@@ -109,6 +109,24 @@ pub(crate) fn ffi_ptr_array_to_vec<T>(a: *mut glib_sys::GPtrArray) -> Vec<*mut T
     v
 }
 
+/// Transform a NULL-terminated array of C strings to an allocated Vec holding unowned references.
+/// This is similar to FromGlibPtrContainer::from_glib_none(), but avoids cloning elements.
+pub(crate) fn ffi_strv_to_os_str_vec<'a>(mut strv: *mut *mut libc::c_char) -> Vec<&'a OsStr> {
+    assert!(!strv.is_null());
+
+    // In theory, we could use std::slice::from_raw_parts instead to make this more 0-cost and
+    // create an &[*mut libc::c_char], but from there there's no clean way to get a &['a OsStr]
+    // short of just transmuting.
+    let mut v = Vec::new();
+    unsafe {
+        while !(*strv).is_null() {
+            v.push(ffi_view_os_str(*strv));
+            strv = strv.offset(1);
+        }
+    }
+    v
+}
+
 // View `fd` as an `openat::Dir` instance.  Lifetime of return value
 // must be less than or equal to that of parameter.
 pub(crate) fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {

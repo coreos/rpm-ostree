@@ -23,6 +23,7 @@ use failure::Fallible;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use std::collections::{HashMap, BTreeMap};
+use std::iter::Extend;
 use std::path::Path;
 use std::io;
 
@@ -52,6 +53,20 @@ fn lockfile_parse<P: AsRef<Path>>(filename: P,) -> Fallible<LockfileConfig> {
         )
     })?;
     Ok(lf)
+}
+
+/// Given lockfile filenames, parse them. Later lockfiles may override packages from earlier ones.
+fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Fallible<LockfileConfig> {
+    let mut final_lockfile: Option<LockfileConfig> = None;
+    for filename in filenames {
+        let lf = lockfile_parse(filename)?;
+        if let Some(ref mut final_lockfile) = final_lockfile {
+            final_lockfile.merge(lf);
+        } else {
+            final_lockfile = Some(lf);
+        }
+    }
+    Ok(final_lockfile.expect("lockfile_parse: at least one lockfile"))
 }
 
 /// Lockfile format:
@@ -87,6 +102,12 @@ struct LockedPackage {
     digest: String,
 }
 
+impl LockfileConfig {
+    fn merge(&mut self, other: LockfileConfig) {
+        self.packages.extend(other.packages);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +139,33 @@ mod tests {
         let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
         let lockfile = lockfile_parse_stream(&mut input).unwrap();
         assert!(lockfile.packages.len() == 2);
+    }
+
+    static OVERRIDE_JS: &str = r###"
+{
+    "packages": {
+        "foo": {
+            "evra": "2.0-2.noarch",
+            "digest": "sha256:dada"
+        }
+    }
+}
+"###;
+
+    #[test]
+    fn basic_valid_override() {
+        let mut base_input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
+        let mut base_lockfile = lockfile_parse_stream(&mut base_input).unwrap();
+        assert!(base_lockfile.packages.len() == 2);
+
+        let mut override_input = io::BufReader::new(OVERRIDE_JS.as_bytes());
+        let override_lockfile = lockfile_parse_stream(&mut override_input).unwrap();
+        assert!(override_lockfile.packages.len() == 1);
+
+        base_lockfile.merge(override_lockfile);
+        assert!(base_lockfile.packages.len() == 2);
+        assert!(base_lockfile.packages.get("foo").unwrap().evra == "2.0-2.noarch");
+        assert!(base_lockfile.packages.get("bar").unwrap().evra == "0.8-15.x86_64");
     }
 
     #[test]
@@ -156,12 +204,11 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_lockfile_read(
-        filename: *const libc::c_char,
+        filenames: *mut *mut libc::c_char,
         gerror: *mut *mut glib_sys::GError,
     ) -> *mut glib_sys::GHashTable {
-        // Convert arguments
-        let filename = ffi_view_os_str(filename);
-        match lockfile_parse(filename) {
+        let filenames = ffi_strv_to_os_str_vec(filenames);
+        match lockfile_parse_multiple(&filenames) {
             Err(ref e) => {
                 error_to_glib(e, gerror);
                 ptr::null_mut()
