@@ -689,7 +689,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   if (opt_read_lockfile)
     {
-      g_autoptr(GHashTable) map = ror_lockfile_get_map (opt_read_lockfile, error);
+      g_autoptr(GHashTable) map = ror_lockfile_read (opt_read_lockfile, error);
       if (!map)
         return FALSE;
       rpmostree_context_set_vlockmap (self->corectx, map);
