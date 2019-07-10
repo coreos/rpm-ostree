@@ -78,7 +78,7 @@ static char *opt_write_commitid_to;
 static char *opt_write_composejson_to;
 static gboolean opt_no_parent;
 static char *opt_write_lockfile;
-static char *opt_read_lockfile;
+static char **opt_read_lockfiles;
 
 /* shared by both install & commit */
 static GOptionEntry common_option_entries[] = {
@@ -102,7 +102,7 @@ static GOptionEntry install_option_entries[] = {
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
   { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile, "Write RPM versions information to FILE", "FILE" },
-  { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING, &opt_read_lockfile, "Read RPM version information from FILE", "FILE" },
+  { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_read_lockfiles, "Read RPM version information from FILE", "FILE" },
   { NULL }
 };
 
@@ -692,13 +692,13 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!self->corectx)
     return FALSE;
 
-  if (opt_read_lockfile)
+  if (opt_read_lockfiles)
     {
-      g_autoptr(GHashTable) map = ror_lockfile_read (opt_read_lockfile, error);
+      g_autoptr(GHashTable) map = ror_lockfile_read (opt_read_lockfiles, error);
       if (!map)
         return FALSE;
       rpmostree_context_set_vlockmap (self->corectx, map);
-      g_print ("Loaded lockfile: %s\n", opt_read_lockfile);
+      g_print ("Loaded lockfiles:\n  %s\n", g_strjoinv ("\n  ", opt_read_lockfiles));
     }
 
   const char *arch = dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx));
