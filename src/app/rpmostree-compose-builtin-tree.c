@@ -345,9 +345,14 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   rpmostree_print_transaction (dnfctx);
 
-  if (opt_write_lockfile &&
-      !rpmostree_composeutil_write_lockfilejson (self->corectx, opt_write_lockfile, error))
-      return FALSE;
+  if (opt_write_lockfile)
+    {
+      g_autoptr(GPtrArray) pkgs = rpmostree_context_get_packages (self->corectx);
+      g_assert (pkgs);
+
+      if (!ror_lockfile_write (opt_write_lockfile, pkgs, error))
+        return FALSE;
+    }
 
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;

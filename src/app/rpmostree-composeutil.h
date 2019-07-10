@@ -73,10 +73,4 @@ rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
                                          GVariantBuilder *builder,
                                          GError    **error);
 
-gboolean
-rpmostree_composeutil_write_lockfilejson (RpmOstreeContext  *ctx,
-                                          const char        *path,
-                                          GError           **error);
-
 G_END_DECLS
-

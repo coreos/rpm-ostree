@@ -178,6 +178,7 @@ rpmostree_custom_nevra_strdup (const char *name,
 char *
 rpmostree_header_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags);
 
+/* NB: this function is exposed to Rust */
 gboolean
 rpmostree_get_repodata_chksum_repr (DnfPackage *pkg,
                                     char      **out_chksum_repr,
@@ -209,12 +210,6 @@ rpmostree_create_rpmdb_pkglist_variant (int              dfd,
                                         GVariant       **out_variant,
                                         GCancellable    *cancellable,
                                         GError         **error);
-
-gboolean
-rpmostree_create_pkglist_variant (GPtrArray     *pkglist,
-                                  GVariant     **out_variant,
-                                  GCancellable  *cancellable,
-                                  GError       **error);
 
 char * rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch);
 char *rpmostree_get_cache_branch_header (Header hdr);
