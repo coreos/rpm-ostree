@@ -22,7 +22,7 @@
 use failure::Fallible;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::path::Path;
 use std::io;
 
@@ -55,26 +55,36 @@ fn lockfile_parse<P: AsRef<Path>>(filename: P,) -> Fallible<LockfileConfig> {
 }
 
 /// Lockfile format:
+///
 /// ```
 /// {
-///    "packages": [
-///        [
-///          "NEVRA1",
-///          "<digest-algo>:<digest>"
-///        ],
-///        [
-///          "NEVRA2",
-///          "<digest-algo>:<digest>"
-///        ],
+///    "packages": {
+///        "name1": {
+///             "evra": "EVRA1",
+///             "digest": "<digest-algo>:<digest>"
+///        },
+///        "name2": {
+///             "evra": "EVRA2",
+///             "digest": "<digest-algo>:<digest>"
+///        },
 ///        ...
-///    ]
+///    }
 /// }
 /// ```
+///
+/// XXX: One known limitation of this format right now is that it's not compatible with multilib.
+/// TBD whether we care about this.
+///
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 struct LockfileConfig {
-    // Core content
-    packages: Vec<(String, String)>,
+    packages: BTreeMap<String, LockedPackage>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LockedPackage {
+    evra: String,
+    digest: String,
 }
 
 #[cfg(test)]
@@ -83,23 +93,30 @@ mod tests {
 
     static VALID_PRELUDE_JS: &str = r###"
 {
- "packages": [["foo", "repodata-foo"], ["bar", "repodata-bar"]]
+    "packages": {
+        "foo": {
+            "evra": "1.0-1.noarch",
+            "digest": "sha256:deadcafe"
+        },
+        "bar": {
+            "evra": "0.8-15.x86_64",
+            "digest": "sha256:cafedead"
+        }
+    }
 }
 "###;
 
     static INVALID_PRELUDE_JS: &str = r###"
 {
- "packages": [["foo", "repodata-foo"], ["bar", "repodata-bar"]],
- "packages-x86_64": [["baz", "repodata-baz"]],
- "packages-comment": "comment here",
+    "packages": {},
+    "unknown-field": "true"
 }
 "###;
 
     #[test]
     fn basic_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
-        let lockfile =
-            lockfile_parse_stream(&mut input).unwrap();
+        let lockfile = lockfile_parse_stream(&mut input).unwrap();
         assert!(lockfile.packages.len() == 2);
     }
 
@@ -149,11 +166,12 @@ mod ffi {
                 error_to_glib(e, gerror);
                 ptr::null_mut()
             },
-            Ok(mut lockfile) => {
+            Ok(lockfile) => {
+                // would be more efficient to just create a GHashTable manually here, but eh...
                 let map = lockfile.packages
-                    .drain(..)
+                    .into_iter()
                     .fold(HashMap::<String, String>::new(), |mut acc, (k, v)| {
-                        acc.insert(k, v);
+                        acc.insert(format!("{}-{}", k, v.evra), v.digest);
                         acc
                     }
                 );
@@ -172,11 +190,13 @@ mod ffi {
         let packages: Vec<*mut DnfPackage> = ffi_ptr_array_to_vec(packages);
 
         let mut lockfile = LockfileConfig {
-            packages: Vec::new(),
+            packages: BTreeMap::new(),
         };
 
         for pkg in packages {
-            let nevra = ffi_new_string(unsafe { dnf_package_get_nevra(pkg) });
+            let name = ffi_new_string(unsafe { dnf_package_get_name(pkg) });
+            let evr = ffi_view_str(unsafe { dnf_package_get_evr(pkg) });
+            let arch = ffi_view_str(unsafe { dnf_package_get_arch(pkg) });
 
             let mut chksum: *mut libc::c_char = ptr::null_mut();
             let r = unsafe { rpmostree_get_repodata_chksum_repr(pkg, &mut chksum, gerror) };
@@ -184,7 +204,10 @@ mod ffi {
                 return r;
             }
 
-            lockfile.packages.push((nevra, ffi_new_string(chksum)));
+            lockfile.packages.insert(name, LockedPackage {
+                evra: format!("{}.{}", evr, arch),
+                digest: ffi_new_string(chksum),
+            });
 
             // forgive me for this sin... need to oxidize chksum_repr()
             unsafe { glib_sys::g_free(chksum as *mut libc::c_void) };

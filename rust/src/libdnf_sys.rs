@@ -30,6 +30,9 @@ pub(crate) struct DnfPackage(libc::c_void);
 #[allow(dead_code)]
 extern {
     pub(crate) fn dnf_package_get_nevra(package: *mut DnfPackage) -> *const libc::c_char;
+    pub(crate) fn dnf_package_get_name(package: *mut DnfPackage) -> *const libc::c_char;
+    pub(crate) fn dnf_package_get_evr(package: *mut DnfPackage) -> *const libc::c_char;
+    pub(crate) fn dnf_package_get_arch(package: *mut DnfPackage) -> *const libc::c_char;
 }
 
 /* And some helper rpm-ostree C functions to deal with libdnf stuff. These are prime candidates for
