@@ -137,7 +137,7 @@ mod ffi {
     use crate::ffiutil::*;
 
     #[no_mangle]
-    pub extern "C" fn ror_lockfile_get_map(
+    pub extern "C" fn ror_lockfile_read(
         filename: *const libc::c_char,
         gerror: *mut *mut glib_sys::GError,
     ) -> *mut glib_sys::GHashTable {
