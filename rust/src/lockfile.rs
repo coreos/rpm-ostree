@@ -180,17 +180,6 @@ mod tests {
             Ok(_) => panic!("Expected invalid lockfile"),
         }
     }
-
-    #[test]
-    fn test_open_file_nonexistent() {
-        let path = "/usr/share/empty/manifest.json";
-        match lockfile_parse(path) {
-            Err(ref e) => assert!(e
-                .to_string()
-                .starts_with(format!("Can't open file {:?}:", path).as_str())),
-            Ok(_) => panic!("Expected nonexistent lockfile error for {}", path),
-        }
-    }
 }
 
 mod ffi {

@@ -1125,17 +1125,6 @@ add-commit-metadata:
         assert!(data.get("my-third-key").unwrap().as_i64().unwrap() == 1000);
         assert!(data.get("my-fourth-key").unwrap().as_object().unwrap().get("nested").unwrap().as_str().unwrap() == "table");
     }
-
-    #[test]
-    fn test_open_file_nonexistent() {
-        let path = "/usr/share/empty/manifest.yaml";
-        match treefile_parse(path, None) {
-            Err(ref e) => assert!(e
-                .to_string()
-                .starts_with(format!("Can't open file {:?}:", path).as_str())),
-            Ok(_) => panic!("Expected nonexistent treefile error for {}", path),
-        }
-    }
 }
 
 mod ffi {
