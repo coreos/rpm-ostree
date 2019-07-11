@@ -146,6 +146,17 @@ mod tests {
         let r = varsubst("${osvendor}", &subs).unwrap();
         assert_eq!(r, "fedora");
     }
+
+    #[test]
+    fn test_open_file_nonexistent() {
+        let path = "/usr/share/empty/manifest.yaml";
+        match open_file(path) {
+            Err(ref e) => assert!(e
+                .to_string()
+                .starts_with(format!("Can't open file {:?} for reading:", path).as_str())),
+            Ok(_) => panic!("Expected nonexistent treefile error for {}", path),
+        }
+    }
 }
 
 mod ffi {
