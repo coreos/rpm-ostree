@@ -159,6 +159,17 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
     "/usr/bin/sh",
     glibc_langpacks_script
   },
+  /* See https://src.fedoraproject.org/rpms/glibc/pull-request/12
+   * Code originally introduced in https://src.fedoraproject.org/rpms/glibc/c/34927af202deb7d97dbb211a3cb13b1c53b496d3?branch=master
+   * Most of that script is about working around bugs from a traditional RPM in-place update,
+   * but rpm-ostree always starts from a clean filesystem checkout.  We just need step (4)
+   * which is updating the iconv cache.
+   */
+  { "glibc.post",
+    "/usr/bin/bash",
+    "libdir=" LIBDIR "\n"
+    "exec iconvconfig -o ${libdir}/gconv/gconv-modules.cache --nostdlib ${libdir}/gconv"
+  },
   /* Just for the tests */
   { "rpmostree-lua-override-test.post",
     "/usr/bin/sh",

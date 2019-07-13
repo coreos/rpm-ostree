@@ -73,6 +73,7 @@ librpmostreepriv_la_CFLAGS = \
 	-I$(srcdir)/src/lib \
 	-I$(srcdir)/src/libpriv \
 	-I$(libglnx_srcpath) \
+	-DLIBDIR=\"$(libdir)\" \
 	-DPKGLIBDIR=\"$(pkglibdir)\" \
 	-fvisibility=hidden \
 	$(PKGDEP_RPMOSTREE_CFLAGS) \
