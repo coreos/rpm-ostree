@@ -216,11 +216,13 @@ It supports the following parameters:
    are provided, then `postprocess-script` will be executed after all
    other `postprocess`.
 
- * `include`: string, optional: Path to another treefile which will be
+ * `include`: string or array of string, optional: Path(s) to treefiles which will be
    used as an inheritance base.  The semantics for inheritance are:
    Non-array values in child values override parent values.  Array
    values are concatenated.  Filenames will be resolved relative to
-   the including treefile.
+   the including treefile.  Since rpm-ostree 2019.5, this value may
+   also be an array of strings.  Including the same file multiple times
+   is an error.
 
  * `container`: boolean, optional: Defaults to `false`.  If `true`, then
    rpm-ostree will not do any special handling of kernel, initrd or the
