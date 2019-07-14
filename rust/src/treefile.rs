@@ -21,7 +21,7 @@
  * */
 
 use c_utf8::CUtf8Buf;
-use failure::Fallible;
+use failure::{Fallible, bail};
 use openat;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
@@ -30,6 +30,8 @@ use std::collections::{HashMap, BTreeMap};
 use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
+use std::os::unix::fs::MetadataExt;
+use std::collections::btree_map::Entry;
 
 use crate::utils;
 
@@ -213,14 +215,28 @@ fn load_passwd_file<P: AsRef<Path>>(
     return Ok(None);
 }
 
+type IncludeMap = collections::BTreeMap<(u64, u64), String>;
+
 /// Given a treefile filename and an architecture, parse it and also
 /// open its external files.
 fn treefile_parse<P: AsRef<Path>>(
     filename: P,
     basearch: Option<&str>,
+    seen_includes: &mut IncludeMap,
 ) -> Fallible<ConfigAndExternals> {
     let filename = filename.as_ref();
-    let mut f = io::BufReader::new(utils::open_file(filename)?);
+    let f = utils::open_file(filename)?;
+    let meta = f.metadata()?;
+    let devino = (meta.dev(), meta.ino());
+    match seen_includes.entry(devino) {
+        Entry::Occupied(_) => {
+            bail!("Include loop detected; {} was already included", filename.to_str().unwrap())
+        },
+        Entry::Vacant(e) => {
+            e.insert(filename.to_str().unwrap().to_string());
+        }
+    };
+    let mut f = io::BufReader::new(f);
     let basename = filename
         .file_name()
         .map(|s| s.to_string_lossy())
@@ -379,11 +395,16 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     filename: P,
     basearch: Option<&str>,
     depth: u32,
+    seen_includes: &mut IncludeMap,
 ) -> Fallible<ConfigAndExternals> {
     let filename = filename.as_ref();
-    let mut parsed = treefile_parse(filename, basearch)?;
-    let include_path = parsed.config.include.take();
-    if let &Some(ref include_path) = &include_path {
+    let mut parsed = treefile_parse(filename, basearch, seen_includes)?;
+    let include = parsed.config.include.take().unwrap_or_else(|| Include::Multiple(Vec::new()));
+    let includes = match include {
+        Include::Single(v) => vec![v],
+        Include::Multiple(v) => v,
+    };
+    for include_path in includes.iter() {
         if depth == INCLUDE_MAXDEPTH {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -393,7 +414,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
         }
         let parent = filename.parent().unwrap();
         let include_path = parent.join(include_path);
-        let mut included = treefile_parse_recurse(include_path, basearch, depth + 1)?;
+        let mut included = treefile_parse_recurse(include_path, basearch, depth + 1, seen_includes)?;
         treefile_merge(&mut parsed.config, &mut included.config);
         treefile_merge_externals(&mut parsed.externals, &mut included.externals);
     }
@@ -419,7 +440,8 @@ impl Treefile {
         basearch: Option<&str>,
         workdir: openat::Dir,
     ) -> Fallible<Box<Treefile>> {
-        let mut parsed = treefile_parse_recurse(filename, basearch, 0)?;
+        let mut seen_includes = collections::BTreeMap::new();
+        let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
         parsed.config = parsed.config.substitute_vars()?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(filename.parent().unwrap())?;
@@ -612,6 +634,13 @@ struct Rojig {
     description: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+enum Include {
+    Single(String),
+    Multiple(Vec<String>)
+}
+
 // Because of how we handle includes, *everything* here has to be
 // Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
 // to `true`).
@@ -634,7 +663,7 @@ struct TreeComposeConfig {
     #[serde(rename = "gpg-key")]
     gpg_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    include: Option<String>,
+    include: Option<Include>,
 
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]

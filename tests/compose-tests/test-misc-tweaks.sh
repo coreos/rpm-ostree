@@ -6,15 +6,20 @@ dn=$(cd $(dirname $0) && pwd)
 . ${dn}/libcomposetest.sh
 
 prepare_compose_test "misc-tweaks"
-# No docs
-pysetjsonmember "documentation" "False"
+# No docs, also test multi includes
+cat >composedata/documentation.yaml <<'EOF'
+documentation: false
+EOF
+cat > composedata/recommends.yaml <<'EOF'
+recommends: false
+EOF
+pysetjsonmember "include" '["documentation.yaml", "recommends.yaml"]'
 # Note this overrides:
 # $ rpm -q systemd
 # systemd-238-8.git0e0aa59.fc28.x86_64
 # $ rpm -qlv systemd|grep -F 'system/default.target '
 # lrwxrwxrwx    1 root    root                       16 May 11 06:59 /usr/lib/systemd/system/default.target -> graphical.target
 pysetjsonmember "default_target" '"multi-user.target"'
-pysetjsonmember "recommends" 'False'
 pysetjsonmember "units" '["tuned.service"]'
 # And test adding/removing files
 pysetjsonmember "add-files" '[["foo.txt", "/usr/etc/foo.txt"],
