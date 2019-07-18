@@ -429,11 +429,20 @@ rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
   g_autofree char *parent_revision = ostree_commit_get_parent (new_commit);
   if (path && parent_revision)
     {
-      g_autoptr(GVariant) diffv = NULL;
-      if (!rpm_ostree_db_diff_variant (repo, parent_revision, new_revision,
-                                       FALSE, &diffv, NULL, error))
+      /* don't error if the parent doesn't exist */
+      gboolean parent_exists;
+      if (!ostree_repo_has_object (repo, OSTREE_OBJECT_TYPE_COMMIT, parent_revision,
+                                   &parent_exists, NULL, error))
         return FALSE;
-      g_variant_builder_add (builder, "{sv}", "pkgdiff", diffv);
+
+      if (parent_exists)
+        {
+          g_autoptr(GVariant) diffv = NULL;
+          if (!rpm_ostree_db_diff_variant (repo, parent_revision, new_revision,
+                                           TRUE, &diffv, NULL, error))
+            return FALSE;
+          g_variant_builder_add (builder, "{sv}", "pkgdiff", diffv);
+        }
     }
 
   if (path)

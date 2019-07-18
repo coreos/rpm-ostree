@@ -17,7 +17,9 @@ cat > metadata.json <<EOF
   "overrideme": "new val"
 }
 EOF
-runcompose --add-metadata-from-json metadata.json
+# Test --parent at the same time (hash is `echo | sha256sum`)
+runcompose --add-metadata-from-json metadata.json \
+  --parent 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
 
 . ${dn}/libbasic-test.sh
 basic_test
