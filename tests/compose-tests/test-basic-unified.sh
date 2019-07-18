@@ -25,7 +25,9 @@ cat > metadata.json <<EOF
   "overrideme": "new val"
 }
 EOF
-runcompose --ex-unified-core --add-metadata-from-json metadata.json
+# Test --parent at the same time (hash is `echo | sha256sum`)
+runcompose --ex-unified-core --add-metadata-from-json metadata.json \
+  --parent 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
 
 # Run it again, but without RPMOSTREE_PRESERVE_TMPDIR. Should be a no-op. This
 # exercises fd handling in the tree context.

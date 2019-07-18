@@ -79,6 +79,7 @@ static char *opt_write_composejson_to;
 static gboolean opt_no_parent;
 static char *opt_write_lockfile;
 static char **opt_read_lockfiles;
+static char *opt_parent;
 
 /* shared by both install & commit */
 static GOptionEntry common_option_entries[] = {
@@ -116,6 +117,7 @@ static GOptionEntry commit_option_entries[] = {
   { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to, "File to write the composed commitid to instead of updating the ref", "FILE" },
   { "write-composejson-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_composejson_to, "Write JSON to FILE containing information about the compose run", "FILE" },
   { "no-parent", 0, 0, G_OPTION_ARG_NONE, &opt_no_parent, "Always commit without a parent", NULL },
+  { "parent", 0, 0, G_OPTION_ARG_STRING, &opt_parent, "Commit with specific parent", "REV" },
   { NULL }
 };
 
@@ -1068,7 +1070,12 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     }
 
   g_autofree char *parent_revision = NULL;
-  if (self->ref && !opt_no_parent)
+  if (opt_parent)
+    {
+      if (!ostree_repo_resolve_rev (self->repo, opt_parent, FALSE, &parent_revision, error))
+        return FALSE;
+    }
+  else if (self->ref && !opt_no_parent)
     {
       if (!ostree_repo_resolve_rev (self->repo, self->ref, TRUE, &parent_revision, error))
         return FALSE;

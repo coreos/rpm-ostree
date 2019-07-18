@@ -108,4 +108,9 @@ echo "ok compose pkglist"
 ostree --repo=${repobuild} cat ${treeref} /usr/share/rpm-ostree/treefile.json > treefile.json
 assert_jq treefile.json '.basearch == "x86_64"'
 echo "ok basearch"
+
+ostree --repo=${repobuild} rev-parse ${treeref}^ > parent.txt
+assert_file_has_content parent.txt 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+echo "ok --parent"
 }
+
