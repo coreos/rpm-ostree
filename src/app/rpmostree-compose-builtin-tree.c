@@ -1130,7 +1130,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                                 opt_write_composejson_to, statsp,
                                                 new_revision, new_commit,
                                                 &composemeta_builder,
-                                                error))
+                                                cancellable, error))
     return FALSE;
 
   if (opt_write_commitid_to)

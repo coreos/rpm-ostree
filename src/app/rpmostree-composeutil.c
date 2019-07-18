@@ -374,6 +374,7 @@ rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
                                          const char *new_revision,
                                          GVariant   *new_commit,
                                          GVariantBuilder *builder,
+                                         GCancellable *cancellable,
                                          GError    **error)
 {
   g_autoptr(GVariant) new_commit_inline_meta = g_variant_get_child_value (new_commit, 0);
@@ -432,14 +433,14 @@ rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
       /* don't error if the parent doesn't exist */
       gboolean parent_exists;
       if (!ostree_repo_has_object (repo, OSTREE_OBJECT_TYPE_COMMIT, parent_revision,
-                                   &parent_exists, NULL, error))
+                                   &parent_exists, cancellable, error))
         return FALSE;
 
       if (parent_exists)
         {
           g_autoptr(GVariant) diffv = NULL;
           if (!rpm_ostree_db_diff_variant (repo, parent_revision, new_revision,
-                                           TRUE, &diffv, NULL, error))
+                                           TRUE, &diffv, cancellable, error))
             return FALSE;
           g_variant_builder_add (builder, "{sv}", "pkgdiff", diffv);
         }
@@ -460,7 +461,7 @@ rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
         return FALSE;
       g_autoptr(GOutputStream) out = g_unix_output_stream_new (tmpf.fd, FALSE);
       /* See also similar code in status.c */
-      if (json_generator_to_stream (generator, out, NULL, error) <= 0
+      if (json_generator_to_stream (generator, out, cancellable, error) <= 0
           || (error != NULL && *error != NULL))
         return FALSE;
 

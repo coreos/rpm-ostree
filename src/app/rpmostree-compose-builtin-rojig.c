@@ -568,7 +568,7 @@ impl_write_rojig (RpmOstreeRojigCompose *self,
   if (!rpmostree_composeutil_write_composejson (self->repo,
                                                 opt_write_composejson_to, &stats,
                                                 new_revision, new_commit, &composemeta_builder,
-                                                error))
+                                                cancellable, error))
     return FALSE;
 
   return TRUE;
