@@ -3742,7 +3742,7 @@ rpmostree_context_get_tmprootfs_dfd  (RpmOstreeContext *self)
 static gboolean
 pkg_name_is_kernel (const char *name)
 {
-  return g_str_equal (name, "kernel") || g_str_equal (name, "kernel-core");
+  return g_str_equal (name, "kernel") || g_str_equal (name, "kernel-core") || g_str_equal (name, "kernel-rt") || g_str_equal (name, "kernel-rt-core");
 }
 
 /* Determine if a txn element contains vmlinuz.  TODO: Check via provides?
