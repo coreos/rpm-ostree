@@ -1476,8 +1476,9 @@ mutate_os_release (const char    *contents,
       g_string_append_printf (new_contents, "%s\n", line);
     }
 
-  /* add a bona fide ostree entry */
-  g_string_append_printf (new_contents, "OSTREE_VERSION=%s\n", next_version);
+  /* Add a bona fide ostree entry. Quote it as a precaution */
+  g_autofree char *quoted_version = g_shell_quote (next_version);
+  g_string_append_printf (new_contents, "OSTREE_VERSION=%s\n", quoted_version);
 
   return g_string_free (new_contents, FALSE);
 }
