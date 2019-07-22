@@ -1,0 +1,113 @@
+@Library('github.com/coreos/coreos-ci-lib@master') _
+
+stage("Build") {
+parallel rpms: {
+  coreos.pod(image: 'registry.svc.ci.openshift.org/coreos/cosa-buildroot:latest', runAsUser: 0) {
+      checkout scm
+      sh """
+        set -euo pipefail
+        ci/installdeps.sh
+        git submodule update --init
+
+        # We lose sanitizers (all the *san) here by building straight to RPMs, but we can
+        # restore those through a build opt later on. Being able to stash RPMs directly is
+        # super nice (and archiving later on will make it easy for anyone to download
+        # binaries from PRs in the future) and meshes well with the following stages.
+        export PATH="/root/.cargo/bin:\$PATH"
+        cargo install cbindgen
+        cbindgen -c rust/cbindgen.toml -o rpmostree-rust.h rust
+
+        cd packaging
+        make -f Makefile.dist-packaging rpm
+      """
+      stash includes: 'packaging/**/*.rpm', name: 'rpms'
+  }
+},
+codestyle: {
+  coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest') {
+      def change = checkout scm
+      sh """
+        set -euo pipefail
+        # Jenkins by default only fetches the branch it's testing. Explicitly fetch master
+        # for ci-commitmessage-submodules.sh
+        git fetch origin +refs/heads/master:refs/remotes/origin/master
+        ci/ci-commitmessage-submodules.sh ${change.GIT_COMMIT}
+        ci/codestyle.sh
+      """
+  }
+},
+msrv: {
+  coreos.pod(image: 'registry.svc.ci.openshift.org/coreos/cosa-buildroot:latest', runAsUser: 0) {
+      checkout scm
+
+      // this corresponds to the latest Rust module available in el8
+      def MINIMUM_SUPPORTED_RUST_VERSION = "1.31.0"
+
+      sh """
+        set -euo pipefail
+        ci/installdeps.sh
+        curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain ${MINIMUM_SUPPORTED_RUST_VERSION} -y
+        PATH="\$HOME/.cargo/bin:\$PATH" ci/build.sh |& tee out.txt
+        grep ${MINIMUM_SUPPORTED_RUST_VERSION} out.txt
+        grep "checking for cargo... \$HOME/.cargo/bin/cargo" out.txt
+        grep "checking for rustc... \$HOME/.cargo/bin/rustc" out.txt
+      """
+  }
+}}
+
+stage("Build FCOS") {
+  coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest', runAsUser: 0, kvm: true) {
+      unstash 'rpms'
+      sh """
+        set -euo pipefail
+
+        # install our built rpm-ostree
+        find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
+        rm -rf packaging
+
+        # and build FCOS
+        coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
+        coreos-assembler build
+      """
+      stash includes: 'builds/latest/*/*.qcow2', name: 'fcos'
+  }
+}
+
+/*
+stage("Test") {
+parallel vmcheck: {
+  coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest', runAsUser: 0, kvm: true) {
+      checkout scm
+      unstash 'rpms'
+      sh """
+        set -euo pipefail
+
+        # install our built rpm-ostree
+        find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
+        rm -rf packaging
+      """
+      unstash 'fcos'
+      sh """
+        set -euo pipefail
+
+        echo "standing up VMs"
+        find builds/ -name '*.qcow2'
+      """
+  }
+},
+compose: {
+  coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest', runAsUser: 0, kvm: true) {
+      checkout scm
+      unstash 'rpms'
+      sh """
+        set -euo pipefail
+
+        # install our built rpm-ostree
+        find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
+        rm -rf packaging
+
+        echo "starting compose tests in supermin"
+      """
+  }
+}}
+*/
