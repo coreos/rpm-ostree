@@ -37,7 +37,7 @@ ostree --repo=${repobuild} cat ${treeref} \
 # VERSION_ID *shouldn't* change
 # (https://github.com/projectatomic/rpm-ostree/pull/433)
 assert_file_has_content os-release.prop VERSION_ID=${releasever}
-assert_file_has_content os-release.prop OSTREE_VERSION=${releasever}.444
+assert_file_has_content os-release.prop OSTREE_VERSION=\'${releasever}.444\'
 assert_file_has_content os-release.prop 'VERSION="'${releasever}'\.444 (Atomic '
 echo "ok mutate-os-release-cli"
 
@@ -55,6 +55,6 @@ ostree --repo=${repobuild} cat ${treeref} \
 # VERSION_ID *shouldn't* change
 # (https://github.com/projectatomic/rpm-ostree/pull/433)
 assert_file_has_content os-release.prop VERSION_ID=${releasever}
-assert_file_has_content os-release.prop OSTREE_VERSION=${releasever}.555
+assert_file_has_content os-release.prop OSTREE_VERSION=\'${releasever}.555\'
 assert_file_has_content os-release.prop 'VERSION="'${releasever}'\.555 (Atomic '
 echo "ok mutate-os-release (auto)"
