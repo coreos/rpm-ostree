@@ -1580,7 +1580,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   self->override_remove_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-remove-packages");
   self->override_reset_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-reset-packages");
 
-  /* default to allowing downgrades for rebases & deploys */
+  /* default to allowing downgrades for rebases & deploys (without --disallow-downgrade) */
   if (vardict_lookup_bool (self->options, "allow-downgrade", refspec_or_revision))
     self->flags |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
 

@@ -48,10 +48,21 @@ vm_assert_status_jq ".deployments[0][\"origin\"] == \"otherremote:vmcheck\"" \
 vm_rpmostree rebase vmcheckmote:
 vm_assert_status_jq ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
                     ".deployments[0][\"booted\"]|not"
+
+# now try to rebase again, but to v1 + --disallow-downgrade
+if vm_rpmostree rebase otherremote: v1 --disallow-downgrade |& tee err.txt; then
+  assert_not_reached "Successfully downgraded during rebase with --disallow-downgrade"
+fi
+assert_file_has_content err.txt "Upgrade.*is chronologically older"
 echo "ok rebase"
 
 # A new update is available...but deploy v1 again
 vm_ostreeupdate_create_noop v3
+# try first with --disallow-downgrade
+if vm_rpmostree deploy v1 --disallow-downgrade |& tee err.txt; then
+  assert_not_reached "Successfully downgraded during deploy with --disallow-downgrade"
+fi
+assert_file_has_content err.txt "Upgrade.*is chronologically older"
 vm_rpmostree deploy v1
 vm_assert_status_jq ".deployments[0][\"booted\"]|not" \
                     ".deployments[0][\"version\"] == \"v1\""
