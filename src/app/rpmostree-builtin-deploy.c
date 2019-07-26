@@ -33,6 +33,7 @@ static gboolean opt_preview;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
 static gboolean opt_lock_finalization;
+static gboolean opt_disallow_downgrade;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -45,6 +46,7 @@ static GOptionEntry option_entries[] = {
   { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
+  { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade, "Forbid deployment of chronologically older trees", NULL },
   { NULL }
 };
 
@@ -116,7 +118,7 @@ rpmostree_builtin_deploy (int            argc,
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
       g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-      g_variant_dict_insert (&dict, "allow-downgrade", "b", TRUE);
+      g_variant_dict_insert (&dict, "allow-downgrade", "b", !opt_disallow_downgrade);
       g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
       g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);

@@ -41,6 +41,7 @@ static char * opt_custom_origin_description;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
 static gboolean opt_experimental;
+static gboolean opt_disallow_downgrade;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -53,6 +54,7 @@ static GOptionEntry option_entries[] = {
   { "custom-origin-description", 0, 0, G_OPTION_ARG_STRING, &opt_custom_origin_description, "Human-readable description of custom origin", NULL },
   { "custom-origin-url", 0, 0, G_OPTION_ARG_STRING, &opt_custom_origin_url, "Machine-readable description of custom origin", NULL },
   { "experimental", 0, 0, G_OPTION_ARG_NONE, &opt_experimental, "Enable experimental features", NULL },
+  { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade, "Forbid deployment of chronologically older trees", NULL },
   { NULL }
 };
 
@@ -163,7 +165,7 @@ rpmostree_builtin_rebase (int             argc,
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-  g_variant_dict_insert (&dict, "allow-downgrade", "b", TRUE);
+  g_variant_dict_insert (&dict, "allow-downgrade", "b", !opt_disallow_downgrade);
   g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
   g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
   g_variant_dict_insert (&dict, "skip-purge", "b", opt_skip_purge);
