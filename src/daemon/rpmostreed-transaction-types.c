@@ -1480,19 +1480,34 @@ vardict_lookup_strv_canonical (GVariantDict  *dict,
   return v;
 }
 
+static inline RpmOstreeTransactionDeployFlags
+set_deploy_flag (RpmOstreeTransactionDeployFlags flags,
+                 RpmOstreeTransactionDeployFlags flag,
+                 gboolean val)
+{
+  /* first, make sure it's cleared */
+  flags &= ~flag;
+  if (val)
+    flags |= flag;
+  return flags;
+}
+
+/* @defaults contains some default flags. They only take effect if the vardict option they
+ * correspond to wasn't specified. */
 static RpmOstreeTransactionDeployFlags
 deploy_flags_from_options (GVariantDict *dict,
                            RpmOstreeTransactionDeployFlags defaults)
 {
   RpmOstreeTransactionDeployFlags ret = defaults;
-  if (vardict_lookup_bool (dict, "allow-downgrade", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
-  if (vardict_lookup_bool (dict, "no-pull-base", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE;
-  if (vardict_lookup_bool (dict, "dry-run", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
-  if (vardict_lookup_bool (dict, "download-only", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY;
+  gboolean val;
+  if (g_variant_dict_lookup (dict, "allow-downgrade", "b", &val))
+    ret = set_deploy_flag (ret, RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE, val);
+  if (g_variant_dict_lookup (dict, "no-pull-base", "b", &val))
+    ret = set_deploy_flag (ret, RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE, val);
+  if (g_variant_dict_lookup (dict, "dry-run", "b", &val))
+    ret = set_deploy_flag (ret, RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN, val);
+  if (g_variant_dict_lookup (dict, "download-only", "b", &val))
+    ret = set_deploy_flag (ret, RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY, val);
   return ret;
 }
 
@@ -1521,7 +1536,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
                                    const char             *osname,
-                                   RpmOstreeTransactionDeployFlags flags,
+                                   RpmOstreeTransactionDeployFlags default_flags,
                                    GVariant               *options,
                                    RpmOstreeUpdateDeploymentModifiers *modifiers,
                                    GUnixFDList            *fd_list,
@@ -1558,7 +1573,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   self->options = g_variant_dict_ref (options_dict);
   self->modifiers = g_variant_dict_new (modifiers);
 
-  self->flags = deploy_flags_from_options (self->options, flags);
+  self->flags = deploy_flags_from_options (self->options, default_flags);
 
   const char *refspec = vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
   /* Canonicalize here; the later code actually ends up peeling it
