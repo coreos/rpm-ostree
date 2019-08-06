@@ -214,8 +214,8 @@ rpmostree_load_sysroot (gchar *sysroot,
       g_autoptr(GError) local_error = NULL;
       g_autoptr(GVariantBuilder) options_builder =
         g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
-      g_variant_builder_add (options_builder, "{sv}", "id",
-                             g_variant_new_string (RPMOSTREE_CLI_ID));
+      const char *clientid = g_getenv ("RPMOSTREE_CLIENT_ID") ?: RPMOSTREE_CLI_ID;
+      g_variant_builder_add (options_builder, "{sv}", "id", g_variant_new_string (clientid));
       g_autoptr(GVariant) res =
         g_dbus_connection_call_sync (connection, bus_name, sysroot_objpath,
                                      "org.projectatomic.rpmostree1.Sysroot",
@@ -907,7 +907,7 @@ rpmostree_print_signatures (GVariant *variant,
               gboolean valid;
               g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_VALID, "b", &valid);
 
-              g_string_append_printf (sigs_buffer, "%s signature by %s\n", valid ? "Valid" : "Invalid", 
+              g_string_append_printf (sigs_buffer, "%s signature by %s\n", valid ? "Valid" : "Invalid",
                                       fingerprint);
             }
         }
