@@ -78,6 +78,10 @@ struct _RpmOstreeContext {
 
   gboolean kernel_changed;
 
+  /* These are set when we're configured from a deployment */
+  OstreeSysroot *sysroot;
+  OstreeDeployment *deployment;
+
   int tmprootfs_dfd; /* Borrowed */
   GHashTable *rootfs_usrlinks;
   GLnxTmpDir repo_tmpdir; /* Used to assemble+commit if no base rootfs provided */

@@ -343,6 +343,9 @@ rpmostree_context_finalize (GObject *object)
   g_clear_object (&rctx->spec);
   g_clear_object (&rctx->dnfctx);
 
+  g_clear_object (&rctx->sysroot);
+  g_clear_object (&rctx->deployment);
+
   g_clear_object (&rctx->rojig_pkg);
   g_free (rctx->rojig_checksum);
   g_free (rctx->rojig_inputhash);
@@ -508,6 +511,16 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
                                              OstreeSysroot    *sysroot,
                                              OstreeDeployment *cfg_deployment)
 {
+  g_clear_object (&self->sysroot);
+  if (sysroot)
+    self->sysroot = g_object_ref (sysroot);
+  g_clear_object (&self->deployment);
+  if (cfg_deployment)
+    {
+      g_assert (sysroot);
+      self->deployment = g_object_ref (cfg_deployment);
+    }
+
   g_autofree char *cfg_deployment_root =
     rpmostree_get_deployment_root (sysroot, cfg_deployment);
   g_autofree char *reposdir =
@@ -4294,6 +4307,20 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       /* Any ostree refs to overlay */
       if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
         return FALSE;
+
+      /* roothooks only run when we're in the booted root.  There's no
+       * strong reason we couldn't spawn a container into the target root
+       * in the sysroot case, but eh...not worth the extra complexity.
+       **/
+      if (self->deployment)
+        {
+          OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (self->sysroot);
+          if (booted_deployment && ostree_deployment_equal (self->deployment, booted_deployment))
+            {
+              if (!ror_roothooks_run (tmprootfs_dfd, error))
+                return glnx_prefix_error (error, "Executing roothooks");
+            }
+        }
 
       {
       g_auto(RpmOstreeProgress) task = { 0, };

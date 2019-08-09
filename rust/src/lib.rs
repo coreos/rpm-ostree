@@ -26,6 +26,8 @@ mod journal;
 pub use self::journal::*;
 mod progress;
 pub use self::progress::*;
+mod roothooks;
+pub use self::roothooks::*;
 mod treefile;
 pub use self::treefile::*;
 mod lockfile;

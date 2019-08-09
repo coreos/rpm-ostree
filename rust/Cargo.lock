@@ -446,9 +446,10 @@ dependencies = [
 
 [[package]]
 name = "openat-ext"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
+ "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",
  "openat 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -671,7 +672,7 @@ dependencies = [
  "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",
  "nix 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "openat 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
- "openat-ext 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "openat-ext 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1003,7 +1004,7 @@ dependencies = [
 "checksum num_cpus 1.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1a23f0ed30a54abaa0c7e83b1d2d87ada7c3c23078d1d87815af3e3b6385fbba"
 "checksum number_prefix 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "dbf9993e59c894e3c08aa1c2712914e9e6bf1fcbfc6bef283e2183df345a4fee"
 "checksum openat 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)" = "65154ad9f41c6a323e81fd19a9bb96c0aba2b84f99a063fa43ff1dc0cc84b48a"
-"checksum openat-ext 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "155fab2a54446fde6c8a3965af4d7ec57b3015e4b3bff0a7657162d5ee4924bb"
+"checksum openat-ext 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "281b3223dcb8d9101d1e73ac59964fe38d0c73252a9730c055690cfef8c9ce76"
 "checksum openssl-probe 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
 "checksum openssl-sys 0.9.43 (registry+https://github.com/rust-lang/crates.io-index)" = "33c86834957dd5b915623e94f2f4ab2c70dd8f6b70679824155d5ae21dbd495d"
 "checksum owning_ref 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "49a4b8ea2179e6a2e27411d3bca09ca6dd630821cf6894c6c7c8467a8ee7ef13"
