@@ -1064,33 +1064,20 @@ automatic_version_prefix: bar
         );
     }
 
-    struct TreefileTest {
-        tf: Box<Treefile>,
-        #[allow(dead_code)]
-        workdir: tempfile::TempDir,
-    }
-
-    impl TreefileTest {
-        fn new<'a, 'b>(contents: &'a str, basearch: Option<&'b str>) -> Fallible<TreefileTest> {
-            let workdir = tempfile::tempdir()?;
-            let tf_path = workdir.path().join("treefile.yaml");
-            {
-                let mut tf_stream = io::BufWriter::new(fs::File::create(&tf_path)?);
-                tf_stream.write_all(contents.as_bytes())?;
-            }
-            let tf = Treefile::new_boxed(
-                tf_path.as_path(),
-                basearch,
-                openat::Dir::open(workdir.path())?,
-            )?;
-            Ok(TreefileTest { tf, workdir })
-        }
+    fn new_test_treefile<'a, 'b>(workdir: &std::path::Path, contents: &'a str, basearch: Option<&'b str>) -> Fallible<Box<Treefile>> {
+        let tf_path = workdir.join("treefile.yaml");
+        utils::write_file(&tf_path, |b| { b.write_all(contents.as_bytes())?; Ok(()) })?;
+        Ok(Treefile::new_boxed(
+            tf_path.as_path(),
+            basearch,
+            openat::Dir::open(workdir)?,
+        )?)
     }
 
     #[test]
     fn test_treefile_new() {
-        let t = TreefileTest::new(VALID_PRELUDE, None).unwrap();
-        let tf = &t.tf;
+        let workdir = tempfile::tempdir().unwrap();
+        let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
         assert!(tf.parsed.rojig.is_none());
         assert!(tf.rojig_spec.is_none());
         assert!(tf.parsed.machineid_compat.is_none());
@@ -1105,10 +1092,10 @@ rojig:
 
     #[test]
     fn test_treefile_new_rojig() {
+        let workdir = tempfile::tempdir().unwrap();
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(ROJIG_YAML);
-        let t = TreefileTest::new(buf.as_str(), None).unwrap();
-        let tf = &t.tf;
+        let tf = new_test_treefile(workdir.path(), buf.as_str(), None).unwrap();
         let rojig = tf.parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
         let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().as_str();
