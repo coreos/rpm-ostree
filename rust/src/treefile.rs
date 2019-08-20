@@ -1104,6 +1104,24 @@ rojig:
     }
 
     #[test]
+    fn test_treefile_includes() -> Fallible<()> {
+        let workdir = tempfile::tempdir()?;
+        utils::write_file(workdir.path().join("foo.yaml"), |b| {
+            let foo = r#"
+packages:
+  - fooinclude
+"#;
+            b.write_all(foo.as_bytes())?; Ok(()) })?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(r#"
+include: foo.yaml
+"#);
+        let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
+        assert!(tf.parsed.packages.unwrap().len() == 4);
+        Ok(())
+    }
+
+    #[test]
     fn test_treefile_merge() {
         let basearch = Some(ARCH_X86_64);
         let mut base = append_and_parse(
