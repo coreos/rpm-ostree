@@ -400,10 +400,20 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     let filename = filename.as_ref();
     let mut parsed = treefile_parse(filename, basearch, seen_includes)?;
     let include = parsed.config.include.take().unwrap_or_else(|| Include::Multiple(Vec::new()));
-    let includes = match include {
+    let mut includes = match include {
         Include::Single(v) => vec![v],
         Include::Multiple(v) => v,
     };
+    if let Some(mut arch_includes) = parsed.config.arch_include.take() {
+        if let Some(basearch) = basearch {
+            if let Some(arch_include_value) = arch_includes.remove(basearch) {
+                match arch_include_value {
+                    Include::Single(v) => includes.push(v),
+                    Include::Multiple(v) => includes.extend(v),
+                }
+            }
+        }
+    }
     for include_path in includes.iter() {
         if depth == INCLUDE_MAXDEPTH {
             return Err(io::Error::new(
@@ -664,6 +674,9 @@ struct TreeComposeConfig {
     gpg_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     include: Option<Include>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "arch-include")]
+    arch_include: Option<BTreeMap<String, Include>>,
 
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1120,6 +1133,28 @@ include: foo.yaml
         assert!(tf.parsed.packages.unwrap().len() == 4);
         Ok(())
     }
+
+    #[test]
+    fn test_treefile_arch_includes() -> Fallible<()> {
+        let workdir = tempfile::tempdir()?;
+        utils::write_file(workdir.path().join("foo-x86_64.yaml"), |b| {
+            let foo = r#"
+packages:
+  - foo-x86_64-include
+"#;
+            b.write_all(foo.as_bytes())?; Ok(()) })?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(r#"
+arch-include:
+    x86_64: foo-x86_64.yaml
+    s390x: foo-s390x.yaml
+"#);
+        // Note foo-s390x.yaml doesn't exist
+        let tf = new_test_treefile(workdir.path(), buf.as_str(), Some(ARCH_X86_64))?;
+        assert!(tf.parsed.packages.unwrap().iter().find(|&p| p == "foo-x86_64-include").is_some());
+        Ok(())
+    }
+
 
     #[test]
     fn test_treefile_merge() {

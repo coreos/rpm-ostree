@@ -224,6 +224,22 @@ It supports the following parameters:
    also be an array of strings.  Including the same file multiple times
    is an error.
 
+ * `arch-include`: object (`Map<String,include>`), optional: Each member of this
+   object should be the name of a base architecture (`$basearch`), and the `include` value
+   functions the same as the `include` key above - it can be either
+   a single string, or an array of strings - and it has the same semantics.
+   Entries which match `arch-include` are processed after `include`.
+
+   Example (in YAML):
+
+   ```yaml
+   arch-include:
+     x86_64: bootloader-x86_64.yaml
+     s390x:
+       - bootloader-s390x.yaml
+       - tweaks-s390x.yaml
+    ```
+
  * `container`: boolean, optional: Defaults to `false`.  If `true`, then
    rpm-ostree will not do any special handling of kernel, initrd or the
    /boot directory. This is useful if the target for the tree is some kind
