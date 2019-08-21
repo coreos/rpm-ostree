@@ -29,7 +29,7 @@ host:
 tests:
   - ./ci/f29-cosa-build.sh
 
-timeout: 60m
+timeout: 120m
 
 ---
 

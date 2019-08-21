@@ -400,10 +400,20 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     let filename = filename.as_ref();
     let mut parsed = treefile_parse(filename, basearch, seen_includes)?;
     let include = parsed.config.include.take().unwrap_or_else(|| Include::Multiple(Vec::new()));
-    let includes = match include {
+    let mut includes = match include {
         Include::Single(v) => vec![v],
         Include::Multiple(v) => v,
     };
+    if let Some(mut arch_includes) = parsed.config.arch_include.take() {
+        if let Some(basearch) = basearch {
+            if let Some(arch_include_value) = arch_includes.remove(basearch) {
+                match arch_include_value {
+                    Include::Single(v) => includes.push(v),
+                    Include::Multiple(v) => includes.extend(v),
+                }
+            }
+        }
+    }
     for include_path in includes.iter() {
         if depth == INCLUDE_MAXDEPTH {
             return Err(io::Error::new(
@@ -664,6 +674,9 @@ struct TreeComposeConfig {
     gpg_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     include: Option<Include>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "arch-include")]
+    arch_include: Option<BTreeMap<String, Include>>,
 
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1064,33 +1077,20 @@ automatic_version_prefix: bar
         );
     }
 
-    struct TreefileTest {
-        tf: Box<Treefile>,
-        #[allow(dead_code)]
-        workdir: tempfile::TempDir,
-    }
-
-    impl TreefileTest {
-        fn new<'a, 'b>(contents: &'a str, basearch: Option<&'b str>) -> Fallible<TreefileTest> {
-            let workdir = tempfile::tempdir()?;
-            let tf_path = workdir.path().join("treefile.yaml");
-            {
-                let mut tf_stream = io::BufWriter::new(fs::File::create(&tf_path)?);
-                tf_stream.write_all(contents.as_bytes())?;
-            }
-            let tf = Treefile::new_boxed(
-                tf_path.as_path(),
-                basearch,
-                openat::Dir::open(workdir.path())?,
-            )?;
-            Ok(TreefileTest { tf, workdir })
-        }
+    fn new_test_treefile<'a, 'b>(workdir: &std::path::Path, contents: &'a str, basearch: Option<&'b str>) -> Fallible<Box<Treefile>> {
+        let tf_path = workdir.join("treefile.yaml");
+        utils::write_file(&tf_path, |b| { b.write_all(contents.as_bytes())?; Ok(()) })?;
+        Ok(Treefile::new_boxed(
+            tf_path.as_path(),
+            basearch,
+            openat::Dir::open(workdir)?,
+        )?)
     }
 
     #[test]
     fn test_treefile_new() {
-        let t = TreefileTest::new(VALID_PRELUDE, None).unwrap();
-        let tf = &t.tf;
+        let workdir = tempfile::tempdir().unwrap();
+        let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
         assert!(tf.parsed.rojig.is_none());
         assert!(tf.rojig_spec.is_none());
         assert!(tf.parsed.machineid_compat.is_none());
@@ -1105,16 +1105,56 @@ rojig:
 
     #[test]
     fn test_treefile_new_rojig() {
+        let workdir = tempfile::tempdir().unwrap();
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(ROJIG_YAML);
-        let t = TreefileTest::new(buf.as_str(), None).unwrap();
-        let tf = &t.tf;
+        let tf = new_test_treefile(workdir.path(), buf.as_str(), None).unwrap();
         let rojig = tf.parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
         let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().as_str();
         let rojig_spec = Path::new(rojig_spec_str);
         assert!(rojig_spec.file_name().unwrap() == "exampleos.spec");
     }
+
+    #[test]
+    fn test_treefile_includes() -> Fallible<()> {
+        let workdir = tempfile::tempdir()?;
+        utils::write_file(workdir.path().join("foo.yaml"), |b| {
+            let foo = r#"
+packages:
+  - fooinclude
+"#;
+            b.write_all(foo.as_bytes())?; Ok(()) })?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(r#"
+include: foo.yaml
+"#);
+        let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
+        assert!(tf.parsed.packages.unwrap().len() == 4);
+        Ok(())
+    }
+
+    #[test]
+    fn test_treefile_arch_includes() -> Fallible<()> {
+        let workdir = tempfile::tempdir()?;
+        utils::write_file(workdir.path().join("foo-x86_64.yaml"), |b| {
+            let foo = r#"
+packages:
+  - foo-x86_64-include
+"#;
+            b.write_all(foo.as_bytes())?; Ok(()) })?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(r#"
+arch-include:
+    x86_64: foo-x86_64.yaml
+    s390x: foo-s390x.yaml
+"#);
+        // Note foo-s390x.yaml doesn't exist
+        let tf = new_test_treefile(workdir.path(), buf.as_str(), Some(ARCH_X86_64))?;
+        assert!(tf.parsed.packages.unwrap().iter().find(|&p| p == "foo-x86_64-include").is_some());
+        Ok(())
+    }
+
 
     #[test]
     fn test_treefile_merge() {
