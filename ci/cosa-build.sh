@@ -7,10 +7,11 @@ cosaimg=quay.io/coreos-assembler/coreos-assembler:latest
 podman pull "${cosaimg}"
 
 # Build rpm-ostree using cosa as a buildroot, and extract the result
-podman run --privileged --rm \
+podman run --security-opt label=disable --rm \
        -v $(pwd):/srv/code -w /srv/code \
+       --entrypoint bash --user root \
        "${cosaimg}" \
-       /bin/sh -c './ci/build.sh && make install DESTDIR=$(pwd)/installroot'
+       -c 'yum -y swap fedora-release-container fedora-release && ./ci/build.sh && make install DESTDIR=$(pwd)/installroot'
 
 codedir=$(pwd)
 mkdir fcos
