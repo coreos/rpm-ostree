@@ -16,7 +16,7 @@ tests:
 ---
 
 # Build a Fedora CoreOS ostree
-context: fcos29-cosa-build
+context: fcos-cosa-build
 inherit: true
 
 # This test case wants unprivileged recursive containers

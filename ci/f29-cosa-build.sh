@@ -1,14 +1,16 @@
 #!/usr/bin/bash
-# Build rpm-ostree, then inject it into a cosa container and build FCOS
+# Build rpm-ostree, using cosa as a buildroot and then
+# override the version inside cosa, then build FCOS
 set -xeuo pipefail
-
-podman run --privileged --rm \
-       -v $(pwd):/srv/code -w /srv/code \
-       registry.fedoraproject.org/fedora:29 \
-       /bin/sh -c './ci/build.sh && make install DESTDIR=$(pwd)/installroot'
 
 cosaimg=quay.io/coreos-assembler/coreos-assembler:latest
 podman pull "${cosaimg}"
+
+# Build rpm-ostree using cosa as a buildroot, and extract the result
+podman run --privileged --rm \
+       -v $(pwd):/srv/code -w /srv/code \
+       "${cosaimg}" \
+       /bin/sh -c './ci/build.sh && make install DESTDIR=$(pwd)/installroot'
 
 codedir=$(pwd)
 mkdir fcos
