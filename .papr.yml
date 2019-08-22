@@ -27,7 +27,7 @@ host:
   distro: fedora/29/atomic
 
 tests:
-  - ./ci/f29-cosa-build.sh
+  - ./ci/cosa-build.sh
 
 timeout: 120m
 
