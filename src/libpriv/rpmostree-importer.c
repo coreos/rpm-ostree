@@ -884,7 +884,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
   if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree,
                                             modifier, cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Importing archive");
 
   /* check if any of the cbs set an error */
   if (cb_error != NULL)
@@ -921,7 +921,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
 
       if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir.fd, ".", mtree, modifier,
                                            cancellable, error))
-        return FALSE;
+        return glnx_prefix_error (error, "Writing tmpfiles mtree");
 
       /* check if any of the cbs set an error */
       if (cb_error != NULL)
@@ -933,7 +933,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
 
   g_autoptr(GFile) root = NULL;
   if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Writing mtree");
 
   g_autoptr(GVariant) metadata = NULL;
   if (!build_metadata_variant (self, &metadata, cancellable, error))
@@ -949,7 +949,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   if (!ostree_repo_write_commit_with_time (repo, NULL, "", "", metadata,
                                            OSTREE_REPO_FILE (root), buildtime,
                                            out_csum, cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Writing commit");
 
   return TRUE;
 }
@@ -967,8 +967,7 @@ rpmostree_importer_run (RpmOstreeImporter *self,
   if (!import_rpm_to_repo (self, &csum, cancellable, error))
     {
       g_autofree char *name = headerGetAsString (self->hdr, RPMTAG_NAME);
-      g_prefix_error (error, "Importing package %s: ", name);
-      return FALSE;
+      return glnx_prefix_error (error, "Importing package '%s'", name);
     }
 
   const char *branch = rpmostree_importer_get_ostree_branch (self);
