@@ -6,6 +6,10 @@ set -xeuo pipefail
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
 
+if [ -n "${SKIP_INSTALLDEPS:-}" ]; then
+    exit 0
+fi
+
 # Use the latest ostree by default (XXX: currently pulling in f29 ostree, need
 # to bump rdgo to f30 or wait for packit)
 id=$(. /etc/os-release && echo $ID)
