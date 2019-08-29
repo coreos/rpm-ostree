@@ -1,4 +1,5 @@
-FROM registry.fedoraproject.org/fedora:30
+FROM registry.svc.ci.openshift.org/coreos/cosa-buildroot:latest
 WORKDIR /src
 COPY . .
-RUN ./ci/build-check.sh
+USER root
+RUN env SKIP_INSTALLDEPS=1 ./ci/build-check.sh

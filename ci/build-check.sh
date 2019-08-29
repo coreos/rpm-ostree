@@ -27,7 +27,11 @@ fi
 ${dn}/build.sh
 # NB: avoid make function because our RPM building doesn't
 # support parallel runs right now
-/usr/bin/make check
+# See https://github.com/containers/fuse-overlayfs/pull/105 for the fuse-overlayfs workaround
+if ! [ "$(findmnt -n -o SOURCE /)" != fuse-overlayfs ]; then
+    /usr/bin/make check
+fi
+make rust-test
 make install
 
 # And now a clang build with -Werror turned on. We can't do this with gcc (in
