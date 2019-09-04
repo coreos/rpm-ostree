@@ -33,19 +33,32 @@ For more information, see the online manual: [Read The Docs (rpm-ostree)](https:
  - Transactional, background image-based (versioned/checksummed) upgrades
  - OS rollback without affecting user data (`/usr` but not `/etc`, `/var`) via libostree
  - Client-side package layering (and overrides)
- - Easily make your own: `rpm-ostree compose tree`
+ - Easily make your own: `rpm-ostree compose tree` and [CoreOS Assembler](https://github.com/coreos/coreos-assembler)
 
 Projects using rpm-ostree
 --------------------------
 
-[Project Atomic](http://www.projectatomic.io/) is an umbrella project for
-delivering upstream container technologies and combined with a minimized,
-atomically upgradable host system to Fedora, Red Hat Enterprise Linux, and CentOS.
+The OSTree project is independent of distributions and agnostic to how content
+is delivered and managed; it's used today by e.g. Debian, Fedora, and OpenEmbedded
+derived systems among others.  There are some examples in the [OSTree github](https://github.com/ostreedev/ostree).
 
-rpm-ostree is the underlying technology for host updates. The headlining project
-is "Atomic Host", which is a server variant oriented towards running Linux
-containers using e.g. Kubernetes. However, there is now also a Workstation
-variant, showing the full generality of the rpm-ostree model.
+In contrast, rpm-ostree is intended to be tightly integrated with the Fedora
+ecosystem.  Today it is the underlying update mechanism of [Fedora CoreOS](https://getfedora.org/coreos/)
+as well as its derivative RHEL CoreOS.  It is also used by [Fedora IoT](https://iot.fedoraproject.org/)
+and [Fedora Silverblue](https://silverblue.fedoraproject.org/). 
+
+Originally, it was productized as part of [Project Atomic](http://www.projectatomic.io/).
+
+Why?
+---
+
+Package systems such as apt and yum are highly prevalent in Linux-based operating systems.  The core premise of rpm-ostree is that image-based updates should be the default.  This provides a high degree of predictability and resiliency.  However, where rpm-ostree is fairly unique in the ecosystem is supporting client-side package layering and overrides; deeply integrating RPM as an (optional) layer on top of OSTree.
+
+A good way to think of package layering is recasting RPMs as "operating system extensions", similar to how browser extensions work (although before those were sandboxed).  One can use package layering for components not easily containerized, such as PAM modules, custom shells, etc.
+
+Further, one can easily use `rpm-ostree override replace` to override the kernel or userspace components with the very same RPMs shipped to traditional systems.  The Fedora project for example continues to only have one kernel build.
+
+Layering and overrides are still built on top of the default OSTree engine - installing and updating client-side packages constructs a new filesystem root, it does not by default affect your booted root.  This preserves the "image" nature of the system.
 
 Manual
 ------
