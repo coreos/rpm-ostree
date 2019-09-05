@@ -24,6 +24,12 @@ set -euo pipefail
 
 set -x
 
+# XXX: uncomment this when we migrate CI to FCOS
+# # Note this test is run with forced read-only sysroot on
+# # https://github.com/coreos/rpm-ostree/pull/1896
+# vm_cmd ostree config --repo /sysroot/ostree/repo set sysroot.readonly true
+# vm_cmd systemctl restart rpm-ostreed
+
 osname=$(vm_get_booted_deployment_info osname)
 
 vm_kargs_now() {
@@ -144,3 +150,8 @@ vm_rpmostree kargs > kargs.txt
 assert_file_has_content_literal kargs.txt 'PACKAGE=TEST'
 assert_file_has_content_literal kargs.txt 'PACKAGE2=TEST2'
 echo "ok kargs display with multiple operations"
+
+# XXX: uncomment this when we migrate CI to FCOS
+# # And reset this bit
+# vm_cmd ostree config --repo /sysroot/ostree/repo set sysroot.readonly false
+# vm_reboot
