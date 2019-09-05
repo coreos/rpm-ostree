@@ -77,3 +77,8 @@ rpm-ostree specific talks:
  * devconf.cz 2018: [Colin Walters: Hybrid image/package OS updates with rpm-ostree](https://www.youtube.com/watch?v=4A_xl5dC210) [slides](https://fedorapeople.org/~walters/2018.01-devconf/index.html)
  * devconf.cz 2018: [Peter Robinson: Using Fedora and OSTree for IoT](https://www.youtube.com/watch?v=mRqV38qT-wc)
 
+License
+----
+
+rpm-ostree includes code licensed under GPLv2+, LGPLv2+, (Apache 2.0 OR MIT).
+For more information, see [LICENSE](LICENSE).
