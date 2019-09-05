@@ -125,33 +125,6 @@ branches:
   - auto
   - try
 
-context: f29-ex-container
-build: false
-timeout: 30m
-required: false
-
-# See the f29-compose context for why we do things this way.
-host:
-  distro: fedora/29/atomic
-
-tests:
-  - docker run --privileged --rm
-    -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
-    -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
-    -v $(pwd):/srv/code -w /srv/code
-    registry.fedoraproject.org/fedora:29 /bin/sh -c
-    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
-
-artifacts:
-  - ex-container-logs
-
----
-
-branches:
-  - master
-  - auto
-  - try
-
 context: rust-min-version-check
 timeout: 30m
 
