@@ -122,6 +122,12 @@ dnl bundled libdnf
 PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
 PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"
 
+dnl Version check this until it's stable
+save_LIBS=$LIBS
+LIBS=$PKGDEP_RPMOSTREE_LIBS
+AC_CHECK_FUNCS(ostree_sysroot_set_mount_namespace_in_use)
+LIBS=$save_LIBS
+
 dnl RHEL8.1 has old libarchive
 AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
   [AC_DEFINE([HAVE_LIBARCHIVE_ZSTD], 1, [Define if we have libarchive with zstd])])

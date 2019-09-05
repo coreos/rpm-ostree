@@ -6,6 +6,8 @@ ConditionPathExists=/ostree
 [Service]
 Type=dbus
 BusName=org.projectatomic.rpmostree1
+# To use the read-only sysroot bits
+MountFlags=slave
 NotifyAccess=main
 @SYSTEMD_ENVIRON@
 ExecStart=@bindir@/rpm-ostree start-daemon

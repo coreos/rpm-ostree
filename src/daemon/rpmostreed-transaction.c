@@ -573,6 +573,16 @@ transaction_initable_init (GInitable *initable,
        * everything from disk.
        */
       priv->sysroot = ostree_sysroot_new (tmp_path);
+      /* See also related code in rpmostreed-sysroot.c */
+#ifdef HAVE_OSTREE_SYSROOT_SET_MOUNT_NAMESPACE_IN_USE
+      if (!ostree_sysroot_initialize (priv->sysroot, error))
+        return FALSE;
+      /* We use MountFlags=slave in the unit file, which combined
+      * with this ensures we support read-only /sysroot mounts.
+      * https://github.com/ostreedev/ostree/issues/1265
+      **/
+      ostree_sysroot_set_mount_namespace_in_use (priv->sysroot);
+#endif
       g_signal_connect (priv->sysroot, "journal-msg",
                         G_CALLBACK (on_sysroot_journal_msg), self);
 
