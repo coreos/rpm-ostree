@@ -1,1 +1,22 @@
-COPYING
+rpm-ostree includes code licensed under GPLv2+, LGPLv2+, (Apache 2.0 OR MIT).
+More specifically, the code in `rust/` is under `Apache 2.0 or MIT`, and
+the C code (in `src/` mostly) is under a mix of GPLv2+ or LGPLv2+.
+See these license files:
+
+ - COPYING.GPL
+ - COPYING.LGPL
+ - rust/LICENSE-APACHE
+ - rust/LICENSE-MIT
+
+Most of our source files have either a license header or a SPDX license identifier.
+
+The original intention for rpm-ostree was to match libostree as being LGPLv2+;
+this would ensure code could be easily shared between the two, as well as other
+LGPLv2+ projects like glib.
+
+However [due to an accident](https://github.com/projectatomic/rpm-ostree/issues/1890),
+some GPLv2+ code was imported, and we're unlikely to easily change that now.
+
+The rationale for having the Rust code be `Apache 2.0 OR MIT` is to match
+most of the Rust ecosystem, so we can easily share it there.
+
