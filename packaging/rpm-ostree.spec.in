@@ -1,12 +1,29 @@
+# The canonical copy of this spec file is upstream at:
+# https://github.com/projectatomic/rpm-ostree/blob/master/packaging/rpm-ostree.spec.in
+
 Summary: Hybrid image/package system
 Name: rpm-ostree
-Version: 2017.3
+Version: 2019.5
 Release: 1%{?dist}
 #VCS: https://github.com/cgwalters/rpm-ostree
-# This tarball is generated via "make -f Makefile.dist-packaging dist-snapshot"
+# This tarball is generated via "cd packaging && make -f Makefile.dist-packaging dist-snapshot"
+# in the upstream git.  If rust is enabled, it contains vendored sources.
 Source0: rpm-ostree-%{version}.tar.xz
 License: LGPLv2+
 URL: https://github.com/projectatomic/rpm-ostree
+
+ExclusiveArch: %{rust_arches}
+
+%if 0%{?fedora}
+BuildRequires: cargo
+BuildRequires: rust
+%else
+# assume el8
+BuildRequires: rust-toolset
+%endif
+
+# For the autofiles bits below
+BuildRequires: /usr/bin/python3
 # We always run autogen.sh
 BuildRequires: autoconf automake libtool git
 # For docs
@@ -14,39 +31,52 @@ BuildRequires: chrpath
 BuildRequires: gtk-doc
 BuildRequires: gperf
 BuildRequires: gnome-common
-BuildRequires: gobject-introspection
+BuildRequires: /usr/bin/g-ir-scanner
 # Core requirements
-BuildRequires: pkgconfig(ostree-1) >= 2017.2
+# One way to check this: `objdump -p /path/to/rpm-ostree | grep LIBOSTREE` and pick the highest (though that might miss e.g. new struct members)
+BuildRequires: pkgconfig(ostree-1) >= 2019.2
+BuildRequires: pkgconfig(polkit-gobject-1)
 BuildRequires: pkgconfig(json-glib-1.0)
 BuildRequires: pkgconfig(rpm)
 BuildRequires: pkgconfig(libarchive)
 BuildRequires: pkgconfig(libsystemd)
-BuildRequires: pkgconfig(polkit-gobject-1)
 BuildRequires: libcap-devel
 BuildRequires: libattr-devel
 
 # We currently interact directly with librepo
 BuildRequires: pkgconfig(librepo)
 
+# Needed by curl-rust
+BuildRequires: pkgconfig(libcurl)
+
 # libdnf bundling
 # We're using RPATH to pick up our bundled version
 %global __requires_exclude ^libdnf[.]so[.].*$
 
+# Our bundled libdnf.so.2 is for us only
+%global __provides_exclude_from ^%{_libdir}/%{name}/.*$
+
 BuildRequires: cmake
 BuildRequires: pkgconfig(expat)
 BuildRequires: pkgconfig(check)
-BuildRequires: python-devel
-BuildRequires: python-sphinx
-%if (0%{?rhel} != 0 && 0%{?rhel} <= 7)
-BuildRequires: libsolv-devel
-%else
 BuildRequires: pkgconfig(libsolv)
-%endif
 
-# In CentOS7/RHEL the package is client-only right now, but we can do both
-%if 0%{?rhel} != 0 && 0%{?rhel} <= 7
-Provides: rpm-ostree-client
-%endif
+# We need g++ for libdnf
+BuildRequires: gcc-c++
+
+
+# more libdnf build deps (see libdnf's spec for versions)
+%global swig_version 3.0.12
+%global libmodulemd_version 1.6.1
+BuildRequires:  swig >= %{swig_version}
+BuildRequires:  pkgconfig(modulemd) >= %{libmodulemd_version}
+BuildRequires:  pkgconfig(json-c)
+BuildRequires:  pkgconfig(cppunit)
+BuildRequires:  pkgconfig(sqlite3)
+BuildRequires:  pkgconfig(smartcols)
+BuildRequires:  gpgme-devel
+
+Requires:       libmodulemd1%{?_isa} >= %{libmodulemd_version}
 
 # For now...see https://github.com/projectatomic/rpm-ostree/pull/637
 # and https://github.com/fedora-infra/fedmsg-atomic-composer/pull/17
@@ -56,6 +86,8 @@ Requires: ostree
 Requires: bubblewrap
 Requires: fuse
 
+Requires: %{name}-libs%{?_isa} = %{version}-%{release}
+
 %description
 rpm-ostree is a hybrid image/package system.  It supports
 "composing" packages on a build server into an OSTree repository,
@@ -64,13 +96,18 @@ Additionally, unlike many "pure" image systems, with rpm-ostree
 each client system can layer on additional packages, providing
 a "best of both worlds" approach.
 
+%package libs
+Summary: Shared library for rpm-ostree
+
+%description libs
+The %{name}-libs package includes the shared library for %{name}.
+
 %package devel
 Summary: Development headers for %{name}
-Group: Development/Libraries
-Requires: %{name} = %{version}-%{release}
+Requires: %{name}-libs%{?_isa} = %{version}-%{release}
 
 %description devel
-The %{name}-devel package includes the header files for the %{name} library.
+The %{name}-devel package includes the header files for %{name}-libs.
 
 %prep
 %autosetup -Sgit -n %{name}-%{version}
@@ -91,7 +128,6 @@ find $RPM_BUILD_ROOT -name '*.la' -delete
 # way the same spec file works more easily across multiple versions where e.g. an
 # older version might not have a systemd unit file.
 cat > autofiles.py <<EOF
-#!/usr/bin/python
 import os,sys,glob
 os.chdir(os.environ['RPM_BUILD_ROOT'])
 for line in sys.argv[1:]:
@@ -107,20 +143,30 @@ for line in sys.argv[1:]:
         else:
             sys.stderr.write('{0} did not match any files\n'.format(line))
 EOF
-python autofiles.py > files \
+PYTHON=python3
+if ! test -x /usr/bin/python3; then
+    PYTHON=python2
+fi
+$PYTHON autofiles.py > files \
   '%{_bindir}/*' \
   '%{_libdir}/%{name}' \
-  '%{_libdir}/*.so.*' \
   '%{_mandir}/man*/*' \
-  '%{_libdir}/girepository-1.0/*.typelib' \
   '%{_sysconfdir}/dbus-1/system.d/*' \
+  '%{_sysconfdir}/rpm-ostreed.conf' \
   '%{_prefix}/lib/systemd/system/*' \
   '%{_libexecdir}/rpm-ostree*' \
+  '%{_datadir}/polkit-1/actions/*.policy' \
   '%{_datadir}/dbus-1/system-services' \
-  '%{_datadir}/polkit-1/actions/org.projectatomic.rpmostree1.policy'
-python autofiles.py > files.devel \
+  '%{_datadir}/bash-completion/completions/*'
+
+$PYTHON autofiles.py > files.lib \
+  '%{_libdir}/*.so.*' \
+  '%{_libdir}/girepository-1.0/*.typelib'
+
+$PYTHON autofiles.py > files.devel \
   '%{_libdir}/lib*.so' \
   '%{_includedir}/*' \
+  '%{_datadir}/dbus-1/interfaces/org.projectatomic.rpmostree1.xml' \
   '%{_libdir}/pkgconfig/*' \
   '%{_datadir}/gtk-doc/html/*' \
   '%{_datadir}/gir-1.0/*-1.0.gir'
@@ -128,5 +174,6 @@ python autofiles.py > files.devel \
 %files -f files
 %doc COPYING README.md
 
-%files devel -f files.devel
+%files libs -f files.lib
 
+%files devel -f files.devel
