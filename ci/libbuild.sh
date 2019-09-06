@@ -1,9 +1,9 @@
 #!/usr/bin/bash
 
 pkg_upgrade() {
-    echo "Running yum -y distro-sync... $(date)"
-    yum -y distro-sync
-    echo "Done yum -y distro-sync! $(date)"
+    echo "Running dnf -y distro-sync... $(date)"
+    dnf -y distro-sync
+    echo "Done dnf -y distro-sync! $(date)"
 }
 
 make() {
@@ -17,21 +17,9 @@ build() {
 }
 
 pkg_install() {
-    echo "Running yum -y install... $(date)"
-    yum -y install "$@"
-    echo "Done running yum -y install! $(date)"
-}
-
-pkg_install_if_os() {
-    os=$1
-    shift
-    (. /etc/os-release;
-         if test "${os}" = "${ID}"; then
-            pkg_install "$@"
-         else
-             echo "Skipping installation on OS ${ID}: $@"
-         fi
-    )
+    echo "Running dnf -y install... $(date)"
+    dnf -y install "$@"
+    echo "Done running dnf -y install! $(date)"
 }
 
 pkg_builddep() {
@@ -46,16 +34,11 @@ pkg_builddep() {
 }
 
 pkg_install_builddeps() {
-    pkg=$1
-    if test -x /usr/bin/dnf; then
-        pkg_install dnf-plugins-core 'dnf-command(builddep)'
-        # Base buildroot
-        pkg_install @buildsys-build
-    else
-        pkg_install yum-utils
-        # Base buildroot, copied from the mock config sadly
-        pkg_install bash bzip2 coreutils cpio diffutils system-release findutils gawk gcc gcc-c++ grep gzip info make patch redhat-rpm-config rpm-build sed shadow-utils tar unzip util-linux which xz
-    fi
+    local pkg=$1
+    pkg_install dnf-plugins-core 'dnf-command(builddep)'
+    # Base buildroot (but exclude fedora-release, conflicts with -container:
+    # https://bugzilla.redhat.com/show_bug.cgi?id=1649921)
+    pkg_install @buildsys-build --excludepkg fedora-release
     # builddeps+runtime deps
     pkg_builddep $pkg
     pkg_install $pkg
