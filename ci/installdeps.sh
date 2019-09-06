@@ -6,10 +6,11 @@ set -xeuo pipefail
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
 
-# Use the latest ostree by default
+# Use the latest ostree by default (XXX: currently pulling in f29 ostree, need
+# to bump rdgo to f30 or wait for packit)
 id=$(. /etc/os-release && echo $ID)
 version_id=$(. /etc/os-release && echo $VERSION_ID)
-if [ "$id" == fedora ] && [ "$version_id" == 29 ]; then
+if [ "$id" == fedora ] && [ "$version_id" -ge 29 ]; then
     echo -e '[fahc]\nmetadata_expire=1m\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
     # Until we fix https://github.com/rpm-software-management/libdnf/pull/149
     excludes='exclude=ostree ostree-libs ostree-grub2 rpm-ostree'
