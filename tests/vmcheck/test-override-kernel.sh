@@ -30,16 +30,23 @@ if test "${osid}" != 'ID=fedora'; then
     exit 0
 fi
 
+versionid=$(vm_cmd grep -E '^VERSION_ID=' /etc/os-release)
+versionid=${versionid:11} # trim off VERSION_ID=
+
 # Test that we can override the kernel.  For ease of testing
-# I just picked the "gold" F29 kernel.
+# I just picked the "gold" F29/30 kernel.
 current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
-kernel_release=4.18.16-300.fc29.x86_64
+case $versionid in
+  29) kernel_release=4.18.16-300.fc29.x86_64;;
+  30) kernel_release=5.0.9-301.fc30.x86_64;;
+  *) assert_not_reached "Unsupported Fedora version: $versionid";;
+esac
 assert_not_file_has_content current-dblist.txt $kernel_release
 grep -E '^ kernel-5' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
 assert_streq "$(wc -l < orig-kernel.txt)" "1"
 orig_kernel=$(cat orig-kernel.txt)
-URL_ROOT="https://dl.fedoraproject.org/pub/fedora/linux/releases/29/Everything/x86_64/os/Packages/k"
+URL_ROOT="https://dl.fedoraproject.org/pub/fedora/linux/releases/$versionid/Everything/x86_64/os/Packages/k"
 vm_rpmostree override replace \
   "$URL_ROOT/kernel{,-core,-modules{,-extra}}-$kernel_release.rpm"
 new=$(vm_get_pending_csum)
