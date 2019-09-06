@@ -12,17 +12,7 @@ PKG_CLIENT_VER = $(PACKAGE)-client-$(GITREV_FOR_PKG)
 dist-snapshot:
 	./make-git-snapshot.sh "$(srcdir)" "$(PKG_VER)" "$(GITREV)"
 	rm -f $(PKG_VER).tar.xz
-	xz $(PKG_VER).tar 
-
-dist-snapshot-without-compose-tooling:
-	./make-git-snapshot.sh "$(srcdir)" "$(PKG_CLIENT_VER)" "$(GITREV)"; \
-	rm tmp -rf; \
-	mkdir tmp; \
-	tar -C tmp -x "--exclude=$(PKG_CLIENT_VER)/src/*compose*" -f $(PKG_CLIENT_VER).tar; \
-	(cd tmp && tar -cf ../$(PKG_CLIENT_VER).tar.filtered *); \
-	mv $(PKG_CLIENT_VER).tar{.filtered,}; \
-	rm -f $(PKG_CLIENT_VER).tar.xz; \
-	xz $(PKG_CLIENT_VER).tar 
+	xz -T0 $(PKG_VER).tar
 
 srpm: dist-snapshot
 	 sed -e "s,^Version:.*,Version: $(GITREV_FOR_PKG)," $(PACKAGE).spec.in > $(PACKAGE).spec; \
