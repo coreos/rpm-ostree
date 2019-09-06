@@ -172,7 +172,7 @@ $PYTHON autofiles.py > files.devel \
   '%{_datadir}/gir-1.0/*-1.0.gir'
 
 %files -f files
-%doc COPYING README.md
+%doc COPYING.GPL COPYING.LGPL LICENSE README.md
 
 %files libs -f files.lib
 
