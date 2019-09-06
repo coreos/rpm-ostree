@@ -20,5 +20,7 @@ srpm: dist-snapshot
 
 rpm: srpm
 	./rpmbuild-cwd --rebuild $(PKG_VER)*.src.rpm
-	repomanage -o | xargs -r rm
+
+yumrepo: rpm
+	repomanage -o . | xargs -r rm
 	createrepo_c .
