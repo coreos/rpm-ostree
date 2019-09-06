@@ -16,9 +16,9 @@ dn=$(dirname $0)
 # It's very common for people to accidentally change submodules, and having this
 # requirement is a small hurdle to pass.
 
-# if running under PAPR, use the branch/PR HEAD actually
-# being tested rather than the merge sha
-HEAD=${PAPR_COMMIT:-HEAD}
+# If passed the commit, use that. Otherwise, if running under PAPR, use the
+# branch/PR HEAD actually being tested rather than the merge sha
+HEAD=${1:-${PAPR_COMMIT:-HEAD}}
 
 tmpd=$(mktemp -d)
 touch ${tmpd}/.tmpdir
