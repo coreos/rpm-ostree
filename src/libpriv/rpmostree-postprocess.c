@@ -174,10 +174,18 @@ init_rootfs (int            dfd,
     { "sysroot/ostree", "ostree" },
   };
 
+  /* Ensure the rootfs has the right mode, we don't want to be affected
+   * by umask.
+   **/
+  if (fchmod (dfd, 0755) == -1)
+    return glnx_throw_errno_prefix (error, "fchmod(rootfs)");
+
   for (guint i = 0; i < G_N_ELEMENTS (toplevel_dirs); i++)
     {
       if (!glnx_ensure_dir (dfd, toplevel_dirs[i], 0755, error))
         return FALSE;
+      if (fchmodat (dfd, toplevel_dirs[i], 0755, 0) == -1)
+        return glnx_throw_errno_prefix (error, "fchmodat");
     }
 
   for (guint i = 0; i < G_N_ELEMENTS (symlinks); i++)
