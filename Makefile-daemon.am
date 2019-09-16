@@ -71,7 +71,7 @@ librpmostreed_la_LIBADD = \
 	$(NULL)
 
 dbusconf_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.conf
-dbusconfdir = ${sysconfdir}/dbus-1/system.d
+dbusconfdir = $(datadir)/dbus-1/system.d
 
 systemdunit_service_in_files = \
 	$(srcdir)/src/daemon/rpm-ostreed.service.in \
