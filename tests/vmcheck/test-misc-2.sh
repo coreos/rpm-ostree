@@ -203,7 +203,7 @@ vm_assert_status_jq '.deployments[0]["pending-base-checksum"]'
 # hard reset to booted csum (simulates what deploy does to remote refspecs)
 vm_cmd ostree reset vmcheck $(vm_get_booted_csum)
 rc=0
-vm_rpmostree deploy $(vm_get_booted_csum) > out.txt || rc=$?
+vm_rpmostree deploy $(vm_get_booted_csum) --unchanged-exit-77 > out.txt || rc=$?
 if [ $rc != 77 ]; then
     assert_not_reached "trying to re-deploy same commit didn't exit 77"
 fi
