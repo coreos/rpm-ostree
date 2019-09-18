@@ -179,11 +179,13 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            In addition to exit status 0 for success and 1 for error,
-            this command also uses exit status 77 to indicate that the
-            system is already on the specified commit.  This tristate
-            return model is intended to support idempotency-oriented
-            systems automation tools like Ansible.
+            <command>
+              --unchanged-exit-77
+            </command>
+              to exit status 77 to indicate that the system is already
+              on the specified commit. This tristate return model is
+              intended to support idempotency-oriented systems
+              automation tools like Ansible.
           </para>
 
           <para>
@@ -424,9 +426,13 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            In addition to exit status 0 for success and 1 for error,
-            this command also uses exit status 77 to indicate that no
-            upgrade is available.
+            <command>
+              --unchanged-exit-77
+            </command>
+              to exit status 77 to indicate that the system is already
+              up to date. This tristate return model is intended to
+              support idempotency-oriented systems automation tools like
+              Ansible.
           </para>
 
           <para>

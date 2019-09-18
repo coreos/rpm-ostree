@@ -34,6 +34,7 @@ static gboolean opt_cache_only;
 static gboolean opt_download_only;
 static gboolean opt_lock_finalization;
 static gboolean opt_disallow_downgrade;
+static gboolean opt_unchanged_exit_77;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -47,6 +48,7 @@ static GOptionEntry option_entries[] = {
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade, "Forbid deployment of chronologically older trees", NULL },
+  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no new deployment made, exit 77", NULL },
   { NULL }
 };
 
@@ -179,7 +181,8 @@ rpmostree_builtin_deploy (int            argc,
 
       if (g_variant_n_children (result) == 0)
         {
-          invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+          if (opt_unchanged_exit_77)
+            invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
           return TRUE;
         }
 
@@ -189,7 +192,8 @@ rpmostree_builtin_deploy (int            argc,
     {
       if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
         {
-          invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+          if (opt_unchanged_exit_77)
+            invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
           return TRUE;
         }
 

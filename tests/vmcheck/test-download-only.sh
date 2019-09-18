@@ -97,7 +97,8 @@ echo "ok offline rebase & install"
 rc=0
 vm_rpmostree upgrade --upgrade-unchanged-exit-77 || rc=$?
 assert_streq "$rc" "77"
-vm_rpmostree upgrade -C --upgrade-unchanged-exit-77 || rc=$?
+# also try out new alias for this
+vm_rpmostree upgrade -C --unchanged-exit-77 || rc=$?
 assert_streq "$rc" "77"
 echo "ok check for change with --cache-only"
 
