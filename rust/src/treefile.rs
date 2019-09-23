@@ -319,10 +319,12 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
 
     merge_basics!(
         treeref,
+        basearch,
         rojig,
         selinux,
         gpg_key,
         include,
+        container,
         recommends,
         documentation,
         boot_location,
@@ -332,22 +334,23 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         releasever,
         automatic_version_prefix,
         mutate_os_release,
-        etc_group_members,
         preserve_passwd,
         check_passwd,
         check_groups,
-        ignore_removed_users,
-        ignore_removed_groups,
         postprocess_script
     );
     merge_vecs!(
         repos,
         packages,
+        bootstrap_packages,
         ostree_layers,
         ostree_override_layers,
         install_langs,
         initramfs_args,
         units,
+        etc_group_members,
+        ignore_removed_users,
+        ignore_removed_groups,
         postprocess,
         add_files,
         remove_files,
@@ -1152,6 +1155,8 @@ arch-include:
 add-commit-metadata:
   my-first-key: "please don't override me"
   my-second-key: "override me"
+etc-group-members:
+  - sudo
         "###,
         );
         let mut mid_input = io::BufReader::new(
@@ -1163,6 +1168,8 @@ add-commit-metadata:
   my-third-key: 1000
   my-fourth-key:
     nested: table
+etc-group-members:
+  - docker
 "###
             .as_bytes(),
         );
@@ -1174,6 +1181,7 @@ add-commit-metadata:
         treefile_merge(&mut top, &mut mid);
         let tf = &top;
         assert!(tf.packages.as_ref().unwrap().len() == 8);
+        assert!(tf.etc_group_members.as_ref().unwrap().len() == 2);
         let rojig = tf.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
         let data = tf.add_commit_metadata.as_ref().unwrap();
