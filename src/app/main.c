@@ -115,6 +115,10 @@ static RpmOstreeCommand commands[] = {
           RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     "Experimental commands that may change or be removed in the future",
     rpmostree_builtin_ex },
+  { "coreos-rootfs", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+                     RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    NULL, rpmostree_builtin_coreos_rootfs },
   { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                     RPM_OSTREE_BUILTIN_FLAG_HIDDEN,

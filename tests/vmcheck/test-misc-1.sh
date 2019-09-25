@@ -102,6 +102,15 @@ fi
 assert_file_has_content err.txt 'ReloadConfig not allowed for user'
 echo "ok auth"
 
+# Test coreos-rootfs
+vm_shell_inline << EOF
+    mkdir /var/tmp/coreos-rootfs
+    rpm-ostree coreos-rootfs seal /var/tmp/coreos-rootfs
+    lsattr -d /var/tmp/coreos-rootfs
+    rpm-ostree coreos-rootfs seal /var/tmp/coreos-rootfs
+EOF > coreos-rootfs.txt
+assert_file_has_content_literal coreos-rootfs.txt '----i-------------- /var/tmp/coreos-rootfs'
+
 # Assert that we can do status as non-root
 vm_cmd_as testuser rpm-ostree status
 echo "ok status doesn't require root"
