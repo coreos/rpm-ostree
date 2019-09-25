@@ -12,6 +12,8 @@ mod composepost;
 pub use self::composepost::*;
 mod history;
 pub use self::history::*;
+mod coreos_rootfs;
+pub use self::coreos_rootfs::*;
 mod journal;
 pub use self::journal::*;
 mod progress;
