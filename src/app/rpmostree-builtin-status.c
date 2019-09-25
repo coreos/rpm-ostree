@@ -1119,7 +1119,7 @@ fetch_history_deployment_gvariant (RORHistoryEntry  *entry,
                                    GError          **error)
 {
   g_autofree char *fn =
-    g_strdup_printf ("%s/%lu", RPMOSTREE_HISTORY_DIR, entry->deploy_timestamp);
+    g_strdup_printf ("%s/%" PRIu64, RPMOSTREE_HISTORY_DIR, entry->deploy_timestamp);
 
   *out_deployment = NULL;
 
@@ -1165,7 +1165,7 @@ print_history_entry (RORHistoryEntry  *entry,
       print_timestamp_and_relative ("BootTimestamp", entry->last_boot_timestamp);
       if (entry->boot_count > 1)
         {
-          g_print ("%s BootCount: %lu; first booted on ",
+          g_print ("%s BootCount: %" PRIu64 "; first booted on ",
                    libsd_special_glyph (TREE_RIGHT), entry->boot_count);
           print_timestamp_and_relative (NULL, entry->first_boot_timestamp);
         }
