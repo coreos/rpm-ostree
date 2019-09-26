@@ -134,7 +134,7 @@ container:
 
 env:
   # this corresponds to the latest Rust module available in el8
-  RUST_MIN_VERSION: 1.31.0
+  RUST_MIN_VERSION: 1.37.0
 
 tests:
   - ci/installdeps.sh
