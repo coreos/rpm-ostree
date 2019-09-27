@@ -56,21 +56,15 @@ struct ConfigAndExternals {
     externals: TreefileExternals,
 }
 
-#[derive(PartialEq)]
-enum InputFormat {
-    YAML,
-    JSON,
-}
-
 /// Parse a YAML treefile definition using base architecture `basearch`.
 /// This does not open the externals.
 fn treefile_parse_stream<R: io::Read>(
-    fmt: InputFormat,
+    fmt: utils::InputFormat,
     input: &mut R,
     basearch: Option<&str>,
 ) -> Fallible<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = match fmt {
-        InputFormat::YAML => {
+        utils::InputFormat::YAML => {
             let tf: TreeComposeConfig = serde_yaml::from_reader(input).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -79,7 +73,7 @@ fn treefile_parse_stream<R: io::Read>(
             })?;
             tf
         }
-        InputFormat::JSON => {
+        utils::InputFormat::JSON => {
             let tf: TreeComposeConfig = serde_json::from_reader(input).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -113,7 +107,7 @@ fn treefile_parse_stream<R: io::Read>(
     // remove from packages-${arch} keys from the extra keys
     let mut archful_pkgs: Option<Vec<String>> = take_archful_pkgs(basearch, &mut treefile)?;
 
-    if fmt == InputFormat::YAML && !treefile.extra.is_empty() {
+    if fmt == utils::InputFormat::YAML && !treefile.extra.is_empty() {
         let keys: Vec<&str> = treefile.extra.keys().map(|k| k.as_str()).collect();
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -225,15 +219,7 @@ fn treefile_parse<P: AsRef<Path>>(
         }
     };
     let mut f = io::BufReader::new(f);
-    let basename = filename
-        .file_name()
-        .map(|s| s.to_string_lossy())
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Expected a filename"))?;
-    let fmt = if basename.ends_with(".yaml") || basename.ends_with(".yml") {
-        InputFormat::YAML
-    } else {
-        InputFormat::JSON
-    };
+    let fmt = utils::InputFormat::detect_from_filename(filename)?;
     let tf = treefile_parse_stream(fmt, &mut f, basearch).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -887,7 +873,7 @@ packages-s390x:
     fn basic_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
         let mut treefile =
-            treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
@@ -911,7 +897,7 @@ remove-files:
         let buf = buf.as_bytes();
         let mut input = io::BufReader::new(buf);
         let treefile =
-            treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.add_files.unwrap().len() == 2);
         assert!(treefile.remove_files.unwrap().len() == 2);
     }
@@ -920,7 +906,7 @@ remove-files:
     fn basic_js_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
         let mut treefile =
-            treefile_parse_stream(InputFormat::JSON, &mut input, Some(ARCH_X86_64)).unwrap();
+            treefile_parse_stream(utils::InputFormat::JSON, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
@@ -929,7 +915,7 @@ remove-files:
     #[test]
     fn basic_valid_noarch() {
         let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let mut treefile = treefile_parse_stream(InputFormat::YAML, &mut input, None).unwrap();
+        let mut treefile = treefile_parse_stream(utils::InputFormat::YAML, &mut input, None).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 3);
@@ -939,14 +925,14 @@ remove-files:
         let buf = VALID_PRELUDE.to_string() + append;
         let mut input = io::BufReader::new(buf.as_bytes());
         let treefile =
-            treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile.substitute_vars().unwrap()
     }
 
     fn test_invalid(data: &'static str) {
         let buf = VALID_PRELUDE.to_string() + data;
         let mut input = io::BufReader::new(buf.as_bytes());
-        match treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)) {
+        match treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)) {
             Err(ref e) => match e.downcast_ref::<io::Error>() {
                 Some(ref ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {}
                 _ => panic!("Expected invalid treefile, not {}", e.to_string()),
@@ -965,7 +951,7 @@ mutate-os-release: ${releasever}
 "###;
         let mut input = io::BufReader::new(buf.as_bytes());
         let mut treefile =
-            treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/30");
         assert!(treefile.releasever.unwrap() == "30");
@@ -1173,9 +1159,9 @@ etc-group-members:
 "###
             .as_bytes(),
         );
-        let mut mid = treefile_parse_stream(InputFormat::YAML, &mut mid_input, basearch).unwrap();
+        let mut mid = treefile_parse_stream(utils::InputFormat::YAML, &mut mid_input, basearch).unwrap();
         let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
-        let mut top = treefile_parse_stream(InputFormat::YAML, &mut top_input, basearch).unwrap();
+        let mut top = treefile_parse_stream(utils::InputFormat::YAML, &mut top_input, basearch).unwrap();
         assert!(top.add_commit_metadata.is_none());
         treefile_merge(&mut mid, &mut base);
         treefile_merge(&mut top, &mut mid);

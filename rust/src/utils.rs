@@ -14,6 +14,28 @@ use tempfile;
 
 use curl::easy::Easy;
 
+#[derive(PartialEq)]
+/// Supported config serialization used by treefile and lockfile
+pub enum InputFormat {
+    YAML,
+    JSON,
+}
+
+impl InputFormat {
+    pub fn detect_from_filename<P: AsRef<Path>>(filename: P) -> Fallible<Self> {
+        let filename = filename.as_ref();
+        let basename = filename
+            .file_name()
+            .map(|s| s.to_string_lossy())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Expected a filename"))?;
+        if basename.ends_with(".yaml") || basename.ends_with(".yml") {
+            Ok(Self::YAML)
+        } else {
+            Ok(Self::JSON)
+        }
+    }
+}
+
 fn download_url_to_tmpfile(url: &str) -> Fallible<fs::File> {
     let mut tmpf = tempfile::tempfile()?;
     {
