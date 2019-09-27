@@ -40,17 +40,9 @@ msrv: {
   coreos.pod(image: 'registry.svc.ci.openshift.org/coreos/cosa-buildroot:latest', runAsUser: 0) {
       checkout scm
 
-      // this corresponds to the latest Rust module available in el8
-      def MINIMUM_SUPPORTED_RUST_VERSION = "1.31.0"
-
       sh """
         set -euo pipefail
-        ci/installdeps.sh
-        curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain ${MINIMUM_SUPPORTED_RUST_VERSION} -y
-        PATH="\$HOME/.cargo/bin:\$PATH" ci/build.sh |& tee out.txt
-        grep ${MINIMUM_SUPPORTED_RUST_VERSION} out.txt
-        grep "checking for cargo... \$HOME/.cargo/bin/cargo" out.txt
-        grep "checking for rustc... \$HOME/.cargo/bin/rustc" out.txt
+        ci/msrv.sh
       """
   }
 }}
