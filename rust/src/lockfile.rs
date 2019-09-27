@@ -18,23 +18,39 @@ use std::io;
 use crate::utils;
 
 /// Parse a JSON lockfile definition.
-fn lockfile_parse_stream<R: io::Read>(input: &mut R,) -> Fallible<LockfileConfig> {
-    let lockfile: LockfileConfig = serde_json::from_reader(input).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("serde-json: {}", e.to_string()),
-        )
-    })?;
+fn lockfile_parse_stream<R: io::Read>(
+    fmt: utils::InputFormat,
+    input: &mut R,
+) -> Fallible<LockfileConfig> {
+    let lockfile: LockfileConfig = match fmt {
+        utils::InputFormat::JSON => {
+            let lf: LockfileConfig = serde_json::from_reader(input).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("serde-json: {}", e.to_string()),
+                )
+            })?;
+            lf
+        }
+        utils::InputFormat::YAML => {
+            let lf: LockfileConfig = serde_yaml::from_reader(input).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("serde-yaml: {}", e.to_string()),
+                )
+            })?;
+            lf
+        }
+    };
     Ok(lockfile)
 }
 
 /// Given a lockfile filename, parse it
 fn lockfile_parse<P: AsRef<Path>>(filename: P,) -> Fallible<LockfileConfig> {
     let filename = filename.as_ref();
+    let fmt = utils::InputFormat::detect_from_filename(filename)?;
     let mut f = io::BufReader::new(utils::open_file(filename)?);
-    filename.file_name().map(|s| s.to_string_lossy()).ok_or_else(
-        || io::Error::new(io::ErrorKind::InvalidInput, "Expected a filename"))?;
-    let lf = lockfile_parse_stream(&mut f).map_err(|e| {
+    let lf = lockfile_parse_stream(fmt, &mut f).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("Parsing {}: {}", filename.to_string_lossy(), e.to_string()),
@@ -126,7 +142,7 @@ mod tests {
     #[test]
     fn basic_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
-        let lockfile = lockfile_parse_stream(&mut input).unwrap();
+        let lockfile = lockfile_parse_stream(utils::InputFormat::JSON, &mut input).unwrap();
         assert!(lockfile.packages.len() == 2);
     }
 
@@ -144,11 +160,11 @@ mod tests {
     #[test]
     fn basic_valid_override() {
         let mut base_input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
-        let mut base_lockfile = lockfile_parse_stream(&mut base_input).unwrap();
+        let mut base_lockfile = lockfile_parse_stream(utils::InputFormat::JSON, &mut base_input).unwrap();
         assert!(base_lockfile.packages.len() == 2);
 
         let mut override_input = io::BufReader::new(OVERRIDE_JS.as_bytes());
-        let override_lockfile = lockfile_parse_stream(&mut override_input).unwrap();
+        let override_lockfile = lockfile_parse_stream(utils::InputFormat::JSON, &mut override_input).unwrap();
         assert!(override_lockfile.packages.len() == 1);
 
         base_lockfile.merge(override_lockfile);
@@ -160,7 +176,7 @@ mod tests {
     #[test]
     fn test_invalid() {
         let mut input = io::BufReader::new(INVALID_PRELUDE_JS.as_bytes());
-        match lockfile_parse_stream(&mut input) {
+        match lockfile_parse_stream(utils::InputFormat::JSON, &mut input) {
             Err(ref e) => match e.downcast_ref::<io::Error>() {
                 Some(ref ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {}
                 _ => panic!("Expected invalid lockfile, not {}", e.to_string()),
