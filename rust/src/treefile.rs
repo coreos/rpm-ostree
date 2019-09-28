@@ -13,7 +13,6 @@ use failure::{Fallible, bail};
 use openat;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
-use serde_yaml;
 use std::collections::{HashMap, BTreeMap};
 use std::io::prelude::*;
 use std::path::Path;
@@ -63,26 +62,7 @@ fn treefile_parse_stream<R: io::Read>(
     input: &mut R,
     basearch: Option<&str>,
 ) -> Fallible<TreeComposeConfig> {
-    let mut treefile: TreeComposeConfig = match fmt {
-        utils::InputFormat::YAML => {
-            let tf: TreeComposeConfig = serde_yaml::from_reader(input).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("serde-yaml: {}", e.to_string()),
-                )
-            })?;
-            tf
-        }
-        utils::InputFormat::JSON => {
-            let tf: TreeComposeConfig = serde_json::from_reader(input).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("serde-json: {}", e.to_string()),
-                )
-            })?;
-            tf
-        }
-    };
+    let mut treefile: TreeComposeConfig = utils::parse_stream(&fmt, input)?;
 
     treefile.basearch = match (treefile.basearch, basearch) {
         (Some(treearch), Some(arch)) => {
