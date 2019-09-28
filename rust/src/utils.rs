@@ -14,6 +14,9 @@ use tempfile;
 
 use curl::easy::Easy;
 
+use serde_json;
+use serde_yaml;
+
 #[derive(PartialEq)]
 /// Supported config serialization used by treefile and lockfile
 pub enum InputFormat {
@@ -34,6 +37,34 @@ impl InputFormat {
             Ok(Self::JSON)
         }
     }
+}
+
+/// Given a lockfile/treefile config definition, parse it
+pub fn parse_stream<T, R: io::Read>(fmt: &InputFormat, input: &mut R) -> Fallible<T>
+where
+    T: serde::de::DeserializeOwned
+{
+    let parsed: T = match fmt {
+        InputFormat::JSON => {
+            let pf: T = serde_json::from_reader(input).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("serde-json: {}", e.to_string()),
+                )
+            })?;
+            pf
+        }
+        InputFormat::YAML => {
+            let pf: T = serde_yaml::from_reader(input).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("serde-yaml: {}", e.to_string()),
+                )
+            })?;
+            pf
+        }
+    };
+    Ok(parsed)
 }
 
 fn download_url_to_tmpfile(url: &str) -> Fallible<fs::File> {
