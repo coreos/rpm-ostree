@@ -72,7 +72,7 @@ rpmostree_builtin_reset (int             argc,
                                        error))
     return FALSE;
 
-  if (argc < 1 || argc > 2)
+  if (argc != 1)
     {
       rpmostree_usage_error (context, "Too few or too many arguments", error);
       return FALSE;
