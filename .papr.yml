@@ -1,20 +1,3 @@
-branches:
-    - master
-    - auto
-    - try
-
-context: f29-codestyle
-
-required: true
-container:
-  image: registry.fedoraproject.org/fedora:29
-
-tests:
-  - ci/ci-commitmessage-submodules.sh
-  - ci/codestyle.sh
-
----
-
 context: f29-primary
 inherit: true
 
@@ -99,20 +82,3 @@ inherit: true
 context: f29-compose2
 env:
   RPMOSTREE_COMPOSE_TEST_FILTER: even
-
----
-
-branches:
-  - master
-  - auto
-  - try
-
-context: rust-min-version-check
-timeout: 30m
-
-required: true
-container:
-  image: registry.fedoraproject.org/fedora:29
-
-tests:
-  - ci/msrv.sh
