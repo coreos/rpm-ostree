@@ -25,13 +25,13 @@ parallel rpms: {
 },
 codestyle: {
   coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest') {
-      def change = checkout scm
+      checkout scm
       sh """
         set -euo pipefail
         # Jenkins by default only fetches the branch it's testing. Explicitly fetch master
         # for ci-commitmessage-submodules.sh
         git fetch origin +refs/heads/master:refs/remotes/origin/master
-        ci/ci-commitmessage-submodules.sh ${change.GIT_COMMIT}
+        ci/ci-commitmessage-submodules.sh
         ci/codestyle.sh
       """
   }
