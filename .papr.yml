@@ -1,5 +1,4 @@
 context: f29-primary
-inherit: true
 
 cluster:
   hosts:
@@ -34,11 +33,6 @@ artifacts:
 
 ---
 
-branches:
-  - master
-  - auto
-  - try
-
 # NB: when bumping 29 here, also bump compose script
 
 context: f29-compose1
@@ -46,8 +40,6 @@ context: f29-compose1
 build: false
 
 timeout: 35m
-
-required: true
 
 # This test case wants an "unprivileged container with bubblewrap",
 # which we don't have right now; so just provision a VM and do a
