@@ -122,6 +122,10 @@ dnl bundled libdnf
 PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
 PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"
 
+dnl RHEL8.1 has old libarchive
+AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
+  [AC_DEFINE([HAVE_LIBARCHIVE_ZSTD], 1, [Define if we have libarchive with zstd])])
+
 dnl This is the current version in Fedora 25.
 AS_IF([pkg-config --atleast-version=4.14.2 rpm], [], [AC_MSG_ERROR([librpm 4.14.2 required])])
 
