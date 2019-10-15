@@ -1994,15 +1994,30 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_assert_cmpuint (g_strv_length (cached_replace_pkgs), ==, 0);
       g_assert_cmpuint (g_strv_length (removed_base_pkgnames), ==, 0);
 
-      GLNX_HASH_TABLE_FOREACH (self->vlockmap, const char*, nevra)
+      GLNX_HASH_TABLE_FOREACH_KV (self->vlockmap, const char*, nevra, const char*, chksum)
         {
           g_autofree char *name = NULL;
           if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
             return FALSE;
           hy_autoquery HyQuery query = hy_query_create (sack);
           hy_query_filter (query, HY_PKG_NAME, HY_EQ, name);
-          hy_query_filter (query, HY_PKG_NEVRA, HY_NEQ, nevra);
-          DnfPackageSet *pset = hy_query_run_set (query);
+          g_autoptr(GPtrArray) pkglist = hy_query_run (query);
+          DnfPackageSet *pset = dnf_packageset_new (sack);
+          for (guint i = 0; i < pkglist->len; i++)
+            {
+              DnfPackage *pkg = pkglist->pdata[i];
+              const char *pkg_nevra = dnf_package_get_nevra (pkg);
+              if (!g_str_equal (pkg_nevra, nevra))
+                dnf_packageset_add (pset, pkg);
+              else if (chksum && *chksum)
+                {
+                  g_autofree char *pkg_chksum = NULL;
+                  if (!rpmostree_get_repodata_chksum_repr (pkg, &pkg_chksum, error))
+                    return FALSE;
+                  if (!g_str_equal (chksum, pkg_chksum))
+                    dnf_packageset_add (pset, pkg);
+                }
+            }
           dnf_sack_add_excludes (sack, pset);
           dnf_packageset_free (pset);
         }
