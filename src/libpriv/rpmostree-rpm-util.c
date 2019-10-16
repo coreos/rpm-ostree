@@ -1300,7 +1300,7 @@ rpmostree_nevra_to_cache_branch (const char *nevra,
    * branch. Something something Rust slices... */
 
   g_autofree char *name = NULL;
-  guint64 epoch;
+  guint64 epoch = 0;
   g_autofree char *version = NULL;
   g_autofree char *release = NULL;
   g_autofree char *arch = NULL;

@@ -3155,7 +3155,7 @@ relabel_in_thread (GTask            *task,
   RpmOstreeContext *self = source;
   RelabelTaskData *tdata = task_data;
 
-  gboolean changed;
+  gboolean changed = FALSE;
   if (!relabel_in_thread_impl (self, tdata->name, tdata->evr, tdata->arch,
                                tdata->tmpdir_dfd, &changed,
                                cancellable, &local_error))
@@ -3669,7 +3669,7 @@ add_install (RpmOstreeContext *self,
   if (!ostree_repo_load_commit (pkgcache_repo, cached_rev, &commit, NULL, error))
     return FALSE;
 
-  gboolean sepolicy_matches;
+  gboolean sepolicy_matches = FALSE;
   if (self->sepolicy)
     {
       if (!commit_has_matching_sepolicy (commit, self->sepolicy, &sepolicy_matches,
