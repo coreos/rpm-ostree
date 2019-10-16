@@ -129,6 +129,11 @@ AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
 dnl This is the current version in Fedora 25.
 AS_IF([pkg-config --atleast-version=4.14.2 rpm], [], [AC_MSG_ERROR([librpm 4.14.2 required])])
 
+dnl We don't *actually* use this ourself, but librepo does, and libdnf gets confused
+dnl if librepo doesn't support it.
+AS_IF([pkg-config --exists zck],
+  [AC_DEFINE([HAVE_ZCHUNK], 1, [Define if we have zchunk])])
+
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS

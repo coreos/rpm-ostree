@@ -22,6 +22,15 @@ BuildRequires: rust
 BuildRequires: rust-toolset
 %endif
 
+# RHEL8 doesn't ship zchunk today.  See also the comments
+# in configure.ac around this as libdnf/librepo need to be in
+# sync, and today we bundle libdnf but not librepo.
+%if 0%{?rhel}
+%bcond_with zchunk
+%else
+%bcond_without zchunk
+%endif
+
 # For the autofiles bits below
 BuildRequires: /usr/bin/python3
 # We always run autogen.sh
@@ -74,6 +83,9 @@ BuildRequires:  pkgconfig(json-c)
 BuildRequires:  pkgconfig(cppunit)
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(smartcols)
+%if %{with zchunk}
+BuildRequires:  pkgconfig(zck) >= 0.9.11
+%endif
 BuildRequires:  gpgme-devel
 
 Requires:       libmodulemd1%{?_isa} >= %{libmodulemd_version}
