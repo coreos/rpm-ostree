@@ -1187,6 +1187,7 @@ rpmostree_compose_builtin_install (int             argc,
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
     return FALSE;
+  g_assert (self); /* Pacify static analysis */
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
     {
@@ -1347,6 +1348,7 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
     return FALSE;
+  g_assert (self); /* Pacify static analysis */
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
     {

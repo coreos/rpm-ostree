@@ -603,6 +603,7 @@ rpmostree_compose_builtin_rojig (int             argc,
   g_autoptr(RpmOstreeRojigCompose) self = NULL;
   if (!rpm_ostree_rojig_compose_new (treefile_path, &self, cancellable, error))
     return FALSE;
+  g_assert (self); /* Pacify static analysis */
   gboolean changed;
   if (!impl_rojig_build (self, outdir, &changed, cancellable, error))
     return FALSE;
