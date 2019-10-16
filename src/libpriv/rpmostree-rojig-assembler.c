@@ -232,8 +232,8 @@ rojig_require_next_entry (RpmOstreeRojigAssembler    *self,
                           GCancellable      *cancellable,
                           GError           **error)
 {
-  gboolean eof;
-  struct archive_entry *entry;
+  gboolean eof = FALSE;
+  struct archive_entry *entry = NULL;
   if (!rojig_next_entry (self, &eof, &entry, cancellable, error))
     return FALSE;
   if (eof)
@@ -458,12 +458,13 @@ rpmostree_rojig_assembler_write_new_objects (RpmOstreeRojigAssembler    *self,
    */
   while (TRUE)
     {
-      gboolean eof;
-      struct archive_entry *entry;
+      gboolean eof = FALSE;
+      struct archive_entry *entry = NULL;
       if (!rojig_next_entry (self, &eof, &entry, cancellable, error))
         return FALSE;
       if (eof)
         break;
+      g_assert (entry); /* Pacify static analysis */
       const char *pathname = peel_entry_pathname (entry, error);
       if (!pathname)
         return FALSE;
@@ -576,12 +577,13 @@ rpmostree_rojig_assembler_next_xattrs (RpmOstreeRojigAssembler    *self,
   *out_objid_to_xattrs = NULL;
 
   /* Look for an xattr entry */
-  gboolean eof;
-  struct archive_entry *entry;
+  gboolean eof = FALSE;
+  struct archive_entry *entry = NULL;
   if (!rojig_next_entry (self, &eof, &entry, cancellable, error))
     return FALSE;
   if (eof)
     return TRUE; /* 🔚 Early return */
+  g_assert (entry); /* Pacify static analysis */
 
   const char *pathname = peel_entry_pathname (entry, error);
   if (!pathname)

@@ -503,7 +503,7 @@ build_objid_map_for_package (RpmOstreeCommit2RojigContext *self,
        * size → checksum, so we can heuristically later try to find
        * "content-identical objects" i.e. they differ only in metadata.
        */
-      guint32 objsize;
+      guint32 objsize = 0;
       if (!query_objsize_assert_32bit (self->pkgcache_repo, checksum, &objsize, error))
         return FALSE;
       if (objsize >= BIG_OBJ_SIZE)
@@ -1148,7 +1148,7 @@ impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
    */
   GLNX_HASH_TABLE_FOREACH (self->commit_content_objects, const char *, checksum)
     {
-      guint32 objsize;
+      guint32 objsize = 0;
       if (!query_objsize_assert_32bit (self->repo, checksum, &objsize, error))
         return FALSE;
       const gboolean is_big = objsize >= BIG_OBJ_SIZE;
@@ -1218,7 +1218,7 @@ impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
   GLNX_HASH_TABLE_FOREACH_IT (new_reachable_big, it, const char *, checksum,
                               void *, unused)
     {
-      guint32 objsize;
+      guint32 objsize = 0;
       if (!query_objsize_assert_32bit (self->repo, checksum, &objsize, error))
         return FALSE;
       g_assert_cmpint (objsize, >=, BIG_OBJ_SIZE);
