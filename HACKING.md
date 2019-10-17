@@ -80,9 +80,32 @@ For more details on how tests are structured, see [tests/README.md](tests/README
 Testing with a custom libdnf
 ============================
 
-Since rpm-ostree uses libdnf as a submodule for the time being, you can simply
-edit the libdnf submodule directly and the various `make` targets will pick up
-the changes and recompile.
+rpm-ostree bundles libdnf since commit https://github.com/coreos/rpm-ostree/commit/125c482b1d16ce8376378f220fc2f93a5b157bc1
+the rationale is:
+
+ - libdnf broke ABI several times silently in the past
+ - Today, dnf does not actually *use* libdnf much, which means
+   for the most part any libdnf breakage is first taken by us
+ - libdnf is trying to rewrite more in C++, which is unlikely to help
+   API/ABI stability
+ - dnf and rpm-ostree release on separate cycles (e.g. today rpm-ostree
+   is used by OpenShift)
+
+In general, until libdnf is defined 100% API/ABI stable, we will
+continue to bundle it.
+
+However, because it's a git submodule, it's easy to test updates
+to it, and it also means we're not *forking* it.
+
+So just do e.g.:
+```
+cd libdnf
+git fetch origin
+git reset --hard origin/master
+cd ..
+```
+
+The various `make` targets will pick up the changes and recompile.
 
 Testing with a custom ostree
 ============================
