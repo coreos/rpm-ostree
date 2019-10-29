@@ -353,7 +353,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
                            GError **error)
 {
   const char slash_bootdir[] = "boot";
-  g_autofree char *modules_bootdir = g_strconcat ("usr/lib/modules/", kver, NULL);
+  g_autofree char *modules_bootdir = g_build_filename ("usr/lib/modules", kver, NULL);
 
   /* Calculate the sha256sum of the kernel+initramfs (called the "boot
    * checksum"). We checksum the initramfs from the tmpfile fd (via mmap()) to
@@ -371,7 +371,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
   }
   const char *boot_checksum_str = g_checksum_get_string (boot_checksum);
 
-  g_autofree char *kernel_modules_path = g_strconcat (modules_bootdir, "/vmlinuz", NULL);;
+  g_autofree char *kernel_modules_path = g_build_filename (modules_bootdir, "vmlinuz", NULL);
   /* It's possible the bootdir is already the modules directory; in that case,
    * we don't need to rename.
    */
@@ -394,7 +394,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
     }
 
   /* Replace the initramfs */
-  g_autofree char *initramfs_modules_path = g_strconcat (modules_bootdir, "/initramfs.img", NULL);
+  g_autofree char *initramfs_modules_path = g_build_filename (modules_bootdir, "initramfs.img", NULL);
   if (unlinkat (rootfs_dfd, initramfs_modules_path, 0) < 0)
     {
       if (errno != ENOENT)
