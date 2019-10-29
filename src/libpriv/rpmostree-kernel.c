@@ -393,6 +393,38 @@ rpmostree_finalize_kernel (int rootfs_dfd,
         return glnx_throw_errno_prefix (error, "linkat(%s)", kernel_modules_path);
     }
 
+  /* If there's an HMAC file, fix the path to the kernel in it to be relative. Right now,
+   * the kernel spec encodes `/boot/vmlinux-$kver`, which of course not going to work for
+   * us. We should work towards making this change directly into the kernel spec. */
+  g_autofree char *hmac_path = g_build_filename (modules_bootdir, ".vmlinuz.hmac", NULL);
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, hmac_path, NULL, 0, error))
+    return FALSE;
+  if (errno == 0)
+    {
+      g_autofree char *contents = glnx_file_get_contents_utf8_at (rootfs_dfd, hmac_path,
+                                                                  NULL, cancellable, error);
+      if (contents == NULL)
+        return FALSE;
+
+      /* rather than trying to parse and understand the *sum format, just hackily replace */
+      g_autofree char *old_path = g_strconcat ("  /boot/vmlinuz-", kver, NULL);
+      g_autofree char *new_path = g_strconcat ("  vmlinuz-", kver, NULL);
+      g_autofree char *new_contents =
+        rpmostree_str_replace (contents, old_path, new_path, error);
+      if (!new_contents)
+        return FALSE;
+
+      /* sanity check there are no '/' in there; that way too we just error out if the path
+       * or format changes (but really, this should be a temporary hack...) */
+      if (strchr (new_contents, '/') != 0)
+        return glnx_throw (error, "Unexpected / in .vmlinuz.hmac: %s", new_contents);
+
+      if (!glnx_file_replace_contents_at (rootfs_dfd, hmac_path,
+                                          (guint8*)new_contents, -1, 0,
+                                          cancellable, error))
+        return FALSE;
+    }
+
   /* Replace the initramfs */
   g_autofree char *initramfs_modules_path = g_build_filename (modules_bootdir, "initramfs.img", NULL);
   if (unlinkat (rootfs_dfd, initramfs_modules_path, 0) < 0)
