@@ -14,6 +14,8 @@ use std::collections::{HashMap, BTreeMap};
 use std::iter::Extend;
 use std::path::Path;
 use std::io;
+use chrono::prelude::*;
+use std::convert::TryInto;
 
 use crate::utils;
 
@@ -49,6 +51,18 @@ fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Fallible<Lockfile
 ///
 /// ```
 /// {
+///    "metatada": {
+///        "generated": "<rfc3339-timestamp>",
+///        "rpmmd_repos": {
+///             "repo1": {
+///                 "generated": "<rfc3339-timestamp>"
+///             },
+///             "repo2": {
+///                 "generated": "<rfc3339-timestamp>"
+///             },
+///             ...
+///        }
+///    }
 ///    "packages": {
 ///        "name1": {
 ///             "evra": "EVRA1",
@@ -70,6 +84,19 @@ fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Fallible<Lockfile
 #[serde(deny_unknown_fields)]
 struct LockfileConfig {
     packages: BTreeMap<String, LockedPackage>,
+    metadata: Option<LockfileConfigMetadata>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+struct LockfileConfigMetadata {
+    generated: Option<DateTime<Utc>>,
+    rpmmd_repos: Option<BTreeMap<String, LockfileRepoMetadata>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LockfileRepoMetadata {
+    generated: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -197,13 +224,25 @@ mod ffi {
     pub extern "C" fn ror_lockfile_write(
         filename: *const libc::c_char,
         packages: *mut glib_sys::GPtrArray,
+        rpmmd_repos: *mut glib_sys::GPtrArray,
         gerror: *mut *mut glib_sys::GError,
     ) -> libc::c_int {
         let filename = ffi_view_os_str(filename);
         let packages: Vec<*mut DnfPackage> = ffi_ptr_array_to_vec(packages);
+        let rpmmd_repos: Vec<*mut DnfRepo> = ffi_ptr_array_to_vec(rpmmd_repos);
+
+        // get current time, but scrub nanoseconds; it's overkill to serialize that
+        let now = {
+            let t = Utc::now();
+            Utc::today().and_hms_nano(t.hour(), t.minute(), t.second(), 0)
+        };
 
         let mut lockfile = LockfileConfig {
             packages: BTreeMap::new(),
+            metadata: Some(LockfileConfigMetadata {
+                generated: Some(now),
+                rpmmd_repos: Some(BTreeMap::new()),
+            })
         };
 
         for pkg in packages {
@@ -224,6 +263,17 @@ mod ffi {
 
             // forgive me for this sin... need to oxidize chksum_repr()
             unsafe { glib_sys::g_free(chksum as *mut libc::c_void) };
+        }
+
+        /* just take the ref here to be less verbose */
+        let lockfile_repos = lockfile.metadata.as_mut().unwrap().rpmmd_repos.as_mut().unwrap();
+
+        for rpmmd_repo in rpmmd_repos {
+            let id = ffi_new_string(unsafe { dnf_repo_get_id(rpmmd_repo) });
+            let generated = unsafe { dnf_repo_get_timestamp_generated(rpmmd_repo) };
+            lockfile_repos.insert(id, LockfileRepoMetadata {
+                generated: Utc.timestamp(generated.try_into().unwrap(), 0),
+            });
         }
 
         int_glib_error(utils::write_file(filename, |w| {
