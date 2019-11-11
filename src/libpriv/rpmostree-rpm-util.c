@@ -1455,3 +1455,19 @@ rpmostree_get_rojig_branch_pkg (DnfPackage *pkg)
                                  dnf_package_get_evr (pkg),
                                  dnf_package_get_arch (pkg));
 }
+
+GPtrArray*
+rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx,
+                                   DnfRepoEnabled enablement)
+{
+  g_autoptr(GPtrArray) ret = g_ptr_array_new ();
+  GPtrArray *repos = dnf_context_get_repos (dnfctx);
+
+  for (guint i = 0; i < repos->len; i++)
+    {
+      DnfRepo *repo = repos->pdata[i];
+      if (dnf_repo_get_enabled (repo) & enablement)
+        g_ptr_array_add (ret, repo);
+    }
+  return g_steal_pointer (&ret);
+}

@@ -232,3 +232,6 @@ rpmostree_nevra_to_cache_branch (const char *nevra,
                                  GError    **error);
 char *
 rpmostree_cache_branch_to_nevra (const char *cachebranch);
+
+GPtrArray *
+rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement);
