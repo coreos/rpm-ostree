@@ -28,7 +28,9 @@ assert_has_file "versions.lock"
 assert_jq versions.lock \
   '.packages["test-pkg"].evra = "1.0-1.x86_64"' \
   '.packages["test-pkg-common"].evra = "1.0-1.x86_64"' \
-  '.packages["another-test-pkg"].evra = "1.0-1.x86_64"'
+  '.packages["another-test-pkg"].evra = "1.0-1.x86_64"' \
+  '.metadata.rpmmd_repos|length > 0' \
+  '.metadata.generated'
 echo "ok lockfile created"
 # Read lockfile back
 build_rpm test-pkg-common version 2.0

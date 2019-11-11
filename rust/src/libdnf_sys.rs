@@ -14,6 +14,8 @@ use glib_sys;
 
 #[repr(C)]
 pub(crate) struct DnfPackage(libc::c_void);
+#[repr(C)]
+pub(crate) struct DnfRepo(libc::c_void);
 
 #[allow(dead_code)]
 extern {
@@ -21,6 +23,9 @@ extern {
     pub(crate) fn dnf_package_get_name(package: *mut DnfPackage) -> *const libc::c_char;
     pub(crate) fn dnf_package_get_evr(package: *mut DnfPackage) -> *const libc::c_char;
     pub(crate) fn dnf_package_get_arch(package: *mut DnfPackage) -> *const libc::c_char;
+
+    pub(crate) fn dnf_repo_get_id(repo: *mut DnfRepo) -> *const libc::c_char;
+    pub(crate) fn dnf_repo_get_timestamp_generated(repo: *mut DnfRepo) -> u64;
 }
 
 /* And some helper rpm-ostree C functions to deal with libdnf stuff. These are prime candidates for

@@ -352,7 +352,10 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       g_autoptr(GPtrArray) pkgs = rpmostree_context_get_packages (self->corectx);
       g_assert (pkgs);
 
-      if (!ror_lockfile_write (opt_write_lockfile, pkgs, error))
+      g_autoptr(GPtrArray) rpmmd_repos =
+        rpmostree_get_enabled_rpmmd_repos (rpmostree_context_get_dnf (self->corectx),
+                                           DNF_REPO_ENABLED_PACKAGES);
+      if (!ror_lockfile_write (opt_write_lockfile, pkgs, rpmmd_repos, error))
         return FALSE;
     }
 
