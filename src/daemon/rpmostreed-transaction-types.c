@@ -2449,20 +2449,20 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
         }
     }
-  else
-    {
-      if (self->kernel_args_replaced)
-        {
-          for (char **iter = self->kernel_args_replaced; iter && *iter; iter++)
-            {
-              const char *arg = *iter;
-              if (!ostree_kernel_args_new_replace (kargs, arg, error))
-                return FALSE;
-            }
-        }
 
-      if (self->kernel_args_added)
-        ostree_kernel_args_append_argv (kargs, self->kernel_args_added);
+  if (self->kernel_args_replaced)
+    {
+      for (char **iter = self->kernel_args_replaced; iter && *iter; iter++)
+        {
+          const char *arg = *iter;
+          if (!ostree_kernel_args_new_replace (kargs, arg, error))
+            return FALSE;
+        }
+    }
+
+  if (self->kernel_args_added)
+    {
+      ostree_kernel_args_append_argv (kargs, self->kernel_args_added);
     }
 
   /* After all the arguments are processed earlier, we convert it to a string list*/

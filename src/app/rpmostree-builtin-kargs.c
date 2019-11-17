@@ -196,12 +196,6 @@ rpmostree_builtin_kargs (int            argc,
                    "Cannot specify both --delete and --replace");
       return FALSE;
     }
-  if (opt_kernel_delete_strings && opt_kernel_append_strings)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify both --delete and --append");
-      return FALSE;
-    }
   if (opt_import_proc_cmdline && opt_deploy_index)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
