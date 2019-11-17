@@ -48,6 +48,15 @@ assert_file_has_content_literal kargs.txt 'FOO=BAR'
 assert_file_has_content_literal kargs.txt 'APPENDARG=VALAPPEND APPENDARG=2NDAPPEND'
 echo "ok kargs append"
 
+# Ensure the result flows through with rpm-ostree kargs
+vm_rpmostree kargs --append=APPENDARG=3RDAPPEND --delete=APPENDARG=VALAPPEND
+vm_rpmostree kargs > kargs.txt
+assert_not_file_has_content kargs.txt 'APPENDARG=VALAPPEND'
+assert_file_has_content_literal kargs.txt 'APPENDARG=3RDAPPEND'
+# And reset to previous state
+vm_rpmostree cleanup -p
+echo "ok kargs append and delete"
+
 # Test for rpm-ostree kargs delete
 vm_kargs_now kargs --delete FOO
 vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
