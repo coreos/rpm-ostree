@@ -564,6 +564,12 @@ rpmostree_run_dracut (int     rootfs_dfd,
       rpmostree_bwrap_bind_read (bwrap, "usr", "/usr");
     }
 
+  /* Need to let dracut create devices like /dev/urandom:
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1778940
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1401444
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1380866 */
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--cap-add", "cap_mknod", NULL);
+
   if (dracut_host_tmpdir)
     rpmostree_bwrap_bind_readwrite (bwrap, dracut_host_tmpdir->path, "/tmp/dracut");
 
