@@ -494,6 +494,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   g_autoptr(GPtrArray) rebuild_argv = NULL;
   g_auto(GLnxTmpfile) tmpf = { 0, };
+  g_autoptr(GBytes) random_cpio_data = NULL;
 
   /* Previously we used to error out if argv or rebuild_from_initramfs were both
    * not set; now we simply use the defaults (which in Fedora today also means
@@ -564,12 +565,6 @@ rpmostree_run_dracut (int     rootfs_dfd,
       rpmostree_bwrap_bind_read (bwrap, "usr", "/usr");
     }
 
-  /* Need to let dracut create devices like /dev/urandom:
-   * https://bugzilla.redhat.com/show_bug.cgi?id=1778940
-   * https://bugzilla.redhat.com/show_bug.cgi?id=1401444
-   * https://bugzilla.redhat.com/show_bug.cgi?id=1380866 */
-  rpmostree_bwrap_append_bwrap_argv (bwrap, "--cap-add", "cap_mknod", NULL);
-
   if (dracut_host_tmpdir)
     rpmostree_bwrap_bind_readwrite (bwrap, dracut_host_tmpdir->path, "/tmp/dracut");
 
@@ -585,6 +580,29 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     goto out;
+
+  /* For FIPS mode we need /dev/urandom pre-created because the FIPS
+   * standards authors require that randomness is tested in a
+   * *shared library constructor* (instead of first use as would be
+   * the sane thing).
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1778940
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1401444
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1380866
+   * */
+  random_cpio_data = g_resources_lookup_data ("/rpmostree/dracut-random.cpio.gz",
+                                              G_RESOURCE_LOOKUP_FLAGS_NONE,
+                                              error);
+  if (!random_cpio_data)
+    return FALSE;
+  gsize random_cpio_data_len = 0;
+  const guint8* random_cpio_data_p = g_bytes_get_data (random_cpio_data, &random_cpio_data_len);
+  if (lseek (tmpf.fd, 0, SEEK_END) < 0)
+    return glnx_throw_errno_prefix (error, "lseek");
+  if (glnx_loop_write (tmpf.fd, random_cpio_data_p, random_cpio_data_len) < 0)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
 
   if (rebuild_from_initramfs)
     (void) unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
