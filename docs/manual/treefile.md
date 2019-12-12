@@ -182,6 +182,10 @@ It supports the following parameters:
 
    Example: `automatic-version-prefix: "22.0"`
 
+ * `automatic-version-suffix`: String, optional: This must be a single ASCII
+   character.  The default value is `.`.  Used by `automatic-version-prefix`.
+   For example, if you set this to `-` then `22` will become `22-1`, `22-2` etc.
+
  * `add-commit-metadata`: Map<String, Object>, optional: Metadata to inject as
    part of composed commits. Keys inserted here can still be overridden at the
    command line with `--add-metadata-string` or `--add-metadata-from-json`.

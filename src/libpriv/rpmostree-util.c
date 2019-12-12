@@ -275,32 +275,39 @@ handle_date_tag (GString    *prefix,
  * Returns the next version string.
  */
 static char*
-increment_version (const char *last_version,
+increment_version (const char *version_suffix_str,
+                   const char *last_version,
                    const char *prefix,
                    const char *increment_start)
 {
   const gboolean increment_given = increment_start != NULL;
 
+  char version_suffix = '.';
+  if (version_suffix_str)
+    {
+      g_assert_cmpint (strlen (version_suffix_str), ==, 1);
+      version_suffix = version_suffix_str[0];
+    }
+
   g_assert_cmpstr (prefix, !=, NULL);
 
+  g_autofree char *incremented = g_strdup_printf ("%s%c%s", prefix, version_suffix, increment_start);
   if (!last_version || !g_str_has_prefix (last_version, prefix))
-    return increment_given ? g_strdup_printf ("%s.%s", prefix, increment_start)
-                           : g_strdup (prefix);
+    return increment_given ? g_steal_pointer (&incremented) : g_strdup (prefix);
 
   if (g_str_equal (last_version, prefix))
-    return increment_given ? g_strdup_printf ("%s.%s", prefix, increment_start)
-                           : g_strdup_printf ("%s.1", prefix);
+    return increment_given ? g_steal_pointer (&incremented)
+                           : g_strdup_printf ("%s%c1", prefix, version_suffix);
 
   g_assert_cmpuint (strlen (last_version), >, strlen (prefix));
   const char *end = last_version + strlen (prefix);
 
-  if (*end != '.')
-    return increment_given ? g_strdup_printf ("%s.%s", prefix, increment_start)
-                           : g_strdup (prefix);
+  if (*end != version_suffix)
+    return increment_given ? g_steal_pointer (&incremented) : g_strdup (prefix);
   ++end;
 
   unsigned long long num = g_ascii_strtoull (end, NULL, 10);
-  return g_strdup_printf ("%s.%llu", prefix, num + 1);
+  return g_strdup_printf ("%s%c%llu", prefix, version_suffix, num + 1);
 }
 
 #define VERSION_TAG_REGEX "<([a-zA-Z]+):(.*)?>"
@@ -313,6 +320,7 @@ increment_version (const char *last_version,
  */
 char *
 _rpmostree_util_next_version (const char   *auto_version_prefix,
+                              const char   *version_suffix,
                               const char   *last_version,
                               GError      **error)
 {
@@ -353,7 +361,7 @@ _rpmostree_util_next_version (const char   *auto_version_prefix,
       g_match_info_next (tag_match_info, NULL);
     }
 
-  return increment_version (last_version, next_version->str, date_tag_given ? "0" : NULL);
+  return increment_version (version_suffix, last_version, next_version->str, date_tag_given ? "0" : NULL);
 }
 
 #undef VERSION_TAG_REGEX
