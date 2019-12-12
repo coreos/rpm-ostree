@@ -59,12 +59,13 @@ test_auto_version (void)
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
 
-#define _VER_TST(x, y, z)                              \
-  g_clear_error (error);                               \
-  version = _rpmostree_util_next_version ((x), (y), error);   \
-  g_assert_cmpstr (version, ==, z);                           \
-  g_free (version);                                           \
+#define _VER_TST_FULL(prefix, suffix, last, expected)                           \
+  g_clear_error (error);                                                        \
+  version = _rpmostree_util_next_version ((prefix), (suffix), (last), error);   \
+  g_assert_cmpstr (version, ==, expected);                                      \
+  g_free (version);                                                             \
   version = NULL
+#define _VER_TST(prefix, last, expected) _VER_TST_FULL(prefix, NULL, last, expected)
 
   _VER_TST("10",  NULL,    "10");
   _VER_TST("10",  "",      "10");
@@ -95,13 +96,17 @@ test_auto_version (void)
   _VER_TST("10.1", "10.1.x", "10.1.1");
   _VER_TST("10.1", "10.1.2x", "10.1.3");
 
+  _VER_TST_FULL("10", "-", "10", "10-1");
+  _VER_TST_FULL("10", "-", "10-1", "10-2");
+  _VER_TST_FULL("10.1", "-", "10.1-5", "10.1-6");
+
   /* Like _VER_TST, but renders datetime specifiers in
    * date_fmt with the current time. The rendered string
    * is then compared against the result of _rpmostree_util_next_version(). */
   #define _VER_DATE_TST(pre, last, final_datefmt)   \
     g_clear_error (error);                          \
     final_version = g_date_time_format (date_time_utc, (final_datefmt));   \
-    version = _rpmostree_util_next_version ((pre), (last), error);   \
+    version = _rpmostree_util_next_version ((pre), NULL, (last), error);   \
     g_assert_cmpstr (version, ==, final_version);                    \
     g_free (final_version);                                          \
     g_free (version);                                                \

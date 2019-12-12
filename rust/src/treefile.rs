@@ -299,6 +299,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         machineid_compat,
         releasever,
         automatic_version_prefix,
+        automatic_version_suffix,
         mutate_os_release,
         preserve_passwd,
         check_passwd,
@@ -452,6 +453,15 @@ impl Treefile {
                     )
                     .into());
                 }
+            }
+        }
+        if let Some(version_suffix) = config.automatic_version_suffix.as_ref() {
+            if !(version_suffix.len() == 1 && version_suffix.is_ascii()) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("Invalid automatic-version-suffix, must be exactly one ASCII character: {}", version_suffix)
+                )
+                .into());
             }
         }
         Ok(())
@@ -687,6 +697,9 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "automatic-version-prefix")]
     automatic_version_prefix: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "automatic-version-suffix")]
+    automatic_version_suffix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "mutate-os-release")]
     mutate_os_release: Option<String>,

@@ -402,8 +402,11 @@ impl_rojig_build (RpmOstreeRojigCompose *self,
         _rpmostree_jsonutil_object_require_string_member (self->treefile, "automatic-version-prefix", error);
       if (!ver_prefix)
         return FALSE;
+      const char *ver_suffix = NULL;
+      if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "automatic-version-suffix", &ver_suffix, error))
+        return FALSE;
 
-      next_version = _rpmostree_util_next_version (ver_prefix, self->previous_version, error);
+      next_version = _rpmostree_util_next_version (ver_prefix, ver_suffix, self->previous_version, error);
       if (!next_version)
         return FALSE;
       g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
