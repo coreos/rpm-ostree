@@ -20,7 +20,7 @@
 
 #include "config.h"
 
-#include "rpmostree-ex-builtins.h"
+#include "rpmostree-builtins.h"
 #include "rpmostree-override-builtins.h"
 
 static RpmOstreeCommand override_subcommands[] = {
