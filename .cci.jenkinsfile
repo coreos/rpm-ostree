@@ -1,8 +1,11 @@
 @Library('github.com/coreos/coreos-ci-lib@master') _
 
+COSA_IMAGE = 'quay.io/coreos-assembler/coreos-assembler:latest'
+COSA_BUILDROOT_IMAGE = 'registry.svc.ci.openshift.org/coreos/cosa-buildroot:latest'
+
 stage("Build") {
 parallel rpms: {
-  coreos.pod(image: 'registry.svc.ci.openshift.org/coreos/cosa-buildroot:latest', runAsUser: 0) {
+  coreos.pod(image: COSA_BUILDROOT_IMAGE, runAsUser: 0) {
       checkout scm
       sh """
         set -euo pipefail
@@ -24,7 +27,7 @@ parallel rpms: {
   }
 },
 codestyle: {
-  coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest') {
+  coreos.pod(image: COSA_IMAGE) {
       checkout scm
       sh """
         set -euo pipefail
@@ -37,7 +40,7 @@ codestyle: {
   }
 },
 msrv: {
-  coreos.pod(image: 'registry.svc.ci.openshift.org/coreos/cosa-buildroot:latest', runAsUser: 0) {
+  coreos.pod(image: COSA_BUILDROOT_IMAGE, runAsUser: 0) {
       checkout scm
 
       sh """
@@ -48,7 +51,7 @@ msrv: {
 }}
 
 stage("Build FCOS") {
-  coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest', runAsUser: 0, kvm: true) {
+  coreos.pod(image: COSA_IMAGE, runAsUser: 0, kvm: true) {
       unstash 'rpms'
       sh """
         set -euo pipefail
