@@ -40,6 +40,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-builtin-status.c \
 	src/app/rpmostree-builtin-ex.c \
 	src/app/rpmostree-builtin-coreos-rootfs.c \
+	src/app/rpmostree-builtin-testutils.c \
 	src/app/rpmostree-builtin-container.c \
 	src/app/rpmostree-ex-builtin-commit2rojig.c \
 	src/app/rpmostree-ex-builtin-rojig2commit.c \

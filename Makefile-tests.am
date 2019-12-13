@@ -59,16 +59,10 @@ uninstalled_test_scripts = \
 	$(NULL)
 
 uninstalled_test_extra_programs = \
-	inject-pkglist			\
 	dbus-run-session		\
 	$(NULL)
 
 dbus_run_session_SOURCES = tests/utils/dbus-run-session.c
-
-inject_pkglist_CPPFLAGS = $(testbin_cppflags)
-inject_pkglist_CFLAGS = $(testbin_cflags)
-inject_pkglist_LDADD = $(testbin_ldadd) libtest.la
-inject_pkglist_SOURCES = tests/utils/inject-pkglist.c
 
 check-local:
 	@echo "  *** NOTE ***"
@@ -88,7 +82,7 @@ vmsync:
 	fi; \
 	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
-vmoverlay: inject-pkglist
+vmoverlay:
 	@set -e; if [ -z "$(SKIP_VMOVERLAY)" ]; then \
 	  if [ -z "$(SKIP_INSTALL)" ]; then \
 	    env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
