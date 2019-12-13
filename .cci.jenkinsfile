@@ -60,12 +60,17 @@ stage("Build FCOS") {
       sh """
         set -euo pipefail
 
+        rpms=\$(find packaging/ ! -name '*.src.rpm' -name '*.rpm')
+
         # install our built rpm-ostree
-        find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
+        dnf install -y \${rpms}
+
+        # and build FCOS with our built rpm-ostree inside of it
+        coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
+        mkdir -p overrides/rpm
+        mv \${rpms} overrides/rpm
         rm -rf packaging
 
-        # and build FCOS
-        coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
         coreos-assembler build
       """
       stash includes: 'builds/latest/*/*.qcow2', name: 'fcos'
