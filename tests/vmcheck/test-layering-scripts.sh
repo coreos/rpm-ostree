@@ -216,15 +216,12 @@ vm_cmd systemctl restart rpm-ostreed
 echo "ok cancel infinite post via `rpm-ostree cancel`"
 
 # Test rm -rf /!
-vm_shell_inline <<EOF
-getent passwd testuser >/dev/null || useradd testuser
-EOF
-vm_cmd touch /home/testuser/somedata /tmp/sometmpfile /var/tmp/sometmpfile
+vm_cmd touch /home/core/somedata /tmp/sometmpfile /var/tmp/sometmpfile
 vm_build_rpm rmrf post "rm --no-preserve-root -rf / &>/dev/null || true"
 if vm_rpmostree install rmrf 2>err.txt; then
     assert_not_reached "rm -rf / worked?  Uh oh."
 fi
-vm_cmd test -f /home/testuser/somedata -a -f /etc/fstab -a -f /tmp/sometmpfile -a -f /var/tmp/sometmpfile
+vm_cmd test -f /home/core/somedata -a -f /etc/passwd -a -f /tmp/sometmpfile -a -f /var/tmp/sometmpfile
 # This is the error today, we may improve it later
 assert_file_has_content err.txt 'error: Sanity-checking final rootfs: Executing bwrap(/usr/bin/true)'
 echo "ok impervious to rm -rf post"

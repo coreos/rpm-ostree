@@ -38,8 +38,7 @@ versionid=${versionid:11} # trim off VERSION_ID=
 current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 case $versionid in
-  29) kernel_release=4.18.16-300.fc29.x86_64;;
-  30) kernel_release=5.0.9-301.fc30.x86_64;;
+  31) kernel_release=5.3.7-301.fc31.x86_64;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt $kernel_release
