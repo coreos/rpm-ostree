@@ -1,6 +1,6 @@
 AC_PREREQ([2.63])
 dnl To do a release, increment this number and the spec file, commit, then submit it as a PR
-dnl to merge via homu.  After that, do `git pull origin && git reset --hard origin/master`.
+dnl to merge via prow.  After that, do `git pull origin && git reset --hard origin/master`.
 dnl Then draft release notes highlighting changes and generate the shortlog using
 dnl <https://github.com/cgwalters/homegit/blob/master/bin/git-shortlog-with-prs>.
 dnl Then use <https://github.com/cgwalters/git-evtag> to create a signed tag with the
@@ -9,7 +9,7 @@ dnl Then git push origin v201X.XX.
 dnl Then create the xz tarball from `make -f Makefile.dist-packaging dist-snapshot`.
 dnl Then create a GitHub release for the new release tag and attach the tarball.
 m4_define([year_version], [2019])
-m4_define([release_version], [6])
+m4_define([release_version], [7])
 m4_define([package_version], [year_version.release_version])
 AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
 AC_CONFIG_HEADER([config.h])
