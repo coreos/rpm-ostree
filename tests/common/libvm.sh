@@ -590,13 +590,11 @@ vm_ostreeupdate_lift_commit() {
 }
 
 _commit_and_inject_pkglist() {
-  version=$1; shift
-  src_ref=$1; shift
+  local version=$1; shift
+  local src_ref=$1; shift
   vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck --fsync=no \
     --tree=ref=$src_ref --add-metadata-string=version=$version
-  # avoid libtool wrapper here since we're running on the VM and it would try to
-  # cd to topsrcdir/use gcc; libs are installed anyway
-  vm_cmd /var/roothome/sync/.libs/inject-pkglist $REMOTE_OSTREE vmcheck
+  vm_rpmostree testutils inject-pkglist $REMOTE_OSTREE vmcheck
 }
 
 # use a previously stolen commit to create an update on our vmcheck branch,
@@ -614,10 +612,10 @@ vm_ostreeupdate_create_noop() {
 
 # takes a layered commit, and makes it into a base
 vm_ostree_repo_commit_layered_as_base() {
-  repo=$1; shift
-  from_rev=$1; shift
-  to_ref=$1; shift
-  d=$repo/tmp/vmcheck_commit.tmp
+  local repo=$1; shift
+  local from_rev=$1; shift
+  local to_ref=$1; shift
+  local d=$repo/tmp/vmcheck_commit.tmp
   rm -rf $d
   vm_cmd ostree checkout --repo=$repo -H --fsync=no $from_rev $d
   # need to update the base rpmdb
@@ -625,7 +623,7 @@ vm_ostree_repo_commit_layered_as_base() {
   vm_cmd rsync -qa --delete $d/usr/share/rpm/ $d/usr/lib/sysimage/rpm-ostree-base-db
   vm_cmd ostree commit --repo=$repo -b $to_ref --link-checkout-speedup --fsync=no --consume $d
   # and inject pkglist metadata
-  vm_cmd /var/roothome/sync/.libs/inject-pkglist $repo $to_ref >/dev/null
+  vm_rpmostree testutils inject-pkglist $repo $to_ref >/dev/null
 }
 
 vm_ostree_commit_layered_as_base() {

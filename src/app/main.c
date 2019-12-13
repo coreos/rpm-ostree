@@ -119,6 +119,9 @@ static RpmOstreeCommand commands[] = {
                      RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                      RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_coreos_rootfs },
+  { "testutils", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+                 RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    NULL, rpmostree_builtin_testutils },
   { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                     RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
