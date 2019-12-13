@@ -25,10 +25,7 @@ ostree admin unlock || :
 
 # Now, overlay our built binaries & config files
 INSTTREE=/var/roothome/sync/insttree
-rsync -rlv $INSTTREE/usr/ /usr/
-if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
-  rsync -rlv $INSTTREE/etc/ /etc/
-fi
+rsync -rlv $INSTTREE/ /
 
 restorecon -v /usr/bin/{rpm-,}ostree /usr/libexec/rpm-ostreed
 

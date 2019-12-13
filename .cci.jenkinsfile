@@ -77,41 +77,38 @@ stage("Build FCOS") {
   }
 }
 
-/*
-stage("Test") {
-parallel vmcheck: {
-  coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest', runAsUser: 0, kvm: true) {
+
+stage("Run vmcheck") {
+  def nhosts = 6
+  def mem = (nhosts * 1024) + 512
+  coreos.pod(image: COSA_IMAGE, runAsUser: 0, kvm: true, memory: "${mem}Mi", cpu: "${nhosts}") {
       checkout scm
       unstash 'rpms'
       sh """
         set -euo pipefail
+        ci/installdeps.sh  # really, we just need test deps, but meh...
 
         # install our built rpm-ostree
         find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
         rm -rf packaging
       """
       unstash 'fcos'
-      sh """
-        set -euo pipefail
-
-        echo "standing up VMs"
-        find builds/ -name '*.qcow2'
-      """
+      try {
+        timeout(time: 30, unit: 'MINUTES') {
+          sh """
+            set -xeuo pipefail
+            fcos=\$(ls builds/latest/*/*.qcow2) # */
+            ln -sf "\$(realpath \${fcos})" tests/vmcheck/image.qcow2
+            NHOSTS=${nhosts} tests/vmcheck.sh
+          """
+        }
+      } finally {
+        sh """
+          if [ -d vmcheck-logs ]; then
+            tar -C vmcheck-logs -cf- . | xz -c9 > vmcheck-logs.tar.xz
+          fi
+        """
+        archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
+      }
   }
-},
-compose: {
-  coreos.pod(image: 'quay.io/coreos-assembler/coreos-assembler:latest', runAsUser: 0, kvm: true) {
-      checkout scm
-      unstash 'rpms'
-      sh """
-        set -euo pipefail
-
-        # install our built rpm-ostree
-        find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
-        rm -rf packaging
-
-        echo "starting compose tests in supermin"
-      """
-  }
-}}
-*/
+}

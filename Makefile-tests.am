@@ -18,7 +18,7 @@ if BUILDOPT_ASAN
 AM_TESTS_ENVIRONMENT += BUILDOPT_ASAN=yes ASAN_OPTIONS=detect_leaks=false
 endif
 
-GITIGNOREFILES += ssh-config ansible-inventory.yml vmcheck/ test-compose-logs/
+GITIGNOREFILES += ssh-config ansible-inventory.yml vmcheck-logs/ test-compose-logs/ tests/vmcheck/image.qcow2
 
 testbin_cppflags = $(AM_CPPFLAGS) -I $(srcdir)/src/lib -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx -I $(srcdir)/tests/common
 testbin_cflags = $(AM_CFLAGS) -fvisibility=hidden $(PKGDEP_RPMOSTREE_CFLAGS)
@@ -74,8 +74,6 @@ check-local:
 
 .PHONY: vmsync vmoverlay vmcheck testenv
 
-HOSTS ?= "vmcheck"
-
 vmsync:
 	@set -e; if [ -z "$(SKIP_INSTALL)" ]; then \
 		env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
@@ -83,19 +81,16 @@ vmsync:
 	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
 vmoverlay:
-	@set -e; if [ -z "$(SKIP_VMOVERLAY)" ]; then \
-	  if [ -z "$(SKIP_INSTALL)" ]; then \
-	    env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
-	  fi; \
-	  echo -n "$(HOSTS)" | xargs -P 0 -n 1 -d ' ' -I {} \
-	    env $(BASE_TESTS_ENVIRONMENT) VM={} \
-	      ./tests/vmcheck/overlay.sh; \
-	fi
+	@set -e; \
+	if [ -z "$(SKIP_INSTALL)" ] && [ -z "$(SKIP_VMOVERLAY)" ]; then \
+	  env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
+	fi; \
+	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/overlay.sh;
 
-# set up test environment to somewhat resemble uninstalled tests
+# One can run the vmcheck.sh script directly. The make target is useful for local
+# development so that e.g. we automatically overlay.
 vmcheck: vmoverlay
-	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) PYTHONUNBUFFERED=1 \
-	  tests/vmcheck/multitest.py $(HOSTS)
+	@tests/vmcheck.sh
 
 testenv:
 	@echo "===== ENTERING TESTENV ====="

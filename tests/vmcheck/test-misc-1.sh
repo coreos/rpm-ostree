@@ -51,12 +51,6 @@ vm_assert_status_jq \
   '.deployments[0]["layered-commit-meta"]|not'
 echo "ok empty pkg arrays, and commit meta correct in status json"
 
-if test -z "${RPMOSTREE_TEST_NO_OVERLAY:-}"; then
-  vm_assert_status_jq \
-    '.deployments[0]["base-commit-meta"]["ostree.source-title"]|contains("overlay")'
-  echo "ok overlay found in commit meta"
-fi
-
 vm_rpmostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
 assert_file_has_content_literal jsonpath.txt 'true'
 echo "ok jsonpath"
@@ -80,23 +74,13 @@ fi
 assert_file_has_content err.txt 'Unknown.*command'
 echo "ok error on unknown command"
 
-# Be sure an unprivileged user exists and that we can SSH into it. This is a bit
-# underhanded, but we need a bona fide user session to verify non-priv status,
-# and logging in through SSH is an easy way to achieve that.
-vm_shell_inline <<EOF
-    getent passwd testuser >/dev/null || useradd testuser
-    mkdir -pm 0700 /home/testuser/.ssh
-    cp -a /root/.ssh/authorized_keys /home/testuser/.ssh
-    chown -R testuser:testuser /home/testuser/.ssh
-EOF
-
 # Make sure we can't do various operations as non-root
 vm_build_rpm foo
-if vm_cmd_as testuser rpm-ostree pkg-add foo &> err.txt; then
+if vm_cmd_as core rpm-ostree pkg-add foo &> err.txt; then
     assert_not_reached "Was able to install a package as non-root!"
 fi
 assert_file_has_content err.txt 'PkgChange not allowed for user'
-if vm_cmd_as testuser rpm-ostree reload &> err.txt; then
+if vm_cmd_as core rpm-ostree reload &> err.txt; then
     assert_not_reached "Was able to reload as non-root!"
 fi
 assert_file_has_content err.txt 'ReloadConfig not allowed for user'
@@ -109,10 +93,10 @@ vm_shell_inline > coreos-rootfs.txt << EOF
     lsattr -d /var/tmp/coreos-rootfs
     rpm-ostree coreos-rootfs seal /var/tmp/coreos-rootfs
 EOF
-assert_file_has_content_literal coreos-rootfs.txt '----i-------------- /var/tmp/coreos-rootfs'
+assert_file_has_content coreos-rootfs.txt '-*i-* /var/tmp/coreos-rootfs'
 
 # Assert that we can do status as non-root
-vm_cmd_as testuser rpm-ostree status
+vm_cmd_as core rpm-ostree status
 echo "ok status doesn't require root"
 
 # StateRoot is only in --verbose
@@ -137,7 +121,11 @@ echo "ok reload"
 
 stateroot=$(vm_get_booted_stateroot)
 ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
-vm_cmd dbus-send --system --dest=org.projectatomic.rpmostree1 --print-reply=literal $ospath org.projectatomic.rpmostree1.OSExperimental.Moo boolean:true > moo.txt
+# related: https://github.com/coreos/fedora-coreos-config/issues/194
+vm_cmd env LANG=C.UTF-8 gdbus call \
+  --system --dest org.projectatomic.rpmostree1 \
+  --object-path /org/projectatomic/rpmostree1/fedora_coreos \
+  --method org.projectatomic.rpmostree1.OSExperimental.Moo true > moo.txt
 assert_file_has_content moo.txt '🐄'
 echo "ok moo"
 

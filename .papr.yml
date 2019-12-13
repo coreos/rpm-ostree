@@ -1,37 +1,7 @@
-context: f29-primary
-
-cluster:
-  hosts:
-    - name: vmcheck1
-      distro: fedora/29/atomic
-    - name: vmcheck2
-      distro: fedora/29/atomic
-    - name: vmcheck3
-      distro: fedora/29/atomic
-  container:
-    image: registry.fedoraproject.org/fedora:29
-
-env:
-  HOSTS: vmcheck1 vmcheck2 vmcheck3
-  # TODO use -fsanitize=address
-  CFLAGS: '-fsanitize=undefined -fsanitize-undefined-trap-on-error -O2 -Wp,-D_FORTIFY_SOURCE=2'
-  ASAN_OPTIONS: 'detect_leaks=0'  # Right now we're not fully clean, but this gets us use-after-free etc
-
-tests:
-  - ci/build-check.sh
-  - ci/vmcheck-provision.sh
-  - make vmcheck
-  # make sure we're aware of any tests that were skipped
-  - "grep -nr '^SKIP: ' vmcheck/ || :"
-
-timeout: 60m
-
-artifacts:
-  - test-suite.log
-  - config.log
-  - vmcheck
-
----
+branches:
+  - master
+  - auto
+  - try
 
 # NB: when bumping 29 here, also bump compose script
 

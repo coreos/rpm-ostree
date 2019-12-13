@@ -19,7 +19,6 @@
 
 # prepares the VM and library for action
 vm_setup() {
-
   export VM=${VM:-vmcheck}
   export SSH_CONFIG=${SSH_CONFIG:-${topsrcdir}/ssh-config}
   SSHOPTS="-o User=root -o ControlMaster=auto \
@@ -35,6 +34,62 @@ vm_setup() {
 
   export SSH="ssh ${SSHOPTS} $VM"
   export SCP="scp ${SSHOPTS}"
+}
+
+# prepares a fresh VM for action via `kola spawn`
+vm_kola_spawn() {
+  local outputdir=$1; shift
+
+  exec 4> info.json
+  mkdir kola-ssh
+  setpriv --pdeathsig SIGKILL -- \
+    env MANTLE_SSH_DIR="$PWD/kola-ssh" kola spawn -p qemu-unpriv \
+    --qemu-image "${topsrcdir}/tests/vmcheck/image.qcow2" -v --idle \
+    --json-info-fd 4 --output-dir "$outputdir" &
+  # hack; need cleaner API for async kola spawn
+  while [ ! -s info.json ]; do sleep 1; done
+
+  local ssh_ip_port ssh_ip ssh_port
+  ssh_ip_port=$(jq -r .public_ip info.json)
+  ssh_ip=${ssh_ip_port%:*}
+  ssh_port=${ssh_ip_port#*:}
+
+  cat > ssh-config <<EOF
+Host vmcheck
+  HostName ${ssh_ip}
+  Port ${ssh_port}
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+EOF
+
+  SSH_CONFIG=$PWD/ssh-config
+  # XXX: should just have kola output the path to the socket
+  SSH_AUTH_SOCK=$(ls kola-ssh/agent.*)
+  export SSH_CONFIG SSH_AUTH_SOCK
+
+  # Hack around kola's Ignition config only setting up the core user; but we
+  # want to be able to ssh directly as root. We still want all the other goodies
+  # that kola injects in its Ignition config though, so we don't want to
+  # override it. `cosa run`'s merge semantics would do nicely.
+  ssh -o User=core -F "${SSH_CONFIG}" vmcheck 'sudo cp -RT {/home/core,/root}/.ssh'
+
+  vm_setup
+
+  # XXX: hack around https://github.com/systemd/systemd/issues/14328
+  vm_cmd systemctl mask --now systemd-logind
+
+  # Some tests expect the ref to be on `vmcheck`. We should drop that
+  # requirement, but for now let's just mangle the origin
+  local deployment_root
+  vm_cmd ostree refs --create vmcheck "$(vm_get_booted_csum)"
+  deployment_root=$(vm_get_deployment_root 0)
+  vm_cmd "sed -ie '/^refspec=/ s/=.*/=vmcheck/' ${deployment_root}.origin"
+  vm_cmd "sed -ie '/^baserefspec=/ s/=.*/=vmcheck/' ${deployment_root}.origin"
+  vm_cmd systemctl try-restart rpm-ostreed
+
+  # also move the default yum repos, we don't want em
+  vm_cmd mv /etc/yum.repos.d{,.bak}
+  vm_cmd mkdir /etc/yum.repos.d
 }
 
 # $1 - file to send
@@ -176,7 +231,7 @@ vm_get_boot_id() {
 vm_reboot_cmd() {
     vm_cmd sync
     local bootid=$(vm_get_boot_id 2>/dev/null)
-    vm_cmd $@ || :
+    vm_cmd "$@" || :
     vm_ssh_wait 120 $bootid
 }
 
