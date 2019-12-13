@@ -9,6 +9,8 @@ parallel rpms: {
       checkout scm
       sh """
         set -euo pipefail
+        # fetch tags so `git describe` gives a nice NEVRA when building the RPM
+        git fetch origin --tags
         ci/installdeps.sh
         git submodule update --init
 
@@ -23,6 +25,8 @@ parallel rpms: {
         cd packaging
         make -f Makefile.dist-packaging rpm
       """
+      // make it easy for anyone to download the RPMs
+      archiveArtifacts 'packaging/**/*.rpm'
       stash includes: 'packaging/**/*.rpm', name: 'rpms'
   }
 },
