@@ -22,7 +22,7 @@
 # Boston, MA 02111-1307, USA.
 
 fatal() {
-    echo $@ 1>&2; exit 1
+    echo error: $@ 1>&2; exit 1
 }
 # fatal() is shorter to type, but retain this alias
 assert_not_reached () {
