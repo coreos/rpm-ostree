@@ -14,7 +14,7 @@ else
   cosa_buildid=${COSA_BUILDID:-latest}
   cosa_builddir=${cosa_builds}/${cosa_buildid}/${basearch}
   if [ ! -e "${cosa_builddir}/meta.json" ]; then
-    fatal "No image provide (use VMIMAGE, or cosa-builds/ or COSA_BUILDS)"
+    fatal "No image provided (use VMIMAGE, or cosa-builds/ or COSA_BUILDS)"
   fi
 
   cosa_qemu_path=$(jq -er '.images.qemu.path' "${cosa_builddir}/meta.json")
