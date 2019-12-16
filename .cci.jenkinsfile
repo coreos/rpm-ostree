@@ -99,7 +99,7 @@ stage("Run vmcheck") {
             set -xeuo pipefail
             fcos=\$(ls builds/latest/*/*.qcow2) # */
             ln -sf "\$(realpath \${fcos})" tests/vmcheck/image.qcow2
-            NHOSTS=${nhosts} tests/vmcheck.sh
+            NHOSTS=${nhosts} SKIP_VMOVERLAY=1 tests/vmcheck.sh
           """
         }
       } finally {

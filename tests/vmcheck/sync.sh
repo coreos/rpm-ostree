@@ -8,7 +8,7 @@ if test -z "${INSIDE_VM:-}"; then
     vm_setup
 
     if ! vm_ssh_wait 30; then
-      echo "ERROR: A running VM is required for 'make vmcheck'."
+      echo "ERROR: A running VM is required"
       exit 1
     fi
 

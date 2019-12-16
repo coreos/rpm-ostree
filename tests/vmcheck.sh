@@ -6,6 +6,8 @@ topsrcdir=$(cd "$dn/.." && pwd)
 commondir=$(cd "$dn/common" && pwd)
 export topsrcdir commondir
 
+${dn}/vmcheck/overlay.sh
+
 # https://github.com/coreos/coreos-assembler/pull/632
 ncpus() {
   if ! grep -q kubepods /proc/1/cgroup; then

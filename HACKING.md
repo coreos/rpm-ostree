@@ -40,7 +40,7 @@ Testing
 You can use `make check` in a container to run the unit tests.  However,
 if you want to test the daemon in a useful way, you'll need virtualization.
 
-There's a `make vmcheck` test suite that requires a `ssh-config` in the
+There's a `./tests/vmcheck.sh` test suite that requires a `ssh-config` in the
 source directory toplevel.  You can provision a VM however you want; libvirt
 directly, vagrant, a remote OpenStack/EC2 instance, etc.  If you choose
 vagrant for example, do something like this:
@@ -51,12 +51,12 @@ vagrant ssh-config > /path/to/src/rpm-ostree/ssh-config
 
 The host is expected to be called `vmcheck` in the
 `ssh-config`. You can specify multiple hosts and parallelize
-the `make vmcheck` testsuite run through the `HOSTS`
+the `./tests/vmcheck.sh` testsuite run through the `HOSTS`
 variable. For example, if you have three nodes named
 `vmcheck[123]`, you can use:
 
 ```sh
-make vmcheck HOSTS='vmcheck1 vmcheck2 vmcheck3'
+./tests/vmcheck.sh HOSTS='vmcheck1 vmcheck2 vmcheck3'
 ```
 
 Once you have a `ssh-config` set up:

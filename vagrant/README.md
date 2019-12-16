@@ -50,10 +50,4 @@ To sync over and install the built binaries to the Vagrant VM:
 make vmsync
 ```
 
-You may also want to use `vmcheck`, like this:
-
-```
-make vmoverlay && make vmcheck
-```
-
-Also see [HACKING.md](../HACKING.md).
+See [HACKING.md](../HACKING.md).

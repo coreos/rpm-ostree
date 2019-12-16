@@ -19,8 +19,7 @@ Tests are divided into three groups:
   it doesn't require building and doesn't use uninstalled binaries.
 
 - Tests in the `vmcheck` directory are oriented around using
-  Vagrant.  Use `make vmcheck` to run them.
-  See also `HACKING.md` in the top directory.
+  coreos-assembler.  See also `HACKING.md` in the top directory.
 
 The `common` directory contains files used by multiple
 tests. The `utils` directory contains helper utilities

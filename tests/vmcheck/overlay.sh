@@ -1,7 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
+dn=$(cd $(dirname $0) && pwd)
 . ${commondir}/libvm.sh
+
+if [ -z "${SKIP_INSTALL:-}" ] && [ -z "${SKIP_VMOVERLAY:-}" ]; then
+  ${dn}/install.sh
+fi
 
 # Thin wrapper around `cosa dev-overlay`.
 

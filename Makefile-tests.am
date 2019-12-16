@@ -68,29 +68,17 @@ check-local:
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 	@echo " \"make check\" only runs a subset of rpm-ostree's tests."
-	@echo " Use \"make vmcheck\" to run remaining tests in a VM."
+	@echo " Use \"./tests/vmcheck.sh\" to run remaining tests in a VM."
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 
-.PHONY: vmsync vmoverlay vmcheck testenv
+.PHONY: vmsync testenv
 
 vmsync:
 	@set -e; if [ -z "$(SKIP_INSTALL)" ]; then \
 		env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
 	fi; \
 	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
-
-vmoverlay:
-	@set -e; \
-	if [ -z "$(SKIP_INSTALL)" ] && [ -z "$(SKIP_VMOVERLAY)" ]; then \
-	  env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
-	fi; \
-	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/overlay.sh;
-
-# One can run the vmcheck.sh script directly. The make target is useful for local
-# development so that e.g. we automatically overlay.
-vmcheck: vmoverlay
-	@tests/vmcheck.sh
 
 testenv:
 	@echo "===== ENTERING TESTENV ====="
