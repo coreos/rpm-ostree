@@ -36,7 +36,7 @@ struct TreefileExternals {
 // This type name is exposed through ffi.
 pub struct Treefile {
     // This one isn't used today, but we may do more in the future.
-    _workdir: openat::Dir,
+    _workdir: Option<openat::Dir>,
     primary_dfd: openat::Dir,
     #[allow(dead_code)] // Not used in tests
     parsed: TreeComposeConfig,
@@ -406,20 +406,19 @@ impl Treefile {
     fn new_boxed(
         filename: &Path,
         basearch: Option<&str>,
-        workdir: openat::Dir,
+        workdir: Option<openat::Dir>,
     ) -> Fallible<Box<Treefile>> {
         let mut seen_includes = collections::BTreeMap::new();
         let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
         parsed.config = parsed.config.substitute_vars()?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
-        let (rojig_name, rojig_spec) = if let Some(rojig) = parsed.config.rojig.as_ref() {
-            (
+        let (rojig_name, rojig_spec) = match (workdir.as_ref(), parsed.config.rojig.as_ref()) {
+            (Some(workdir), Some(rojig)) => {(
                 Some(CUtf8Buf::from_string(rojig.name.clone())),
-                Some(Treefile::write_rojig_spec(&workdir, rojig)?),
-            )
-        } else {
-            (None, None)
+                Some(Treefile::write_rojig_spec(workdir, rojig)?),
+            )},
+            _ => (None, None)
         };
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
         // Notice we hash the *reserialization* of the final flattened treefile only so that e.g.
@@ -1053,7 +1052,7 @@ automatic_version_prefix: bar
         Ok(Treefile::new_boxed(
             tf_path.as_path(),
             basearch,
-            openat::Dir::open(workdir)?,
+            Some(openat::Dir::open(workdir)?),
         )?)
     }
 
@@ -1201,7 +1200,7 @@ mod ffi {
         // Convert arguments
         let filename = ffi_view_os_str(filename);
         let basearch = ffi_view_nullable_str(basearch);
-        let workdir = ffi_view_openat_dir(workdir_dfd);
+        let workdir = ffi_view_openat_dir_option(workdir_dfd);
         // Run code, map error if any, otherwise extract raw pointer, passing
         // ownership back to C.
         ptr_glib_error(
