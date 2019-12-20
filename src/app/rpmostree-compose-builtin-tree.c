@@ -498,7 +498,7 @@ parse_treefile_to_json (const char    *treefile_path,
   g_autoptr(JsonParser) parser = json_parser_new ();
   g_autoptr(RORTreefile) treefile_rs = ror_treefile_new (treefile_path, arch, workdir_dfd, error);
   if (!treefile_rs)
-    return glnx_prefix_error (error, "Failed to load YAML treefile");
+    return glnx_prefix_error (error, "Failed to load treefile");
 
   const char *serialized = ror_treefile_get_json_string (treefile_rs);
   if (!json_parser_load_from_data (parser, serialized, -1, error))
