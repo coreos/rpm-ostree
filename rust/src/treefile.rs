@@ -217,7 +217,7 @@ fn treefile_parse<P: AsRef<Path>>(
             add_files.insert(name.clone(), utils::open_file(filename.with_file_name(name))?);
         }
     }
-    let parent = filename.parent().unwrap();
+    let parent = utils::parent_dir(filename).unwrap();
     let passwd = load_passwd_file(&parent, &tf.check_passwd)?;
     let group = load_passwd_file(&parent, &tf.check_groups)?;
     Ok(ConfigAndExternals {
@@ -380,7 +380,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
             )
             .into());
         }
-        let parent = filename.parent().unwrap();
+        let parent = utils::parent_dir(filename).unwrap();
         let include_path = parent.join(include_path);
         let mut included = treefile_parse_recurse(include_path, basearch, depth + 1, seen_includes)?;
         treefile_merge(&mut parsed.config, &mut included.config);
@@ -412,7 +412,7 @@ impl Treefile {
         let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
         parsed.config = parsed.config.substitute_vars()?;
         Treefile::validate_config(&parsed.config)?;
-        let dfd = openat::Dir::open(filename.parent().unwrap())?;
+        let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
         let (rojig_name, rojig_spec) = if let Some(rojig) = parsed.config.rojig.as_ref() {
             (
                 Some(CUtf8Buf::from_string(rojig.name.clone())),
