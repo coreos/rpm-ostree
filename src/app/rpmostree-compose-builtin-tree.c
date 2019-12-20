@@ -790,12 +790,6 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
    */
   *out_changed = FALSE;
 
-  if (opt_print_only)
-    {
-      g_print ("%s\n", ror_treefile_get_json_string (self->treefile_rs));
-      return TRUE; /* Note early return */
-    }
-
   /* Print version number */
   g_printerr ("RPM-OSTree Version: %s\n", PACKAGE_VERSION);
 
@@ -1152,6 +1146,18 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   return TRUE;
 }
 
+static gboolean
+parse_and_print_treefile (const char *treefile_path, GError **error)
+{
+  g_autofree char *arch = rpm_ostree_get_basearch ();
+  g_autoptr(RORTreefile) treefile_rs = ror_treefile_new (treefile_path, arch, -1, error);
+  if (!treefile_rs)
+    return glnx_prefix_error (error, "Failed to load treefile");
+
+  g_print ("%s\n", ror_treefile_get_json_string (treefile_rs));
+  return TRUE;
+}
+
 gboolean
 rpmostree_compose_builtin_install (int             argc,
                                    char          **argv,
@@ -1177,6 +1183,11 @@ rpmostree_compose_builtin_install (int             argc,
       return FALSE;
     }
 
+  const char *treefile_path = argv[1];
+
+  if (opt_print_only)
+    return parse_and_print_treefile (treefile_path, error);
+
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
@@ -1189,7 +1200,6 @@ rpmostree_compose_builtin_install (int             argc,
       return FALSE;
     }
 
-  const char *treefile_path = argv[1];
   /* Destination is turned into workdir */
   const char *destdir = argv[2];
   opt_workdir = g_strdup (destdir);
@@ -1347,13 +1357,16 @@ rpmostree_compose_builtin_tree (int             argc,
       return FALSE;
     }
 
+  const char *treefile_path = argv[1];
+
+  if (opt_print_only)
+    return parse_and_print_treefile (treefile_path, error);
+
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
       return FALSE;
     }
-
-  const char *treefile_path = argv[1];
 
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))

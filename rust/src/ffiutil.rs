@@ -124,6 +124,15 @@ pub(crate) fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
     r
 }
 
+// View `fd` as an `Option<openat::Dir>` instance.  Lifetime of return value
+// must be less than or equal to that of parameter.
+pub(crate) fn ffi_view_openat_dir_option(fd: libc::c_int) -> Option<openat::Dir> {
+    match fd {
+        -1 => None,
+        _ => Some(ffi_view_openat_dir(fd)),
+    }
+}
+
 /// Assert that a raw pointer is not `NULL`, and cast it to a Rust reference
 /// with the static lifetime - it has to be static as we can't tell Rust about
 /// our lifetimes from the C side.
