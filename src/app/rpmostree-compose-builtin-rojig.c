@@ -553,9 +553,12 @@ impl_write_rojig (RpmOstreeRojigCompose *self,
                                  &new_revision, cancellable, error))
     return FALSE;
 
+  const char *rojig_spec_path = ror_treefile_get_rojig_spec_path (self->treefile_rs);
+  if (!rojig_spec_path)
+    return glnx_throw (error, "treefile has no rojig section");
+
   if (!rpmostree_commit2rojig (self->repo, self->pkgcache_repo, new_revision,
-                               self->workdir_dfd,
-                               ror_treefile_get_rojig_spec_path (self->treefile_rs),
+                               self->workdir_dfd, rojig_spec_path,
                                outdir, cancellable, error))
     return FALSE;
 

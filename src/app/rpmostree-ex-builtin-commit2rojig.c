@@ -101,6 +101,9 @@ rpmostree_ex_builtin_commit2rojig (int             argc,
 
   g_autoptr(RORTreefile) treefile_rs = ror_treefile_new (treefile, NULL, tmpd.fd, error);
   const char *rojig_spec_path = ror_treefile_get_rojig_spec_path (treefile_rs);
+  if (!rojig_spec_path)
+    return glnx_throw (error, "treefile has no rojig section");
+
   if (!rpmostree_commit2rojig (repo, pkgcache_repo, rev, tmpd.fd, rojig_spec_path, outputdir,
                                cancellable, error))
     return FALSE;
