@@ -930,8 +930,8 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
       return FALSE;
 
     /* We're done with these maps */
-    g_clear_pointer (&self->commit_content_objects, (GDestroyNotify)g_ptr_array_unref);
-    g_clear_pointer (&self->content_object_to_pkg_objid, (GDestroyNotify)g_ptr_array_unref);
+    g_clear_pointer (&self->commit_content_objects, (GDestroyNotify)g_hash_table_unref);
+    g_clear_pointer (&self->content_object_to_pkg_objid, (GDestroyNotify)g_hash_table_unref);
 
     /* Now that we have a mapping for each package, sort
      * the package xattr data by objid, and write it to
