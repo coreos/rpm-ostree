@@ -43,13 +43,14 @@ codestyle: {
       """
   }
 },
-msrv: {
+rust: {
   coreos.pod(image: COSA_BUILDROOT_IMAGE, runAsUser: 0) {
       checkout scm
 
       sh """
         set -euo pipefail
         ci/msrv.sh
+        cd rust && cargo test
       """
   }
 }}
