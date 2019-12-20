@@ -69,7 +69,7 @@ static gboolean opt_unified_core;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
-static char *opt_metadata_json;
+static char **opt_metadata_json;
 static char *opt_repo;
 static char *opt_touch_if_changed;
 static gboolean opt_dry_run;
@@ -113,7 +113,7 @@ static GOptionEntry postprocess_option_entries[] = {
 
 static GOptionEntry commit_option_entries[] = {
   { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
-  { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
+  { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
   { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to, "File to write the composed commitid to instead of updating the ref", "FILE" },
   { "write-composejson-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_composejson_to, "Write JSON to FILE containing information about the compose run", "FILE" },
   { "no-parent", 0, 0, G_OPTION_ARG_NONE, &opt_no_parent, "Always commit without a parent", NULL },
@@ -735,9 +735,13 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   /* then --add-metadata-from-json */
   if (opt_metadata_json)
     {
-      if (!rpmostree_composeutil_read_json_metadata_from_file (opt_metadata_json,
-                                                               self->metadata, error))
-        return FALSE;
+      for (char **iter = opt_metadata_json; iter && *iter; iter++)
+        {
+          const char *metadata_json_file = *iter;
+          if (!rpmostree_composeutil_read_json_metadata_from_file (metadata_json_file,
+                                                                   self->metadata, error))
+            return FALSE;
+        }
     }
 
   /* and finally --add-metadata-string */
