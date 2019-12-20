@@ -158,7 +158,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   const char *preserve = g_getenv ("RPMOSTREE_PRESERVE_TMPDIR");
   if (ctx->workdir_tmp.initialized &&
       (preserve && (!g_str_equal (preserve, "on-fail") || ctx->failed)))
-    g_print ("Preserved workdir: %s\n", ctx->workdir_tmp.path);
+    g_printerr ("Preserved workdir: %s\n", ctx->workdir_tmp.path);
   else
     (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
   glnx_close_fd (&ctx->rootfs_dfd);
