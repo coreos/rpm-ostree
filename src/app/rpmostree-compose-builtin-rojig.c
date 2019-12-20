@@ -104,7 +104,7 @@ rpm_ostree_rojig_compose_free (RpmOstreeRojigCompose *ctx)
   if (ctx->cachedir_dfd != ctx->workdir_tmp.fd)
     glnx_close_fd (&ctx->cachedir_dfd);
   if (g_getenv ("RPMOSTREE_PRESERVE_TMPDIR"))
-    g_print ("Preserved workdir: %s\n", ctx->workdir_tmp.path);
+    g_printerr ("Preserved workdir: %s\n", ctx->workdir_tmp.path);
   else
     (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
   g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
