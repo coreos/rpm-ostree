@@ -8,7 +8,7 @@ parallel rpms: {
   coreos.pod(image: COSA_BUILDROOT_IMAGE, runAsUser: 0) {
       checkout scm
       sh """
-        set -euo pipefail
+        set -xeuo pipefail
         # fetch tags so `git describe` gives a nice NEVRA when building the RPM
         git fetch origin --tags
         ci/installdeps.sh
@@ -24,17 +24,18 @@ parallel rpms: {
 
         cd packaging
         make -f Makefile.dist-packaging rpm
+        mv \$(find . -name '*.rpm') ..
       """
       // make it easy for anyone to download the RPMs
-      archiveArtifacts 'packaging/**/*.rpm'
-      stash includes: 'packaging/**/*.rpm', name: 'rpms'
+      archiveArtifacts '*.rpm'
+      stash excludes: '*.src.rpm', includes: '*.rpm', name: 'rpms'
   }
 },
 codestyle: {
   coreos.pod(image: COSA_IMAGE) {
       checkout scm
       sh """
-        set -euo pipefail
+        set -xeuo pipefail
         # Jenkins by default only fetches the branch it's testing. Explicitly fetch master
         # for ci-commitmessage-submodules.sh
         git fetch origin +refs/heads/master:refs/remotes/origin/master
@@ -48,101 +49,92 @@ rust: {
       checkout scm
 
       sh """
-        set -euo pipefail
+        set -xeuo pipefail
         ci/msrv.sh
         cd rust && cargo test
       """
   }
 }}
 
-stage("Build FCOS") {
-  coreos.pod(image: COSA_IMAGE, runAsUser: 0, kvm: true) {
-      unstash 'rpms'
-      sh """
-        set -euo pipefail
-
-        rpms=\$(find packaging/ ! -name '*.src.rpm' -name '*.rpm')
-
-        # install our built rpm-ostree
-        dnf install -y \${rpms}
-
-        # and build FCOS with our built rpm-ostree inside of it
-        coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
-        mkdir -p overrides/rpm
-        mv \${rpms} overrides/rpm
-        rm -rf packaging
-
-        coreos-assembler build
-      """
-      stash includes: 'builds/latest/*/*.qcow2', name: 'fcos'
-  }
-}
-
-
 stage("Test") {
 parallel vmcheck: {
-  def nhosts = 6
-  def mem = (nhosts * 1024) + 512
-  coreos.pod(image: COSA_IMAGE, runAsUser: 0, kvm: true, memory: "${mem}Mi", cpu: "${nhosts}") {
-      checkout scm
-      unstash 'rpms'
-      sh """
-        set -euo pipefail
-        ci/installdeps.sh  # really, we just need test deps, but meh...
-
-        # install our built rpm-ostree
-        find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
-        rm -rf packaging
-      """
-      unstash 'fcos'
-      try {
-        timeout(time: 30, unit: 'MINUTES') {
+    def nhosts = 6
+    def mem = (nhosts * 1024) + 512
+    coreos.pod(image: COSA_IMAGE, runAsUser: 0, kvm: true, memory: "${mem}Mi", cpu: "${nhosts}") {
+      stage("Build FCOS") {
+        checkout scm
+        unstash 'rpms'
+        // run this stage first without installing deps, so we match exactly the cosa pkgset
+        // (+ our built rpm-ostree)
+        sh """
+          set -xeuo pipefail
+          dnf install -y *.rpm
+          coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
+          # include our built rpm-ostree in the image
+          mkdir -p overrides/rpm
+          mv *.rpm overrides/rpm
+          coreos-assembler build
+        """
+      }
+      stage("Install Deps") {
+        sh """
+          set -xeuo pipefail
+          ci/installdeps.sh  # really, we just need test deps, but meh...
+        """
+      }
+      stage("Run") {
+        try {
+          timeout(time: 30, unit: 'MINUTES') {
+            sh """
+              set -xeuo pipefail
+              fcos=\$(ls builds/latest/*/*.qcow2) # */
+              ln -sf "\$(realpath \${fcos})" tests/vmcheck/image.qcow2
+              JOBS=${nhosts} tests/vmcheck.sh
+            """
+          }
+        } finally {
           sh """
             set -xeuo pipefail
-            fcos=\$(ls builds/latest/*/*.qcow2) # */
-            ln -sf "\$(realpath \${fcos})" tests/vmcheck/image.qcow2
-            JOBS=${nhosts} tests/vmcheck.sh
+            if [ -d vmcheck-logs ]; then
+              tar -C vmcheck-logs -cf- . | xz -c9 > vmcheck-logs.tar.xz
+            fi
           """
+          archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
         }
-      } finally {
-        sh """
-          if [ -d vmcheck-logs ]; then
-            tar -C vmcheck-logs -cf- . | xz -c9 > vmcheck-logs.tar.xz
-          fi
-        """
-        archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
-      }
+    }
   }
 },
 compose: {
-  def jobs = 5
-  def mem = (jobs * 2048) + 512
-  coreos.pod(image: COSA_IMAGE, runAsUser: 0, emptyDirs: ["/srv/tmpdir"], kvm: true, memory: "${mem}Mi", cpu: "${jobs}") {
-      checkout scm
-      unstash 'rpms'
-      sh """
-        set -euo pipefail
-        ci/installdeps.sh  # really, we just need test deps, but meh...
-
-        # install our built rpm-ostree
-        find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
-        rm -rf packaging
-      """
-      try {
-        timeout(time: 40, unit: 'MINUTES') {
+    def jobs = 5
+    def mem = (jobs * 2048) + 512
+    coreos.pod(image: COSA_IMAGE, runAsUser: 0, emptyDirs: ["/srv/tmpdir"], kvm: true, memory: "${mem}Mi", cpu: "${jobs}") {
+        checkout scm
+        unstash 'rpms'
+        stage("Install Deps") {
           sh """
             set -xeuo pipefail
-            mkdir compose-logs
-            TMPDIR=/srv/tmpdir JOBS=${jobs} ./tests/compose.sh
+            ci/installdeps.sh  # really, we just need test deps, but meh...
+            dnf install -y *.rpm  # install our built rpm-ostree
           """
         }
-      } finally {
-        sh """
-          if [ -d compose-logs ]; then
-            tar -C compose-logs -cf- . | xz -c9 > compose-logs.tar.xz
-          fi
-        """
-        archiveArtifacts allowEmptyArchive: true, artifacts: 'compose-logs.tar.xz'
-      }
-  }
+        stage("Run") {
+          try {
+            timeout(time: 40, unit: 'MINUTES') {
+              sh """
+                set -xeuo pipefail
+                mkdir compose-logs
+                TMPDIR=/srv/tmpdir JOBS=${jobs} ./tests/compose.sh
+              """
+            }
+          } finally {
+            sh """
+              set -xeuo pipefail
+              if [ -d compose-logs ]; then
+                tar -C compose-logs -cf- . | xz -c9 > compose-logs.tar.xz
+              fi
+            """
+            archiveArtifacts allowEmptyArchive: true, artifacts: 'compose-logs.tar.xz'
+          }
+        }
+    }
 }}
