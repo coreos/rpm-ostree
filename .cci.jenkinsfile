@@ -79,7 +79,8 @@ stage("Build FCOS") {
 }
 
 
-stage("Run vmcheck") {
+stage("Test") {
+parallel vmcheck: {
   def nhosts = 6
   def mem = (nhosts * 1024) + 512
   coreos.pod(image: COSA_IMAGE, runAsUser: 0, kvm: true, memory: "${mem}Mi", cpu: "${nhosts}") {
@@ -100,7 +101,7 @@ stage("Run vmcheck") {
             set -xeuo pipefail
             fcos=\$(ls builds/latest/*/*.qcow2) # */
             ln -sf "\$(realpath \${fcos})" tests/vmcheck/image.qcow2
-            NHOSTS=${nhosts} tests/vmcheck.sh
+            JOBS=${nhosts} tests/vmcheck.sh
           """
         }
       } finally {
@@ -112,4 +113,36 @@ stage("Run vmcheck") {
         archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
       }
   }
-}
+},
+compose: {
+  def jobs = 5
+  def mem = (jobs * 2048) + 512
+  coreos.pod(image: COSA_IMAGE, runAsUser: 0, emptyDirs: ["/srv/tmpdir"], kvm: true, memory: "${mem}Mi", cpu: "${jobs}") {
+      checkout scm
+      unstash 'rpms'
+      sh """
+        set -euo pipefail
+        ci/installdeps.sh  # really, we just need test deps, but meh...
+
+        # install our built rpm-ostree
+        find packaging/ ! -name '*.src.rpm' -name '*.rpm' | xargs dnf install -y
+        rm -rf packaging
+      """
+      try {
+        timeout(time: 40, unit: 'MINUTES') {
+          sh """
+            set -xeuo pipefail
+            mkdir compose-logs
+            TMPDIR=/srv/tmpdir JOBS=${jobs} ./tests/compose.sh
+          """
+        }
+      } finally {
+        sh """
+          if [ -d compose-logs ]; then
+            tar -C compose-logs -cf- . | xz -c9 > compose-logs.tar.xz
+          fi
+        """
+        archiveArtifacts allowEmptyArchive: true, artifacts: 'compose-logs.tar.xz'
+      }
+  }
+}}

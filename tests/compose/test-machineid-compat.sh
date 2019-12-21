@@ -1,45 +1,34 @@
 #!/bin/bash
-
 set -xeuo pipefail
 
-dn=$(cd $(dirname $0) && pwd)
-. ${dn}/libcomposetest.sh
+dn=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=libcomposetest.sh
+. "${dn}/libcomposetest.sh"
 
 # Test that `units` and `machineid-compat: False` conflict
-prepare_compose_test "machineid-compat-conflict"
-pysetjsonmember "machineid-compat" 'False'
-pysetjsonmember "units" '["tuned.service"]'
+treefile_set "units" '["tuned.service"]'
 
-# Do the compose -- we call compose directly because `set -e` has no effect when
-# calling functions within an if condition context
-rm ${compose_workdir} -rf
-mkdir ${test_tmpdir}/workdir
-if rpm-ostree compose tree ${compose_base_argv} ${treefile} |& tee err.txt; then
+# Do the compose
+if runcompose |& tee err.txt; then
     assert_not_reached err.txt "Successfully composed with units and machineid-compat=False?"
 fi
 assert_file_has_content_literal err.txt \
     "'units' directive is incompatible with machineid-compat = false"
 echo "ok conflict with units"
 
-# In this test we also want to test that include:
-# correctly handles machineid-compat.
-prepare_compose_test "machineid-compat"
-# Also test having no ref
-pyeditjson 'del jd["ref"]' < ${treefile} > ${treefile}.new
-mv ${treefile}{.new,}
-treeref=""
-pysetjsonmember "machineid-compat" 'False'
-cat > composedata/fedora-machineid-compat-includer.yaml <<EOF
-include: fedora-machineid-compat.json
-EOF
-export treefile=composedata/fedora-machineid-compat-includer.yaml
+# Now test machineid-compat: True
+
+# Also test having no ref (XXX: move to misc or something)
+treefile_del 'ref'
+treefile_set "machineid-compat" 'True'
 runcompose
 echo "ok compose"
 
-ostree --repo="${repobuild}" refs >refs.txt
-diff -u /dev/null refs.txt
+ostree --repo="${repo}" refs > refs.txt
+assert_not_file_has_content refs.txt "${treeref}"
 echo "ok no refs written"
 
-ostree --repo=${repobuild} ls ${commit} /usr/etc > ls.txt
-assert_not_file_has_content ls.txt 'machine-id'
+commit=$(jq -r '.["ostree-commit"]' < compose.json)
+ostree --repo=${repo} ls ${commit} /usr/etc > ls.txt
+assert_file_has_content ls.txt 'machine-id'
 echo "ok machineid-compat"

@@ -1,19 +1,27 @@
 #!/bin/bash
-
 set -xeuo pipefail
 
-dn=$(cd $(dirname $0) && pwd)
-. ${dn}/libcomposetest.sh
+dn=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=libcomposetest.sh
+. "${dn}/libcomposetest.sh"
 
-prepare_compose_test "installroot"
 # This is used to test postprocessing with treefile vs not
-pysetjsonmember "boot_location" '"new"'
-instroot_tmp=$(mktemp -d /var/tmp/rpm-ostree-instroot.XXXXXX)
-rpm-ostree compose install --unified-core --repo="${repobuild}" ${treefile} ${instroot_tmp}
+treefile_set "boot-location" '"new"'
+
+# This test is a bit of a degenerative case of the supermin abstration. We need
+# to be able to interact with the compose output directly, feed it back to
+# rpm-ostree, etc... So we just run whole scripts inside the VM.
+
+instroot_tmp=cache/instroot
 instroot=${instroot_tmp}/rootfs
-assert_not_has_dir ${instroot}/etc
+integrationconf=usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf
+runasroot sh -xec "
+mkdir -p ${instroot_tmp}
+rpm-ostree compose install ${compose_base_argv} ${treefile} ${instroot_tmp}
+
+! test -d ${instroot}/etc
 test -L ${instroot}/home
-assert_has_dir ${instroot}/usr/etc
+test -d ${instroot}/usr/etc
 
 # Clone the root - we'll test direct commit, as well as postprocess with
 # and without treefile.
@@ -21,28 +29,32 @@ mv ${instroot}{,-postprocess}
 cp -al ${instroot}{-postprocess,-directcommit}
 cp -al ${instroot}{-postprocess,-postprocess-treefile}
 
-integrationconf=usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf
 
-assert_not_has_file ${instroot}-postprocess/${integrationconf}
+! test -f ${instroot}-postprocess/${integrationconf}
 rpm-ostree compose postprocess ${instroot}-postprocess
-assert_has_file ${instroot}-postprocess/${integrationconf}
-ostree --repo=${repobuild} commit -b test-directcommit --selinux-policy ${instroot}-postprocess --tree=dir=${instroot}-postprocess
+test -f ${instroot}-postprocess/${integrationconf}
+ostree --repo=${repo} commit -b test-directcommit --selinux-policy ${instroot}-postprocess --tree=dir=${instroot}-postprocess
+"
 echo "ok postprocess + direct commit"
 
+runasroot sh -xec "
 rpm-ostree compose postprocess ${instroot}-postprocess-treefile ${treefile}
-assert_has_file ${instroot}-postprocess-treefile/${integrationconf}
+test -f ${instroot}-postprocess-treefile/${integrationconf}
 # with treefile, no kernels in /boot
 ls ${instroot}-postprocess-treefile/boot > ls.txt
-assert_not_file_has_content ls.txt '^vmlinuz-'
+! grep '^vmlinuz-' ls.txt
 rm -f ls.txt
+"
 echo "ok postprocess with treefile"
 
 testdate=$(date)
-echo "${testdate}" > ${instroot}-directcommit/usr/share/rpm-ostree-composetest-split.txt
-assert_not_has_file ${instroot}-directcommit/${integrationconf}
-rpm-ostree compose commit --repo=${repobuild} ${treefile} ${instroot}-directcommit
-ostree --repo=${repobuild} ls ${treeref} /usr/bin/bash
-ostree --repo=${repobuild} cat ${treeref} /usr/share/rpm-ostree-composetest-split.txt >out.txt
-assert_file_has_content_literal out.txt "${testdate}"
-ostree --repo=${repobuild} cat ${treeref} /${integrationconf}
+runasroot sh -xec "
+echo \"${testdate}\" > ${instroot}-directcommit/usr/share/rpm-ostree-composetest-split.txt
+! test -f ${instroot}-directcommit/${integrationconf}
+rpm-ostree compose commit --repo=${repo} ${treefile} ${instroot}-directcommit
+ostree --repo=${repo} ls ${treeref} /usr/bin/bash
+ostree --repo=${repo} cat ${treeref} /usr/share/rpm-ostree-composetest-split.txt >out.txt
+grep \"${testdate}\" out.txt
+ostree --repo=${repo} cat ${treeref} /${integrationconf}
+"
 echo "ok installroot"

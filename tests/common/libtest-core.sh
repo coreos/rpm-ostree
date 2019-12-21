@@ -133,3 +133,51 @@ skip() {
     echo "1..0 # SKIP" "$@"
     exit 0
 }
+
+# https://github.com/coreos/coreos-assembler/pull/632. Ideally, we'd also cap
+# based on memory available to us, but that's notoriously difficult to do for
+# containers (see:
+# https://fabiokung.com/2014/03/13/memory-inside-linux-containers/). We make an
+# assumption here that we have at least e.g. 1G of RAM we can use per CPU
+# available to us.
+ncpus() {
+  if ! grep -q kubepods /proc/1/cgroup; then
+    # this might be a developer laptop; leave one cpu free to be nice
+    echo $(($(nproc) - 1))
+    return 0
+  fi
+
+  quota=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
+  period=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us)
+  if [[ ${quota} != -1 ]] && [[ ${period} -gt 0 ]]; then
+    echo $(("${quota}" / "${period}"))
+  fi
+
+  # just fallback to 1
+  echo 1
+}
+
+filter_tests() {
+  local tests_dir=$1; shift
+  local skipped=0
+
+  local selected_tests=()
+  for tf in $(find "${tests_dir}" -name 'test-*.sh' | shuf); do
+    tfbn=$(basename "$tf" .sh)
+    tfbn=" ${tfbn#test-} "
+    if [ -n "${TESTS+ }" ]; then
+      if [[ " $TESTS " != *$tfbn* ]]; then
+        skipped=$((skipped + 1))
+        continue
+      fi
+    fi
+
+    selected_tests+=("${tfbn}")
+  done
+
+  if [ ${skipped} -gt 0 ]; then
+    echo "Skipping ${skipped} tests" >&2
+  fi
+
+  echo "${selected_tests[*]}"
+}
