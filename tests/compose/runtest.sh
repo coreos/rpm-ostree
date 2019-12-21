@@ -6,7 +6,11 @@ if [ -n "${V:-}" ]; then
 fi
 
 outputdir=$1; shift
+fixtures=$1; shift
 testname=$1; shift
+
+# this is used directly just by the basic test, but it also hosts the RPMs
+export fixtures
 
 outputdir="${outputdir}/${testname}"
 rm -rf "${outputdir:?}"/*
@@ -29,16 +33,17 @@ fi
 echo "EXEC: ${testname}" >&3
 
 # this will cause libtest.sh to allocate a tmpdir and cd to it
-export VMTESTS=1
+export COMPOSETESTS=1
 
 # shellcheck source=../common/libtest.sh disable=2154
 . "${commondir}/libtest.sh"
 
-# shellcheck source=../common/libvm.sh
-. "${commondir}/libvm.sh"
+# use `git clone` rather than a symlink; we want our own copy so that we can
+# modify it
+git clone file://${fixtures}/config
+ostree init --repo repo --mode=bare-user
 
-if vm_kola_spawn "${outputdir}/kola" && \
-    "${topsrcdir}/tests/vmcheck/test-${testname}.sh"; then
+if "${topsrcdir}/tests/compose/test-${testname}.sh"; then
   echo "PASS: ${testname}" >&3
 else
   echo "FAIL: ${testname}" >&3
@@ -46,9 +51,9 @@ else
     tail -n20 "${outputdir}/output.log" | sed "s/^/   ${testname}: /g" >&3
   fi
 
-  if [ -n "${VMCHECK_DEBUG:-}" ]; then
-    echo "--- VMCHECK_DEBUG ---" >&3
-    echo "To try SSH:" "SSH_AUTH_SOCK=$(realpath "${SSH_AUTH_SOCK}") ${SSH:-}" >&3
+  if [ -n "${COMPOSE_DEBUG:-}" ]; then
+    echo "--- COMPOSE_DEBUG ---" >&3
+    echo "Working directory: ${PWD}" >&3
     echo "Sleeping..." >&3
     sleep infinity
   fi

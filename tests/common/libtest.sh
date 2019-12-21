@@ -51,12 +51,14 @@ _cleanup_tmpdir () {
 
 # Create a tmpdir if we're running as a local test (i.e. through `make check`)
 # or as a `vmcheck` test, which also needs some scratch space on the host.
-if ( test -n "${UNINSTALLEDTESTS:-}" || test -n "${VMTESTS:-}" ) && ! test -f $PWD/.test; then
+if { test -n "${UNINSTALLEDTESTS:-}" || \
+     test -n "${VMTESTS:-}" || \
+     test -n "${COMPOSETESTS:-}"; } && ! test -f "$PWD/.test"; then
    # Use --tmpdir to keep it in /tmp. This also keeps paths short; this is
    # important if we want to create UNIX sockets under there.
    test_tmpdir=$(mktemp -d test.XXXXXX --tmpdir)
    touch ${test_tmpdir}/.test
-   trap _cleanup_tmpdir EXIT
+   trap _cleanup_tmpdir EXIT SIGINT
    cd ${test_tmpdir}
 fi
 if test -n "${UNINSTALLEDTESTS:-}"; then
@@ -404,6 +406,8 @@ EOF
         case $section in
         requires)
             echo "Requires: $arg" >> $spec;;
+        recommends)
+            echo "Recommends: $arg" >> $spec;;
         provides)
             echo "Provides: $arg" >> $spec;;
         conflicts)
@@ -576,4 +580,27 @@ assert_jq() {
             exit 1
         fi
     done
+}
+
+# This function below was taken and adapted from coreos-assembler. We
+# should look into sharing this code more easily.
+
+# Determine if current user has enough privileges for composes
+_privileged=
+has_compose_privileges() {
+    if [ -z "${_privileged:-}" ]; then
+        if [ -n "${FORCE_UNPRIVILEGED:-}" ]; then
+            echo "Detected FORCE_UNPRIVILEGED; using virt"
+            _privileged=0
+        elif ! capsh --print | grep -q 'Bounding.*cap_sys_admin'; then
+            echo "Missing CAP_SYS_ADMIN; using virt"
+            _privileged=0
+        elif [ "$(id -u)" != "0" ]; then
+            echo "Not running as root; using virt"
+            _privileged=0
+        else
+            _privileged=1
+        fi
+    fi
+    [ ${_privileged} == 1 ]
 }
