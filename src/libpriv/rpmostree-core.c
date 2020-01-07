@@ -1158,6 +1158,12 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
    * So for now, let's tell libdnf that we do want to be able to see them. See:
    * https://github.com/projectatomic/rpm-ostree/issues/1435 */
   dnf_sack_set_module_excludes (dnf_context_get_sack (self->dnfctx), NULL);
+  /* And also mark all repos as hotfix repos so that we can indiscriminately cherry-pick
+   * from modular repos and non-modular repos alike. */
+  g_autoptr(GPtrArray) repos =
+    rpmostree_get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
+  for (guint i = 0; i < repos->len; i++)
+    dnf_repo_set_module_hotfixes (repos->pdata[i], TRUE);
 
   return TRUE;
 }
