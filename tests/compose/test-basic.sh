@@ -17,21 +17,6 @@ echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
 treefile_append "packages" '["foobar"]'
 
-###
-# MAJOR HACK ALERT; drop modular pkgs because libdnf in the non-unified path
-# wants the modulemd available in the rpmmd, which neither our cache repo nor
-# pool have
-treefile_pyedit "
-tf['packages'].remove('afterburn')
-tf['packages'].remove('afterburn-dracut')
-tf['packages'].remove('fedora-coreos-pinger')
-tf['packages'].remove('sssd')
-"
-# have mercy
-echo 'exclude=libnghttp2' >> config/cache.repo
-build_rpm fake-libnghttp2 version 1.40.0 provides "libnghttp2.so.14()(64bit)"
-###
-
 treefile_pyedit "tf['add-commit-metadata']['foobar'] = 'bazboo'"
 treefile_pyedit "tf['add-commit-metadata']['overrideme'] = 'old var'"
 
