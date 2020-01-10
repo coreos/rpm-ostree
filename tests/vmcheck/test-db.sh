@@ -50,17 +50,20 @@ check_not_diff() {
   assert_not_file_has_content diff.txt "$@"
 }
 
+# make the package name start with zzz so it's last to be processed
+vm_build_rpm zzz-pkg-to-downgrade version 2.0
 vm_build_rpm pkg-to-remove
 vm_build_rpm pkg-to-replace
 vm_build_rpm pkg-to-replace-archtrans arch noarch
-vm_rpmostree install pkg-to-remove pkg-to-replace pkg-to-replace-archtrans
+vm_rpmostree install pkg-to-remove pkg-to-replace pkg-to-replace-archtrans zzz-pkg-to-downgrade
 
 # we should be able to see the diff in status now
 vm_rpmostree status > status.txt
-assert_file_has_content status.txt "Diff: 3 added"
+assert_file_has_content status.txt "Diff: 4 added"
 vm_rpmostree status -v > statusv.txt
 assert_file_has_content statusv.txt \
   "Added:" \
+  "zzz-pkg-to-downgrade" \
   "pkg-to-remove" \
   "pkg-to-replace" \
   "pkg-to-replace-archtrans"
@@ -69,6 +72,7 @@ echo "ok db diff in status"
 booted_csum=$(vm_get_booted_csum)
 pending_csum=$(vm_get_pending_csum)
 check_diff $booted_csum $pending_csum \
+  +zzz-pkg-to-downgrade \
   +pkg-to-remove \
   +pkg-to-replace \
   +pkg-to-replace-archtrans
@@ -78,18 +82,21 @@ vm_rpmostree db diff --format=json $booted_csum $pending_csum > diff.json
 # See assert_replaced_local_pkg() for some syntax explanation. The .[1] == 0 bit
 # is what filters by "pkgs added".
 assert_jq diff.json \
+  '[.pkgdiff|map(select(.[1] == 0))[][0]]|index("zzz-pkg-to-downgrade") >= 0' \
   '[.pkgdiff|map(select(.[1] == 0))[][0]]|index("pkg-to-remove") >= 0' \
   '[.pkgdiff|map(select(.[1] == 0))[][0]]|index("pkg-to-replace") >= 0' \
   '[.pkgdiff|map(select(.[1] == 0))[][0]]|index("pkg-to-replace-archtrans") >= 0'
 
 # check that it's the default behaviour without both args
 check_diff "" "" \
+  +zzz-pkg-to-downgrade \
   +pkg-to-remove \
   +pkg-to-replace \
   +pkg-to-replace-archtrans
 
 # check that it's the default behaviour without one arg
 check_diff "$pending_csum" "" \
+  +zzz-pkg-to-downgrade \
   +pkg-to-remove \
   +pkg-to-replace \
   +pkg-to-replace-archtrans
@@ -103,15 +110,18 @@ vm_rpmostree cleanup -p
 vm_rpmostree upgrade
 pending_csum=$(vm_get_pending_csum)
 check_diff $booted_csum $pending_csum \
+  +zzz-pkg-to-downgrade \
   +pkg-to-remove \
   +pkg-to-replace \
   +pkg-to-replace-archtrans
 echo "ok setup"
 
 vm_rpmostree override remove pkg-to-remove
+vm_build_rpm zzz-pkg-to-downgrade version 1.0
 vm_build_rpm pkg-to-replace version 2.0
 vm_build_rpm pkg-to-replace-archtrans version 2.0
 vm_rpmostree override replace \
+  $YUMREPO/zzz-pkg-to-downgrade-1.0-1.x86_64.rpm \
   $YUMREPO/pkg-to-replace-2.0-1.x86_64.rpm \
   $YUMREPO/pkg-to-replace-archtrans-2.0-1.x86_64.rpm
 vm_build_rpm pkg-to-overlay build 'echo same > pkg-to-overlay'
@@ -125,6 +135,7 @@ check_diff $booted_csum $pending_layered_csum \
   +pkg-to-overlay-1.0-1.i686 \
   +glibc-1.0-1.i686 \
   +pkg-to-replace-2.0 \
+  +zzz-pkg-to-downgrade-1.0 \
   +pkg-to-replace-archtrans-2.0
 # check that regular glibc is *not* in the list of modified/dropped packages
 check_not_diff $booted_csum $pending_layered_csum \
@@ -139,10 +150,19 @@ check_diff $pending_csum $pending_layered_csum \
   +pkg-to-overlay-1.0-1.i686 \
   +glibc-1.0-1.i686 \
   -pkg-to-remove \
+  !zzz-pkg-to-downgrade-2.0 \
+  =zzz-pkg-to-downgrade-1.0 \
   !pkg-to-replace-1.0 \
   =pkg-to-replace-2.0 \
   !pkg-to-replace-archtrans-1.0 \
   =pkg-to-replace-archtrans-2.0
+# also do a human diff check
+vm_rpmostree db diff $pending_csum $pending_layered_csum > diff.txt
+assert_file_has_content diff.txt 'Upgraded'
+assert_file_has_content diff.txt 'Downgraded'
+assert_file_has_content diff.txt 'Removed'
+assert_file_has_content diff.txt 'Added'
+grep -A1 '^Downgraded:' diff.txt | grep zzz-pkg-to-downgrade
 echo "ok db diff"
 
 # this is a bit convoluted; basically, we prune the commit and only keep its

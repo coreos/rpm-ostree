@@ -914,20 +914,19 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
         continue;
-      upgraded++;
 
       switch (format)
         {
         /* we deal with summary after; just need a count */
         case RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY:
-          continue;
+          break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
           g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? "Upgraded" : "",
                    i == 0 ? ":" : " ", name, rpm_ostree_package_get_evr (oldpkg),
                                              rpm_ostree_package_get_evr (newpkg));
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
-          if (i == 0)
+          if (upgraded == 0)
             g_print ("Upgraded:\n");
           g_print ("  %s %s -> %s\n", name,
                    rpm_ostree_package_get_evr (oldpkg),
@@ -936,6 +935,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
         default:
           g_assert_not_reached ();
         }
+      upgraded++;
     }
 
   guint downgraded = 0;
@@ -947,20 +947,19 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) < 0)
         continue;
-      downgraded++;
 
       switch (format)
         {
         /* we deal with summary after; just need a count */
         case RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY:
-          continue;
+          break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
           g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? "Downgraded" : "",
                    i == 0 ? ":" : " ", name, rpm_ostree_package_get_evr (oldpkg),
                                              rpm_ostree_package_get_evr (newpkg));
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
-          if (i == 0)
+          if (downgraded == 0)
             g_print ("Downgraded:\n");
           g_print ("  %s %s -> %s\n", name,
                    rpm_ostree_package_get_evr (oldpkg),
@@ -969,6 +968,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
         default:
           g_assert_not_reached ();
         }
+      downgraded++;
     }
 
   /* now that we have all the counts, we can handle the SUMMARY path */
