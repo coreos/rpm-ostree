@@ -119,7 +119,7 @@ compose: {
         }
         stage("Run") {
           try {
-            timeout(time: 40, unit: 'MINUTES') {
+            timeout(time: 45, unit: 'MINUTES') {
               sh """
                 set -xeuo pipefail
                 mkdir compose-logs
