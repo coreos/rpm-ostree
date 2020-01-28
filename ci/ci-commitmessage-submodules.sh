@@ -53,6 +53,11 @@ git log --pretty=oneline origin/master..$HEAD | while read logline; do
         if grep -q -e '^'${submodule} ${tmpd}/diff.txt; then
             echo "Commit $commit modifies submodule: $submodule"
             expected_match="Update submodule: $submodule"
+            # check if it's from dependabot
+            if grep -q -e '^Author: dependabot' ${tmpd}/log.txt; then
+              echo "Commit $commit contains bump from Dependabot"
+              continue
+            fi
             if ! grep -q -e "$expected_match" ${tmpd}/log.txt; then
                 echo "error: Commit message for ${commit} changes a submodule, but does not match regex ${expected_match}"
                 exit 1
