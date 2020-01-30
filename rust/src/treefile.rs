@@ -1303,8 +1303,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_treefile_get_rojig_name(tf: *mut Treefile) -> *const libc::c_char {
-        assert!(!tf.is_null());
-        let tf = unsafe { &mut *tf };
+        let tf = ref_from_raw_ptr(tf);
         tf.rojig_name
             .as_ref()
             .map(|v| v.as_ptr())
