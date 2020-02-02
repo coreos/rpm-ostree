@@ -66,6 +66,9 @@ assert_file_has_content_literal autovar.txt 'd /var/log/chrony 0755 chrony chron
 if ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/pkg-rpm.conf > rpm.txt 2>/dev/null; then
     assert_not_file_has_content rpm.txt 'd /var/lib/rpm'
 fi
+ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/pkg-pam.conf > autovar.txt
+# Verify translating /var/run -> /run
+assert_file_has_content_literal autovar.txt 'd /run/console'
 echo "ok autovar"
 
 # And redo it to trigger relabeling. Also test --no-parent at the same time.

@@ -548,6 +548,18 @@ path_for_tmpfiles_should_be_ignored (const char *path)
   return g_str_has_prefix (path, "/var/lib/rpm");
 }
 
+/* systemd-tmpfiles complains loudly about writing to /var/run; ideally,
+ * all of the packages get fixed for this but...eh.
+ */
+static void
+append_translated_tmpfiles_path (GString *buf, const char *path)
+{
+  static const char varrun[] = "/var/run/";
+  if (g_str_has_prefix (path, varrun))
+    path += strlen ("/var");
+  g_string_append (buf, path);
+}
+
 static void
 append_tmpfiles_d (RpmOstreeImporter *self,
                    const char *path,
@@ -576,7 +588,7 @@ append_tmpfiles_d (RpmOstreeImporter *self,
 
   g_string_append_c (tmpfiles_d, filetype_c);
   g_string_append_c (tmpfiles_d, ' ');
-  g_string_append (tmpfiles_d, path);
+  append_translated_tmpfiles_path (tmpfiles_d, path);
 
   switch (g_file_info_get_file_type (finfo))
     {
