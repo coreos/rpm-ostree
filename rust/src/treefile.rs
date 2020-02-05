@@ -310,6 +310,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         repos,
         packages,
         bootstrap_packages,
+        exclude_packages,
         ostree_layers,
         ostree_override_layers,
         install_langs,
@@ -656,6 +657,9 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ostree-override-layers")]
     ostree_override_layers: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "exclude-packages")]
+    exclude_packages: Option<Vec<String>>,
 
     // Content installation opts
     #[serde(skip_serializing_if = "Option::is_none")]

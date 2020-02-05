@@ -27,6 +27,9 @@ treefile_append "include" '["documentation.yaml", "recommends.yaml"]'
 treefile_del 'recommends'
 treefile_del 'documentation'
 
+# Test blacklists
+treefile_append "exclude-packages" '["somenonexistent-package", "gnome-shell"]'
+
 # Note this overrides:
 # $ rpm -q systemd
 # systemd-243.4-1.fc31.x86_64

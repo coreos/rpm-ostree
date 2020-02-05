@@ -257,6 +257,7 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 #undef BIND_STRING
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
+  add_canonicalized_string_array (&builder, "exclude-packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "cached-packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "removed-base-packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "cached-replaced-base-packages", NULL, keyfile);
@@ -1891,8 +1892,11 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   DnfContext *dnfctx = self->dnfctx;
   g_autofree char **pkgnames = NULL;
+  g_autofree char **exclude_packages = NULL;
   g_assert (g_variant_dict_lookup (self->spec->dict, "packages",
                                    "^a&s", &pkgnames));
+  g_variant_dict_lookup (self->spec->dict, "exclude-packages",
+                         "^a&s", &exclude_packages);
 
   g_autofree char **cached_pkgnames = NULL;
   g_assert (g_variant_dict_lookup (self->spec->dict, "cached-packages",
@@ -2021,6 +2025,20 @@ rpmostree_context_prepare (RpmOstreeContext *self,
           dnf_sack_add_excludes (sack, pset);
           dnf_packageset_free (pset);
         }
+    }
+
+  /* Process excludes */
+  for (char **iter = exclude_packages; iter && *iter; iter++)
+    {
+      const char *pkgname = *iter;
+      hy_autoquery HyQuery query = hy_query_create (sack);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
+      g_autoptr(GPtrArray) pkglist = hy_query_run (query);
+      DnfPackageSet *pset = dnf_packageset_new (sack);
+      for (guint i = 0; i < pkglist->len; i++)
+        dnf_packageset_add (pset, pkglist->pdata[i]);
+      dnf_sack_add_excludes (sack, pset);
+      dnf_packageset_free (pset);
     }
 
   /* First, handle packages to remove */
