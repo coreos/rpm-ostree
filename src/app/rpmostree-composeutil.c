@@ -247,6 +247,8 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
 
   if (!treespec_bind_array (treedata, treespec, "packages", NULL, TRUE, error))
     return FALSE;
+  if (!treespec_bind_array (treedata, treespec, "exclude-packages", NULL, FALSE, error))
+    return FALSE;
   if (!treespec_bind_array (treedata, treespec, "repos", NULL, TRUE, error))
     return FALSE;
   if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))

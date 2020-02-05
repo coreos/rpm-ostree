@@ -113,6 +113,15 @@ assert_file_has_content_literal () {
     done
 }
 
+assert_not_file_has_content_literal () {
+    fpath=$1; shift
+    for s in "$@"; do
+        if grep -q -F -e "$s" "$fpath"; then
+            _fatal_print_file "$fpath" "File '$fpath' matches fixed string list '$s'"
+        fi
+    done
+}
+
 assert_symlink_has_content () {
     if ! test -L "$1"; then
         fatal "File '$1' is not a symbolic link"

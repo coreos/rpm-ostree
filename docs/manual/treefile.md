@@ -61,6 +61,15 @@ It supports the following parameters:
  * `packages-$basearch`: Array of strings, optional: Set of installed packages, used
     only if $basearch matches the target architecture name.
 
+ * `exclude-packages`: Array of strings, optional: Each entry in this list is a package name
+   which will be filtered out.  If a package listed in the manifest ("manifest package") indirectly hard depends
+   on one of these packages, it will be a fatal error.  If a manifest package recommends one
+   of these packages, the recommended package will simply be omitted.  It is also a fatal
+   error to include a package both as a manifest package and in the blacklist.
+
+   An example use case for this is for Fedora CoreOS, which will blacklist the `python` and `python3`
+   packages to ensure that nothing included in the OS starts depending on it in the future.
+
  * `ostree-layers`: Array of strings, optional: After all packages are unpacked,
     check out these OSTree refs, which must already be in the destination repository.
     Any conflicts with packages will be an error.
