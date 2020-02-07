@@ -129,5 +129,11 @@ initramfs=$(vm_cmd grep ^initrd /boot/loader/entries/ostree-2-$osname.conf | sed
 test -n "${initramfs}"
 vm_cmd lsinitrd $initramfs > lsinitrd.txt
 assert_not_file_has_content lsinitrd.txt /etc/rpmostree-initramfs-testing
-
 echo "ok initramfs disable"
+# while we're here, sanity check we also ship /etc/passwd in the initrd to
+# soothe systemd-udevd
+for x in passwd group; do
+  assert_file_has_content lsinitrd.txt " etc/$x"
+done
+rm -f lsinitrd.txt
+echo "ok initramfs has passwd"

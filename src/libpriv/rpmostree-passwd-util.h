@@ -21,6 +21,7 @@
 #pragma once
 
 #include <gio/gio.h>
+#include <json-glib/json-glib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
