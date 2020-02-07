@@ -34,6 +34,8 @@
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
 
+#include "rpmostree-passwd-util.h"
+#include "rpmostree-core.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-bwrap.h"
 #include "rpmostree-util.h"
@@ -496,6 +498,21 @@ rpmostree_run_dracut (int     rootfs_dfd,
   g_auto(GLnxTmpfile) tmpf = { 0, };
   g_autoptr(GBytes) random_cpio_data = NULL;
 
+  /* We need to have /etc/passwd since dracut doesn't have altfiles
+   * today.  Though maybe in the future we should add it, but
+   * in the end we want to use systemd-sysusers of course.
+   **/
+  gboolean renamed_etc = FALSE;
+  if (!rpmostree_core_undo_usretc (rootfs_dfd, &renamed_etc, error))
+    return FALSE;
+  gboolean have_passwd = FALSE;
+  if (!rpmostree_passwd_prepare_rpm_layering (rootfs_dfd,
+                                              NULL,
+                                              &have_passwd,
+                                              cancellable,
+                                              error))
+    return FALSE;
+
   /* Previously we used to error out if argv or rebuild_from_initramfs were both
    * not set; now we simply use the defaults (which in Fedora today also means
    * implicitly hostonly). That case is for `rpm-ostree override replace
@@ -606,6 +623,12 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   if (rebuild_from_initramfs)
     (void) unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
+
+  if (have_passwd && !rpmostree_passwd_complete_rpm_layering (rootfs_dfd, error))
+    goto out;
+
+  if (renamed_etc && !rpmostree_core_redo_usretc (rootfs_dfd, error))
+    goto out;
 
   ret = TRUE;
   *out_initramfs_tmpf = tmpf; tmpf.initialized = FALSE; /* Transfer */
