@@ -25,8 +25,9 @@ if [ "$id" == fedora ] && [ "$version_id" -ge 29 ]; then
 fi
 
 pkg_upgrade
-pkg_install_builddeps rpm-ostree
-# and we have the canonical spec file handy so just builddep from that too
+# install base builddeps like @buildsys-build
+pkg_install_builddeps
+# we have the canonical spec file handy so just builddep from that
 # XXX: use --allowerasing as a temporary hack to ease the migration to libmodulemd2
 dnf builddep --spec -y packaging/rpm-ostree.spec.in --allowerasing
 # Mostly dependencies for tests

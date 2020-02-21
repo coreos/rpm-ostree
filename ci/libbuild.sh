@@ -34,13 +34,14 @@ pkg_builddep() {
 }
 
 pkg_install_builddeps() {
-    local pkg=$1
     pkg_install dnf-plugins-core 'dnf-command(builddep)'
     # Base buildroot (but exclude fedora-release, conflicts with -container:
     # https://bugzilla.redhat.com/show_bug.cgi?id=1649921)
     pkg_install @buildsys-build --excludepkg fedora-release
     # builddeps+runtime deps
-    pkg_builddep $pkg
-    pkg_install $pkg
-    rpm -e $pkg
+    if [ $# -ne 0 ]; then
+      pkg_builddep "$@"
+      pkg_install "$@"
+      rpm -e "$@"
+    fi
 }
