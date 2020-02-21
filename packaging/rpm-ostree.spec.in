@@ -76,9 +76,9 @@ BuildRequires: gcc-c++
 
 # more libdnf build deps (see libdnf's spec for versions)
 %global swig_version 3.0.12
-%global libmodulemd_version 1.6.1
+%global libmodulemd_version 2.5.0
 BuildRequires:  swig >= %{swig_version}
-BuildRequires:  pkgconfig(modulemd) >= %{libmodulemd_version}
+BuildRequires:  pkgconfig(modulemd-2.0) >= %{libmodulemd_version}
 BuildRequires:  pkgconfig(json-c)
 BuildRequires:  pkgconfig(cppunit)
 BuildRequires:  pkgconfig(sqlite3)
@@ -88,7 +88,7 @@ BuildRequires:  pkgconfig(zck) >= 0.9.11
 %endif
 BuildRequires:  gpgme-devel
 
-Requires:       libmodulemd1%{?_isa} >= %{libmodulemd_version}
+Requires:       libmodulemd%{?_isa} >= %{libmodulemd_version}
 
 # For now...see https://github.com/projectatomic/rpm-ostree/pull/637
 # and https://github.com/fedora-infra/fedmsg-atomic-composer/pull/17

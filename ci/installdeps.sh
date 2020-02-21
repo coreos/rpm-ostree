@@ -27,7 +27,8 @@ fi
 pkg_upgrade
 pkg_install_builddeps rpm-ostree
 # and we have the canonical spec file handy so just builddep from that too
-dnf builddep --spec -y packaging/rpm-ostree.spec.in
+# XXX: use --allowerasing as a temporary hack to ease the migration to libmodulemd2
+dnf builddep --spec -y packaging/rpm-ostree.spec.in --allowerasing
 # Mostly dependencies for tests
 pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq python3-pyyaml \
     libubsan libasan libtsan elfutils fuse sudo python3-gobject-base \
