@@ -20,7 +20,7 @@ ostree --version
 # in important ways.
 # XXX: We add libmodulemd manually for now until it's
 # part of the image.
-pkgs="libsolv libmodulemd1"
+pkgs="libsolv libmodulemd"
 if rpm -q zchunk-libs 2>/dev/null; then
     pkgs="${pkgs} zchunk-libs"
 fi
