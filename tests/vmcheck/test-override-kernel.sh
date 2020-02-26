@@ -60,3 +60,12 @@ assert_streq "$(wc -l < modules-dirs.txt)" "2"
 assert_file_has_content_literal modules-dirs.txt $kernel_release
 
 echo "ok override kernel"
+
+# And check that we can regenerate the initramfs and include files from our /etc
+vm_cmd touch /etc/foobar.conf
+vm_rpmostree initramfs --enable --arg=-I --arg=/etc/foobar.conf
+newroot=$(vm_get_deployment_root 0)
+vm_cmd lsinitrd ${newroot}/usr/lib/modules/${kernel_release}/initramfs.img > lsinitrd.txt
+assert_file_has_content_literal lsinitrd.txt etc/foobar.conf
+
+echo "ok override kernel with custom initramfs args"

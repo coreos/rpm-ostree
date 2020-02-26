@@ -1097,9 +1097,12 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       g_assert (kernel_state && kernel_path);
 
       g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
-      if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver,
-                                 initramfs_path, NULL, &initramfs_tmpf,
-                                 cancellable, error))
+      /* NB: We only use the real root's /etc if initramfs regeneration is explicitly
+       * requested. IOW, just replacing the kernel still gets use stock settings, like the
+       * server side. */
+      if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver, initramfs_path,
+                                 rpmostree_origin_get_regenerate_initramfs (self->origin),
+                                 NULL, &initramfs_tmpf, cancellable, error))
         return FALSE;
 
       if (!rpmostree_finalize_kernel (self->tmprootfs_dfd, bootdir, kver, kernel_path,

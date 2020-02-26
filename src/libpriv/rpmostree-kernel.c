@@ -475,6 +475,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
                       const char *const* argv,
                       const char *kver,
                       const char *rebuild_from_initramfs,
+                      gboolean     use_root_etc,
                       GLnxTmpDir  *dracut_host_tmpdir,
                       GLnxTmpfile *out_initramfs_tmpf,
                       GCancellable  *cancellable,
@@ -562,10 +563,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
                                       &tmpf, error))
     goto out;
 
-  /* If we're rebuilding, we use the *current* /etc so we pick up any modified
-   * config files.  Otherwise, we use the usr/etc defaults.
-   */
-  if (rebuild_from_initramfs)
+  if (use_root_etc)
     {
       bwrap = rpmostree_bwrap_new_base (rootfs_dfd, error);
       if (!bwrap)
