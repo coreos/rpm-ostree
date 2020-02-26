@@ -443,6 +443,13 @@ main (int    argc,
 
   setlocale (LC_ALL, "");
 
+  /* We don't support /etc/dnf/dnf.conf, so tell libdnf to not look for it. The function
+   * name here is misleading; it's not attached to a `DnfContext` object, but instead
+   * controls a global var. And it's not just the `DnfContext` that uses it, but e.g.
+   * `DnfSack` and Repo too. So just do this upfront. XXX: Clean up that API so it's always
+   * attached to a context object. */
+  dnf_context_set_config_file_path("");
+
   GCancellable *cancellable = g_cancellable_new ();
 
   g_autofree char *command_line = rebuild_command_line (argc, argv);
