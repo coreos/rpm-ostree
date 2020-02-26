@@ -3,7 +3,8 @@ set -euo pipefail
 
 # freeze on a specific commit for tests for reproducibility and since it should
 # always work to target older treefiles
-FEDORA_COREOS_CONFIG_COMMIT=088fc2dec535aca392958e9c30c17cf19ef4b568
+# XXX: disable this for now: https://pagure.io/releng/issue/9281
+# FEDORA_COREOS_CONFIG_COMMIT=088fc2dec535aca392958e9c30c17cf19ef4b568
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
@@ -38,7 +39,8 @@ if [ ! -d compose-cache ]; then
   git clone https://github.com/coreos/fedora-coreos-config config
 
   pushd config
-  git checkout "${FEDORA_COREOS_CONFIG_COMMIT}"
+  # XXX: disable this for now -- see above
+  # git checkout "${FEDORA_COREOS_CONFIG_COMMIT}"
   # we flatten the treefile to make it easier to manipulate in tests (we have
   # lots of tests that check for include logic already)
   rpm-ostree compose tree --print-only manifest.yaml > manifest.json
