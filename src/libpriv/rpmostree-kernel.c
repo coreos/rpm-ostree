@@ -514,11 +514,8 @@ rpmostree_run_dracut (int     rootfs_dfd,
                                               error))
     return FALSE;
 
-  /* Previously we used to error out if argv or rebuild_from_initramfs were both
-   * not set; now we simply use the defaults (which in Fedora today also means
-   * implicitly hostonly). That case is for `rpm-ostree override replace
-   * kernel.*.x86_64.rpm`.
-   */
+  /* Note rebuild_from_initramfs now is only used as a fallback in the client-side regen
+   * path when we can't fetch the canonical initramfs args to use. */
 
   if (rebuild_from_initramfs)
     {
