@@ -447,7 +447,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
       return FALSE;
     if (!rpmostree_run_dracut (rootfs_dfd,
                                (const char *const*)dracut_argv->pdata, kver,
-                               NULL, &dracut_host_tmpd,
+                               NULL, FALSE, &dracut_host_tmpd,
                                &initramfs_tmpf, cancellable, error))
       return FALSE;
     /* No reason to have the initramfs not be world-readable since
