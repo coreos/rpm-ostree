@@ -1060,6 +1060,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
     rpmostree_context_get_kernel_changed (self->ctx) ||
     rpmostree_origin_get_regenerate_initramfs (self->origin);
   g_autoptr(GVariant) kernel_state = NULL;
+  g_autoptr(GPtrArray) initramfs_args = g_ptr_array_new_with_free_func (g_free);
   const char *bootdir = NULL;
   const char *kver = NULL;
   const char *kernel_path = NULL;
@@ -1069,9 +1070,30 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       kernel_state = rpmostree_find_kernel (self->tmprootfs_dfd, cancellable, error);
       if (!kernel_state)
         return FALSE;
+
+      /* note we extract the initramfs path here but we only use it as a fallback to use
+       * with `--rebuild` if we're missing `initramfs-args` in the commit metadata -- in the
+       * future, we could remove this entirely */
       g_variant_get (kernel_state, "(&s&s&sm&s)",
                      &kver, &bootdir,
                      &kernel_path, &initramfs_path);
+
+      g_assert (self->base_revision);
+      g_autoptr(GVariant) base_commit = NULL;
+      if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                     self->base_revision, &base_commit, error))
+        return FALSE;
+
+      g_autoptr(GVariant) metadata = g_variant_get_child_value (base_commit, 0);
+      g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata);
+
+      g_autofree char **args = NULL;
+      if (g_variant_dict_lookup (metadata_dict, "rpmostree.initramfs-args", "^a&s", &args))
+        {
+          initramfs_path = NULL; /* we got the canonical args, so don't use --rebuild */
+          for (char **it = args; it && *it; it++)
+            g_ptr_array_add (initramfs_args, g_strdup (*it));
+        }
     }
 
   /* If *just* the kernel changed, all we need to do is run depmod here.
@@ -1087,9 +1109,13 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   if (kernel_or_initramfs_changed)
     {
+      /* append the extra args */
       const char *const* add_dracut_argv = NULL;
       if (rpmostree_origin_get_regenerate_initramfs (self->origin))
          add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
+      for (char **it = (char**)add_dracut_argv; it && *it; it++)
+        g_ptr_array_add (initramfs_args, g_strdup (*it));
+      g_ptr_array_add (initramfs_args, NULL);
 
       g_auto(RpmOstreeProgress) task = { 0, };
       rpmostree_output_task_begin (&task, "Generating initramfs");
@@ -1100,7 +1126,9 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       /* NB: We only use the real root's /etc if initramfs regeneration is explicitly
        * requested. IOW, just replacing the kernel still gets use stock settings, like the
        * server side. */
-      if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver, initramfs_path,
+      if (!rpmostree_run_dracut (self->tmprootfs_dfd,
+                                 (const char* const*)initramfs_args->pdata,
+                                 kver, initramfs_path,
                                  rpmostree_origin_get_regenerate_initramfs (self->origin),
                                  NULL, &initramfs_tmpf, cancellable, error))
         return FALSE;
