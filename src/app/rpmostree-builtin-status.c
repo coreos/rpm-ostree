@@ -856,7 +856,9 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
 
       for (char **iter = initramfs_args; iter && *iter; iter++)
         {
-          g_string_append (buf, *iter);
+          const char *arg = *iter;
+          g_autofree char *quoted = rpmostree_maybe_shell_quote (arg);
+          g_string_append (buf, quoted ?: arg);
           g_string_append_c (buf, ' ');
         }
       if (buf->len == 0)
