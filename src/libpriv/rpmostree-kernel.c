@@ -180,7 +180,7 @@ kernel_remove_in (int rootfs_dfd,
 /* Given a root filesystem, delete all kernel/initramfs data from it.
  * The rpm filelist for the kernel isn't aware of all the places we
  * copy the data, such as `/usr/lib/ostree-boot`.
- * Used by `rpm-ostree override-replace ./kernel-42.x86_64.rpm`.
+ * Used by `rpm-ostree override replace ./kernel-42.x86_64.rpm`.
  */
 gboolean
 rpmostree_kernel_remove (int rootfs_dfd,
