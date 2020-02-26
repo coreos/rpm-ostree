@@ -1034,6 +1034,17 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux, error))
     return FALSE;
 
+  /* pick up any initramfs regeneration args to shove into the metadata */
+  JsonNode *initramfs_args = json_object_get_member (self->treefile, "initramfs-args");
+  if (initramfs_args)
+    {
+      GVariant *v = json_gvariant_deserialize (initramfs_args, "as", error);
+      if (!v)
+       return FALSE;
+      g_hash_table_insert (self->metadata, g_strdup ("rpmostree.initramfs-args"),
+                           g_variant_ref_sink (v));
+    }
+
   /* Convert metadata hash to GVariant */
   g_autoptr(GVariant) metadata = rpmostree_composeutil_finalize_metadata (self->metadata, self->rootfs_dfd, error);
   if (!metadata)
