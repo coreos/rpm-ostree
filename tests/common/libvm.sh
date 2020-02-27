@@ -505,8 +505,10 @@ vm_run_container() {
   # just automatically always share dnf cache so we don't redownload each time
   # (use -n so this ssh invocation doesn't consume stdin)
   vm_cmd -n mkdir -p /var/cache/dnf
+  # This uses a mirror since the Fedora registry is very flaky
+  # https://pagure.io/releng/issue/9282
   vm_cmd podman run --rm -v /var/cache/dnf:/var/cache/dnf:z $podman_args \
-    registry.fedoraproject.org/fedora:31 "$@"
+    registry.svc.ci.openshift.org/coreos/fedora:31 "$@"
 }
 
 # $1 - service name
