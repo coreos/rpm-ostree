@@ -241,7 +241,7 @@ mod tests {
             assert!(!error.is_null());
             assert_eq!((*error).domain, gio_sys::g_io_error_quark());
             assert_eq!((*error).code, gio_sys::G_IO_ERROR_FAILED);
-            let e = glib::Error::wrap(error);
+            let e: glib::Error = glib::translate::from_glib_full(error);
             assert_eq!(e.description(), "oops");
         }
     }
@@ -255,7 +255,7 @@ mod tests {
             assert!(!error.is_null());
             assert_eq!((*error).domain, gio_sys::g_io_error_quark());
             assert_eq!((*error).code, gio_sys::G_IO_ERROR_FAILED);
-            let e = glib::Error::wrap(error);
+            let e: glib::Error = glib::translate::from_glib_full(error);
             assert_eq!(e.description(), "oops");
         }
     }
