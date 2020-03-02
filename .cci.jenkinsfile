@@ -1,14 +1,10 @@
-@Library('github.com/coreos/coreos-ci-lib@master') _
-
-COSA_IMAGE = 'quay.io/coreos-assembler/coreos-assembler:latest'
-COSA_BUILDROOT_IMAGE = 'registry.svc.ci.openshift.org/coreos/cosa-buildroot:latest'
+// Documentation: https://github.com/coreos/coreos-ci/blob/master/README-upstream-ci.md
 
 stage("Build") {
 parallel rpms: {
-  coreos.pod(image: COSA_BUILDROOT_IMAGE, runAsUser: 0) {
+  cosaPod(buildroot: true, runAsUser: 0) {
       checkout scm
-      sh """
-        set -xeuo pipefail
+      shwrap("""
         # fetch tags so `git describe` gives a nice NEVRA when building the RPM
         git fetch origin --tags
         ci/installdeps.sh
@@ -25,33 +21,28 @@ parallel rpms: {
         cd packaging
         make -f Makefile.dist-packaging rpm
         mv \$(find . -name '*.rpm') ..
-      """
+      """)
       // make it easy for anyone to download the RPMs
       archiveArtifacts '*.rpm'
       stash excludes: '*.src.rpm', includes: '*.rpm', name: 'rpms'
   }
 },
 codestyle: {
-  coreos.pod(image: COSA_IMAGE) {
+  cosaPod {
       checkout scm
-      sh """
-        set -xeuo pipefail
+      shwrap("""
         # Jenkins by default only fetches the branch it's testing. Explicitly fetch master
         # for ci-commitmessage-submodules.sh
         git fetch origin +refs/heads/master:refs/remotes/origin/master
         ci/ci-commitmessage-submodules.sh
         ci/codestyle.sh
-      """
+      """)
   }
 },
 rust: {
-  coreos.pod(image: COSA_BUILDROOT_IMAGE, runAsUser: 0) {
+  cosaPod(buildroot: true, runAsUser: 0) {
       checkout scm
-
-      sh """
-        set -xeuo pipefail
-        ci/msrv.sh
-      """
+      shwrap("ci/msrv.sh")
   }
 }}
 
@@ -59,45 +50,40 @@ stage("Test") {
 parallel vmcheck: {
     def nhosts = 6
     def mem = (nhosts * 1024) + 512
-    coreos.pod(image: COSA_IMAGE, runAsUser: 0, kvm: true, memory: "${mem}Mi", cpu: "${nhosts}") {
+    cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
       stage("Build FCOS") {
         checkout scm
         unstash 'rpms'
         // run this stage first without installing deps, so we match exactly the cosa pkgset
         // (+ our built rpm-ostree)
-        sh """
-          set -xeuo pipefail
+        shwrap("""
           dnf install -y *.rpm
           coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm
           mv *.rpm overrides/rpm
           coreos-assembler build
-        """
+        """)
       }
       stage("Install Deps") {
-        sh """
-          set -xeuo pipefail
-          ci/installdeps.sh  # really, we just need test deps, but meh...
-        """
+        // really, we just need test deps, but meh...
+        shwrap("ci/installdeps.sh")
       }
       stage("Run") {
         try {
           timeout(time: 30, unit: 'MINUTES') {
-            sh """
-              set -xeuo pipefail
+            shwrap("""
               fcos=\$(ls builds/latest/*/*.qcow2) # */
               ln -sf "\$(realpath \${fcos})" tests/vmcheck/image.qcow2
               JOBS=${nhosts} tests/vmcheck.sh
-            """
+            """)
           }
         } finally {
-          sh """
-            set -xeuo pipefail
+          shwrap("""
             if [ -d vmcheck-logs ]; then
               tar -C vmcheck-logs -cf- . | xz -c9 > vmcheck-logs.tar.xz
             fi
-          """
+          """)
           archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
         }
     }
@@ -106,32 +92,29 @@ parallel vmcheck: {
 compose: {
     def jobs = 5
     def mem = (jobs * 2048) + 512
-    coreos.pod(image: COSA_IMAGE, runAsUser: 0, emptyDirs: ["/srv/tmpdir"], kvm: true, memory: "${mem}Mi", cpu: "${jobs}") {
+    cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${jobs}") {
         checkout scm
         unstash 'rpms'
         stage("Install Deps") {
-          sh """
-            set -xeuo pipefail
+          shwrap("""
             ci/installdeps.sh  # really, we just need test deps, but meh...
             dnf install -y *.rpm  # install our built rpm-ostree
-          """
+          """)
         }
         stage("Run") {
           try {
             timeout(time: 45, unit: 'MINUTES') {
-              sh """
-                set -xeuo pipefail
-                mkdir compose-logs
+              shwrap("""
+                mkdir -p compose-logs /srv/tmpdir
                 TMPDIR=/srv/tmpdir JOBS=${jobs} ./tests/compose.sh
-              """
+              """)
             }
           } finally {
-            sh """
-              set -xeuo pipefail
+            shwrap("""
               if [ -d compose-logs ]; then
                 tar -C compose-logs -cf- . | xz -c9 > compose-logs.tar.xz
               fi
-            """
+            """)
             archiveArtifacts allowEmptyArchive: true, artifacts: 'compose-logs.tar.xz'
           }
         }
