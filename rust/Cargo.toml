@@ -27,7 +27,7 @@ systemd = "0.4.0"
 indicatif = "0.14.0"
 lazy_static = "1.1.0"
 envsubst = "0.1.0"
-chrono = { version = "0.4.9", features = ["serde"] }
+chrono = { version = "0.4.11", features = ["serde"] }
 
 [lib]
 name = "rpmostree_rust"
