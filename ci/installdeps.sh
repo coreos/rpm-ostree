@@ -10,19 +10,9 @@ if [ -n "${SKIP_INSTALLDEPS:-}" ]; then
     exit 0
 fi
 
-# Use the latest ostree by default (XXX: currently pulling in f29 ostree, need
-# to bump rdgo to f30 or wait for packit)
-id=$(. /etc/os-release && echo $ID)
+# Add the continuous tag for latest build tools and mark as required.
 version_id=$(. /etc/os-release && echo $VERSION_ID)
-if [ "$id" == fedora ] && [ "$version_id" -ge 29 ]; then
-    echo -e '[fahc]\nmetadata_expire=1m\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
-    # Until we fix https://github.com/rpm-software-management/libdnf/pull/149
-    excludes='exclude=ostree ostree-libs ostree-grub2 rpm-ostree'
-    for repo in /etc/yum.repos.d/fedora*.repo; do
-        cat ${repo} | (while IFS= read -r line; do if echo "$line" | grep -qE -e '^enabled=1'; then echo "${excludes}"; fi; echo "$line"; done) > ${repo}.new
-        mv ${repo}.new ${repo}
-    done
-fi
+echo -e "[f${version_id}-coreos-continuous]\nenabled=1\nmetadata_expire=1m\nbaseurl=https://kojipkgs.fedoraproject.org/repos-dist/f${version_id}-coreos-continuous/latest/\$basearch/\ngpgcheck=0\nskip_if_unavailable=False\n" > /etc/yum.repos.d/coreos.repo
 
 pkg_upgrade
 # install base builddeps like @buildsys-build
