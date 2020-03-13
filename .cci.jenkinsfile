@@ -61,6 +61,9 @@ parallel vmcheck: {
           coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm
+          # And further for now, temporarily override ostree, see
+          # https://github.com/coreos/rpm-ostree/pull/2015
+          dnf --disablerepo=* --enablerepo=f31-coreos-continuous download ostree ostree-libs
           mv *.rpm overrides/rpm
           coreos-assembler build
         """)

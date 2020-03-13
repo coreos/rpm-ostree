@@ -762,11 +762,9 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
   const char *sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
   g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
   self->ot_sysroot = ostree_sysroot_new (sysroot_file);
-#ifdef HAVE_OSTREE_SYSROOT_SET_MOUNT_NAMESPACE_IN_USE
   if (!ostree_sysroot_initialize (self->ot_sysroot, error))
     return FALSE;
   ostree_sysroot_set_mount_namespace_in_use (self->ot_sysroot);
-#endif
 
   /* This creates and caches an OstreeRepo instance inside
    * OstreeSysroot to ensure subsequent ostree_sysroot_get_repo()
