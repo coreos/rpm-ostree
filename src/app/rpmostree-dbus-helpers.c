@@ -583,12 +583,14 @@ on_owner_changed (GObject    *object,
                   GParamSpec *pspec,
                   gpointer    user_data)
 {
-  /* Owner shouldn't change durning a transaction
+  /* Owner shouldn't change during a transaction
    * that messes with notifications, abort, abort.
    */
   TransactionProgress *tp = user_data;
   tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
-                                               "Bus owner changed, aborting.");
+                                               "Bus owner changed, aborting. This likely "
+                                               "means the daemon crashed; check logs with "
+                                               "`journalctl -xe`.");
   transaction_progress_end (tp);
 }
 
