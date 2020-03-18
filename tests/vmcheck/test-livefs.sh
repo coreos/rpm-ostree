@@ -150,7 +150,7 @@ fi
 vm_cmd test -f /${dummy_file_to_modify}
 generate_upgrade() {
     # Create a modified vmcheck commit
-    vm_shell_inline <<EOF
+    vm_shell_inline_sysroot_rw <<EOF
       cd /ostree/repo/tmp
       rm vmcheck -rf
       ostree checkout vmcheck vmcheck --fsync=0

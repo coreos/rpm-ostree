@@ -133,7 +133,7 @@ vm_rpmostree usroverlay
 vm_cmd test -w /usr/bin
 echo "ok usroverlay"
 
-vm_shell_inline <<EOF
+vm_shell_inline_sysroot_rw <<EOF
     rpm-ostree cleanup -p
     originpath=\$(ostree admin --print-current-dir).origin
     cp -a \${originpath}{,.orig}

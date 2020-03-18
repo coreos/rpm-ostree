@@ -69,9 +69,11 @@ vm_rpmostree install test-pkgcache-migrate-pkg{1,2}
 
 # jury-rig a pkgcache of the olden days
 OLD_PKGCACHE_DIR=/ostree/repo/extensions/rpmostree/pkgcache
-vm_cmd test -L ${OLD_PKGCACHE_DIR}
-vm_cmd rm ${OLD_PKGCACHE_DIR}
-vm_cmd mkdir ${OLD_PKGCACHE_DIR}
+vm_shell_inline_sysroot_rw <<EOF
+test -L ${OLD_PKGCACHE_DIR}
+rm ${OLD_PKGCACHE_DIR}
+mkdir ${OLD_PKGCACHE_DIR}
+EOF
 vm_cmd ostree init --repo ${OLD_PKGCACHE_DIR} --mode=bare
 vm_cmd ostree pull-local --repo ${OLD_PKGCACHE_DIR} /ostree/repo \
   rpmostree/pkg/test-pkgcache-migrate-pkg{1,2}/1.0-1.x86__64
