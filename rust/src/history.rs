@@ -203,6 +203,9 @@ fn history_get_oldest_deployment_msg_timestamp() -> Fallible<Option<u64>> {
 /// that correspond to deployments older than that one. Essentially, this binds pruning to
 /// journal pruning. Called from C through `ror_history_prune()`.
 fn history_prune() -> Fallible<()> {
+    if !Path::new(RPMOSTREE_HISTORY_DIR).exists() {
+        return Ok(())
+    }
     let oldest_timestamp = history_get_oldest_deployment_msg_timestamp()?;
 
     // Cleanup any entry older than the oldest entry in the journal. Also nuke anything else that
