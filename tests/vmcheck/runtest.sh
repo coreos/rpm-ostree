@@ -37,8 +37,8 @@ export VMTESTS=1
 # shellcheck source=../common/libvm.sh
 . "${commondir}/libvm.sh"
 
-if vm_kola_spawn "${outputdir}/kola" && \
-    "${topsrcdir}/tests/vmcheck/test-${testname}.sh"; then
+vm_kola_spawn "${outputdir}/kola"
+if "${topsrcdir}/tests/vmcheck/test-${testname}.sh"; then
   echo "PASS: ${testname}" >&3
 else
   echo "FAIL: ${testname}" >&3
