@@ -169,10 +169,10 @@ echo "ok db diff"
 # metadata to check that `db diff` is indeed using the rpmdb.pkglist metadata
 commit_path=$(get_obj_path /ostree/repo $pending_layered_csum commit)
 vm_cmd test -f $commit_path
-vm_cmd cp $commit_path $commit_path.bak
+vm_cmd_sysroot_rw cp $commit_path $commit_path.bak
 vm_rpmostree cleanup -p
 vm_cmd test ! -f $commit_path
-vm_cmd mv $commit_path.bak $commit_path
+vm_cmd_sysroot_rw mv $commit_path.bak $commit_path
 if vm_cmd ostree checkout --subpath /usr/share/rpm $pending_layered_csum; then
   assert_not_reached "Was able to checkout /usr/share/rpm?"
 fi

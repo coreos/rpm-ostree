@@ -46,22 +46,22 @@ osname=$(vm_get_booted_deployment_info osname)
 # use the var through /sysroot/ to make sure we always get hardlinks
 remote_repo=/ostree/deploy/$osname/var/tmp/vmcheck/repo
 REMOTE_OSTREE="vm_cmd ostree --repo=$remote_repo"
-vm_cmd rm -rf $remote_repo
-vm_cmd mkdir -p $remote_repo
+vm_cmd_sysroot_rw rm -rf $remote_repo
+vm_cmd_sysroot_rw mkdir -p $remote_repo
 $REMOTE_OSTREE init --mode=bare
 $REMOTE_OSTREE pull-local /ostree/repo vmcheck
 vm_cmd ostree remote delete --if-exists vmcheck_remote
 vm_cmd ostree remote add --no-gpg-verify vmcheck_remote file://$remote_repo
 
 go_offline() {
-  vm_cmd mv ${remote_repo}{,.bak}
-  vm_cmd mv /var/tmp/vmcheck/yumrepo{,.bak}
+  vm_cmd_sysroot_rw mv ${remote_repo}{,.bak}
+  vm_cmd_sysroot_rw mv /var/tmp/vmcheck/yumrepo{,.bak}
   YUMREPO=/var/tmp/vmcheck/yumrepo.bak/packages/x86_64
 }
 
 go_online() {
-  vm_cmd mv /var/tmp/vmcheck/yumrepo{.bak,}
-  vm_cmd mv ${remote_repo}{.bak,}
+  vm_cmd_sysroot_rw mv /var/tmp/vmcheck/yumrepo{.bak,}
+  vm_cmd_sysroot_rw mv ${remote_repo}{.bak,}
   YUMREPO=/var/tmp/vmcheck/yumrepo/packages/x86_64
 }
 

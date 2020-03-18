@@ -87,8 +87,10 @@ EOF
   local deployment_root
   vm_cmd ostree refs --create vmcheck "$(vm_get_booted_csum)"
   deployment_root=$(vm_get_deployment_root 0)
-  vm_cmd "sed -ie '/^refspec=/ s/=.*/=vmcheck/' ${deployment_root}.origin"
-  vm_cmd "sed -ie '/^baserefspec=/ s/=.*/=vmcheck/' ${deployment_root}.origin"
+  vm_shell_inline_sysroot_rw <<EOF
+  sed -ie '/^refspec=/ s/=.*/=vmcheck/' ${deployment_root}.origin
+  sed -ie '/^baserefspec=/ s/=.*/=vmcheck/' ${deployment_root}.origin
+EOF
   vm_cmd systemctl try-restart rpm-ostreed
 
   # also move the default yum repos, we don't want em
@@ -110,13 +112,34 @@ vm_send_inline() {
   rm -f ${f}
 }
 
+# Takes on its stdin a shell script to run on the node. The special positional
+# argument `sysroot-rw` indicates that the script needs rw access to /sysroot.
 vm_shell_inline() {
-  script=$(mktemp -p $PWD)
+  local script=$(mktemp -p $PWD)
   echo "set -xeuo pipefail" > ${script}
+  if [ "${1:-}" = 'sysroot-rw' ]; then
+    cat >> ${script} <<EOF
+    if [ -z "\${RPMOSTREE_VMCHECK_UNSHARED:-}" ]; then
+            exec env RPMOSTREE_VMCHECK_UNSHARED=1 unshare --mount bash \$0 $@
+    else
+            mount -o rw,remount /sysroot
+    fi
+EOF
+  fi
   cat >> ${script}
   vm_send ${script} /tmp/$(basename ${script})
   rm -f ${script}
   vm_cmd bash /tmp/$(basename ${script})
+}
+
+# Shorthand for `vm_shell_inline sysroot-rw`.
+vm_shell_inline_sysroot_rw() {
+  vm_shell_inline sysroot-rw
+}
+
+# Like `vm_cmd`, but for commands which need rw access to /sysroot
+vm_cmd_sysroot_rw() {
+  vm_shell_inline_sysroot_rw <<< "$@"
 }
 
 # rsync wrapper that sets up authentication
@@ -545,8 +568,10 @@ vm_ostreeupdate_prepare_repo() {
   # Really testing this like a user requires a remote ostree server setup.
   # Let's start by setting up the repo.
   REMOTE_OSTREE=/ostree/repo/tmp/vmcheck-remote
-  vm_cmd mkdir -p $REMOTE_OSTREE
-  vm_cmd ostree init --repo=$REMOTE_OSTREE --mode=archive
+  vm_shell_inline_sysroot_rw <<EOF
+  mkdir -p $REMOTE_OSTREE
+  ostree init --repo=$REMOTE_OSTREE --mode=archive
+EOF
   vm_start_httpd ostree_server $REMOTE_OSTREE 8888
 }
 
@@ -655,7 +680,7 @@ _commit_and_inject_pkglist() {
   local src_ref=$1; shift
   vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck --fsync=no \
     --tree=ref=$src_ref --add-metadata-string=version=$version
-  vm_rpmostree testutils inject-pkglist $REMOTE_OSTREE vmcheck
+  vm_cmd_sysroot_rw rpm-ostree testutils inject-pkglist $REMOTE_OSTREE vmcheck
 }
 
 # use a previously stolen commit to create an update on our vmcheck branch,
@@ -678,13 +703,15 @@ vm_ostree_repo_commit_layered_as_base() {
   local to_ref=$1; shift
   local d=$repo/tmp/vmcheck_commit.tmp
   rm -rf $d
-  vm_cmd ostree checkout --repo=$repo -H --fsync=no $from_rev $d
+  vm_shell_inline_sysroot_rw <<EOF
+  ostree checkout --repo=$repo -H --fsync=no $from_rev $d
   # need to update the base rpmdb
-  vm_cmd mkdir -p $d/usr/lib/sysimage/rpm-ostree-base-db
-  vm_cmd rsync -qa --delete $d/usr/share/rpm/ $d/usr/lib/sysimage/rpm-ostree-base-db
-  vm_cmd ostree commit --repo=$repo -b $to_ref --link-checkout-speedup --fsync=no --consume $d
+  mkdir -p $d/usr/lib/sysimage/rpm-ostree-base-db
+  rsync -qa --delete $d/usr/share/rpm/ $d/usr/lib/sysimage/rpm-ostree-base-db
+  ostree commit --repo=$repo -b $to_ref --link-checkout-speedup --fsync=no --consume $d
   # and inject pkglist metadata
-  vm_rpmostree testutils inject-pkglist $repo $to_ref >/dev/null
+  rpm-ostree testutils inject-pkglist $repo $to_ref >/dev/null
+EOF
 }
 
 vm_ostree_commit_layered_as_base() {

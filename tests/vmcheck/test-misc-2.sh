@@ -266,7 +266,7 @@ vm_pending_is_staged
 # deployment root it expects to exist. I played with overriding the service file
 # so we just do e.g. /usr/bin/false, but the issue is we still want the "start"
 # journal msg to be emitted.
-vm_cmd rm -rf $(vm_get_deployment_root 0)
+vm_cmd_sysroot_rw rm -rf $(vm_get_deployment_root 0)
 
 # and now check that we notice there was a failure in `status`
 vm_reboot
