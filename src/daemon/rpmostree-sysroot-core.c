@@ -254,6 +254,8 @@ syscore_regenerate_refs (OstreeSysroot            *sysroot,
                          GCancellable             *cancellable,
                          GError                  **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("regenerating refs", error);
+
   g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
   if (!rpmostree_repo_auto_transaction_start (&txn, repo, FALSE, cancellable, error))
     return FALSE;
@@ -295,10 +297,10 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
      successfully */
   if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR,
                              cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "cleaning tmp rootfs");
   /* also delete extra history entries */
   if (!ror_history_prune (error))
-    return FALSE;
+    return glnx_prefix_error (error, "pruning history");
 
   /* Regenerate all refs */
   guint n_pkgcache_freed = 0;
@@ -314,7 +316,7 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
     if (!ostree_sysroot_cleanup_prune_repo (sysroot, &opts, &n_objects_total,
                                             &n_objects_pruned, &freed_space,
                                             cancellable, error))
-      return FALSE;
+      return glnx_prefix_error (error, "pruning");
   }
 
   if (n_pkgcache_freed > 0 || freed_space > 0)
