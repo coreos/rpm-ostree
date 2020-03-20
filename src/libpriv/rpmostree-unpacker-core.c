@@ -92,6 +92,7 @@ rpmostree_unpack_rpm2cpio (int fd, GError **error)
   if (archive_read_open_fd (ret, fd, 10240) != ARCHIVE_OK)
     {
       propagate_libarchive_error (error, ret);
+      glnx_prefix_error (error, "rpmostree_unpack_rpm2cpio");
       goto out;
     }
 
