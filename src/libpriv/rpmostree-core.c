@@ -2453,7 +2453,7 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
     rpmostree_importer_new_take_fd (&fd, ostreerepo, pkg, flags,
                                     self->sepolicy, error);
   if (!unpacker)
-    return FALSE;
+    return glnx_prefix_error (error, "creating importer");
 
   if (rojig_xattrs)
     {
@@ -2547,7 +2547,7 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
   if (self->async_error)
     {
       g_propagate_error (error, g_steal_pointer (&self->async_error));
-      return FALSE;
+      return glnx_prefix_error (error, "importing RPMs");
     }
 
   rpmostree_output_progress_end (&progress);
@@ -3287,7 +3287,7 @@ relabel_if_necessary (RpmOstreeContext *self,
   if (self->async_error)
     {
       g_propagate_error (error, g_steal_pointer (&self->async_error));
-      return FALSE;
+      return glnx_prefix_error (error, "relabeling");
     }
 
   rpmostree_output_progress_end (&progress);
