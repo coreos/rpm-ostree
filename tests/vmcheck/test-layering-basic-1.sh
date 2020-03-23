@@ -35,17 +35,32 @@ vm_assert_status_jq \
   '.deployments[0]["base-checksum"]|not' \
   '.deployments[0]["pending-base-checksum"]|not'
 
-#  make sure installing in /opt works (and ends up in usr/lib/opt) and
+# make sure installing in /opt works (and ends up in usr/lib/opt) and
+# also test a directory with spaces and quotes
 vm_build_rpm test-opt \
-  files /opt/app \
+  files "/opt/*
+         /var/app" \
   install "mkdir -p %{buildroot}/opt/app/bin
-           touch %{buildroot}/opt/app/bin/foo"
+           touch %{buildroot}/opt/app/bin/foo
+           mkdir -p '%{buildroot}/opt/some lib/subdir'
+           mkdir -p '%{buildroot}/opt/quote\"ed/subdir'
+           mkdir -p '%{buildroot}/var/app/some lib/subdir'
+           mkdir -p '%{buildroot}/var/app/quote\"ed/subdir'"
+cp $test_tmpdir/yumrepo/packages/x86_64/test-opt-1.0-1.*.rpm /tmp
 vm_rpmostree install test-opt-1.0
+vm_reboot
 
+vm_cmd rpm -qlv test-opt
 root=$(vm_get_deployment_root 0)
 vm_has_files $root/usr/lib/opt/app/bin/foo $root/usr/lib/tmpfiles.d/pkg-test-opt.conf
+vm_cmd cat $root/usr/lib/tmpfiles.d/pkg-test-opt.conf
 vm_cmd grep -q /usr/lib/opt/app $root/usr/lib/tmpfiles.d/pkg-test-opt.conf
-vm_rpmostree cleanup -p
+vm_cmd ls -al /var/opt/ /var/app
+vm_cmd test -d "'/opt/some lib/subdir'"
+vm_cmd test -d '/opt/quote\"ed/subdir'
+vm_cmd test -d "'/var/app/some lib/subdir'"
+vm_cmd test -d '/var/app/quote\"ed/subdir'
+vm_rpmostree rollback
 
 echo "ok Installed rpm with /opt ended up in /usr/lib/opt"
 
