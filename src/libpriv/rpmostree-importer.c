@@ -557,7 +557,9 @@ append_translated_tmpfiles_path (GString *buf, const char *path)
   static const char varrun[] = "/var/run/";
   if (g_str_has_prefix (path, varrun))
     path += strlen ("/var");
-  g_string_append (buf, path);
+  /* Handle file paths with spaces and other chars https://github.com/coreos/rpm-ostree/issues/2029 */
+  g_autofree char *quoted = rpmostree_maybe_shell_quote (path);
+  g_string_append (buf, quoted ?: path);
 }
 
 static void
@@ -907,9 +909,14 @@ import_rpm_to_repo (RpmOstreeImporter *self,
 
   GLNX_HASH_TABLE_FOREACH (self->opt_files, const char*, filename)
     {
+      g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
+      g_autofree char *opt_quoted = rpmostree_maybe_shell_quote (opt);
+      /* Note that the destination can't be quoted as systemd just
+       * parses the remainder of the line, and doesn't expand quotes.
+       **/
       g_string_append_printf (self->tmpfiles_d,
-                              "L /opt/%s - - - - /usr/lib/opt/%s\n",
-                              filename, filename);
+                              "L %s - - - - /usr/lib/opt/%s\n",
+                              opt_quoted ?: opt, filename);
     }
 
   /* Handle any data we've accumulated data to write to tmpfiles.d.
