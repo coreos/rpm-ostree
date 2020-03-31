@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use failure::{bail, Fallible};
-use failure::ResultExt;
+use anyhow::{Result, bail, Context};
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::path::Path;
@@ -25,7 +24,7 @@ pub enum InputFormat {
 }
 
 impl InputFormat {
-    pub fn detect_from_filename<P: AsRef<Path>>(filename: P) -> Fallible<Self> {
+    pub fn detect_from_filename<P: AsRef<Path>>(filename: P) -> Result<Self> {
         let filename = filename.as_ref();
         let basename = filename
             .file_name()
@@ -40,7 +39,7 @@ impl InputFormat {
 }
 
 /// Given a lockfile/treefile config definition, parse it
-pub fn parse_stream<T, R: io::Read>(fmt: &InputFormat, input: &mut R) -> Fallible<T>
+pub fn parse_stream<T, R: io::Read>(fmt: &InputFormat, input: &mut R) -> Result<T>
 where
     T: serde::de::DeserializeOwned
 {
@@ -67,7 +66,7 @@ where
     Ok(parsed)
 }
 
-fn download_url_to_tmpfile(url: &str) -> Fallible<fs::File> {
+fn download_url_to_tmpfile(url: &str) -> Result<fs::File> {
     let mut tmpf = tempfile::tempfile()?;
     {
         let mut output = io::BufWriter::new(&mut tmpf);
@@ -86,15 +85,15 @@ fn download_url_to_tmpfile(url: &str) -> Fallible<fs::File> {
 }
 
 /// Open file for reading and provide context containing filename on failures.
-pub fn open_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
+pub fn open_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
     return Ok(fs::File::open(filename.as_ref())
-        .with_context(|e| format!("Can't open file {:?} for reading: {}", filename.as_ref().display(), e))?);
+        .with_context(|| format!("Can't open file {:?} for reading", filename.as_ref().display()))?);
 }
 
 /// Open file for writing and provide context containing filename on failures.
-pub fn create_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
+pub fn create_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
     return Ok(fs::File::create(filename.as_ref())
-        .with_context(|e| format!("Can't open file {:?} for writing: {}", filename.as_ref().display(), e))?);
+        .with_context(|| format!("Can't open file {:?} for writing", filename.as_ref().display()))?);
 }
 
 /// Open file for writing, passes a Writer to a closure, and closes the file, with O_TMPFILE
@@ -102,10 +101,10 @@ pub fn create_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
 pub fn write_file<P, F>(
     filename: P,
     f: F
-) -> Fallible<()>
+) -> Result<()>
 where
     P: AsRef<Path>,
-    F: Fn(&mut io::BufWriter<&mut fs::File>) -> Fallible<()>,
+    F: Fn(&mut io::BufWriter<&mut fs::File>) -> Result<()>,
 {
     // XXX: enhance with tempfile + linkat + rename dance
     let mut file = create_file(filename)?;
@@ -130,7 +129,7 @@ pub fn parent_dir(filename: &Path) -> Option<&Path> {
 /// Given an input string `s`, replace variables of the form `${foo}` with
 /// values provided in `vars`.  No quoting syntax is available, so it is
 /// not possible to have a literal `${` in the string.
-pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Fallible<String> {
+pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
     let mut buf = instr;
     let mut s = "".to_string();
     while buf.len() > 0 {
@@ -204,7 +203,7 @@ mod tests {
         match open_file(path) {
             Err(ref e) => assert!(e
                 .to_string()
-                .starts_with(format!("Can't open file {:?} for reading:", path).as_str())),
+                .starts_with(format!("Can't open file {:?} for reading", path).as_str())),
             Ok(_) => panic!("Expected nonexistent treefile error for {}", path),
         }
     }

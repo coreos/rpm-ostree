@@ -7,7 +7,7 @@
 /* Copied and adapted from: treefile.rs
  */
 
-use failure::Fallible;
+use anyhow::Result;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use std::collections::{HashMap, BTreeMap};
@@ -20,7 +20,7 @@ use std::convert::TryInto;
 use crate::utils;
 
 /// Given a lockfile filename, parse it
-fn lockfile_parse<P: AsRef<Path>>(filename: P,) -> Fallible<LockfileConfig> {
+fn lockfile_parse<P: AsRef<Path>>(filename: P,) -> Result<LockfileConfig> {
     let filename = filename.as_ref();
     let fmt = utils::InputFormat::detect_from_filename(filename)?;
     let mut f = io::BufReader::new(utils::open_file(filename)?);
@@ -34,7 +34,7 @@ fn lockfile_parse<P: AsRef<Path>>(filename: P,) -> Fallible<LockfileConfig> {
 }
 
 /// Given lockfile filenames, parse them. Later lockfiles may override packages from earlier ones.
-fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Fallible<LockfileConfig> {
+fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Result<LockfileConfig> {
     let mut final_lockfile: Option<LockfileConfig> = None;
     for filename in filenames {
         let lf = lockfile_parse(filename)?;
@@ -277,7 +277,7 @@ mod ffi {
         }
 
         int_glib_error(utils::write_file(filename, |w| {
-            serde_json::to_writer_pretty(w, &lockfile).map_err(failure::Error::from)
+            Ok(serde_json::to_writer_pretty(w, &lockfile)?)
         }), gerror)
     }
 }
