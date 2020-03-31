@@ -3772,20 +3772,21 @@ rpmostree_context_get_tmprootfs_dfd  (RpmOstreeContext *self)
   return self->tmprootfs_dfd;
 }
 
-static gboolean
-pkg_name_is_kernel (const char *name)
-{
-  const char *kernel_names[] = {"kernel", "kernel-core", "kernel-rt", "kernel-rt-core", NULL};
-  return g_strv_contains (kernel_names, name);
-}
-
-/* Determine if a txn element contains vmlinuz.  TODO: Check via provides?
+/* Determine if a txn element contains vmlinuz via provides.
  * There's also some hacks for this in libdnf.
  */
 static gboolean
 rpmte_is_kernel (rpmte te)
 {
-  return pkg_name_is_kernel (rpmteN (te));
+  const char *kernel_names[] = {"kernel", "kernel-core", "kernel-rt", "kernel-rt-core", NULL};
+  rpmds provides = rpmdsInit (rpmteDS (te, RPMTAG_PROVIDENAME));
+  while (rpmdsNext (provides) >= 0)
+   {
+     const char *provname = rpmdsN (provides);
+     if (g_strv_contains (kernel_names, provname))
+       return TRUE;
+   }
+  return FALSE;
 }
 
 /* TRUE if a package providing vmlinuz changed in this transaction;
