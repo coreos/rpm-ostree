@@ -9,7 +9,7 @@
  * */
 
 use c_utf8::CUtf8Buf;
-use failure::{Fallible, bail};
+use anyhow::{Result, bail, anyhow};
 use openat;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
@@ -61,7 +61,7 @@ fn treefile_parse_stream<R: io::Read>(
     fmt: utils::InputFormat,
     input: &mut R,
     basearch: Option<&str>,
-) -> Fallible<TreeComposeConfig> {
+) -> Result<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = utils::parse_stream(&fmt, input)?;
 
     treefile.basearch = match (treefile.basearch, basearch) {
@@ -122,7 +122,7 @@ fn treefile_parse_stream<R: io::Read>(
 fn take_archful_pkgs(
     basearch: Option<&str>,
     treefile: &mut TreeComposeConfig,
-) -> Fallible<Option<Vec<String>>> {
+) -> Result<Option<Vec<String>>> {
     let mut archful_pkgs: Option<Vec<String>> = None;
 
     for key in treefile.extra.keys().filter(|k| k.starts_with("packages-")) {
@@ -167,7 +167,7 @@ fn take_archful_pkgs(
 fn load_passwd_file<P: AsRef<Path>>(
     basedir: P,
     v: &Option<CheckPasswd>,
-) -> Fallible<Option<fs::File>> {
+) -> Result<Option<fs::File>> {
     if let &Some(ref v) = v {
         let basedir = basedir.as_ref();
         if let Some(ref path) = v.filename {
@@ -185,7 +185,7 @@ fn treefile_parse<P: AsRef<Path>>(
     filename: P,
     basearch: Option<&str>,
     seen_includes: &mut IncludeMap,
-) -> Fallible<ConfigAndExternals> {
+) -> Result<ConfigAndExternals> {
     let filename = filename.as_ref();
     let f = utils::open_file(filename)?;
     let meta = f.metadata()?;
@@ -355,7 +355,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     basearch: Option<&str>,
     depth: u32,
     seen_includes: &mut IncludeMap,
-) -> Fallible<ConfigAndExternals> {
+) -> Result<ConfigAndExternals> {
     let filename = filename.as_ref();
     let mut parsed = treefile_parse(filename, basearch, seen_includes)?;
     let include = parsed.config.include.take().unwrap_or_else(|| Include::Multiple(Vec::new()));
@@ -408,7 +408,7 @@ impl Treefile {
         filename: &Path,
         basearch: Option<&str>,
         workdir: Option<openat::Dir>,
-    ) -> Fallible<Box<Treefile>> {
+    ) -> Result<Box<Treefile>> {
         let mut seen_includes = collections::BTreeMap::new();
         let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
         parsed.config = parsed.config.substitute_vars()?;
@@ -442,7 +442,7 @@ impl Treefile {
     }
 
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
-    fn validate_config(config: &TreeComposeConfig) -> Fallible<()> {
+    fn validate_config(config: &TreeComposeConfig) -> Result<()> {
         // check add-files
         if let Some(files) = &config.add_files {
             for (_, dest) in files.iter() {
@@ -467,7 +467,7 @@ impl Treefile {
         Ok(())
     }
 
-    fn serialize_json_string(config: &TreeComposeConfig) -> Fallible<CUtf8Buf> {
+    fn serialize_json_string(config: &TreeComposeConfig) -> Result<CUtf8Buf> {
         let mut output = vec![];
         serde_json::to_writer_pretty(&mut output, config)?;
         Ok(CUtf8Buf::from_string(
@@ -476,7 +476,7 @@ impl Treefile {
     }
 
     /// Generate a rojig spec file.
-    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> Fallible<CUtf8Buf> {
+    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> Result<CUtf8Buf> {
         let description = r
             .description
             .as_ref()
@@ -523,7 +523,7 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
     }
 }
 
-fn hash_file(hasher: &mut glib::Checksum, mut f: &fs::File) -> Fallible<()> {
+fn hash_file(hasher: &mut glib::Checksum, mut f: &fs::File) -> Result<()> {
     let mut reader = io::BufReader::with_capacity(128 * 1024, f);
     loop {
         // have to scope fill_buf() so we can consume() below
@@ -542,7 +542,7 @@ fn hash_file(hasher: &mut glib::Checksum, mut f: &fs::File) -> Fallible<()> {
 }
 
 impl TreefileExternals {
-    fn hasher_update(&self, hasher: &mut glib::Checksum) -> Fallible<()> {
+    fn hasher_update(&self, hasher: &mut glib::Checksum) -> Result<()> {
         if let Some(ref f) = self.postprocess_script {
             hash_file(hasher, f)?;
         }
@@ -772,7 +772,7 @@ struct LegacyTreeComposeConfigFields {
 
 impl TreeComposeConfig {
     /// Look for use of legacy/renamed fields and migrate them to the new field.
-    fn migrate_legacy_fields(mut self) -> Fallible<Self> {
+    fn migrate_legacy_fields(mut self) -> Result<Self> {
         macro_rules! migrate_field {
             ( $field:ident ) => {{
                 if self.legacy_fields.$field.is_some() && self.$field.is_some() {
@@ -795,7 +795,7 @@ impl TreeComposeConfig {
     }
 
     /// Look for use of ${variable} and replace it by its proper value
-    fn substitute_vars(mut self) -> Fallible<Self> {
+    fn substitute_vars(mut self) -> Result<Self> {
         let mut substvars: collections::HashMap<String, String> = collections::HashMap::new();
         // Substitute ${basearch} and ${releasever}
         if let Some(arch) = &self.basearch {
@@ -804,7 +804,7 @@ impl TreeComposeConfig {
         if let Some(releasever) = &self.releasever {
             substvars.insert("releasever".to_string(), releasever.clone());
         }
-        envsubst::validate_vars(&substvars)?;
+        envsubst::validate_vars(&substvars).map_err(|e| anyhow!(e.to_string()))?;
 
         macro_rules! substitute_field {
             ( $field:ident ) => {{
@@ -812,7 +812,7 @@ impl TreeComposeConfig {
                     self.$field = if envsubst::is_templated(&value) {
                         match envsubst::substitute(value, &substvars) {
                             Ok(s) => Some(s),
-                            Err(e) => return Err(e),
+                            Err(e) => return Err(anyhow!(e.to_string())),
                         }
                     } else {
                         Some(value)
@@ -827,7 +827,7 @@ impl TreeComposeConfig {
         Ok(self)
     }
 
-    fn hasher_update(&self, hasher: &mut glib::Checksum) -> Fallible<()> {
+    fn hasher_update(&self, hasher: &mut glib::Checksum) -> Result<()> {
         // don't use pretty mode to increase the chances of a stable serialization
         // https://github.com/projectatomic/rpm-ostree/pull/1865
         hasher.update(serde_json::to_vec(self)?.as_slice());
@@ -1050,7 +1050,7 @@ automatic_version_prefix: bar
         );
     }
 
-    fn new_test_treefile<'a, 'b>(workdir: &std::path::Path, contents: &'a str, basearch: Option<&'b str>) -> Fallible<Box<Treefile>> {
+    fn new_test_treefile<'a, 'b>(workdir: &std::path::Path, contents: &'a str, basearch: Option<&'b str>) -> Result<Box<Treefile>> {
         let tf_path = workdir.join("treefile.yaml");
         utils::write_file(&tf_path, |b| { b.write_all(contents.as_bytes())?; Ok(()) })?;
         Ok(Treefile::new_boxed(
@@ -1090,7 +1090,7 @@ rojig:
     }
 
     #[test]
-    fn test_treefile_includes() -> Fallible<()> {
+    fn test_treefile_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
         utils::write_file(workdir.path().join("foo.yaml"), |b| {
             let foo = r#"
@@ -1108,7 +1108,7 @@ include: foo.yaml
     }
 
     #[test]
-    fn test_treefile_arch_includes() -> Fallible<()> {
+    fn test_treefile_arch_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
         utils::write_file(workdir.path().join("foo-x86_64.yaml"), |b| {
             let foo = r#"
