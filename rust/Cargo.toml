@@ -5,8 +5,6 @@ authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebo
 edition = "2018"
 
 [dependencies]
-# TODO remove this
-failure = "0.1.7"
 anyhow = "1.0"
 serde = "1.0.105"
 serde_derive = "1.0.105"

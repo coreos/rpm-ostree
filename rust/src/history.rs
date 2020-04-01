@@ -52,7 +52,7 @@
 //! than scanning the whole journal upfront. This can then be e.g. piped through
 //! a pager, stopped after N entries, etc...
 
-use failure::{bail, Fallible};
+use anyhow::{Result, bail};
 use openat::{self, Dir, SimpleType};
 use std::collections::VecDeque;
 use std::ffi::CString;
@@ -168,7 +168,7 @@ enum JournalSearchMode {
 }
 
 #[cfg(not(test))]
-fn journal_record_timestamp(journal: &journal::Journal) -> Fallible<u64> {
+fn journal_record_timestamp(journal: &journal::Journal) -> Result<u64> {
     Ok(journal
         .timestamp()?
         .duration_since(std::time::UNIX_EPOCH)?
@@ -176,7 +176,7 @@ fn journal_record_timestamp(journal: &journal::Journal) -> Fallible<u64> {
 }
 
 #[cfg(test)]
-fn journal_record_timestamp(journal: &journal::Journal) -> Fallible<u64> {
+fn journal_record_timestamp(journal: &journal::Journal) -> Result<u64> {
     Ok(journal.current_timestamp.unwrap())
 }
 
@@ -187,7 +187,7 @@ where
     s.and_then(|s| s.parse::<u64>().ok())
 }
 
-fn history_get_oldest_deployment_msg_timestamp() -> Fallible<Option<u64>> {
+fn history_get_oldest_deployment_msg_timestamp() -> Result<Option<u64>> {
     let mut journal = journal::Journal::open(journal::JournalFiles::System, false, true)?;
     journal.seek(journal::JournalSeek::Head)?;
     journal.match_add("MESSAGE_ID", RPMOSTREE_DEPLOY_MSG)?;
@@ -202,7 +202,7 @@ fn history_get_oldest_deployment_msg_timestamp() -> Fallible<Option<u64>> {
 /// Gets the oldest deployment message in the journal, and nuke all the GVariant data files
 /// that correspond to deployments older than that one. Essentially, this binds pruning to
 /// journal pruning. Called from C through `ror_history_prune()`.
-fn history_prune() -> Fallible<()> {
+fn history_prune() -> Result<()> {
     if !Path::new(RPMOSTREE_HISTORY_DIR).exists() {
         return Ok(())
     }
@@ -238,7 +238,7 @@ fn history_prune() -> Fallible<()> {
 
 impl HistoryCtx {
     /// Create a new context object. Called from C through `ror_history_ctx_new()`.
-    fn new_boxed() -> Fallible<Box<HistoryCtx>> {
+    fn new_boxed() -> Result<Box<HistoryCtx>> {
         let mut journal = journal::Journal::open(journal::JournalFiles::System, false, true)?;
         journal.seek(journal::JournalSeek::Tail)?;
 
@@ -252,7 +252,7 @@ impl HistoryCtx {
     }
 
     /// Ensures the journal filters are set up for the messages we're interested in.
-    fn set_search_mode(&mut self, mode: JournalSearchMode) -> Fallible<()> {
+    fn set_search_mode(&mut self, mode: JournalSearchMode) -> Result<()> {
         if Some(&mode) != self.search_mode.as_ref() {
             self.journal.match_flush()?;
             self.journal.match_add("MESSAGE_ID", OSTREE_BOOT_MSG)?;
@@ -266,7 +266,7 @@ impl HistoryCtx {
 
     /// Creates a marker from an OSTree boot message. Uses the timestamp of the message
     /// itself as the boot time. Returns None if record is incomplete.
-    fn boot_record_to_marker(&self, record: &JournalRecord) -> Fallible<Option<Marker>> {
+    fn boot_record_to_marker(&self, record: &JournalRecord) -> Result<Option<Marker>> {
         if let (Some(path), Some(device), Some(inode)) = (
             record.get("DEPLOYMENT_PATH"),
             map_to_u64(record.get("DEPLOYMENT_DEVICE")),
@@ -284,7 +284,7 @@ impl HistoryCtx {
     /// Creates a marker from an RPM-OSTree deploy message. Uses the `DEPLOYMENT_TIMESTAMP`
     /// in the message as the deploy time. This matches the history gv filename for that
     /// deployment. Returns None if record is incomplete.
-    fn deployment_record_to_marker(&self, record: &JournalRecord) -> Fallible<Option<Marker>> {
+    fn deployment_record_to_marker(&self, record: &JournalRecord) -> Result<Option<Marker>> {
         if let (Some(timestamp), Some(device), Some(inode), Some(path)) = (
             map_to_u64(record.get("DEPLOYMENT_TIMESTAMP")),
             map_to_u64(record.get("DEPLOYMENT_DEVICE")),
@@ -304,7 +304,7 @@ impl HistoryCtx {
     }
 
     /// Goes to the next OSTree boot msg in the journal and returns its marker.
-    fn find_next_boot_marker(&mut self) -> Fallible<Option<BootMarker>> {
+    fn find_next_boot_marker(&mut self) -> Result<Option<BootMarker>> {
         self.set_search_mode(JournalSearchMode::BootMsgs)?;
         while let Some(rec) = self.journal.previous_record()? {
             if let Some(Marker::Boot(m)) = self.boot_record_to_marker(&rec)? {
@@ -315,7 +315,7 @@ impl HistoryCtx {
     }
 
     /// Returns a marker of the appropriate kind for a given journal message.
-    fn record_to_marker(&self, record: &JournalRecord) -> Fallible<Option<Marker>> {
+    fn record_to_marker(&self, record: &JournalRecord) -> Result<Option<Marker>> {
         Ok(match record.get("MESSAGE_ID").unwrap() {
             m if m == OSTREE_BOOT_MSG => self.boot_record_to_marker(&record)?,
             m if m == RPMOSTREE_DEPLOY_MSG => self.deployment_record_to_marker(&record)?,
@@ -325,7 +325,7 @@ impl HistoryCtx {
 
     /// Goes to the next OSTree boot or RPM-OSTree deploy msg in the journal, creates a
     /// marker for it, and returns it.
-    fn find_next_marker(&mut self) -> Fallible<Option<Marker>> {
+    fn find_next_marker(&mut self) -> Result<Option<Marker>> {
         self.set_search_mode(JournalSearchMode::BootAndDeploymentMsgs)?;
         while let Some(rec) = self.journal.previous_record()? {
             if let Some(marker) = self.record_to_marker(&rec)? {
@@ -336,7 +336,7 @@ impl HistoryCtx {
     }
 
     /// Finds the matching deployment marker for the next boot marker in the queue.
-    fn scan_until_path_match(&mut self) -> Fallible<Option<(BootMarker, DeploymentMarker)>> {
+    fn scan_until_path_match(&mut self) -> Result<Option<(BootMarker, DeploymentMarker)>> {
         // keep popping & scanning until we get to the next boot marker
         let boot_marker = loop {
             match self.marker_queue.pop_front() {
@@ -376,7 +376,7 @@ impl HistoryCtx {
 
     /// Returns the next history entry, which consists of a boot timestamp and its matching
     /// deploy timestamp.
-    fn scan_until_next_entry(&mut self) -> Fallible<Option<HistoryEntry>> {
+    fn scan_until_next_entry(&mut self) -> Result<Option<HistoryEntry>> {
         while let Some((boot_marker, deployment_marker)) = self.scan_until_path_match()? {
             if boot_marker.node != deployment_marker.node {
                 // This is a non-foolproof safety valve to ensure that the boot is definitely
@@ -399,7 +399,7 @@ impl HistoryCtx {
     /// of the same deployment into a single entry. The `boot_count` field represents the
     /// number of boots squashed, and `*_boot_timestamp` fields provide the timestamp of the
     /// first and last boots.
-    fn scan_until_next_new_entry(&mut self) -> Fallible<Option<HistoryEntry>> {
+    fn scan_until_next_new_entry(&mut self) -> Result<Option<HistoryEntry>> {
         while let Some(entry) = self.scan_until_next_entry()? {
             if self.current_entry.is_none() {
                 /* first scan ever; prime with first entry */
@@ -426,7 +426,7 @@ impl HistoryCtx {
     /// Returns the next entry. This is a thin wrapper around `scan_until_next_new_entry`
     /// that mostly just handles the `Option` -> EOF conversion for the C side. Called from
     /// C through `ror_history_ctx_next()`.
-    fn next_entry(&mut self) -> Fallible<HistoryEntry> {
+    fn next_entry(&mut self) -> Result<HistoryEntry> {
         if self.reached_eof {
             bail!("next_entry() called after having reached EOF!")
         }
@@ -445,7 +445,7 @@ impl HistoryCtx {
 /// stuff in the host journal; in fact without needing any system journal access at all.
 #[cfg(test)]
 mod mock_journal {
-    use super::Fallible;
+    use super::Result;
     pub use systemd::journal::{JournalFiles, JournalRecord, JournalSeek};
 
     pub struct Journal {
@@ -455,25 +455,25 @@ mod mock_journal {
     }
 
     impl Journal {
-        pub fn open(_: JournalFiles, _: bool, _: bool) -> Fallible<Journal> {
+        pub fn open(_: JournalFiles, _: bool, _: bool) -> Result<Journal> {
             Ok(Journal {
                 entries: Vec::new(),
                 current_timestamp: None,
                 msg_ids: Vec::new(),
             })
         }
-        pub fn seek(&mut self, _: JournalSeek) -> Fallible<()> {
+        pub fn seek(&mut self, _: JournalSeek) -> Result<()> {
             Ok(())
         }
-        pub fn match_flush(&mut self) -> Fallible<()> {
+        pub fn match_flush(&mut self) -> Result<()> {
             self.msg_ids.clear();
             Ok(())
         }
-        pub fn match_add(&mut self, _: &str, msg_id: &str) -> Fallible<()> {
+        pub fn match_add(&mut self, _: &str, msg_id: &str) -> Result<()> {
             self.msg_ids.push(msg_id.into());
             Ok(())
         }
-        pub fn previous_record(&mut self) -> Fallible<Option<JournalRecord>> {
+        pub fn previous_record(&mut self) -> Result<Option<JournalRecord>> {
             while let Some((timestamp, record)) = self.entries.pop() {
                 if self.msg_ids.contains(record.get("MESSAGE_ID").unwrap()) {
                     self.current_timestamp = Some(timestamp);
@@ -483,7 +483,7 @@ mod mock_journal {
             Ok(None)
         }
         // This is only used by the prune path, which we're not unit testing.
-        pub fn next_record(&mut self) -> Fallible<Option<JournalRecord>> {
+        pub fn next_record(&mut self) -> Result<Option<JournalRecord>> {
             unimplemented!();
         }
     }

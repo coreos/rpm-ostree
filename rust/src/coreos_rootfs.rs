@@ -11,7 +11,7 @@
 //! is here in rpm-ostree as a convenience.
 
 use std::os::unix::prelude::*;
-use failure::{Fallible, ResultExt};
+use anyhow::{Result, Context};
 use structopt::StructOpt;
 use openat;
 use nix;
@@ -74,7 +74,7 @@ fn to_cstr<P: openat::AsPath>(path: P) -> std::io::Result<P::Buffer> {
 }
 
 /// Set the immutable bit
-fn seal(opts: &SealOpts) -> Fallible<()> {
+fn seal(opts: &SealOpts) -> Result<()> {
     let fd = unsafe {
         let fd = libc::open(to_cstr(opts.sysroot.as_str())?.as_ref().as_ptr(), libc::O_CLOEXEC | libc::O_DIRECTORY);
         if fd < 0 {
@@ -94,10 +94,10 @@ fn seal(opts: &SealOpts) -> Fallible<()> {
 }
 
 /// Main entrypoint
-fn coreos_rootfs_main(args: &Vec<String>) -> Fallible<()> {
+fn coreos_rootfs_main(args: &Vec<String>) -> Result<()> {
     let opt = Opt::from_iter(args.iter());
     match opt {
-        Opt::Seal(ref opts) => seal(opts).with_context(|e| format!("Sealing: {}", e.to_string()))?,
+        Opt::Seal(ref opts) => seal(opts).context("Sealing rootfs failed")?,
     };
     Ok(())
 }
