@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use failure::Fallible;
+use anyhow::Result;
 use openat;
 use rayon::prelude::*;
 use std::io;
@@ -23,7 +23,7 @@ use crate::utils;
 // https://pagure.io/workstation-ostree-config/pull-request/121
 // https://discussion.fedoraproject.org/t/adapting-user-home-in-etc-passwd/487/6
 // https://github.com/justjanne/powerline-go/issues/94
-fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()> {
+fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Result<()> {
     let path = Path::new("usr/etc/default/useradd");
     if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         let f = io::BufReader::new(f);
@@ -48,7 +48,7 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()> {
 // We keep hitting issues with the ostree-remount preset not being
 // enabled; let's just do this rather than trying to propagate the
 // preset everywhere.
-fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Fallible<()> {
+fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Result<()> {
     let mut o = rootfs_dfd.write_file(
         "usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset",
         0o644,
@@ -68,7 +68,7 @@ enable ostree-finalize-staged.path
 // and (2) make sure there *isn't* a /var/home -> /home substition rule. The latter check won't
 // technically be needed once downstreams have:
 // https://src.fedoraproject.org/rpms/selinux-policy/pull-request/14
-fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Fallible<()> {
+fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
     let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
     if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         let f = io::BufReader::new(f);
@@ -95,7 +95,7 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Fallible<()> {
 
 // This function is called from rpmostree_postprocess_final(); think of
 // it as the bits of that function that we've chosen to implement in Rust.
-fn compose_postprocess_final(rootfs_dfd: &openat::Dir) -> Fallible<()> {
+fn compose_postprocess_final(rootfs_dfd: &openat::Dir) -> Result<()> {
     let tasks = [
         postprocess_useradd,
         postprocess_presets,

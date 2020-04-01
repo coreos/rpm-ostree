@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use failure::Fallible;
+use anyhow::Result;
 use systemd::id128::Id128;
 use systemd::journal;
 
@@ -12,7 +12,7 @@ static OSTREE_FINALIZE_STAGED_SERVICE: &'static str = "ostree-finalize-staged.se
 static OSTREE_DEPLOYMENT_FINALIZING_MSG_ID: &'static str = "e8646cd63dff4625b77909a8e7a40994";
 static OSTREE_DEPLOYMENT_COMPLETE_MSG_ID: &'static str = "dd440e3e549083b63d0efc7dc15255f1";
 
-fn print_staging_failure_msg(msg: Option<&str>) -> Fallible<()> {
+fn print_staging_failure_msg(msg: Option<&str>) -> Result<()> {
     println!("Warning: failed to finalize previous deployment");
     if let Some(msg) = msg {
         println!("         {}", msg);
@@ -25,7 +25,7 @@ fn print_staging_failure_msg(msg: Option<&str>) -> Fallible<()> {
 }
 
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.
-fn journal_print_staging_failure() -> Fallible<()> {
+fn journal_print_staging_failure() -> Result<()> {
     let mut j = journal::Journal::open(journal::JournalFiles::System, false, true)?;
 
     // first, go to the first entry of the current boot
