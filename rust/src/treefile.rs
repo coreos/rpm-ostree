@@ -804,7 +804,7 @@ impl TreeComposeConfig {
         if let Some(releasever) = &self.releasever {
             substvars.insert("releasever".to_string(), releasever.clone());
         }
-        envsubst::validate_vars(&substvars).map_err(|e| anyhow!(e.to_string()))?;
+        envsubst::validate_vars(&substvars)?;
 
         macro_rules! substitute_field {
             ( $field:ident ) => {{
