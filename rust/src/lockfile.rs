@@ -8,19 +8,19 @@
  */
 
 use anyhow::Result;
+use chrono::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
+use std::convert::TryInto;
+use std::io;
 use std::iter::Extend;
 use std::path::Path;
-use std::io;
-use chrono::prelude::*;
-use std::convert::TryInto;
 
 use crate::utils;
 
 /// Given a lockfile filename, parse it
-fn lockfile_parse<P: AsRef<Path>>(filename: P,) -> Result<LockfileConfig> {
+fn lockfile_parse<P: AsRef<Path>>(filename: P) -> Result<LockfileConfig> {
     let filename = filename.as_ref();
     let fmt = utils::InputFormat::detect_from_filename(filename)?;
     let mut f = io::BufReader::new(utils::open_file(filename)?);
@@ -141,7 +141,8 @@ mod tests {
     #[test]
     fn basic_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
-        let lockfile: LockfileConfig = utils::parse_stream(&utils::InputFormat::JSON, &mut input).unwrap();
+        let lockfile: LockfileConfig =
+            utils::parse_stream(&utils::InputFormat::JSON, &mut input).unwrap();
         assert!(lockfile.packages.len() == 2);
     }
 
@@ -159,11 +160,13 @@ mod tests {
     #[test]
     fn basic_valid_override() {
         let mut base_input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
-        let mut base_lockfile: LockfileConfig = utils::parse_stream(&utils::InputFormat::JSON, &mut base_input).unwrap();
+        let mut base_lockfile: LockfileConfig =
+            utils::parse_stream(&utils::InputFormat::JSON, &mut base_input).unwrap();
         assert!(base_lockfile.packages.len() == 2);
 
         let mut override_input = io::BufReader::new(OVERRIDE_JS.as_bytes());
-        let override_lockfile: LockfileConfig = utils::parse_stream(&utils::InputFormat::JSON, &mut override_input).unwrap();
+        let override_lockfile: LockfileConfig =
+            utils::parse_stream(&utils::InputFormat::JSON, &mut override_input).unwrap();
         assert!(override_lockfile.packages.len() == 1);
 
         base_lockfile.merge(override_lockfile);
@@ -187,8 +190,8 @@ mod tests {
 
 mod ffi {
     use super::*;
-    use glib_sys;
     use glib::translate::*;
+    use glib_sys;
     use libc;
     use std::ptr;
 
@@ -205,15 +208,15 @@ mod ffi {
             Err(ref e) => {
                 error_to_glib(e, gerror);
                 ptr::null_mut()
-            },
+            }
             Ok(lockfile) => {
                 // would be more efficient to just create a GHashTable manually here, but eh...
-                let map = lockfile.packages
-                    .into_iter()
-                    .fold(HashMap::<String, String>::new(), |mut acc, (k, v)| {
+                let map = lockfile.packages.into_iter().fold(
+                    HashMap::<String, String>::new(),
+                    |mut acc, (k, v)| {
                         acc.insert(format!("{}-{}", k, v.evra), v.digest.unwrap_or("".into()));
                         acc
-                    }
+                    },
                 );
                 map.to_glib_full()
             }
@@ -242,7 +245,7 @@ mod ffi {
             metadata: Some(LockfileConfigMetadata {
                 generated: Some(now),
                 rpmmd_repos: Some(BTreeMap::new()),
-            })
+            }),
         };
 
         for pkg in packages {
@@ -256,35 +259,54 @@ mod ffi {
                 return r;
             }
 
-            lockfile.packages.insert(name, LockedPackage {
-                evra: format!("{}.{}", evr, arch),
-                digest: Some(ffi_new_string(chksum)),
-            });
+            lockfile.packages.insert(
+                name,
+                LockedPackage {
+                    evra: format!("{}.{}", evr, arch),
+                    digest: Some(ffi_new_string(chksum)),
+                },
+            );
 
             // forgive me for this sin... need to oxidize chksum_repr()
             unsafe { glib_sys::g_free(chksum as *mut libc::c_void) };
         }
 
         /* just take the ref here to be less verbose */
-        let lockfile_repos = lockfile.metadata.as_mut().unwrap().rpmmd_repos.as_mut().unwrap();
+        let lockfile_repos = lockfile
+            .metadata
+            .as_mut()
+            .unwrap()
+            .rpmmd_repos
+            .as_mut()
+            .unwrap();
 
         for rpmmd_repo in rpmmd_repos {
             let id = ffi_new_string(unsafe { dnf_repo_get_id(rpmmd_repo) });
             let generated = unsafe { dnf_repo_get_timestamp_generated(rpmmd_repo) };
-            lockfile_repos.insert(id, LockfileRepoMetadata {
-                generated: Utc.timestamp(generated.try_into().unwrap(), 0),
-            });
+            lockfile_repos.insert(
+                id,
+                LockfileRepoMetadata {
+                    generated: Utc.timestamp(generated.try_into().unwrap(), 0),
+                },
+            );
         }
 
-        int_glib_error(utils::write_file(filename, |w| {
-            Ok(serde_json::to_writer_pretty(w, &lockfile)?)
-        }), gerror)
+        int_glib_error(
+            utils::write_file(filename, |w| {
+                Ok(serde_json::to_writer_pretty(w, &lockfile)?)
+            }),
+            gerror,
+        )
     }
 
     /* Some helper rpm-ostree C functions to deal with libdnf stuff. These are prime candidates for
      * oxidation since it makes e.g. interacting with strings less efficient. */
     extern "C" {
-        pub(crate) fn rpmostree_get_repodata_chksum_repr(package: *mut DnfPackage, chksum: *mut *mut libc::c_char, gerror: *mut *mut glib_sys::GError) -> libc::c_int;
+        pub(crate) fn rpmostree_get_repodata_chksum_repr(
+            package: *mut DnfPackage,
+            chksum: *mut *mut libc::c_char,
+            gerror: *mut *mut glib_sys::GError,
+        ) -> libc::c_int;
     }
 }
 

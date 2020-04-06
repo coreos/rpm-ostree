@@ -8,17 +8,17 @@
  * https://github.com/cgwalters/coreos-assembler
  * */
 
+use anyhow::{anyhow, bail, Result};
 use c_utf8::CUtf8Buf;
-use anyhow::{Result, bail, anyhow};
 use openat;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, HashMap};
 use std::io::prelude::*;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::{collections, fs, io};
-use std::os::unix::fs::MetadataExt;
-use std::collections::btree_map::Entry;
 
 use crate::utils;
 
@@ -191,9 +191,10 @@ fn treefile_parse<P: AsRef<Path>>(
     let meta = f.metadata()?;
     let devino = (meta.dev(), meta.ino());
     match seen_includes.entry(devino) {
-        Entry::Occupied(_) => {
-            bail!("Include loop detected; {} was already included", filename.to_str().unwrap())
-        },
+        Entry::Occupied(_) => bail!(
+            "Include loop detected; {} was already included",
+            filename.to_str().unwrap()
+        ),
         Entry::Vacant(e) => {
             e.insert(filename.to_str().unwrap().to_string());
         }
@@ -214,7 +215,10 @@ fn treefile_parse<P: AsRef<Path>>(
     let mut add_files: BTreeMap<String, fs::File> = BTreeMap::new();
     if let Some(ref add_file_names) = tf.add_files.as_ref() {
         for (name, _) in add_file_names.iter() {
-            add_files.insert(name.clone(), utils::open_file(filename.with_file_name(name))?);
+            add_files.insert(
+                name.clone(),
+                utils::open_file(filename.with_file_name(name))?,
+            );
         }
     }
     let parent = utils::parent_dir(filename).unwrap();
@@ -255,8 +259,8 @@ fn merge_vec_field<T>(dest: &mut Option<Vec<T>>, src: &mut Option<Vec<T>>) {
 /// duplicate keys, `dest` wins (`src` is the "included" config).
 fn merge_map_field<T>(
     dest: &mut Option<BTreeMap<String, T>>,
-    src: &mut Option<BTreeMap<String, T>>)
-{
+    src: &mut Option<BTreeMap<String, T>>,
+) {
     if let Some(mut srcv) = src.take() {
         if let Some(mut destv) = dest.take() {
             srcv.append(&mut destv);
@@ -324,9 +328,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         remove_files,
         remove_from_packages
     );
-    merge_maps!(
-        add_commit_metadata
-    );
+    merge_maps!(add_commit_metadata);
 }
 
 /// Merge the treefile externals. There are currently only two keys that
@@ -358,7 +360,11 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
 ) -> Result<ConfigAndExternals> {
     let filename = filename.as_ref();
     let mut parsed = treefile_parse(filename, basearch, seen_includes)?;
-    let include = parsed.config.include.take().unwrap_or_else(|| Include::Multiple(Vec::new()));
+    let include = parsed
+        .config
+        .include
+        .take()
+        .unwrap_or_else(|| Include::Multiple(Vec::new()));
     let mut includes = match include {
         Include::Single(v) => vec![v],
         Include::Multiple(v) => v,
@@ -383,7 +389,8 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
         }
         let parent = utils::parent_dir(filename).unwrap();
         let include_path = parent.join(include_path);
-        let mut included = treefile_parse_recurse(include_path, basearch, depth + 1, seen_includes)?;
+        let mut included =
+            treefile_parse_recurse(include_path, basearch, depth + 1, seen_includes)?;
         treefile_merge(&mut parsed.config, &mut included.config);
         treefile_merge_externals(&mut parsed.externals, &mut included.externals);
     }
@@ -415,11 +422,11 @@ impl Treefile {
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
         let (rojig_name, rojig_spec) = match (workdir.as_ref(), parsed.config.rojig.as_ref()) {
-            (Some(workdir), Some(rojig)) => {(
+            (Some(workdir), Some(rojig)) => (
                 Some(CUtf8Buf::from_string(rojig.name.clone())),
                 Some(Treefile::write_rojig_spec(workdir, rojig)?),
-            )},
-            _ => (None, None)
+            ),
+            _ => (None, None),
         };
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
         // Notice we hash the *reserialization* of the final flattened treefile only so that e.g.
@@ -459,7 +466,10 @@ impl Treefile {
             if !(version_suffix.len() == 1 && version_suffix.is_ascii()) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("Invalid automatic-version-suffix, must be exactly one ASCII character: {}", version_suffix)
+                    format!(
+                        "Invalid automatic-version-suffix, must be exactly one ASCII character: {}",
+                        version_suffix
+                    ),
                 )
                 .into());
             }
@@ -615,7 +625,7 @@ struct Rojig {
 #[serde(untagged)]
 enum Include {
     Single(String),
-    Multiple(Vec<String>)
+    Multiple(Vec<String>),
 }
 
 // Because of how we handle includes, *everything* here has to be
@@ -911,7 +921,8 @@ remove-files:
     #[test]
     fn basic_valid_noarch() {
         let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let mut treefile = treefile_parse_stream(utils::InputFormat::YAML, &mut input, None).unwrap();
+        let mut treefile =
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, None).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 3);
@@ -1050,9 +1061,16 @@ automatic_version_prefix: bar
         );
     }
 
-    fn new_test_treefile<'a, 'b>(workdir: &std::path::Path, contents: &'a str, basearch: Option<&'b str>) -> Result<Box<Treefile>> {
+    fn new_test_treefile<'a, 'b>(
+        workdir: &std::path::Path,
+        contents: &'a str,
+        basearch: Option<&'b str>,
+    ) -> Result<Box<Treefile>> {
         let tf_path = workdir.join("treefile.yaml");
-        utils::write_file(&tf_path, |b| { b.write_all(contents.as_bytes())?; Ok(()) })?;
+        utils::write_file(&tf_path, |b| {
+            b.write_all(contents.as_bytes())?;
+            Ok(())
+        })?;
         Ok(Treefile::new_boxed(
             tf_path.as_path(),
             basearch,
@@ -1097,11 +1115,15 @@ rojig:
 packages:
   - fooinclude
 "#;
-            b.write_all(foo.as_bytes())?; Ok(()) })?;
+            b.write_all(foo.as_bytes())?;
+            Ok(())
+        })?;
         let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str(r#"
+        buf.push_str(
+            r#"
 include: foo.yaml
-"#);
+"#,
+        );
         let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
         assert!(tf.parsed.packages.unwrap().len() == 4);
         Ok(())
@@ -1115,19 +1137,28 @@ include: foo.yaml
 packages:
   - foo-x86_64-include
 "#;
-            b.write_all(foo.as_bytes())?; Ok(()) })?;
+            b.write_all(foo.as_bytes())?;
+            Ok(())
+        })?;
         let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str(r#"
+        buf.push_str(
+            r#"
 arch-include:
     x86_64: foo-x86_64.yaml
     s390x: foo-s390x.yaml
-"#);
+"#,
+        );
         // Note foo-s390x.yaml doesn't exist
         let tf = new_test_treefile(workdir.path(), buf.as_str(), Some(ARCH_X86_64))?;
-        assert!(tf.parsed.packages.unwrap().iter().find(|&p| p == "foo-x86_64-include").is_some());
+        assert!(tf
+            .parsed
+            .packages
+            .unwrap()
+            .iter()
+            .find(|&p| p == "foo-x86_64-include")
+            .is_some());
         Ok(())
     }
-
 
     #[test]
     fn test_treefile_merge() {
@@ -1155,9 +1186,11 @@ etc-group-members:
 "###
             .as_bytes(),
         );
-        let mut mid = treefile_parse_stream(utils::InputFormat::YAML, &mut mid_input, basearch).unwrap();
+        let mut mid =
+            treefile_parse_stream(utils::InputFormat::YAML, &mut mid_input, basearch).unwrap();
         let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
-        let mut top = treefile_parse_stream(utils::InputFormat::YAML, &mut top_input, basearch).unwrap();
+        let mut top =
+            treefile_parse_stream(utils::InputFormat::YAML, &mut top_input, basearch).unwrap();
         assert!(top.add_commit_metadata.is_none());
         treefile_merge(&mut mid, &mut base);
         treefile_merge(&mut top, &mut mid);
@@ -1170,14 +1203,24 @@ etc-group-members:
         assert!(data.get("my-first-key").unwrap().as_str().unwrap() == "please don't override me");
         assert!(data.get("my-second-key").unwrap().as_str().unwrap() == "something better");
         assert!(data.get("my-third-key").unwrap().as_i64().unwrap() == 1000);
-        assert!(data.get("my-fourth-key").unwrap().as_object().unwrap().get("nested").unwrap().as_str().unwrap() == "table");
+        assert!(
+            data.get("my-fourth-key")
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .get("nested")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                == "table"
+        );
     }
 }
 
 mod ffi {
     use super::*;
-    use glib_sys;
     use glib::translate::*;
+    use glib_sys;
     use libc;
     use std::io::Seek;
     use std::os::unix::io::{AsRawFd, RawFd};
@@ -1262,7 +1305,7 @@ mod ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn ror_treefile_get_ostree_layers(tf: *mut Treefile) -> *mut *mut libc::c_char  {
+    pub extern "C" fn ror_treefile_get_ostree_layers(tf: *mut Treefile) -> *mut *mut libc::c_char {
         let tf = ref_from_raw_ptr(tf);
         if let Some(ref layers) = tf.parsed.ostree_layers {
             layers.to_glib_full()
@@ -1272,7 +1315,9 @@ mod ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn ror_treefile_get_ostree_override_layers(tf: *mut Treefile) -> *mut *mut libc::c_char  {
+    pub extern "C" fn ror_treefile_get_ostree_override_layers(
+        tf: *mut Treefile,
+    ) -> *mut *mut libc::c_char {
         let tf = ref_from_raw_ptr(tf);
         if let Some(ref layers) = tf.parsed.ostree_override_layers {
             layers.to_glib_full()
@@ -1282,9 +1327,11 @@ mod ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn ror_treefile_get_all_ostree_layers(tf: *mut Treefile) -> *mut *mut libc::c_char  {
+    pub extern "C" fn ror_treefile_get_all_ostree_layers(
+        tf: *mut Treefile,
+    ) -> *mut *mut libc::c_char {
         let tf = ref_from_raw_ptr(tf);
-        let mut ret : Vec<String> = Vec::new();
+        let mut ret: Vec<String> = Vec::new();
         if let Some(ref layers) = tf.parsed.ostree_layers {
             ret.extend(layers.iter().cloned())
         }
@@ -1293,7 +1340,6 @@ mod ffi {
         }
         ret.to_glib_full()
     }
-
 
     #[no_mangle]
     pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {
@@ -1329,6 +1375,5 @@ mod ffi {
             Box::from_raw(tf);
         }
     }
-
 }
 pub use self::ffi::*;

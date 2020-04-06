@@ -10,12 +10,12 @@
 //! a hidden implmentation detail of CoreOS style systems.  The code
 //! is here in rpm-ostree as a convenience.
 
-use std::os::unix::prelude::*;
-use anyhow::{Result, Context};
-use structopt::StructOpt;
-use openat;
-use nix;
+use anyhow::{Context, Result};
 use libc;
+use nix;
+use openat;
+use std::os::unix::prelude::*;
+use structopt::StructOpt;
 
 /// A reference to a *directory* file descriptor.  Unfortunately,
 /// the openat crate always uses O_PATH which doesn't support ioctl().
@@ -45,7 +45,7 @@ impl Drop for RawDirFd {
 }
 
 /* From /usr/include/ext2fs/ext2_fs.h */
-const EXT2_IMMUTABLE_FL : libc::c_long = 0x00000010; /* Immutable file */
+const EXT2_IMMUTABLE_FL: libc::c_long = 0x00000010; /* Immutable file */
 
 nix::ioctl_read!(ext2_get_flags, b'f', 1, libc::c_long);
 nix::ioctl_write_ptr!(ext2_set_flags, b'f', 2, libc::c_long);
@@ -66,17 +66,18 @@ enum Opt {
 
 // taken from openat code
 fn to_cstr<P: openat::AsPath>(path: P) -> std::io::Result<P::Buffer> {
-    path.to_path()
-    .ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput,
-                            "nul byte in file name")
+    path.to_path().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "nul byte in file name")
     })
 }
 
 /// Set the immutable bit
 fn seal(opts: &SealOpts) -> Result<()> {
     let fd = unsafe {
-        let fd = libc::open(to_cstr(opts.sysroot.as_str())?.as_ref().as_ptr(), libc::O_CLOEXEC | libc::O_DIRECTORY);
+        let fd = libc::open(
+            to_cstr(opts.sysroot.as_str())?.as_ref().as_ptr(),
+            libc::O_CLOEXEC | libc::O_DIRECTORY,
+        );
         if fd < 0 {
             Err(std::io::Error::last_os_error())?
         } else {
@@ -84,7 +85,7 @@ fn seal(opts: &SealOpts) -> Result<()> {
         }
     };
 
-    let mut flags : libc::c_long = 0;
+    let mut flags: libc::c_long = 0;
     unsafe { ext2_get_flags(fd.as_raw_fd(), &mut flags as *mut libc::c_long)? };
     if flags & EXT2_IMMUTABLE_FL == 0 {
         flags |= EXT2_IMMUTABLE_FL;
@@ -110,8 +111,10 @@ mod ffi {
     use crate::ffiutil::*;
 
     #[no_mangle]
-    pub extern "C" fn ror_coreos_rootfs_entrypoint(argv: *mut *mut libc::c_char,
-                                                  gerror: *mut *mut glib_sys::GError) -> libc::c_int {
+    pub extern "C" fn ror_coreos_rootfs_entrypoint(
+        argv: *mut *mut libc::c_char,
+        gerror: *mut *mut glib_sys::GError,
+    ) -> libc::c_int {
         let v: Vec<String> = unsafe { glib::translate::FromGlibPtrContainer::from_glib_none(argv) };
         int_glib_error(coreos_rootfs_main(&v), gerror)
     }

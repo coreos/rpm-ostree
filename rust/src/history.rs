@@ -52,7 +52,7 @@
 //! than scanning the whole journal upfront. This can then be e.g. piped through
 //! a pager, stopped after N entries, etc...
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use openat::{self, Dir, SimpleType};
 use std::collections::VecDeque;
 use std::ffi::CString;
@@ -204,7 +204,7 @@ fn history_get_oldest_deployment_msg_timestamp() -> Result<Option<u64>> {
 /// journal pruning. Called from C through `ror_history_prune()`.
 fn history_prune() -> Result<()> {
     if !Path::new(RPMOSTREE_HISTORY_DIR).exists() {
-        return Ok(())
+        return Ok(());
     }
     let oldest_timestamp = history_get_oldest_deployment_msg_timestamp()?;
 
