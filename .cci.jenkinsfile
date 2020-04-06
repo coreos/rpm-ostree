@@ -28,7 +28,7 @@ parallel rpms: {
   }
 },
 codestyle: {
-  cosaPod {
+  cosaPod(buildroot: true) {
       checkout scm
       shwrap("""
         # Jenkins by default only fetches the branch it's testing. Explicitly fetch master

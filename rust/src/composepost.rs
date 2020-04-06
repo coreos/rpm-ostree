@@ -6,11 +6,11 @@
 
 use anyhow::Result;
 use openat;
+use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
 use std::io;
 use std::io::{BufRead, Write};
 use std::path::Path;
-use openat_ext::OpenatDirExt;
 
 use crate::utils;
 
@@ -72,7 +72,9 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
     let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
     if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         let f = io::BufReader::new(f);
-        let tmp_path = utils::parent_dir(path).unwrap().join("file_contexts.subs_dist.tmp");
+        let tmp_path = utils::parent_dir(path)
+            .unwrap()
+            .join("file_contexts.subs_dist.tmp");
         let o = rootfs_dfd.write_file(&tmp_path, 0o644)?;
         let mut bufw = io::BufWriter::new(&o);
         for line in f.lines() {

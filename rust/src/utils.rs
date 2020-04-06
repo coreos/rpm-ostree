@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use anyhow::{Result, bail, Context};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::path::Path;
@@ -41,7 +41,7 @@ impl InputFormat {
 /// Given a lockfile/treefile config definition, parse it
 pub fn parse_stream<T, R: io::Read>(fmt: &InputFormat, input: &mut R) -> Result<T>
 where
-    T: serde::de::DeserializeOwned
+    T: serde::de::DeserializeOwned,
 {
     let parsed: T = match fmt {
         InputFormat::JSON => {
@@ -86,22 +86,27 @@ fn download_url_to_tmpfile(url: &str) -> Result<fs::File> {
 
 /// Open file for reading and provide context containing filename on failures.
 pub fn open_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
-    return Ok(fs::File::open(filename.as_ref())
-        .with_context(|| format!("Can't open file {:?} for reading", filename.as_ref().display()))?);
+    return Ok(fs::File::open(filename.as_ref()).with_context(|| {
+        format!(
+            "Can't open file {:?} for reading",
+            filename.as_ref().display()
+        )
+    })?);
 }
 
 /// Open file for writing and provide context containing filename on failures.
 pub fn create_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
-    return Ok(fs::File::create(filename.as_ref())
-        .with_context(|| format!("Can't open file {:?} for writing", filename.as_ref().display()))?);
+    return Ok(fs::File::create(filename.as_ref()).with_context(|| {
+        format!(
+            "Can't open file {:?} for writing",
+            filename.as_ref().display()
+        )
+    })?);
 }
 
 /// Open file for writing, passes a Writer to a closure, and closes the file, with O_TMPFILE
 /// semantics.
-pub fn write_file<P, F>(
-    filename: P,
-    f: F
-) -> Result<()>
+pub fn write_file<P, F>(filename: P, f: F) -> Result<()>
 where
     P: AsRef<Path>,
     F: Fn(&mut io::BufWriter<&mut fs::File>) -> Result<()>,
@@ -119,11 +124,9 @@ where
 // Surprising we need a wrapper for this... parent() returns a slice of its buffer, so doesn't
 // handle going up relative paths well: https://github.com/rust-lang/rust/issues/36861
 pub fn parent_dir(filename: &Path) -> Option<&Path> {
-    filename.parent().map(|p| if p.as_os_str() == "" {
-        ".".as_ref()
-    } else {
-        p
-    })
+    filename
+        .parent()
+        .map(|p| if p.as_os_str() == "" { ".".as_ref() } else { p })
 }
 
 /// Given an input string `s`, replace variables of the form `${foo}` with
