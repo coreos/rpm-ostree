@@ -12,10 +12,8 @@ use glib_sys;
  * https://github.com/swig/swig/issues/1468) or at least `bindgen` for the strict C parts of the
  * API. For now, I just took the shortcut of manually defining a tiny subset we care about. */
 
-#[repr(C)]
-pub(crate) struct DnfPackage(libc::c_void);
-#[repr(C)]
-pub(crate) struct DnfRepo(libc::c_void);
+pub(crate) enum DnfPackage {}
+pub(crate) enum DnfRepo {}
 
 #[allow(dead_code)]
 extern {
