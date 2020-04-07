@@ -6,7 +6,6 @@
 
 // pub(crate) utilities
 mod ffiutil;
-mod libdnf_sys;
 
 mod composepost;
 pub use self::composepost::*;

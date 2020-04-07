@@ -1,0 +1,12 @@
+[package]
+name = "libdnf-sys"
+version = "0.1.0"
+authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
+edition = "2018"
+
+[dependencies]
+libc = "0.2"
+
+[lib]
+name = "libdnf_sys"
+path = "lib.rs"

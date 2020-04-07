@@ -7,6 +7,14 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(RORHistoryCtx, ror_history_ctx_free)
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(RORHistoryEntry, ror_history_entry_clear)
 """
 
-
 [export]
 prefix = "ROR"
+# Here we exclude functions belonging to the C side which we use on the Rust side and so
+# doesn't make sense to re-export.
+exclude = ["rpmostree_get_repodata_chksum_repr"]
+
+[parse]
+# We don't want cbindgen to parse libdnf-sys, since we're clients of the library, not
+# providers. This should already be guaranteed by `parse_deps` being `false`, but include
+# this here too to be explicit.
+exclude = ["libdnf-sys"]

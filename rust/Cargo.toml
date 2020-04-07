@@ -28,6 +28,7 @@ indicatif = "0.14.0"
 lazy_static = "1.1.0"
 envsubst = "0.2.0"
 chrono = { version = "0.4.11", features = ["serde"] }
+libdnf-sys = { path = "libdnf-sys", version = "0.1.0" }
 
 
 [lib]
