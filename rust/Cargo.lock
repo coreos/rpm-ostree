@@ -369,6 +369,13 @@ version = "0.2.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "libdnf-sys"
+version = "0.1.0"
+dependencies = [
+ "libc 0.2.68 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "libsystemd-sys"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -665,6 +672,7 @@ dependencies = [
  "indicatif 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.68 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libdnf-sys 0.1.0",
  "nix 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "openat 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "openat-ext 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",

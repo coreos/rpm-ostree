@@ -193,7 +193,7 @@ mod ffi {
     use std::ptr;
 
     use crate::ffiutil::*;
-    use crate::libdnf_sys::*;
+    use libdnf_sys::*;
 
     #[no_mangle]
     pub extern "C" fn ror_lockfile_read(
@@ -280,5 +280,12 @@ mod ffi {
             Ok(serde_json::to_writer_pretty(w, &lockfile)?)
         }), gerror)
     }
+
+    /* Some helper rpm-ostree C functions to deal with libdnf stuff. These are prime candidates for
+     * oxidation since it makes e.g. interacting with strings less efficient. */
+    extern "C" {
+        pub(crate) fn rpmostree_get_repodata_chksum_repr(package: *mut DnfPackage, chksum: *mut *mut libc::c_char, gerror: *mut *mut glib_sys::GError) -> libc::c_int;
+    }
 }
+
 pub use self::ffi::*;
