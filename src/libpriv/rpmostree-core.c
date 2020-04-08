@@ -1115,7 +1115,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
           rpmostree_output_progress_percent_begin (&progress, "Updating metadata for '%s'",
                                                    dnf_repo_get_id (repo));
           if (!dnf_repo_update (repo, DNF_REPO_UPDATE_FLAG_FORCE, hifstate, error))
-            return FALSE;
+            return glnx_prefix_error (error, "Updating rpm-md repo '%s'", dnf_repo_get_id (repo));
 
           did_update = TRUE;
 
