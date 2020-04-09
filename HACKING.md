@@ -40,7 +40,11 @@ Testing
 You can use `make check` in a container to run the unit tests.  However,
 if you want to test the daemon in a useful way, you'll need virtualization.
 
-There's a `make vmcheck` test suite that requires a `ssh-config` in the
+rpm-ostree has some tests that use the [coreos-assembler/kola framework](https://github.com/coreos/coreos-assembler/blob/94602e26678fd1a8fa3bda37b3b1d980967be2d6/mantle/kola/README-kola-ext.md).
+
+You will want to [build a custom image](https://github.com/coreos/coreos-assembler/blob/94602e26678fd1a8fa3bda37b3b1d980967be2d6/README-devel.md#using-overrides) and use `kola run -E /path/to/rpm-ostree.git ext.rpm-ostree.*'.
+
+There's also a `make vmcheck` test suite that requires a `ssh-config` in the
 source directory toplevel.  You can provision a VM however you want; libvirt
 directly, vagrant, a remote OpenStack/EC2 instance, etc.  If you choose
 vagrant for example, do something like this:
