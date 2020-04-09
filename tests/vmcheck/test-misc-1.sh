@@ -95,25 +95,6 @@ vm_shell_inline > coreos-rootfs.txt << EOF
 EOF
 assert_file_has_content coreos-rootfs.txt '-*i-* /var/tmp/coreos-rootfs'
 
-# Assert that we can do status as non-root
-vm_cmd_as core rpm-ostree status
-echo "ok status doesn't require root"
-
-# StateRoot is only in --verbose
-vm_rpmostree status > status.txt
-assert_not_file_has_content status.txt StateRoot:
-vm_rpmostree status -v > status.txt
-assert_file_has_content status.txt StateRoot:
-echo "ok status text"
-
-# Also check that we can do status as non-root non-active
-vm_cmd runuser -u bin rpm-ostree status
-echo "ok status doesn't require active PAM session"
-
-vm_rpmostree status -b > status.txt
-assert_streq $(grep -F -e 'ostree://' status.txt | wc -l) "1"
-assert_file_has_content status.txt BootedDeployment:
-echo "ok status -b"
 
 # Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
 vm_cmd rpm-ostree reload
