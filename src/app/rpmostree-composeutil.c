@@ -251,6 +251,8 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
     return FALSE;
   if (!treespec_bind_array (treedata, treespec, "repos", NULL, TRUE, error))
     return FALSE;
+  if (!treespec_bind_array (treedata, treespec, "lockfile-repos", NULL, FALSE, error))
+    return FALSE;
   if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))
     return FALSE;
   if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))

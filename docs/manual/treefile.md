@@ -17,7 +17,7 @@ It supports the following parameters:
    secret key must be in the home directory of the building user.  Defaults to
    none.
 
- * `repos` array of strings, mandatory: Names of yum repositories to
+ * `repos`: array of strings, mandatory: Names of yum repositories to
    use, from any files that end in `.repo`, in the same directory as
    the treefile.  `rpm-ostree compose tree` does not use the system
    `/etc/yum.repos.d`, because it's common to want to compose a target
@@ -304,3 +304,9 @@ version of `rpm-ostree`.
 
  * `rojig`: Object, optional.  Sub-keys are `name`, `summary`, `license`,
    and `description`.  Of those, `name` and `license` are mandatory.
+
+ * `lockfile-repos`: array of strings, optional: Semantically similar to
+   `repo`, but these repos will only be used to fetch packages locked
+   via lockfiles. This is useful when locked packages are kept
+   separately from the primary repos and one wants to ensure that
+   rpm-ostree will otherwise not select unlocked packages from them.
