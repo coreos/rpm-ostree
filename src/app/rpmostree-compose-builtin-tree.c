@@ -77,8 +77,8 @@ static gboolean opt_print_only;
 static char *opt_write_commitid_to;
 static char *opt_write_composejson_to;
 static gboolean opt_no_parent;
-static char *opt_write_lockfile;
-static char **opt_read_lockfiles;
+static char *opt_write_lockfile_to;
+static char **opt_lockfiles;
 static char *opt_parent;
 
 /* shared by both install & commit */
@@ -102,8 +102,8 @@ static GOptionEntry install_option_entries[] = {
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
-  { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile, "Write RPM versions information to FILE", "FILE" },
-  { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_read_lockfiles, "Read RPM version information from FILE", "FILE" },
+  { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile_to, "Write lockfile to FILE", "FILE" },
+  { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_lockfiles, "Read lockfile from FILE", "FILE" },
   { NULL }
 };
 
@@ -347,7 +347,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   rpmostree_print_transaction (dnfctx);
 
-  if (opt_write_lockfile)
+  if (opt_write_lockfile_to)
     {
       g_autoptr(GPtrArray) pkgs = rpmostree_context_get_packages (self->corectx);
       g_assert (pkgs);
@@ -355,7 +355,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       g_autoptr(GPtrArray) rpmmd_repos =
         rpmostree_get_enabled_rpmmd_repos (rpmostree_context_get_dnf (self->corectx),
                                            DNF_REPO_ENABLED_PACKAGES);
-      if (!ror_lockfile_write (opt_write_lockfile, pkgs, rpmmd_repos, error))
+      if (!ror_lockfile_write (opt_write_lockfile_to, pkgs, rpmmd_repos, error))
         return FALSE;
     }
 
@@ -697,13 +697,13 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!self->corectx)
     return FALSE;
 
-  if (opt_read_lockfiles)
+  if (opt_lockfiles)
     {
-      g_autoptr(GHashTable) map = ror_lockfile_read (opt_read_lockfiles, error);
+      g_autoptr(GHashTable) map = ror_lockfile_read (opt_lockfiles, error);
       if (!map)
         return FALSE;
       rpmostree_context_set_vlockmap (self->corectx, map);
-      g_print ("Loaded lockfiles:\n  %s\n", g_strjoinv ("\n  ", opt_read_lockfiles));
+      g_print ("Loaded lockfiles:\n  %s\n", g_strjoinv ("\n  ", opt_lockfiles));
     }
 
   const char *arch = dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx));
