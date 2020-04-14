@@ -313,6 +313,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     );
     merge_vecs!(
         repos,
+        lockfile_repos,
         packages,
         bootstrap_packages,
         exclude_packages,
@@ -645,6 +646,9 @@ struct TreeComposeConfig {
     rojig: Option<Rojig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repos: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "lockfile-repos")]
+    lockfile_repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     selinux: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

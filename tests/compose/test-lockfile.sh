@@ -151,3 +151,37 @@ if runcompose \
 fi
 assert_file_has_content err.txt "Couldn't find locked package 'unmatched-pkg-1.0-1.x86_64'"
 echo "ok strict mode locked pkg missing from rpmmd"
+
+# test lockfile-repos, i.e. check that a pkg in a lockfile repo with higher
+# NEVRA isn't picked unless if it's not in the lockfile
+
+# some file shuffling to get a separate yumrepo-locked/ which has foobar-2.0
+build_rpm foobar
+mv yumrepo yumrepo.bak
+build_rpm foobar version 2.0
+mv yumrepo yumrepo-locked
+mv yumrepo.bak yumrepo
+sed -e 's/test-repo/test-lockfile-repo/g' < yumrepo.repo > yumrepo-locked.repo
+sed -e 's/yumrepo/yumrepo-locked/g' < yumrepo-locked.repo > yumrepo-locked.repo.new
+mv yumrepo-locked.repo.new yumrepo-locked.repo
+ln "$PWD/yumrepo-locked.repo" config/yumrepo-locked.repo
+treefile_append "packages" '["foobar"]'
+
+# try first as a regular repo, to make sure it's functional
+treefile_append "repos" '["test-lockfile-repo"]'
+runcompose \
+  --ex-lockfile="$PWD/versions.lock" \
+  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --dry-run "${treefile}" |& tee out.txt
+assert_file_has_content out.txt 'foobar-2.0-1.x86_64'
+
+# ok, now as a lockfile repo
+treefile_remove "repos" '"test-lockfile-repo"'
+treefile_append "lockfile-repos" '["test-lockfile-repo"]'
+runcompose \
+  --ex-lockfile="$PWD/versions.lock" \
+  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --dry-run "${treefile}" |& tee out.txt
+assert_file_has_content out.txt 'foobar-1.0-1.x86_64'
+treefile_remove "packages" '"foobar"'
+echo "ok lockfile-repos"

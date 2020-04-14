@@ -268,6 +268,10 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
     if (val && *val)
       add_canonicalized_string_array (&builder, "repos", NULL, keyfile);
   }
+  { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "lockfile-repos", NULL, NULL);
+    if (val && *val)
+      add_canonicalized_string_array (&builder, "lockfile-repos", NULL, keyfile);
+  }
   add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile);
 
   if (g_key_file_get_boolean (keyfile, "tree", "skip-sanity-check", NULL))
@@ -758,14 +762,40 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     }
   else
     {
+      /* Makes sure we only disable all repos once. This is more for future proofing against
+       * refactors for now since we don't support `lockfile-repos` on the client-side and on
+       * the server-side we always require `repos` anyway. */
+      gboolean disabled_all_repos = FALSE;
+
       /* NB: missing "repos" --> let libdnf figure it out for itself (we're likely doing a
        * client-side compose where we want to use /etc/yum.repos.d/) */
       g_autofree char **enabled_repos = NULL;
       if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
         {
-          disable_all_repos (self);
+          if (!disabled_all_repos)
+            {
+              disable_all_repos (self);
+              disabled_all_repos = TRUE;
+            }
           if (!enable_repos (self, (const char *const*)enabled_repos, error))
             return FALSE;
+        }
+
+      /* only enable lockfile-repos if we actually have a lockfile so we don't even waste
+       * time fetching metadata */
+      if (self->vlockmap)
+        {
+          g_autofree char **enabled_lockfile_repos = NULL;
+          if (g_variant_dict_lookup (self->spec->dict, "lockfile-repos", "^a&s", &enabled_lockfile_repos))
+            {
+              if (!disabled_all_repos)
+                {
+                  disable_all_repos (self);
+                  disabled_all_repos = TRUE;
+                }
+              if (!enable_repos (self, (const char *const*)enabled_lockfile_repos, error))
+                return FALSE;
+            }
         }
     }
 
@@ -2048,6 +2078,21 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         }
       else
         {
+          /* Exclude all the packages in lockfile repos except locked packages. */
+          g_autofree char **lockfile_repos = NULL;
+          g_variant_dict_lookup (self->spec->dict, "lockfile-repos", "^a&s", &lockfile_repos);
+          for (char **it = lockfile_repos; it && *it; it++)
+            {
+              const char *repo = *it;
+              hy_autoquery HyQuery query = hy_query_create (sack);
+              hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo);
+              DnfPackageSet *pset = hy_query_run_set (query);
+              Map *map = dnf_packageset_get_map (pset);
+              map_subtract (map, dnf_packageset_get_map (locked_pset));
+              dnf_sack_add_excludes (sack, pset);
+              dnf_packageset_free (pset);
+            }
+
           /* In relaxed mode, we allow packages to be added or removed without having to
            * edit lockfiles. However, we still want to make sure that if a package does get
            * installed which is in the lockfile, it can only pick that NEVRA. To do this, we
