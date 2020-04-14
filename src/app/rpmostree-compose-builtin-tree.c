@@ -79,6 +79,7 @@ static char *opt_write_composejson_to;
 static gboolean opt_no_parent;
 static char *opt_write_lockfile_to;
 static char **opt_lockfiles;
+static gboolean opt_lockfile_strict;
 static char *opt_parent;
 
 /* shared by both install & commit */
@@ -104,6 +105,7 @@ static GOptionEntry install_option_entries[] = {
   { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
   { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile_to, "Write lockfile to FILE", "FILE" },
   { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_lockfiles, "Read lockfile from FILE", "FILE" },
+  { "ex-lockfile-strict", 0, 0, G_OPTION_ARG_NONE, &opt_lockfile_strict, "With --ex-lockfile, require full match", NULL },
   { NULL }
 };
 
@@ -702,7 +704,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       g_autoptr(GHashTable) map = ror_lockfile_read (opt_lockfiles, error);
       if (!map)
         return FALSE;
-      rpmostree_context_set_vlockmap (self->corectx, map);
+      rpmostree_context_set_vlockmap (self->corectx, map, opt_lockfile_strict);
       g_print ("Loaded lockfiles:\n  %s\n", g_strjoinv ("\n  ", opt_lockfiles));
     }
 

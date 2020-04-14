@@ -58,15 +58,96 @@ EOF
 runcompose \
   --ex-lockfile="$PWD/versions.lock" \
   --ex-lockfile="$PWD/override.lock" \
-  --ex-write-lockfile-to="$PWD/versions.lock" \
+  --ex-write-lockfile-to="$PWD/versions.lock.new" \
   --dry-run "${treefile}" |& tee out.txt
-echo "ok compose with lockfile"
-
 assert_file_has_content out.txt 'test-pkg-1.0-1.x86_64'
 assert_file_has_content out.txt 'test-pkg-common-1.0-1.x86_64'
 assert_file_has_content out.txt 'another-test-pkg-2.0-1.x86_64'
-assert_jq versions.lock \
+assert_jq versions.lock.new \
   '.packages["test-pkg"].evra = "1.0-1.x86_64"' \
   '.packages["test-pkg-common"].evra = "1.0-1.x86_64"' \
   '.packages["another-test-pkg"].evra = "2.0-1.x86_64"'
 echo "ok override"
+
+# sanity-check that we can remove packages in relaxed mode
+treefile_remove "packages" '"another-test-pkg"'
+runcompose \
+  --ex-lockfile="$PWD/versions.lock" \
+  --ex-lockfile="$PWD/override.lock" \
+  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --dry-run "${treefile}" |& tee out.txt
+assert_file_has_content out.txt 'test-pkg-1.0-1.x86_64'
+assert_file_has_content out.txt 'test-pkg-common-1.0-1.x86_64'
+assert_not_file_has_content out.txt 'another-test-pkg'
+echo "ok relaxed mode can remove pkg"
+
+# test strict mode
+
+# sanity-check that refeeding the output lockfile as input satisfies strict mode
+mv versions.lock{.new,}
+runcompose \
+  --ex-lockfile-strict \
+  --ex-lockfile="$PWD/versions.lock" \
+  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --dry-run "${treefile}" |& tee out.txt
+assert_streq \
+  "$(jq .packages versions.lock | sha256sum)" \
+  "$(jq .packages versions.lock.new | sha256sum)"
+echo "ok strict mode sanity check"
+
+# check that trying to install a pkg that's not in the lockfiles fails
+build_rpm unlocked-pkg
+treefile_append "packages" '["unlocked-pkg"]'
+if runcompose \
+    --ex-lockfile-strict \
+    --ex-lockfile="$PWD/versions.lock" \
+    --dry-run "${treefile}" &>err.txt; then
+  fatal "compose unexpectedly succeeded"
+fi
+assert_file_has_content err.txt 'Packages not found: unlocked-pkg'
+echo "ok strict mode no unlocked pkgs"
+
+# check that a locked pkg with unlocked deps causes an error
+build_rpm unlocked-pkg version 2.0 requires unlocked-pkg-dep
+build_rpm unlocked-pkg-dep version 2.0
+# notice we add unlocked-pkg, but not unlocked-pkg-dep
+cat > override.lock <<EOF
+{
+  "packages": {
+    "unlocked-pkg": {
+      "evra": "2.0-1.x86_64"
+    }
+  }
+}
+EOF
+if runcompose \
+    --ex-lockfile-strict \
+    --ex-lockfile="$PWD/versions.lock" \
+    --ex-lockfile="$PWD/override.lock" \
+    --dry-run "${treefile}" &>err.txt; then
+  fatal "compose unexpectedly succeeded"
+fi
+assert_file_has_content err.txt 'Could not depsolve transaction'
+assert_file_has_content err.txt 'unlocked-pkg-dep-2.0-1.x86_64 is filtered out by exclude filtering'
+treefile_remove "packages" '"unlocked-pkg"'
+echo "ok strict mode no unlocked pkg deps"
+
+# check that a locked pkg which isn't actually in the repos causes an error
+cat > override.lock <<EOF
+{
+  "packages": {
+    "unmatched-pkg": {
+      "evra": "1.0-1.x86_64"
+    }
+  }
+}
+EOF
+if runcompose \
+    --ex-lockfile-strict \
+    --ex-lockfile="$PWD/versions.lock" \
+    --ex-lockfile="$PWD/override.lock" \
+    --dry-run "${treefile}" &>err.txt; then
+  fatal "compose unexpectedly succeeded"
+fi
+assert_file_has_content err.txt "Couldn't find locked package 'unmatched-pkg-1.0-1.x86_64'"
+echo "ok strict mode locked pkg missing from rpmmd"

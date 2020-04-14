@@ -56,6 +56,10 @@ else:
   tf['$1'] += $2"
 }
 
+treefile_remove() {
+    treefile_pyedit "tf['$1'].remove($2)"
+}
+
 # for tests that need direct control on rpm-ostree
 export compose_base_argv="\
     --unified-core \

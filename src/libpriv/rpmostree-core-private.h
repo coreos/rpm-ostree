@@ -73,6 +73,7 @@ struct _RpmOstreeContext {
   GHashTable *pkgs_to_replace; /* new gv_nevra --> old gv_nevra */
 
   GHashTable *vlockmap; /* nevra --> repochecksum */
+  gboolean vlockmap_strict;
 
   GLnxTmpDir tmpdir;
 
