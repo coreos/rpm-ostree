@@ -60,9 +60,7 @@ else:
 export compose_base_argv="\
     --unified-core \
     --repo=${repo} \
-    --cachedir=${test_tmpdir}/cache \
-    --ex-lockfile=config/manifest-lock.x86_64.json \
-    --ex-lockfile=config/manifest-lock.overrides.x86_64.yaml"
+    --cachedir=${test_tmpdir}/cache"
 
 # and create this now for tests which only use `compose_base_argv`
 mkdir -p cache
