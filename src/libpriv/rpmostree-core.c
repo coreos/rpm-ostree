@@ -262,7 +262,7 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   add_canonicalized_string_array (&builder, "removed-base-packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "cached-replaced-base-packages", NULL, keyfile);
 
-  /* We allow the "repo" key to be missing. This means that we rely on hif's
+  /* We allow the "repos" key to be missing. This means that we rely on libdnf's
    * normal behaviour (i.e. look at repos in repodir with enabled=1). */
   { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "repos", NULL, NULL);
     if (val && *val)
@@ -646,11 +646,8 @@ enable_one_repo (GPtrArray           *sources,
   return glnx_throw (error, "Unknown rpm-md repository: %s", reponame);
 }
 
-/* Enable all repos in @enabled_repos, and disable everything else */
-static gboolean
-context_repos_enable_only (RpmOstreeContext    *context,
-                           const char    *const *enabled_repos,
-                           GError       **error)
+static void
+disable_all_repos (RpmOstreeContext  *context)
 {
   GPtrArray *sources = dnf_context_get_repos (context->dnfctx);
   for (guint i = 0; i < sources->len; i++)
@@ -658,8 +655,16 @@ context_repos_enable_only (RpmOstreeContext    *context,
       DnfRepo *src = sources->pdata[i];
       dnf_repo_set_enabled (src, DNF_REPO_ENABLED_NONE);
     }
+}
 
-  for (const char *const *iter = enabled_repos; iter && *iter; iter++)
+/* Enable all repos in @repos */
+static gboolean
+enable_repos (RpmOstreeContext  *context,
+              const char        *const *repos,
+              GError           **error)
+{
+  GPtrArray *sources = dnf_context_get_repos (context->dnfctx);
+  for (const char *const *iter = repos; iter && *iter; iter++)
     {
       if (!enable_one_repo (sources, *iter, error))
         return FALSE;
@@ -687,7 +692,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                          GError       **error)
 {
   const char *releasever = NULL;
-  g_autofree char **enabled_repos = NULL;
   g_autofree char **instlangs = NULL;
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
@@ -750,15 +754,19 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* disable all repos in pkgcache-only mode, otherwise obey "repos" key */
   if (self->pkgcache_only)
     {
-      if (!context_repos_enable_only (self, NULL, error))
-        return FALSE;
+      disable_all_repos (self);
     }
   else
     {
-      /* NB: missing "repos" --> let hif figure it out for itself */
+      /* NB: missing "repos" --> let libdnf figure it out for itself (we're likely doing a
+       * client-side compose where we want to use /etc/yum.repos.d/) */
+      g_autofree char **enabled_repos = NULL;
       if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
-        if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
-          return FALSE;
+        {
+          disable_all_repos (self);
+          if (!enable_repos (self, (const char *const*)enabled_repos, error))
+            return FALSE;
+        }
     }
 
   g_autoptr(GPtrArray) repos =
