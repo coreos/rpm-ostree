@@ -2113,6 +2113,11 @@ rpmostree_context_prepare (RpmOstreeContext *self,
           /* remove our locked packages from the exclusion set */
           map_subtract (named_pkgs_map, dnf_packageset_get_map (locked_pset));
           dnf_sack_add_excludes (sack, named_pkgs);
+
+          /* Additionally, we want libsolv to favor locked packages when choosing between
+           * alternatives. */
+          for (guint i = 0; i < locked_pkgs->len; i++)
+            hy_goal_favor (goal, locked_pkgs->pdata[i]);
         }
     }
 
