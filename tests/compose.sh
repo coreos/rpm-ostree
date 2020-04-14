@@ -3,8 +3,7 @@ set -euo pipefail
 
 # freeze on a specific commit for tests for reproducibility and since it should
 # always work to target older treefiles
-# XXX: disable this for now: https://pagure.io/releng/issue/9281
-# FEDORA_COREOS_CONFIG_COMMIT=088fc2dec535aca392958e9c30c17cf19ef4b568
+FEDORA_COREOS_CONFIG_COMMIT=d18bcd20d359ba03e5b47faba25810cb26a0fa32
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
@@ -39,15 +38,14 @@ if [ ! -d compose-cache ]; then
   git clone https://github.com/coreos/fedora-coreos-config config
 
   pushd config
-  # XXX: disable this for now -- see above
-  # git checkout "${FEDORA_COREOS_CONFIG_COMMIT}"
+  git checkout "${FEDORA_COREOS_CONFIG_COMMIT}"
   # we flatten the treefile to make it easier to manipulate in tests (we have
   # lots of tests that check for include logic already)
   rpm-ostree compose tree --print-only manifest.yaml > manifest.json
   rm manifest.yaml
   mv manifests/{passwd,group} .
   rm -rf manifests/
-  popd
+  popd # config
 
   if ! has_compose_privileges; then
     # Unlike cosa, we don't need as much flexibility since we don't e.g. build
@@ -133,9 +131,9 @@ json.dump(y, sys.stdout)' < manifest.json > manifest.json.new
   git add .
   git -c user.email="composetest@localhost.com" -c user.name="composetest" \
     commit -am 'modifications for tests'
-  popd
+  popd # config
 
-  popd
+  popd # compose-cache
 fi
 
 echo "Running ${#tests[*]} tests ${JOBS} at a time"
