@@ -47,7 +47,7 @@ rust: {
 }}
 
 stage("Test") {
-parallel vmcheck: {
+parallel insttests: {
     def nhosts = 6
     def mem = (nhosts * 1024) + 512
     cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
@@ -72,7 +72,10 @@ parallel vmcheck: {
         // really, we just need test deps, but meh...
         shwrap("ci/installdeps.sh")
       }
-      stage("Run") {
+      stage("Kola") {
+        fcosKola(cosaDir: "${env.WORKSPACE}", extraArgs: "ext.*", parallel: nhosts)
+      }
+      stage("vmcheck") {
         try {
           timeout(time: 30, unit: 'MINUTES') {
             shwrap("""
@@ -89,8 +92,8 @@ parallel vmcheck: {
           """)
           archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
         }
+      }
     }
-  }
 },
 compose: {
     def jobs = 5
