@@ -2041,10 +2041,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       const char *pkgname = *iter;
       hy_autoquery HyQuery query = hy_query_create (sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
-      g_autoptr(GPtrArray) pkglist = hy_query_run (query);
-      DnfPackageSet *pset = dnf_packageset_new (sack);
-      for (guint i = 0; i < pkglist->len; i++)
-        dnf_packageset_add (pset, pkglist->pdata[i]);
+      DnfPackageSet *pset = hy_query_run_set (query);
       dnf_sack_add_excludes (sack, pset);
       dnf_packageset_free (pset);
     }
