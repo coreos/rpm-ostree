@@ -645,7 +645,7 @@ vm_ostreeupdate_prepare_reboot() {
     vm_assert_status_jq ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
                         ".deployments[0][\"booted\"]" \
                         ".deployments[0][\"version\"] == \"v1\""
-    vm_rpmostree status > status.txt
+    vm_rpmostree status --verbose > status.txt
     assert_file_has_content_literal status.txt 'AutomaticUpdates: disabled'
     # start it up again since we rebooted
     vm_start_httpd ostree_server $REMOTE_OSTREE 8888
