@@ -65,6 +65,7 @@ parallel insttests: {
           # https://github.com/coreos/rpm-ostree/pull/2015
           dnf --disablerepo=* --enablerepo=f31-coreos-continuous download ostree ostree-libs
           mv *.rpm overrides/rpm
+          coreos-assembler fetch
           coreos-assembler build
         """)
       }
