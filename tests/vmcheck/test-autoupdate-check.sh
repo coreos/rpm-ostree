@@ -59,7 +59,9 @@ vm_rpmostree cleanup -m
 
 # make sure that off means off
 vm_change_update_policy off
-vm_rpmostree status | grep 'AutomaticUpdates: disabled'
+vm_rpmostree status --verbose | grep 'AutomaticUpdates: disabled'
+vm_rpmostree status > status.txt
+assert_not_file_has_content status.txt 'AutomaticUpdates:'
 vm_rpmostree upgrade --trigger-automatic-update-policy > out.txt
 assert_file_has_content out.txt "Automatic updates are not enabled; exiting"
 # check we didn't download any metadata (skip starting dir)
@@ -180,7 +182,7 @@ echo "ok --check/--preview layered pkgs check policy"
 vm_change_update_policy off
 vm_rpmostree cleanup -m
 vm_cmd systemctl stop rpm-ostreed
-vm_rpmostree status | grep 'AutomaticUpdates: disabled'
+vm_rpmostree status --verbose | grep 'AutomaticUpdates: disabled'
 assert_check_preview_rc 0
 assert_output
 echo "ok --check/--preview layered pkgs off policy"

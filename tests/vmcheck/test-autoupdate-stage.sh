@@ -32,7 +32,7 @@ vm_ostreeupdate_create v2
 
 vm_rpmostree cleanup -m
 
-vm_rpmostree status > status.txt
+vm_rpmostree status --verbose > status.txt
 assert_file_has_content status.txt 'AutomaticUpdates: disabled'
 vm_change_update_policy stage
 vm_rpmostree status > status.txt

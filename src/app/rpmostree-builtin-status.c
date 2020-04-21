@@ -295,12 +295,17 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
     g_print ("Warning: failed to query journal: %s\n", local_error->message);
   g_print ("%s%s", get_bold_end (), get_red_end ());
 
-  g_print ("AutomaticUpdates: ");
   if (g_str_equal (policy, "none"))
-    g_print ("disabled\n");
+    {
+      /* https://github.com/coreos/fedora-coreos-tracker/issues/271
+       * https://github.com/coreos/rpm-ostree/issues/1747
+       */
+      if (opt_verbose)
+        g_print ("AutomaticUpdates: disabled");
+    }
   else
     {
-      g_print ("%s", policy);
+      g_print ("AutomaticUpdates: %s", policy);
 
       /* don't try to get info from systemd if we're not on the system bus */
       if (bus_type != G_BUS_TYPE_SYSTEM)
