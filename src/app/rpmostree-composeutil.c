@@ -246,13 +246,13 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
   rpmostree_context_set_treefile (ctx, treefile_rs);
 
   if (!treespec_bind_array (treedata, treespec, "packages", NULL, TRUE, error))
-    return FALSE;
+    return NULL;
   if (!treespec_bind_array (treedata, treespec, "exclude-packages", NULL, FALSE, error))
-    return FALSE;
+    return NULL;
   if (!treespec_bind_array (treedata, treespec, "repos", NULL, FALSE, error))
-    return FALSE;
+    return NULL;
   if (!treespec_bind_array (treedata, treespec, "lockfile-repos", NULL, FALSE, error))
-    return FALSE;
+    return NULL;
 
   /* at least one of `repos` and `lockfile-repos` should be defined */
   if (!json_object_has_member (treedata, "repos") &&
@@ -260,15 +260,15 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
     return glnx_null_throw (error, "Treefile has neither \"repos\" nor \"lockfile-repos\" members");
 
   if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))
-    return FALSE;
+    return NULL;
   if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))
-    return FALSE;
+    return NULL;
   if (!treespec_bind_array (treedata, treespec, "install-langs", "instlangs", FALSE, error))
-    return FALSE;
+    return NULL;
   { const char *releasever;
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "releasever",
                                                                 &releasever, error))
-      return FALSE;
+      return NULL;
     if (releasever)
       g_key_file_set_string (treespec, "tree", "releasever", releasever);
   }
@@ -276,7 +276,7 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
   if (bind_selinux)
     {
       if (!treespec_bind_bool (treedata, treespec, "selinux", TRUE, error))
-        return FALSE;
+        return NULL;
     }
   else
     {
@@ -288,12 +288,12 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
 
   const char *input_ref = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "ref", &input_ref, error))
-    return FALSE;
+    return NULL;
   if (input_ref)
     {
       g_autofree char *ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
       if (!ref)
-        return FALSE;
+        return NULL;
       g_key_file_set_string (treespec, "tree", "ref", ref);
     }
 
