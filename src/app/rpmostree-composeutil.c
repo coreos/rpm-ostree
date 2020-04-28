@@ -249,10 +249,16 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
     return FALSE;
   if (!treespec_bind_array (treedata, treespec, "exclude-packages", NULL, FALSE, error))
     return FALSE;
-  if (!treespec_bind_array (treedata, treespec, "repos", NULL, TRUE, error))
+  if (!treespec_bind_array (treedata, treespec, "repos", NULL, FALSE, error))
     return FALSE;
   if (!treespec_bind_array (treedata, treespec, "lockfile-repos", NULL, FALSE, error))
     return FALSE;
+
+  /* at least one of `repos` and `lockfile-repos` should be defined */
+  if (!json_object_has_member (treedata, "repos") &&
+      !json_object_has_member (treedata, "lockfile-repos"))
+    return glnx_null_throw (error, "Treefile has neither \"repos\" nor \"lockfile-repos\" members");
+
   if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))
     return FALSE;
   if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))
