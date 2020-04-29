@@ -51,9 +51,6 @@ vm_assert_status_jq \
   '.deployments[0]["layered-commit-meta"]|not'
 echo "ok empty pkg arrays, and commit meta correct in status json"
 
-vm_rpmostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
-assert_file_has_content_literal jsonpath.txt 'true'
-echo "ok jsonpath"
 
 vm_rpmostree --version > version.yaml
 python3 -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
@@ -67,12 +64,6 @@ while read command; do
     fi
 done < commands
 echo "ok error on unknown command options"
-
-if vm_rpmostree nosuchcommand --nosuchoption 2>err.txt; then
-    assert_not_reached "Expected an error for nosuchcommand"
-fi
-assert_file_has_content err.txt 'Unknown.*command'
-echo "ok error on unknown command"
 
 # Make sure we can't do various operations as non-root
 vm_build_rpm foo
@@ -107,20 +98,6 @@ if [ -d "${wrapdir}" ]; then
 else
     echo "Missing ${wrapdir}; cliwrap not enabled"
 fi
-
-# Test coreos-rootfs
-vm_shell_inline > coreos-rootfs.txt << EOF
-    mkdir /var/tmp/coreos-rootfs
-    rpm-ostree coreos-rootfs seal /var/tmp/coreos-rootfs
-    lsattr -d /var/tmp/coreos-rootfs
-    rpm-ostree coreos-rootfs seal /var/tmp/coreos-rootfs
-EOF
-assert_file_has_content coreos-rootfs.txt '-*i-* /var/tmp/coreos-rootfs'
-
-
-# Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
-vm_cmd rpm-ostree reload
-echo "ok reload"
 
 stateroot=$(vm_get_booted_stateroot)
 ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
