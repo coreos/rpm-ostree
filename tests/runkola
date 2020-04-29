@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+# Use with `cosa build-fast`, e.g.:
+# cosa build-fast && ./tests/runkola
+top=$(git rev-parse --show-toplevel)
+cd ${top}
+image=$(ls fastbuild-*-qemu.qcow2 | head -1)
+if [ -z "${image}" ]; then 
+    echo "Must run on image from cosa build-fast"
+    exit 1
+fi
+if [ -z "$@" ]; then
+    set -- 'ext.*' "$@"
+fi
+set -x
+exec kola run -p qemu --qemu-image "${image}" -E ${top} "$@"
