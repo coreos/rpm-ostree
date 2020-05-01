@@ -3,6 +3,10 @@ name = "rpmostree-rust"
 version = "0.1.0"
 authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
 edition = "2018"
+# Most of our Rust code is actually MIT, but our C/C++ is LGPL and
+# we also directly depend on the LGPLv2 systemd crate.
+# This is "license of the whole" as opposed "license of the individual code files".
+license = "LGPL-2.1-or-later"
 # See https://rust-lang.github.io/rfcs/2495-min-rust-version.html
 # Usually, we try to keep this to no newer than current RHEL8 rust-toolset version.
 # You can find the current versions from here:

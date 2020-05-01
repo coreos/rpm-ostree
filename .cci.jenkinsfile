@@ -48,6 +48,12 @@ unit: {
       """)
   }
 },
+license: {
+  cosaPod(buildroot: true, runAsUser: 0, memory: "1Gi", cpu: "2") {
+      checkout scm
+      shwrap("./ci/license-check.sh")
+  }
+},
 clang: {
   // Build with clang/clang++
   def n = 5
