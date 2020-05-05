@@ -40,30 +40,9 @@ set -x
 # vm_rpmostree reload
 # echo "ok remote not found"
 
-# make sure that package-related entries are always present,
-# even when they're empty
-vm_assert_status_jq \
-  '.deployments[0]["packages"]' \
-  '.deployments[0]["requested-packages"]' \
-  '.deployments[0]["requested-local-packages"]' \
-  '.deployments[0]["base-removals"]' \
-  '.deployments[0]["requested-base-removals"]' \
-  '.deployments[0]["layered-commit-meta"]|not'
-echo "ok empty pkg arrays, and commit meta correct in status json"
-
-
 vm_rpmostree --version > version.yaml
 python3 -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
 echo "ok yaml version"
-
-# Ensure we return an error when passing a wrong option.
-vm_rpmostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
-while read command; do
-    if vm_rpmostree $command --n0t-3xisting-0ption &>/dev/null; then
-        assert_not_reached "command $command --n0t-3xisting-0ption was successful"
-    fi
-done < commands
-echo "ok error on unknown command options"
 
 # Make sure we can't do various operations as non-root
 vm_build_rpm foo
@@ -98,16 +77,6 @@ if [ -d "${wrapdir}" ]; then
 else
     echo "Missing ${wrapdir}; cliwrap not enabled"
 fi
-
-stateroot=$(vm_get_booted_stateroot)
-ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
-# related: https://github.com/coreos/fedora-coreos-config/issues/194
-vm_cmd env LANG=C.UTF-8 gdbus call \
-  --system --dest org.projectatomic.rpmostree1 \
-  --object-path /org/projectatomic/rpmostree1/fedora_coreos \
-  --method org.projectatomic.rpmostree1.OSExperimental.Moo true > moo.txt
-assert_file_has_content moo.txt '🐄'
-echo "ok moo"
 
 vm_rpmostree usroverlay
 vm_cmd test -w /usr/bin
