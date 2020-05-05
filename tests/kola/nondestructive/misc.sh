@@ -1,8 +1,30 @@
 #!/bin/bash
 set -euo pipefail
 
-. ${KOLA_EXT_DATA}/libtest-core.sh
+. ${KOLA_EXT_DATA}/libtest.sh
 cd $(mktemp -d)
+
+# make sure that package-related entries are always present,
+# even when they're empty
+rpm-ostree status --json > status.json
+assert_jq status.json \
+  '.deployments[0]["packages"]' \
+  '.deployments[0]["requested-packages"]' \
+  '.deployments[0]["requested-local-packages"]' \
+  '.deployments[0]["base-removals"]' \
+  '.deployments[0]["requested-base-removals"]' \
+  '.deployments[0]["layered-commit-meta"]|not'
+rm status.json
+echo "ok empty pkg arrays, and commit meta correct in status json"
+
+# Ensure we return an error when passing a wrong option.
+rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands.txt
+while read cmd; do
+    if rpm-ostree ${cmd} --n0t-3xisting-0ption &>/dev/null; then
+        assert_not_reached "command ${cmd} --n0t-3xisting-0ption was successful"
+    fi
+done < commands.txt
+echo "ok error on unknown command options"
 
 rpm-ostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
 assert_file_has_content_literal jsonpath.txt 'true'
@@ -33,6 +55,19 @@ if rpm-ostree nosuchcommand --nosuchoption 2>err.txt; then
 fi
 assert_file_has_content err.txt 'Unknown.*command'
 echo "ok error on unknown command"
+
+stateroot=$(dirname $(ls /ostree/deploy/*/var))
+ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
+# related: https://github.com/coreos/fedora-coreos-config/issues/194
+(export LANG=C.utf8
+ # And for some reason this one is set in kola runs but not interactive shells
+ unset LC_ALL
+ gdbus call \
+  --system --dest org.projectatomic.rpmostree1 \
+  --object-path /org/projectatomic/rpmostree1/fedora_coreos \
+  --method org.projectatomic.rpmostree1.OSExperimental.Moo true > moo.txt
+ assert_file_has_content moo.txt '🐄')
+echo "ok moo"
 
 tmprootfs=$(mktemp -d -p /var/tmp)
 rpm-ostree coreos-rootfs seal "${tmprootfs}"
