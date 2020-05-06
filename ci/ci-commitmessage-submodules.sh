@@ -16,9 +16,8 @@ dn=$(dirname $0)
 # It's very common for people to accidentally change submodules, and having this
 # requirement is a small hurdle to pass.
 
-# If passed the commit, use that. Otherwise, if running under PAPR, use the
-# branch/PR HEAD actually being tested rather than the merge sha
-HEAD=${1:-${PAPR_COMMIT:-HEAD}}
+# If passed the commit, use that. Otherwise, just use HEAD.
+HEAD=${1:-HEAD}
 
 tmpd=$(mktemp -d)
 touch ${tmpd}/.tmpdir
@@ -43,6 +42,18 @@ cp -a ${gitdir} ${tmpd}/workdir
 cd ${tmpd}/workdir
 git log --pretty=oneline origin/master..$HEAD | while read logline; do
     commit=$(echo ${logline} | cut -f 1 -d ' ')
+    # For merge commits, just check that they're empty (i.e. no conflict
+    # resolution was needed). Otherwise, let's just error out. Conflicts should
+    # be resolved by rebasing the PR.
+    # https://stackoverflow.com/questions/3824050#comment82244548_13956422
+    if [ "$(git rev-list --no-walk --count --merges ${commit})" -ne 0 ]; then
+      if [ -n "$(git diff-tree ${commit})" ]; then
+        echo "error: non-empty git merge: resolve conflicts by rebasing!"
+        exit 1
+      fi
+      echo "Commit ${commit} is an empty merge commit; ignoring..."
+      continue
+    fi
     git diff --name-only ${commit}^..${commit} > ${tmpd}/diff.txt
     git log -1 ${commit} > ${tmpd}/log.txt
     echo "Validating commit for submodules: $commit"
