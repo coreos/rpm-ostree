@@ -20,12 +20,14 @@ treefile_append "packages" '["foobar"]'
 cat > config/documentation.yaml <<'EOF'
 documentation: true
 EOF
-cat > config/recommends.yaml <<'EOF'
+cat > config/other.yaml <<'EOF'
 recommends: true
+readonly-executables: true
 EOF
-treefile_append "include" '["documentation.yaml", "recommends.yaml"]'
-treefile_del 'recommends'
-treefile_del 'documentation'
+treefile_append "include" '["documentation.yaml", "other.yaml"]'
+for x in 'recommends' 'documentation' 'readonly-executables'; do
+  treefile_del "$x"
+done
 
 # Test blacklists
 treefile_append "exclude-packages" '["somenonexistent-package", "gnome-shell"]'
@@ -168,6 +170,11 @@ done
 ostree --repo=${repo} cat ${treeref} /usr/bin/ls > ls.txt
 assert_file_has_content ls.txt '^sweet new ls binary$'
 echo "ok layers"
+
+# Test readonly-executables
+ostree --repo=${repo} ls ${treeref} /usr/bin/bash > ls.txt
+assert_file_has_content ls.txt '^-00555 .*/usr/bin/bash$'
+echo "ok readonly-executables"
 
 # Check that add-files with bad paths are rejected
 treefile_append "add-files" '[["foo.txt", "/var/lib/foo.txt"]]'

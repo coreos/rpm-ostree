@@ -297,6 +297,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         container,
         recommends,
         cliwrap,
+        readonly_executables,
         documentation,
         boot_location,
         tmp_is_dir,
@@ -691,6 +692,9 @@ struct TreeComposeConfig {
     initramfs_args: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cliwrap: Option<bool>,
+    #[serde(rename = "readonly-executables")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    readonly_executables: Option<bool>,
 
     // Tree layout options
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1377,6 +1381,12 @@ mod ffi {
     pub extern "C" fn ror_treefile_get_cliwrap(tf: *mut Treefile) -> bool {
         let tf = ref_from_raw_ptr(tf);
         tf.parsed.cliwrap.unwrap_or(false)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_readonly_executables(tf: *mut Treefile) -> bool {
+        let tf = ref_from_raw_ptr(tf);
+        tf.parsed.readonly_executables.unwrap_or(false)
     }
 
     #[no_mangle]

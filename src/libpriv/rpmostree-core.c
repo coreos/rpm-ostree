@@ -2541,6 +2541,9 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
       flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
   }
 
+  if (self->treefile_rs && ror_treefile_get_readonly_executables (self->treefile_rs))
+    flags |= RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES;
+
   /* TODO - tweak the unpacker flags for containers */
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autoptr(RpmOstreeImporter) unpacker =
