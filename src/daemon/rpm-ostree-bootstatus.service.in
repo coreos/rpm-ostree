@@ -1,5 +1,5 @@
 [Unit]
-Description=Log RPM-OSTree Booted Deployment Status To Journal
+Description=Log rpm-ostree Booted Deployment Status To Journal
 Documentation=man:rpm-ostree(1)
 ConditionPathExists=/run/ostree-booted
 

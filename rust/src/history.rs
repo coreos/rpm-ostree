@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-//! High-level interface to retrieve host RPM-OSTree history. The two main C
+//! High-level interface to retrieve host rpm-ostree history. The two main C
 //! APIs are `ror_history_ctx_new()` which creates a context object
 //! (`HistoryCtx`), and `ror_history_ctx_next()`, which iterates through history
 //! entries (`HistoryEntry`).
@@ -38,7 +38,7 @@
 //!   - starting from the most recent journal entry, go backwards searching for
 //!     OSTree boot messages
 //!   - when a boot message is found, keep going backwards to find its matching
-//!     RPM-OSTree deploy message by comparing the two messages' deployment path
+//!     rpm-ostree deploy message by comparing the two messages' deployment path
 //!     fields
 //!   - when a match is found, return a `HistoryEntry`
 //!   - start up the search again for the next boot message
@@ -94,7 +94,7 @@ struct BootMarker {
     node: DevIno,
 }
 
-/// Marker for RPM-OSTree deployment messages.
+/// Marker for rpm-ostree deployment messages.
 #[derive(Clone)]
 struct DeploymentMarker {
     timestamp: u64,
@@ -281,7 +281,7 @@ impl HistoryCtx {
         Ok(None)
     }
 
-    /// Creates a marker from an RPM-OSTree deploy message. Uses the `DEPLOYMENT_TIMESTAMP`
+    /// Creates a marker from an rpm-ostree deploy message. Uses the `DEPLOYMENT_TIMESTAMP`
     /// in the message as the deploy time. This matches the history gv filename for that
     /// deployment. Returns None if record is incomplete.
     fn deployment_record_to_marker(&self, record: &JournalRecord) -> Result<Option<Marker>> {
@@ -323,7 +323,7 @@ impl HistoryCtx {
         })
     }
 
-    /// Goes to the next OSTree boot or RPM-OSTree deploy msg in the journal, creates a
+    /// Goes to the next OSTree boot or rpm-ostree deploy msg in the journal, creates a
     /// marker for it, and returns it.
     fn find_next_marker(&mut self) -> Result<Option<Marker>> {
         self.set_search_mode(JournalSearchMode::BootAndDeploymentMsgs)?;
