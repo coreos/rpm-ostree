@@ -1,5 +1,5 @@
 [Unit]
-Description=RPM-OSTree System Management Daemon
+Description=rpm-ostree System Management Daemon
 Documentation=man:rpm-ostree(1)
 ConditionPathExists=/ostree
 

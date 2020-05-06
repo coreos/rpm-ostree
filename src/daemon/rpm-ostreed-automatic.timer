@@ -1,5 +1,5 @@
 [Unit]
-Description=RPM-OSTree Automatic Update Trigger
+Description=rpm-ostree Automatic Update Trigger
 Documentation=man:rpm-ostree(1) man:rpm-ostreed.conf(5)
 ConditionPathExists=/run/ostree-booted
 

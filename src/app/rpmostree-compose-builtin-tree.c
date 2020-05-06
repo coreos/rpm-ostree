@@ -793,7 +793,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   *out_changed = FALSE;
 
   /* Print version number */
-  g_printerr ("RPM-OSTree Version: %s\n", PACKAGE_VERSION);
+  g_printerr ("rpm-ostree version: %s\n", PACKAGE_VERSION);
 
   /* Without specifying --cachedir we'd just toss the data we download, so let's
    * catch that.

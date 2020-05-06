@@ -44,7 +44,7 @@ Boston, MA 02111-1307, USA.
 
   <refnamediv>
     <refname>rpm-ostreed.conf</refname>
-    <refpurpose>RPM-OSTree daemon configuration file</refpurpose>
+    <refpurpose>rpm-ostree daemon configuration file</refpurpose>
   </refnamediv>
 
   <refsynopsisdiv>
@@ -55,7 +55,7 @@ Boston, MA 02111-1307, USA.
     <title>Description</title>
 
     <para>
-      This file configures the RPM-OSTree daemon.
+      This file configures the rpm-ostree daemon.
     </para>
   </refsect1>
 

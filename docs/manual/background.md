@@ -24,7 +24,7 @@ to fall cleanly into one of two camps: package-based or image-based.
  * - Often paired with a separate application mechanism, but misses out on things that aren't apps
  * - Administrators still need to know content inside
 
-## How RPM-OSTree provides a middle ground
+## How rpm-ostree provides a middle ground
 
 rpm-ostree in its default mode feels more like image replication, but
 the underlying architecture allows a lot of package-like flexibility.
