@@ -100,6 +100,11 @@ It supports the following parameters:
 
     The default is `false` out of conservatism; you likely want to enable this.
 
+ * `readonly-executables`: boolean, optional.  Defaults to `false` (for backcompat).
+    If enabled, rpm-ostree will remove the write bit from all executables.
+
+    The default is `false` out of conservatism; you likely want to enable this.
+
  * `remove-files`: Array of files to delete from the generated tree.
 
  * `remove-from-packages`: Array, optional: Delete from specified packages

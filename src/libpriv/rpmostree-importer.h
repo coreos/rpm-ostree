@@ -40,10 +40,12 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeImporter, g_object_unref)
  * RpmOstreeImporterFlags:
  * @RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS: Skip files/directories outside of supported ostree-compliant paths rather than erroring out
  * @RPMOSTREE_IMPORTER_FLAGS_NODOCS: Skip documentation files
+ * @RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES: Make executable files readonly
  */
 typedef enum {
   RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS =  (1 << 0),
   RPMOSTREE_IMPORTER_FLAGS_NODOCS =  (1 << 1),
+  RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES =  (1 << 2),
 } RpmOstreeImporterFlags;
 
 RpmOstreeImporter*

@@ -719,6 +719,18 @@ compose_filter_cb (OstreeRepo         *repo,
 
   ensure_directories_user_writable (file_info);
 
+  /* See similar code in `ostree commit` - https://github.com/ostreedev/ostree/pull/2091/commits/7392259332e00c33ed45b904deabde08f4da3e3c */
+  if ((self->flags & RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES) > 0 &&
+      g_file_info_get_file_type (file_info) == G_FILE_TYPE_REGULAR)
+    {
+      guint32 mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
+      if (mode & (S_IXUSR | S_IXGRP | S_IXOTH))
+        {
+          mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
+          g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
+        }
+    }
+
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
