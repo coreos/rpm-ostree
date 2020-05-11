@@ -36,7 +36,9 @@ librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libp
 librpmostree_1_la_LDFLAGS = $(AM_LDFLAGS) -version-number 1:0:0 -Bsymbolic-functions
 librpmostree_1_la_LIBADD =  $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la $(librpmostree_rust_path)
 
-# bundled libdnf
+# The g-ir-scanner creates a stub executable (to help introspect type information) which
+# links to our stuff. We want to make sure it picks up our fresh libdnf and not a possibly
+# stale one from a previously installed rpm-ostree's bundled libdnf.
 INTROSPECTION_SCANNER_ENV = env LD_LIBRARY_PATH=$(top_builddir)/libdnf-build/libdnf
 
 # XXX: work around clang being passed -fstack-clash-protection which it doesn't understand
