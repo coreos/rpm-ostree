@@ -44,8 +44,9 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 # Keep this in sync with the AM_CFLAGS in libostree; see
 # that project for more information about e.g. -fno-strict-aliasing
 AM_CFLAGS += -std=gnu11 -fno-strict-aliasing $(WARN_CFLAGS)
-# bundled libdnf
-AM_LDFLAGS += "-Wl,-rpath=$(libdir)/rpm-ostree"
+# bundled libdnf; --enable-new-dtags emits DT_RUNPATH instead of deprecated DT_RPATH, which
+# can't be overridden by LD_LIBRARY_PATH; which is useful for uninstalled runs/tests
+AM_LDFLAGS += "-Wl,-rpath=$(libdir)/rpm-ostree,--enable-new-dtags"
 
 EXTRA_DIST += autogen.sh COPYING
 
