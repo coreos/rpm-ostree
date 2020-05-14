@@ -131,8 +131,9 @@ AS_IF([pkg-config --atleast-version=4.14.2 rpm], [], [AC_MSG_ERROR([librpm 4.14.
 
 dnl We don't *actually* use this ourself, but librepo does, and libdnf gets confused
 dnl if librepo doesn't support it.
+have_zchunk=no
 AS_IF([pkg-config --exists zck],
-  [AC_DEFINE([HAVE_ZCHUNK], 1, [Define if we have zchunk])])
+  [have_zchunk=yes; AC_DEFINE([HAVE_ZCHUNK], 1, [Define if we have zchunk])])
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
@@ -258,6 +259,9 @@ dnl And propagate the release/debug type to cmake
 cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
 if test ${debug_release} = debug; then
   cmake_args="-DCMAKE_BUILD_TYPE=Debug"
+fi
+if test x${have_zchunk} = xno; then
+  cmake_args="${cmake_args} -DWITH_ZCHUNK:BOOL=0"
 fi
 export cmake_args
 
