@@ -5,24 +5,34 @@ to fall cleanly into one of two camps: package-based or image-based.
 
 ### Package system benefits and drawbacks
 
- * + Highly dynamic, fast access to wide array of software
- * + State management in `/etc` and `/var` is well understood 
- * + Can swap between major/minor system states (`apt-get upgrade` is similar to `apt-get dist-upgrade`)
- * + Generally supports any filesystem or partition layout
- * - As package set grows, testing becomes combinatorially more expensive
- * - Live system mutation, no rollbacks
+Benefits
+
+ * Highly dynamic, fast access to wide array of software
+ * State management in `/etc` and `/var` is well understood
+ * Can swap between major/minor system states (`apt-get upgrade` is similar to `apt-get dist-upgrade`)
+ * Generally supports any filesystem or partition layout
+
+Drawbacks
+
+ * As package set grows, testing becomes combinatorially more expensive
+ * Live system mutation, no rollbacks
 
 ### Image benefits and drawbacks
 
- * + Ensures all users are running a known state
- * + Rollback supported
- * + Easier to verify system integrity
- * - Many image systems have a read-only `/etc`, and writable partitions elsewhere
- * - Must reboot for updates
- * - Usually operate at block level, so require fixed partition layout and filesystem
- * - Many use a "dual root" mode which wastes space and is inflexible
- * - Often paired with a separate application mechanism, but misses out on things that aren't apps
- * - Administrators still need to know content inside
+Benefits
+
+ * Ensures all users are running a known state
+ * Rollback supported
+ * Easier to verify system integrity
+
+Drawbacks
+
+ * Many image systems have a read-only `/etc`, and writable partitions elsewhere
+ * Must reboot for updates
+ * Usually operate at block level, so require fixed partition layout and filesystem
+ * Many use a "dual root" mode which wastes space and is inflexible
+ * Often paired with a separate application mechanism, but misses out on things that aren't apps
+ * Administrators still need to know content inside
 
 ## How rpm-ostree provides a middle ground
 
