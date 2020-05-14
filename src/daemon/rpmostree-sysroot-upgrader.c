@@ -416,11 +416,11 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
                                      g_variant_new_variant (g_variant_new_string (dir_to_pull)));
             g_variant_builder_add (optbuilder, "{s@v}", "flags",
                                    g_variant_new_variant (g_variant_new_int32 (flags)));
-            /* Add the timestamp check, unless disabled. The option was added in
-             * libostree v2017.11 */
+            /* Add the timestamp check, unless disabled. We used to use `timestamp-check`
+             * here but now use `timestamp-check-from-rev`, added in libostree v2020.4. */
             if (!allow_older)
-              g_variant_builder_add (optbuilder, "{s@v}", "timestamp-check",
-                                     g_variant_new_variant (g_variant_new_boolean (TRUE)));
+              g_variant_builder_add (optbuilder, "{s@v}", "timestamp-check-from-rev",
+                                     g_variant_new_variant (g_variant_new_string (self->base_revision)));
             g_variant_builder_add (optbuilder, "{s@v}", "refs",
                                    g_variant_new_variant (g_variant_new_strv (
                                                                               (const char *const *)&origin_ref, 1)));
