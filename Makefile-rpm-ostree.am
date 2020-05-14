@@ -77,13 +77,6 @@ rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.l
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
 
-install-bin-hook:
-	mv $(DESTDIR)$(bindir)/rpm-ostree $(DESTDIR)$(bindir)/$(primaryname)
-	ln -sf $(primaryname) $(DESTDIR)$(bindir)/rpm-ostree
-if BUILDOPT_NEW_NAME
-INSTALL_DATA_HOOKS += install-bin-hook
-endif
-
 # Propagate automake verbose mode
 cargo_build = $(cargo) build $(if $(subst 0,,$(V)),--verbose,)
 
