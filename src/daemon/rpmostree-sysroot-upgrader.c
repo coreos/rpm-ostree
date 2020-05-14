@@ -432,7 +432,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
             g_autoptr(GVariant) opts = g_variant_ref_sink (g_variant_builder_end (optbuilder));
             if (!ostree_repo_pull_with_options (self->repo, origin_remote, opts, progress,
                                                 cancellable, error))
-              return FALSE;
+              return glnx_prefix_error (error, "While pulling %s", override_commit ?: origin_ref);
 
             if (progress)
               ostree_async_progress_finish (progress);
@@ -503,7 +503,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         {
           if (!ostree_sysroot_upgrader_check_timestamps (self->repo, self->base_revision,
                                                          new_base_rev, error))
-            return FALSE;
+            return glnx_prefix_error (error, "While checking against deployment timestamp");
         }
 
       g_free (self->base_revision);
