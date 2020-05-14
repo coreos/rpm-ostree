@@ -102,13 +102,6 @@ libexec_SCRIPTS = rpm-ostreed
 rpm-ostreed: $(srcdir)/src/daemon/rpm-ostreed-stub.sh.in Makefile
 	$(SED_SUBST) $< > $@.tmp && mv $@.tmp $@
 
-install-daemon-altname-hook:
-	mv $(DESTDIR)$(systemdunitdir)/rpm-ostreed.service $(DESTDIR)$(systemdunitdir)/$(primaryname)d.service
-	ln -sf $(primaryname)d.service $(DESTDIR)$(systemdunitdir)/rpm-ostreed.service
-if BUILDOPT_NEW_NAME
-INSTALL_DATA_HOOKS += install-daemon-altname-hook
-endif
-
 # We don't yet rename the DBus related items
 service_in_files = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.service.in
 service_DATA     = $(service_in_files:.service.in=.service)
