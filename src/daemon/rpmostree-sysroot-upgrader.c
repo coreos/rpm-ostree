@@ -419,8 +419,19 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
             /* Add the timestamp check, unless disabled. The option was added in
              * libostree v2017.11 */
             if (!allow_older)
-              g_variant_builder_add (optbuilder, "{s@v}", "timestamp-check",
-                                     g_variant_new_variant (g_variant_new_boolean (TRUE)));
+              {
+                g_variant_builder_add (optbuilder, "{s@v}", "timestamp-check",
+                                       g_variant_new_variant (g_variant_new_boolean (TRUE)));
+                /* XXX: Short-term hack until we switch to timestamp-check-from-rev:
+                 * https://github.com/coreos/rpm-ostree/pull/2094. This ensures that
+                 * timestamp-check is comparing against our deployment csum's timestamp, not
+                 * whatever the ref is pointing to.
+                 */
+                if (override_commit &&
+                    !ostree_repo_set_ref_immediate (self->repo, origin_remote, origin_ref,
+                                                    self->base_revision, cancellable, error))
+                  return FALSE;
+              }
             g_variant_builder_add (optbuilder, "{s@v}", "refs",
                                    g_variant_new_variant (g_variant_new_strv (
                                                                               (const char *const *)&origin_ref, 1)));
