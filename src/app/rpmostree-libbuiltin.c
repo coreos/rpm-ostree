@@ -46,6 +46,50 @@ rpmostree_print_kv (const char *key,
 }
 
 void
+rpmostree_print_kv_newline (const char *key,
+			    guint	maxkeylen,
+			    const char *value)
+{
+  const char delim[2] = ", ";
+  char *token;
+  int len = strlen (value);
+  token = strtok (value, delim);
+  
+  guint current_width = 0;
+  const guint area_width = get_textarea_width (maxkeylen);
+  
+  printf ("  %*s%s ", maxkeylen, key, strlen (key) ? ":" : " ");
+
+  while ( token != NULL ) 
+   {
+      const guint entry_width = strlen (token);
+
+      /* first print */
+      if (current_width == 0)
+        {
+          g_print ("%s", token);
+          current_width += entry_width;
+        }
+      else if ((current_width + entry_width + 1) <= area_width) /* +1 for space separator */
+        {
+          g_print (" %s", token);
+          current_width += (entry_width + 1);
+        }
+      else
+        {
+          /* always print at least one per line, even if we overflow */
+          putc ('\n', stdout);
+          rpmostree_print_kv_no_newline ("", maxkeylen, token);
+          current_width = entry_width;
+        }
+ 
+      token = strtok (NULL, delim);
+   }
+
+  putc ('\n', stdout);
+}
+
+void
 rpmostree_usage_error (GOptionContext  *context,
                        const char      *message,
                        GError         **error)
