@@ -1,3 +1,14 @@
+## Using higher level build tooling
+
+Originally `rpm-ostree compose tree` was intended to be a "high level" tool,
+but that didn't work out very well in practice.  Today, you should consider
+it as a low level tool.  For example, most people that want to generate
+OSTree commits *also* want to generate bootable disk images, and rpm-ostree
+has nothing to do with that.
+
+One example higher level tool that takes care of both OSTree commit generation
+and bootable disk images is [coreos-assembler](https://github.com/coreos/coreos-assembler).
+
 ## Background on managing an OSTree repository
 
 Before you get started, it's recommended to read (at least) these two sections
@@ -59,7 +70,7 @@ If you're doing this multiple times, it's strongly recommended to create a cache
 directory:
 
 ```
-# rpm-ostree compose tree --cachedir=cache --repo=/srv/centos-atomic/build-repo sig-atomic-buildscripts/centos-atomic-host.json
+# rpm-ostree compose tree --unified-core --cachedir=cache --repo=/srv/centos-atomic/build-repo sig-atomic-buildscripts/centos-atomic-host.json
 ```
 
 This will download RPMs from the referenced repos, and commit the result to the

@@ -343,6 +343,17 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
       rpmostree_context_set_repos (self->corectx, self->build_repo, self->pkgcache_repo);
     }
+  else
+    {
+      /* Secret environment variable for those desperate */
+      if (!g_getenv ("RPM_OSTREE_I_KNOW_NON_UNIFIED_CORE_IS_DEPRECATED"))
+        {
+          g_printerr ("\nNOTICE: Running rpm-ostree compose tree without --unified-core is deprecated.\n"
+                      " Please add --unified-core to the command line and ensure your content\n"
+                      " works with it.  For more information, see https://github.com/coreos/rpm-ostree/issues/729\n\n");
+          g_usleep (G_USEC_PER_SEC * 5);
+        }
+    }
 
   if (!rpmostree_context_prepare (self->corectx, cancellable, error))
     return FALSE;
