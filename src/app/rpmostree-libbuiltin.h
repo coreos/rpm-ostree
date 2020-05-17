@@ -48,7 +48,11 @@ void
 rpmostree_print_kv_no_newline (const char *key,
                                guint       maxkeylen,
                                const char *value);
-
+void
+rpmostree_print_kv_newline (const char *key,
+                            guint       maxkeylen,
+                            const char *value,
+			    guint	width);
 void
 rpmostree_print_kv (const char *key,
                     guint       maxkeylen,

@@ -48,7 +48,8 @@ rpmostree_print_kv (const char *key,
 void
 rpmostree_print_kv_newline (const char *key,
 			    guint	maxkeylen,
-			    const char *value)
+			    const char *value,
+			    guint	width)
 {
   const char delim[2] = ", ";
   char *token;
@@ -56,7 +57,7 @@ rpmostree_print_kv_newline (const char *key,
   token = strtok (value, delim);
   
   guint current_width = 0;
-  const guint area_width = get_textarea_width (maxkeylen);
+  const guint area_width = width;
   
   printf ("  %*s%s ", maxkeylen, key, strlen (key) ? ":" : " ");
 
