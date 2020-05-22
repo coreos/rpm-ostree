@@ -47,9 +47,9 @@ rpmostree_print_kv (const char *key,
 
 void
 rpmostree_print_kv_newline (const char *key,
-			    guint	maxkeylen,
-			    const char *value,
-			    guint	width)
+                            guint       maxkeylen,
+                            const char *value,
+                            guint       width)
 {
   const char delim[2] = ", ";
   char *token;

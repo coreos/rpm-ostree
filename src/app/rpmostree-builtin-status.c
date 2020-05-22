@@ -752,7 +752,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         }
 
       if (str->len)
-	rpmostree_print_kv_newline ("RemovedBasePackages", max_key_len, str->str, get_textarea_width (max_key_len));
+        rpmostree_print_kv_newline ("RemovedBasePackages", max_key_len, str->str, get_textarea_width (max_key_len));
     }
 
   /* only print inactive base removal requests in verbose mode */
