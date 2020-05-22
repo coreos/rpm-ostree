@@ -67,7 +67,6 @@ static gboolean opt_force_nocache;
 static gboolean opt_cache_only;
 static gboolean opt_unified_core;
 static char *opt_proxy;
-static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
 static char **opt_metadata_json;
 static char *opt_repo;
@@ -98,7 +97,6 @@ static GOptionEntry install_option_entries[] = {
   { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core, "Use new \"unified core\" codepath", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
-  { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
@@ -342,6 +340,17 @@ install_packages (RpmOstreeTreeComposeContext  *self,
         }
 
       rpmostree_context_set_repos (self->corectx, self->build_repo, self->pkgcache_repo);
+    }
+  else
+    {
+      /* Secret environment variable for those desperate */
+      if (!g_getenv ("RPM_OSTREE_I_KNOW_NON_UNIFIED_CORE_IS_DEPRECATED"))
+        {
+          g_printerr ("\nNOTICE: Running rpm-ostree compose tree without --unified-core is deprecated.\n"
+                      " Please add --unified-core to the command line and ensure your content\n"
+                      " works with it.  For more information, see https://github.com/coreos/rpm-ostree/issues/729\n\n");
+          g_usleep (G_USEC_PER_SEC * 5);
+        }
     }
 
   if (!rpmostree_context_prepare (self->corectx, cancellable, error))
