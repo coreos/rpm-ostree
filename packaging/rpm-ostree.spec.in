@@ -14,18 +14,17 @@ URL: https://github.com/projectatomic/rpm-ostree
 
 ExclusiveArch: %{rust_arches}
 
-%if 0%{?fedora}
+%if 0%{?rhel} && !0%{?eln}
+BuildRequires: rust-toolset
+%else
 BuildRequires: cargo
 BuildRequires: rust
-%else
-# assume el8
-BuildRequires: rust-toolset
 %endif
 
 # RHEL8 doesn't ship zchunk today.  See also the comments
 # in configure.ac around this as libdnf/librepo need to be in
 # sync, and today we bundle libdnf but not librepo.
-%if 0%{?rhel}
+%if 0%{?rhel} && 0%{?rhel} <= 8
 %bcond_with zchunk
 %else
 %bcond_without zchunk
