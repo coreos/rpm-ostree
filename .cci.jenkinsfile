@@ -76,6 +76,8 @@ parallel insttests: {
         shwrap("ci/installdeps.sh")
       }
       stage("Kola") {
+        // TODO upstream this into coreos-ci-lib
+        shwrap("make -C tests/kolainst install")
         fcosKola(cosaDir: "${env.WORKSPACE}", extraArgs: "ext.*", parallel: nhosts)
       }
       stage("vmcheck") {
