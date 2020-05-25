@@ -31,6 +31,7 @@
 #include "rpmostree-rpm-util.h"
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
+#include <rpm/rpmmacro.h>
 #include <rpm/rpmfi.h>
 #include <rpm/rpmts.h>
 #include <archive.h>
@@ -549,49 +550,6 @@ build_objid_map_for_package (RpmOstreeCommit2RojigContext *self,
   return TRUE;
 }
 
-/* Converts e.g. x86_64 to x86-64 (which is the current value of the RPM %{_isa}
- * macro). Here's where RPM maintains this currently:
- * https://github.com/rpm-software-management/rpm/blob/d9d47e01146a5d4411691a71916b1030ac7da193/installplatform#L25
- * For now we scrape all the Provides: looking for a `Provides: %{name}(something)`.
- */
-static char *
-pkg_get_requires_isa (RpmOstreeCommit2RojigContext *self,
-                      DnfPackage *pkg,
-                      GError    **error)
-{
-  g_autoptr(DnfReldepList) provides = dnf_package_get_provides (pkg);
-  const gint n_provides = dnf_reldep_list_count (provides);
-  Pool *pool = dnf_sack_get_pool (self->rsack->sack);
-  g_autofree char *provides_prefix = g_strconcat (dnf_package_get_name (pkg), "(", NULL);
-  for (int i = 0; i < n_provides; i++)
-    {
-      DnfReldep *req = dnf_reldep_list_index (provides, i);
-      Id reqid = dnf_reldep_get_id (req);
-      if (!ISRELDEP (reqid))
-        continue;
-      Reldep *rdep = GETRELDEP (pool, reqid);
-      if (!(rdep->flags & REL_EQ))
-        continue;
-
-      const char *name = pool_id2str (pool, rdep->name);
-
-      if (!g_str_has_prefix (name, provides_prefix))
-        continue;
-      const char *isa_start = name + strlen (provides_prefix);
-      const char *endparen = strchr (isa_start, ')');
-      if (!endparen)
-        continue;
-
-      /* Return the first match.  In theory this would blow up if
-       * e.g. a package started doing a Provides: %{name}(awesome) but...
-       * why would someone do that?  We can address that if it comes up.
-       */
-      return g_strndup (isa_start, endparen - isa_start);
-    }
-  return glnx_null_throw (error, "Missing Provides(%s%%{_isa}) in package: %s",
-                          dnf_package_get_name (pkg), dnf_package_get_nevra (pkg));
-}
-
 /* Take input spec file and generate a temporary spec file with our metadata
  * inserted.
  */
@@ -631,6 +589,8 @@ generate_spec (RpmOstreeCommit2RojigContext  *self,
       g_string_append_printf (replacement, "(%s)\n", rpmostree_inputhash);
     }
 
+  g_autofree char *isa = rpmExpand ("%_isa", NULL);
+
   /* Add Requires: on our dependent packages; note this needs to be
    * arch-specific otherwise we may be tripped up by multiarch packages.
    */
@@ -645,10 +605,7 @@ generate_spec (RpmOstreeCommit2RojigContext  *self,
         }
       else
         {
-          g_autofree char *isa = pkg_get_requires_isa (self, pkg, error);
-          if (!isa)
-            return NULL;
-          g_string_append_printf (replacement, "Requires: %s(%s) = %s\n",
+          g_string_append_printf (replacement, "Requires: %s%s = %s\n",
                                   dnf_package_get_name (pkg), isa,
                                   dnf_package_get_evr (pkg));
         }
