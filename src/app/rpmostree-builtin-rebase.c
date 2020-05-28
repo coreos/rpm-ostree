@@ -147,8 +147,6 @@ rpmostree_builtin_rebase (int             argc,
     {
       if (*remainder == '/')
         {
-          if (!opt_experimental)
-            return glnx_throw (error, "Local repo rebase requires --experimental");
           const char *ref = strrchr (remainder, ':');
           if (!ref)
             return glnx_throw (error, "Missing ':' in LOCALPATH:REF rebase");
