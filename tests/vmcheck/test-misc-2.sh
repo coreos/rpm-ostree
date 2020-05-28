@@ -72,7 +72,7 @@ vm_rpmostree cleanup -p
 echo "ok rebase with custom origin"
 
 # Try again but making it think it's pulling from another local repo
-vm_rpmostree rebase --skip-purge /sysroot/ostree/repo:${booted_csum} --experimental
+vm_rpmostree rebase --skip-purge /sysroot/ostree/repo:${booted_csum}
 vm_rpmostree upgrade >out.txt
 assert_file_has_content_literal out.txt 'Pinned to commit; no upgrade available'
 vm_rpmostree cleanup -p
