@@ -33,12 +33,16 @@ fi
 versionid=$(vm_cmd grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
 
-# Test that we can override the kernel.  For ease of testing
-# I just picked the "gold" F29/30 kernel.
+# Test that we can override the kernel; we use the "gold"
+# kernel because we know it won't be GC'd.  Use e.g.
+# `koji latest-pkg f32 kernel`
+# to find this.  (In contrast, koji latest-pkg f32-updates kernel
+# will get the latest updates).
 current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 case $versionid in
   31) kernel_release=5.3.7-301.fc31.x86_64;;
+  32) kernel_release=5.6.6-300.fc32.x86_64;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt $kernel_release
