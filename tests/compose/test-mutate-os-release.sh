@@ -5,10 +5,10 @@ dn=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=libcomposetest.sh
 . "${dn}/libcomposetest.sh"
 
-releasever=31
-
 # make sure we clear out postprocess scripts, which might be using os-release
 treefile_set "postprocess" '[]'
+
+releasever=$(jq -r .releasever "${treefile}")
 
 # specifying the key but neither automatic_version_prefix nor
 # --add-metadata-string should cause no mutation

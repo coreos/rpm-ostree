@@ -17,7 +17,7 @@ runcompose() {
 
 runcompose
 test -f treecompose.json
-test -f rojig-repo/x86_64/fedora-coreos-42-1.fc31.x86_64.rpm
+test -f rojig-repo/x86_64/fedora-coreos-42-1.fc*.x86_64.rpm
 echo "ok rojig ♲📦 initial"
 
 runcompose
@@ -27,5 +27,5 @@ echo "ok rojig no changes"
 treefile_set "documentation" 'False'
 runcompose
 test -f treecompose.json
-test -f rojig-repo/x86_64/fedora-coreos-42.1-1.fc31.x86_64.rpm
+test -f rojig-repo/x86_64/fedora-coreos-42.1-1.fc*.x86_64.rpm
 echo "ok rojig dropped docs"

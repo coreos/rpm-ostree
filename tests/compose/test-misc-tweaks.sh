@@ -34,9 +34,9 @@ treefile_append "exclude-packages" '["somenonexistent-package", "gnome-shell"]'
 
 # Note this overrides:
 # $ rpm -q systemd
-# systemd-243.4-1.fc31.x86_64
-# $ rpm -qlv systemd|grep -F 'system/default.target '
-# lrwxrwxrwx    1 root    root                       16 May 11 06:59 /usr/lib/systemd/system/default.target -> graphical.target
+# systemd-245.4-1.fc32.x86_64
+# $ rpm -qlv systemd | grep -F 'system/default.target'
+# lrwxrwxrwx    1 root     root                       16 Apr  1 17:46 /usr/lib/systemd/system/default.target -> graphical.target
 treefile_set "default-target" '"multi-user.target"'
 treefile_append "units" '["zincati.service"]'
 # Need this in order to test unit enablement
