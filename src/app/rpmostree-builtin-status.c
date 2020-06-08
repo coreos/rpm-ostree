@@ -301,7 +301,7 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
        * https://github.com/coreos/rpm-ostree/issues/1747
        */
       if (opt_verbose)
-        g_print ("AutomaticUpdates: disabled");
+        g_print ("AutomaticUpdates: disabled\n");
     }
   else
     {
