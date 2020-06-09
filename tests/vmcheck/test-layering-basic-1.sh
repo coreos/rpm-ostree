@@ -206,15 +206,36 @@ echo "ok no leftover rpmdb files"
 # upgrade to a layer with foo already builtin
 vm_ostree_commit_layered_as_base $booted_csum vmcheck
 vm_rpmostree upgrade
+
+# check that we can't layer a pkg which wants to change a base pkg
 vm_build_rpm bar conflicts foo
 if vm_rpmostree install bar &> err.txt; then
   assert_not_reached "successfully layered conflicting pkg bar?"
 fi
-assert_file_has_content err.txt "Base packages would be removed"
+assert_file_has_content err.txt "conflicting requests"
 assert_file_has_content err.txt "foo-1.0-1.x86_64"
+echo "ok can't layer pkg that would remove base pkg"
+
+vm_build_rpm foo version 2.0
+vm_build_rpm foo-ext version 2.0 requires "foo = 2.0-1"
+if vm_rpmostree install foo-ext &> err.txt; then
+  assert_not_reached "successfully layered updated split pkg foo-ext?"
+fi
+assert_file_has_content err.txt "conflicting requests"
+assert_file_has_content err.txt "foo-1.0-1.x86_64"
+assert_file_has_content err.txt "foo-2.0-1.x86_64"
+echo "ok can't layer pkg that would upgrade base pkg"
+
+# check that we can select a repo split pkg which matches the base version
+vm_build_rpm foo version 1.0
+vm_build_rpm foo-ext version 1.0 requires "foo = 1.0-1"
+vm_rpmostree install foo-ext
+vm_assert_status_jq \
+    '.deployments[0]["packages"]|length == 1' \
+    '.deployments[0]["packages"]|index("foo-ext") >= 0'
+echo "ok can layer split pkg matching base version"
 vm_rpmostree cleanup -p
 vm_cmd ostree reset vmcheck $(vm_cmd ostree rev-parse "vmcheck^")
-echo "ok can't layer pkg that would remove base pkg"
 
 # check that root is a shared mount
 # https://bugzilla.redhat.com/show_bug.cgi?id=1318547
