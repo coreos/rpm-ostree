@@ -1565,12 +1565,14 @@ gv_nevra_hash (gconstpointer v)
   return g_str_hash (g_variant_get_string (nevra, NULL));
 }
 
-/* We need to make sure that only the pkgs in the base allowed to be
- * removed are removed. The issue is that marking a package for DNF_INSTALL
- * could uninstall a base pkg if it's an update or obsoletes it. There doesn't
- * seem to be a way to tell libsolv to not touch some pkgs in the base layer,
- * so we just inspect its solution in retrospect. libdnf has the concept of
- * protected packages, but it still allows updating protected packages.
+/* Before hy_goal_lock(), this function was the only way for us to make sure that libsolv
+ * wasn't trying to modify a base package it wasn't supposed to. Its secondary purpose was
+ * to collect the packages being replaced and removed into `self->pkgs_to_replace` and
+ * `self->pkgs_to_remove` respectively.
+ *
+ * Nowadays, that secondary purpose is now its primary purpose because we're already
+ * guaranteed the first part by hy_goal_lock(). Though we still leave all those original
+ * checks in place as a fail-safe in case libsolv messes up.
  */
 static gboolean
 check_goal_solution (RpmOstreeContext *self,
@@ -2004,6 +2006,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   /* Handle packages to replace; only add them to the sack for now */
   g_autoptr(GPtrArray) replaced_nevras = g_ptr_array_new ();
+  g_autoptr(GPtrArray) replaced_pkgnames = g_ptr_array_new_with_free_func (g_free);
   for (char **it = cached_replace_pkgs; it && *it; it++)
     {
       const char *nevra = *it;
@@ -2017,7 +2020,13 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
         return FALSE;
 
+      const char *name = dnf_package_get_name (pkg);
+      g_assert (name);
+
       g_ptr_array_add (replaced_nevras, (gpointer)nevra);
+      // this is a bit wasteful, but for locking purposes, we need the pkgname to match
+      // against the base, not the nevra which naturally will be different
+      g_ptr_array_add (replaced_pkgnames, g_strdup (name));
       g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
     }
 
@@ -2175,6 +2184,24 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   if (missing_pkgs && missing_pkgs->len > 0)
     return throw_package_list (error, "Packages not found", missing_pkgs);
 
+  /* And lock all the base packages we don't expect to be replaced. */
+  { hy_autoquery HyQuery query = hy_query_create (sack);
+    hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+    g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+    for (guint i = 0; i < pkgs->len; i++)
+      {
+        DnfPackage *pkg = pkgs->pdata[i];
+        const char *pkgname = dnf_package_get_name (pkg);
+        g_assert (pkgname);
+
+        if (rpmostree_str_ptrarray_contains (removed_pkgnames, pkgname) ||
+            rpmostree_str_ptrarray_contains (replaced_pkgnames, pkgname))
+          continue;
+        if (hy_goal_lock (goal, pkg, error) != 0)
+          return glnx_prefix_error (error, "while locking pkg '%s'", pkgname);
+      }
+  }
+
   if (self->rojig_spec)
     {
       if (!setup_rojig_state (self, error))
@@ -2198,7 +2225,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
           !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
         return FALSE;
       g_clear_pointer (&self->pkgs, (GDestroyNotify)g_ptr_array_unref);
-      self->pkgs = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
+      self->pkgs = dnf_goal_get_packages (goal,
                                           DNF_PACKAGE_INFO_INSTALL,
                                           DNF_PACKAGE_INFO_UPDATE,
                                           DNF_PACKAGE_INFO_DOWNGRADE, -1);
