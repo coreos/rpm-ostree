@@ -24,7 +24,7 @@ curl = "0.4.29"
 rayon = "1.0"
 c_utf8 = "0.1.0"
 systemd = "0.4.0"
-indicatif = "0.14.0"
+indicatif = "0.15.0"
 lazy_static = "1.1.0"
 envsubst = "0.2.0"
 chrono = { version = "0.4.11", features = ["serde"] }
