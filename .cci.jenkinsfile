@@ -14,7 +14,7 @@ parallel rpms: {
         # restore those through a build opt later on. Being able to stash RPMs directly is
         # super nice (and archiving later on will make it easy for anyone to download
         # binaries from PRs in the future) and meshes well with the following stages.
-        export PATH="/root/.cargo/bin:\$PATH"
+        export PATH="\$HOME/.cargo/bin:\$PATH"
         cargo install cbindgen
         cbindgen -c rust/cbindgen.toml -o rpmostree-rust.h rust
 
