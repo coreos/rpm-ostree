@@ -81,3 +81,7 @@ echo "ok coreos-rootfs seal"
 # Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
 rpm-ostree reload
 echo "ok reload"
+
+# See rpmostree-scripts.c
+grep ^DEFAULT /etc/crypto-policies/config
+echo "ok crypto-policies DEFAULT backend"
