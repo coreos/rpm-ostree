@@ -153,7 +153,7 @@ pub(crate) fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GErro
     }
     unsafe {
         assert!((*gerror).is_null());
-        let c_msg = CString::new(e.to_string()).unwrap();
+        let c_msg = CString::new(format!("{:#}", e)).unwrap();
         *gerror = glib_sys::g_error_new_literal(
             gio_sys::g_io_error_quark(),
             gio_sys::G_IO_ERROR_FAILED,
