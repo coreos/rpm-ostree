@@ -170,6 +170,20 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
     "libdir=" LIBDIR "\n"
     "exec iconvconfig -o ${libdir}/gconv/gconv-modules.cache --nostdlib ${libdir}/gconv"
   },
+  /* See https://bugzilla.redhat.com/show_bug.cgi?id=1847454.
+   * Code originally introduced in:
+   * https://src.fedoraproject.org/rpms/crypto-policies/c/9b9c9f7378c3fd375b9a08d5283c530a51a5de34?branch=master
+   * Keying off the installed machines FIPS mode for the installroot doesn't make sense, so
+   * just revert back to baking in the DEFAULT config.
+   */
+  { "crypto-policies.post",
+    "/usr/bin/bash",
+    "cp " DATADIR "/crypto-policies/default-config " SYSCONFDIR "/crypto-policies/config\n"
+    "echo DEFAULT > " SYSCONFDIR "/crypto-policies/state/current\n"
+    "for f in " DATADIR "/crypto-policies/DEFAULT/*; do\n"
+    "  ln -sf $f " SYSCONFDIR "/crypto-policies/back-ends/$(basename $f .txt).config\n"
+    "done"
+  },
   /* Just for the tests */
   { "rpmostree-lua-override-test.post",
     "/usr/bin/sh",
