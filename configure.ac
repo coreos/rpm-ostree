@@ -1,13 +1,7 @@
 AC_PREREQ([2.63])
-dnl To do a release, increment this number and the spec file, commit, then submit it as a PR
-dnl to merge via prow.  After that, do `git pull origin && git reset --hard origin/master`.
-dnl Then draft release notes highlighting changes and generate the shortlog using
-dnl <https://github.com/cgwalters/homegit/blob/master/bin/git-shortlog-with-prs>.
-dnl Then use <https://github.com/cgwalters/git-evtag> to create a signed tag with the
-dnl release notes as its content.
-dnl Then git push origin v201X.XX.
-dnl Then create the xz tarball from `make -f Makefile.dist-packaging dist-snapshot`.
-dnl Then create a GitHub release for the new release tag and attach the tarball.
+dnl
+dnl SEE RELEASE.md FOR INSTRUCTIONS ON HOW TO DO A RELEASE.
+dnl
 m4_define([year_version], [2020])
 m4_define([release_version], [3])
 m4_define([package_version], [year_version.release_version])
