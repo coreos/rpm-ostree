@@ -24,4 +24,4 @@ dnf builddep --spec -y packaging/rpm-ostree.spec.in --allowerasing
 pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq python3-pyyaml \
     libubsan libasan libtsan elfutils fuse sudo python3-gobject-base \
     selinux-policy-devel selinux-policy-targeted python3-createrepo_c \
-    rsync python3-rpm parallel clang rustfmt-preview
+    rsync python3-rpm parallel clang rustfmt-preview distribution-gpg-keys
