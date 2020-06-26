@@ -102,13 +102,13 @@ fn treefile_parse_stream<R: io::Read>(
     let mut pkgs: Vec<String> = vec![];
     {
         if let Some(base_pkgs) = treefile.packages.take() {
-            pkgs.extend_from_slice(&whitespace_split_packages(&base_pkgs));
+            pkgs.extend_from_slice(&whitespace_split_packages(&base_pkgs)?);
         }
         if let Some(bootstrap_pkgs) = treefile.bootstrap_packages.take() {
-            pkgs.extend_from_slice(&whitespace_split_packages(&bootstrap_pkgs));
+            pkgs.extend_from_slice(&whitespace_split_packages(&bootstrap_pkgs)?);
         }
         if let Some(archful_pkgs) = archful_pkgs.take() {
-            pkgs.extend_from_slice(&whitespace_split_packages(&archful_pkgs));
+            pkgs.extend_from_slice(&whitespace_split_packages(&archful_pkgs)?);
         }
     }
 
@@ -574,10 +574,42 @@ impl TreefileExternals {
 
 /// For increased readability in YAML/JSON, we support whitespace in individual
 /// array elements.
-fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
-    pkgs.iter()
-        .flat_map(|pkg| pkg.split_whitespace().map(String::from))
-        .collect()
+fn whitespace_split_packages(pkgs: &[String]) -> Result<Vec<String>> {
+    let mut ret = vec![];
+    for element in pkgs.iter() {
+        ret.extend(split_whitespace_unless_quoted(element)?.map(String::from));
+    }
+
+    Ok(ret)
+}
+
+// Helper for whitespace_split_packages().
+// Splits a String by whitespace unless substring is wrapped between single quotes
+// and returns split &str in an Iterator.
+fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = &str>> {
+    let mut ret = vec![];
+    let mut start_index = 0;
+    let mut looping_over_quoted_pkg = false;
+    for (i, c) in element.chars().enumerate() {
+        if c == '\'' {
+            if looping_over_quoted_pkg {
+                ret.push(&element[start_index..i]);
+                looping_over_quoted_pkg = false;
+            } else {
+                ret.extend((&element[start_index..i]).split_whitespace());
+                looping_over_quoted_pkg = true;
+            }
+            start_index = i + 1;
+        }
+        if i == element.len() - 1 {
+            if looping_over_quoted_pkg {
+                bail!("Missing terminating quote: {}", element);
+            }
+            ret.extend((&element[start_index..]).split_whitespace());
+        }
+    }
+
+    Ok(ret.into_iter())
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -868,6 +900,7 @@ ref: "exampleos/x86_64/blah"
 packages:
  - foo bar
  - baz
+ - corge 'quuz >= 1.0'
 packages-x86_64:
  - grub2 grub2-tools
 packages-s390x:
@@ -893,7 +926,7 @@ packages-s390x:
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
-        assert!(treefile.packages.unwrap().len() == 5);
+        assert!(treefile.packages.unwrap().len() == 7);
     }
 
     #[test]
@@ -936,7 +969,7 @@ remove-files:
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, None).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
-        assert!(treefile.packages.unwrap().len() == 3);
+        assert!(treefile.packages.unwrap().len() == 5);
     }
 
     fn append_and_parse(append: &'static str) -> TreeComposeConfig {
@@ -1136,7 +1169,7 @@ include: foo.yaml
 "#,
         );
         let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
-        assert!(tf.parsed.packages.unwrap().len() == 4);
+        assert!(tf.parsed.packages.unwrap().len() == 6);
         Ok(())
     }
 
@@ -1206,7 +1239,7 @@ etc-group-members:
         treefile_merge(&mut mid, &mut base);
         treefile_merge(&mut top, &mut mid);
         let tf = &top;
-        assert!(tf.packages.as_ref().unwrap().len() == 8);
+        assert!(tf.packages.as_ref().unwrap().len() == 10);
         assert!(tf.etc_group_members.as_ref().unwrap().len() == 2);
         let rojig = tf.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
@@ -1225,6 +1258,65 @@ etc-group-members:
                 .unwrap()
                 == "table"
         );
+    }
+
+    #[test]
+    fn test_split_whitespace_unless_quoted() -> Result<()> {
+        // test single quoted package
+        let single_quoted_pkg = "'foobar >= 1.0'";
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(&single_quoted_pkg)?.collect();
+        assert_eq!("foobar >= 1.0", pkgs[0]);
+
+        // test multiple quoted packages
+        let mult_quoted_pkg = "'foobar >= 1.0' 'quuz < 0.5' 'corge > 2'";
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mult_quoted_pkg)?.collect();
+        assert_eq!("foobar >= 1.0", pkgs[0]);
+        assert_eq!("quuz < 0.5", pkgs[1]);
+        assert_eq!("corge > 2", pkgs[2]);
+
+        // test single unquoted package
+        let single_unquoted_pkg = "foobar";
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(&single_unquoted_pkg)?.collect();
+        assert_eq!("foobar", pkgs[0]);
+
+        // test multiple unquoted packages
+        let mult_unquoted_pkg = "foobar quuz corge";
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mult_unquoted_pkg)?.collect();
+        assert_eq!("foobar", pkgs[0]);
+        assert_eq!("quuz", pkgs[1]);
+        assert_eq!("corge", pkgs[2]);
+
+        // test different orderings of mixed quoted and unquoted packages
+        let mix_quoted_unquoted_pkgs = "'foobar >= 1.1' baz-package 'corge < 0.5'";
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mix_quoted_unquoted_pkgs)?.collect();
+        assert_eq!("foobar >= 1.1", pkgs[0]);
+        assert_eq!("baz-package", pkgs[1]);
+        assert_eq!("corge < 0.5", pkgs[2]);
+        let mix_quoted_unquoted_pkgs = "corge 'foobar >= 1.1' baz-package";
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mix_quoted_unquoted_pkgs)?.collect();
+        assert_eq!("corge", pkgs[0]);
+        assert_eq!("foobar >= 1.1", pkgs[1]);
+        assert_eq!("baz-package", pkgs[2]);
+        let mix_quoted_unquoted_pkgs = "corge 'foobar >= 1.1' baz-package 'quuz < 0.0.1'";
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mix_quoted_unquoted_pkgs)?.collect();
+        assert_eq!("corge", pkgs[0]);
+        assert_eq!("foobar >= 1.1", pkgs[1]);
+        assert_eq!("baz-package", pkgs[2]);
+        assert_eq!("quuz < 0.0.1", pkgs[3]);
+
+        // test missing quotes around packages using version qualifiers
+        let missing_quotes = "foobar >= 1.0 quuz";
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(&missing_quotes)?.collect();
+        assert_ne!("foobar >= 1.0", pkgs[0]);
+        assert_eq!(">=", pkgs[1]);
+        let missing_leading_quote = "foobar >= 1.0'";
+        assert!(split_whitespace_unless_quoted(&missing_leading_quote).is_err());
+        let missing_trailing_quote = "'foobar >= 1.0 baz-package";
+        assert!(split_whitespace_unless_quoted(&missing_trailing_quote).is_err());
+        let stray_quote = "'foobar >= 1.0' quuz' corge";
+        assert!(split_whitespace_unless_quoted(&stray_quote).is_err());
+
+        Ok(())
     }
 }
 
