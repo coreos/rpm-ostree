@@ -10,11 +10,14 @@ treefile_append "repos" '["test-repo"]'
 # test `recommends: true` (test-basic[-unified] test the false path)
 build_rpm foobar recommends foobar-rec
 build_rpm foobar-rec
+build_rpm quuz
+build_rpm corge version 1.0
+build_rpm corge version 2.0
 
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
 # the top-level manifest doesn't have any packages, so just set it
-treefile_append "packages" '["foobar"]'
+treefile_append "packages" $'["\'foobar >= 0.5\' quuz \'corge < 2.0\'"]'
 
 # With docs and recommends, also test multi includes
 cat > config/documentation.yaml <<'EOF'
@@ -159,6 +162,11 @@ rpm-ostree db list --repo=${repo} ${treeref} > pkglist.txt
 assert_file_has_content_literal pkglist.txt 'foobar'
 assert_file_has_content_literal pkglist.txt 'foobar-rec'
 echo "ok recommends"
+
+assert_file_has_content_literal pkglist.txt 'quuz'
+assert_file_has_content_literal pkglist.txt 'corge-1.0'
+assert_not_file_has_content_literal pkglist.txt 'corge-2.0'
+echo "ok package versions"
 
 # Test overlays/overrides
 for x in $(seq 3); do
