@@ -36,6 +36,7 @@ for path in /usr/share/rpm /usr/lib/sysimage/rpm-ostree-base-db; do
     ostree --repo=${repo} ls -R ${treeref} ${path} > db.txt
     assert_file_has_content_literal db.txt /Packages
 done
+ostree --repo=${repo} ls ${treeref} /usr/lib/sysimage/rpm >/dev/null
 echo "ok db"
 
 ostree --repo=${repo} show --print-metadata-key exampleos.gitrepo ${treeref} > meta.txt

@@ -1087,6 +1087,11 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                              rootfs_dfd, RPMOSTREE_BASE_RPMDB,
                              cancellable, error))
         return glnx_prefix_error (error, "Hardlinking %s", RPMOSTREE_BASE_RPMDB);
+      /* And write a symlink from the proposed standard /usr/lib/sysimage/rpm
+       * to our /usr/share/rpm - eventually we will invert this.
+       */
+     if (symlinkat ("../../share/rpm", rootfs_dfd, RPMOSTREE_SYSIMAGE_RPMDB) < 0)
+        return glnx_throw_errno_prefix (error, "symlinking %s", RPMOSTREE_SYSIMAGE_RPMDB);
     }
 
   return TRUE;
