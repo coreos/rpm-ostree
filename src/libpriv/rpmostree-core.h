@@ -35,6 +35,7 @@
 /* See http://lists.rpm.org/pipermail/rpm-maint/2017-October/006681.html */
 #define RPMOSTREE_RPMDB_LOCATION "usr/share/rpm"
 #define RPMOSTREE_SYSIMAGE_DIR "usr/lib/sysimage"
+#define RPMOSTREE_SYSIMAGE_RPMDB RPMOSTREE_SYSIMAGE_DIR "/rpm"
 #define RPMOSTREE_BASE_RPMDB RPMOSTREE_SYSIMAGE_DIR "/rpm-ostree-base-db"
 
 /* put it in cache dir so it gets destroyed naturally with a `cleanup -m` */
