@@ -33,11 +33,13 @@ static const char *const *opt_remove_pkgs;
 static const char *const *opt_replace_pkgs;
 static const char *const *install_pkgs;
 static const char *const *uninstall_pkgs;
+static gboolean opt_lock_finalization;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
+  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { NULL }
 };
 
@@ -83,6 +85,7 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
   g_variant_dict_insert (&dict, "no-overrides", "b", opt_reset_all);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
+  g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);

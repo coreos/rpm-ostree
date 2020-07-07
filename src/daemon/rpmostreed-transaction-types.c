@@ -1735,8 +1735,12 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "initramfs");
 
+  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
+  if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
+
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0, cancellable, error);
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags, cancellable, error);
   if (upgrader == NULL)
     return FALSE;
 
@@ -2426,6 +2430,8 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   /* don't want to pull new content for this */
   upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
   upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
+  if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
 
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "kargs");
 

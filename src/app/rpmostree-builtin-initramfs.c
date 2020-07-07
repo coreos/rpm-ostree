@@ -34,6 +34,7 @@ static gboolean opt_enable;
 static gboolean opt_disable;
 static char **opt_add_arg;
 static gboolean opt_reboot;
+static gboolean opt_lock_finalization;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -41,6 +42,7 @@ static GOptionEntry option_entries[] = {
   { "arg", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_add_arg, "Append ARG to the dracut arguments", "ARG" },
   { "disable", 0, 0, G_OPTION_ARG_NONE, &opt_disable, "Disable regenerating initramfs locally", NULL },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
+  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { NULL }
 };
 
@@ -136,6 +138,7 @@ rpmostree_builtin_initramfs (int             argc,
       g_variant_dict_init (&dict, NULL);
       g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
       g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
+      g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       g_autofree char *transaction_address = NULL;
