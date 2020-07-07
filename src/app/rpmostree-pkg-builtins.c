@@ -40,6 +40,7 @@ static gboolean opt_download_only;
 static gboolean opt_allow_inactive;
 static gboolean opt_uninstall_all;
 static gboolean opt_unchanged_exit_77;
+static gboolean opt_lock_finalization;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -48,6 +49,7 @@ static GOptionEntry option_entries[] = {
   { "allow-inactive", 0, 0, G_OPTION_ARG_NONE, &opt_allow_inactive, "Allow inactive package requests", NULL },
   { "idempotent", 0, 0, G_OPTION_ARG_NONE, &opt_idempotent, "Do nothing if package already (un)installed", NULL },
   { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no overlays were changed, exit 77", NULL },
+  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { NULL }
 };
 
@@ -97,6 +99,7 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_insert (&dict, "no-layering", "b", opt_uninstall_all);
   g_variant_dict_insert (&dict, "idempotent-layering", "b", opt_idempotent);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
+  g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   gboolean met_local_pkg = FALSE;

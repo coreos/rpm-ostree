@@ -35,6 +35,7 @@ static gboolean opt_reboot;
 static gboolean opt_overlays;
 static gboolean opt_overrides;
 static gboolean opt_initramfs;
+static gboolean opt_lock_finalization;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -42,6 +43,7 @@ static GOptionEntry option_entries[] = {
   { "overlays", 'l', 0, G_OPTION_ARG_NONE, &opt_overlays, "Remove all overlayed packages", NULL },
   { "overrides", 'o', 0, G_OPTION_ARG_NONE, &opt_overrides, "Remove all overrides", NULL },
   { "initramfs", 'i', 0, G_OPTION_ARG_NONE, &opt_initramfs, "Stop regenerating initramfs", NULL },
+  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { NULL }
 };
 
@@ -101,6 +103,7 @@ rpmostree_builtin_reset (int             argc,
   g_variant_dict_insert (&dict, "no-initramfs", "b", opt_initramfs);
   g_variant_dict_insert (&dict, "cache-only", "b", cache_only);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
+  g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   if (!rpmostree_update_deployment (os_proxy, NULL, NULL, install_pkgs, uninstall_pkgs,
