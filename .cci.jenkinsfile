@@ -2,7 +2,7 @@
 
 stage("Build") {
 parallel rpms: {
-  cosaPod(buildroot: true, runAsUser: 0) {
+  cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi") {
       checkout scm
       shwrap("""
         # fetch tags so `git describe` gives a nice NEVRA when building the RPM
@@ -40,7 +40,7 @@ codestyle: {
   }
 },
 rust: {
-  cosaPod(buildroot: true, runAsUser: 0) {
+  cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi") {
       checkout scm
       shwrap("ci/msrv.sh")
   }
