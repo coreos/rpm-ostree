@@ -40,9 +40,10 @@ codestyle: {
   }
 },
 rust: {
-  cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi") {
+  def n = 5
+  cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi", cpu: "${n}") {
       checkout scm
-      shwrap("ci/msrv.sh")
+      shwrap("MAKE_JOBS=${n} CARGO_BUILD_JOBS=${n} ci/msrv.sh")
   }
 }}
 
