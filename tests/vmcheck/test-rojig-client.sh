@@ -35,7 +35,7 @@ fi
 
 vm_cmd 'cat >/etc/yum.repos.d/fahc.repo' <<EOF
 [fahc]
-baseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/jigdo
+baseurl=http://artifacts.ci.centos.org/sig-atomic/fahc/jigdo
 gpgcheck=0
 EOF
 
