@@ -56,6 +56,10 @@ fi
 assert_file_has_content err.txt 'Unknown.*command'
 echo "ok error on unknown command"
 
+systemctl show -p IOSchedulingClass rpm-ostreed >out.txt
+assert_file_has_content out.txt 'IOSchedulingClass=3'
+echo "ok IO scheduling"
+
 stateroot=$(dirname $(ls /ostree/deploy/*/var))
 ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
 # related: https://github.com/coreos/fedora-coreos-config/issues/194

@@ -6,6 +6,14 @@ ConditionPathExists=/ostree
 [Service]
 Type=dbus
 BusName=org.projectatomic.rpmostree1
+# Be nice to concurrent processes; operating system updates
+# are usually a background thing.  See e.g.
+# https://github.com/openshift/machine-config-operator/issues/1897
+# https://github.com/ostreedev/ostree/pull/2152
+# This option is most effective in combination with
+# a block scheduler such as `bfq`, which is the systemd
+# default since https://github.com/systemd/systemd/pull/13321
+IOSchedulingClass=idle
 # To use the read-only sysroot bits
 MountFlags=slave
 NotifyAccess=main
