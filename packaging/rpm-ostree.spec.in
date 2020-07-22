@@ -126,10 +126,10 @@ The %{name}-devel package includes the header files for %{name}-libs.
 %build
 env NOCONFIGURE=1 ./autogen.sh
 %configure --disable-silent-rules --enable-gtk-doc
-make %{?_smp_mflags}
+%make_build
 
 %install
-make install DESTDIR=$RPM_BUILD_ROOT INSTALL="install -p -c"
+%make_install INSTALL="install -p -c"
 find $RPM_BUILD_ROOT -name '*.la' -delete
 
 # I try to do continuous delivery via rpmdistro-gitoverlay while
