@@ -95,6 +95,9 @@ rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin);
 const char *
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
 
+GHashTable *
+rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin);
+
 gboolean
 rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 
@@ -119,6 +122,20 @@ rpmostree_origin_get_string (RpmOstreeOrigin *origin,
 
 GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin);
+
+void
+rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin,
+                                            char **paths,
+                                            gboolean *out_changed);
+
+void
+rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin,
+                                              char **paths,
+                                              gboolean *out_changed);
+
+void
+rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin,
+                                                  gboolean *out_changed);
 
 void
 rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,

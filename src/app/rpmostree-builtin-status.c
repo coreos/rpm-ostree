@@ -870,6 +870,13 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         g_string_append (buf, "regenerate");
       rpmostree_print_kv ("Initramfs", max_key_len, buf->str);
     }
+
+  g_autofree char **initramfs_etc_files = NULL;
+  g_variant_dict_lookup (dict, "initramfs-etc", "^a&s", &initramfs_etc_files);
+  if (initramfs_etc_files && *initramfs_etc_files)
+    /* XXX: not really packages but it works... should just rename that function */
+    print_packages ("InitramfsEtc", max_key_len, (const char**)initramfs_etc_files, NULL);
+
   gboolean pinned = FALSE;
   g_variant_dict_lookup (dict, "pinned", "b", &pinned);
   if (pinned)

@@ -42,7 +42,7 @@ static GOptionEntry option_entries[] = {
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after transaction is complete", NULL },
   { "overlays", 'l', 0, G_OPTION_ARG_NONE, &opt_overlays, "Remove all overlayed packages", NULL },
   { "overrides", 'o', 0, G_OPTION_ARG_NONE, &opt_overrides, "Remove all overrides", NULL },
-  { "initramfs", 'i', 0, G_OPTION_ARG_NONE, &opt_initramfs, "Stop regenerating initramfs", NULL },
+  { "initramfs", 'i', 0, G_OPTION_ARG_NONE, &opt_initramfs, "Stop regenerating initramfs or tracking files", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { NULL }
 };

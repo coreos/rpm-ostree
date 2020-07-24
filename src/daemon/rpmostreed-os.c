@@ -137,7 +137,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
       return TRUE;
     }
   else if (g_strcmp0 (method_name, "SetInitramfsState") == 0 ||
-           g_strcmp0 (method_name, "KernelArgs") == 0)
+           g_strcmp0 (method_name, "KernelArgs") == 0 ||
+           g_strcmp0 (method_name, "InitramfsEtc") == 0)
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
     }
@@ -1079,6 +1080,67 @@ out:
 }
 
 static gboolean
+os_handle_initramfs_etc (RPMOSTreeOS *interface,
+                         GDBusMethodInvocation *invocation,
+                         const char *const* track,
+                         const char *const* untrack,
+                         gboolean untrack_all,
+                         gboolean force_sync,
+                         GVariant *options)
+{
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  const char *osname;
+  GError *local_error = NULL;
+
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
+  if (transaction)
+    goto out;
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (interface);
+
+  transaction = rpmostreed_transaction_new_initramfs_etc (invocation,
+                                                          ot_sysroot,
+                                                          osname,
+                                                          (char**)track,
+                                                          (char**)untrack,
+                                                          untrack_all,
+                                                          force_sync,
+                                                          options,
+                                                          cancellable,
+                                                          &local_error);
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_initramfs_etc (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
+
+static gboolean
 os_handle_set_initramfs_state (RPMOSTreeOS *interface,
                                GDBusMethodInvocation *invocation,
                                gboolean regenerate,
@@ -1764,6 +1826,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_refresh_md                 = os_handle_refresh_md;
   iface->handle_modify_yum_repo            = os_handle_modify_yum_repo;
   iface->handle_rollback                   = os_handle_rollback;
+  iface->handle_initramfs_etc              = os_handle_initramfs_etc;
   iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
   iface->handle_update_deployment          = os_handle_update_deployment;
   iface->handle_finalize_deployment        = os_handle_finalize_deployment;
