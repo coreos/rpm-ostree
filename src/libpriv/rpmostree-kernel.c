@@ -372,7 +372,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
 
   { g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmpf->fd, FALSE, error);
     if (!mfile)
-      return FALSE;
+      return glnx_prefix_error (error, "mmap(initramfs)");
     g_checksum_update (boot_checksum, (guint8*)g_mapped_file_get_contents (mfile),
                        g_mapped_file_get_length (mfile));
 
@@ -385,7 +385,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
     if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
                                rootfs_dfd, initramfs_modules_path,
                                error))
-      return FALSE;
+      return glnx_prefix_error (error, "Linking initramfs");
   }
 
   const char *boot_checksum_str = g_checksum_get_string (boot_checksum);

@@ -1147,13 +1147,13 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       if (!rpmostree_finalize_kernel (self->tmprootfs_dfd, bootdir, kver, kernel_path,
                                       &initramfs_tmpf, RPMOSTREE_FINALIZE_KERNEL_AUTO,
                                       cancellable, error))
-        return FALSE;
+        return glnx_prefix_error (error, "Finalizing kernel");
     }
 
   if (!rpmostree_context_commit (self->ctx, self->base_revision,
                                  RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                  &self->final_revision, cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Committing");
 
   /* Ensure we aren't holding any references to the tmpdir now that we're done;
    * rpmostree_sysroot_upgrader_deploy() eventually calls
