@@ -370,23 +370,33 @@ rpmostree_finalize_kernel (int rootfs_dfd,
   g_autofree char *initramfs_modules_path =
     g_build_filename (modules_bootdir, "initramfs.img", NULL);
 
-  { g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmpf->fd, FALSE, error);
-    if (!mfile)
-      return glnx_prefix_error (error, "mmap(initramfs)");
-    g_checksum_update (boot_checksum, (guint8*)g_mapped_file_get_contents (mfile),
-                       g_mapped_file_get_length (mfile));
+  if (initramfs_tmpf && initramfs_tmpf->initialized)
+    {
+      g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmpf->fd, FALSE, error);
+      if (!mfile)
+        return glnx_prefix_error (error, "mmap(initramfs)");
+      g_checksum_update (boot_checksum, (guint8*)g_mapped_file_get_contents (mfile),
+                         g_mapped_file_get_length (mfile));
 
-    /* Replace the initramfs */
-    if (unlinkat (rootfs_dfd, initramfs_modules_path, 0) < 0)
-      {
-        if (errno != ENOENT)
-          return glnx_throw_errno_prefix (error, "unlinkat(%s)", initramfs_modules_path);
-      }
-    if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                               rootfs_dfd, initramfs_modules_path,
-                               error))
-      return glnx_prefix_error (error, "Linking initramfs");
-  }
+      /* Replace the initramfs */
+      if (unlinkat (rootfs_dfd, initramfs_modules_path, 0) < 0)
+        {
+          if (errno != ENOENT)
+            return glnx_throw_errno_prefix (error, "unlinkat(%s)", initramfs_modules_path);
+        }
+      if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
+                                 rootfs_dfd, initramfs_modules_path,
+                                 error))
+        return glnx_prefix_error (error, "Linking initramfs");
+    }
+  else
+    {
+      /* we're not replacing the initramfs; use built-in one */
+      if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd,
+                                                      initramfs_modules_path, cancellable,
+                                                      error))
+        return FALSE;
+    }
 
   const char *boot_checksum_str = g_checksum_get_string (boot_checksum);
 
