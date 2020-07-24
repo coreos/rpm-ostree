@@ -10,4 +10,6 @@ all:
 install:
 	install -d -m 0755 $(KOLA_TESTDIR)
 	rsync -prlv ./nondestructive $(KOLA_TESTDIR)/
-	rsync -prlv ../common/ $(KOLA_TESTDIR)/nondestructive/data
+	rsync -prlv ./destructive $(KOLA_TESTDIR)/
+	rsync -prlv ../common/*.sh $(KOLA_TESTDIR)/nondestructive/data/
+	rsync -prlv ../common/*.sh $(KOLA_TESTDIR)/destructive/data/

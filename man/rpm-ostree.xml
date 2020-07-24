@@ -662,6 +662,36 @@ Boston, MA 02111-1307, USA.
         </listitem>
       </varlistentry>
 
+      <varlistentry>
+        <term><command>ex initramfs-etc</command></term>
+
+        <listitem>
+          <para>
+            Experimental feature; subject to change.
+          </para>
+
+          <para>
+            Add configuration (<literal>/etc</literal>) files into the initramfs without
+            regenerating the entire initramfs. This is useful to be able to configure
+            services backing the root block device as well as early-boot services like
+            systemd and journald.
+          </para>
+
+          <para>
+            Use <command>--track</command> to start tracking a specific file. Can be
+            specified multiple times. A new deployment will be generated. Use
+            <command>--untrack</command> or <command>--untrack-all</command> to stop
+            tracking files.
+          </para>
+
+          <para>
+            When there are tracked files, any future created deployment (e.g. when doing an
+            upgrade) will ensure that they are synced. You can additionally use
+            <command>--force-sync</command> to simply generate a new deployment with the
+            latest versions of tracked files without upgrading.
+          </para>
+        </listitem>
+      </varlistentry>
     </variablelist>
   </refsect1>
 

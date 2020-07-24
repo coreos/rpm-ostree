@@ -1011,9 +1011,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   gboolean changed = FALSE;
-  if (no_initramfs && rpmostree_origin_get_regenerate_initramfs (origin))
+  GHashTable *initrd_etc_files = rpmostree_origin_get_initramfs_etc_files (origin);
+  if (no_initramfs && (rpmostree_origin_get_regenerate_initramfs (origin) ||
+                       g_hash_table_size (initrd_etc_files) > 0))
     {
       rpmostree_origin_set_regenerate_initramfs (origin, FALSE, NULL);
+      rpmostree_origin_initramfs_etc_files_untrack_all (origin, NULL);
       changed = TRUE;
     }
 
@@ -1694,7 +1697,161 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   return (RpmostreedTransaction *) g_steal_pointer (&self);
 }
 
-/* ================================ InitramfsState ================================ */
+/* ================================ InitramfsEtc ================================ */
+
+typedef struct {
+  RpmostreedTransaction parent;
+  char *osname;
+  char **track;
+  char **untrack;
+  gboolean untrack_all;
+  gboolean force_sync;
+  GVariantDict *options;
+} InitramfsEtcTransaction;
+
+typedef RpmostreedTransactionClass InitramfsEtcTransactionClass;
+
+GType initramfs_etc_transaction_get_type (void);
+
+G_DEFINE_TYPE (InitramfsEtcTransaction,
+               initramfs_etc_transaction,
+               RPMOSTREED_TYPE_TRANSACTION)
+
+static void
+initramfs_etc_transaction_finalize (GObject *object)
+{
+  InitramfsEtcTransaction *self;
+
+  self = (InitramfsEtcTransaction *) object;
+  g_free (self->osname);
+  g_strfreev (self->track);
+  g_strfreev (self->untrack);
+  g_clear_pointer (&self->options, g_variant_dict_unref);
+
+  G_OBJECT_CLASS (initramfs_etc_transaction_parent_class)->finalize (object);
+}
+
+static gboolean
+initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
+                                   GCancellable *cancellable,
+                                   GError **error)
+{
+  InitramfsEtcTransaction *self = (InitramfsEtcTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  const char *command_line =
+    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
+
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "initramfs-etc");
+
+  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
+  if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
+
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags, cancellable, error);
+  if (upgrader == NULL)
+    return FALSE;
+
+  g_autoptr(RpmOstreeOrigin) origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
+
+  gboolean changed = FALSE;
+  if (self->untrack_all)
+    {
+      gboolean subchanged = FALSE;
+      rpmostree_origin_initramfs_etc_files_untrack_all (origin, &subchanged);
+      changed = changed || subchanged;
+    }
+  else if (self->untrack)
+    {
+      gboolean subchanged = FALSE;
+      rpmostree_origin_initramfs_etc_files_untrack (origin, self->untrack, &subchanged);
+      changed = changed || subchanged;
+    }
+
+  if (self->track)
+    {
+      gboolean subchanged = FALSE;
+      rpmostree_origin_initramfs_etc_files_track (origin, self->track, &subchanged);
+      changed = changed || subchanged;
+    }
+
+  if (!changed && !self->force_sync)
+    {
+      rpmostree_output_message ("No changes.");
+      return TRUE; /* Note early return */
+    }
+
+  GHashTable *files = rpmostree_origin_get_initramfs_etc_files (origin);
+  GLNX_HASH_TABLE_FOREACH (files, const char*, file)
+    {
+      if (!g_str_has_prefix (file, "/etc/"))
+        return glnx_throw (error, "Path outside /etc forbidden: %s", file);
+      /* could add more checks here in the future */
+    }
+
+  rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, NULL, cancellable, error))
+    return FALSE;
+
+  if (vardict_lookup_bool (self->options, "reboot", FALSE))
+    rpmostreed_reboot (cancellable, error);
+
+  return TRUE;
+}
+
+static void
+initramfs_etc_transaction_class_init (InitramfsEtcTransactionClass *class)
+{
+  GObjectClass *object_class;
+
+  object_class = G_OBJECT_CLASS (class);
+  object_class->finalize = initramfs_etc_transaction_finalize;
+
+  class->execute = initramfs_etc_transaction_execute;
+}
+
+static void
+initramfs_etc_transaction_init (InitramfsEtcTransaction *self)
+{
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_initramfs_etc (GDBusMethodInvocation *invocation,
+                                          OstreeSysroot         *sysroot,
+                                          const char            *osname,
+                                          char                 **track,
+                                          char                 **untrack,
+                                          gboolean               untrack_all,
+                                          gboolean               force_sync,
+                                          GVariant              *options,
+                                          GCancellable          *cancellable,
+                                          GError               **error)
+{
+  InitramfsEtcTransaction *self;
+
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+
+  self = g_initable_new (initramfs_etc_transaction_get_type (),
+                         cancellable, error,
+                         "invocation", invocation,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                         NULL);
+
+  if (self != NULL)
+    {
+      self->osname = g_strdup (osname);
+      self->track = g_strdupv (track);
+      self->untrack = g_strdupv (untrack);
+      self->untrack_all = untrack_all;
+      self->force_sync = force_sync;
+      self->options = g_variant_dict_new (options);
+    }
+
+  return (RpmostreedTransaction *) self;
+}
+
+/* ================================ SetInitramfsState ================================ */
 
 typedef struct {
   RpmostreedTransaction parent;

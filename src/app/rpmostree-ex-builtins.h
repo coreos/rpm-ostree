@@ -37,6 +37,7 @@ BUILTINPROTO(commit2rojig);
 BUILTINPROTO(rojig2commit);
 #endif
 BUILTINPROTO(history);
+BUILTINPROTO(initramfs_etc);
 
 #undef BUILTINPROTO
 

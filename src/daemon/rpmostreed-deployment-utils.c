@@ -412,6 +412,9 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       g_variant_dict_insert (&dict, "initramfs-args", "^as", args);
   }
 
+  variant_add_from_hash_table (&dict, "initramfs-etc",
+                               rpmostree_origin_get_initramfs_etc_files (origin));
+
   if (booted_id != NULL)
     g_variant_dict_insert (&dict, "booted", "b", g_strcmp0 (booted_id, id) == 0);
 

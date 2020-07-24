@@ -46,6 +46,7 @@ struct RpmOstreeOrigin {
 
   char *cached_unconfigured_state;
   char **cached_initramfs_args;
+  GHashTable *cached_initramfs_etc_files;       /* set of paths */
   GHashTable *cached_packages;                  /* set of reldeps */
   GHashTable *cached_local_packages;            /* NEVRA --> header sha256 */
   /* GHashTable *cached_overrides_replace;         XXX: NOT IMPLEMENTED YET */
@@ -111,6 +112,8 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
   ret->cached_overrides_remove =
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  ret->cached_initramfs_etc_files =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
@@ -160,6 +163,11 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   if (!parse_packages_strv (ret->kf, "overrides", "replace-local", TRUE,
                             ret->cached_overrides_local_replace, error))
     return FALSE;
+
+  g_auto(GStrv) initramfs_etc_files =
+    g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-etc", NULL, NULL);
+  for (char **f = initramfs_etc_files; f && *f; f++)
+    g_hash_table_add (ret->cached_initramfs_etc_files, g_steal_pointer (f));
 
   ret->cached_initramfs_args =
     g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
@@ -314,6 +322,12 @@ rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
   return origin->cached_override_commit;
 }
 
+GHashTable *
+rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin)
+{
+  return origin->cached_initramfs_etc_files;
+}
+
 gboolean
 rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
 {
@@ -342,6 +356,7 @@ gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
   return rpmostree_origin_get_regenerate_initramfs (origin) ||
+        (g_hash_table_size (origin->cached_initramfs_etc_files) > 0) ||
         (g_hash_table_size (origin->cached_packages) > 0) ||
         (g_hash_table_size (origin->cached_local_packages) > 0) ||
         (g_hash_table_size (origin->cached_overrides_local_replace) > 0) ||
@@ -398,6 +413,7 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_clear_pointer (&origin->cached_local_packages, g_hash_table_unref);
   g_clear_pointer (&origin->cached_overrides_local_replace, g_hash_table_unref);
   g_clear_pointer (&origin->cached_overrides_remove, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_initramfs_etc_files, g_hash_table_unref);
   g_free (origin);
 }
 
@@ -409,6 +425,51 @@ update_string_list_from_hash_table (GKeyFile *kf,
 {
   g_autofree char **strv = (char**)g_hash_table_get_keys_as_array (values, NULL);
   g_key_file_set_string_list (kf, group, key, (const char *const*)strv, g_strv_length (strv));
+}
+
+void
+rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin,
+                                            char **paths,
+                                            gboolean *out_changed)
+{
+  gboolean changed = FALSE;
+  for (char **path = paths; path && *path; path++)
+    changed = (g_hash_table_add (origin->cached_initramfs_etc_files, g_strdup (*path)) || changed);
+
+  if (changed)
+    update_string_list_from_hash_table (origin->kf, "rpmostree", "initramfs-etc",
+                                        origin->cached_initramfs_etc_files);
+  if (out_changed)
+    *out_changed = changed;
+}
+
+void
+rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin,
+                                              char **paths,
+                                              gboolean *out_changed)
+{
+  gboolean changed = FALSE;
+  for (char **path = paths; path && *path; path++)
+    changed = (g_hash_table_remove (origin->cached_initramfs_etc_files, *path) || changed);
+
+  if (changed)
+    update_string_list_from_hash_table (origin->kf, "rpmostree", "initramfs-etc",
+                                        origin->cached_initramfs_etc_files);
+  if (out_changed)
+    *out_changed = changed;
+}
+
+void
+rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin,
+                                                  gboolean *out_changed)
+{
+  const gboolean changed = (g_hash_table_size (origin->cached_initramfs_etc_files) > 0);
+  g_hash_table_remove_all (origin->cached_initramfs_etc_files);
+  if (changed)
+    update_string_list_from_hash_table (origin->kf, "rpmostree", "initramfs-etc",
+                                        origin->cached_initramfs_etc_files);
+  if (out_changed)
+    *out_changed = changed;
 }
 
 void

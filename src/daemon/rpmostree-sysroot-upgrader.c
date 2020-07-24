@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include <libglnx.h>
+#include <gio/gunixoutputstream.h>
 #include <systemd/sd-journal.h>
 #include "rpmostreed-utils.h"
 #include "rpmostree-util.h"
@@ -947,6 +948,15 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
 {
   g_assert (!self->ctx);
 
+  /* before doing any serious work; do some basic sanity checks that the origin is valid */
+
+  /* If initramfs regeneration is enabled, it's silly to support /etc overlays on top of
+   * that. Just point users at dracut's -I instead. I guess we could auto-convert
+   * ourselves? */
+  if (rpmostree_origin_get_regenerate_initramfs (self->origin) &&
+      g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->origin)) > 0)
+    return glnx_throw (error, "initramfs regeneration and /etc overlay not compatible; use dracut arg -I instead");
+
   if (!checkout_base_tree (self, cancellable, error))
     return FALSE;
 
@@ -1035,6 +1045,186 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
     /* Otherwise, we're transitioning from not-layered to layered, so it
        definitely changed */
     self->layering_changed = TRUE;
+
+  return TRUE;
+}
+
+static gboolean
+add_etc_files_recurse (const char         *path,
+                       GPtrArray          *filelist,
+                       GCancellable       *cancellable,
+                       GError            **error)
+{
+  struct stat stbuf;
+  if (!glnx_fstatat (AT_FDCWD, path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+
+  if (!(S_ISDIR (stbuf.st_mode) || S_ISREG (stbuf.st_mode) || S_ISLNK (stbuf.st_mode)))
+    return glnx_throw (error, "Invalid file type for %s", path);
+
+  g_ptr_array_add (filelist, g_strdup (path));
+
+  /* cpio doesn't automatically recurse into directories, so we need to do it */
+  if (S_ISDIR (stbuf.st_mode))
+    {
+      g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+      if (!glnx_dirfd_iterator_init_at (AT_FDCWD, path, TRUE, &dfd_iter, error))
+        return FALSE;
+
+      while (TRUE)
+        {
+          struct dirent *dent = NULL;
+          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+            return FALSE;
+          if (!dent)
+            break;
+
+          g_autofree char *subpath = g_build_filename (path, dent->d_name, NULL);
+          if (!add_etc_files_recurse (subpath, filelist, cancellable, error))
+            return FALSE;
+        }
+    }
+
+  return TRUE;
+}
+
+typedef struct {
+  guint counter;
+  GMainLoop *loop;
+  GError **error;
+} InitRamfsOverlayData;
+
+static void
+splice_cb (GObject      *object,
+           GAsyncResult *result,
+           gpointer      user_data)
+{
+  InitRamfsOverlayData *data = user_data;
+  g_autoptr(GError) local_error = NULL;
+
+  (void)g_output_stream_splice_finish ((GOutputStream*)object, result, &local_error);
+
+  /* just keep the first error */
+  if (local_error && !*data->error)
+    *data->error = g_steal_pointer (&local_error);
+
+  data->counter--;
+  if (data->counter == 0)
+    g_main_loop_quit (data->loop);
+}
+
+static int
+compare_strings (gconstpointer a,
+                 gconstpointer b)
+{
+  const gchar *sa = *(const gchar **) a;
+  const gchar *sb = *(const gchar **) b;
+  return strcmp (sa, sb);
+}
+
+static gboolean
+generate_initramfs_overlay (GHashTable    *initramfs_etc_files,
+                            GLnxTmpfile   *out_tmpf,
+                            GCancellable  *cancellable,
+                            GError       **error)
+{
+
+  g_autoptr(GMainLoop) loop = g_main_loop_new (g_main_context_get_thread_default (), TRUE);
+  g_autoptr(GError) local_error = NULL;
+  InitRamfsOverlayData data = { .loop = loop, .error = &local_error };
+
+  g_auto(GLnxTmpfile) tmpf = { 0, };
+  if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &tmpf, error))
+    return glnx_prefix_error (error, "Creating tmpfile");
+
+  g_autoptr(GOutputStream) tmpf_stream = g_unix_output_stream_new (tmpf.fd, FALSE);
+
+  g_autoptr(GPtrArray) filelist = g_ptr_array_new_with_free_func (g_free);
+
+  /* could do this async too... though it really shouldn't be that many files */
+  GLNX_HASH_TABLE_FOREACH (initramfs_etc_files, const char*, path)
+    {
+      /* should've been checked already */
+      g_assert (g_str_has_prefix (path, "/etc/"));
+      if (!add_etc_files_recurse (path, filelist, cancellable, error))
+        return FALSE;
+    }
+
+  /* feed into the input stream, but sort first to avoid needlessly changing the checksum */
+  g_ptr_array_sort (filelist, compare_strings);
+  g_autoptr(GInputStream) filelist_input = g_memory_input_stream_new ();
+
+  /* keep a hash of the previous path so we don't archive the same file multiple times */
+  guint last_path_hash = 0;
+  for (guint i = 0; i < filelist->len; i++)
+    {
+      g_autofree char *path = g_steal_pointer (&filelist->pdata[i]); /* steal in-place */
+      guint path_hash = g_str_hash (path);
+      if (path_hash == last_path_hash)
+        continue;
+      g_memory_input_stream_add_data (G_MEMORY_INPUT_STREAM (filelist_input),
+                                      g_steal_pointer (&path), (strlen (path))+1, g_free);
+      last_path_hash = path_hash;
+    }
+
+  const char *cpio_argv[] = {"cpio", "--create", "--format", "newc", "--quiet",
+                             "--reproducible", "--null", NULL};
+  g_autoptr(GSubprocess) cpio = g_subprocess_newv ((const char *const*)cpio_argv,
+                                                   G_SUBPROCESS_FLAGS_STDIN_PIPE |
+                                                   G_SUBPROCESS_FLAGS_STDOUT_PIPE,
+                                                   error);
+  if (!cpio)
+    return FALSE;
+
+  const char *gzip_argv[] = {"gzip", "-1", NULL};
+  g_autoptr(GSubprocess) gzip = g_subprocess_newv ((const char *const*)gzip_argv,
+                                                   G_SUBPROCESS_FLAGS_STDIN_PIPE |
+                                                   G_SUBPROCESS_FLAGS_STDOUT_PIPE,
+                                                   error);
+  if (!gzip)
+    return FALSE;
+
+  GOutputStream *cpio_input = g_subprocess_get_stdin_pipe (cpio);
+  g_output_stream_splice_async (cpio_input, filelist_input,
+                                G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
+                                G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+                                G_PRIORITY_DEFAULT, cancellable, splice_cb, &data);
+  data.counter++;
+
+  GInputStream *cpio_output = g_subprocess_get_stdout_pipe (cpio);
+  GOutputStream *gzip_input = g_subprocess_get_stdin_pipe (gzip);
+  g_output_stream_splice_async (gzip_input, cpio_output,
+                                G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
+                                G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+                                G_PRIORITY_DEFAULT, cancellable, splice_cb, &data);
+  data.counter++;
+
+  GInputStream *gzip_output = g_subprocess_get_stdout_pipe (gzip);
+  g_output_stream_splice_async (tmpf_stream, gzip_output,
+                                G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
+                                G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+                                G_PRIORITY_DEFAULT, cancellable, splice_cb, &data);
+  data.counter++;
+
+  g_main_loop_run (data.loop);
+
+  const gboolean cpio_success = g_subprocess_wait_check (cpio, cancellable, error);
+  const gboolean gzip_success = g_subprocess_wait_check (gzip, cancellable, error);
+  if (local_error)
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+  /* stderr is inherited; so it's in the journal */
+  if (!cpio_success)
+    return glnx_throw (error, "cpio failed; check daemon output in journal");
+  if (!gzip_success)
+    return glnx_throw (error, "gzip failed; check daemon output in journal");
+
+  if (lseek (tmpf.fd, 0, SEEK_SET) < 0)
+    return glnx_throw_errno_prefix (error, "lseek");
+
+  *out_tmpf = tmpf; tmpf.initialized = FALSE; /* Transfer */
 
   return TRUE;
 }
@@ -1406,6 +1596,28 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   g_autoptr(GKeyFile) origin = rpmostree_origin_dup_keyfile (self->origin);
   g_autoptr(OstreeDeployment) new_deployment = NULL;
 
+  g_autofree char *overlay_initrd_checksum = NULL;
+  const char *overlay_v[] = { NULL, NULL };
+  if (g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->origin)) > 0)
+    {
+      g_auto(GLnxTmpfile) tmpf = { 0, };
+      if (!generate_initramfs_overlay (rpmostree_origin_get_initramfs_etc_files (self->origin),
+                                       &tmpf, cancellable, error))
+        return glnx_prefix_error (error, "Generating initramfs overlay");
+
+      if (!ostree_sysroot_stage_overlay_initrd (self->sysroot, tmpf.fd,
+                                                &overlay_initrd_checksum,
+                                                cancellable, error))
+        return glnx_prefix_error (error, "Staging initramfs overlay");
+
+      overlay_v[0] = overlay_initrd_checksum;
+    }
+
+  OstreeSysrootDeployTreeOpts opts = {
+    .override_kernel_argv = self->kargs_strv,
+    .overlay_initrds = (char**)overlay_v,
+  };
+
   if (use_staging)
     {
       /* touch file *before* we stage to avoid races */
@@ -1425,22 +1637,20 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
       g_auto(RpmOstreeProgress) task = { 0, };
       rpmostree_output_task_begin (&task, "Staging deployment");
-      if (!ostree_sysroot_stage_tree (self->sysroot, self->osname,
-                                      target_revision, origin,
-                                      self->cfg_merge_deployment,
-                                      self->kargs_strv,
-                                      &new_deployment,
-                                      cancellable, error))
+      if (!ostree_sysroot_stage_tree_with_options (self->sysroot, self->osname,
+                                                   target_revision, origin,
+                                                   self->cfg_merge_deployment,
+                                                   &opts, &new_deployment,
+                                                   cancellable, error))
         return FALSE;
     }
   else
     {
-      if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
-                                       target_revision, origin,
-                                       self->cfg_merge_deployment,
-                                       self->kargs_strv,
-                                       &new_deployment,
-                                       cancellable, error))
+      if (!ostree_sysroot_deploy_tree_with_options (self->sysroot, self->osname,
+                                                    target_revision, origin,
+                                                    self->cfg_merge_deployment,
+                                                    &opts, &new_deployment,
+                                                    cancellable, error))
         return FALSE;
     }
 

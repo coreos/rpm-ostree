@@ -1,0 +1,79 @@
+#!/bin/bash
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+cd $(mktemp -d)
+
+# From https://github.com/ostreedev/ostree/blob/95a6d1514/tests/kolainst/destructive/overlay-initrds.sh#L23
+check_for_dracut_karg() {
+  local karg=$1; shift
+  # https://github.com/dracutdevs/dracut/blob/38ea7e821b/modules.d/98dracut-systemd/dracut-cmdline.sh#L17
+  journalctl -b 0 -t dracut-cmdline \
+    --grep "Using kernel command line parameters:.* ${karg} "
+}
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+  "")
+    mkdir -p /etc/cmdline.d
+    echo 'foobar' > /etc/cmdline.d/foobar.conf
+
+    rpm-ostree ex initramfs-etc --track /etc/cmdline.d/foobar.conf
+    rpm-ostree status > status.txt
+    assert_file_has_content_literal status.txt "InitramfsEtc: /etc/cmdline.d/foobar.conf"
+    rpm-ostree status --json > status.json
+    assert_jq status.json \
+      '.deployments[0]["initramfs-etc"]|length == 1' \
+      '.deployments[0]["initramfs-etc"][0] == "/etc/cmdline.d/foobar.conf"'
+
+    /tmp/autopkgtest-reboot 1
+    ;;
+  1)
+    check_for_dracut_karg foobar
+    rpm-ostree ex initramfs-etc --track /etc/cmdline.d/foobar.conf > out.txt
+    assert_file_has_content_literal out.txt "No changes."
+
+    # right now we don't rechecksum all the files so changing the file alone
+    # isn't noticed, but we could in the future
+    echo 'barbaz' > /etc/cmdline.d/foobar.conf
+    rpm-ostree ex initramfs-etc --track /etc/cmdline.d/foobar.conf > out.txt
+    assert_file_has_content_literal out.txt "No changes."
+
+    # but --force-sync should also plow through
+    rpm-ostree ex initramfs-etc --force-sync > out.txt
+    assert_file_has_content_literal out.txt "Staging deployment"
+
+    /tmp/autopkgtest-reboot 2
+    ;;
+  2)
+    check_for_dracut_karg barbaz
+    if check_for_dracut_karg foobar; then
+      assert_not_reached "Found karg foobar; expected barbaz"
+    fi
+
+    # let's try tracking a whole directory instead
+    echo 'bazboo' > /etc/cmdline.d/bazboo.conf
+    # and for fun, let's use the the locked finalization flow
+    rpm-ostree ex initramfs-etc --lock-finalization \
+      --untrack /etc/cmdline.d/foobar.conf \
+      --track /etc/cmdline.d
+    rpm-ostree status > status.txt
+    assert_file_has_content_literal status.txt "InitramfsEtc: /etc/cmdline.d"
+    rpm-ostree status --json > status.json
+    assert_jq status.json \
+      '.deployments[0]["initramfs-etc"]|length == 1' \
+      '.deployments[0]["initramfs-etc"][0] == "/etc/cmdline.d"'
+
+    /tmp/autopkgtest-reboot-prepare 3
+    rpm-ostree finalize-deployment --allow-missing-checksum
+    ;;
+  3)
+    check_for_dracut_karg barbaz
+    check_for_dracut_karg bazboo
+
+    # finally, check that passing no args prints the tracked files
+    rpm-ostree ex initramfs-etc > out.txt
+    assert_file_has_content_literal out.txt "Tracked files:"
+    assert_file_has_content_literal out.txt "/etc/cmdline.d"
+    ;;
+  *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac

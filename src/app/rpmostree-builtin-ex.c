@@ -36,6 +36,8 @@ static RpmOstreeCommand ex_subcommands[] = {
 #endif
   { "history", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
+  { "initramfs-etc", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    "Track initramfs configuration files", rpmostree_ex_builtin_initramfs_etc },
   { NULL, 0, NULL, NULL }
 };
 

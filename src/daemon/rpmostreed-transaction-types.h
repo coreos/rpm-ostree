@@ -78,6 +78,18 @@ rpmostreed_transaction_new_finalize_deployment (GDBusMethodInvocation *invocatio
                                                 GError               **error);
 
 RpmostreedTransaction *
+rpmostreed_transaction_new_initramfs_etc (GDBusMethodInvocation *invocation,
+                                          OstreeSysroot         *sysroot,
+                                          const char            *osname,
+                                          char                 **track,
+                                          char                 **untrack,
+                                          gboolean               untrack_all,
+                                          gboolean               force_sync,
+                                          GVariant              *options,
+                                          GCancellable          *cancellable,
+                                          GError               **error);
+
+RpmostreedTransaction *
 rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocation,
                                                   OstreeSysroot         *sysroot,
                                                   const char            *osname,
