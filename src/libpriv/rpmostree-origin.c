@@ -401,6 +401,16 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_free (origin);
 }
 
+static void
+update_string_list_from_hash_table (GKeyFile *kf,
+                                    const char *group,
+                                    const char *key,
+                                    GHashTable *values)
+{
+  g_autofree char **strv = (char**)g_hash_table_get_keys_as_array (values, NULL);
+  g_key_file_set_string_list (kf, group, key, (const char *const*)strv, g_strv_length (strv));
+}
+
 void
 rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
                                            gboolean regenerate,
@@ -623,11 +633,7 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
     }
   else
     {
-      g_autofree char **pkgv =
-        (char**)g_hash_table_get_keys_as_array (pkgs, NULL);
-      g_key_file_set_string_list (origin->kf, group, key,
-                                  (const char *const*)pkgv,
-                                  g_strv_length (pkgv));
+      update_string_list_from_hash_table (origin->kf, group, key, pkgs);
     }
 
   if (g_hash_table_size (pkgs) > 0)
