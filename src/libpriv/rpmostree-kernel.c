@@ -366,12 +366,28 @@ rpmostree_finalize_kernel (int rootfs_dfd,
   if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, kernel_path,
                                                   cancellable, error))
     return FALSE;
+
+  g_autofree char *initramfs_modules_path =
+    g_build_filename (modules_bootdir, "initramfs.img", NULL);
+
   { g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmpf->fd, FALSE, error);
     if (!mfile)
       return FALSE;
     g_checksum_update (boot_checksum, (guint8*)g_mapped_file_get_contents (mfile),
                        g_mapped_file_get_length (mfile));
+
+    /* Replace the initramfs */
+    if (unlinkat (rootfs_dfd, initramfs_modules_path, 0) < 0)
+      {
+        if (errno != ENOENT)
+          return glnx_throw_errno_prefix (error, "unlinkat(%s)", initramfs_modules_path);
+      }
+    if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
+                               rootfs_dfd, initramfs_modules_path,
+                               error))
+      return FALSE;
   }
+
   const char *boot_checksum_str = g_checksum_get_string (boot_checksum);
 
   g_autofree char *kernel_modules_path = g_build_filename (modules_bootdir, "vmlinuz", NULL);
@@ -427,18 +443,6 @@ rpmostree_finalize_kernel (int rootfs_dfd,
                                           cancellable, error))
         return FALSE;
     }
-
-  /* Replace the initramfs */
-  g_autofree char *initramfs_modules_path = g_build_filename (modules_bootdir, "initramfs.img", NULL);
-  if (unlinkat (rootfs_dfd, initramfs_modules_path, 0) < 0)
-    {
-      if (errno != ENOENT)
-        return glnx_throw_errno_prefix (error, "unlinkat(%s)", initramfs_modules_path);
-    }
-  if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                             rootfs_dfd, initramfs_modules_path,
-                             error))
-    return FALSE;
 
   /* Update /usr/lib/ostree-boot and /boot (if desired) */
   const gboolean only_if_found = (dest == RPMOSTREE_FINALIZE_KERNEL_AUTO);
