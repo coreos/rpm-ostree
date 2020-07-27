@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # this corresponds to the latest Rust module available in el8
-MINIMUM_SUPPORTED_RUST_VERSION=1.39.0
+MINIMUM_SUPPORTED_RUST_VERSION=1.43.1
 
 ci/installdeps.sh
 dnf remove -y cargo
