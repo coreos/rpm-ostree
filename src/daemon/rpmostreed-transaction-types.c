@@ -975,6 +975,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!ostree_repo_pull (repo, local_repo_uri, (char**)refs_to_fetch,
                              OSTREE_REPO_PULL_FLAGS_NONE, progress, cancellable, error))
         return glnx_prefix_error (error, "Pulling commit %s from local repo", rev);
+      ostree_async_progress_finish (progress);
       rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
       /* as far as the rest of the code is concerned, we're rebasing to :SHA256 now */
