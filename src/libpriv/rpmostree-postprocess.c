@@ -1097,55 +1097,6 @@ rpmostree_postprocess_final (int            rootfs_dfd,
   return TRUE;
 }
 
-static gboolean
-handle_remove_files_from_package (int               rootfs_fd,
-                                  RpmOstreeRefSack *refsack,
-                                  JsonArray        *removespec,
-                                  GCancellable     *cancellable,
-                                  GError          **error)
-{
-  const char *pkgname = json_array_get_string_element (removespec, 0);
-  const guint len = json_array_get_length (removespec);
-  hy_autoquery HyQuery query = hy_query_create (refsack->sack);
-  hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
-  g_autoptr(GPtrArray) pkglist = hy_query_run (query);
-  guint npackages = pkglist->len;
-  if (npackages == 0)
-    return glnx_throw (error, "Unable to find package '%s' specified in remove-from-packages", pkgname);
-
-  for (guint j = 0; j < npackages; j++)
-    {
-      DnfPackage *pkg = pkglist->pdata[j];
-      g_auto(GStrv) pkg_files = dnf_package_get_files (pkg);
-
-      for (guint i = 1; i < len; i++)
-        {
-          const char *remove_regex_pattern = json_array_get_string_element (removespec, i);
-
-          GRegex *regex = g_regex_new (remove_regex_pattern, G_REGEX_JAVASCRIPT_COMPAT, 0, error);
-          if (!regex)
-            return FALSE;
-
-          for (char **strviter = pkg_files; strviter && strviter[0]; strviter++)
-            {
-              const char *file = *strviter;
-
-              if (g_regex_match (regex, file, 0, NULL))
-                {
-                  if (file[0] == '/')
-                    file++;
-
-                  g_print ("Deleting: %s\n", file);
-                  if (!glnx_shutil_rm_rf_at (rootfs_fd, file, cancellable, error))
-                    return FALSE;
-                }
-            }
-        }
-    }
-
-  return TRUE;
-}
-
 gboolean
 rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
                                       const char *dest,
@@ -1656,25 +1607,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   /* Take care of /etc for these bits */
   if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
     return FALSE;
-
-  if (json_object_has_member (treefile, "remove-from-packages"))
-    {
-      remove = json_object_get_array_member (treefile, "remove-from-packages");
-      len = json_array_get_length (remove);
-
-      g_autoptr(RpmOstreeRefSack) refsack =
-        rpmostree_get_refsack_for_root (rootfs_fd, ".", error);
-      if (!refsack)
-        return glnx_prefix_error (error, "Reading package set");
-
-      for (guint i = 0; i < len; i++)
-        {
-          JsonArray *elt = json_array_get_array_element (remove, i);
-          if (!handle_remove_files_from_package (rootfs_fd, refsack, elt, cancellable, error))
-            return FALSE;
-        }
-
-    }
 
   {
     const char *base_version = NULL;

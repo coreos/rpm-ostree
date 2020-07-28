@@ -13,11 +13,20 @@ build_rpm foobar-rec
 build_rpm quuz
 build_rpm corge version 1.0
 build_rpm corge version 2.0
+# test `remove-from-packages` (files shared with other pkgs should not be removed)
+build_rpm barbar \
+          files "/etc/sharedfile
+                 /usr/bin/barbarextra" \
+          install "mkdir -p %{buildroot}/etc && echo shared file data > %{buildroot}/etc/sharedfile
+                   mkdir -p %{buildroot}/usr/bin && echo more binary data > %{buildroot}/usr/bin/barbarextra"
+build_rpm barbaz \
+          files "/etc/sharedfile" \
+          install "mkdir -p %{buildroot}/etc && echo shared file data > %{buildroot}/etc/sharedfile"
 
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
 # the top-level manifest doesn't have any packages, so just set it
-treefile_append "packages" $'["\'foobar >= 0.5\' quuz \'corge < 2.0\'"]'
+treefile_append "packages" $'["\'foobar >= 0.5\' quuz \'corge < 2.0\' barbar barbaz"]'
 
 # With docs and recommends, also test multi includes
 cat > config/documentation.yaml <<'EOF'
@@ -67,7 +76,8 @@ EOF
 chmod a+x postprocess.sh
 
 treefile_set "remove-files" '["etc/hosts"]'
-treefile_set "remove-from-packages" '[["setup", "/etc/hosts\..*"]]'
+treefile_set "remove-from-packages" '[["barbar", "/usr/bin/*"],
+                                      ["barbar", "/etc/sharedfile"]]'
 rnd=$RANDOM
 echo $rnd > config/foo.txt
 echo bar >  config/bar.txt
@@ -148,9 +158,11 @@ ostree --repo=${repo} ls ${treeref} /usr/etc > out.txt
 assert_not_file_has_content out.txt '/usr/etc/hosts$'
 echo "ok remove-files"
 
+ostree --repo=${repo} ls ${treeref} /usr/bin > out.txt
+assert_not_file_has_content out.txt 'bin/barbar'
+assert_not_file_has_content out.txt 'bin/barbarextra'
 ostree --repo=${repo} ls ${treeref} /usr/etc > out.txt
-assert_not_file_has_content out.txt '/usr/etc/hosts\.allow$'
-assert_not_file_has_content out.txt '/usr/etc/hosts\.deny$'
+assert_file_has_content out.txt 'etc/sharedfile'
 echo "ok remove-from-packages"
 
 # https://github.com/projectatomic/rpm-ostree/issues/669

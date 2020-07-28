@@ -1490,5 +1490,24 @@ mod ffi {
             Box::from_raw(tf);
         }
     }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_files_remove_regex(
+        tf: *mut Treefile,
+        package: *const libc::c_char,
+    ) -> *mut *mut libc::c_char {
+        let package = ffi_view_os_str(package);
+        let package = package.to_string_lossy().into_owned();
+        let mut files_to_remove: Vec<String> = Vec::new();
+        let tf = ref_from_raw_ptr(tf);
+        if let Some(ref packages) = tf.parsed.remove_from_packages {
+            for pkg in packages {
+                if pkg[0] == package {
+                    files_to_remove.extend_from_slice(&pkg[1..]);
+                }
+            }
+        }
+        files_to_remove.to_glib_full()
+    }
 }
 pub use self::ffi::*;
