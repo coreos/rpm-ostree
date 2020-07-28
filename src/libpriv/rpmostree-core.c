@@ -41,6 +41,7 @@
 #include "rpmostree-kernel.h"
 #include "rpmostree-importer.h"
 #include "rpmostree-output.h"
+#include "rpmostree-rust.h"
 
 #define RPMOSTREE_MESSAGE_COMMIT_STATS SD_ID128_MAKE(e6,37,2e,38,41,21,42,a9,bc,13,b6,32,b3,f8,93,44)
 #define RPMOSTREE_MESSAGE_SELINUX_RELABEL SD_ID128_MAKE(5a,e0,56,34,f2,d7,49,3b,b1,58,79,b7,0c,02,e6,5d)
@@ -2860,21 +2861,46 @@ handle_file_dispositions (RpmOstreeContext *self,
   return TRUE;
 }
 
+typedef struct {
+  GHashTable *files_skip;
+  GPtrArray  *files_remove_regex;
+} FilterData;
+
 static OstreeRepoCheckoutFilterResult
 checkout_filter (OstreeRepo         *self,
                  const char         *path,
                  struct stat        *st_buf,
                  gpointer            user_data)
 {
-  GHashTable *files_skip = user_data;
-  if (g_hash_table_contains (files_skip, path))
-    return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
+  GHashTable *files_skip = ((FilterData*)user_data)->files_skip;
+  GPtrArray *files_remove_regex = ((FilterData*)user_data)->files_remove_regex;
+
+  if (files_skip && g_hash_table_size (files_skip) > 0)
+    {
+      if (g_hash_table_contains (files_skip, path))
+        return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
+    }
+
+  if (files_remove_regex)
+    {
+      for (guint i = 0; i < files_remove_regex->len; i++)
+        {
+          GRegex *regex = g_ptr_array_index (files_remove_regex, i);
+          if (g_regex_match (regex, path, 0, NULL))
+            {
+              g_print ("Skipping file %s from checkout\n", path);
+              return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
+            }
+        }
+    }
+  
   /* Hack for nsswitch.conf: the glibc.i686 copy is identical to the one in glibc.x86_64,
    * but because we modify it at treecompose time, UNION_IDENTICAL wouldn't save us here. A
    * better heuristic here might be to skip all /etc files which have a different digest
    * than the one registered in the rpmdb */
   if (g_str_equal (path, "/usr/etc/nsswitch.conf"))
     return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
+
   return OSTREE_REPO_CHECKOUT_FILTER_ALLOW;
 }
 
@@ -2885,6 +2911,7 @@ checkout_package (OstreeRepo   *repo,
                   OstreeRepoDevInoCache *devino_cache,
                   const char   *pkg_commit,
                   GHashTable   *files_skip,
+                  GPtrArray    *files_remove_regex,
                   OstreeRepoCheckoutOverwriteMode ovwmode,
                   gboolean      force_copy_zerosized,
                   GCancellable *cancellable,
@@ -2904,11 +2931,14 @@ checkout_package (OstreeRepo   *repo,
   /* Used in the no-rofiles-fuse path */
   opts.force_copy_zerosized = force_copy_zerosized;
 
-  if (files_skip && g_hash_table_size (files_skip) > 0)
-    {
-      opts.filter = checkout_filter;
-      opts.filter_user_data = files_skip;
-    }
+  /* If called by `checkout_package_into_root()`, there may be files that need to be filtered. */
+  FilterData filter_data = { files_skip, files_remove_regex, };
+  if ((files_skip && g_hash_table_size (files_skip) > 0) ||
+      (files_remove_regex && files_remove_regex->len > 0))
+      {
+        opts.filter = checkout_filter;
+        opts.filter_user_data = &filter_data;
+      }
 
   return ostree_repo_checkout_at (repo, &opts, dfd, path,
                                   pkg_commit, cancellable, error);
@@ -2926,6 +2956,24 @@ checkout_package_into_root (RpmOstreeContext *self,
                             GCancellable *cancellable,
                             GError      **error)
 {
+  /* If called on compose-side, there may be files to remove from packages specified in the treefile. */
+  g_autoptr(GPtrArray) files_remove_regex = NULL;
+  if (self->treefile_rs)
+    {
+      g_auto(GStrv) files_remove_regex_patterns = 
+        ror_treefile_get_files_remove_regex (self->treefile_rs, dnf_package_get_name (pkg));
+      guint len = g_strv_length (files_remove_regex_patterns);
+      files_remove_regex = g_ptr_array_new_full (len, (GDestroyNotify)g_regex_unref);
+      for (guint i = 0; i < len; i++) 
+        {
+          const char *remove_regex_pattern = files_remove_regex_patterns[i];
+          GRegex *regex = g_regex_new (remove_regex_pattern, G_REGEX_JAVASCRIPT_COMPAT, 0, NULL);
+          if (!regex)
+            return FALSE;
+          g_ptr_array_add (files_remove_regex, regex);
+        }
+    }
+  
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
 
   /* The below is currently TRUE only in the --unified-core path. We probably want to
@@ -2943,7 +2991,7 @@ checkout_package_into_root (RpmOstreeContext *self,
     }
 
   if (!checkout_package (pkgcache_repo, dfd, path,
-                         devino_cache, pkg_commit, files_skip, ovwmode,
+                         devino_cache, pkg_commit, files_skip, files_remove_regex, ovwmode,
                          !self->enable_rofiles,
                          cancellable, error))
     return glnx_prefix_error (error, "Checkout %s", dnf_package_get_nevra (pkg));
@@ -3196,7 +3244,7 @@ relabel_in_thread_impl (RpmOstreeContext *self,
   g_autoptr(OstreeRepoDevInoCache) cache = ostree_repo_devino_cache_new ();
 
   if (!checkout_package (repo, tmpdir_dfd, pkg_dirname, cache,
-                         commit_csum, NULL, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE, FALSE,
+                         commit_csum, NULL, NULL, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE, FALSE,
                          cancellable, error))
     return FALSE;
 
