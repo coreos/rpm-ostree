@@ -124,6 +124,11 @@ The %{name}-devel package includes the header files for %{name}-libs.
 %autosetup -Sgit -n %{name}-%{version}
 
 %build
+# gobject introspection does not work with LTO.  There is an effort to fix this
+# in the appropriate project upstreams, so hopefully LTO can be enabled someday
+# Disable LTO.
+%define _lto_cflags %{nil}
+
 env NOCONFIGURE=1 ./autogen.sh
 %configure --disable-silent-rules --enable-gtk-doc
 %make_build
