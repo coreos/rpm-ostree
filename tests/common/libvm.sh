@@ -676,8 +676,9 @@ vm_ostreeupdate_lift_commit() {
 _commit_and_inject_pkglist() {
   local version=$1; shift
   local src_ref=$1; shift
-  vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck --fsync=no \
-    --tree=ref=$src_ref --add-metadata-string=version=$version
+  # Small percentage by default here; unshare to create a new mount namespace to make /sysroot writable
+  vm_cmd unshare -m rpm-ostree testutils generate-synthetic-upgrade --percentage=5 --repo=$REMOTE_OSTREE --ref=vmcheck \
+    --srcref=$src_ref --commit-version=$version
   vm_cmd_sysroot_rw rpm-ostree testutils inject-pkglist $REMOTE_OSTREE vmcheck
 }
 

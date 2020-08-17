@@ -26,6 +26,7 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-rust.h"
 
 gboolean
 rpmostree_testutils_builtin_inject_pkglist (int argc, char **argv,
@@ -35,6 +36,7 @@ rpmostree_testutils_builtin_inject_pkglist (int argc, char **argv,
 static RpmOstreeCommand testutils_subcommands[] = {
   { "inject-pkglist", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     NULL, rpmostree_testutils_builtin_inject_pkglist },
+  // Avoid adding other commands here - write them in Rust in testutils.rs
   { NULL, 0, NULL, NULL }
 };
 
@@ -43,8 +45,18 @@ rpmostree_builtin_testutils (int argc, char **argv,
                              RpmOstreeCommandInvocation *invocation,
                              GCancellable *cancellable, GError **error)
 {
-  return rpmostree_handle_subcommand (argc, argv, testutils_subcommands,
-                                      invocation, cancellable, error);
+  // See above; avoid adding other commands here - write them in Rust in testutils.rs
+  if (argc >= 2 && g_str_equal (argv[1], "inject-pkglist"))
+    return rpmostree_handle_subcommand (argc, argv, testutils_subcommands,
+                                        invocation, cancellable, error);
+  else
+    {
+        g_autoptr(GPtrArray) args = g_ptr_array_new ();
+        for (int i = 0; i < argc; i++)
+          g_ptr_array_add (args, argv[i]);
+        g_ptr_array_add (args, NULL);
+        return ror_testutils_entrypoint ((char**)args->pdata, error);
+    }
 }
 
 /*
