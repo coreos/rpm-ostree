@@ -25,3 +25,5 @@ mod lockfile;
 pub use self::lockfile::*;
 mod utils;
 pub use self::utils::*;
+mod testutils;
+pub use self::testutils::*;
