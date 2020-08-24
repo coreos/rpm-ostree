@@ -115,7 +115,7 @@ compose: {
         }
         stage("Run") {
           try {
-            timeout(time: 45, unit: 'MINUTES') {
+            timeout(time: 60, unit: 'MINUTES') {
               shwrap("""
                 mkdir -p compose-logs /srv/tmpdir
                 TMPDIR=/srv/tmpdir JOBS=${jobs} ./tests/compose.sh
