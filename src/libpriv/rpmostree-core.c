@@ -1101,11 +1101,19 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
       return TRUE;
     }
 
-  g_autoptr(GString) enabled_repos = g_string_new ("Enabled rpm-md repositories:");
-  for (guint i = 0; i < rpmmd_repos->len; i++)
+  g_autoptr(GString) enabled_repos = g_string_new ("");
+  if (rpmmd_repos->len > 0)
     {
-      DnfRepo *repo = rpmmd_repos->pdata[i];
-      g_string_append_printf (enabled_repos, " %s", dnf_repo_get_id (repo));
+      g_string_append (enabled_repos, "Enabled rpm-md repositories:");
+      for (guint i = 0; i < rpmmd_repos->len; i++)
+        {
+          DnfRepo *repo = rpmmd_repos->pdata[i];
+          g_string_append_printf (enabled_repos, " %s", dnf_repo_get_id (repo));
+        }
+    }
+  else
+    {
+      g_string_append (enabled_repos, "No enabled rpm-md repositories.");
     }
   rpmostree_output_message ("%s", enabled_repos->str);
 
