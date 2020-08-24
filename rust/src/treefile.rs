@@ -488,6 +488,24 @@ impl Treefile {
         ))
     }
 
+    fn update_checksum(&self, repo: &ostree::Repo, checksum: &mut glib::Checksum) -> Result<()> {
+        let it = self.parsed.ostree_layers.iter().flat_map(|x| x.iter());
+        let it = it.chain(
+            self.parsed
+                .ostree_override_layers
+                .iter()
+                .flat_map(|x| x.iter()),
+        );
+        for v in it {
+            let rev = repo.resolve_rev(v, false)?;
+            let (commit, _) = repo.load_commit(rev.as_str())?;
+            let content_checksum =
+                ostree::commit_get_content_checksum(&commit).expect("content checksum");
+            checksum.update(content_checksum.as_bytes());
+        }
+        Ok(())
+    }
+
     /// Generate a rojig spec file.
     fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> Result<CUtf8Buf> {
         let description = r
@@ -1442,6 +1460,19 @@ mod ffi {
             ret.extend(layers.iter().cloned())
         }
         ret.to_glib_full()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_update_checksum(
+        tf: *mut Treefile,
+        repo: *mut ostree_sys::OstreeRepo,
+        checksum: *mut glib_sys::GChecksum,
+        gerror: *mut *mut glib_sys::GError,
+    ) -> libc::c_int {
+        let repo: ostree::Repo = unsafe { from_glib_none(repo) };
+        let mut checksum: glib::Checksum = unsafe { from_glib_none(checksum) };
+        let tf = ref_from_raw_ptr(tf);
+        int_glib_error(tf.update_checksum(&repo, &mut checksum), gerror)
     }
 
     #[no_mangle]
