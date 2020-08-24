@@ -29,4 +29,6 @@
 b(GError)
 b(GHashTable)
 b(GPtrArray)
+b(GChecksum)
+b(OstreeRepo)
 #undef b
