@@ -59,7 +59,6 @@ GPtrArray *
 _rpmostree_util_get_commit_hashes (OstreeRepo *repo,
                                    const char *beg,
                                    const char *end,
-                                   GCancellable *cancellable,
                                    GError **error);
 
 gboolean

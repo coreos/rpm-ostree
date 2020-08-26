@@ -51,7 +51,7 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
           if (!*mrev)
             mrev = NULL;
 
-          range_revs = _rpmostree_util_get_commit_hashes (repo, revdup, mrev, cancellable, error);
+          range_revs = _rpmostree_util_get_commit_hashes (repo, revdup, mrev, error);
           if (!range_revs)
             return FALSE;
 
