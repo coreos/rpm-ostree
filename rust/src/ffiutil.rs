@@ -199,7 +199,6 @@ where
 mod tests {
     use super::*;
     use glib;
-    use std::error::Error;
     use std::{io, ptr};
 
     struct Foo {
@@ -242,7 +241,7 @@ mod tests {
             assert_eq!((*error).domain, gio_sys::g_io_error_quark());
             assert_eq!((*error).code, gio_sys::G_IO_ERROR_FAILED);
             let e: glib::Error = glib::translate::from_glib_full(error);
-            assert_eq!(e.description(), "oops");
+            assert_eq!(e.to_string(), "oops");
         }
     }
 
@@ -256,7 +255,7 @@ mod tests {
             assert_eq!((*error).domain, gio_sys::g_io_error_quark());
             assert_eq!((*error).code, gio_sys::G_IO_ERROR_FAILED);
             let e: glib::Error = glib::translate::from_glib_full(error);
-            assert_eq!(e.description(), "oops");
+            assert_eq!(e.to_string(), "oops");
         }
     }
 
