@@ -111,7 +111,6 @@ GPtrArray *
 _rpmostree_util_get_commit_hashes (OstreeRepo    *repo,
                                    const char    *beg,
                                    const char    *end,
-                                   GCancellable  *cancellable,
                                    GError       **error)
 {
   GPtrArray *ret = NULL;
@@ -121,14 +120,14 @@ _rpmostree_util_get_commit_hashes (OstreeRepo    *repo,
   char *checksum = NULL;
   gboolean worked = FALSE;
 
-  if (!ostree_repo_read_commit (repo, beg, NULL, &beg_checksum, cancellable, error))
+  if (!ostree_repo_read_commit (repo, beg, NULL, &beg_checksum, NULL, error))
     goto out;
 
   ret = g_ptr_array_new_with_free_func (g_free);
   g_ptr_array_add (ret, g_strdup (beg));  /* Add the user defined REFSPEC. */
 
   if (end &&
-      !ostree_repo_read_commit (repo, end, NULL, &end_checksum, cancellable, error))
+      !ostree_repo_read_commit (repo, end, NULL, &end_checksum, NULL, error))
       goto out;
 
   if (end && g_str_equal (end_checksum, beg_checksum))
