@@ -34,51 +34,24 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
 {
   for (guint num = 0; num < revs->len; num++)
     {
-      char *rev = revs->pdata[num];
-      g_autoptr(RpmRevisionData) rpmrev = NULL;
-      g_autofree char *rpmdbv = NULL;
-      char *mrev = strstr (rev, "..");
+      const char *rev = revs->pdata[num];
 
-      if (mrev)
-        {
-          g_autoptr(GPtrArray) range_revs = NULL;
-          g_autofree char *revdup = g_strdup (rev);
+      g_autoptr(RpmRevisionData) rpmrev = rpmrev_new (repo, rev, NULL, cancellable, error);
+      if (!rpmrev)
+        return FALSE;
 
-          mrev = revdup + (mrev - rev);
-          *mrev = 0;
-          mrev += 2;
+      g_autofree char *rpmdbv =
+        rpmhdrs_rpmdbv (rpmrev_get_headers (rpmrev), cancellable, error);
+      if (rpmdbv == NULL)
+        return FALSE;
 
-          if (!*mrev)
-            mrev = NULL;
+      if (!g_str_equal (rev, rpmrev_get_commit (rpmrev)))
+        printf ("ostree commit: %s (%s)\n", rev, rpmrev_get_commit (rpmrev));
+      else
+        printf ("ostree commit: %s\n", rev);
 
-          range_revs = _rpmostree_util_get_commit_hashes (repo, revdup, mrev, error);
-          if (!range_revs)
-            return FALSE;
-
-          if (!_builtin_db_version (repo, range_revs,
-                                    cancellable, error))
-            return FALSE;
-
-          continue;
-        }
-
-        rpmrev = rpmrev_new (repo, rev, NULL, cancellable, error);
-        if (!rpmrev)
-          return FALSE;
-
-        rpmdbv = rpmhdrs_rpmdbv (rpmrev_get_headers (rpmrev),
-                                 cancellable, error);
-        if (rpmdbv == NULL)
-          return FALSE;
-
-        /* FIXME: g_console? */
-        if (!g_str_equal (rev, rpmrev_get_commit (rpmrev)))
-          printf ("ostree commit: %s (%s)\n", rev, rpmrev_get_commit (rpmrev));
-        else
-          printf ("ostree commit: %s\n", rev);
-
-        printf ("  rpmdbv is: %66s\n", rpmdbv);
-      }
+      printf ("  rpmdbv is: %66s\n", rpmdbv);
+    }
 
   return TRUE;
 }

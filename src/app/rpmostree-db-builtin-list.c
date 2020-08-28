@@ -36,29 +36,7 @@ _builtin_db_list (OstreeRepo      *repo,
 {
   for (guint num = 0; num < revs->len; num++)
     {
-      char *rev = revs->pdata[num];
-      char *mrev = strstr (rev, "..");
-      if (mrev)
-        {
-          g_autoptr(GPtrArray) range_revs = NULL;
-          g_autofree char *revdup = g_strdup (rev);
-
-          mrev = revdup + (mrev - rev);
-          *mrev = 0;
-          mrev += 2;
-
-          if (!*mrev)
-            mrev = NULL;
-
-          range_revs = _rpmostree_util_get_commit_hashes (repo, revdup, mrev, error);
-          if (!range_revs)
-            return FALSE;
-
-          if (!_builtin_db_list (repo, range_revs, patterns, cancellable, error))
-            return FALSE;
-
-          continue;
-        }
+      const char *rev = revs->pdata[num];
 
       g_autofree char *checksum = NULL;
       if (!ostree_repo_resolve_rev (repo, rev, FALSE, &checksum, error))
