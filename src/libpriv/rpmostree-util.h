@@ -55,12 +55,6 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
                                            GCancellable *cancellable,
                                            GError      **error);
 
-GPtrArray *
-_rpmostree_util_get_commit_hashes (OstreeRepo *repo,
-                                   const char *beg,
-                                   const char *end,
-                                   GError **error);
-
 gboolean
 rpmostree_pkg_is_local (DnfPackage *pkg);
 
