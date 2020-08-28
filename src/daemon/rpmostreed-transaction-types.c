@@ -634,6 +634,7 @@ deploy_transaction_finalize (GObject *object)
   g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
   g_free (self->override_remove_pkgs);
   g_free (self->override_reset_pkgs);
+  glnx_close_fd (&self->local_repo_remote_dfd);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
@@ -981,6 +982,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       /* as far as the rest of the code is concerned, we're rebasing to :SHA256 now */
       g_clear_pointer (&self->refspec, g_free);
       self->refspec = g_strdup_printf (":%s", rev);
+      glnx_close_fd (&self->local_repo_remote_dfd);
     }
 
   g_autofree gchar *new_refspec = NULL;
