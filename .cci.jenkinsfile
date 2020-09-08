@@ -62,11 +62,6 @@ parallel insttests: {
           coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm
-          # Let's make sure we're always composing with the latest ostree. This could be
-          # from the continuous repo (which for now we manually use to fast-track ostree
-          # builds which are needed to get rpm-ostree patches in, but eventually will be
-          # automated) or from the regular repos.
-          dnf download ostree ostree-libs --arch x86_64
           mv *.rpm overrides/rpm
           coreos-assembler fetch
           coreos-assembler build
