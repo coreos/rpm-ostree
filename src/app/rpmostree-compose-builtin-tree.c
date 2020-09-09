@@ -207,6 +207,7 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self,
                             GCancellable                 *cancellable,
                             GError                      **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Loading previous sepolicy", error);
   gboolean selinux = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux",
                                                                &selinux, error))
@@ -234,7 +235,8 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self,
                                cancellable, error))
     return FALSE;
 
-  OstreeRepoCheckoutAtOptions opts = { .subpath = "/usr/etc/selinux" };
+  OstreeRepoCheckoutAtOptions opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_USER,
+                                       .subpath = "/usr/etc/selinux" };
   if (!ostree_repo_checkout_at (self->repo, &opts, self->workdir_dfd,
                                 TMP_SELINUX_ROOTFS, self->previous_checksum,
                                 cancellable, error))
