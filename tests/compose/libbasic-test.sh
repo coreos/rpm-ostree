@@ -95,6 +95,11 @@ ostree --repo=${repo} ls -R ${treeref} /usr/etc/selinux > ls.txt
 assert_not_file_has_content ls.txt 'LOCK'
 echo "ok no leftover files"
 
+ostree --repo=${repo} ls ${treeref} /usr/share/rpm > ls.txt
+assert_file_has_content ls.txt /usr/share/rpm/Packages
+assert_not_file_has_content ls.txt rpmdb.sqlite
+echo "ok rpmdb is bdb"
+
 ostree --repo=${repo} show ${treeref} \
   --print-metadata-key rpmostree.rpmdb.pkglist > pkglist.txt
 assert_file_has_content pkglist.txt 'systemd'
