@@ -94,6 +94,10 @@ It supports the following parameters:
     specific filesystem drivers are included.  If not specified,
     `--no-hostonly` will be used.
 
+ * `rpmdb`: String, optional: The RPM database backend.  Can be one of
+    `bdb`, `ndb`, or `sqlite`.  If unspecified, defaults to `bdb` for
+    compatibility.
+
  * `cliwrap`: boolean, optional.  Defaults to `false`.  If enabled,
     rpm-ostree will replace binaries such as `/usr/bin/rpm` with
     wrappers that intercept unsafe operations, or adjust functionality.

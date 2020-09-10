@@ -753,6 +753,15 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* This is what we use as default. */
   dnf_context_set_rpm_macro (self->dnfctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
+  /* Set the database backend only in the compose path.  It then becomes the default
+   * for any client side layering.
+   */
+  if (self->treefile_rs)
+    {
+      g_autofree char *rpmdb_backend = ror_treefile_get_rpmdb (self->treefile_rs);
+      dnf_context_set_rpm_macro (self->dnfctx, "_db_backend", rpmdb_backend);
+    }
+
   if (!dnf_context_setup (self->dnfctx, cancellable, error))
     return FALSE;
 

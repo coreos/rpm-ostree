@@ -306,6 +306,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         releasever,
         automatic_version_prefix,
         automatic_version_suffix,
+        rpmdb,
         mutate_os_release,
         preserve_passwd,
         check_passwd,
@@ -681,6 +682,16 @@ enum Include {
     Multiple(Vec<String>),
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
+/// and https://fedoraproject.org/wiki/Changes/Sqlite_Rpmdb
+enum RpmdbBackend {
+    BDB,
+    Sqlite,
+    NDB,
+}
+
 // Because of how we handle includes, *everything* here has to be
 // Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
 // to `true`).
@@ -821,6 +832,10 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-commit-metadata")]
     add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "rpmdb")]
+    // The database backend
+    rpmdb: Option<RpmdbBackend>,
 
     #[serde(flatten)]
     legacy_fields: LegacyTreeComposeConfigFields,
@@ -1026,6 +1041,7 @@ mutate-os-release: ${releasever}
         assert!(treefile.releasever.unwrap() == "30");
         assert!(treefile.automatic_version_prefix.unwrap() == "30");
         assert!(treefile.mutate_os_release.unwrap() == "30");
+        assert!(treefile.rpmdb.is_none());
     }
 
     #[test]
@@ -1043,12 +1059,14 @@ gpg_key: foo
 boot_location: new
 default_target: bar
 automatic_version_prefix: baz
+rpmdb: sqlite
         ",
         );
         assert!(treefile.gpg_key.unwrap() == "foo");
         assert!(treefile.boot_location.unwrap() == BootLocation::New);
         assert!(treefile.default_target.unwrap() == "bar");
         assert!(treefile.automatic_version_prefix.unwrap() == "baz");
+        assert!(treefile.rpmdb.unwrap() == RpmdbBackend::Sqlite);
     }
 
     #[test]
@@ -1510,6 +1528,17 @@ mod ffi {
     pub extern "C" fn ror_treefile_get_readonly_executables(tf: *mut Treefile) -> bool {
         let tf = ref_from_raw_ptr(tf);
         tf.parsed.readonly_executables.unwrap_or(false)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_rpmdb(tf: *mut Treefile) -> *mut libc::c_char {
+        let tf = ref_from_raw_ptr(tf);
+        let s: &str = match tf.parsed.rpmdb.as_ref().unwrap_or(&RpmdbBackend::BDB) {
+            RpmdbBackend::BDB => "bdb",
+            RpmdbBackend::Sqlite => "sqlite",
+            RpmdbBackend::NDB => "ndb",
+        };
+        s.to_string().to_glib_full()
     }
 
     #[no_mangle]
