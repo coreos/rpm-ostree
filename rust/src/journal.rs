@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use systemd::id128::Id128;
 use systemd::journal;
 
@@ -27,11 +27,14 @@ fn print_staging_failure_msg(msg: Option<&str>) -> Result<()> {
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.
 fn journal_print_staging_failure() -> Result<()> {
     let mut j = journal::Journal::open(journal::JournalFiles::System, false, true)?;
+    j.seek(journal::JournalSeek::Head)?;
 
     // first, go to the first entry of the current boot
     let boot_id = Id128::from_boot()?;
     j.match_add("_BOOT_ID", boot_id.to_string().as_str())?;
-    j.seek(journal::JournalSeek::Head)?;
+    if j.next_entry()?.is_none() {
+        bail!("couldn't find current boot in journal");
+    }
     j.match_flush()?;
 
     // Now, go backwards until we hit the first entry from the previous boot. In theory that should
@@ -39,7 +42,7 @@ fn journal_print_staging_failure() -> Result<()> {
     // https://github.com/systemd/systemd/commit/dc00966228ff90c554fd034e588ea55eb605ec52
     let mut previous_boot_id: Id128 = boot_id.clone();
     while previous_boot_id == boot_id {
-        match j.previous_record()? {
+        match j.previous_entry()? {
             Some(_) => previous_boot_id = j.monotonic_timestamp()?.1,
             None => return Ok(()), // no previous boot!
         }
@@ -54,7 +57,7 @@ fn journal_print_staging_failure() -> Result<()> {
     j.match_add("MESSAGE_ID", OSTREE_DEPLOYMENT_FINALIZING_MSG_ID)?;
     j.match_add("SYSLOG_IDENTIFIER", "ostree")?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
-    let ostree_pid = match j.previous_record()? {
+    let ostree_pid = match j.previous_entry()? {
         None => return Ok(()), // didn't run (or staged deployment was cleaned up)
         Some(mut rec) => rec.remove("_PID").unwrap(),
     };
@@ -69,7 +72,7 @@ fn journal_print_staging_failure() -> Result<()> {
     j.match_add("_PID", ostree_pid.as_str())?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
 
-    if j.next_record()? != None {
+    if j.next_entry()? != None {
         return Ok(()); // finished successfully!
     }
 
@@ -86,7 +89,7 @@ fn journal_print_staging_failure() -> Result<()> {
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
 
     let mut exited = false;
-    while let Some(rec) = j.next_record()? {
+    while let Some(rec) = j.next_entry()? {
         if let Some(msg) = rec.get("MESSAGE") {
             if msg.contains("Failed with result") || msg.contains("control process exited") {
                 if !msg.contains("exit-code") && !msg.contains("code=exited") {
@@ -118,7 +121,7 @@ fn journal_print_staging_failure() -> Result<()> {
     // systemd can be timestamped *after* the error msg (stdout transport)...
     j.match_add("_TRANSPORT", "stdout")?;
 
-    if let Some(rec) = j.previous_record()? {
+    if let Some(rec) = j.previous_entry()? {
         if let Some(msg) = rec.get("MESSAGE") {
             // only print the msg if it starts with 'error:', otherwise some other really
             // weird thing happened that might span multiple lines?
