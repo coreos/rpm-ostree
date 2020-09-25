@@ -191,7 +191,7 @@ fn history_get_oldest_deployment_msg_timestamp() -> Result<Option<u64>> {
     let mut journal = journal::Journal::open(journal::JournalFiles::System, false, true)?;
     journal.seek(journal::JournalSeek::Head)?;
     journal.match_add("MESSAGE_ID", RPMOSTREE_DEPLOY_MSG)?;
-    while let Some(rec) = journal.next_record()? {
+    while let Some(rec) = journal.next_entry()? {
         if let Some(ts) = map_to_u64(rec.get("DEPLOYMENT_TIMESTAMP")) {
             return Ok(Some(ts));
         }
@@ -306,7 +306,7 @@ impl HistoryCtx {
     /// Goes to the next OSTree boot msg in the journal and returns its marker.
     fn find_next_boot_marker(&mut self) -> Result<Option<BootMarker>> {
         self.set_search_mode(JournalSearchMode::BootMsgs)?;
-        while let Some(rec) = self.journal.previous_record()? {
+        while let Some(rec) = self.journal.previous_entry()? {
             if let Some(Marker::Boot(m)) = self.boot_record_to_marker(&rec)? {
                 return Ok(Some(m));
             }
@@ -327,7 +327,7 @@ impl HistoryCtx {
     /// marker for it, and returns it.
     fn find_next_marker(&mut self) -> Result<Option<Marker>> {
         self.set_search_mode(JournalSearchMode::BootAndDeploymentMsgs)?;
-        while let Some(rec) = self.journal.previous_record()? {
+        while let Some(rec) = self.journal.previous_entry()? {
             if let Some(marker) = self.record_to_marker(&rec)? {
                 return Ok(Some(marker));
             }
@@ -473,7 +473,7 @@ mod mock_journal {
             self.msg_ids.push(msg_id.into());
             Ok(())
         }
-        pub fn previous_record(&mut self) -> Result<Option<JournalRecord>> {
+        pub fn previous_entry(&mut self) -> Result<Option<JournalRecord>> {
             while let Some((timestamp, record)) = self.entries.pop() {
                 if self.msg_ids.contains(record.get("MESSAGE_ID").unwrap()) {
                     self.current_timestamp = Some(timestamp);
@@ -483,7 +483,7 @@ mod mock_journal {
             Ok(None)
         }
         // This is only used by the prune path, which we're not unit testing.
-        pub fn next_record(&mut self) -> Result<Option<JournalRecord>> {
+        pub fn next_entry(&mut self) -> Result<Option<JournalRecord>> {
             unimplemented!();
         }
     }
