@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "openat-ext"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.77 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -879,7 +879,7 @@ dependencies = [
  "libdnf-sys 0.1.0",
  "nix 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "openat 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "openat-ext 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "openat-ext 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "ostree 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ostree-sys 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1292,7 +1292,7 @@ dependencies = [
 "checksum number_prefix 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "17b02fc0ff9a9e4b35b3342880f48e896ebf69f2967921fe8646bf5b7125956a"
 "checksum once_cell 1.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "260e51e7efe62b592207e9e13a68e43692a7a279171d6ba57abd208bf23645ad"
 "checksum openat 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)" = "8eff876e3964841fd6067ecf1d040e0315879c1a1cce2a0f162828e82f04d1ce"
-"checksum openat-ext 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "2dc422059d181116b39e3358041fc595ef0424321c5675ee38cb704ce2cce7e8"
+"checksum openat-ext 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "2862a15ef65cac3c516de37ce6f026e0d77ad03d229f471e8294a29a962da1d6"
 "checksum openssl-probe 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
 "checksum openssl-sys 0.9.53 (registry+https://github.com/rust-lang/crates.io-index)" = "465d16ae7fc0e313318f7de5cecf57b2fbe7511fd213978b457e1c96ff46736f"
 "checksum ostree 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e3c64010b13eabf6bd78933985636b123d7fb1397948aafe3e399290874d59c5"
