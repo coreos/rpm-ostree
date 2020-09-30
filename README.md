@@ -1,7 +1,10 @@
 # rpm-ostree: A true hybrid image/package system
 
-rpm-ostree combines [libostree](https://ostree.readthedocs.io/en/latest/) (an image system),
-with [libdnf](https://github.com/rpm-software-management/libdnf) (a package system), bringing
+rpm-ostree is a hybrid image/package system.  It combines
+[libostree](https://ostree.readthedocs.io/en/latest/) as a base image format,
+and accepts RPM on both the client and server side, sharing code with the
+[dnf](https://en.wikipedia.org/wiki/DNF_(software)) project; specifically
+[libdnf](https://github.com/rpm-software-management/libdnf). and thus bringing
 many of the benefits of both together.
 
 ```
@@ -26,8 +29,6 @@ many of the benefits of both together.
 +-------------------------------------------+        +-----------------------------------------+
 ```
 
-For more information, see the online manual: [Read The Docs (rpm-ostree)](https://rpm-ostree.readthedocs.org/en/latest/)
-
 **Features:**
 
  - Transactional, background image-based (versioned/checksummed) upgrades
@@ -35,50 +36,147 @@ For more information, see the online manual: [Read The Docs (rpm-ostree)](https:
  - Client-side package layering (and overrides)
  - Easily make your own: `rpm-ostree compose tree` and [CoreOS Assembler](https://github.com/coreos/coreos-assembler)
 
-Projects using rpm-ostree
---------------------------
+## Documentation
+
+For more information, see the [project documentation](docs/index.md) or the
+[project documentation website](https://coreos.github.io/rpm-ostree).
+
+## Projects using rpm-ostree
 
 The OSTree project is independent of distributions and agnostic to how content
-is delivered and managed; it's used today by e.g. Debian, Fedora, and OpenEmbedded
-derived systems among others.  There are some examples in the [OSTree github](https://github.com/ostreedev/ostree).
+is delivered and managed; it's used today by e.g. Debian, Fedora, and
+OpenEmbedded derived systems among others. There are some examples in the
+[OSTree github](https://github.com/ostreedev/ostree).
 
 In contrast, rpm-ostree is intended to be tightly integrated with the Fedora
-ecosystem.  Today it is the underlying update mechanism of [Fedora CoreOS](https://getfedora.org/coreos/)
-as well as its derivative RHEL CoreOS.  It is also used by [Fedora IoT](https://iot.fedoraproject.org/)
-and [Fedora Silverblue](https://silverblue.fedoraproject.org/). 
+ecosystem. Today it is the underlying update mechanism of
+[Fedora CoreOS](https://getfedora.org/coreos/) as well as its derivative RHEL
+CoreOS. It is also used by [Fedora IoT](https://iot.fedoraproject.org/) and
+[Fedora Silverblue](https://silverblue.fedoraproject.org/).
 
 Originally, it was productized as part of [Project Atomic](http://www.projectatomic.io/).
 
-Why?
----
+## Getting started
 
-Package systems such as apt and yum are highly prevalent in Linux-based operating systems.  The core premise of rpm-ostree is that image-based updates should be the default.  This provides a high degree of predictability and resiliency.  However, where rpm-ostree is fairly unique in the ecosystem is supporting client-side package layering and overrides; deeply integrating RPM as an (optional) layer on top of OSTree.
+If you want to try the system as a user, we recommend
+[Fedora CoreOS](https://getfedora.org/en/coreos). If you are interested in
+assembling your own systems, see [compose server](compose-server.md).
 
-A good way to think of package layering is recasting RPMs as "operating system extensions", similar to how browser extensions work (although before those were sandboxed).  One can use package layering for components not easily containerized, such as PAM modules, custom shells, etc.
+## Why?
 
-Further, one can easily use `rpm-ostree override replace` to override the kernel or userspace components with the very same RPMs shipped to traditional systems.  The Fedora project for example continues to only have one kernel build.
+Package systems such as apt and yum are highly prevalent in Linux-based
+operating systems. The core premise of rpm-ostree is that image-based updates
+should be the default. This provides a high degree of predictability and
+resiliency. However, where rpm-ostree is fairly unique in the ecosystem is
+supporting client-side package layering and overrides; deeply integrating RPM
+as an (optional) layer on top of OSTree.
 
-Layering and overrides are still built on top of the default OSTree engine - installing and updating client-side packages constructs a new filesystem root, it does not by default affect your booted root.  This preserves the "image" nature of the system.
+A good way to think of package layering is recasting RPMs as "operating system
+extensions", similar to how browser extensions work (although before those were
+sandboxed). One can use package layering for components not easily
+containerized, such as PAM modules, custom shells, etc.
 
-Manual
-------
+Further, one can easily use `rpm-ostree override replace` to override the
+kernel or userspace components with the very same RPMs shipped to traditional
+systems. The Fedora project for example continues to only have one kernel
+build.
 
-For more information, see the online manual: [Read The Docs (rpm-ostree)](https://rpm-ostree.readthedocs.org/en/latest/)
+Layering and overrides are still built on top of the default OSTree engine -
+installing and updating client-side packages constructs a new filesystem root,
+it does not by default affect your booted root. This preserves the "image"
+nature of the system.
 
-Talks and media
------
+## Why would I want to use it?
+
+One major feature rpm-ostree has over traditional package management
+is atomic upgrade/rollback.  It supports a model where an OS vendor
+(such as [CentOS](https://www.centos.org/) or
+[Fedora](https://getfedora.org/)) can provide pre-assembled "base OS
+images", and client systems can replicate those, and possibly layer on
+additional packages.
+
+rpm-ostree is a core part of the [Project Atomic](http://www.projectatomic.io/)
+effort, which uses rpm-ostree to provide a minimal host for
+Docker formatted Linux containers.
+
+We expect most users will be interested in rpm-ostree on the client
+side, using it to replicate a base system, and possibly layer on
+additional packages, and use containers for applications.
+
+## Why not implement these changes in an existing package manager?
+
+The [OSTree related projects](https://coreos.github.io/ostree/related-projects/)
+section covers this to a degree.  As soon as one starts taking
+"snapshots" or keeping track of multiple roots, it uncovers many
+issues.  For example, which content specifically is rolled forward or
+backwards?  If the package manager isn't deeply aware of a snapshot
+tool, it's easy to lose coherency.
+
+### Filesystem layout
+
+A concrete example is that rpm-ostree moves the RPM database
+to `/usr/share/rpm`, since we want one per root `/usr`.  In contrast,
+the [snapper](http://snapper.io/) tool goes to some effort to
+include `/var/lib/rpm` in snapshots, but
+avoid rolling forward/back log files in `/var/log`.
+
+OSTree requires clear rules around the semantics
+of directories like `/usr` and `/var` across upgrades, and
+while this requires changing some software, we believe the
+result is significantly more reliable than having two separate
+systems like yum and snapper glued together, or apt-get and BTRFS,
+etc.
+
+### User experience
+
+Furthermore, beyond just the mechanics of things like the filesystem
+layout, the implemented upgrade model affects the entire user
+experience.
+
+For example, the base system OSTree commits that one replicates from a
+remote server can be assigned version numbers.  They are
+released as coherent wholes, tested together.  If one is simply
+performing snapshots on the client side, every client machine
+can have different versions of components.
+
+Related to this is that rpm-ostree clearly distinguishes which
+packages you have layered, and it's easy to remove them, going back to
+a pristine, known state.  Many package managers just implement a "bag
+of packages" model with no clear bases or layering.  As the OS evolves
+over time, "package drift" occurs where you might have old, unused
+packages lying around.
+
+## But still evolutionary
+
+On the other hand, rpm-ostree in other ways is very evolutionary.
+There have been many, many different package managers invented -
+why not adopt or build on one of those?
+
+The answer here is that it takes a long time for tooling to be built
+on top of a package format - things like mirroring servers.  Another
+example is source format representations - there are many, many
+tools that know how to build source RPMs.
+
+From the perspective of distribution which has all of that ecosystem
+built up, rpm-ostree does introduce a new binary format (ostree), but
+otherwise includes an RPM database, and also operates on packages.  It
+is not a new source format either.
+
+## Talks and media
 
 A number of Project Atomic talks are available; see for
-example [this post](https://lists.projectatomic.io/projectatomic-archives/atomic-devel/2018-January/msg00057.html) which
-has a bigger collection that also includes talks on containers.
+example [this post](https://lists.projectatomic.io/projectatomic-archives/atomic-devel/2018-January/msg00057.html)
+which has a bigger collection that also includes talks on containers.
 
 rpm-ostree specific talks:
 
- * devconf.cz 2018: [Colin Walters: Hybrid image/package OS updates with rpm-ostree](https://www.youtube.com/watch?v=4A_xl5dC210) [slides](https://fedorapeople.org/~walters/2018.01-devconf/index.html)
- * devconf.cz 2018: [Peter Robinson: Using Fedora and OSTree for IoT](https://www.youtube.com/watch?v=mRqV38qT-wc)
+ * devconf.cz 2018:
+   [Colin Walters: Hybrid image/package OS updates with rpm-ostree](https://www.youtube.com/watch?v=4A_xl5dC210)
+   ([slides](https://fedorapeople.org/~walters/2018.01-devconf/index.html))
+ * devconf.cz 2018:
+   [Peter Robinson: Using Fedora and OSTree for IoT](https://www.youtube.com/watch?v=mRqV38qT-wc)
 
-License
-----
+## License
 
 rpm-ostree includes code licensed under GPLv2+, LGPLv2+, (Apache 2.0 OR MIT).
 For more information, see [LICENSE](LICENSE).
