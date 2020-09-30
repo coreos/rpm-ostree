@@ -1,3 +1,13 @@
+---
+nav_order: 3
+---
+
+# Client administration
+{: .no_toc }
+
+1. TOC
+{:toc}
+
 ## Administering an rpm-ostree based system
 
 At the moment, there are four primary commands to be familiar with on
@@ -7,7 +17,7 @@ system, the `atomic host` command (from the
 alias for `rpm-ostree`.
 
 ```
-   # rpm-ostree status
+# rpm-ostree status
 ```
 
 Will show you your deployments in the order in which they will appear in the
@@ -15,7 +25,7 @@ bootloader, the first deployment in the list being the current default one. The
 `●` shows the currently booted deployment.
 
 ```
-   # rpm-ostree upgrade
+# rpm-ostree upgrade
 ```
 
 Will perform a system upgrade, creating a *new* deployment (root filesystem) and
@@ -23,7 +33,7 @@ set it as the default for the next boot.  You should use `systemctl reboot`
 shortly afterwards.
 
 ```
-   # rpm-ostree rollback
+# rpm-ostree rollback
 ```
 
 This rolls back to the previous state, i.e. the default deployment changes
@@ -68,13 +78,23 @@ Will download the target package, its dependencies, and create a new deployment
 with those packages installed.  It is also possible to specify a local package
 which is not part of a repository.
 
-To remove layered packages installed from a repository, use `rpm-ostree uninstall
-<pkg>`.  To remove layered packages installed from a local package, you must
-specify the full NEVRA of the package.  For example, `rpm-ostree uninstall
-ltrace-0.7.91-16.fc22.x86_64`.
+To remove layered packages, use:
 
-In order to uninstall a package that is a part of the base layer, use `rpm-ostree override remove <pkg>`.
-For example, `rpm-ostree override remove firefox`.
+```
+# rpm-ostree uninstall <pkg>
+```
+
+In order to uninstall a package that is a part of the base layer, use:
+
+```
+# rpm-ostree override remove <pkg>
+```
+
+For example:
+
+```
+# rpm-ostree override remove firefox
+```
 
 By default, every `rpm-ostree` operation is "offline" - it has no effect
 on your running system, and will only take effect when you reboot.  This "pending" state is
@@ -85,7 +105,7 @@ will upgraded with the package also installed.
 ### Rebasing
 
 ```
-rpm-ostree rebase -b $branchname
+# rpm-ostree rebase -b $branchname
 ```
 
 Your operating system vendor may provide multiple base branches.  For example,
