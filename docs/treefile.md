@@ -1,5 +1,8 @@
-Treefile
---------
+---
+nav_order: 5
+---
+
+# Treefile
 
 A "treefile" is a made up term for a JSON-formatted specification used
 as input to `rpm-ostree compose tree` to bind "set of RPMs with
@@ -305,8 +308,7 @@ It supports the following parameters:
    `/usr/lib/systemd/system-presets/XX-example.preset` file as part of a package
    or in the postprocess script.
 
-Experimental options
---------
+## Experimental options
 
 All options listed here are subject to change or removal in a future
 version of `rpm-ostree`.
