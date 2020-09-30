@@ -1,19 +1,95 @@
-# What is rpm-ostree?
+---
+nav_order: 1
+---
 
-rpm-ostree is a hybrid image/package system.  It uses
-[libOSTree](https://ostree.readthedocs.io/en/latest/) as a base image
-format, and accepts RPM on both the client and server side, sharing
-code with the [dnf](https://en.wikipedia.org/wiki/DNF_(software)) project;
-specifically [libdnf](https://github.com/rpm-software-management/libdnf).
+# rpm-ostree: A true hybrid image/package system
+{: .no_toc }
 
-# Getting started
+1. TOC
+{:toc}
+
+rpm-ostree is a hybrid image/package system.  It combines
+[libostree](https://ostree.readthedocs.io/en/latest/) as a base image format,
+and accepts RPM on both the client and server side, sharing code with the
+[dnf](https://en.wikipedia.org/wiki/DNF_(software)) project; specifically
+[libdnf](https://github.com/rpm-software-management/libdnf). and thus bringing
+many of the benefits of both together.
+
+```
+                         +-----------------------------------------+
+                         |                                         |
+                         |       rpm-ostree (daemon + CLI)         |
+                  +------>                                         <---------+
+                  |      |     status, upgrade, rollback,          |         |
+                  |      |     pkg layering, initramfs --enable    |         |
+                  |      |                                         |         |
+                  |      +-----------------------------------------+         |
+                  |                                                          |
+                  |                                                          |
+                  |                                                          |
++-----------------|-------------------------+        +-----------------------|-----------------+
+|                                           |        |                                         |
+|         libostree (image system)          |        |            libdnf (pkg system)          |
+|                                           |        |                                         |
+|   C API, hardlink fs trees, system repo,  |        |    ties together libsolv (SAT solver)   |
+|   commits, atomic bootloader swap         |        |    with librepo (RPM repo downloads)    |
+|                                           |        |                                         |
++-------------------------------------------+        +-----------------------------------------+
+```
+
+**Features:**
+
+ - Transactional, background image-based (versioned/checksummed) upgrades
+ - OS rollback without affecting user data (`/usr` but not `/etc`, `/var`) via libostree
+ - Client-side package layering (and overrides)
+ - Easily make your own: `rpm-ostree compose tree` and [CoreOS Assembler](https://github.com/coreos/coreos-assembler)
+
+## Projects using rpm-ostree
+
+The OSTree project is independent of distributions and agnostic to how content
+is delivered and managed; it's used today by e.g. Debian, Fedora, and
+OpenEmbedded derived systems among others. There are some examples in the
+[OSTree github](https://github.com/ostreedev/ostree).
+
+In contrast, rpm-ostree is intended to be tightly integrated with the Fedora
+ecosystem. Today it is the underlying update mechanism of
+[Fedora CoreOS](https://getfedora.org/coreos/) as well as its derivative RHEL
+CoreOS. It is also used by [Fedora IoT](https://iot.fedoraproject.org/) and
+[Fedora Silverblue](https://silverblue.fedoraproject.org/).
+
+Originally, it was productized as part of [Project Atomic](http://www.projectatomic.io/).
+
+## Getting started
 
 If you want to try the system as a user, we recommend
-[Project Atomic](http://www.projectatomic.io/). If you are
-interested in assembling your own systems, see
-[compose server](manual/compose-server.md).
+[Fedora CoreOS](https://getfedora.org/en/coreos). If you are interested in
+assembling your own systems, see [compose server](compose-server.md).
 
-# Why would I want to use it?
+## Why?
+
+Package systems such as apt and yum are highly prevalent in Linux-based
+operating systems. The core premise of rpm-ostree is that image-based updates
+should be the default. This provides a high degree of predictability and
+resiliency. However, where rpm-ostree is fairly unique in the ecosystem is
+supporting client-side package layering and overrides; deeply integrating RPM
+as an (optional) layer on top of OSTree.
+
+A good way to think of package layering is recasting RPMs as "operating system
+extensions", similar to how browser extensions work (although before those were
+sandboxed). One can use package layering for components not easily
+containerized, such as PAM modules, custom shells, etc.
+
+Further, one can easily use `rpm-ostree override replace` to override the
+kernel or userspace components with the very same RPMs shipped to traditional
+systems. The Fedora project for example continues to only have one kernel
+build.
+
+Layering and overrides are still built on top of the default OSTree engine -
+installing and updating client-side packages constructs a new filesystem root,
+it does not by default affect your booted root. This preserves the "image"
+nature of the system.
+
+## Why would I want to use it?
 
 One major feature rpm-ostree has over traditional package management
 is atomic upgrade/rollback.  It supports a model where an OS vendor
@@ -30,9 +106,9 @@ We expect most users will be interested in rpm-ostree on the client
 side, using it to replicate a base system, and possibly layer on
 additional packages, and use containers for applications.
 
-# Why not implement these changes in an existing package manager?
+## Why not implement these changes in an existing package manager?
 
-The [OSTree related projects](https://ostree.readthedocs.io/en/latest/manual/related-projects/)
+The [OSTree related projects](https://coreos.github.io/ostree/related-projects/)
 section covers this to a degree.  As soon as one starts taking
 "snapshots" or keeping track of multiple roots, it uncovers many
 issues.  For example, which content specifically is rolled forward or
@@ -73,7 +149,7 @@ of packages" model with no clear bases or layering.  As the OS evolves
 over time, "package drift" occurs where you might have old, unused
 packages lying around.
 
-# But still evolutionary
+## But still evolutionary
 
 On the other hand, rpm-ostree in other ways is very evolutionary.
 There have been many, many different package managers invented -
@@ -89,3 +165,21 @@ built up, rpm-ostree does introduce a new binary format (ostree), but
 otherwise includes an RPM database, and also operates on packages.  It
 is not a new source format either.
 
+## Talks and media
+
+A number of Project Atomic talks are available; see for
+example [this post](https://lists.projectatomic.io/projectatomic-archives/atomic-devel/2018-January/msg00057.html)
+which has a bigger collection that also includes talks on containers.
+
+rpm-ostree specific talks:
+
+ * devconf.cz 2018:
+   [Colin Walters: Hybrid image/package OS updates with rpm-ostree](https://www.youtube.com/watch?v=4A_xl5dC210)
+   ([slides](https://fedorapeople.org/~walters/2018.01-devconf/index.html))
+ * devconf.cz 2018:
+   [Peter Robinson: Using Fedora and OSTree for IoT](https://www.youtube.com/watch?v=mRqV38qT-wc)
+
+## License
+
+rpm-ostree includes code licensed under GPLv2+, LGPLv2+, (Apache 2.0 OR MIT).
+For more information, see [LICENSE](https://github.com/coreos/rpm-ostree/blob/master/LICENSE).
