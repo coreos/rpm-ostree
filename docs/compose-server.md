@@ -1,3 +1,13 @@
+---
+nav_order: 4
+---
+
+# Compose server
+{: .no_toc }
+
+1. TOC
+{:toc}
+
 ## Using higher level build tooling
 
 Originally `rpm-ostree compose tree` was intended to be a "high level" tool,
