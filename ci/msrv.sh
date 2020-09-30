@@ -12,7 +12,3 @@ SKIP_INSTALLDEPS=1 ci/build.sh |& tee out.txt
 grep ${MINIMUM_SUPPORTED_RUST_VERSION} out.txt
 grep "checking for cargo... $HOME/.cargo/bin/cargo" out.txt
 grep "checking for rustc... $HOME/.cargo/bin/rustc" out.txt
-
-# and run the tests
-cd rust
-cargo test
