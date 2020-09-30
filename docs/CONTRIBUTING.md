@@ -1,18 +1,28 @@
-Submitting patches
-------------------
+---
+nav_order: 9
+---
 
-Submit a pull request against <https://github.com/projectatomic/rpm-ostree>.
+# Contributing
+{: .no_toc }
+
+1. TOC
+{:toc}
+
+## Submitting patches
+
+Submit a pull request against [coreos/rpm-ostree][rpm-ostree].
 
 Please look at `git log` and match the commit log style.
 
-Running the test suite
-----------------------
+## Running the test suite
 
-There is `make check` as well as `make vmcheck`. See also what
-the [PAPR](.papr.yml) file does.
+There is `make check` as well as `make vmcheck`. See also what the
+[Jenkinsfile][jenkinsfile] file does.
 
-Coding style
-------------
+## Coding style
 
-See the [OSTree CONTRIBUTING](https://ostree.readthedocs.io/en/latest/CONTRIBUTING/)
-coding style.
+See the [OSTree CONTRIBUTING][contributing] coding style.
+
+[rpm-ostree]: https://github.com/coreos/rpm-ostree
+[jenkinsfile]: https://github.com/coreos/rpm-ostree/blob/master/.cci.jenkinsfile
+[contributing]: https://github.com/ostreedev/ostree/blob/master/docs/CONTRIBUTING.md
