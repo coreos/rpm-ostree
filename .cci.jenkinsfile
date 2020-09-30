@@ -39,11 +39,16 @@ codestyle: {
       """)
   }
 },
-rust: {
+unit: {
+  // this branch runs unit tests (both Rust-based and C-based) and makes sure we compile
+  // fine against the MSRV
   def n = 5
   cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi", cpu: "${n}") {
       checkout scm
-      shwrap("MAKE_JOBS=${n} CARGO_BUILD_JOBS=${n} ci/msrv.sh")
+      shwrap("""
+        MAKE_JOBS=${n} CARGO_BUILD_JOBS=${n} ci/msrv.sh
+        PATH="\$HOME/.cargo/bin:\$PATH" make check
+      """)
   }
 }}
 
