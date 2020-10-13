@@ -444,9 +444,9 @@ impl Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
             _workdir: workdir,
-            rojig_name: rojig_name,
-            rojig_spec: rojig_spec,
-            serialized: serialized,
+            rojig_name,
+            rojig_spec,
+            serialized,
             externals: parsed.externals,
             checksum: CUtf8Buf::from_string(hasher.get_string().unwrap()),
         }))
