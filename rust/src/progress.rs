@@ -81,8 +81,8 @@ impl ProgressState {
         }
         Self {
             bar: pb,
-            is_hidden: is_hidden,
-            ptype: ptype,
+            is_hidden,
+            ptype,
             message: msg,
         }
     }
@@ -131,7 +131,7 @@ fn n_digits(n: u64) -> u32 {
     let mut n = n;
     while n >= 10 {
         width += 1;
-        n = n / 10;
+        n /= 10;
     }
     width
 }

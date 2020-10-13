@@ -23,7 +23,7 @@ fn has_query(argv: &[&str]) -> bool {
         if a == "--query" {
             return true;
         }
-        if a.starts_with("-") && !a.starts_with("--") {
+        if a.starts_with('-') && !a.starts_with("--") {
             for c in a.chars().skip(1) {
                 if c == 'q' {
                     return true;

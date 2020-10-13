@@ -69,11 +69,11 @@ use self::mock_journal as journal;
 use systemd::journal;
 
 // msg ostree-prepare-root emits at boot time when it resolved the deployment */
-static OSTREE_BOOT_MSG: &'static str = "7170336a73ba4601bad31af888aa0df7";
+static OSTREE_BOOT_MSG: &str = "7170336a73ba4601bad31af888aa0df7";
 // msg rpm-ostree emits when it creates the deployment */
-static RPMOSTREE_DEPLOY_MSG: &'static str = "9bddbda177cd44d891b1b561a8a0ce9e";
+static RPMOSTREE_DEPLOY_MSG: &str = "9bddbda177cd44d891b1b561a8a0ce9e";
 
-static RPMOSTREE_HISTORY_DIR: &'static str = "/var/lib/rpm-ostree/history";
+static RPMOSTREE_HISTORY_DIR: &str = "/var/lib/rpm-ostree/history";
 
 /// Context object used to iterate through `HistoryEntry` events.
 pub struct HistoryCtx {

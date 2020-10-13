@@ -166,13 +166,13 @@ fn load_passwd_file<P: AsRef<Path>>(
     basedir: P,
     v: &Option<CheckPasswd>,
 ) -> Result<Option<fs::File>> {
-    if let &Some(ref v) = v {
+    if let Some(ref v) = *v {
         let basedir = basedir.as_ref();
         if let Some(ref path) = v.filename {
             return Ok(Some(utils::open_file(basedir.join(path))?));
         }
     }
-    return Ok(None);
+    Ok(None)
 }
 
 type IncludeMap = collections::BTreeMap<(u64, u64), String>;
@@ -402,7 +402,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
 // Similar to the importer check but just checks for prefixes since
 // they're files, and also allows /etc since it's before conversion
 fn add_files_path_is_valid(path: &str) -> bool {
-    let path = path.trim_start_matches("/");
+    let path = path.trim_start_matches('/');
     (path.starts_with("usr/") && !path.starts_with("usr/local/"))
         || path.starts_with("etc/")
         || path.starts_with("bin/")
@@ -535,7 +535,7 @@ impl Treefile {
         let description = r
             .description
             .as_ref()
-            .and_then(|v| if v.len() > 0 { Some(v.as_str()) } else { None })
+            .and_then(|v| if !v.is_empty() { Some(v.as_str()) } else { None })
             .unwrap_or(r.summary.as_str());
         let name: String = format!("{}.spec", r.name);
         {
@@ -1415,7 +1415,7 @@ mod ffi {
         ptr_glib_error(
             Treefile::new_boxed(
                 filename.as_ref(),
-                basearch.as_ref().map(|s| s.as_str()),
+                basearch.as_deref(),
                 workdir,
             ),
             gerror,
@@ -1510,7 +1510,7 @@ mod ffi {
     #[no_mangle]
     pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {
         let tf = ref_from_raw_ptr(tf);
-        if let &Some(ref rojig) = &tf.rojig_spec {
+        if let Some(ref rojig) = tf.rojig_spec {
             rojig.as_ptr()
         } else {
             ptr::null_mut()

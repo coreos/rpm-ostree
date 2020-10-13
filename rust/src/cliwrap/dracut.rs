@@ -9,7 +9,7 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
 integrated with the underlying ostree transaction mechanism.
 Use `rpm-ostree initramfs` to control client-side initramfs generation."
     );
-    if argv.len() > 0 {
+    if !argv.is_empty() {
         Ok(cliutil::run_unprivileged(true, "dracut", argv)?)
     } else {
         std::process::exit(1);

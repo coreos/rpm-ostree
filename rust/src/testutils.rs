@@ -183,8 +183,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     println!("Mutated ELF files: {}", mutated);
     let src_ref = opts
         .src_ref
-        .as_ref()
-        .map(|s| s.as_str())
+        .as_deref()
         .unwrap_or(opts.ostref.as_str());
     let mut cmd = Command::new("ostree");
     cmd.arg(format!("--repo={}", repo_path.to_str().unwrap()))
@@ -212,7 +211,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     Ok(())
 }
 
-fn testutils_main(args: &Vec<String>) -> Result<()> {
+fn testutils_main(args: &[String]) -> Result<()> {
     let opt = Opt::from_iter(args.iter());
     match opt {
         Opt::GenerateSyntheticUpgrade(ref opts) => update_os_tree(opts)?,

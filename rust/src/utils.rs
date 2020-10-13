@@ -86,22 +86,22 @@ fn download_url_to_tmpfile(url: &str) -> Result<fs::File> {
 
 /// Open file for reading and provide context containing filename on failures.
 pub fn open_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
-    return Ok(fs::File::open(filename.as_ref()).with_context(|| {
+    Ok(fs::File::open(filename.as_ref()).with_context(|| {
         format!(
             "Can't open file {:?} for reading",
             filename.as_ref().display()
         )
-    })?);
+    })?)
 }
 
 /// Open file for writing and provide context containing filename on failures.
 pub fn create_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
-    return Ok(fs::File::create(filename.as_ref()).with_context(|| {
+    Ok(fs::File::create(filename.as_ref()).with_context(|| {
         format!(
             "Can't open file {:?} for writing",
             filename.as_ref().display()
         )
-    })?);
+    })?)
 }
 
 // Surprising we need a wrapper for this... parent() returns a slice of its buffer, so doesn't
@@ -118,12 +118,12 @@ pub fn parent_dir(filename: &Path) -> Option<&Path> {
 pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
     let mut buf = instr;
     let mut s = "".to_string();
-    while buf.len() > 0 {
+    while !buf.is_empty() {
         if let Some(start) = buf.find("${") {
             let (prefix, rest) = buf.split_at(start);
             let rest = &rest[2..];
             s.push_str(prefix);
-            if let Some(end) = rest.find("}") {
+            if let Some(end) = rest.find('}') {
                 let (varname, remainder) = rest.split_at(end);
                 let remainder = &remainder[1..];
                 if let Some(val) = vars.get(varname) {
@@ -140,7 +140,7 @@ pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
             break;
         }
     }
-    return Ok(s);
+    Ok(s)
 }
 
 #[cfg(test)]

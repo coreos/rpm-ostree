@@ -31,9 +31,9 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Result<()> {
                 if !line.starts_with("HOME=") {
                     bufw.write_all(line.as_bytes())?;
                 } else {
-                    bufw.write_all("HOME=/var/home".as_bytes())?;
+                    bufw.write_all(b"HOME=/var/home")?;
                 }
-                bufw.write_all("\n".as_bytes())?;
+                bufw.write_all(b"\n")?;
             }
             Ok(())
         })?;

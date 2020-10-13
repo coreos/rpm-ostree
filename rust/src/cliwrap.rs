@@ -28,7 +28,7 @@ mod grubby;
 mod rpm;
 
 /// Location for the underlying (not wrapped) binaries.
-pub const CLIWRAP_DESTDIR: &'static str = "usr/libexec/rpm-ostree/wrapped";
+pub const CLIWRAP_DESTDIR: &str = "usr/libexec/rpm-ostree/wrapped";
 
 /// Our list of binaries that will be wrapped.  Must be a relative path.
 static WRAPPED_BINARIES: &[&str] = &["usr/bin/rpm", "usr/bin/dracut", "usr/sbin/grubby"];
@@ -41,7 +41,7 @@ pub(crate) enum RunDisposition {
 }
 
 /// Main entrypoint for cliwrap
-fn cliwrap_main(args: &Vec<String>) -> Result<()> {
+fn cliwrap_main(args: &[String]) -> Result<()> {
     // We'll panic here if the vector is empty, but that is intentional;
     // the outer code should always pass us at least one arg.
     let name = args[0].as_str();
@@ -117,7 +117,7 @@ mod ffi {
     ) -> libc::c_int {
         let rootfs_dfd = ffi_view_openat_dir(rootfs_dfd);
         int_glib_error(
-            write_wrappers(&rootfs_dfd).with_context(|| format!("cli wrapper replacement failed")),
+            write_wrappers(&rootfs_dfd).context("cli wrapper replacement failed"),
             gerror,
         )
     }

@@ -8,9 +8,9 @@ use anyhow::{bail, Result};
 use systemd::id128::Id128;
 use systemd::journal;
 
-static OSTREE_FINALIZE_STAGED_SERVICE: &'static str = "ostree-finalize-staged.service";
-static OSTREE_DEPLOYMENT_FINALIZING_MSG_ID: &'static str = "e8646cd63dff4625b77909a8e7a40994";
-static OSTREE_DEPLOYMENT_COMPLETE_MSG_ID: &'static str = "dd440e3e549083b63d0efc7dc15255f1";
+static OSTREE_FINALIZE_STAGED_SERVICE: &str = "ostree-finalize-staged.service";
+static OSTREE_DEPLOYMENT_FINALIZING_MSG_ID: &str = "e8646cd63dff4625b77909a8e7a40994";
+static OSTREE_DEPLOYMENT_COMPLETE_MSG_ID: &str = "dd440e3e549083b63d0efc7dc15255f1";
 
 fn print_staging_failure_msg(msg: Option<&str>) -> Result<()> {
     println!("Warning: failed to finalize previous deployment");
@@ -21,7 +21,7 @@ fn print_staging_failure_msg(msg: Option<&str>) -> Result<()> {
         "         check `journalctl -b -1 -u {}`",
         OSTREE_FINALIZE_STAGED_SERVICE
     );
-    return Ok(()); // for convenience
+    Ok(()) // for convenience
 }
 
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.
@@ -135,7 +135,7 @@ fn journal_print_staging_failure() -> Result<()> {
         }
     }
 
-    return print_staging_failure_msg(None);
+    print_staging_failure_msg(None)
 }
 
 mod ffi {
