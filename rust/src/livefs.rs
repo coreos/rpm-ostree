@@ -176,7 +176,7 @@ fn update_etc(
     // need it to be the self-link `.` path.
     fn canonicalized_parent(p: &Path) -> &Path {
         match p.parent() {
-            Some(p) if p.as_os_str().len() == 0 => Path::new("."),
+            Some(p) if p.as_os_str().is_empty() => Path::new("."),
             Some(p) => p,
             None => Path::new("."),
         }
@@ -392,7 +392,7 @@ fn livefs(sysroot: &ostree::Sysroot, target: Option<&str>) -> Result<()> {
 
     let source_commit = state
         .as_ref()
-        .map(|s| s.commit.as_ref().map(|s| s.as_str()))
+        .map(|s| s.commit.as_deref())
         .flatten()
         .unwrap_or(booted_commit);
     let diff = crate::ostree_diff::diff(repo, source_commit, &target_commit, Some("/usr"))

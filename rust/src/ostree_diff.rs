@@ -23,10 +23,10 @@ fn query_info_optional(
             if let Some(ref e2) = e.kind::<gio::IOErrorEnum>() {
                 match e2 {
                     gio::IOErrorEnum::NotFound => Ok(None),
-                    _ => return Err(e.into()),
+                    _ => Err(e.into()),
                 }
             } else {
-                return Err(e.into());
+                Err(e.into())
             }
         }
     }

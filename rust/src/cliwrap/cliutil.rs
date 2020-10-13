@@ -54,7 +54,7 @@ pub fn run_unprivileged<T: AsRef<str>>(
         "--",
     ];
 
-    let argv: Vec<&str> = argv.into_iter().map(AsRef::as_ref).collect();
+    let argv: Vec<&str> = argv.iter().map(AsRef::as_ref).collect();
     let drop_privileges = am_privileged();
     let app_name = "rpm-ostree";
     if with_warning {

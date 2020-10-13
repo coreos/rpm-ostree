@@ -53,7 +53,7 @@ mod ffi {
         gerror: *mut *mut GError,
     ) -> *mut TempEtcGuard {
         let fd = ffiutil::ffi_view_openat_dir(rootfs);
-        let res = TempEtcGuard::undo_usretc(fd).map(|guard| Box::new(guard));
+        let res = TempEtcGuard::undo_usretc(fd).map(Box::new);
         ffiutil::ptr_glib_error(res, gerror)
     }
 
