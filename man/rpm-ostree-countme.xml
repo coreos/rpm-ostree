@@ -1,0 +1,80 @@
+<?xml version='1.0'?> <!--*-nxml-*-->
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+
+<!--
+Copyright 2020 Colin Walters <walters@verbum.org>
+Copyright 2020 Timothée Ravier <travier@redhat.com>
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the
+Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.
+-->
+
+<refentry id="rpm-ostree-countme.service">
+
+  <refentryinfo>
+    <title>rpm-ostree-countme</title>
+    <productname>rpm-ostree</productname>
+
+    <authorgroup>
+      <author>
+        <contrib>Developer</contrib>
+        <firstname>Timothée</firstname>
+        <surname>Ravier</surname>
+        <email>travier@redhat.com</email>
+      </author>
+    </authorgroup>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>rpm-ostree-countme</refentrytitle>
+    <manvolnum>8</manvolnum>
+  </refmeta>
+
+  <refnamediv>
+    <refname>rpm-ostree-countme.service</refname>
+    <refname>rpm-ostree-countme.timer</refname>
+    <refpurpose>DNF Count Me support in rpm-ostree</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <para><filename>rpm-ostree-countme.service</filename></para>
+    <para><filename>rpm-ostree-countme.timer</filename></para>
+  </refsynopsisdiv>
+
+  <refsect1>
+    <title>Description</title>
+    <para>
+      The service unit enacts the Count Me reporting implemented as a hidden command in rpm-ostree. 
+    </para>
+
+    <para>
+      The timer unit triggers Count Me reporting weekly at a random time.
+      Disabling or masking this unit effectively disables Count Me reporting, regardless of the setting in RPM repository configuration files.
+      See <citerefentry><refentrytitle>systemd.timer</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+      for more information on how to control systemd timers.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>See Also</title>
+
+    <para>
+      <citerefentry><refentrytitle>rpm-ostree</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+      <citerefentry><refentrytitle>dnf</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+    </para>
+  </refsect1>
+
+</refentry>
