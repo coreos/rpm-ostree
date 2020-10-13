@@ -321,3 +321,17 @@ pub(crate) fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32> {
     mfd.add_seals(&seals)?;
     Ok(mfd.into_file().into_raw_fd())
 }
+
+/// Map Rust architecture constants to the ones used by DNF.
+/// Rust architecture constants: https://doc.rust-lang.org/std/env/consts/constant.ARCH.html
+/// DNF mapping: https://github.com/rpm-software-management/dnf/blob/4.5.2/dnf/rpm/__init__.py#L88
+pub(crate) fn get_rpm_basearch() -> String {
+    match std::env::consts::ARCH {
+        "arm" => "armhfp".to_string(),
+        "powerpc" => "ppc".to_string(),
+        "powerpc64" => "ppc64".to_string(),
+        "sparc64" => "sparc".to_string(),
+        "x86" => "i386".to_string(),
+        s => s.to_string(),
+    }
+}

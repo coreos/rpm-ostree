@@ -129,12 +129,19 @@ mod ffi {
         fn add_group_content(self: &mut PasswdDB, rootfs: i32, group_path: &str) -> Result<()>;
         fn add_passwd_content(self: &mut PasswdDB, rootfs: i32, passwd_path: &str) -> Result<()>;
     }
+
+    // countme.rs
+    extern "Rust" {
+        fn countme_entrypoint(argv: Vec<String>) -> Result<()>;
+    }
 }
 
 mod client;
 pub(crate) use client::*;
 mod cliwrap;
 pub use cliwrap::*;
+mod countme;
+pub use countme::*;
 mod composepost;
 pub(crate) use composepost::*;
 mod core;

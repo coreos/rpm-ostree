@@ -132,6 +132,8 @@ static RpmOstreeCommand commands[] = {
     NULL, rpmostree_builtin_finalize_deployment },
   { "cliwrap", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_cliwrap },
+  { "countme", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |   RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
+    NULL, rpmostree_builtin_countme },
   { NULL }
 };
 

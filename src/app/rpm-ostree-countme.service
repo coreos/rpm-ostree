@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly rpm-ostree Count Me reporting
+Documentation=man:rpm-ostree-countme.service(8)
+ConditionPathExists=/run/ostree-booted
+
+[Service]
+Type=oneshot
+User=rpm-ostree
+DynamicUser=yes
+StateDirectory=rpm-ostree-countme
+StateDirectoryMode=750
+ExecStart=/usr/bin/rpm-ostree countme
