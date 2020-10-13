@@ -3,7 +3,7 @@ set -euo pipefail
 
 # freeze on a specific commit for tests for reproducibility and since it should
 # always work to target older treefiles
-FEDORA_COREOS_CONFIG_COMMIT=d18bcd20d359ba03e5b47faba25810cb26a0fa32
+FEDORA_COREOS_CONFIG_COMMIT=501c4edc0c3d2bfea7d8fcf857eeb0add765d11d
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
