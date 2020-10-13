@@ -126,6 +126,7 @@ EOF
 import sys, json
 y = json.load(sys.stdin)
 y["repos"] = ["cache"]
+y["postprocess"] = []
 y.pop("lockfile-repos", None)
 json.dump(y, sys.stdout)' < manifest.json > manifest.json.new
   mv manifest.json{.new,}
