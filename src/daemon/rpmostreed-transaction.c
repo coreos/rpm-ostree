@@ -38,6 +38,7 @@ struct _RpmostreedTransactionPrivate {
    */
   char *sysroot_path;
   OstreeSysroot *sysroot;
+  gboolean sysroot_locked;
   /* Capture of the client description at txn creation time */
   char *client_description;
 
@@ -88,6 +89,19 @@ static RpmostreedTransactionPrivate *
 rpmostreed_transaction_get_private (RpmostreedTransaction *self)
 {
   return self->priv;
+}
+
+static void
+unlock_sysroot (RpmostreedTransaction *self)
+{
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
+
+  if (!(priv->sysroot && priv->sysroot_locked))
+    return;
+  
+  ostree_sysroot_unlock (priv->sysroot);
+  sd_journal_print (LOG_INFO, "Unlocked sysroot");
+  priv->sysroot_locked = FALSE;
 }
 
 static void
@@ -372,6 +386,7 @@ transaction_execute_done_cb (GObject *source_object,
   g_variant_ref_sink (priv->finished_params);
 
   priv->executed = TRUE;
+  unlock_sysroot (self);
   g_object_notify (G_OBJECT (self), "executed");
 
   transaction_maybe_emit_closed (self);
@@ -458,9 +473,8 @@ transaction_finalize (GObject *object)
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   g_debug ("%s (%p): Finalized", G_OBJECT_TYPE_NAME (self), self);
-
-  if (priv->sysroot != NULL)
-    ostree_sysroot_unlock (priv->sysroot);
+  
+  unlock_sysroot (self);
 
   if (priv->watch_id > 0)
     g_bus_unwatch_name (priv->watch_id);
@@ -596,6 +610,9 @@ transaction_initable_init (GInitable *initable,
                                "System transaction in progress");
           return FALSE;
         }
+
+      priv->sysroot_locked = TRUE;
+      sd_journal_print (LOG_INFO, "Locked sysroot");
     }
 
   g_dbus_server_start (priv->server);
