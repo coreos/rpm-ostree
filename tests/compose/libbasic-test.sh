@@ -80,8 +80,8 @@ ostree --repo=${repo} ls ${treeref} /usr/bin/su > su.txt
 assert_file_has_content su.txt '^-04[71][0-7][0-7]'
 echo "ok setuid"
 
-ostree --repo=${repo} ls -X ${treeref} /usr/bin/ping > ping.txt
-assert_file_has_content_literal ping.txt "b'security.capability', [byte"
+ostree --repo=${repo} ls -X ${treeref} /usr/bin/arping > arping.txt
+assert_file_has_content_literal arping.txt "b'security.capability', [byte"
 echo "ok fcaps"
 
 # https://github.com/projectatomic/rpm-ostree/issues/669
