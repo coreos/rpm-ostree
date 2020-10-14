@@ -420,21 +420,27 @@ reset_config_properties (RpmostreedSysroot  *self,
   return TRUE;
 }
 
-/* reloads *only* deployments and os internals, *no* configuration files */
-static gboolean
-handle_reload (RPMOSTreeSysroot *object,
-               GDBusMethodInvocation *invocation)
-{
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-  g_autoptr(GError) local_error = NULL;
+typedef struct {
+  RPMOSTreeSysroot *object;
+  GDBusMethodInvocation *invocation;
+} ReloadIdleData;
 
+/* See comment below for why we defer to an idle for this */
+static gboolean
+handle_reload_via_idle (gpointer data)
+{
+  ReloadIdleData *idata = data;
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (idata->object);
+  GDBusMethodInvocation *invocation = idata->invocation;
+
+  g_autoptr(GError) local_error = NULL;
   if (!sysroot_populate_deployments_unlocked (self, NULL, &local_error))
     goto out;
 
   /* always send an UPDATED signal to also force OS interfaces to reload */
   g_signal_emit (self, signals[UPDATED], 0);
 
-  rpmostree_sysroot_complete_reload (object, invocation);
+  rpmostree_sysroot_complete_reload (idata->object, invocation);
 
 out:
   if (local_error)
@@ -442,6 +448,22 @@ out:
       g_prefix_error (&local_error, "Handling reload: ");
       g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
     }
+  return G_SOURCE_REMOVE;
+}
+
+/* reloads *only* deployments and os internals, *no* configuration files */
+static gboolean
+handle_reload (RPMOSTreeSysroot *object,
+               GDBusMethodInvocation *invocation)
+{
+  ReloadIdleData *idata = g_new0 (ReloadIdleData, 1);
+  idata->object = object;
+  idata->invocation = invocation;
+  /* Deferred to an idle to ensure that we've processed any 
+   * other pending notifications, such as file descriptors being closed
+   * for the transaction, etc.
+   */
+  g_idle_add_full (G_PRIORITY_LOW, handle_reload_via_idle, idata, g_free);
   return TRUE;
 }
 
