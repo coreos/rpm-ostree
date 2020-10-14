@@ -710,11 +710,11 @@ rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
  * beforehand and avoid losing information.  We monitor the transaction,
  * printing output it sends, and handle Ctrl-C, etc.
  */
-gboolean
-rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
-                                         const char *transaction_address,
-                                         GCancellable *cancellable,
-                                         GError **error)
+static gboolean
+impl_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
+                                    const char *transaction_address,
+                                    GCancellable *cancellable,
+                                    GError **error)
 {
   guint sigintid = 0;
   GDBusConnection *connection;
@@ -801,11 +801,6 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
         }
     }
 
-  /* On success, call Reload() as a way to sync with the daemon. Do this in async mode so
-   * that gdbus handles signals for changed properties. */
-  if (success)
-    await_reload_sync (sysroot_proxy);
-
 out:
   if (sigintid)
     g_source_remove (sigintid);
@@ -814,6 +809,26 @@ out:
 
   transaction_progress_free (tp);
   return success;
+}
+
+/* Transactions need an explicit Start call so we can set up watches for signals
+ * beforehand and avoid losing information.  We monitor the transaction,
+ * printing output it sends, and handle Ctrl-C, etc.
+ */
+gboolean
+rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
+                                         const char *transaction_address,
+                                         GCancellable *cancellable,
+                                         GError **error)
+{
+  if (!impl_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable, error))
+    return FALSE;
+
+  /* On success, call Reload() as a way to sync with the daemon. Do this in async mode so
+   * that gdbus handles signals for changed properties. */
+  await_reload_sync (sysroot_proxy);
+
+  return TRUE;
 }
 
 /* Handles client-side processing for most command line tools
