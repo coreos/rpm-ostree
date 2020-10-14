@@ -858,6 +858,7 @@ on_force_close (gpointer data)
 
   if (self->transaction)
     {
+      sd_journal_print (LOG_WARNING, "Forcibly closing transaction due to timeout");
       rpmostreed_transaction_force_close (self->transaction);
       rpmostreed_sysroot_set_txn (self, NULL);
     }
