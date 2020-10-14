@@ -20,7 +20,7 @@ runcompose
 echo "ok compose"
 
 ostree --repo=${repo} cat ${treeref} /usr/etc/lang-test.date.txt > out.txt
-assert_file_has_content out.txt 'jeu\. janv\.  1 00:00:00 UTC 1970'
+assert_file_has_content out.txt 'jeu.*janv.*1970'
 ostree --repo=${repo} cat ${treeref} /usr/etc/lang-test.touch.txt > out.txt
 assert_file_has_content out.txt 'opérande de fichier manquant'
 
