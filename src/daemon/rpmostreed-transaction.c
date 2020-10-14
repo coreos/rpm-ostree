@@ -636,8 +636,6 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
    * initiating process whose bus name we were watching. */
   if (priv->watch_id > 0)
     {
-      GTask *task;
-
       started = TRUE;
 
       g_debug ("%s (%p): Started", G_OBJECT_TYPE_NAME (self), self);
@@ -645,7 +643,7 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
       g_bus_unwatch_name (priv->watch_id);
       priv->watch_id = 0;
 
-      task = g_task_new (transaction,
+      GTask *task = g_task_new (transaction,
                          priv->cancellable,
                          transaction_execute_done_cb,
                          NULL);
@@ -663,15 +661,11 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
    * Finished signal again but only on this connection. */
   if (priv->finished_params != NULL)
     {
-      GDBusConnection *connection;
-      const char *object_path;
-      const char *interface_name;
+      GDBusConnection *connection = g_dbus_method_invocation_get_connection (invocation);
+      const char *object_path = g_dbus_method_invocation_get_object_path (invocation);
+      const char *interface_name = g_dbus_method_invocation_get_interface_name (invocation);
+
       GError *local_error = NULL;
-
-      connection = g_dbus_method_invocation_get_connection (invocation);
-      object_path = g_dbus_method_invocation_get_object_path (invocation);
-      interface_name = g_dbus_method_invocation_get_interface_name (invocation);
-
       g_dbus_connection_emit_signal (connection,
                                      NULL,
                                      object_path,
@@ -780,24 +774,18 @@ rpmostreed_transaction_init (RpmostreedTransaction *self)
 gboolean
 rpmostreed_transaction_get_active (RpmostreedTransaction *transaction)
 {
-  RpmostreedTransactionPrivate *priv;
-
   g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), FALSE);
 
-  priv = rpmostreed_transaction_get_private (transaction);
-
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return (priv->finished_params == NULL);
 }
 
 OstreeSysroot *
 rpmostreed_transaction_get_sysroot (RpmostreedTransaction *transaction)
 {
-  RpmostreedTransactionPrivate *priv;
-
   g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
 
-  priv = rpmostreed_transaction_get_private (transaction);
-
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->sysroot;
 }
 
@@ -807,31 +795,25 @@ rpmostreed_transaction_get_client (RpmostreedTransaction *transaction)
   g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
-
   return priv->client_description;
 }
 
 GDBusMethodInvocation *
 rpmostreed_transaction_get_invocation (RpmostreedTransaction *transaction)
 {
-  RpmostreedTransactionPrivate *priv;
-
   g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
 
-  priv = rpmostreed_transaction_get_private (transaction);
-
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->invocation;
 }
 
 const char *
 rpmostreed_transaction_get_client_address (RpmostreedTransaction *transaction)
 {
-  RpmostreedTransactionPrivate *priv;
 
   g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
 
-  priv = rpmostreed_transaction_get_private (transaction);
-
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return g_dbus_server_get_client_address (priv->server);
 }
 
@@ -839,23 +821,16 @@ gboolean
 rpmostreed_transaction_is_compatible (RpmostreedTransaction *transaction,
                                       GDBusMethodInvocation *invocation)
 {
-  RpmostreedTransactionPrivate *priv;
-  const char *method_name_a;
-  const char *method_name_b;
-  GVariant *parameters_a;
-  GVariant *parameters_b;
-
   g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), FALSE);
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), FALSE);
 
-  priv = rpmostreed_transaction_get_private (transaction);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
 
-  method_name_a = g_dbus_method_invocation_get_method_name (priv->invocation);
-  method_name_b = g_dbus_method_invocation_get_method_name (invocation);
+  const char *method_name_a = g_dbus_method_invocation_get_method_name (priv->invocation);
+  const char *method_name_b = g_dbus_method_invocation_get_method_name (invocation);
 
-  parameters_a = g_dbus_method_invocation_get_parameters (priv->invocation);
-  parameters_b = g_dbus_method_invocation_get_parameters (invocation);
-
+  GVariant *parameters_a = g_dbus_method_invocation_get_parameters (priv->invocation);
+  GVariant *parameters_b = g_dbus_method_invocation_get_parameters (invocation);
   return g_str_equal (method_name_a, method_name_b) &&
          g_variant_equal (parameters_a, parameters_b);
 }
