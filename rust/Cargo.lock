@@ -733,9 +733,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-sys"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f79033c9541cfdadd9b816440bb7d96b947b7a0dfd3bffba083826abe07d9a69"
+checksum = "6b1095c6e9fa5b19177d4646d1c8fb896322556b6c0da3af09c0ffc440dfcc75"
 dependencies = [
  "gio-sys",
  "glib-sys",
