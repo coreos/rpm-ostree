@@ -283,6 +283,7 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
                                      WITH_BUBBLEWRAP_PATH,
                                      "--dev", "/dev",
                                      "--proc", "/proc",
+                                     "--dir", "/run",
                                      "--dir", "/tmp",
                                      "--chdir", "/",
                                      "--ro-bind", "/sys/block", "/sys/block",
