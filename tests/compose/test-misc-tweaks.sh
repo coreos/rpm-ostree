@@ -62,6 +62,7 @@ treefile_set "postprocess" '["""#!/bin/bash
 touch /usr/share/postprocess-testing""",
 """#!/bin/bash
 set -xeuo pipefail
+mkdir /run/somedir
 touch /usr/share/included-postprocess-test
 rm /usr/share/postprocess-testing
 touch /usr/share/postprocess-testing-done"""]'

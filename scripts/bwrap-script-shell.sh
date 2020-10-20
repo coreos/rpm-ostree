@@ -5,7 +5,7 @@ rootfs=$1
 shift
 cd ${rootfs}
 # ⚠⚠⚠ If you change this, also update src/libpriv/rpmostree-scripts.c ⚠⚠⚠
-BWRAP_ARGV="--dev /dev --proc /proc --dir /tmp --chdir / \
+BWRAP_ARGV="--dev /dev --proc /proc --dir /tmp --dir /run --chdir / \
      --unshare-pid --unshare-uts \
      --unshare-ipc --unshare-cgroup-try \
 "
