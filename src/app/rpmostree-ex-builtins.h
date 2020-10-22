@@ -32,8 +32,10 @@ G_BEGIN_DECLS
 
 BUILTINPROTO(unpack);
 BUILTINPROTO(livefs);
+#ifdef BUILDOPT_ROJIG
 BUILTINPROTO(commit2rojig);
 BUILTINPROTO(rojig2commit);
+#endif
 BUILTINPROTO(history);
 
 #undef BUILTINPROTO

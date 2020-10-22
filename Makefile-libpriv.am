@@ -46,12 +46,6 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-rpm-util.h \
 	src/libpriv/rpmostree-importer.c \
 	src/libpriv/rpmostree-importer.h \
-	src/libpriv/rpmostree-rojig-build.c \
-	src/libpriv/rpmostree-rojig-build.h \
-	src/libpriv/rpmostree-rojig-assembler.c \
-	src/libpriv/rpmostree-rojig-assembler.h \
-	src/libpriv/rpmostree-rojig-core.h \
-	src/libpriv/rpmostree-rojig-client.c \
 	src/libpriv/rpmostree-unpacker-core.c \
 	src/libpriv/rpmostree-unpacker-core.h \
 	src/libpriv/rpmostree-output.c \
@@ -65,6 +59,17 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-libarchive-input-stream.c \
 	src/libpriv/rpmostree-libarchive-input-stream.h \
 	$(NULL)
+
+if BUILDOPT_ROJIG
+librpmostreepriv_la_SOURCES += \
+	src/libpriv/rpmostree-rojig-build.c \
+	src/libpriv/rpmostree-rojig-build.h \
+	src/libpriv/rpmostree-rojig-assembler.c \
+	src/libpriv/rpmostree-rojig-assembler.h \
+	src/libpriv/rpmostree-rojig-core.h \
+	src/libpriv/rpmostree-rojig-client.c \
+	$(NULL)
+endif
 
 librpmostreepriv_la_CFLAGS = \
 	$(AM_CFLAGS) \

@@ -43,8 +43,6 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-builtin-coreos-rootfs.c \
 	src/app/rpmostree-builtin-testutils.c \
 	src/app/rpmostree-builtin-container.c \
-	src/app/rpmostree-ex-builtin-commit2rojig.c \
-	src/app/rpmostree-ex-builtin-rojig2commit.c \
 	src/app/rpmostree-builtin-db.c \
 	src/app/rpmostree-builtin-start-daemon.c \
 	src/app/rpmostree-builtin-finalize-deployment.c \
@@ -63,11 +61,18 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-polkit-agent.h \
 	src/app/rpmostree-builtin-kargs.c \
 	src/app/rpmostree-compose-builtin-tree.c \
-	src/app/rpmostree-compose-builtin-rojig.c \
 	src/app/rpmostree-composeutil.c \
 	src/app/rpmostree-composeutil.h \
 	src/app/rpmostree-builtin-compose.c \
 	$(NULL)
+
+if BUILDOPT_ROJIG
+rpm_ostree_SOURCES += \
+	src/app/rpmostree-ex-builtin-commit2rojig.c \
+	src/app/rpmostree-ex-builtin-rojig2commit.c \
+	src/app/rpmostree-compose-builtin-rojig.c \
+	$(NULL)
+endif
 
 rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \

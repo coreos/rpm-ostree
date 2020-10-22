@@ -30,6 +30,12 @@ if test "${osid}" != 'ID=fedora'; then
     exit 0
 fi
 
+vm_rpmostree --version > version.txt
+if ! grep -q rojig version.txt; then
+    echo "ok skip no rojig support"
+    exit 0
+fi
+
 # Test rebasing to https://pagure.io/fedora-atomic-host-continuous
 # in rojig:// mode.
 
