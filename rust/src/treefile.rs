@@ -489,6 +489,31 @@ impl Treefile {
         ))
     }
 
+    /// Given a treefile, print warnings about items which are deprecated.
+    fn print_deprecation_warnings(&self) {
+        let mut deprecated = false;
+        match self
+            .parsed
+            .boot_location
+            .as_ref()
+            .copied()
+            .unwrap_or_default()
+        {
+            BootLocation::Modules => {}
+            o => {
+                let s = serde_json::to_string(&o).expect("serialize");
+                deprecated = true;
+                eprintln!(
+                    "warning: boot-location: {} is deprecated, use boot-location: modules",
+                    s
+                )
+            }
+        }
+        if deprecated {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+    }
+
     fn update_checksum(&self, repo: &ostree::Repo, checksum: &mut glib::Checksum) -> Result<()> {
         let it = self.parsed.ostree_layers.iter().flat_map(|x| x.iter());
         let it = it.chain(
@@ -631,7 +656,7 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
     Ok(ret.into_iter())
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Copy, Clone)]
 enum BootLocation {
     #[serde(rename = "new")]
     New,
@@ -1539,6 +1564,12 @@ mod ffi {
             RpmdbBackend::NDB => "ndb",
         };
         s.to_string().to_glib_full()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_print_deprecation_warnings(tf: *mut Treefile) {
+        let tf = ref_from_raw_ptr(tf);
+        tf.print_deprecation_warnings()
     }
 
     #[no_mangle]

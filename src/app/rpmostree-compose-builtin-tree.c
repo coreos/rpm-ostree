@@ -726,6 +726,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                                error))
     return FALSE;
 
+  ror_treefile_print_deprecation_warnings (self->treefile_rs);
+
   self->treefile_rootval = json_parser_get_root (self->treefile_parser);
   if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
     return glnx_throw (error, "Treefile root is not an object");
