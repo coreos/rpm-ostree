@@ -5,6 +5,12 @@ dn=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=libcomposetest.sh
 . "${dn}/libcomposetest.sh"
 
+rpm-ostree --version > version.txt
+if ! grep -q rojig version.txt; then
+    echo "ok skip no rojig support"
+    exit 0
+fi
+
 treefile_set "automatic-version-prefix" '"42"'
 treefile_set "documentation" 'True'
 mkdir rojig-repo

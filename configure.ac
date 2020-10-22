@@ -249,6 +249,15 @@ if test "${enable_lto}" = yes; then
     fi
 fi
 
+AC_ARG_ENABLE(rojig,
+  AC_HELP_STRING([--enable-rojig],
+    [Support for shipping ostree commits via RPMs [default=no]]))
+AM_CONDITIONAL([BUILDOPT_ROJIG], test x$enable_rojig = xyes)
+AM_COND_IF([BUILDOPT_ROJIG], [
+  RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rojig"
+  AC_DEFINE([BUILDOPT_ROJIG], 1, [Define if rojig is enabled])
+])
+
 dnl And propagate the release/debug type to cmake
 cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
 if test ${debug_release} = debug; then
@@ -291,6 +300,7 @@ echo "
     $PACKAGE $VERSION
 
     introspection:                           $found_introspection
+    rojig:                                   ${enable_rojig:-no}
     bubblewrap:                              $with_bubblewrap
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release (lto: ${enable_lto:-no})

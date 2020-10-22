@@ -28,10 +28,12 @@ static RpmOstreeCommand ex_subcommands[] = {
     rpmostree_ex_builtin_livefs },
   { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Assemble local unprivileged containers", rpmostree_builtin_container },
+#ifdef BUILDOPT_ROJIG
   { "commit2rojig", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an OSTree commit into an rpm-ostree rojig", rpmostree_ex_builtin_commit2rojig },
   { "rojig2commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an rpm-ostree rojig into an OSTree commit", rpmostree_ex_builtin_rojig2commit },
+#endif
   { "history", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
   { NULL, 0, NULL, NULL }

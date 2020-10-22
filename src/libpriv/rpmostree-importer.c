@@ -769,6 +769,7 @@ unprivileged_filter_cb (OstreeRepo         *repo,
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
+#ifdef BUILDOPT_ROJIG
 static OstreeRepoCommitFilterResult
 rojig_filter_cb (OstreeRepo         *repo,
                  const char         *path,
@@ -812,6 +813,7 @@ rojig_xattr_cb (OstreeRepo  *repo,
   RpmOstreeImporter *self = user_data;
   return g_steal_pointer (&self->rojig_next_xattrs);
 }
+#endif
 
 static GVariant*
 xattr_cb (OstreeRepo  *repo,
@@ -876,7 +878,13 @@ import_rpm_to_repo (RpmOstreeImporter *self,
    */
   const gboolean unprivileged = ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE_USER_ONLY;
   if (self->rojig_mode)
-    filter = rojig_filter_cb;
+    {
+#ifdef BUILDOPT_ROJIG
+      filter = rojig_filter_cb;
+#else
+      g_assert_not_reached ();
+#endif
+    }
   else if (unprivileged)
     filter = unprivileged_filter_cb;
   else
@@ -891,9 +899,13 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
   if (self->rojig_mode)
     {
+#ifdef BUILDOPT_ROJIG
       ostree_repo_commit_modifier_set_xattr_callback (modifier, rojig_xattr_cb,
                                                       NULL, self);
       g_assert (self->sepolicy == NULL);
+#else
+      g_assert_not_reached ();
+#endif
     }
   else
     {

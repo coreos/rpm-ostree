@@ -460,6 +460,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
       {
+#ifdef BUILDOPT_ROJIG
         // Not implemented yet, though we could do a query for the provides
         if (override_commit)
           return glnx_throw (error, "Specifying commit overrides for rojig:// is not implemented yet");
@@ -502,6 +503,9 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
 
         if (rojig_changed)
           rpmostree_origin_set_rojig_description (self->origin, rojig_pkg);
+#else
+        return glnx_throw (error, "rojig is not supported in this build of rpm-ostree");
+#endif
       }
     }
 

@@ -5,6 +5,12 @@ dn=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=libcomposetest.sh
 . "${dn}/libcomposetest.sh"
 
+rpm-ostree --version > version.txt
+if ! grep -q rojig version.txt; then
+    echo "ok skip no rojig support"
+    exit 0
+fi
+
 # Add a local rpm-md repo so we can mutate local test packages
 treefile_append "repos" '["test-repo"]'
 build_rpm test-pkg \
