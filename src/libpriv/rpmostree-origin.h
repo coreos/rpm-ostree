@@ -110,13 +110,6 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin);
 
-// WARNING: This prototype is also redefined in Rust, if changing this
-// please also update `includes.rs`.
-void
-rpmostree_origin_get_live_state (RpmOstreeOrigin *origin,
-                                 char           **out_inprogress,
-                                 char           **out_live);
-
 char *
 rpmostree_origin_get_string (RpmOstreeOrigin *origin,
                              const char *section,
@@ -207,8 +200,3 @@ gboolean
 rpmostree_origin_remove_all_overrides (RpmOstreeOrigin  *origin,
                                        gboolean         *out_changed,
                                        GError          **error);
-
-void
-rpmostree_origin_set_live_state (RpmOstreeOrigin *origin,
-                                 const char      *inprogress,
-                                 const char      *live);

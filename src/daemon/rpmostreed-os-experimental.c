@@ -115,23 +115,6 @@ osexperimental_handle_moo (RPMOSTreeOSExperimental *interface,
   rpmostree_osexperimental_complete_moo (interface, invocation, result);
   return TRUE;
 }
-static RpmOstreeTransactionLiveFsFlags
-livefs_flags_from_options (GVariant *options)
-{
-  RpmOstreeTransactionLiveFsFlags ret = 0;
-  GVariantDict options_dict;
-  gboolean opt = FALSE;
-
-  g_variant_dict_init (&options_dict, options);
-  if (g_variant_dict_lookup (&options_dict, "dry-run", "b", &opt) && opt)
-    ret |= RPMOSTREE_TRANSACTION_LIVEFS_FLAG_DRY_RUN;
-  if (g_variant_dict_lookup (&options_dict, "replace", "b", &opt) && opt)
-    ret |= RPMOSTREE_TRANSACTION_LIVEFS_FLAG_REPLACE;
-
-  g_variant_dict_clear (&options_dict);
-
-  return ret;
-}
 
 static gboolean
 osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
@@ -159,7 +142,7 @@ osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
 
   transaction = rpmostreed_transaction_new_livefs (invocation,
                                                    ot_sysroot,
-                                                   livefs_flags_from_options (arg_options),
+                                                   arg_options,
                                                    cancellable,
                                                    &local_error);
   if (transaction == NULL)

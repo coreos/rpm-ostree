@@ -308,10 +308,31 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
                                 cancellable, error))
     return FALSE;
 
+  OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
+  g_autofree char *live_inprogress = NULL;
+  g_autofree char *live_replaced = NULL;
+  if (booted)
+    {
+      if (!ror_livefs_get_state (sysroot, booted, &live_inprogress, &live_replaced, error))
+        return FALSE;
+    }
+
   /* And do a prune */
   guint64 freed_space;
   gint n_objects_total, n_objects_pruned;
   { g_autoptr(GHashTable) reachable = ostree_repo_traverse_new_reachable ();
+
+    /* We don't currently write refs for these since the content can be
+     * ephemeral; add them to the strong set */
+    if (live_inprogress && 
+        !ostree_repo_traverse_commit_union (repo, live_inprogress, 0, reachable,
+                                            cancellable, error))
+        return FALSE;
+    if (live_replaced && 
+        !ostree_repo_traverse_commit_union (repo, live_replaced, 0, reachable,
+                                            cancellable, error))
+        return FALSE;
+
     OstreeRepoPruneOptions opts = { OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, reachable };
     if (!ostree_sysroot_cleanup_prune_repo (sysroot, &opts, &n_objects_total,
                                             &n_objects_pruned, &freed_space,
@@ -351,6 +372,17 @@ rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *self, const char *
   return NULL;
 }
 
+/* Return TRUE in *out_is_live if the target deployment has a live overlay */
+gboolean 
+rpmostree_syscore_livefs_query (OstreeSysroot *self, OstreeDeployment *deployment, gboolean *out_is_live, GError **error)
+{
+  g_autofree char *live_inprogress = NULL;
+  g_autofree char *live_replaced = NULL;
+  if (!ror_livefs_get_state (self, deployment, &live_inprogress, &live_replaced, error))
+    return FALSE;
+  *out_is_live = (live_inprogress != NULL) || (live_replaced != NULL);
+  return TRUE;
+}
 
 /* Copy of currently private _ostree_sysroot_bump_mtime()
  * until we decide to either formalize that, or have a method
@@ -446,7 +478,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
       if (booted)
         {
           gboolean is_live;
-          if (!rpmostree_syscore_deployment_is_live (booted, &is_live, error))
+          if (!rpmostree_syscore_livefs_query (sysroot, booted, &is_live, error))
             return FALSE;
           if (is_live)
             flags |= OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK;
@@ -461,35 +493,5 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
   if (!rpmostree_syscore_cleanup (sysroot, repo, cancellable, error))
     return FALSE;
 
-  return TRUE;
-}
-
-/* Load the checksums that describe the "livefs" state of the given
- * deployment.
- */
-gboolean
-rpmostree_syscore_deployment_get_live (OstreeDeployment *deployment,
-                                       char            **out_inprogress_checksum,
-                                       char            **out_livereplaced_checksum,
-                                       GError          **error)
-{
-  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
-  if (!origin)
-    return FALSE;
-  rpmostree_origin_get_live_state (origin, out_inprogress_checksum, out_livereplaced_checksum);
-  return TRUE;
-}
-
-/* Set @out_is_live to %TRUE if the deployment is live-modified */
-gboolean
-rpmostree_syscore_deployment_is_live (OstreeDeployment *deployment,
-                                      gboolean         *out_is_live,
-                                      GError          **error)
-{
-  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
-  if (!origin)
-    return FALSE;
-
-  *out_is_live = ror_origin_is_live(origin);
   return TRUE;
 }

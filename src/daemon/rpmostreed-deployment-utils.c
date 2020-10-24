@@ -261,6 +261,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   if (!origin)
     return NULL;
 
+  const gboolean is_booted = g_strcmp0 (booted_id, id) == 0;
+
   RpmOstreeRefspecType refspec_type;
   g_autofree char *refspec = rpmostree_origin_get_full_refspec (origin, &refspec_type);
 
@@ -364,16 +366,19 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       break;
     }
 
-  g_autofree char *live_inprogress = NULL;
-  g_autofree char *live_replaced = NULL;
-  if (!rpmostree_syscore_deployment_get_live (deployment, &live_inprogress,
-                                              &live_replaced, error))
-    return NULL;
 
-  if (live_inprogress)
-    g_variant_dict_insert (&dict, "live-inprogress", "s", live_inprogress);
-  if (live_replaced)
-    g_variant_dict_insert (&dict, "live-replaced", "s", live_replaced);
+  if (is_booted)
+    {
+      g_autofree char *live_inprogress = NULL;
+      g_autofree char *live_replaced = NULL;
+      if (!ror_livefs_get_state (sysroot, deployment, &live_inprogress, &live_replaced, error))
+        return FALSE;
+
+      if (live_inprogress)
+        g_variant_dict_insert (&dict, "live-inprogress", "s", live_inprogress);
+      if (live_replaced)
+        g_variant_dict_insert (&dict, "live-replaced", "s", live_replaced);
+    }
 
   if (ostree_deployment_is_staged (deployment))
     {
@@ -416,7 +421,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                rpmostree_origin_get_initramfs_etc_files (origin));
 
   if (booted_id != NULL)
-    g_variant_dict_insert (&dict, "booted", "b", g_strcmp0 (booted_id, id) == 0);
+    g_variant_dict_insert (&dict, "booted", "b", is_booted);
 
   return g_variant_dict_end (&dict);
 }
