@@ -195,9 +195,6 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
 
   /* this is already covered by the above, but the below also updates the cached value */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
-
-  /* then rpm-ostree specific things */
-  rpmostree_origin_set_live_state (origin, NULL, NULL);
 }
 
 const char *
@@ -361,17 +358,6 @@ rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
         (g_hash_table_size (origin->cached_local_packages) > 0) ||
         (g_hash_table_size (origin->cached_overrides_local_replace) > 0) ||
         (g_hash_table_size (origin->cached_overrides_remove) > 0);
-}
-
-void
-rpmostree_origin_get_live_state (RpmOstreeOrigin *origin,
-                                 char           **out_inprogress,
-                                 char           **out_live)
-{
-  if (out_inprogress)
-    *out_inprogress = g_key_file_get_string (origin->kf, "rpmostree-ex-live", "inprogress", NULL);
-  if (out_live)
-    *out_live = g_key_file_get_string (origin->kf, "rpmostree-ex-live", "commit", NULL);
 }
 
 GKeyFile *
@@ -637,33 +623,6 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              GError         **error)
 {
   return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL, error);
-}
-
-/* Like g_key_file_set_string(), but remove the key if @value is NULL */
-static void
-set_or_unset_str (GKeyFile *kf,
-                  const char *group,
-                  const char *key,
-                  const char *value)
-{
-  if (!value)
-    (void) g_key_file_remove_key (kf, group, key, NULL);
-  else
-    (void) g_key_file_set_string (kf, group, key, value);
-}
-
-void
-rpmostree_origin_set_live_state (RpmOstreeOrigin *origin,
-                                 const char      *inprogress,
-                                 const char      *live)
-{
-  if (!inprogress && !live)
-    (void) g_key_file_remove_group (origin->kf, "rpmostree-ex-live", NULL);
-  else
-    {
-      set_or_unset_str (origin->kf, "rpmostree-ex-live", "inprogress", inprogress);
-      set_or_unset_str (origin->kf, "rpmostree-ex-live", "commit", live);
-    }
 }
 
 static void

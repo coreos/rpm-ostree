@@ -31,6 +31,7 @@ vm_rpmostree cleanup -pr
 vm_assert_layered_pkg foo absent
 
 vm_build_rpm foo
+vm_build_rpm bar
 vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_assert_status_jq '.deployments|length == 2'
 echo "ok install foo locally"
@@ -38,22 +39,36 @@ echo "ok install foo locally"
 if vm_cmd rpm -q foo; then
     assert_not_reached "have foo?"
 fi
-assert_livefs_ok() {
-    vm_rpmostree ex livefs --i-like-danger -n > livefs-analysis.txt
-    assert_file_has_content livefs-analysis.txt 'livefs OK (dry run)'
-}
-assert_livefs_ok
 
 vm_assert_status_jq '.deployments|length == 2' \
                     '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
-vm_rpmostree ex livefs --i-like-danger
+vm_rpmostree ex livefs
 vm_cmd rpm -q foo > rpmq.txt
 assert_file_has_content rpmq.txt foo-1.0-1
-vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]|not' \
+vm_cmd ls -al /usr/bin/foo
+vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]'
+if vm_cmd test -w /usr; then
+    fatal "Found writable /usr"
+fi
+echo "ok livefs basic"
 
-echo "ok livefs stage1"
+vm_rpmostree cleanup -p
+vm_rpmostree install bar
+vm_assert_status_jq '.deployments|length == 2' \
+                    '.deployments[0]["live-replaced"]|not' \
+                    '.deployments[1]["live-replaced"]'
+vm_rpmostree ex livefs
+vm_cmd rpm -qa > rpmq.txt
+assert_file_has_content rpmq.txt bar-1.0-1
+assert_not_file_has_content rpmq.txt foo-1.0-1
+vm_cmd ls -al /usr/bin/bar
+if vm_cmd test -f /usr/bin/foo; then
+    fatal "Still have /usr/bin/foo"
+fi
+
+echo "ok livefs again"
 
 vm_build_rpm test-livefs-with-etc \
   build 'echo "A config file for %{name}" > %{name}.conf' \
@@ -86,10 +101,9 @@ vm_cmd rm -rf /etc/test-livefs-with-etc \
               /etc/opt/test-livefs-with-etc-opt.conf
 
 vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-{with-etc,service}-1.0-1.x86_64.rpm
-assert_livefs_ok
-vm_rpmostree ex livefs --i-like-danger
-vm_cmd rpm -q foo test-livefs-{with-etc,service} > rpmq.txt
-assert_file_has_content rpmq.txt foo-1.0-1 test-livefs-{with-etc,service}-1.0-1
+vm_rpmostree ex livefs
+vm_cmd rpm -q bar test-livefs-{with-etc,service} > rpmq.txt
+assert_file_has_content rpmq.txt bar-1.0-1 test-livefs-{with-etc,service}-1.0-1
 vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
 assert_file_has_content test-livefs-with-etc.conf "A config file for test-livefs-with-etc"
 for v in subconfig-one subconfig-two subdir/subconfig-three; do
@@ -107,91 +121,3 @@ assert_file_has_content test-livefs-group.txt livefs-group
 vm_cmd test -d /var/lib/test-livefs-service
 
 echo "ok livefs stage2"
-
-# Now, perform a further change in the pending
-vm_rpmostree uninstall test-livefs-with-etc-1.0-1.x86_64
-vm_assert_status_jq '.deployments|length == 3'
-echo "ok livefs preserved rollback"
-
-# Reset to rollback, undeploy pending
-reset() {
-    vm_rpmostree reset
-    vm_reboot
-    vm_rpmostree cleanup -r
-    vm_assert_status_jq '.deployments|length == 1' '.deployments[0]["live-replaced"]|not'
-}
-reset
-
-# If the admin created a config file before, we need to keep it
-vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
-vm_cmd cat /etc/test-livefs-with-etc.conf || true
-vm_cmd echo custom \> /etc/test-livefs-with-etc.conf
-vm_cmd cat /etc/test-livefs-with-etc.conf
-vm_rpmostree ex livefs --i-like-danger
-vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
-assert_file_has_content test-livefs-with-etc.conf "custom"
-echo "ok livefs preserved modified config"
-
-vm_rpmostree cleanup -p
-# make sure there's no layering going on somehow
-vm_assert_status_jq '.deployments[0]["base-checksum"]|not'
-vm_rpmostree deploy $(vm_get_booted_deployment_info checksum)
-echo "ok livefs redeploy booted commit"
-
-reset
-vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
-vm_rpmostree ex livefs --i-like-danger
-# Picked a file that should be around, but harmless to change for testing.  The
-# first is available on Fedora, the second on CentOS (and newer too).
-dummy_file_to_modify=usr/share/licenses/ostree/COPYING
-if ! vm_cmd test -f /${dummy_file_to_modify}; then
-    dummy_file_to_modify=usr/share/ostree/trusted.gpg.d/README-gpg
-fi
-vm_cmd test -f /${dummy_file_to_modify}
-generate_upgrade() {
-    # Create a modified vmcheck commit
-    vm_shell_inline_sysroot_rw <<EOF
-      cd /ostree/repo/tmp
-      rm vmcheck -rf
-      ostree checkout vmcheck vmcheck --fsync=0
-      (date; echo "JUST KIDDING DO WHATEVER") >vmcheck/${dummy_file_to_modify}.new && mv vmcheck/${dummy_file_to_modify}{.new,}
-      $@
-      ostree commit -b vmcheck --tree=dir=vmcheck --link-checkout-speedup
-      rm vmcheck -rf
-EOF
-}
-generate_upgrade
-# And remove the pending deployment so that our origin is now the booted
-vm_rpmostree cleanup -p
-vm_rpmostree upgrade
-vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]|not' \
-                    '.deployments[1]["live-replaced"]'
-
-echo "ok livefs not carried over across upgrades"
-
-reset
-generate_upgrade "mkdir -p vmcheck/usr/newsubdir && date > vmcheck/usr/newsubdir/date.txt"
-vm_rpmostree upgrade
-vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
-                    '.deployments[1]["live-replaced"]|not'
-if vm_rpmostree ex livefs --i-like-danger -n &> livefs-analysis.txt; then
-    assert_not_reached "livefs succeeded?"
-fi
-vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
-                    '.deployments[1]["live-replaced"]|not'
-assert_file_has_content livefs-analysis.txt 'No packages added'
-echo "ok no modifications"
-
-# And now replacement
-vm_rpmostree ex livefs -n --i-like-danger --dangerous-do-not-use-replace &> livefs-analysis.txt
-assert_file_has_content livefs-analysis.txt 'livefs OK (dry run)'
-vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
-                    '.deployments[1]["live-replaced"]|not'
-vm_rpmostree ex livefs --i-like-danger --dangerous-do-not-use-replace
-vm_cmd cat /${dummy_file_to_modify} > dummyfile.txt
-assert_file_has_content dummyfile.txt "JUST KIDDING DO WHATEVER"
-vm_cmd test -f /usr/newsubdir/date.txt
-vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]|not' \
-                    '.deployments[1]["live-replaced"]' '.deployments[1]["booted"]'
-echo "ok modifications"
-

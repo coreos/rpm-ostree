@@ -36,4 +36,6 @@ b(GPtrArray)
 b(GChecksum)
 b(OstreeRepo)
 b(RpmOstreeOrigin)
+b(OstreeDeployment)
+b(OstreeSysroot)
 #undef b

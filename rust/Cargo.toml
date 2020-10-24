@@ -35,7 +35,6 @@ subprocess = "0.2.6"
 chrono = { version = "0.4.19", features = ["serde"] }
 libdnf-sys = { path = "libdnf-sys", version = "0.1.0" }
 
-
 [lib]
 name = "rpmostree_rust"
 path = "src/lib.rs"

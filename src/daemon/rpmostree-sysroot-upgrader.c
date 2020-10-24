@@ -593,7 +593,7 @@ try_load_base_rsack_from_pending (RpmOstreeSysrootUpgrader *self,
                                   GError                  **error)
 {
   gboolean is_live;
-  if (!rpmostree_syscore_deployment_is_live (self->origin_merge_deployment, &is_live, error))
+  if (!rpmostree_syscore_livefs_query (self->sysroot, self->origin_merge_deployment, &is_live, error))
     return FALSE;
 
   /* livefs invalidates the deployment */
