@@ -1229,7 +1229,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
 
           gboolean is_live;
-          if (!rpmostree_syscore_deployment_is_live (sysroot, deployment, &is_live, error))
+          if (!rpmostree_syscore_deployment_is_live (deployment, &is_live, error))
             return FALSE;
 
           if (is_live)

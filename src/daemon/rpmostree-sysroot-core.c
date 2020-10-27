@@ -446,8 +446,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
       if (booted)
         {
           gboolean is_live;
-          if (!rpmostree_syscore_deployment_is_live (sysroot, booted,
-                                                     &is_live, error))
+          if (!rpmostree_syscore_deployment_is_live (booted, &is_live, error))
             return FALSE;
           if (is_live)
             flags |= OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK;
@@ -469,8 +468,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
  * deployment.
  */
 gboolean
-rpmostree_syscore_deployment_get_live (OstreeSysroot    *sysroot,
-                                       OstreeDeployment *deployment,
+rpmostree_syscore_deployment_get_live (OstreeDeployment *deployment,
                                        char            **out_inprogress_checksum,
                                        char            **out_livereplaced_checksum,
                                        GError          **error)
@@ -484,15 +482,14 @@ rpmostree_syscore_deployment_get_live (OstreeSysroot    *sysroot,
 
 /* Set @out_is_live to %TRUE if the deployment is live-modified */
 gboolean
-rpmostree_syscore_deployment_is_live (OstreeSysroot    *sysroot,
-                                      OstreeDeployment *deployment,
+rpmostree_syscore_deployment_is_live (OstreeDeployment *deployment,
                                       gboolean         *out_is_live,
                                       GError          **error)
 {
   g_autofree char *inprogress_checksum = NULL;
   g_autofree char *livereplaced_checksum = NULL;
 
-  if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, &inprogress_checksum,
+  if (!rpmostree_syscore_deployment_get_live (deployment, &inprogress_checksum,
                                               &livereplaced_checksum, error))
     return FALSE;
 
