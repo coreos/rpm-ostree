@@ -949,6 +949,7 @@ impl TreeComposeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use openat_ext::OpenatDirExt;
     use tempfile;
 
     static ARCH_X86_64: &str = "x86_64";
@@ -1172,10 +1173,7 @@ automatic_version_prefix: bar
         basearch: Option<&'b str>,
     ) -> Result<Box<Treefile>> {
         let tf_path = workdir.join("treefile.yaml");
-        utils::write_file(&tf_path, |b| {
-            b.write_all(contents.as_bytes())?;
-            Ok(())
-        })?;
+        std::fs::write(&tf_path, contents)?;
         Ok(Treefile::new_boxed(
             tf_path.as_path(),
             basearch,
@@ -1215,14 +1213,15 @@ rojig:
     #[test]
     fn test_treefile_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
-        utils::write_file(workdir.path().join("foo.yaml"), |b| {
-            let foo = r#"
-packages:
-  - fooinclude
-"#;
-            b.write_all(foo.as_bytes())?;
-            Ok(())
-        })?;
+        let workdir_d = openat::Dir::open(workdir.path())?;
+        workdir_d.write_file_contents(
+            "foo.yaml",
+            0o644,
+            r#"
+        packages:
+          - fooinclude
+        "#,
+        )?;
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -1237,14 +1236,15 @@ include: foo.yaml
     #[test]
     fn test_treefile_arch_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
-        utils::write_file(workdir.path().join("foo-x86_64.yaml"), |b| {
-            let foo = r#"
+        let workdir_d = openat::Dir::open(workdir.path())?;
+        workdir_d.write_file_contents(
+            "foo-x86_64.yaml",
+            0o644,
+            r#"
 packages:
   - foo-x86_64-include
-"#;
-            b.write_all(foo.as_bytes())?;
-            Ok(())
-        })?;
+"#,
+        )?;
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"

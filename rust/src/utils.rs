@@ -104,23 +104,6 @@ pub fn create_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
     })?);
 }
 
-/// Open file for writing, passes a Writer to a closure, and closes the file, with O_TMPFILE
-/// semantics.
-pub fn write_file<P, F>(filename: P, f: F) -> Result<()>
-where
-    P: AsRef<Path>,
-    F: Fn(&mut io::BufWriter<&mut fs::File>) -> Result<()>,
-{
-    // XXX: enhance with tempfile + linkat + rename dance
-    let mut file = create_file(filename)?;
-    {
-        let mut w = io::BufWriter::new(&mut file);
-        f(&mut w)?;
-    }
-    file.sync_all()?;
-    Ok(())
-}
-
 // Surprising we need a wrapper for this... parent() returns a slice of its buffer, so doesn't
 // handle going up relative paths well: https://github.com/rust-lang/rust/issues/36861
 pub fn parent_dir(filename: &Path) -> Option<&Path> {

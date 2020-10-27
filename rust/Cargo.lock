@@ -216,6 +216,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "drop_bomb"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bda8e21c04aca2ae33ffc2fd8c23134f3cac46db123ba97bd9d3f3b8a4a85e1"
+
+[[package]]
 name = "dtoa"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,15 +596,14 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50e4785f2c3b7589a0d0c1dd60285e1188adac4006e8abd6dd578e1567027363"
+checksum = "83450fe6a6142ddd95fb064b746083fc4ef1705fe81f64a64e1d4b39f54a1055"
 dependencies = [
  "bitflags",
  "cc",
  "cfg-if 0.1.10",
  "libc",
- "void",
 ]
 
 [[package]]
@@ -665,13 +670,15 @@ dependencies = [
 
 [[package]]
 name = "openat-ext"
-version = "0.1.6"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1be1e54fbd54bae8b4497ddcc30f97ae57f18fa37fa2f35d48db7b0a8f0b59"
+checksum = "73e85ee792caf10bf54dc2a844b9f5cbc4a05095360fdeba67ffe687912d2b8b"
 dependencies = [
+ "drop_bomb",
  "libc",
- "nix 0.17.0",
+ "nix 0.18.0",
  "openat",
+ "rand",
 ]
 
 [[package]]
@@ -1262,12 +1269,6 @@ name = "version_check"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
-
-[[package]]
-name = "void"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "wasi"

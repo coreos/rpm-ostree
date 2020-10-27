@@ -9,6 +9,7 @@
 
 use anyhow::Result;
 use chrono::prelude::*;
+use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use std::collections::{BTreeMap, HashMap};
@@ -230,7 +231,7 @@ mod ffi {
         rpmmd_repos: *mut glib_sys::GPtrArray,
         gerror: *mut *mut glib_sys::GError,
     ) -> libc::c_int {
-        let filename = ffi_view_os_str(filename);
+        let filename = Path::new(ffi_view_os_str(filename));
         let packages: Vec<*mut DnfPackage> = ffi_ptr_array_to_vec(packages);
         let rpmmd_repos: Vec<*mut DnfRepo> = ffi_ptr_array_to_vec(rpmmd_repos);
 
@@ -292,9 +293,14 @@ mod ffi {
         }
 
         int_glib_error(
-            utils::write_file(filename, |w| {
-                Ok(serde_json::to_writer_pretty(w, &lockfile)?)
-            }),
+            || -> Result<()> {
+                let lockfile_dir = openat::Dir::open(filename.parent().unwrap_or(Path::new("/")))?;
+                let basename = filename.file_name().expect("filename");
+                lockfile_dir.write_file_with(basename, 0o644, |w| -> Result<()> {
+                    Ok(serde_json::to_writer_pretty(w, &lockfile)?)
+                })?;
+                Ok(())
+            }(),
             gerror,
         )
     }
