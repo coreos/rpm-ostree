@@ -366,7 +366,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   g_autofree char *live_inprogress = NULL;
   g_autofree char *live_replaced = NULL;
-  if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, &live_inprogress,
+  if (!rpmostree_syscore_deployment_get_live (deployment, &live_inprogress,
                                               &live_replaced, error))
     return NULL;
 

@@ -691,7 +691,7 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   /* Find out whether we already have a live overlay */
   g_autofree char *live_inprogress = NULL;
   g_autofree char *live_replaced = NULL;
-  if (!rpmostree_syscore_deployment_get_live (sysroot, booted_deployment, &live_inprogress,
+  if (!rpmostree_syscore_deployment_get_live (booted_deployment, &live_inprogress,
                                               &live_replaced, error))
     return FALSE;
   const char *resuming_overlay = NULL;
