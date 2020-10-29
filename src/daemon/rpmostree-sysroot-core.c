@@ -486,13 +486,10 @@ rpmostree_syscore_deployment_is_live (OstreeDeployment *deployment,
                                       gboolean         *out_is_live,
                                       GError          **error)
 {
-  g_autofree char *inprogress_checksum = NULL;
-  g_autofree char *livereplaced_checksum = NULL;
-
-  if (!rpmostree_syscore_deployment_get_live (deployment, &inprogress_checksum,
-                                              &livereplaced_checksum, error))
+  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
+  if (!origin)
     return FALSE;
 
-  *out_is_live = (inprogress_checksum != NULL || livereplaced_checksum != NULL);
+  *out_is_live = ror_origin_is_live(origin);
   return TRUE;
 }

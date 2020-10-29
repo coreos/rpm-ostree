@@ -107,6 +107,8 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin);
 
+// WARNING: This prototype is also redefined in Rust, if changing this
+// please also update `includes.rs`.
 void
 rpmostree_origin_get_live_state (RpmOstreeOrigin *origin,
                                  char           **out_inprogress,

@@ -6,24 +6,27 @@
 
 // pub(crate) utilities
 mod ffiutil;
+mod includes;
 
 mod cliwrap;
 pub use cliwrap::*;
 mod composepost;
 pub use self::composepost::*;
-mod history;
-pub use self::history::*;
 mod coreos_rootfs;
 pub use self::coreos_rootfs::*;
+mod history;
+pub use self::history::*;
 mod journal;
 pub use self::journal::*;
-mod progress;
-pub use self::progress::*;
-mod treefile;
-pub use self::treefile::*;
 mod lockfile;
 pub use self::lockfile::*;
-mod utils;
-pub use self::utils::*;
+mod progress;
+pub use self::progress::*;
+mod syscore;
+pub use self::syscore::ffi::*;
 mod testutils;
 pub use self::testutils::*;
+mod treefile;
+pub use self::treefile::*;
+mod utils;
+pub use self::utils::*;

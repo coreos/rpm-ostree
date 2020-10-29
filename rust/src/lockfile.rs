@@ -7,6 +7,8 @@
 /* Copied and adapted from: treefile.rs
  */
 
+pub use self::ffi::*;
+use crate::utils;
 use anyhow::Result;
 use chrono::prelude::*;
 use openat_ext::OpenatDirExt;
@@ -17,8 +19,6 @@ use std::convert::TryInto;
 use std::io;
 use std::iter::Extend;
 use std::path::Path;
-
-use crate::utils;
 
 /// Given a lockfile filename, parse it
 fn lockfile_parse<P: AsRef<Path>>(filename: P) -> Result<LockfileConfig> {
@@ -191,13 +191,13 @@ mod tests {
 
 mod ffi {
     use super::*;
+    use crate::ffiutil::*;
+    use crate::includes::*;
     use glib::translate::*;
     use glib_sys;
     use libc;
-    use std::ptr;
-
-    use crate::ffiutil::*;
     use libdnf_sys::*;
+    use std::ptr;
 
     #[no_mangle]
     pub extern "C" fn ror_lockfile_read(
@@ -304,16 +304,4 @@ mod ffi {
             gerror,
         )
     }
-
-    /* Some helper rpm-ostree C functions to deal with libdnf stuff. These are prime candidates for
-     * oxidation since it makes e.g. interacting with strings less efficient. */
-    extern "C" {
-        pub(crate) fn rpmostree_get_repodata_chksum_repr(
-            package: *mut DnfPackage,
-            chksum: *mut *mut libc::c_char,
-            gerror: *mut *mut glib_sys::GError,
-        ) -> libc::c_int;
-    }
 }
-
-pub use self::ffi::*;
