@@ -194,6 +194,7 @@ mod ffi {
     use crate::ffiutil::*;
     use crate::includes::*;
     use glib::translate::*;
+    use glib::GString;
     use glib_sys;
     use libc;
     use libdnf_sys::*;
@@ -250,9 +251,9 @@ mod ffi {
         };
 
         for pkg in packages {
-            let name: String = unsafe { from_glib_none(dnf_package_get_name(pkg)) };
-            let evr: String = unsafe { from_glib_none(dnf_package_get_evr(pkg)) };
-            let arch: String = unsafe { from_glib_none(dnf_package_get_arch(pkg)) };
+            let name: Borrowed<GString> = unsafe { from_glib_borrow(dnf_package_get_name(pkg)) };
+            let evr: Borrowed<GString> = unsafe { from_glib_borrow(dnf_package_get_evr(pkg)) };
+            let arch: Borrowed<GString> = unsafe { from_glib_borrow(dnf_package_get_arch(pkg)) };
 
             let mut chksum: *mut libc::c_char = ptr::null_mut();
             let r = unsafe { rpmostree_get_repodata_chksum_repr(pkg, &mut chksum, gerror) };
@@ -261,9 +262,9 @@ mod ffi {
             }
 
             lockfile.packages.insert(
-                name,
+                name.as_str().to_string(),
                 LockedPackage {
-                    evra: format!("{}.{}", evr, arch),
+                    evra: format!("{}.{}", evr.as_str(), arch.as_str()),
                     digest: Some(unsafe { from_glib_none(chksum) }),
                 },
             );
