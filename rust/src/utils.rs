@@ -197,22 +197,22 @@ mod tests {
 
 mod ffi {
     use super::*;
+    use crate::ffiutil::*;
     use glib;
+    use glib::translate::*;
     use glib_sys;
     use libc;
     use std::ffi::CString;
     use std::os::unix::io::IntoRawFd;
     use std::ptr;
 
-    use crate::ffiutil::*;
-
     #[no_mangle]
     pub extern "C" fn ror_download_to_fd(
         url: *const libc::c_char,
         gerror: *mut *mut glib_sys::GError,
     ) -> libc::c_int {
-        let url = ffi_view_nullable_str(url).unwrap();
-        match download_url_to_tmpfile(url) {
+        let url: String = unsafe { from_glib_none(url) };
+        match download_url_to_tmpfile(url.as_str()) {
             Ok(f) => f.into_raw_fd(),
             Err(e) => {
                 error_to_glib(&e, gerror);
@@ -227,10 +227,10 @@ mod ffi {
         h: *mut glib_sys::GHashTable,
         gerror: *mut *mut glib_sys::GError,
     ) -> *mut libc::c_char {
-        let s = ffi_view_nullable_str(s).unwrap();
+        let s: String = unsafe { from_glib_none(s) };
         let h_rs: HashMap<String, String> =
             unsafe { glib::translate::FromGlibPtrContainer::from_glib_none(h) };
-        match varsubst(s, &h_rs) {
+        match varsubst(s.as_str(), &h_rs) {
             Ok(s) => CString::new(s).unwrap().into_raw(),
             Err(e) => {
                 error_to_glib(&e, gerror);

@@ -42,33 +42,6 @@ use std::ptr;
  * outlive the function call.
  */
 
-/// Convert a C (UTF-8) string to a &str; will panic
-/// if it is NULL or isn't valid UTF-8.  Note the lifetime of
-/// the return value must be <= the pointer.
-pub(crate) fn ffi_view_str<'a>(s: *const libc::c_char) -> &'a str {
-    assert!(!s.is_null());
-    let s = unsafe { CStr::from_ptr(s) };
-    s.to_str().expect("ffi_view_str: valid utf-8")
-}
-
-/// Convert a C (UTF-8) string to a &str; will panic
-/// if it isn't valid UTF-8.  Note the lifetime of
-/// the return value must be <= the pointer.
-pub(crate) fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
-    if s.is_null() {
-        None
-    } else {
-        Some(ffi_view_str(s))
-    }
-}
-
-/// Given a NUL-terminated C string, copy it to an owned
-/// String.  Will panic if the C string is not valid UTF-8.
-pub(crate) fn ffi_new_string(s: *const libc::c_char) -> String {
-    let buf = ffi_view_bytestring(s);
-    String::from_utf8(buf.into()).expect("ffi_new_string: valid utf-8")
-}
-
 /// View a C "bytestring" (NUL terminated) as a Rust byte array.
 /// Panics if `s` is `NULL`.
 pub(crate) fn ffi_view_bytestring<'a>(s: *const libc::c_char) -> &'a [u8] {

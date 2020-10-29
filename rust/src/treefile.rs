@@ -1410,12 +1410,16 @@ mod ffi {
     ) -> *mut Treefile {
         // Convert arguments
         let filename = ffi_view_os_str(filename);
-        let basearch = ffi_view_nullable_str(basearch);
+        let basearch: Option<String> = unsafe { from_glib_none(basearch) };
         let workdir = ffi_view_openat_dir_option(workdir_dfd);
         // Run code, map error if any, otherwise extract raw pointer, passing
         // ownership back to C.
         ptr_glib_error(
-            Treefile::new_boxed(filename.as_ref(), basearch, workdir),
+            Treefile::new_boxed(
+                filename.as_ref(),
+                basearch.as_ref().map(|s| s.as_str()),
+                workdir,
+            ),
             gerror,
         )
     }

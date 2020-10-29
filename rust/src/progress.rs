@@ -98,9 +98,9 @@ impl ProgressState {
     /// Change the "sub message" which is the indicatif `{message}`. This text
     /// appears after everything else - it's meant for text that changes width
     /// often (otherwise the progress bar would bounce around).
-    fn set_sub_message(&self, msg: Option<&str>) {
+    fn set_sub_message<T: AsRef<str>>(&self, msg: Option<T>) {
         if let Some(ref sub_message) = msg {
-            self.bar.set_message(sub_message)
+            self.bar.set_message(sub_message.as_ref())
         } else {
             self.bar.set_message("");
         }
@@ -113,9 +113,9 @@ impl ProgressState {
     }
 
     /// Clear the progress bar and print a completion message even on non-ttys.
-    fn end(&self, suffix: Option<&str>) {
+    fn end<T: AsRef<str>>(&self, suffix: Option<T>) {
         self.bar.finish_and_clear();
-        let suffix = suffix.unwrap_or("done");
+        let suffix = suffix.as_ref().map(|s| s.as_ref()).unwrap_or("done");
         if self.is_hidden {
             println!("{}", suffix);
         } else {
@@ -155,10 +155,9 @@ mod tests {
 
 mod ffi {
     use super::*;
+    use glib::translate::*;
     use libc;
     use std::sync::MutexGuard;
-
-    use crate::ffiutil::*;
 
     fn assert_empty(m: &MutexGuard<Option<ProgressState>>) {
         if let Some(ref state) = **m {
@@ -168,7 +167,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_begin_task(msg: *const libc::c_char) {
-        let msg = ffi_new_string(msg);
+        let msg: String = unsafe { from_glib_none(msg) };
         let mut lock = PROGRESS.lock().unwrap();
         assert_empty(&lock);
         *lock = Some(ProgressState::new(msg, ProgressType::Task));
@@ -176,7 +175,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_begin_n_items(msg: *const libc::c_char, n: libc::c_int) {
-        let msg = ffi_new_string(msg);
+        let msg: String = unsafe { from_glib_none(msg) };
         let mut lock = PROGRESS.lock().unwrap();
         assert_empty(&lock);
         *lock = Some(ProgressState::new(msg, ProgressType::NItems(n as u64)));
@@ -184,7 +183,8 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_begin_percent(msg: *const libc::c_char) {
-        let msg = ffi_new_string(msg);
+        let msg: String = unsafe { from_glib_none(msg) };
+
         let mut lock = PROGRESS.lock().unwrap();
         assert_empty(&lock);
         *lock = Some(ProgressState::new(msg, ProgressType::Percent));
@@ -192,7 +192,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_set_message(msg: *const libc::c_char) {
-        let msg = ffi_new_string(msg);
+        let msg: String = unsafe { from_glib_none(msg) };
         let mut lock = PROGRESS.lock().unwrap();
         let state = lock.as_mut().expect("progress to update");
         state.set_message(msg);
@@ -200,7 +200,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_set_sub_message(msg: *const libc::c_char) {
-        let msg = ffi_view_nullable_str(msg);
+        let msg: Option<String> = unsafe { from_glib_none(msg) };
         let mut lock = PROGRESS.lock().unwrap();
         let state = lock.as_mut().expect("progress to update");
         state.set_sub_message(msg);
@@ -215,7 +215,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_end(suffix: *const libc::c_char) {
-        let suffix = ffi_view_nullable_str(suffix);
+        let suffix: Option<String> = unsafe { from_glib_none(suffix) };
         let mut lock = PROGRESS.lock().unwrap();
         let state = lock.take().expect("progress to end");
         state.end(suffix);
