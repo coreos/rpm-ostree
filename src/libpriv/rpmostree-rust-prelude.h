@@ -22,6 +22,9 @@
 
 #include <gio/gio.h>
 
+/* Forward declarations */
+typedef struct RpmOstreeOrigin RpmOstreeOrigin;
+
 /* Right now cbindgen doesn't understand types from external crates, so we hackily
  * typedef them.
  **/
@@ -31,4 +34,5 @@ b(GHashTable)
 b(GPtrArray)
 b(GChecksum)
 b(OstreeRepo)
+b(RpmOstreeOrigin)
 #undef b
