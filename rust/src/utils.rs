@@ -211,7 +211,7 @@ mod ffi {
         url: *const libc::c_char,
         gerror: *mut *mut glib_sys::GError,
     ) -> libc::c_int {
-        let url: String = unsafe { from_glib_none(url) };
+        let url: Borrowed<glib::GString> = unsafe { from_glib_borrow(url) };
         match download_url_to_tmpfile(url.as_str()) {
             Ok(f) => f.into_raw_fd(),
             Err(e) => {
@@ -227,7 +227,7 @@ mod ffi {
         h: *mut glib_sys::GHashTable,
         gerror: *mut *mut glib_sys::GError,
     ) -> *mut libc::c_char {
-        let s: String = unsafe { from_glib_none(s) };
+        let s: Borrowed<glib::GString> = unsafe { from_glib_borrow(s) };
         let h_rs: HashMap<String, String> =
             unsafe { glib::translate::FromGlibPtrContainer::from_glib_none(h) };
         match varsubst(s.as_str(), &h_rs) {
