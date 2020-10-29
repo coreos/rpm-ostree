@@ -482,11 +482,8 @@ impl Treefile {
     }
 
     fn serialize_json_string(config: &TreeComposeConfig) -> Result<CUtf8Buf> {
-        let mut output = vec![];
-        serde_json::to_writer_pretty(&mut output, config)?;
-        Ok(CUtf8Buf::from_string(
-            String::from_utf8(output).expect("utf-8 json"),
-        ))
+        let output = serde_json::to_string_pretty(config)?;
+        Ok(CUtf8Buf::from_string(output))
     }
 
     /// Given a treefile, print warnings about items which are deprecated.
