@@ -250,9 +250,9 @@ mod ffi {
         };
 
         for pkg in packages {
-            let name = ffi_new_string(unsafe { dnf_package_get_name(pkg) });
-            let evr = ffi_view_str(unsafe { dnf_package_get_evr(pkg) });
-            let arch = ffi_view_str(unsafe { dnf_package_get_arch(pkg) });
+            let name: String = unsafe { from_glib_none(dnf_package_get_name(pkg)) };
+            let evr: String = unsafe { from_glib_none(dnf_package_get_evr(pkg)) };
+            let arch: String = unsafe { from_glib_none(dnf_package_get_arch(pkg)) };
 
             let mut chksum: *mut libc::c_char = ptr::null_mut();
             let r = unsafe { rpmostree_get_repodata_chksum_repr(pkg, &mut chksum, gerror) };
@@ -264,7 +264,7 @@ mod ffi {
                 name,
                 LockedPackage {
                     evra: format!("{}.{}", evr, arch),
-                    digest: Some(ffi_new_string(chksum)),
+                    digest: Some(unsafe { from_glib_none(chksum) }),
                 },
             );
 
@@ -282,7 +282,7 @@ mod ffi {
             .unwrap();
 
         for rpmmd_repo in rpmmd_repos {
-            let id = ffi_new_string(unsafe { dnf_repo_get_id(rpmmd_repo) });
+            let id: String = unsafe { from_glib_none(dnf_repo_get_id(rpmmd_repo)) };
             let generated = unsafe { dnf_repo_get_timestamp_generated(rpmmd_repo) };
             lockfile_repos.insert(
                 id,
