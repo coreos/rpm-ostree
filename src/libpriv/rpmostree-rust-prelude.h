@@ -30,6 +30,7 @@ typedef struct RpmOstreeOrigin RpmOstreeOrigin;
  **/
 #define b(x) typedef x ROR ## x;
 b(GError)
+b(GCancellable)
 b(GHashTable)
 b(GPtrArray)
 b(GChecksum)

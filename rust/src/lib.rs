@@ -18,6 +18,8 @@ mod history;
 pub use self::history::*;
 mod journal;
 pub use self::journal::*;
+mod initramfs;
+pub use self::initramfs::ffi::*;
 mod lockfile;
 pub use self::lockfile::*;
 mod progress;

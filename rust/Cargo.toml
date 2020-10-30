@@ -31,6 +31,7 @@ systemd = "0.7.1"
 indicatif = "0.15.0"
 lazy_static = "1.4.0"
 envsubst = "0.2.0"
+subprocess = "0.2.6"
 chrono = { version = "0.4.19", features = ["serde"] }
 libdnf-sys = { path = "libdnf-sys", version = "0.1.0" }
 
