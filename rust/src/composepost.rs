@@ -29,11 +29,11 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Result<()> {
             for line in f.lines() {
                 let line = line?;
                 if !line.starts_with("HOME=") {
-                    bufw.write(line.as_bytes())?;
+                    bufw.write_all(line.as_bytes())?;
                 } else {
-                    bufw.write("HOME=/var/home".as_bytes())?;
+                    bufw.write_all("HOME=/var/home".as_bytes())?;
                 }
-                bufw.write("\n".as_bytes())?;
+                bufw.write_all("\n".as_bytes())?;
             }
             Ok(())
         })?;
@@ -49,7 +49,7 @@ fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Result<()> {
         "usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset",
         0o644,
         |w| {
-            w.write(
+            w.write_all(
                 r###"# Written by rpm-ostree compose tree
 enable ostree-remount.service
 enable ostree-finalize-staged.path
@@ -73,15 +73,15 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
             for line in f.lines() {
                 let line = line?;
                 if line.starts_with("/var/home ") {
-                    w.write(b"# https://github.com/projectatomic/rpm-ostree/pull/1754\n")?;
-                    w.write(b"# ")?;
+                    w.write_all(b"# https://github.com/projectatomic/rpm-ostree/pull/1754\n")?;
+                    w.write_all(b"# ")?;
                 }
-                w.write(line.as_bytes())?;
-                w.write(b"\n")?;
+                w.write_all(line.as_bytes())?;
+                w.write_all(b"\n")?;
             }
-            w.write(b"# https://github.com/projectatomic/rpm-ostree/pull/1754\n")?;
-            w.write(b"/home /var/home")?;
-            w.write(b"\n")?;
+            w.write_all(b"# https://github.com/projectatomic/rpm-ostree/pull/1754\n")?;
+            w.write_all(b"/home /var/home")?;
+            w.write_all(b"\n")?;
             Ok(())
         })?;
     }
