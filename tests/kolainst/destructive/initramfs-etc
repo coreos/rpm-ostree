@@ -14,6 +14,14 @@ check_for_dracut_karg() {
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   "")
+    for f in / /var /usr/bin; do
+      if rpm-ostree ex initramfs-etc --track ${f} 2>out.txt; then
+        fatal "should have failed with path ${f}"
+      fi
+      assert_file_has_content_literal out.txt "Path outside /etc forbidden: ${f}"
+      rm -f out.txt
+    done
+
     mkdir -p /etc/cmdline.d
     echo 'foobar' > /etc/cmdline.d/foobar.conf
 
