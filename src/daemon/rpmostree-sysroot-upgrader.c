@@ -1162,8 +1162,10 @@ generate_initramfs_overlay (GHashTable    *initramfs_etc_files,
       guint path_hash = g_str_hash (path);
       if (path_hash == last_path_hash)
         continue;
+      /* we want the trailing NUL too as a separator */
+      const size_t n = strlen (path) + 1;
       g_memory_input_stream_add_data (G_MEMORY_INPUT_STREAM (filelist_input),
-                                      g_steal_pointer (&path), (strlen (path))+1, g_free);
+                                      g_steal_pointer (&path), n, g_free);
       last_path_hash = path_hash;
     }
 
