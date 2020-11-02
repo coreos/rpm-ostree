@@ -25,7 +25,7 @@
 #include "libglnx.h"
 
 typedef struct {
-  volatile gint refcount;
+  gint refcount;  /* atomic */
   DnfSack *sack;
   GLnxTmpDir tmpdir;
 } RpmOstreeRefSack;

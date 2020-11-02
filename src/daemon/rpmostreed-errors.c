@@ -39,10 +39,10 @@ GQuark
 rpmostreed_error_quark (void)
 {
   G_STATIC_ASSERT (G_N_ELEMENTS (dbus_error_entries) == RPM_OSTREED_ERROR_NUM_ENTRIES);
-  static volatile gsize quark_volatile = 0;
+  static gsize quark = 0;
   g_dbus_error_register_error_domain ("rpmostreed-error-quark",
-                                      &quark_volatile,
+                                      &quark,
                                       dbus_error_entries,
                                       G_N_ELEMENTS (dbus_error_entries));
-  return (GQuark) quark_volatile;
+  return (GQuark) quark;
 }

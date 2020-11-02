@@ -1817,10 +1817,10 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
 }
 
 struct CommitThreadData {
-  volatile gint done;
+  gint done;  /* atomic */
   off_t n_bytes;
   off_t n_processed;
-  volatile gint percent;
+  gint percent;  /* atomic */
   OstreeRepo *repo;
   int rootfs_fd;
   OstreeMutableTree *mtree;
