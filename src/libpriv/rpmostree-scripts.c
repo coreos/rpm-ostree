@@ -254,7 +254,7 @@ rpmostree_script_txn_validate (DnfPackage    *package,
       switch (action)
         {
         case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
-          return glnx_throw (error, "Package '%s' has (currently) unsupported script of type '%s'",
+          return glnx_throw (error, "Package '%s' has (currently) unsupported script of type '%s'; see https://github.com/coreos/rpm-ostree/issues/749",
                              dnf_package_get_name (package), desc);
         case RPMOSTREE_SCRIPT_ACTION_IGNORE:
           continue;
