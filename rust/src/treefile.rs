@@ -45,8 +45,6 @@ pub struct Treefile {
     rojig_spec: Option<CUtf8Buf>,
     serialized: CUtf8Buf,
     externals: TreefileExternals,
-    // This is a checksum over *all* the treefile inputs (recursed treefiles + externals).
-    checksum: CUtf8Buf,
 }
 
 // We only use this while parsing
@@ -433,13 +431,6 @@ impl Treefile {
             _ => (None, None),
         };
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
-        // Notice we hash the *reserialization* of the final flattened treefile only so that e.g.
-        // comments/whitespace/hash table key reorderings don't trigger a respin. We could take
-        // this further by using a custom `serialize_with` for Vecs where ordering doesn't matter
-        // (or just sort the Vecs).
-        let mut hasher = glib::Checksum::new(glib::ChecksumType::Sha256);
-        parsed.config.hasher_update(&mut hasher)?;
-        parsed.externals.hasher_update(&mut hasher)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
@@ -448,7 +439,6 @@ impl Treefile {
             rojig_spec,
             serialized,
             externals: parsed.externals,
-            checksum: CUtf8Buf::from_string(hasher.get_string().unwrap()),
         }))
     }
 
@@ -511,7 +501,15 @@ impl Treefile {
         }
     }
 
-    fn update_checksum(&self, repo: &ostree::Repo, checksum: &mut glib::Checksum) -> Result<()> {
+    fn get_checksum(&self, repo: &ostree::Repo) -> Result<String> {
+        // Notice we hash the *reserialization* of the final flattened treefile only so that e.g.
+        // comments/whitespace/hash table key reorderings don't trigger a respin. We could take
+        // this further by using a custom `serialize_with` for Vecs where ordering doesn't matter
+        // (or just sort the Vecs).
+        let mut hasher = glib::Checksum::new(glib::ChecksumType::Sha256);
+        self.parsed.hasher_update(&mut hasher)?;
+        self.externals.hasher_update(&mut hasher)?;
+
         let it = self.parsed.ostree_layers.iter().flat_map(|x| x.iter());
         let it = it.chain(
             self.parsed
@@ -519,14 +517,17 @@ impl Treefile {
                 .iter()
                 .flat_map(|x| x.iter()),
         );
+
         for v in it {
             let rev = repo.resolve_rev(v, false)?;
-            let (commit, _) = repo.load_commit(rev.as_str())?;
+            let rev = rev.as_str();
+            let (commit, _) = repo.load_commit(rev)?;
             let content_checksum =
                 ostree::commit_get_content_checksum(&commit).expect("content checksum");
-            checksum.update(content_checksum.as_bytes());
+            let content_checksum = content_checksum.as_str();
+            hasher.update(content_checksum.as_bytes());
         }
-        Ok(())
+        Ok(hasher.get_string().expect("hash"))
     }
 
     /// Generate a rojig spec file.
@@ -1507,19 +1508,6 @@ mod ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn ror_treefile_update_checksum(
-        tf: *mut Treefile,
-        repo: *mut ostree_sys::OstreeRepo,
-        checksum: *mut glib_sys::GChecksum,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let repo: ostree::Repo = unsafe { from_glib_none(repo) };
-        let mut checksum: glib::Checksum = unsafe { from_glib_none(checksum) };
-        let tf = ref_from_raw_ptr(tf);
-        int_glib_error(tf.update_checksum(&repo, &mut checksum), gerror)
-    }
-
-    #[no_mangle]
     pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {
         let tf = ref_from_raw_ptr(tf);
         if let &Some(ref rojig) = &tf.rojig_spec {
@@ -1539,9 +1527,20 @@ mod ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn ror_treefile_get_checksum(tf: *mut Treefile) -> *const libc::c_char {
+    pub extern "C" fn ror_treefile_get_checksum(
+        tf: *mut Treefile,
+        repo: *mut ostree_sys::OstreeRepo,
+        gerror: *mut *mut glib_sys::GError,
+    ) -> *mut libc::c_char {
         let tf = ref_from_raw_ptr(tf);
-        tf.checksum.as_ptr()
+        let repo: ostree::Repo = unsafe { from_glib_none(repo) };
+        match tf.get_checksum(&repo) {
+            Ok(c) => c.to_glib_full(),
+            Err(ref e) => {
+                error_to_glib(e, gerror);
+                ptr::null_mut()
+            }
+        }
     }
 
     #[no_mangle]
