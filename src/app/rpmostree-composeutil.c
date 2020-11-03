@@ -61,17 +61,14 @@ rpmostree_composeutil_checksum (HyGoal             goal,
 
   /* Hash in the treefile inputs (this includes all externals like postprocess, add-files,
    * etc... and the final flattened treefile -- see treefile.rs for more details). */
-  g_checksum_update (checksum, (guint8*)ror_treefile_get_checksum (tf), -1);
+  g_autofree char *tf_checksum = ror_treefile_get_checksum (tf, repo, error);
+  if (!tf_checksum)
+    return FALSE;
+  g_checksum_update (checksum, (guint8*) tf_checksum, -1);
 
   /* Hash in each package */
   if (!rpmostree_dnf_add_checksum_goal (checksum, goal, NULL, error))
     return FALSE;
-
-  if (tf)
-    {
-      if (!ror_treefile_update_checksum (tf, repo, checksum, error))
-        return FALSE;
-    }
 
   *out_checksum = g_strdup (g_checksum_get_string (checksum));
   return TRUE;
