@@ -260,17 +260,15 @@ mod ffi {
             if r == 0 {
                 return r;
             }
+            let chksum: String = unsafe { from_glib_full(chksum) };
 
             lockfile.packages.insert(
                 name.as_str().to_string(),
                 LockedPackage {
                     evra: format!("{}.{}", evr.as_str(), arch.as_str()),
-                    digest: Some(unsafe { from_glib_none(chksum) }),
+                    digest: Some(chksum),
                 },
             );
-
-            // forgive me for this sin... need to oxidize chksum_repr()
-            unsafe { glib_sys::g_free(chksum as *mut libc::c_void) };
         }
 
         /* just take the ref here to be less verbose */
