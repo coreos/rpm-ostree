@@ -71,6 +71,7 @@ static char **opt_metadata_strings;
 static char **opt_metadata_json;
 static char *opt_repo;
 static char *opt_touch_if_changed;
+static char *opt_previous_commit;
 static gboolean opt_dry_run;
 static gboolean opt_print_only;
 static char *opt_write_commitid_to;
@@ -99,6 +100,7 @@ static GOptionEntry install_option_entries[] = {
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
+  { "previous-commit", 0, 0, G_OPTION_ARG_STRING, &opt_previous_commit, "Use this commit for change detection", "COMMIT" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
   { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile_to, "Write lockfile to FILE", "FILE" },
@@ -836,7 +838,13 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
    * if one uses `check-passwd: { "type": "previous" }`. There are a few other optimizations
    * too, e.g. using the previous SELinux policy in unified core. Also, we might need the
    * commit *object* for next version incrementing. */
-  if (self->ref)
+  if (opt_previous_commit)
+    {
+      if (!ostree_repo_resolve_rev (self->repo, opt_previous_commit, FALSE,
+                                    &self->previous_checksum, error))
+        return FALSE;
+    }
+  else if (self->ref)
     {
       if (!ostree_repo_resolve_rev (self->repo, self->ref, TRUE,
                                     &self->previous_checksum, error))
