@@ -5,7 +5,7 @@ authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebo
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.33"
+anyhow = "1.0.34"
 serde = "1.0.117"
 serde_derive = "1.0.117"
 serde_json = "1.0.59"
