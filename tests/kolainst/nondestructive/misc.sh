@@ -69,15 +69,6 @@ ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
  assert_file_has_content moo.txt '🐄')
 echo "ok moo"
 
-tmprootfs=$(mktemp -d -p /var/tmp)
-rpm-ostree coreos-rootfs seal "${tmprootfs}"
-lsattr -d "${tmprootfs}" > coreos-rootfs.txt
-rpm-ostree coreos-rootfs seal "${tmprootfs}"
-assert_file_has_content coreos-rootfs.txt '-*i-* '"${tmprootfs}"
-chattr -i "${tmprootfs}"
-rm -rf "${tmprootfs}" coreos-rootfs.txt
-echo "ok coreos-rootfs seal"
-
 # Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
 rpm-ostree reload
 echo "ok reload"
