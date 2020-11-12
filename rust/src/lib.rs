@@ -12,8 +12,6 @@ mod cliwrap;
 pub use cliwrap::*;
 mod composepost;
 pub use self::composepost::*;
-mod coreos_rootfs;
-pub use self::coreos_rootfs::*;
 mod history;
 pub use self::history::*;
 mod journal;
