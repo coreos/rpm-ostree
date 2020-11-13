@@ -422,6 +422,9 @@ rpmostree_context_new_system (OstreeRepo   *repo,
   dnf_context_set_check_disk_space (self->dnfctx, FALSE);
   dnf_context_set_check_transaction (self->dnfctx, FALSE);
 
+  /* we don't need any plugins */
+  dnf_context_set_plugins_dir (self->dnfctx, NULL);
+
   /* Hack until libdnf+librepo know how to better negotaiate zchunk.
    * see also the bits in configure.ac that define HAVE_ZCHUNK
    **/
