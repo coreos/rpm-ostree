@@ -2443,22 +2443,6 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
   return TRUE;
 }
 
-/* Builds a mapping from filename to rpm color */
-static void
-add_te_files_to_ht (rpmte        te,
-                    GHashTable  *ht)
-{
-  g_auto(rpmfiles) files = rpmteFiles (te);
-  g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
-
-  while (rpmfiNext (fi) >= 0)
-    {
-      const char *fn = rpmfiFN (fi);
-      rpm_color_t color = rpmfiFColor (fi);
-      g_hash_table_insert (ht, g_strdup (fn), GUINT_TO_POINTER (color));
-    }
-}
-
 static char*
 canonicalize_rpmfi_path (const char *path)
 {
@@ -2514,7 +2498,24 @@ handle_file_dispositions (RpmOstreeContext *self,
       rpmElementType type = rpmteType (te);
       if (type == TR_REMOVED)
         g_hash_table_add (pkgs_deleted, GUINT_TO_POINTER (rpmteDBInstance (te)));
-      add_te_files_to_ht (te, type == TR_REMOVED ? files_deleted : files_added);
+
+      g_auto(rpmfiles) files = rpmteFiles (te);
+      g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
+
+      if (type == TR_REMOVED)
+        {
+          while (rpmfiNext (fi) >= 0)
+            g_hash_table_add (files_deleted, g_strdup (rpmfiFN (fi)));
+        }
+      else
+        {
+          while (rpmfiNext (fi) >= 0)
+            {
+              const char *fn = rpmfiFN (fi);
+              rpm_color_t color = rpmfiFColor (fi);
+              g_hash_table_insert (files_added, g_strdup (fn), GUINT_TO_POINTER (color));
+            }
+        }
     }
 
   /* this we *do* canonicalize since we'll be comparing against ostree paths */
