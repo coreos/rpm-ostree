@@ -8,6 +8,13 @@ Type=dbus
 BusName=org.projectatomic.rpmostree1
 # To use the read-only sysroot bits
 MountFlags=slave
+# We have no business accessing /var/roothome or /var/home.  In general
+# the ostree design clearly avoids touching those, but since systemd offers
+# us easy tools to toggle on protection, let's use them.  In the future
+# it'd be nice to do something like using DynamicUser=yes for the main service,
+# and have a system rpm-ostreed-transaction.service that runs privileged
+# but as a subprocess.
+ProtectHome=true
 NotifyAccess=main
 @SYSTEMD_ENVIRON@
 ExecStart=@bindir@/rpm-ostree start-daemon
