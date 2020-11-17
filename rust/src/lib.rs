@@ -273,6 +273,32 @@ pub mod ffi {
         #[allow(dead_code)]
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<UniquePtr<CxxString>>;
     }
+
+    #[derive(Debug)]
+    pub enum RefspecType {
+        Ostree,
+        Rojig,
+        Checksum,
+    }
+
+    // origin.rs
+    extern "Rust" {
+        type Origin;
+
+        fn origin_parse_deployment(deployment: Pin<&mut OstreeDeployment>) -> Result<Box<Origin>>;
+        fn is_rojig(&self) -> bool;
+        fn get_packages(&self) -> Vec<String>;
+        fn get_local_packages(&self) -> Vec<StringMapping>;
+        fn get_override_local_pkgs(&self) -> Vec<String>;
+        fn get_refspec_type(&self) -> RefspecType;
+        fn get_prefixed_refspec(&self) -> String;
+        fn get_custom_url(&self) -> Result<String>;
+        fn get_custom_description(&self) -> Result<String>;
+        fn get_rojig_description(&self) -> String;
+        fn get_regenerate_initramfs(&self) -> bool;
+        fn get_initramfs_etc_files(&self) -> Vec<String>;
+        fn get_initramfs_args(&self) -> Vec<String>;
+    }
 }
 
 mod client;
@@ -300,10 +326,8 @@ pub use self::lockfile::*;
 mod live;
 pub(crate) use self::live::*;
 mod nameservice;
-// An origin parser in Rust but only built when testing until
-// we're ready to try porting the C++ code.
-#[cfg(test)]
 mod origin;
+pub(crate) use self::origin::*;
 mod ostree_diff;
 mod ostree_utils;
 mod passwd;

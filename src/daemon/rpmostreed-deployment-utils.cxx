@@ -29,6 +29,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-sysroot-core.h"
 #include "rpmostree-core.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-package-variants.h"
 #include "rpmostreed-utils.h"
 #include "rpmostree-cxxrs.h"
@@ -225,6 +226,16 @@ variant_add_from_hash_table (GVariantDict *dict,
   g_variant_dict_insert (dict, key, "^as", values);
 }
 
+static void
+variant_add_from_cxxrs_strings (GVariantDict *dict, const char *key, rust::Vec<rust::String> &v)
+{
+  GVariantBuilder b;
+  g_variant_builder_init (&b, (GVariantType*)"as");
+  for (auto & s : v)
+    g_variant_builder_add (&b, "s", s.c_str());
+  g_variant_dict_insert (dict, key, "@as", g_variant_builder_end (&b));
+}
+
 /* Returns floating GVariant equivalent of `commit_meta` minus blacklisted keys. */
 static GVariant*
 filter_commit_meta (GVariant *commit_meta)
@@ -258,14 +269,13 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
     return NULL;
 
   g_autofree gchar *id = rpmostreed_deployment_generate_id (deployment);
-  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
-  if (!origin)
-    return NULL;
+  auto origin = rpmostreecxx::origin_parse_deployment (*deployment);
 
   const gboolean is_booted = g_strcmp0 (booted_id, id) == 0;
 
-  RpmOstreeRefspecType refspec_type;
-  g_autofree char *refspec = rpmostree_origin_get_full_refspec (origin, &refspec_type);
+  auto refspec_type = origin->get_refspec_type();
+  auto refspec_str = origin->get_prefixed_refspec();
+  auto refspec = std::string (refspec_str);
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -323,25 +333,25 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   switch (refspec_type)
     {
-    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
+    case rpmostreecxx::RefspecType::Checksum:
       {
-        g_autofree char *custom_origin_url = NULL;
-        g_autofree char *custom_origin_description = NULL;
-        rpmostree_origin_get_custom_description (origin, &custom_origin_url,
-                                                 &custom_origin_description);
-        if (custom_origin_url)
-          g_variant_dict_insert (&dict, "custom-origin", "(ss)",
-                                 custom_origin_url,
-                                 custom_origin_description);
+        auto url = origin->get_custom_url();
+        auto description = origin->get_custom_description();
+        if (url.size() > 0)
+          {
+            g_variant_dict_insert (&dict, "custom-origin", "(ss)",
+                                   url.c_str(),
+                                   description.c_str());
+          }
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+    case rpmostreecxx::RefspecType::Ostree:
       {
-        if (!variant_add_remote_status (repo, refspec, base_checksum, &dict, error))
+        if (!variant_add_remote_status (repo, refspec.c_str(), base_checksum, &dict, error))
           return NULL;
 
         g_autofree char *pending_base_commitrev = NULL;
-        if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
+        if (!ostree_repo_resolve_rev (repo, refspec.c_str(), TRUE,
                                       &pending_base_commitrev, error))
           return NULL;
 
@@ -359,10 +369,10 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
           }
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+    case rpmostreecxx::RefspecType::Rojig:
       {
         g_variant_dict_insert (&dict, "rojig-description", "@a{sv}",
-                               rpmostree_origin_get_rojig_description (origin));
+                              origin->get_rojig_description ().c_str());
       }
       break;
     }
@@ -387,13 +397,13 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       g_variant_dict_insert (&dict, "finalization-locked", "b", errno == 0);
     }
 
-  if (refspec)
-    g_variant_dict_insert (&dict, "origin", "s", refspec);
+  if (refspec.length() > 0)
+    g_variant_dict_insert (&dict, "origin", "s", refspec.c_str());
 
-  variant_add_from_hash_table (&dict, "requested-packages",
-                               rpmostree_origin_get_packages (origin));
-  variant_add_from_hash_table (&dict, "requested-local-packages",
-                               rpmostree_origin_get_local_packages (origin));
+  auto pkgs = origin->get_packages();
+  variant_add_from_cxxrs_strings (&dict, "requested-packages", pkgs);
+  auto local_pkgs = origin->get_local_packages()
+  variant_add_from_hash_table (&dict, "requested-local-packages", local_pkgs);
   variant_add_from_hash_table (&dict, "requested-base-removals",
                                rpmostree_origin_get_overrides_remove (origin));
   variant_add_from_hash_table (&dict, "requested-base-local-replacements",
@@ -409,14 +419,16 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                          ostree_deployment_unlocked_state_to_string (ostree_deployment_get_unlocked (deployment)));
 
   g_variant_dict_insert (&dict, "regenerate-initramfs", "b",
-                         rpmostree_origin_get_regenerate_initramfs (origin));
-  { const char *const* args = rpmostree_origin_get_initramfs_args (origin);
+                         origin->get_regenerate_initramfs ());
+  { auto args = origin->get_initramfs_args ();
     if (args && *args)
       g_variant_dict_insert (&dict, "initramfs-args", "^as", args);
   }
 
-  variant_add_from_hash_table (&dict, "initramfs-etc",
-                               rpmostree_origin_get_initramfs_etc_files (origin));
+  //   variant_add_from_hash_table (&dict, "initramfs-etc",
+  //                               rpmostree_origin_get_initramfs_etc_files (origin));
+  auto initramfs_etc = origin->get_initramfs_etc_files();
+  variant_add_from_cxxrs_strings (&dict, "initramfs-etc", initramfs_etc);
 
   if (booted_id != NULL)
     g_variant_dict_insert (&dict, "booted", "b", is_booted);

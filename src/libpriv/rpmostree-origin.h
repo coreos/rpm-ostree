@@ -112,11 +112,6 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin);
 
-char *
-rpmostree_origin_get_string (RpmOstreeOrigin *origin,
-                             const char *section,
-                             const char *value);
-
 GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin);
 

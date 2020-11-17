@@ -6,24 +6,18 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use anyhow::{bail, Result};
+use crate::cxxrsutil::*;
+use crate::ffi::{RefspecType, StringMapping};
+use anyhow::{anyhow, bail, Result};
 use glib::translate::*;
-use glib::GString;
 use glib::KeyFile;
-use std::result::Result as StdResult;
+use std::{pin::Pin, result::Result as StdResult};
 
 use std::collections::{BTreeMap, BTreeSet};
 
 const ROJIG_PREFIX: &str = "rojig://";
 const ORIGIN: &str = "origin";
 const OVERRIDE_COMMIT: &str = "override-commit";
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RefspecType {
-    Checksum,
-    Ostree,
-    Rojig,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Refspec {
@@ -46,7 +40,6 @@ struct Cache {
     override_replace_local: BTreeMap<String, String>,
 
     initramfs_etc: BTreeSet<String>,
-    #[allow(dead_code)]
     initramfs_args: Vec<String>,
 }
 
@@ -109,7 +102,6 @@ fn keyfile_get_optional_string(kf: &KeyFile, group: &str, key: &str) -> Result<O
     Ok(map_keyfile_optional(kf.get_value(group, key))?.map(|v| v.to_string()))
 }
 
-#[allow(dead_code)]
 fn keyfile_get_nonempty_optional_string(
     kf: &KeyFile,
     group: &str,
@@ -121,6 +113,14 @@ fn keyfile_get_nonempty_optional_string(
         }
     }
     Ok(None)
+}
+
+fn new_strmap<S: AsRef<str>>(c: impl Iterator<Item = (S, S)>) -> Vec<StringMapping> {
+    c.map(|(k, v)| StringMapping {
+        k: k.as_ref().to_string(),
+        v: v.as_ref().to_string(),
+    })
+    .collect()
 }
 
 impl Origin {
@@ -258,6 +258,22 @@ impl Origin {
         }
     }
 
+    pub(crate) fn get_packages(&self) -> Vec<String> {
+        self.cache.packages.iter().cloned().collect()
+    }
+
+    pub(crate) fn get_local_packages(&self) -> Vec<StringMapping> {
+        new_strmap(self.cache.packages_local.iter())
+    }
+
+    pub(crate) fn get_override_remove(&self) -> Vec<String> {
+        self.cache.override_remove.iter().cloned().collect()
+    }
+
+    pub(crate) fn get_override_local_replace(&self) -> Vec<StringMapping> {
+        new_strmap(self.cache.override_replace_local.iter())
+    }
+
     pub(crate) fn get_custom_url(&self) -> Result<String> {
         // FIXME(cxx-rs) propagate Option once supported
         Ok(
@@ -291,12 +307,12 @@ impl Origin {
         }
     }
 
-    pub(crate) fn get_initramfs_etc_files(&self) -> Vec<GString> {
-        self.cache
-            .initramfs_etc
-            .iter()
-            .map(|s| GString::from(s.as_str()))
-            .collect()
+    pub(crate) fn get_initramfs_etc_files(&self) -> Vec<String> {
+        self.cache.initramfs_etc.iter().cloned().collect()
+    }
+
+    pub(crate) fn get_initramfs_args(&self) -> Vec<String> {
+        self.cache.initramfs_args.clone()
     }
 
     pub(crate) fn may_require_local_assembly(&self) -> bool {
@@ -320,6 +336,16 @@ impl Origin {
         }
         r
     }
+}
+
+pub(crate) fn origin_parse_deployment(
+    mut deployment: Pin<&mut FFIOstreeDeployment>,
+) -> CxxResult<Box<Origin>> {
+    let deployment = deployment.gobj_wrap();
+    let kf = deployment
+        .get_origin()
+        .ok_or_else(|| anyhow!("No origin found for deployment"))?;
+    Ok(Origin::new_parse(&kf)?)
 }
 
 #[cfg(test)]

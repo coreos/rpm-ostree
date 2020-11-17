@@ -163,9 +163,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
       if (!rpmostree_deployment_get_base_layer (repo, deployment, &base_commit, error))
         return FALSE;
 
-      g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
-      if (!origin)
-        return FALSE;
+      auto origin = rpmostreecxx::origin_parse_deployment (*deployment);
 
       /* Hold a ref to layered packages; actually right now this injects refs
        * for *all* packages since we don't have an API to query out which
@@ -192,7 +190,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
       /* In rojig mode, we need to also reference packages from the base; this
        * is a different refspec format.
        */
-      if (rpmostree_origin_is_rojig (origin))
+      if (origin->is_rojig ())
         {
           const char *actual_base_commit = base_commit ?: current_checksum;
           g_autoptr(RpmOstreeRefSack) base_rsack =
@@ -205,12 +203,12 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
         }
 
       /* also add any inactive local replacements */
-      GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
-      GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
-        {
-          auto cachebranch = rpmostreecxx::nevra_to_cache_branch (std::string(nevra));
+      auto local_replace = origin->get_override_local_pkgs();
+      for (rust::String v : local_replace) {
+          auto vs = std::string(v);
+          auto cachebranch = rpmostreecxx::nevra_to_cache_branch(vs);
           g_hash_table_add (referenced_pkgs, g_strdup (cachebranch->c_str()));
-        }
+      }
     }
 
   guint n_freed = 0;
