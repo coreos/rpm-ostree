@@ -150,7 +150,7 @@ your changes on top.  This means that upgrades will receive new
 default files in `/etc`, which is quite a critical feature.
 
 For more information, see
-[OSTree: Adapting](https://ostree.readthedocs.io/en/latest/manual/adapting-existing/).
+[OSTree: Adapting](https://ostreedev.github.io/ostree/adapting-existing/).
 
 ## Operating system changes
 
