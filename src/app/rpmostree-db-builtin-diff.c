@@ -94,7 +94,7 @@ print_diff (OstreeRepo   *repo,
       if (is_diff_format)
         rpmostree_diff_print (removed, added, modified_from, modified_to);
       else
-        rpmostree_diff_print_formatted (RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0,
+        rpmostree_diff_print_formatted (RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, NULL, 0,
                                         removed, added, modified_from, modified_to);
     }
 

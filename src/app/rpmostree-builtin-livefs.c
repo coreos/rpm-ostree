@@ -30,20 +30,36 @@
 #include <libglnx.h>
 
 static char *opt_target;
+static gboolean opt_reset;
 
 static GOptionEntry option_entries[] = {
-  { "target", 0, 0, G_OPTION_ARG_NONE, &opt_target, "Target provided commit instead of pending deployment", NULL },
+  { "target", 0, 0, G_OPTION_ARG_STRING, &opt_target, "Target provided commit instead of pending deployment", NULL },
+  { "reset", 0, 0, G_OPTION_ARG_NONE, &opt_reset, "Reset back to booted commit", NULL },
   { NULL }
 };
 
 static GVariant *
-get_args_variant (void)
+get_args_variant (GError **error)
 {
   GVariantDict dict;
 
   g_variant_dict_init (&dict, NULL);
   if (opt_target)
-    g_variant_dict_insert (&dict, "target", "s", opt_target);
+    {
+      if (opt_reset)
+        return glnx_null_throw (error, "Cannot specify both --target and --reset");
+      g_variant_dict_insert (&dict, "target", "s", opt_target);
+    }
+  else if (opt_reset)
+    {
+      OstreeSysroot *sysroot = ostree_sysroot_new_default ();
+      if (!ostree_sysroot_load (sysroot, NULL, error))
+        return FALSE;
+      OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
+      if (!booted)
+        return glnx_null_throw (error, "Not in a booted OSTree deployment");
+      g_variant_dict_insert (&dict, "target", "s", ostree_deployment_get_csum (booted));
+    }
 
   return g_variant_dict_end (&dict);
 }
@@ -78,8 +94,11 @@ rpmostree_ex_builtin_livefs (int             argc,
     return FALSE;
 
   g_autofree char *transaction_address = NULL;
+  g_autoptr(GVariant) args = get_args_variant (error);
+  if (!args)
+    return FALSE;
   if (!rpmostree_osexperimental_call_live_fs_sync (osexperimental_proxy,
-                                                   get_args_variant (),
+                                                   args,
                                                    &transaction_address,
                                                    cancellable,
                                                    error))

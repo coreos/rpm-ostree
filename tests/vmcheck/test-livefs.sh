@@ -30,6 +30,8 @@ vm_rpmostree cleanup -pr
 
 vm_assert_layered_pkg foo absent
 
+vm_cmd rpm -qa | sort > original-rpmdb.txt
+
 vm_build_rpm foo
 vm_build_rpm bar
 vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
@@ -40,6 +42,8 @@ if vm_cmd rpm -q foo; then
     assert_not_reached "have foo?"
 fi
 
+vm_rpmostree status > status.txt
+assert_not_file_has_content_literal status.txt 'LiveDiff'
 vm_assert_status_jq '.deployments|length == 2' \
                     '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
@@ -52,6 +56,10 @@ vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]
 if vm_cmd test -w /usr; then
     fatal "Found writable /usr"
 fi
+vm_rpmostree status > status.txt
+assert_file_has_content_literal status.txt 'LiveDiff: 1 added'
+vm_rpmostree status -v > status.txt
+assert_file_has_content_literal status.txt 'LiveAdded:'
 echo "ok livefs basic"
 
 vm_rpmostree cleanup -p
@@ -67,6 +75,8 @@ vm_cmd ls -al /usr/bin/bar
 if vm_cmd test -f /usr/bin/foo; then
     fatal "Still have /usr/bin/foo"
 fi
+vm_rpmostree status > status.txt
+assert_file_has_content_literal status.txt 'LiveDiff: 1 added'
 
 echo "ok livefs again"
 
@@ -120,4 +130,19 @@ assert_file_has_content test-livefs-group.txt livefs-group
 # Test systemd-tmpfiles
 vm_cmd test -d /var/lib/test-livefs-service
 
+vm_rpmostree status > status.txt
+assert_file_has_content_literal status.txt 'LiveDiff: 3 added'
+
 echo "ok livefs stage2"
+
+# Now undo it all
+vm_rpmostree ex livefs --reset
+vm_cmd rpm -qa | sort > current-rpmdb.txt
+diff -u original-rpmdb.txt current-rpmdb.txt
+if vm_cmd test -f /usr/bin/bar; then
+    fatal "Still have /usr/bin/bar"
+fi
+vm_rpmostree status > status.txt
+assert_not_file_has_content_literal status.txt 'LiveDiff:'
+
+echo "ok livefs reset"

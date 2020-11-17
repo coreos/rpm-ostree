@@ -414,6 +414,42 @@ print_origin_repos (gboolean host_endian,
 }
 
 static gboolean
+print_live_pkgdiff (const char *live_target, RpmOstreeDiffPrintFormat format, guint max_key_len, GCancellable *cancellable, GError **error)
+{
+  g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new_default ();
+  if (!ostree_sysroot_load (sysroot, cancellable, error))
+    return FALSE;
+  g_autoptr(OstreeRepo) repo = NULL;
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+    return FALSE;
+  OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
+  g_assert (booted_deployment);
+
+  const char *from_rev = ostree_deployment_get_csum (booted_deployment);
+
+  gboolean have_target = FALSE;
+  if (!ostree_repo_has_object (repo, OSTREE_OBJECT_TYPE_COMMIT, live_target, &have_target, NULL, error))
+    return FALSE;
+  /* It might happen that the live target commit was GC'd somehow; we're not writing
+   * an explicit ref for it.  In that case skip the diff.
+   */
+  if (!have_target)
+    return TRUE;
+
+  g_autoptr(GPtrArray) removed = NULL;
+  g_autoptr(GPtrArray) added = NULL;
+  g_autoptr(GPtrArray) modified_old = NULL;
+  g_autoptr(GPtrArray) modified_new = NULL;
+  if (!rpm_ostree_db_diff (repo, from_rev, live_target,
+                           &removed, &added, &modified_old, &modified_new,
+                           cancellable, error))
+    return FALSE;
+  rpmostree_diff_print_formatted (format, "Live", max_key_len,
+                                  removed, added, modified_old, modified_new);
+  return TRUE;
+}
+
+static gboolean
 print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                       GVariant         *child,
                       gboolean          first,
@@ -616,6 +652,9 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   const gboolean have_live_changes = live_inprogress || live_replaced;
 
   const gboolean is_ostree_or_verbose = opt_verbose || refspectype == RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  const RpmOstreeDiffPrintFormat diff_format =
+        opt_verbose ? RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED
+                    : RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY;
 
   if (is_locally_assembled && is_ostree_or_verbose)
     {
@@ -655,6 +694,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
       rpmostree_print_kv ("LiveCommit", max_key_len, live_replaced);
       if (is_booted)
         g_print ("%s%s", get_bold_end (), get_red_end ());
+      if (!print_live_pkgdiff (live_replaced, diff_format, max_key_len, NULL, error))
+        return FALSE;
     }
 
   gboolean is_staged = FALSE;
@@ -697,10 +738,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
     {
       /* No cached update, but we can still print a diff summary */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      RpmOstreeDiffPrintFormat format =
-        opt_verbose ? RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED
-                    : RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY;
-      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path, format,
+      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path, diff_format,
                                                            max_key_len, NULL, error))
         return FALSE;
     }
