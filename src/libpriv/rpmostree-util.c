@@ -827,12 +827,14 @@ rpmostree_generate_diff_summary (guint upgraded,
 /* Given the result of rpm_ostree_db_diff(), print it in a nice formatted way for humans. */
 void
 rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
+                                const char *prefix,
                                 guint      max_key_len,
                                 GPtrArray *removed,
                                 GPtrArray *added,
                                 GPtrArray *modified_old,
                                 GPtrArray *modified_new)
 {
+  const char *sprefix = prefix ?: "";
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
 
   guint upgraded = 0;
@@ -857,7 +859,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
           if (upgraded == 0)
-            g_print ("Upgraded:\n");
+            g_print ("%sUpgraded:\n", sprefix);
           g_print ("  %s %s -> %s\n", name,
                    rpm_ostree_package_get_evr (oldpkg),
                    rpm_ostree_package_get_evr (newpkg));
@@ -884,13 +886,17 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
         case RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY:
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
-          g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? "Downgraded" : "",
-                   i == 0 ? ":" : " ", name, rpm_ostree_package_get_evr (oldpkg),
-                                             rpm_ostree_package_get_evr (newpkg));
+          {
+            g_autofree char *header_owned = prefix ? g_strconcat (prefix, "Downgraded", NULL) : NULL;
+            const char *header = header_owned ?: "Downgraded";
+            g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? header : "",
+                     i == 0 ? ":" : " ", name, rpm_ostree_package_get_evr (oldpkg),
+                                               rpm_ostree_package_get_evr (newpkg));
+          }
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
           if (downgraded == 0)
-            g_print ("Downgraded:\n");
+            g_print ("%sDowngraded:\n", sprefix);
           g_print ("  %s %s -> %s\n", name,
                    rpm_ostree_package_get_evr (oldpkg),
                    rpm_ostree_package_get_evr (newpkg));
@@ -906,8 +912,10 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
     {
       g_autofree char *diff_summary =
         rpmostree_generate_diff_summary (upgraded, downgraded, removed->len, added->len);
+      g_autofree char *header_owned = prefix ? g_strconcat (prefix, "Diff", NULL) : NULL;
+      const char *header = header_owned ?: "Diff";
       if (strlen (diff_summary) > 0) /* only print if we have something to print */
-        g_print ("  %*s: %s\n", max_key_len, "Diff", diff_summary);
+        g_print ("  %*s: %s\n", max_key_len, header, diff_summary);
       return;
     }
 
@@ -919,12 +927,16 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
       switch (format)
         {
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
-          g_print ("  %*s%s %s\n", max_key_len, i == 0 ? "Removed" : "",
-                   i == 0 ? ":" : " ", nevra);
+          {
+            g_autofree char *header_owned = prefix ? g_strconcat (prefix, "Removed", NULL) : NULL;
+            const char *header = header_owned ?: "Removed";
+            g_print ("  %*s%s %s\n", max_key_len, i == 0 ? header : "",
+                     i == 0 ? ":" : " ", nevra);
+          }
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
           if (i == 0)
-            g_print ("Removed:\n");
+            g_print ("%sRemoved:\n", sprefix);
           g_print ("  %s\n", nevra);
           break;
         default:
@@ -940,12 +952,16 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
       switch (format)
         {
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
-          g_print ("  %*s%s %s\n", max_key_len, i == 0 ? "Added" : "",
-                   i == 0 ? ":" : " ", nevra);
+          {
+            g_autofree char *header_owned = prefix ? g_strconcat (prefix, "Added", NULL) : NULL;
+            const char *header = header_owned ?: "Added";
+            g_print ("  %*s%s %s\n", max_key_len, i == 0 ? header : "",
+                     i == 0 ? ":" : " ", nevra);
+          }
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
           if (i == 0)
-            g_print ("Added:\n");
+            g_print ("%sAdded:\n", sprefix);
           g_print ("  %s\n", nevra);
           break;
         default:

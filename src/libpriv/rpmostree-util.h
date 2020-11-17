@@ -125,6 +125,7 @@ typedef enum {
 
 void
 rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
+                                const char *prefix,
                                 guint      max_key_len,
                                 GPtrArray *removed,
                                 GPtrArray *added,

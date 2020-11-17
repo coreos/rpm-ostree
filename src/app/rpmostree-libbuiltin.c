@@ -121,7 +121,7 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar   *sysroot_path,
                            cancellable, error))
     return FALSE;
 
-  rpmostree_diff_print_formatted (format, max_key_len,
+  rpmostree_diff_print_formatted (format, NULL, max_key_len,
                                   removed, added, modified_old, modified_new);
   return TRUE;
 }
