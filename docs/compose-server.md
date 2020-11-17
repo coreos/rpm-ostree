@@ -24,8 +24,8 @@ and bootable disk images is [coreos-assembler](https://github.com/coreos/coreos-
 Before you get started, it's recommended to read (at least) these two sections
 of the OSTree manual:
 
- - [buildsystem-and-repos](https://ostree.readthedocs.io/en/latest/manual/buildsystem-and-repos/)
- - [repository-management](https://ostree.readthedocs.io/en/latest/manual/repository-management/)
+ - [buildsystem-and-repos](https://ostreedev.github.io/ostree/buildsystem-and-repos/)
+ - [repository-management](https://ostreedev.github.io/ostree/repository-management/)
 
 ## Generating OSTree commits from a CentOS base
 

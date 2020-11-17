@@ -287,7 +287,7 @@ It supports the following parameters:
    Note that in the OSTree model, not all directories are managed by OSTree. In
    short, only files in `/usr` (or UsrMove symlinks into `/usr`) and `/etc` are
    supported. For more details, see the OSTree manual:
-   https://ostree.readthedocs.io/en/latest/manual/deployment/
+   https://ostreedev.github.io/ostree/deployment/
 
  * `tmp-is-dir`: boolean, optional: Defaults to `false`.  By default,
    rpm-ostree creates symlink `/tmp` → `sysroot/tmp`.  When set to `true`,
