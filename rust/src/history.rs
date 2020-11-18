@@ -187,8 +187,22 @@ where
     s.and_then(|s| s.parse::<u64>().ok())
 }
 
+#[cfg(not(test))]
+fn journal_open() -> Result<journal::Journal> {
+    Ok(journal::OpenOptions::default()
+        .system(true)
+        .local_only(true)
+        .runtime_only(false)
+        .open()?)
+}
+
+#[cfg(test)]
+fn journal_open() -> Result<mock_journal::Journal> {
+    mock_journal::Journal::new()
+}
+
 fn history_get_oldest_deployment_msg_timestamp() -> Result<Option<u64>> {
-    let mut journal = journal::Journal::open(journal::JournalFiles::System, false, true)?;
+    let mut journal = journal_open()?;
     journal.seek(journal::JournalSeek::Head)?;
     journal.match_add("MESSAGE_ID", RPMOSTREE_DEPLOY_MSG)?;
     while let Some(rec) = journal.next_entry()? {
@@ -239,7 +253,7 @@ fn history_prune() -> Result<()> {
 impl HistoryCtx {
     /// Create a new context object. Called from C through `ror_history_ctx_new()`.
     fn new_boxed() -> Result<Box<HistoryCtx>> {
-        let mut journal = journal::Journal::open(journal::JournalFiles::System, false, true)?;
+        let mut journal = journal_open()?;
         journal.seek(journal::JournalSeek::Tail)?;
 
         Ok(Box::new(HistoryCtx {
@@ -446,7 +460,7 @@ impl HistoryCtx {
 #[cfg(test)]
 mod mock_journal {
     use super::Result;
-    pub use systemd::journal::{JournalFiles, JournalRecord, JournalSeek};
+    pub use systemd::journal::{JournalRecord, JournalSeek};
 
     pub struct Journal {
         pub entries: Vec<(u64, JournalRecord)>,
@@ -455,7 +469,7 @@ mod mock_journal {
     }
 
     impl Journal {
-        pub fn open(_: JournalFiles, _: bool, _: bool) -> Result<Journal> {
+        pub fn new() -> Result<Journal> {
             Ok(Journal {
                 entries: Vec::new(),
                 current_timestamp: None,
