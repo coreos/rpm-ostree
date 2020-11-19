@@ -92,3 +92,11 @@ rpmostree_importer_get_nevra (RpmOstreeImporter *self);
 
 const char *
 rpmostree_importer_get_header_sha256 (RpmOstreeImporter *self);
+
+gboolean
+rpmostree_importer_import_many_local_rpms (OstreeRepo    *repo,
+
+                        GUnixFDList   *fdl,
+                        GPtrArray    **out_pkgs,
+                        GCancellable  *cancellable,
+                        GError       **error);

@@ -639,96 +639,6 @@ deploy_transaction_finalize (GObject *object)
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
 
-static gboolean
-import_local_rpm (OstreeRepo    *repo,
-                  int           *fd,
-                  char         **sha256_nevra,
-                  GCancellable  *cancellable,
-                  GError       **error)
-{
-  /* let's just use the current sepolicy -- we'll just relabel it if the new
-   * base turns out to have a different one */
-  glnx_autofd int rootfs_dfd = -1;
-  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_dfd, error))
-    return FALSE;
-  g_autoptr(OstreeSePolicy) policy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
-  if (policy == NULL)
-    return FALSE;
-
-  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (fd, repo, NULL, 0, policy, error);
-  if (unpacker == NULL)
-    return FALSE;
-
-  if (!rpmostree_importer_run (unpacker, NULL, cancellable, error))
-    return FALSE;
-
-  g_autofree char *nevra = rpmostree_importer_get_nevra (unpacker);
-  *sha256_nevra = g_strconcat (rpmostree_importer_get_header_sha256 (unpacker),
-                               ":", nevra, NULL);
-
-  return TRUE;
-}
-
-static void
-ptr_close_fd (gpointer fdp)
-{
-  int fd = GPOINTER_TO_INT (fdp);
-  glnx_close_fd (&fd);
-}
-
-/* GUnixFDList doesn't allow stealing individual members */
-static GPtrArray *
-unixfdlist_to_ptrarray (GUnixFDList *fdl)
-{
-  gint len;
-  gint *fds = g_unix_fd_list_steal_fds (fdl, &len);
-  GPtrArray *ret = g_ptr_array_new_with_free_func ((GDestroyNotify)ptr_close_fd);
-  for (int i = 0; i < len; i++)
-    g_ptr_array_add (ret, GINT_TO_POINTER (fds[i]));
-  return ret;
-}
-
-static gboolean
-import_many_local_rpms (OstreeRepo    *repo,
-                        GUnixFDList   *fdl,
-                        GPtrArray    **out_pkgs,
-                        GCancellable  *cancellable,
-                        GError       **error)
-{
-  /* Note that we record the SHA-256 of the RPM header in the origin to make sure that e.g.
-   * if we somehow re-import the same NEVRA with different content, we error out. We don't
-   * record the checksum of the branch itself, because it may need relabeling and that's OK.
-   * */
-
-  g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
-  /* Note use of commit-on-failure */
-  if (!rpmostree_repo_auto_transaction_start (&txn, repo, TRUE, cancellable, error))
-    return FALSE;
-
-  g_autoptr(GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_free);
-
-  g_autoptr(GPtrArray) fds = unixfdlist_to_ptrarray (fdl);
-  for (guint i = 0; i < fds->len; i++)
-    {
-      /* Steal fd from the ptrarray */
-      glnx_autofd int fd = GPOINTER_TO_INT (fds->pdata[i]);
-      fds->pdata[i] = GINT_TO_POINTER (-1);
-      g_autofree char *sha256_nevra = NULL;
-      /* Transfer fd to import */
-      if (!import_local_rpm (repo, &fd, &sha256_nevra, cancellable, error))
-        return FALSE;
-
-      g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));
-    }
-
-  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
-    return FALSE;
-  txn.initialized = FALSE;
-
-  *out_pkgs = g_steal_pointer (&pkgs);
-  return TRUE;
-}
-
 static void
 gv_nevra_add_nevra_name_mappings (GVariant *gv_nevra,
                                   GHashTable *name_to_nevra,
@@ -1084,7 +994,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (self->install_local_pkgs != NULL)
     {
       g_autoptr(GPtrArray) pkgs = NULL;
-      if (!import_many_local_rpms (repo, self->install_local_pkgs, &pkgs,
+      if (!rpmostree_importer_import_many_local_rpms (repo, self->install_local_pkgs, &pkgs,
                                    cancellable, error))
         return FALSE;
 
@@ -1189,7 +1099,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (self->override_replace_local_pkgs)
     {
       g_autoptr(GPtrArray) pkgs = NULL;
-      if (!import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
+      if (!rpmostree_importer_import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
                                    cancellable, error))
         return FALSE;
 
