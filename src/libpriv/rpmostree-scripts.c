@@ -209,6 +209,11 @@ static const RpmOstreeScriptReplacement script_replacements[] = {
    * https://src.fedoraproject.org/rpms/pam/pull-request/3
    */
   { "pam.post", ".el7", NULL, NULL },
+  /* EL8 is broken: https://bugzilla.redhat.com/show_bug.cgi?id=1900691
+   * Fedora is currently fine.
+   */
+  { "nvme-cli.post", ".el8_2", NULL, NULL },
+  { "nvme-cli.post", ".el8", NULL, NULL },
 };
 
 static gboolean
