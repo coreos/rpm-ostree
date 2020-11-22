@@ -104,7 +104,7 @@ rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 char **
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
 
-const char *
+char *
 rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 
 gboolean

@@ -337,10 +337,10 @@ rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
   return g_strdupv (origin->cached_initramfs_args);
 }
 
-const char*
+char*
 rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
 {
-  return origin->cached_unconfigured_state;
+  return g_strdup (origin->cached_unconfigured_state);
 }
 
 /* Determines whether the origin hints at local assembly being required. In some

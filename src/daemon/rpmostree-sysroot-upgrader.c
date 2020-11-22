@@ -116,13 +116,14 @@ parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
     return FALSE;
   rpmostree_origin_remove_transient_state (self->origin);
 
-  if (rpmostree_origin_get_unconfigured_state (self->origin) &&
+  g_autofree char *unconfigured = rpmostree_origin_get_unconfigured_state (self->origin);
+  if (unconfigured &&
       !(self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED))
     {
       /* explicit action is required OS creator to upgrade, print their text as an error */
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "origin unconfigured-state: %s",
-                   rpmostree_origin_get_unconfigured_state (self->origin));
+                   unconfigured);
       return FALSE;
     }
 
