@@ -197,10 +197,10 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
 }
 
-const char *
+char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 {
-  return origin->cached_refspec;
+  return g_strdup (origin->cached_refspec);
 }
 
 /* For rojig:// refspecs, includes the prefix. */
@@ -239,10 +239,10 @@ rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
     *out_refspecdata = origin->cached_refspec;
 }
 
-const char *
+char *
 rpmostree_origin_get_rojig_version (RpmOstreeOrigin *origin)
 {
-  return origin->cached_rojig_version;
+  return g_strdup (origin->cached_rojig_version);
 }
 
 /* Returns a new (floating) variant of type a{sv} with fields:

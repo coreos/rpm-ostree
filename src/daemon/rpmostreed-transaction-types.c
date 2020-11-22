@@ -94,8 +94,7 @@ change_origin_refspec (GVariantDict    *options,
   /* Now here we "peel" it since the rest of the code assumes libostree */
   const char *refspec = refspecdata;
 
-  g_autofree gchar *current_refspec =
-    g_strdup (rpmostree_origin_get_refspec (origin));
+  g_autofree gchar *current_refspec = rpmostree_origin_get_refspec (origin);
   g_autofree gchar *new_refspec = NULL;
 
   if (!rpmostreed_refspec_parse_partial (refspec,
@@ -189,6 +188,8 @@ apply_revision_override (RpmostreedTransaction    *transaction,
   if (!rpmostreed_parse_revision (revision, &checksum, &version, error))
     return FALSE;
 
+  g_autofree char *refspec = rpmostree_origin_get_refspec (origin);
+
   if (version != NULL)
     {
       switch (refspectype)
@@ -198,7 +199,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
             /* Perhaps down the line we'll drive history traversal into libostree */
             rpmostree_output_message ("Resolving version '%s'", version);
 
-            if (!rpmostreed_repo_lookup_version (repo, rpmostree_origin_get_refspec (origin),
+            if (!rpmostreed_repo_lookup_version (repo, refspec,
                                                  version, progress,
                                                  cancellable, &checksum, error))
               return FALSE;
@@ -222,7 +223,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
         {
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
           rpmostree_output_message ("Validating checksum '%s'", checksum);
-          if (!rpmostreed_repo_lookup_checksum (repo, rpmostree_origin_get_refspec (origin),
+          if (!rpmostreed_repo_lookup_checksum (repo, refspec,
                                                 checksum, progress, cancellable, error))
             return FALSE;
           break;

@@ -1332,6 +1332,7 @@ write_history (RpmOstreeSysrootUpgrader *self,
       return FALSE;
     version = rpmostree_checksum_version (commit);
   }
+  g_autofree char *refspec = rpmostree_origin_get_refspec (self->origin);
 
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR,
                    SD_ID128_FORMAT_VAL(RPMOSTREE_NEW_DEPLOYMENT_MSG),
@@ -1341,7 +1342,7 @@ write_history (RpmOstreeSysrootUpgrader *self,
                    "DEPLOYMENT_DEVICE=%" PRIu64, (uint64_t) stbuf.st_dev,
                    "DEPLOYMENT_INODE=%" PRIu64, (uint64_t) stbuf.st_ino,
                    "DEPLOYMENT_CHECKSUM=%s", ostree_deployment_get_csum (new_deployment),
-                   "DEPLOYMENT_REFSPEC=%s", rpmostree_origin_get_refspec (self->origin),
+                   "DEPLOYMENT_REFSPEC=%s", refspec,
                    /* we could use iovecs here and sd_journal_sendv to make these truly
                     * conditional, but meh, empty field works fine too */
                    "DEPLOYMENT_VERSION=%s", version ?: "",

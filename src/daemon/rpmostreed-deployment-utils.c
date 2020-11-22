@@ -1063,7 +1063,8 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
   if (!origin)
     return FALSE;
 
-  const char *refspec = rpmostree_origin_get_refspec (origin);
+  g_autofree char *refspec_owned = rpmostree_origin_get_refspec (origin);
+  const char *refspec = refspec_owned;
   { RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
     const char *refspec_data;
     if (!rpmostree_refspec_classify (refspec, &refspectype, &refspec_data, error))

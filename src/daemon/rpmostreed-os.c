@@ -392,6 +392,7 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
   GCancellable *cancellable = NULL;
   g_autoptr(GVariant) value = NULL;
   g_autoptr(GVariant) details = NULL;
+  g_autofree char *refspec = NULL;
   GError *local_error = NULL;
 
   global_sysroot = rpmostreed_sysroot_get ();
@@ -426,14 +427,15 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
   origin = rpmostree_origin_parse_deployment (base_deployment, &local_error);
   if (!origin)
     goto out;
+  refspec = rpmostree_origin_get_refspec (origin);
 
   if (!rpm_ostree_db_diff_variant (ot_repo, ostree_deployment_get_csum (base_deployment),
-                                   rpmostree_origin_get_refspec (origin), FALSE, &value,
+                                   refspec, FALSE, &value,
                                    cancellable, &local_error))
     goto out;
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment, ot_repo,
-                                                               rpmostree_origin_get_refspec (origin),
+                                                               refspec,
                                                                NULL,
                                                                &local_error);
   if (!details)
@@ -1427,6 +1429,7 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
   g_autoptr(RpmOstreeOrigin) origin = NULL;
   g_autofree gchar *comp_ref = NULL;
   GError *local_error = NULL;
+  g_autofree char *refspec = NULL;
   g_autoptr(GVariant) value = NULL;
   g_autoptr(GVariant) details = NULL;
 
@@ -1449,9 +1452,10 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
   origin = rpmostree_origin_parse_deployment (base_deployment, &local_error);
   if (!origin)
     goto out;
+  refspec = rpmostree_origin_get_refspec (origin);
 
   if (!rpmostreed_refspec_parse_partial (arg_refspec,
-                                         rpmostree_origin_get_refspec (origin),
+                                         refspec,
                                          &comp_ref,
                                          &local_error))
     goto out;
@@ -1555,6 +1559,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   g_autoptr(GCancellable) cancellable = NULL;
   g_autoptr(GVariant) value = NULL;
   g_autoptr(GVariant) details = NULL;
+  g_autofree char *refspec = NULL;
   GError *local_error = NULL;
   GError **error = &local_error;
 
@@ -1575,6 +1580,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   origin = rpmostree_origin_parse_deployment (base_deployment, error);
   if (!origin)
     goto out;
+  refspec = rpmostree_origin_get_refspec (origin);
 
   base_checksum = ostree_deployment_get_csum (base_deployment);
 
@@ -1587,7 +1593,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   if (version != NULL)
     {
       if (!rpmostreed_repo_lookup_cached_version (ot_repo,
-                                                  rpmostree_origin_get_refspec (origin),
+                                                  refspec,
                                                   version,
                                                   cancellable,
                                                   &checksum,
@@ -1601,7 +1607,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
-                                                               rpmostree_origin_get_refspec (origin),
+                                                               refspec,
                                                                checksum,
                                                                &local_error);
   if (!details)
