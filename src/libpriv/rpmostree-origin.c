@@ -292,7 +292,7 @@ rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin,
 GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin)
 {
-  return origin->cached_packages;
+  return g_hash_table_ref (origin->cached_packages);
 }
 
 GHashTable *

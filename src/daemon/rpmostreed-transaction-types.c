@@ -1313,7 +1313,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       /* XXX: in rojig mode we'll want to do this unconditionally */
       g_autoptr(DnfSack) sack = NULL;
-      if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
+      g_autoptr(GHashTable) packages = rpmostree_origin_get_packages (origin);
+      if (g_hash_table_size (packages) > 0)
         {
           if (!get_sack_for_booted (sysroot, repo, booted_deployment, &sack,
                                     cancellable, error))

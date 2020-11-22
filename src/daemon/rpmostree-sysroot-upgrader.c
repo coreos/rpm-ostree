@@ -863,10 +863,10 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
     }
 
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
+  g_autoptr(GHashTable) packages = rpmostree_origin_get_packages (self->origin);
 
   /* check for each package if we have a provides or a path match */
-  GLNX_HASH_TABLE_FOREACH (rpmostree_origin_get_packages (self->origin),
-                           const char*, pattern)
+  GLNX_HASH_TABLE_FOREACH (packages, const char*, pattern)
     {
       g_autoptr(GPtrArray) matches =
         rpmostree_get_matching_packages (self->rsack->sack, pattern);

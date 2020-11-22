@@ -392,8 +392,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   if (refspec)
     g_variant_dict_insert (&dict, "origin", "s", refspec);
 
-  variant_add_from_hash_table (&dict, "requested-packages",
-                               rpmostree_origin_get_packages (origin));
+  g_autoptr(GHashTable) packages = rpmostree_origin_get_packages (origin);
+  variant_add_from_hash_table (&dict, "requested-packages", packages);
   variant_add_from_hash_table (&dict, "requested-local-packages",
                                rpmostree_origin_get_local_packages (origin));
   variant_add_from_hash_table (&dict, "requested-base-removals",
@@ -1173,7 +1173,7 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
         }
 
       /* now we look at the rpm-md/layering side */
-      GHashTable *layered_pkgs = rpmostree_origin_get_packages (origin);
+      g_autoptr(GHashTable) layered_pkgs = rpmostree_origin_get_packages (origin);
 
       /* check that it's actually layered (i.e. the requests are not all just dormant) */
       if (sack && is_new_layered && g_hash_table_size (layered_pkgs) > 0)
