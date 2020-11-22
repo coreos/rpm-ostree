@@ -202,7 +202,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
         }
 
       /* also add any inactive local replacements */
-      GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
+      g_autoptr(GHashTable) local_replace = rpmostree_origin_get_overrides_local_replace (origin);
       GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
         {
           g_autofree char *cachebranch = NULL;

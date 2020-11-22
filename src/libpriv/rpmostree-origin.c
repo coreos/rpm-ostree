@@ -310,7 +310,7 @@ rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin)
 GHashTable *
 rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin)
 {
-  return origin->cached_overrides_local_replace;
+  return g_hash_table_ref (origin->cached_overrides_local_replace);
 }
 
 const char *

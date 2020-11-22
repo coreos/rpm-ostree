@@ -756,7 +756,7 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
 {
   g_assert (self->rsack);
 
-  GHashTable *local_replacements =
+  g_autoptr(GHashTable) local_replacements =
     rpmostree_origin_get_overrides_local_replace (self->origin);
   g_autoptr(GPtrArray) ret_final_local_replacements =
     g_ptr_array_new_with_free_func (g_free);
