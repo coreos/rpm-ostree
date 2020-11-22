@@ -670,7 +670,7 @@ generate_treespec (RpmOstreeSysrootUpgrader *self)
                                   self->overlay_packages->len);
     }
 
-  GHashTable *local_packages = rpmostree_origin_get_local_packages (self->origin);
+  g_autoptr(GHashTable) local_packages = rpmostree_origin_get_local_packages (self->origin);
   if (g_hash_table_size (local_packages) > 0)
     {
       g_autoptr(GPtrArray) sha256_nevra = g_ptr_array_new_with_free_func (g_free);
@@ -829,7 +829,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
    * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
    * you can have foo-1.0-1.x86_64 layered, and foo or /usr/bin/foo as dormant.
    * */
-  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
+  g_autoptr(GHashTable) local_pkgs = rpmostree_origin_get_local_packages (self->origin);
   if (g_hash_table_size (local_pkgs) > 0)
     {
       if (!initialize_metatmpdir (self, error))
@@ -969,7 +969,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!prepare_context_for_assembly (self, tmprootfs_abspath, cancellable, error))
     return FALSE;
 
-  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
+  g_autoptr(GHashTable) local_pkgs = rpmostree_origin_get_local_packages (self->origin);
 
   /* NB: We're pretty much using the defaults for the other treespec values like
    * instlang and docs since it would be hard to expose the cli for them because
@@ -1191,10 +1191,11 @@ requires_local_assembly (RpmOstreeSysrootUpgrader *self)
    * https://github.com/projectatomic/rpm-ostree/issues/753
    */
 
+  g_autoptr(GHashTable) local_pkgs = rpmostree_origin_get_local_packages (self->origin);
   return self->overlay_packages->len > 0 ||
          self->override_remove_packages->len > 0 ||
          self->override_replace_local_packages->len > 0 ||
-         g_hash_table_size (rpmostree_origin_get_local_packages (self->origin)) > 0 ||
+         g_hash_table_size (local_pkgs) > 0 ||
          rpmostree_origin_get_regenerate_initramfs (self->origin);
 }
 

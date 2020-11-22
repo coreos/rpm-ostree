@@ -394,8 +394,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   g_autoptr(GHashTable) packages = rpmostree_origin_get_packages (origin);
   variant_add_from_hash_table (&dict, "requested-packages", packages);
-  variant_add_from_hash_table (&dict, "requested-local-packages",
-                               rpmostree_origin_get_local_packages (origin));
+  g_autoptr(GHashTable) local_packages = rpmostree_origin_get_local_packages (origin);
+  variant_add_from_hash_table (&dict, "requested-local-packages", local_packages);
   variant_add_from_hash_table (&dict, "requested-base-removals",
                                rpmostree_origin_get_overrides_remove (origin));
   variant_add_from_hash_table (&dict, "requested-base-local-replacements",

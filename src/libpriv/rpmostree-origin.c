@@ -298,7 +298,7 @@ rpmostree_origin_get_packages (RpmOstreeOrigin *origin)
 GHashTable *
 rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin)
 {
-  return origin->cached_local_packages;
+  return g_hash_table_ref (origin->cached_local_packages);
 }
 
 GHashTable *
