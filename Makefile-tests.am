@@ -22,7 +22,7 @@ GITIGNOREFILES += ssh-config ansible-inventory.yml vmcheck-logs/ test-compose-lo
 
 testbin_cppflags = $(AM_CPPFLAGS) -I $(srcdir)/src/lib -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx -I $(srcdir)/tests/common
 testbin_cflags = $(AM_CFLAGS) -fvisibility=hidden $(PKGDEP_RPMOSTREE_CFLAGS)
-testbin_ldadd = $(PKGDEP_RPMOSTREE_LIBS) librpmostree-1.la librpmostreepriv.la
+testbin_ldadd = $(PKGDEP_RPMOSTREE_LIBS) librpmostree-1.la librpmostreepriv.la -lstdc++
 
 noinst_LTLIBRARIES += libtest.la
 libtest_la_SOURCES = tests/common/libtest.c

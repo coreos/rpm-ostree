@@ -269,7 +269,7 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
   if (!current_lang)
     current_lang = "C";
 
-  const char *lang_var = glnx_strjoina ("LANG=", current_lang);
+  const char *lang_var = (const char*) glnx_strjoina ("LANG=", current_lang);
   /* This is similar to what systemd does, except:
    *  - We drop /usr/local, since scripts shouldn't see it.
    *  - We pull in the current process' LANG, since that's what people
@@ -351,19 +351,19 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
       rpmostree_bwrap_append_bwrap_argv (ret, "--symlink", srcpath, destpath, NULL);
     }
 
-  return g_steal_pointer (&ret);
+  return (RpmOstreeBwrap*)g_steal_pointer (&ret);
 }
 
 RpmOstreeBwrap *
 rpmostree_bwrap_new (int rootfs_fd,
-                     RpmOstreeBwrapMutability mutable,
+                     RpmOstreeBwrapMutability is_mutable,
                      GError **error)
 {
   g_autoptr(RpmOstreeBwrap) ret = rpmostree_bwrap_new_base (rootfs_fd, error);
   if (!ret)
     return FALSE;
 
-  switch (mutable)
+  switch (is_mutable)
     {
     case RPMOSTREE_BWRAP_IMMUTABLE:
       rpmostree_bwrap_bind_read (ret, "usr", "/usr");
@@ -383,13 +383,13 @@ rpmostree_bwrap_new (int rootfs_fd,
       break;
     }
 
-  return g_steal_pointer (&ret);
+  return (RpmOstreeBwrap*) g_steal_pointer (&ret);
 }
 
 static void
 bwrap_child_setup (gpointer data)
 {
-  RpmOstreeBwrap *bwrap = data;
+  RpmOstreeBwrap *bwrap = (RpmOstreeBwrap*)data;
 
   if (fchdir (bwrap->rootfs_fd) < 0)
     err (1, "fchdir");
@@ -440,7 +440,7 @@ rpmostree_bwrap_run_captured (RpmOstreeBwrap *bwrap,
   if (stderr_buf)
     g_subprocess_launcher_set_flags (bwrap->launcher, G_SUBPROCESS_FLAGS_STDERR_PIPE);
 
-  const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
+  const char *errmsg = (const char*) glnx_strjoina ("Executing bwrap(", (char*)bwrap->child_argv0, ")");
   GLNX_AUTO_PREFIX_ERROR (errmsg, error);
 
   g_autoptr(GSubprocess) subproc = rpmostree_bwrap_execute (bwrap, error);
@@ -489,7 +489,7 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
 GSubprocess *
 rpmostree_bwrap_execute (RpmOstreeBwrap *bwrap, GError **error)
 {
-  g_autoptr(GSubprocessLauncher) launcher = g_steal_pointer (&bwrap->launcher);
+  g_autoptr(GSubprocessLauncher) launcher = (GSubprocessLauncher*)g_steal_pointer (&bwrap->launcher);
   g_assert (!bwrap->executed);
   bwrap->executed = TRUE;
 
