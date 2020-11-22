@@ -92,7 +92,7 @@ rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin);
 GHashTable *
 rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin);
 
-const char *
+char *
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
 
 GHashTable *

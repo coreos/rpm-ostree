@@ -390,7 +390,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
   const gboolean synthetic =
     (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL) > 0;
 
-  const char *override_commit = rpmostree_origin_get_override_commit (self->origin);
+  g_autofree char *override_commit = rpmostree_origin_get_override_commit (self->origin);
 
   RpmOstreeRefspecType refspec_type;
   const char *refspec;

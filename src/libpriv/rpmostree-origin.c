@@ -313,10 +313,10 @@ rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin)
   return g_hash_table_ref (origin->cached_overrides_local_replace);
 }
 
-const char *
+char *
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 {
-  return origin->cached_override_commit;
+  return g_strdup (origin->cached_override_commit);
 }
 
 GHashTable *
