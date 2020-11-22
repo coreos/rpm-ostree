@@ -949,12 +949,13 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   g_assert (!self->ctx);
 
   /* before doing any serious work; do some basic sanity checks that the origin is valid */
+  g_autoptr(GHashTable) initramfs_etc_files = rpmostree_origin_get_initramfs_etc_files (self->origin);
 
   /* If initramfs regeneration is enabled, it's silly to support /etc overlays on top of
    * that. Just point users at dracut's -I instead. I guess we could auto-convert
    * ourselves? */
   if (rpmostree_origin_get_regenerate_initramfs (self->origin) &&
-      g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->origin)) > 0)
+      g_hash_table_size (initramfs_etc_files) > 0)
     return glnx_throw (error, "initramfs regeneration and /etc overlay not compatible; use dracut arg -I instead");
 
   if (!checkout_base_tree (self, cancellable, error))
@@ -1417,13 +1418,14 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   g_autoptr(GKeyFile) origin = rpmostree_origin_dup_keyfile (self->origin);
   g_autoptr(OstreeDeployment) new_deployment = NULL;
+  g_autoptr(GHashTable) initramfs_etc_files = rpmostree_origin_get_initramfs_etc_files (self->origin);
 
   g_autofree char *overlay_initrd_checksum = NULL;
   const char *overlay_v[] = { NULL, NULL };
-  if (g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->origin)) > 0)
+  if (g_hash_table_size (initramfs_etc_files) > 0)
     {
       glnx_fd_close int fd = -1;
-      if (!ror_initramfs_overlay_generate (rpmostree_origin_get_initramfs_etc_files (self->origin),
+      if (!ror_initramfs_overlay_generate (initramfs_etc_files,
                                            &fd, cancellable, error))
         return glnx_prefix_error (error, "Generating initramfs overlay");
 

@@ -322,7 +322,7 @@ rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 GHashTable *
 rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin)
 {
-  return origin->cached_initramfs_etc_files;
+  return g_hash_table_ref (origin->cached_initramfs_etc_files);
 }
 
 gboolean

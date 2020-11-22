@@ -1012,7 +1012,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   gboolean changed = FALSE;
-  GHashTable *initrd_etc_files = rpmostree_origin_get_initramfs_etc_files (origin);
+  g_autoptr(GHashTable) initrd_etc_files = rpmostree_origin_get_initramfs_etc_files (origin);
   if (no_initramfs && (rpmostree_origin_get_regenerate_initramfs (origin) ||
                        g_hash_table_size (initrd_etc_files) > 0))
     {
@@ -1783,7 +1783,7 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
       return TRUE; /* Note early return */
     }
 
-  GHashTable *files = rpmostree_origin_get_initramfs_etc_files (origin);
+  g_autoptr(GHashTable) files = rpmostree_origin_get_initramfs_etc_files (origin);
   GLNX_HASH_TABLE_FOREACH (files, const char*, file)
     {
       if (!g_str_has_prefix (file, "/etc/"))
