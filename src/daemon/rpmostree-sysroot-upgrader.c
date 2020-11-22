@@ -215,7 +215,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
 
   g_clear_object (&self->cfg_merge_deployment);
   g_clear_object (&self->origin_merge_deployment);
-  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
+  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_free);
   g_free (self->base_revision);
   g_free (self->final_revision);
   g_strfreev (self->kargs_strv);
@@ -349,7 +349,7 @@ void
 rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
                                        RpmOstreeOrigin          *new_origin)
 {
-  rpmostree_origin_unref (self->origin);
+  rpmostree_origin_free (self->origin);
   self->origin = rpmostree_origin_dup (new_origin);
 }
 

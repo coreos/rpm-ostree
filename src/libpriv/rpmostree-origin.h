@@ -24,9 +24,8 @@
 #include "rpmostree-core.h"
 
 typedef struct RpmOstreeOrigin RpmOstreeOrigin;
-RpmOstreeOrigin *rpmostree_origin_ref (RpmOstreeOrigin *origin);
-void rpmostree_origin_unref (RpmOstreeOrigin *origin);
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeOrigin, rpmostree_origin_unref)
+void rpmostree_origin_free (RpmOstreeOrigin *origin);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeOrigin, rpmostree_origin_free)
 
 RpmOstreeOrigin *
 rpmostree_origin_parse_keyfile (GKeyFile *keyfile,

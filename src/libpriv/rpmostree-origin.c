@@ -29,8 +29,6 @@
 #include "rpmostree-rpm-util.h"
 
 struct RpmOstreeOrigin {
-  guint refcount;
-
   /* this is the single source of truth */
   GKeyFile *kf;
 
@@ -102,7 +100,6 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   g_autoptr(RpmOstreeOrigin) ret = NULL;
 
   ret = g_new0 (RpmOstreeOrigin, 1);
-  ret->refcount = 1;
   ret->kf = keyfile_dup (origin);
 
   ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -374,22 +371,10 @@ rpmostree_origin_get_string (RpmOstreeOrigin *origin,
   return g_key_file_get_string (origin->kf, section, value, NULL);
 }
 
-RpmOstreeOrigin*
-rpmostree_origin_ref (RpmOstreeOrigin *origin)
-{
-  g_assert (origin);
-  origin->refcount++;
-  return origin;
-}
-
 void
-rpmostree_origin_unref (RpmOstreeOrigin *origin)
+rpmostree_origin_free (RpmOstreeOrigin *origin)
 {
   g_assert (origin);
-  g_assert_cmpint (origin->refcount, >, 0);
-  origin->refcount--;
-  if (origin->refcount > 0)
-    return;
   g_key_file_unref (origin->kf);
   g_free (origin->cached_refspec);
   g_free (origin->cached_rojig_version);
