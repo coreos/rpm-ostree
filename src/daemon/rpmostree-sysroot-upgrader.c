@@ -721,7 +721,7 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self,
 {
   g_assert (self->rsack);
 
-  GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
+  g_autoptr(GHashTable) removals = rpmostree_origin_get_overrides_remove (self->origin);
   g_autoptr(GPtrArray) ret_final_removals = g_ptr_array_new_with_free_func (g_free);
 
   g_autoptr(GPtrArray) inactive_removals = g_ptr_array_new ();
@@ -862,7 +862,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
         }
     }
 
-  GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
+  g_autoptr(GHashTable) removals = rpmostree_origin_get_overrides_remove (self->origin);
   g_autoptr(GHashTable) packages = rpmostree_origin_get_packages (self->origin);
 
   /* check for each package if we have a provides or a path match */

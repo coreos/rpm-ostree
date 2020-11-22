@@ -304,7 +304,7 @@ rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin)
 GHashTable *
 rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin)
 {
-  return origin->cached_overrides_remove;
+  return g_hash_table_ref (origin->cached_overrides_remove);
 }
 
 GHashTable *
