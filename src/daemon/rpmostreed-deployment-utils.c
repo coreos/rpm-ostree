@@ -412,7 +412,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   g_variant_dict_insert (&dict, "regenerate-initramfs", "b",
                          rpmostree_origin_get_regenerate_initramfs (origin));
-  { const char *const* args = rpmostree_origin_get_initramfs_args (origin);
+  { g_auto(GStrv) args = rpmostree_origin_get_initramfs_args (origin);
     if (args && *args)
       g_variant_dict_insert (&dict, "initramfs-args", "^as", args);
   }

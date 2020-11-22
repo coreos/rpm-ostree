@@ -1135,7 +1135,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (kernel_or_initramfs_changed)
     {
       /* append the extra args */
-      const char *const* add_dracut_argv = NULL;
+      g_auto(GStrv) add_dracut_argv = NULL;
       if (rpmostree_origin_get_regenerate_initramfs (self->origin))
          add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
       for (char **it = (char**)add_dracut_argv; it && *it; it++)

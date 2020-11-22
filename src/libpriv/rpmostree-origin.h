@@ -101,7 +101,7 @@ rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin);
 gboolean
 rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 
-const char *const*
+char **
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
 
 const char *

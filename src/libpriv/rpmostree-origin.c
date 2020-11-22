@@ -331,10 +331,10 @@ rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
   return g_key_file_get_boolean (origin->kf, "rpmostree", "regenerate-initramfs", NULL);
 }
 
-const char *const*
+char **
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
 {
-  return (const char * const*)origin->cached_initramfs_args;
+  return g_strdupv (origin->cached_initramfs_args);
 }
 
 const char*
