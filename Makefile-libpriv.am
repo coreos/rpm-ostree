@@ -32,7 +32,7 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-core.c \
 	src/libpriv/rpmostree-core.h \
 	src/libpriv/rpmostree-core-private.h \
-	src/libpriv/rpmostree-bwrap.c \
+	src/libpriv/rpmostree-bwrap.cxx \
 	src/libpriv/rpmostree-bwrap.h \
 	src/libpriv/rpmostree-kernel.c \
 	src/libpriv/rpmostree-kernel.h \
@@ -41,7 +41,7 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-scripts.c \
 	src/libpriv/rpmostree-scripts.h \
 	src/libpriv/rpmostree-refsack.h \
-	src/libpriv/rpmostree-refsack.c \
+	src/libpriv/rpmostree-refsack.cxx \
 	src/libpriv/rpmostree-rpm-util.c \
 	src/libpriv/rpmostree-rpm-util.h \
 	src/libpriv/rpmostree-importer.c \
@@ -71,9 +71,7 @@ librpmostreepriv_la_SOURCES += \
 	$(NULL)
 endif
 
-librpmostreepriv_la_CFLAGS = \
-	$(AM_CFLAGS) \
-	-I$(srcdir)/src/lib \
+rpmostreepriv_common_cflags = -I$(srcdir)/src/lib \
 	-I$(srcdir)/src/libpriv \
 	-I$(libglnx_srcpath) \
 	-DLIBDIR=\"$(libdir)\" \
@@ -81,6 +79,8 @@ librpmostreepriv_la_CFLAGS = \
 	-fvisibility=hidden \
 	$(PKGDEP_RPMOSTREE_CFLAGS) \
 	$(NULL)
+librpmostreepriv_la_CFLAGS = $(AM_CFLAGS) $(rpmostreepriv_common_cflags)
+librpmostreepriv_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostreepriv_common_cflags)
 
 librpmostreepriv_la_LIBADD = \
 	$(PKGDEP_RPMOSTREE_LIBS) \

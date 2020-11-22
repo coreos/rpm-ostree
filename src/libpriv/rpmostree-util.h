@@ -81,7 +81,7 @@ _rpmostree_util_next_version (const char   *auto_version_prefix,
 char *
 rpmostree_str_replace (const char  *buf,
                        const char  *old,
-                       const char  *new,
+                       const char  *newval,
                        GError     **error);
 
 char *
@@ -206,7 +206,7 @@ typedef struct {
 static inline void
 rpmostree_repo_auto_transaction_cleanup (void *p)
 {
-  RpmOstreeRepoAutoTransaction *autotxn = p;
+  RpmOstreeRepoAutoTransaction *autotxn = (RpmOstreeRepoAutoTransaction *)p;
   if (!autotxn->initialized)
     return;
 

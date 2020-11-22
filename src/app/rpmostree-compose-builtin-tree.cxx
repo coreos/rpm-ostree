@@ -1,4 +1,4 @@
-/* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
+/* -*- mode: C++; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
  *
  * Copyright (C) 2013,2014 Colin Walters <walters@verbum.org>
  *
@@ -182,7 +182,7 @@ on_hifstate_percentage_changed (DnfState   *hifstate,
                                 guint       percentage,
                                 gpointer    user_data)
 {
-  const char *text = user_data;
+  auto text = static_cast<const char*>(user_data);
   glnx_console_progress_text_percent (text, percentage);
 }
 
@@ -480,8 +480,8 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       g_autoptr(DnfState) hifstate = dnf_state_new ();
 
       guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                               G_CALLBACK (on_hifstate_percentage_changed),
-                                               "Installing packages:");
+                                               reinterpret_cast<GCallback>(on_hifstate_percentage_changed),
+                                               (void*)"Installing packages:");
 
       glnx_console_lock (&console);
 
@@ -498,7 +498,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   if (out_unmodified)
     *out_unmodified = FALSE;
-  *out_new_inputhash = g_steal_pointer (&ret_new_inputhash);
+  *out_new_inputhash = (char*) g_steal_pointer (&ret_new_inputhash);
   return TRUE;
 }
 
@@ -519,8 +519,8 @@ parse_treefile_to_json (const char    *treefile_path,
   if (!json_parser_load_from_data (parser, serialized, -1, error))
     return FALSE;
 
-  *out_parser = g_steal_pointer (&parser);
-  *out_treefile_rs = g_steal_pointer (&treefile_rs);
+  *out_parser = static_cast<JsonParser*>(g_steal_pointer (&parser));
+  *out_treefile_rs = static_cast<RORTreefile*>(g_steal_pointer (&treefile_rs));
   return TRUE;
 }
 
@@ -702,7 +702,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
             return glnx_throw_errno_prefix (error, "fcntl");
         }
 
-      self->build_repo = g_object_ref (self->repo);
+      self->build_repo = static_cast<OstreeRepo*>(g_object_ref (self->repo));
     }
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
@@ -792,7 +792,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
   self->ref = rpmostree_treespec_get_ref (self->treespec);
 
-  *out_context = g_steal_pointer (&self);
+  *out_context = static_cast<RpmOstreeTreeComposeContext*>(g_steal_pointer (&self));
   return TRUE;
 }
 
@@ -899,11 +899,12 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     }
   else
     {
-      GVariant *v = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
+      gpointer vp = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
+      auto v = static_cast<GVariant*>(vp);
       if (v)
         {
           g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
-          next_version = g_variant_dup_string (v, NULL);
+          next_version = static_cast<char*>(g_variant_dup_string (v, NULL));
         }
     }
 
@@ -1025,7 +1026,7 @@ pull_local_into_target_repo (OstreeRepo   *src_repo,
                      : noninteractive_console_progress_changed, &console);
 
   /* no fancy flags here, so just use the old school simpler API */
-  if (!ostree_repo_pull (dest_repo, src_repo_uri, (char**)refs, 0, progress,
+  if (!ostree_repo_pull (dest_repo, src_repo_uri, (char**)refs, static_cast<OstreeRepoPullFlags>(0), progress,
                          cancellable, error))
     return FALSE;
 

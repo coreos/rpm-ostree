@@ -36,9 +36,20 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
 	-DRPM_OSTREE_GITREV='"$(RPM_OSTREE_GITREV)"' \
 	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_56 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_56
+# We make some C warnings always a hard error; these should never happen in our code.
+# These flags are not valid for C++.
+warn_only_c_flags = -Werror=strict-prototypes \
+  -Werror=missing-prototypes \
+  -Werror=implicit-function-declaration \
+  -Werror=int-conversion \
+  -Werror=incompatible-pointer-types \
+  -Werror=int-conversion \
+  $(NULL)
 # Keep this in sync with the AM_CFLAGS in libostree; see
 # that project for more information about e.g. -fno-strict-aliasing
-AM_CFLAGS += -std=gnu11 -fno-strict-aliasing $(WARN_CFLAGS)
+AM_CFLAGS += -std=gnu11 -fno-strict-aliasing $(WARN_CFLAGS) $(warn_only_c_flags)
+# Our default CXX flags
+AM_CXXFLAGS += -std=c++14 -fno-strict-aliasing $(WARN_CFLAGS)
 # bundled libdnf; --enable-new-dtags emits DT_RUNPATH instead of deprecated DT_RPATH, which
 # can't be overridden by LD_LIBRARY_PATH; which is useful for uninstalled runs/tests
 AM_LDFLAGS += "-Wl,-rpath=$(libdir)/rpm-ostree,--enable-new-dtags"

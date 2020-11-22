@@ -43,7 +43,7 @@ void rpmostree_ptrarray_append_strdup (GPtrArray *argv_array, ...) G_GNUC_NULL_T
 RpmOstreeBwrap *rpmostree_bwrap_new_base (int rootfs, GError **error);
 
 RpmOstreeBwrap *rpmostree_bwrap_new (int rootfs,
-                                     RpmOstreeBwrapMutability mutable,
+                                     RpmOstreeBwrapMutability is_mutable,
                                      GError **error);
 
 void rpmostree_bwrap_set_inherit_stdin (RpmOstreeBwrap *bwrap);

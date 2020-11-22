@@ -60,7 +60,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-polkit-agent.c \
 	src/app/rpmostree-polkit-agent.h \
 	src/app/rpmostree-builtin-kargs.c \
-	src/app/rpmostree-compose-builtin-tree.c \
+	src/app/rpmostree-compose-builtin-tree.cxx \
 	src/app/rpmostree-composeutil.c \
 	src/app/rpmostree-composeutil.h \
 	src/app/rpmostree-builtin-compose.c \
@@ -74,9 +74,11 @@ rpm_ostree_SOURCES += \
 	$(NULL)
 endif
 
-rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
+rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
 	-fvisibility=hidden -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
+rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
 rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.la librpmostreed.la
 
 privdatadir=$(pkglibdir)
@@ -123,7 +125,7 @@ BUILT_SOURCES += rpmostree-rust.h
 endif
 
 rpm_ostree_CFLAGS += $(PKGDEP_RPMOSTREE_RS_CFLAGS)
-rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS)
+rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++
 
 # Wraps `cargo test`.  This is always a debug non-release build;
 # the main thing here is we still drop the `target` dir in our build
