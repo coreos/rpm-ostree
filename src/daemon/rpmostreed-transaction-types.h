@@ -24,6 +24,8 @@
 
 #include <gio/gunixfdlist.h>
 
+G_BEGIN_DECLS
+
 RpmostreedTransaction *
                 rpmostreed_transaction_new_package_diff    (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot *sysroot,
@@ -154,3 +156,4 @@ rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
                                        GCancellable          *cancellable,
                                        GError               **error);
 
+G_END_DECLS

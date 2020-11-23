@@ -25,6 +25,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
+#include <glib.h>
+
+G_BEGIN_DECLS
 
 typedef uint64_t usec_t;
 typedef uint64_t nsec_t;
@@ -65,3 +68,5 @@ typedef uint64_t nsec_t;
 #define FORMAT_TIMESPAN_MAX 64
 
 char *libsd_format_timestamp_relative(char *buf, size_t l, usec_t t);
+
+G_END_DECLS

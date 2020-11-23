@@ -23,6 +23,8 @@
 
 #include "rpmostreed-types.h"
 
+G_BEGIN_DECLS
+
 char *          rpmostreed_deployment_generate_id (OstreeDeployment *deployment);
 
 OstreeDeployment *
@@ -67,3 +69,5 @@ gboolean        rpmostreed_update_generate_variant (OstreeDeployment  *booted_de
                                                     GVariant         **out_update,
                                                     GCancellable      *cancellable,
                                                     GError           **error);
+
+G_END_DECLS

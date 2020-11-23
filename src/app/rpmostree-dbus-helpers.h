@@ -29,6 +29,8 @@
 #include <string.h>
 #include <ostree.h>
 
+G_BEGIN_DECLS
+
 #define BUS_NAME "org.projectatomic.rpmostree1"
 
 #define _cleanup_peer_ __attribute__((cleanup(rpmostree_cleanup_peer)))
@@ -128,3 +130,5 @@ rpmostree_print_cached_update (GVariant         *cached_update,
                                gboolean          verbose_advisories,
                                GCancellable     *cancellable,
                                GError          **error);
+
+G_END_DECLS

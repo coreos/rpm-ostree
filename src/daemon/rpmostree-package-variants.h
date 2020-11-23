@@ -23,6 +23,8 @@
 #include <ostree.h>
 #include <rpmostree.h>
 
+G_BEGIN_DECLS
+
 #define RPMOSTREE_DB_DIFF_VARIANT_FORMAT G_VARIANT_TYPE ("a(sua{sv})")
 
 typedef enum {
@@ -40,3 +42,5 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
                             GVariant  **out_variant,
                             GCancellable *cancellable,
                             GError **error);
+
+G_END_DECLS

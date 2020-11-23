@@ -23,6 +23,8 @@
 #include <gio/gio.h>
 #include <json-glib/json-glib.h>
 
+G_BEGIN_DECLS
+
 gboolean
 _rpmostree_jsonutil_object_get_optional_string_member (JsonObject     *object,
                                                        const char     *member_name,
@@ -74,3 +76,4 @@ GHashTable *
 _rpmostree_jsonutil_jsarray_strings_to_set (JsonArray  *array);
 
 
+G_END_DECLS

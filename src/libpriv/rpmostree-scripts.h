@@ -32,6 +32,8 @@
 
 #include "libglnx.h"
 
+G_BEGIN_DECLS
+
 typedef enum {
   RPMOSTREE_SCRIPT_ACTION_DEFAULT = 0,
   RPMOSTREE_SCRIPT_ACTION_IGNORE,
@@ -87,3 +89,5 @@ rpmostree_deployment_sanitycheck_rpmdb (int           rootfs_fd,
                                         GPtrArray     *overrides,
                                         GCancellable *cancellable,
                                         GError      **error);
+
+G_END_DECLS

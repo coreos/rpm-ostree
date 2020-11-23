@@ -25,6 +25,8 @@
 #include "rpmostree-package.h"
 #include "rpmostree-refsack.h"
 
+G_BEGIN_DECLS
+
 RpmOstreePackage * _rpm_ostree_package_new (RpmOstreeRefSack *rsack, DnfPackage *hypkg);
 
 RpmOstreePackage * _rpm_ostree_package_new_from_variant (GVariant *gv_nevra);
@@ -44,3 +46,5 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
                                 GPtrArray **out_modified_a,
                                 GPtrArray **out_modified_b,
                                 GPtrArray **out_common);
+
+G_END_DECLS

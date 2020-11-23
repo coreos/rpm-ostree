@@ -21,5 +21,9 @@
 
 #pragma once
 
+G_BEGIN_DECLS
+
 int rpmostree_polkit_agent_open(void);
 void rpmostree_polkit_agent_close(void);
+
+G_END_DECLS

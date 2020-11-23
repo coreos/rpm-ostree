@@ -29,6 +29,8 @@
 #include "rpmostree.h"
 #include "rpmostree-types.h"
 
+G_BEGIN_DECLS
+
 #define _N(single, plural, n) ( (n) == 1 ? (single) : (plural) )
 #define _NS(n) _N("", "s", n)
 
@@ -255,3 +257,5 @@ rpmostree_relative_path_is_ostree_compliant (const char *path);
 
 char*
 rpmostree_maybe_shell_quote (const char *s);
+
+G_END_DECLS

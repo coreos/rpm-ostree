@@ -26,6 +26,8 @@
 #include <rpm/rpmlib.h>
 #include <libdnf/libdnf.h>
 
+G_BEGIN_DECLS
+
 /* A rojigRPM is structured as an ordered set of files/directories; we use numeric
  * prefixes to ensure ordering. Most of the files are in GVariant format.
  *
@@ -80,3 +82,5 @@
 
 /* This one goes in the spec file to use as our replacement */
 #define RPMOSTREE_ROJIG_SPEC_META_MAGIC "#@@@rpmostree_rojig_meta@@@"
+
+G_END_DECLS

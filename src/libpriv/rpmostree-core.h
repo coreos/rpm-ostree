@@ -27,6 +27,8 @@
 #include "rpmostree-rust.h"
 #include "libglnx.h"
 
+G_BEGIN_DECLS
+
 #define RPMOSTREE_CORE_CACHEDIR "/var/cache/rpm-ostree/"
 #define RPMOSTREE_DIR_CACHE_REPOMD "repomd"
 #define RPMOSTREE_DIR_CACHE_SOLV "solv"
@@ -242,3 +244,5 @@ rpmostree_core_undo_usretc (int              rootfs_dfd,
 gboolean
 rpmostree_core_redo_usretc (int           rootfs_dfd,
                             GError      **error);
+
+G_END_DECLS

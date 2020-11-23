@@ -18,6 +18,8 @@
 
 #pragma once
 
+G_BEGIN_DECLS
+
 /* These types are used by both the daemon and the client. Some of them should probably be
  * added to the public API eventually. */
 
@@ -62,3 +64,5 @@ typedef enum {
  */
 #define RPMOSTREE_DIFF_MODIFIED_GVARIANT_STRING "a(us(ss)(ss))"
 #define RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT G_VARIANT_TYPE (RPMOSTREE_DIFF_MODIFIED_GVARIANT_STRING)
+
+G_END_DECLS

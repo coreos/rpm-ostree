@@ -21,6 +21,8 @@
 #include "rpmostreed-types.h"
 #include "rpmostree-util.h"
 
+G_BEGIN_DECLS
+
 #define RPMOSTREED_TYPE_DAEMON   (rpmostreed_daemon_get_type ())
 #define RPMOSTREED_DAEMON(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), RPMOSTREED_TYPE_DAEMON, RpmostreedDaemon))
 #define RPMOSTREED_IS_DAEMON(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPMOSTREED_TYPE_DAEMON))
@@ -55,3 +57,5 @@ gboolean           rpmostreed_daemon_reload_config  (RpmostreedDaemon *self,
 
 RpmostreedAutomaticUpdatePolicy
 rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self);
+
+G_END_DECLS

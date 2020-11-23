@@ -24,6 +24,8 @@
 #include "rpmostree-rojig-core.h"
 #include "rpmostree-core.h"
 
+G_BEGIN_DECLS
+
 struct _RpmOstreeContext {
   GObject parent;
 
@@ -84,3 +86,4 @@ struct _RpmOstreeContext {
   GLnxTmpDir repo_tmpdir; /* Used to assemble+commit if no base rootfs provided */
 };
 
+G_END_DECLS

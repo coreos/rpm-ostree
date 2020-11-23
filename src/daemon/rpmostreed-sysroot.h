@@ -22,6 +22,8 @@
 #include "rpmostreed-types.h"
 #include <polkit/polkit.h>
 
+G_BEGIN_DECLS
+
 #define RPMOSTREED_TYPE_SYSROOT   (rpmostreed_sysroot_get_type ())
 #define RPMOSTREED_SYSROOT(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), RPMOSTREED_TYPE_SYSROOT, RpmostreedSysroot))
 #define RPMOSTREED_IS_SYSROOT(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPMOSTREED_TYPE_SYSROOT))
@@ -63,3 +65,5 @@ void                rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
                                                 RpmostreedTransaction *txn);
 
 void                rpmostreed_sysroot_emit_update      (RpmostreedSysroot *self);
+
+G_END_DECLS

@@ -26,6 +26,8 @@
 #include <rpm/rpmlib.h>
 #include <libdnf/libdnf.h>
 
+G_BEGIN_DECLS
+
 typedef struct RpmOstreeImporter RpmOstreeImporter;
 
 #define RPMOSTREE_TYPE_IMPORTER         (rpmostree_importer_get_type ())
@@ -92,3 +94,5 @@ rpmostree_importer_get_nevra (RpmOstreeImporter *self);
 
 const char *
 rpmostree_importer_get_header_sha256 (RpmOstreeImporter *self);
+
+G_END_DECLS

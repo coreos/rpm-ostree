@@ -28,4 +28,8 @@
 #include <archive.h>
 #include <archive_entry.h>
 
+G_BEGIN_DECLS
+
 struct archive * rpmostree_unpack_rpm2cpio (int fd, GError **error);
+
+G_END_DECLS

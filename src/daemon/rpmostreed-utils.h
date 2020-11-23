@@ -22,6 +22,8 @@
 
 #include "rpmostreed-types.h"
 
+G_BEGIN_DECLS
+
 gchar *    rpmostreed_generate_object_path (const gchar  *base,
                                             const gchar  *part,
                                             ...);
@@ -82,3 +84,5 @@ gboolean   rpmostreed_parse_revision (const char  *revision,
                                       char       **out_checksum,
                                       char       **out_version,
                                       GError     **error);
+
+G_END_DECLS

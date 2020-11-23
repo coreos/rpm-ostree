@@ -20,6 +20,8 @@
 
 #include "rpmostreed-types.h"
 
+G_BEGIN_DECLS
+
 #define RPMOSTREED_TYPE_TRANSACTION          (rpmostreed_transaction_get_type ())
 #define RPMOSTREED_TRANSACTION(o)            (G_TYPE_CHECK_INSTANCE_CAST ((o), RPMOSTREED_TYPE_TRANSACTION, RpmostreedTransaction))
 #define RPMOSTREED_TRANSACTION_CLASS(c)      (G_TYPE_CHECK_CLASS_CAST ((c), RPMOSTREED_TYPE_TRANSACTION, RpmostreedTransactionClass))
@@ -58,3 +60,5 @@ void            rpmostreed_transaction_connect_signature_progress
                                                            (RpmostreedTransaction *transaction,
                                                             OstreeRepo *repo);
 void            rpmostreed_transaction_force_close         (RpmostreedTransaction *transaction);
+
+G_END_DECLS

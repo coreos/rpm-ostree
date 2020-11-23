@@ -23,6 +23,8 @@
 
 #include <gio/gio.h>
 
+G_BEGIN_DECLS
+
 typedef struct RpmOstreePackage RpmOstreePackage;
 
 #define RPM_OSTREE_TYPE_PACKAGE         (rpm_ostree_package_get_type ())
@@ -46,3 +48,5 @@ const char *rpm_ostree_package_get_arch (RpmOstreePackage *p);
 
 _RPMOSTREE_EXTERN
 int rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2);
+
+G_END_DECLS

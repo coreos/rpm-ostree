@@ -20,6 +20,8 @@
 
 #include "rpmostreed-types.h"
 
+G_BEGIN_DECLS
+
 #define RPMOSTREED_TYPE_OS   (rpmostreed_os_get_type ())
 #define RPMOSTREED_OS(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), RPMOSTREED_TYPE_OS, RpmostreedOS))
 #define RPMOSTREED_IS_OS(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPMOSTREED_TYPE_OS))
@@ -31,3 +33,4 @@ GType             rpmostreed_os_get_type           (void) G_GNUC_CONST;
 RPMOSTreeOS *     rpmostreed_os_new                (OstreeSysroot *sysroot,
                                                     OstreeRepo *repo,
                                                     const char *name);
+G_END_DECLS
