@@ -22,6 +22,8 @@
 
 #include <ostree.h>
 
+G_BEGIN_DECLS
+
 typedef enum {
   RPMOSTREE_FINALIZE_KERNEL_AUTO,
   RPMOSTREE_FINALIZE_KERNEL_USRLIB_MODULES,
@@ -59,3 +61,5 @@ rpmostree_run_dracut (int     rootfs_dfd,
                       GLnxTmpfile *out_initramfs_tmpf,
                       GCancellable  *cancellable,
                       GError **error);
+
+G_END_DECLS

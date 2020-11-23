@@ -23,6 +23,8 @@
 #include "libglnx.h"
 #include "rpmostree-rojig-core.h"
 
+G_BEGIN_DECLS
+
 gboolean
 rpmostree_commit2rojig (OstreeRepo   *repo,
                         OstreeRepo   *pkgcache_repo,
@@ -32,3 +34,5 @@ rpmostree_commit2rojig (OstreeRepo   *repo,
                         const char   *outputdir,
                         GCancellable *cancellable,
                         GError      **error);
+
+G_END_DECLS

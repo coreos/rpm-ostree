@@ -21,6 +21,8 @@
 
 #include <glib.h>
 
+G_BEGIN_DECLS
+
 typedef enum {
         TREE_VERTICAL,
         TREE_BRANCH,
@@ -34,3 +36,5 @@ typedef enum {
 } SpecialGlyph;
 
 const char *libsd_special_glyph(SpecialGlyph code) __attribute__ ((const));
+
+G_END_DECLS

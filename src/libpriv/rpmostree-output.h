@@ -20,6 +20,8 @@
 
 #include <stdbool.h>
 
+G_BEGIN_DECLS
+
 typedef enum {
   RPMOSTREE_OUTPUT_MESSAGE,
   RPMOSTREE_OUTPUT_PROGRESS_BEGIN,
@@ -91,3 +93,4 @@ typedef struct {
   const char *msg;
 } RpmOstreeOutputProgressEnd;
 
+G_END_DECLS

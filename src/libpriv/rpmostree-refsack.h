@@ -24,6 +24,8 @@
 #include <libdnf/libdnf.h>
 #include "libglnx.h"
 
+G_BEGIN_DECLS
+
 typedef struct {
   gint refcount;  /* atomic */
   DnfSack *sack;
@@ -41,3 +43,4 @@ rpmostree_refsack_unref (RpmOstreeRefSack *rsack);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefSack, rpmostree_refsack_unref);
 
+G_END_DECLS

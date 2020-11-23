@@ -24,6 +24,8 @@
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-rust.h"
 
+G_BEGIN_DECLS
+
 /* "public" for unit tests */
 char *
 rpmostree_postprocess_replace_nsswitch (const char *buf,
@@ -103,3 +105,5 @@ rpmostree_compose_commit (int            rootfs_dfd,
                           char         **out_new_revision,
                           GCancellable  *cancellable,
                           GError       **error);
+
+G_END_DECLS

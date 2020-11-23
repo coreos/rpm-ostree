@@ -22,6 +22,8 @@
 
 #include "rpmostreed-types.h"
 
+G_BEGIN_DECLS
+
 /* Used by the upgrader to hold a strong ref temporarily to a base commit */
 #define RPMOSTREE_TMP_BASE_REF "rpmostree/base/tmp"
 /* Diretory that is defined to have 0700 mode always, used for checkouts */
@@ -58,3 +60,5 @@ gboolean rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
                                              gboolean                 pushing_rollback,
                                              GCancellable            *cancellable,
                                              GError                 **error);
+
+G_END_DECLS

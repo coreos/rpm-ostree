@@ -24,6 +24,8 @@
 
 #include "libglnx.h"
 
+G_BEGIN_DECLS
+
 typedef enum {
   RPMOSTREE_BWRAP_IMMUTABLE = 0,
   RPMOSTREE_BWRAP_MUTATE_ROFILES,
@@ -75,3 +77,5 @@ gboolean rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
                               GError        **error);
 
 gboolean rpmostree_bwrap_selftest (GError **error);
+
+G_END_DECLS

@@ -24,6 +24,8 @@
 #include <libdnf/libdnf.h>
 #include "libglnx.h"
 
+G_BEGIN_DECLS
+
 typedef struct {
   gint refcount;  /* atomic */
   rpmts ts;
@@ -41,3 +43,4 @@ rpmostree_refts_unref (RpmOstreeRefTs *rts);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefTs, rpmostree_refts_unref);
 
+G_END_DECLS

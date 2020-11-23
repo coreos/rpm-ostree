@@ -27,6 +27,8 @@
 
 #include "rpmostree-rust.h"
 
+G_BEGIN_DECLS
+
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
                         int              rootfs_dfd,
@@ -133,3 +135,5 @@ gboolean
 rpmostree_passwd_sysusers2char (GPtrArray *sysusers_entries,
                                 char      **out_content,
                                 GError    **error);
+
+G_END_DECLS

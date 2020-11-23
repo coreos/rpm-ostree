@@ -32,6 +32,8 @@
 
 #include "libglnx.h"
 
+G_BEGIN_DECLS
+
 struct RpmHeaders
 {
   RpmOstreeRefTs *refts; /* rpm transaction set the headers belong to */
@@ -236,3 +238,5 @@ rpmostree_cache_branch_to_nevra (const char *cachebranch);
 
 GPtrArray *
 rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement);
+
+G_END_DECLS

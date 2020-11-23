@@ -22,6 +22,8 @@
 
 #include <gio/gio.h>
 
+G_BEGIN_DECLS
+
 /* Forward declarations */
 typedef struct RpmOstreeOrigin RpmOstreeOrigin;
 
@@ -39,3 +41,5 @@ b(RpmOstreeOrigin)
 b(OstreeDeployment)
 b(OstreeSysroot)
 #undef b
+
+G_END_DECLS

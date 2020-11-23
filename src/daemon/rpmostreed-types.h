@@ -26,6 +26,8 @@
 #include <stdint.h>
 #include <string.h>
 
+G_BEGIN_DECLS
+
 struct _RpmostreedDaemon;
 typedef struct _RpmostreedDaemon RpmostreedDaemon;
 
@@ -39,3 +41,5 @@ typedef struct _RpmostreedOSExperimental RpmostreedOSExperimental;
 
 struct _RpmostreedTransaction;
 typedef struct _RpmostreedTransaction RpmostreedTransaction;
+
+G_END_DECLS

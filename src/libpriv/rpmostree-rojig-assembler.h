@@ -23,6 +23,8 @@
 #include "libglnx.h"
 #include "rpmostree-rojig-core.h"
 
+G_BEGIN_DECLS
+
 typedef struct RpmOstreeRojigAssembler RpmOstreeRojigAssembler;
 
 #define RPMOSTREE_TYPE_ROJIG_ASSEMBLER         (rpmostree_rojig_assembler_get_type ())
@@ -67,3 +69,5 @@ rpmostree_rojig_assembler_xattr_lookup (GVariant *xattr_table,
                                         GVariant *xattrs,
                                         GVariant **out_xattrs,
                                         GError  **error);
+
+G_END_DECLS

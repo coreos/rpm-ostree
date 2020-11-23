@@ -20,6 +20,8 @@
 
 #include <gio/gio.h>
 
+G_BEGIN_DECLS
+
 #define RPM_OSTREED_ERROR (rpmostreed_error_quark ())
 
 typedef enum {
@@ -32,3 +34,5 @@ typedef enum {
 } RpmOstreedError;
 
 GQuark rpmostreed_error_quark (void);
+
+G_END_DECLS

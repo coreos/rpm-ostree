@@ -20,6 +20,8 @@
 
 #include "rpmostreed-types.h"
 
+G_BEGIN_DECLS
+
 #define RPMOSTREED_TYPE_OSEXPERIMENTAL   (rpmostreed_osexperimental_get_type ())
 #define RPMOSTREED_OSEXPERIMENTAL(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), RPMOSTREED_TYPE_OSEXPERIMENTAL, RpmostreedOSExperimental))
 #define RPMOSTREED_IS_OSEXPERIMENTAL(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPMOSTREED_TYPE_OSEXPERIMENTAL))
@@ -28,3 +30,4 @@ GType             rpmostreed_osexperimental_get_type           (void) G_GNUC_CON
 RPMOSTreeOSExperimental *     rpmostreed_osexperimental_new                (OstreeSysroot *sysroot,
                                                                 OstreeRepo *repo,
                                                                             const char *name);
+G_END_DECLS
