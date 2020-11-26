@@ -59,11 +59,6 @@
     <!-- none, check, stage -->
     <property name="AutomaticUpdatePolicy" type="s" access="read"/>
 
-    <method name="CreateOSName">
-      <arg type="s" name="name"/>
-      <arg type="o" name="result" direction="out"/>
-    </method>
-
     <method name="GetOS">
       <arg name="name" type="s"/>
       <arg name="object_path" type="o" direction="out"/>
