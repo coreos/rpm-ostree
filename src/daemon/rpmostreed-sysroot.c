@@ -195,42 +195,6 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
 }
 
 static gboolean
-handle_create_osname (RPMOSTreeSysroot *object,
-                      GDBusMethodInvocation *invocation,
-                      const gchar *osname)
-{
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-  GError *error = NULL;
-  g_autofree gchar *dbus_path = NULL;
-
-  if (!ostree_sysroot_ensure_initialized (self->ot_sysroot, NULL, &error))
-    goto out;
-
-  if (strchr (osname, '/') != 0)
-    {
-      g_set_error_literal (&error,
-                           RPM_OSTREED_ERROR,
-                           RPM_OSTREED_ERROR_FAILED,
-                           "Invalid osname");
-      goto out;
-    }
-
-  if (!ostree_sysroot_init_osname (self->ot_sysroot, osname, NULL, &error))
-    goto out;
-
-  dbus_path = rpmostreed_generate_object_path (BASE_DBUS_PATH, osname, NULL);
-
-  rpmostree_sysroot_complete_create_osname (RPMOSTREE_SYSROOT (self),
-                                            invocation,
-                                            g_strdup (dbus_path));
-out:
-  if (error)
-    g_dbus_method_invocation_take_error (invocation, error);
-
-  return TRUE;
-}
-
-static gboolean
 handle_get_os (RPMOSTreeSysroot *object,
                GDBusMethodInvocation *invocation,
                const char *arg_name)
@@ -758,7 +722,6 @@ on_deploy_changed (GFileMonitor *monitor,
 static void
 rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 {
-  iface->handle_create_osname = handle_create_osname;
   iface->handle_get_os = handle_get_os;
   iface->handle_register_client = handle_register_client;
   iface->handle_unregister_client = handle_unregister_client;
