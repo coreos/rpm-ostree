@@ -55,7 +55,6 @@ uninstalled_test_programs = \
 
 uninstalled_test_scripts = \
 	tests/check/test-lib-introspection.sh \
-	tests/check/test-ucontainer.sh \
 	$(NULL)
 
 uninstalled_test_extra_programs = \
