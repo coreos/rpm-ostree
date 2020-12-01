@@ -42,7 +42,6 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-builtin-status.c \
 	src/app/rpmostree-builtin-ex.c \
 	src/app/rpmostree-builtin-testutils.c \
-	src/app/rpmostree-builtin-container.c \
 	src/app/rpmostree-builtin-db.c \
 	src/app/rpmostree-builtin-start-daemon.c \
 	src/app/rpmostree-builtin-finalize-deployment.c \
@@ -51,8 +50,6 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-db-builtin-version.c \
 	src/app/rpmostree-dbus-helpers.c \
 	src/app/rpmostree-dbus-helpers.h \
-	src/app/rpmostree-container-builtins.h \
-	src/app/rpmostree-container-builtins.c \
 	src/app/rpmostree-override-builtins.h \
 	src/app/rpmostree-override-builtins.c \
 	src/app/rpmostree-libbuiltin.c \

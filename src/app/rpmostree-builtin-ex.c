@@ -26,8 +26,6 @@ static RpmOstreeCommand ex_subcommands[] = {
   { "livefs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_livefs },
-  { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Assemble local unprivileged containers", rpmostree_builtin_container },
 #ifdef BUILDOPT_ROJIG
   { "commit2rojig", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an OSTree commit into an rpm-ostree rojig", rpmostree_ex_builtin_commit2rojig },
