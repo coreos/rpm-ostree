@@ -45,19 +45,13 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Result<()> {
 // enabled; let's just do this rather than trying to propagate the
 // preset everywhere.
 fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Result<()> {
-    rootfs_dfd.write_file_with(
-        "usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset",
-        0o644,
-        |w| {
-            w.write_all(
-                r###"# Written by rpm-ostree compose tree
-enable ostree-remount.service
-enable ostree-finalize-staged.path
-"###
-                .as_bytes(),
-            )
-        },
-    )?;
+    let wantsdir = "usr/lib/systemd/system/multi-user.target.wants";
+    rootfs_dfd.ensure_dir_all(wantsdir, 0o755)?;
+    for service in &["ostree-remount.service", "ostree-finalize-staged.path"] {
+        let target = format!("../{}", service);
+        let loc = Path::new(wantsdir).join(service);
+        rootfs_dfd.symlink(&loc, target)?;
+    }
     Ok(())
 }
 
