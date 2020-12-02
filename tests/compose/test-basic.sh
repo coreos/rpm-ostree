@@ -54,9 +54,8 @@ assert_file_has_content_literal autovar.txt 'd /var/cache 0755 root root - -'
 assert_file_has_content_literal autovar.txt 'd /var/log/chrony 0755 chrony chrony - -'
 echo "ok autovar"
 
-ostree --repo="${repo}" cat "${treeref}" /usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset > preset.txt
-assert_file_has_content preset.txt '^enable ostree-remount.service$'
-assert_file_has_content preset.txt '^enable ostree-finalize-staged.path$'
+# Validate this exists
+ostree --repo="${repo}" ls "${treeref}" /usr/lib/systemd/system/multi-user.target.wants/ostree-remount.service
 
 python3 <<EOF
 import json, yaml
