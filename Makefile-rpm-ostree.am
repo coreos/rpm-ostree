@@ -81,52 +81,25 @@ rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.l
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
 
-# Propagate automake verbose mode
-cargo_build = $(cargo) build $(if $(subst 0,,$(V)),--verbose,)
-
-if !HAVE_PREBUILT_CBINDGEN
-if !HAVE_EXTERNAL_CBINDGEN
-rpmostree-bindgen: bindgen/Cargo.toml bindgen/src/main.rs
-	cd $(top_srcdir)/bindgen && \
-	export CARGO_TARGET_DIR=@abs_top_builddir@/bindgen-target && \
-	if test -d "$${CARGO_TARGET_DIR}" && [ "$$(stat -c '%u' $${CARGO_TARGET_DIR})" != "$$(id -u)" ]; then echo "mismatched uids on build"; exit 1; fi && \
-	$(cargo_build) && \
-	ln -sf $${CARGO_TARGET_DIR}/debug/rpmostree-bindgen $(abs_top_builddir)/rpmostree-bindgen
-endif
-endif
-GITIGNOREFILES += bindgen-target/ rpmostree-bindgen
+LIBRPMOSTREE_RUST_SRCS = $(shell find rpmostree-rust/src/ -name '*.rs') rpmostree-rust/cbindgen.toml rpmostree-rust/Cargo.toml bindgen/Cargo.toml bindgen/src/main.rs
+cargo-build: Makefile $(LIBRPMOSTREE_RUST_SRCS)
+	$(cargo) build $(CARGO_RELEASE_ARGS) $(if $(subst 0,,$(V)),--verbose,)
 
 librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
-# If the target directory exists, and isn't owned by our uid, then
-# we exit with a fatal error, since someone probably did `make && sudo make install`,
-# and in this case cargo will download into ~/.root which we don't want.
-LIBRPMOSTREE_RUST_SRCS = $(shell find rust/src/ -name '*.rs') rust/cbindgen.toml
-$(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
-	cd $(top_srcdir)/rust && \
-	  export CARGO_TARGET_DIR=@abs_top_builddir@/target && \
-    target_subdir=@abs_top_builddir@/target/@RUST_TARGET_SUBDIR@; \
-	  if test -d "$${target_subdir}" && [ "$$(stat -c '%u' $${target_subdir})" != "$$(id -u)" ]; then echo "mismatched uids on build"; exit 1; fi && \
-	  $(cargo_build) $(CARGO_RELEASE_ARGS)
-EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
+$(librpmostree_rust_path): 
+	$(cargo_build) $(CARGO_RELEASE_ARGS)
+EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) Cargo.lock
+GITIGNOREFILES += Cargo.lock
 
 # Generate bindings from Rust to C
-if !HAVE_PREBUILT_CBINDGEN
-if HAVE_EXTERNAL_CBINDGEN
-rpmostree-rust.h:
-	$(AM_V_GEN) cbindgen -c rust/cbindgen.toml -o $@ $(top_srcdir)/rust
-else
-rpmostree-rust.h: rpmostree-bindgen
-	$(AM_V_GEN) ./rpmostree-bindgen $(top_srcdir)/rust
-endif
+rpmostree-rust.h: cargo-build
+	$(AM_V_GEN) ./target/release/rpmostree-bindgen $(top_srcdir)/rpmostree-rust
 BUILT_SOURCES += rpmostree-rust.h
-endif
 
 rpm_ostree_CFLAGS += $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++
 
-# Wraps `cargo test`.  This is always a debug non-release build;
-# the main thing here is we still drop the `target` dir in our build
-# directory, since we nominally support srcdir != builddir.
+# Deprecated; we've moved cargo to the toplevel
 rust-test:
-	cd $(top_srcdir)/rust && CARGO_TARGET_DIR=@abs_top_builddir@/target cargo test
+	cargo test
 .PHONY: rust-test
