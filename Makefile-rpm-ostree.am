@@ -84,17 +84,17 @@ privdata_DATA = src/app/rpm-ostree-0-integration.conf
 # Propagate automake verbose mode
 cargo_build = $(cargo) build $(if $(subst 0,,$(V)),--verbose,)
 
+tooling_src = bindgen/Cargo.toml bindgen/src/main.rs
+tooling-build:
+	cd $(top_srcdir)/tooling && $(cargo_build) --release --all-targets
+
 if !HAVE_PREBUILT_CBINDGEN
 if !HAVE_EXTERNAL_CBINDGEN
-rpmostree-bindgen: bindgen/Cargo.toml bindgen/src/main.rs
-	cd $(top_srcdir)/bindgen && \
-	export CARGO_TARGET_DIR=@abs_top_builddir@/bindgen-target && \
-	if test -d "$${CARGO_TARGET_DIR}" && [ "$$(stat -c '%u' $${CARGO_TARGET_DIR})" != "$$(id -u)" ]; then echo "mismatched uids on build"; exit 1; fi && \
-	$(cargo_build) && \
-	ln -sf $${CARGO_TARGET_DIR}/debug/rpmostree-bindgen $(abs_top_builddir)/rpmostree-bindgen
+rpmostree-bindgen: tooling-build
+	ln -sf tooling/target/release/rpmostree-bindgen $(abs_top_builddir)/rpmostree-bindgen
 endif
 endif
-GITIGNOREFILES += bindgen-target/ rpmostree-bindgen
+GITIGNOREFILES += tooling/target/ rpmostree-bindgen
 
 librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
 # If the target directory exists, and isn't owned by our uid, then
