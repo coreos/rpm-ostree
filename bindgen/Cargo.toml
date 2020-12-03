@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Colin Walters <walters@verbum.org>"]
 
 [dependencies]
-cbindgen = "0.6.3"
+cbindgen = "0.15.0"
 
 # Might as well keep these from the main Rust source
 [profile.release]
