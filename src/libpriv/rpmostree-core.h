@@ -236,13 +236,5 @@ gboolean rpmostree_context_commit (RpmOstreeContext      *self,
                                    char                 **out_commit,
                                    GCancellable          *cancellable,
                                    GError               **error);
-gboolean
-rpmostree_core_undo_usretc (int              rootfs_dfd,
-                            gboolean        *renamed_etc,
-                            GError         **error);
-
-gboolean
-rpmostree_core_redo_usretc (int           rootfs_dfd,
-                            GError      **error);
 
 G_END_DECLS

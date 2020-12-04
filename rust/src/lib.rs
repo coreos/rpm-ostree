@@ -12,6 +12,7 @@ mod cliwrap;
 pub use cliwrap::*;
 mod composepost;
 pub use self::composepost::*;
+mod core;
 mod history;
 pub use self::history::*;
 mod journal;
