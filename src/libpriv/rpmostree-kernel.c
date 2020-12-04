@@ -521,8 +521,8 @@ rpmostree_run_dracut (int     rootfs_dfd,
    * today.  Though maybe in the future we should add it, but
    * in the end we want to use systemd-sysusers of course.
    **/
-  gboolean renamed_etc = FALSE;
-  if (!rpmostree_core_undo_usretc (rootfs_dfd, &renamed_etc, error))
+  RORTempEtcGuard * etc_guard = ror_tempetc_undo_usretc (rootfs_dfd, error);
+  if (etc_guard == NULL)
     return FALSE;
   gboolean have_passwd = FALSE;
   if (!rpmostree_passwd_prepare_rpm_layering (rootfs_dfd,
@@ -640,7 +640,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (have_passwd && !rpmostree_passwd_complete_rpm_layering (rootfs_dfd, error))
     goto out;
 
-  if (renamed_etc && !rpmostree_core_redo_usretc (rootfs_dfd, error))
+  if (!ror_tempetc_redo_usretc (etc_guard, error))
     goto out;
 
   ret = TRUE;

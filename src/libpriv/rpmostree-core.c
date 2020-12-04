@@ -3992,49 +3992,6 @@ rpmostree_context_get_kernel_changed (RpmOstreeContext *self)
   return self->kernel_changed;
 }
 
-/* We have a messy dance in dealing with /usr/etc and /etc; the
- * current model is basically to have it be /etc whenever we're running
- * any code.
- */
-gboolean
-rpmostree_core_undo_usretc (int              rootfs_dfd,
-                            gboolean        *renamed_etc,
-                            GError         **error)
-{
-  if (!glnx_fstatat_allow_noent (rootfs_dfd, "usr/etc", NULL, 0, error))
-    return FALSE;
-  if (errno == 0)
-    {
-      /* In general now, we place contents in /etc when running scripts */
-      if (!glnx_renameat (rootfs_dfd, "usr/etc", rootfs_dfd, "etc", error))
-        return FALSE;
-      /* But leave a compat symlink, as we used to bind mount, so scripts
-       * could still use that too.
-       */
-      if (symlinkat ("../etc", rootfs_dfd, "usr/etc") < 0)
-        return glnx_throw_errno_prefix (error, "symlinkat");
-      *renamed_etc = TRUE;
-    }
-  else
-    {
-      *renamed_etc = FALSE;
-    }
-  
-  return TRUE;
-}
-
-gboolean
-rpmostree_core_redo_usretc (int           rootfs_dfd,
-                            GError      **error)
-{
-  /* Remove the symlink and swap back */
-  if (!glnx_unlinkat (rootfs_dfd, "usr/etc", 0, error))
-    return FALSE;
-  if (!glnx_renameat (rootfs_dfd, "etc", rootfs_dfd, "usr/etc", error))
-    return FALSE;
-  return TRUE;
-}
-
 static gboolean
 process_one_ostree_layer (RpmOstreeContext *self,
                           int               rootfs_dfd,
@@ -4366,8 +4323,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   gboolean skip_sanity_check = FALSE;
   g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
 
-  gboolean renamed_etc = FALSE;
-  if (!rpmostree_core_undo_usretc (tmprootfs_dfd, &renamed_etc, error))
+  RORTempEtcGuard * etc_guard = ror_tempetc_undo_usretc (tmprootfs_dfd, error);
+  if (etc_guard == NULL)
     return FALSE;
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
@@ -4620,7 +4577,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     }
 
   /* Undo the /etc move above */
-  if (renamed_etc && !rpmostree_core_redo_usretc (tmprootfs_dfd, error))
+  if (!ror_tempetc_redo_usretc (etc_guard, error))
     return FALSE;
 
   /* And clean up var/tmp, we don't want it in commits */
