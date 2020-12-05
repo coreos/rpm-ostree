@@ -1155,10 +1155,14 @@ rpmostree_builtin_status (int             argc,
 static gboolean opt_no_pager;
 static gboolean opt_deployments;
 */
+static int opt_limit = 3;
+static gboolean opt_all;
 
 static GOptionEntry history_option_entries[] = {
   { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot)", NULL },
   { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
+  { "limit", 'n', 0, G_OPTION_ARG_INT, &opt_limit, "Limit number of entries to output (default: 3)", "N" },
+  { "all", 0, 0, G_OPTION_ARG_NONE, &opt_all, "Output all entries", NULL },
   /* XXX { "deployments", 0, 0, G_OPTION_ARG_NONE, &opt_deployments, "Print all deployments, not just those booted into", NULL }, */
   /* XXX { "no-pager", 0, 0, G_OPTION_ARG_NONE, &opt_no_pager, "Don't use a pager to display output", NULL }, */
   { NULL }
@@ -1275,8 +1279,8 @@ print_history_entry (RORHistoryEntry  *entry,
   return TRUE;
 }
 
-/* The `history` also lives here since the printing bits re-use a lot of the `status`
- * machinery. */
+/* The `history` command also lives here since the printing bits re-use a lot of the
+ * `status` machinery. */
 gboolean
 rpmostree_ex_builtin_history (int             argc,
                               char          **argv,
@@ -1294,6 +1298,9 @@ rpmostree_ex_builtin_history (int             argc,
                                        error))
     return FALSE;
 
+  if (opt_limit <= 0)
+    return glnx_throw (error, "Limit must be positive integer");
+
   /* initiate a history context, then iterate over each (boot time, deploy time), then print */
 
   /* XXX: enhance with option for going in reverse (oldest first) */
@@ -1304,7 +1311,7 @@ rpmostree_ex_builtin_history (int             argc,
   /* XXX: use pager here */
 
   gboolean at_least_one = FALSE;
-  while (TRUE)
+  while (opt_all || opt_limit--)
     {
       g_auto(RORHistoryEntry) entry = { 0, };
       if (!ror_history_ctx_next (history_ctx, &entry, error))
