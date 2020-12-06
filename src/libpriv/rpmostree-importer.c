@@ -890,7 +890,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   else
     filter = compose_filter_cb;
 
-  /* If changing this, also look at changing rpmostree-postprocess.c */
+  /* If changing this, also look at changing rpmostree-postprocess.cxx */
   OstreeRepoCommitModifierFlags modifier_flags =
     OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
   if (unprivileged)

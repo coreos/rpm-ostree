@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
+#include <utility>
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-kernel.h"
@@ -277,8 +278,8 @@ rpmostree_postprocess_run_depmod (int           rootfs_dfd,
                                   GCancellable *cancellable,
                                   GError      **error)
 {
-  char *child_argv[] = { "depmod", "-a", (char*)kver, NULL };
-  if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, unified_core_mode, cancellable, error))
+  const char *child_argv[] = { "depmod", "-a", kver, NULL };
+  if (!run_bwrap_mutably (rootfs_dfd, "depmod", (char**)child_argv, unified_core_mode, cancellable, error))
     return FALSE;
   return TRUE;
 }
@@ -754,7 +755,7 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
   if (ret_sepolicy == NULL)
     return FALSE;
 
-  *out_sepolicy = g_steal_pointer (&ret_sepolicy);
+  *out_sepolicy = util::move_nullify (ret_sepolicy);
   return TRUE;
 }
 
@@ -806,7 +807,7 @@ replace_nsswitch_string (const char *buf,
   /* Last ditch effort if we didn't find `files` */
   if (!inserted)
     g_string_append (retbuf, " altfiles");
-  return g_string_free (g_steal_pointer (&retbuf), FALSE);
+  return g_string_free (util::move_nullify (retbuf), FALSE);
 }
 
 char *
@@ -826,7 +827,7 @@ rpmostree_postprocess_replace_nsswitch (const char *buf,
       if (*(iter+1))
         g_string_append_c (new_buf, '\n');
     }
-  return g_string_free (g_steal_pointer (&new_buf), FALSE);
+  return g_string_free (util::move_nullify (new_buf), FALSE);
 }
 
 
@@ -882,7 +883,7 @@ rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
     {
       g_autofree char *new_contents = g_strconcat (orig_contents, new_store_root, NULL);
       if (!glnx_file_replace_contents_at (rootfs_dfd, semanage_path,
-                                          (guint8*)new_contents, -1, 0,
+                                          (guint8*)new_contents, -1, static_cast<GLnxFileReplaceFlags>(0),
                                           cancellable, error))
         return glnx_prefix_error (error, "Replacing %s", semanage_path);
     }
@@ -992,8 +993,8 @@ rpmostree_postprocess_final (int            rootfs_dfd,
 
       /* Now regenerate SELinux policy so that postprocess scripts from users and from us
        * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
-      char *child_argv[] = { "semodule", "-nB", NULL };
-      if (!run_bwrap_mutably (rootfs_dfd, "semodule", child_argv, unified_core_mode,
+      const char *child_argv[] = { "semodule", "-nB", NULL };
+      if (!run_bwrap_mutably (rootfs_dfd, "semodule", (char**)child_argv, unified_core_mode,
                               cancellable, error))
         return FALSE;
     }
@@ -1642,7 +1643,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
             return FALSE;
 
           gsize len;
-          pathbuf = g_bytes_unref_to_data (g_steal_pointer (&out), &len);
+          pathbuf = (char*)g_bytes_unref_to_data (util::move_nullify (out), &len);
 
           /* if realpath returned successfully, it must've printed something */
           g_assert_cmpuint (len, >, 0);
@@ -1669,7 +1670,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
           return FALSE;
 
         if (!glnx_file_replace_contents_at (rootfs_fd, path,
-                                            (guint8*)new_contents, -1, 0,
+                                            (guint8*)new_contents, -1, static_cast<GLnxFileReplaceFlags>(0),
                                             cancellable, error))
           return FALSE;
       }
@@ -1838,7 +1839,7 @@ filter_xattrs_cb (OstreeRepo     *repo,
                   GFileInfo      *file_info,
                   gpointer        user_data)
 {
-  struct CommitThreadData *tdata = user_data;
+  auto tdata = static_cast<struct CommitThreadData *>(user_data);
   int rootfs_fd = tdata->rootfs_fd;
   /* If you have a use case for something else, file an issue */
   static const char *accepted_xattrs[] =
@@ -1944,7 +1945,7 @@ count_filesizes (int dfd,
 static gpointer
 write_dfd_thread (gpointer datap)
 {
-  struct CommitThreadData *data = datap;
+  auto data = static_cast<struct CommitThreadData *>(datap);
 
   if (!ostree_repo_write_dfd_to_mtree (data->repo, data->rootfs_fd, ".",
                                        data->mtree,
@@ -1962,7 +1963,7 @@ write_dfd_thread (gpointer datap)
 static gboolean
 on_progress_timeout (gpointer datap)
 {
-  struct CommitThreadData *data = datap;
+  auto data = static_cast<struct CommitThreadData *>(datap);
   const gint percent = g_atomic_int_get (&data->percent);
 
   /* clamp to 100 if it somehow goes over (XXX: bad counting?) */
@@ -2003,8 +2004,8 @@ rpmostree_compose_commit (int            rootfs_fd,
    * Also right now we unconditionally use the CONSUME flag, but this will need
    * to change for the split compose/commit root patches.
    */
-  OstreeRepoCommitModifierFlags modifier_flags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED |
-    OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CONSUME;
+  auto modifier_flags = static_cast<OstreeRepoCommitModifierFlags>(OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED |
+    OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CONSUME);
   /* If changing this, also look at changing rpmostree-unpacker.c */
   g_autoptr(OstreeRepoCommitModifier) commit_modifier =
     ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
@@ -2047,7 +2048,7 @@ rpmostree_compose_commit (int            rootfs_fd,
       g_main_context_iteration (NULL, TRUE);
 
     g_source_destroy (progress_src);
-    g_thread_join (g_steal_pointer (&commit_thread));
+    g_thread_join (util::move_nullify (commit_thread));
 
     rpmostree_output_progress_percent (100);
   }
@@ -2073,7 +2074,7 @@ rpmostree_compose_commit (int            rootfs_fd,
     }
 
   if (out_new_revision)
-    *out_new_revision = g_steal_pointer (&new_revision);
+    *out_new_revision = util::move_nullify (new_revision);
 
   return TRUE;
 }
