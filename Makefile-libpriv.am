@@ -18,7 +18,7 @@
 noinst_LTLIBRARIES += librpmostreepriv.la
 
 librpmostreepriv_la_SOURCES = \
-	src/libpriv/rpmostree-postprocess.c \
+	src/libpriv/rpmostree-postprocess.cxx \
 	src/libpriv/rpmostree-postprocess.h \
 	src/libpriv/rpmostree-json-parsing.c \
 	src/libpriv/rpmostree-json-parsing.h \
