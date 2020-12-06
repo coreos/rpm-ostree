@@ -56,7 +56,7 @@ rpmostree_load_os_proxy                      (RPMOSTreeSysroot *sysroot_proxy,
 
 gboolean
 rpmostree_load_os_proxies                    (RPMOSTreeSysroot *sysroot_proxy,
-                                              gchar *opt_osname,
+                                              const char *opt_osname,
                                               GCancellable *cancellable,
                                               RPMOSTreeOS **out_os_proxy,
                                               RPMOSTreeOSExperimental **out_osexperimental_proxy,
