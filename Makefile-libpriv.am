@@ -29,7 +29,7 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-passwd-util.h \
 	src/libpriv/rpmostree-refts.h \
 	src/libpriv/rpmostree-refts.c \
-	src/libpriv/rpmostree-core.c \
+	src/libpriv/rpmostree-core.cxx \
 	src/libpriv/rpmostree-core.h \
 	src/libpriv/rpmostree-core-private.h \
 	src/libpriv/rpmostree-bwrap.cxx \
