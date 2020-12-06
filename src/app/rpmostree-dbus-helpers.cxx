@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <sys/socket.h>
 #include <systemd/sd-login.h>
+#include <utility>
 
 #include <glib-unix.h>
 #include <libglnx.h>
@@ -45,7 +46,7 @@ rpmostree_cleanup_peer (GPid *peer_pid)
 }
 
 static GDBusConnection*
-get_connection_for_path (gchar *sysroot,
+get_connection_for_path (const char *sysroot,
                          gboolean force_peer,
                          GPid *out_peer_pid,
                          GBusType *out_bus_type,
@@ -64,7 +65,7 @@ get_connection_for_path (gchar *sysroot,
       /* NB: as opposed to other early returns, this is _also_ a happy path */
       GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
       if (!ret)
-        return glnx_prefix_error_null (error, "Connecting to session bus");
+        return (GDBusConnection*)(glnx_prefix_error_null (error, "Connecting to session bus"));
 
       *out_bus_type = G_BUS_TYPE_SESSION;
       return ret;
@@ -78,7 +79,7 @@ get_connection_for_path (gchar *sysroot,
       /* NB: as opposed to other early returns, this is _also_ a happy path */
       GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
       if (!ret)
-        return glnx_prefix_error_null (error, "Connecting to system bus");
+        return (GDBusConnection*)(glnx_prefix_error_null (error, "Connecting to system bus"));
 
       *out_bus_type = G_BUS_TYPE_SYSTEM;
       return ret;
@@ -96,7 +97,7 @@ get_connection_for_path (gchar *sysroot,
 
   g_print ("Running in single user mode. Be sure no other users are modifying the system\n");
   if (socketpair (AF_UNIX, SOCK_STREAM, 0, pair) < 0)
-    return glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
+    return (GDBusConnection*)glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
 
   g_snprintf (buffer, sizeof (buffer), "%d", pair[1]);
 
@@ -110,7 +111,7 @@ get_connection_for_path (gchar *sysroot,
 
   _cleanup_peer_ GPid peer_pid = 0;
   if (!g_spawn_async (NULL, (gchar **)args, NULL,
-                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN | G_SPAWN_DO_NOT_REAP_CHILD,
+                      static_cast<GSpawnFlags>(G_SPAWN_LEAVE_DESCRIPTORS_OPEN | G_SPAWN_DO_NOT_REAP_CHILD),
                       NULL, NULL, &peer_pid, error))
     {
       close (pair[1]);
@@ -137,7 +138,7 @@ on_reload_done (GObject      *src,
                 GAsyncResult *res,
                 gpointer      user_data)
 {
-  gboolean *donep = user_data;
+  auto donep = static_cast<gboolean *>(user_data);
   *donep = TRUE;
   (void) rpmostree_sysroot_call_reload_finish ((RPMOSTreeSysroot*)src, res, NULL);
 }
@@ -239,7 +240,7 @@ rpmostree_load_sysroot (gchar *sysroot,
         }
 
       /* Something else went wrong */
-      g_propagate_error (error, g_steal_pointer (&local_error));
+      g_propagate_error (error, util::move_nullify (local_error));
       return FALSE;
     }
 
@@ -253,7 +254,7 @@ rpmostree_load_sysroot (gchar *sysroot,
   /* TODO: Change RegisterClient to also do a reload and do it async instead */
   await_reload_sync (sysroot_proxy);
 
-  *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
+  *out_sysroot_proxy = util::move_nullify (sysroot_proxy);
   *out_peer_pid = peer_pid; peer_pid = 0;
   if (out_bus_type)
     *out_bus_type = bus_type;
@@ -262,7 +263,7 @@ rpmostree_load_sysroot (gchar *sysroot,
 
 gboolean
 rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
-                           gchar *opt_osname,
+                           const char *opt_osname,
                            GCancellable *cancellable,
                            RPMOSTreeOS **out_os_proxy,
                            RPMOSTreeOSExperimental **out_osexperimental_proxy,
@@ -318,9 +319,9 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
         return FALSE;
     }
 
-  *out_os_proxy = g_steal_pointer (&os_proxy);
+  *out_os_proxy = util::move_nullify (os_proxy);
   if (out_osexperimental_proxy)
-    *out_osexperimental_proxy = g_steal_pointer (&ret_osexperimental_proxy);
+    *out_osexperimental_proxy = util::move_nullify (ret_osexperimental_proxy);
   return TRUE;
 }
 
@@ -368,7 +369,7 @@ transaction_get_progress_line (guint64 start_time,
 
   if (outstanding_fetches)
     {
-      g_autofree gchar *formatted_bytes_transferred = g_format_size_full (bytes_transferred, 0);
+      g_autofree gchar *formatted_bytes_transferred = g_format_size_full (bytes_transferred, static_cast<GFormatSizeFlags>(0));
       g_autofree gchar *formatted_bytes_sec = NULL;
 
       if (!bytes_sec)
@@ -454,7 +455,7 @@ on_transaction_progress (GDBusProxy *proxy,
                          GVariant *parameters,
                          gpointer user_data)
 {
-  TransactionProgress *tp = user_data;
+  auto tp = static_cast<TransactionProgress *>(user_data);
 
   if (g_strcmp0 (signal_name, "SignatureProgress") == 0)
     {
@@ -586,7 +587,7 @@ on_owner_changed (GObject    *object,
   /* Owner shouldn't change during a transaction
    * that messes with notifications, abort, abort.
    */
-  TransactionProgress *tp = user_data;
+  auto tp = static_cast<TransactionProgress *>(user_data);
   tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
                                                "Bus owner changed, aborting. This likely "
                                                "means the daemon crashed; check logs with "
@@ -598,14 +599,14 @@ static void
 cancelled_handler (GCancellable *cancellable,
                    gpointer user_data)
 {
-  RPMOSTreeTransaction *transaction = user_data;
+  auto transaction = static_cast<RPMOSTreeTransaction*>(user_data);
   rpmostree_transaction_call_cancel_sync (transaction, NULL, NULL);
 }
 
 static gboolean
 on_sigint (gpointer user_data)
 {
-  GCancellable *cancellable = user_data;
+  auto cancellable = static_cast<GCancellable*>(user_data);
   if (!g_cancellable_is_cancelled (cancellable))
     {
       g_printerr ("Caught SIGINT, cancelling transaction\n");
@@ -621,7 +622,7 @@ on_sigint (gpointer user_data)
 static gboolean
 set_variable_false (gpointer data)
 {
-  gboolean *donep = data;
+  auto donep = static_cast<gboolean*>(data);
   *donep = TRUE;
   g_main_context_wakeup (NULL);
   return FALSE;
@@ -702,7 +703,7 @@ rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
         spin_mainloop_for_a_second ();
     }
 
-  g_propagate_error (error, g_steal_pointer (&txn_connect_error));
+  g_propagate_error (error, util::move_nullify (txn_connect_error));
   return FALSE;
 }
 
@@ -1035,7 +1036,7 @@ rpmostree_print_package_diffs (GVariant *variant)
 
   while (!g_queue_is_empty (&queue))
     {
-      child = g_queue_pop_head (&queue);
+      child = (GVariant*)g_queue_pop_head (&queue);
       pkg_diff_variant_print (child);
       g_variant_unref (child);
     }
@@ -1092,7 +1093,7 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
     }
 
   *out_fd_idxs = g_variant_ref_sink (g_variant_new ("ah", &builder));
-  *out_repo_pkgs = g_steal_pointer (&repo_pkgs);
+  *out_repo_pkgs = util::move_nullify (repo_pkgs);
   return TRUE;
 }
 
@@ -1188,7 +1189,7 @@ get_modifiers_variant (const char   *set_refspec,
       g_variant_dict_insert (&dict, "ex-local-repo-remote", "h", idx);
     }
 
-  *out_fd_list = g_steal_pointer (&fd_list);
+  *out_fd_list = util::move_nullify (fd_list);
   *out_modifiers = g_variant_ref_sink (g_variant_dict_end (&dict));
   return TRUE;
 }
@@ -1357,7 +1358,7 @@ print_advisories (GVariant *advisories,
 
   for (guint i = 0; i < sec_advisories->len; i++)
     {
-      GVariant *advisory = sec_advisories->pdata[i];
+      auto advisory = static_cast<GVariant*>(sec_advisories->pdata[i]);
 
       const char *id;
       g_variant_get_child (advisory, 0, "&s", &id);
