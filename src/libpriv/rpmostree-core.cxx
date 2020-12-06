@@ -31,6 +31,7 @@
 #include <systemd/sd-journal.h>
 #include <libdnf/libdnf.h>
 #include <librepo/librepo.h>
+#include <utility>
 
 #include "rpmostree-core-private.h"
 #include "rpmostree-rojig-core.h"
@@ -123,8 +124,8 @@ static int
 compare_pkgs (gconstpointer ap,
               gconstpointer bp)
 {
-  DnfPackage **a = (gpointer)ap;
-  DnfPackage **b = (gpointer)bp;
+  auto a = (DnfPackage**)ap;
+  auto b = (DnfPackage**)bp;
   return dnf_package_cmp (*a, *b);
 }
 
@@ -234,7 +235,7 @@ RpmOstreeTreespec *
 rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
                                      GError    **error)
 {
-  g_autoptr(RpmOstreeTreespec) ret = g_object_new (RPMOSTREE_TYPE_TREESPEC, NULL);
+  g_autoptr(RpmOstreeTreespec) ret = (RpmOstreeTreespec*)g_object_new (RPMOSTREE_TYPE_TREESPEC, NULL);
   g_auto(GVariantBuilder) builder;
 
   g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
@@ -285,14 +286,14 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   ret->spec = g_variant_builder_end (&builder);
   ret->dict = g_variant_dict_new (ret->spec);
 
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 RpmOstreeTreespec *
 rpmostree_treespec_new_from_path (const char *path, GError  **error)
 {
   g_autoptr(GKeyFile) specdata = g_key_file_new();
-  if (!g_key_file_load_from_file (specdata, path, 0, error))
+  if (!g_key_file_load_from_file (specdata, path, static_cast<GKeyFileFlags>(0), error))
     return NULL;
   return rpmostree_treespec_new_from_keyfile (specdata, error);
 }
@@ -300,10 +301,10 @@ rpmostree_treespec_new_from_path (const char *path, GError  **error)
 RpmOstreeTreespec *
 rpmostree_treespec_new (GVariant   *variant)
 {
-  g_autoptr(RpmOstreeTreespec) ret = g_object_new (RPMOSTREE_TYPE_TREESPEC, NULL);
+  g_autoptr(RpmOstreeTreespec) ret = (RpmOstreeTreespec*)g_object_new (RPMOSTREE_TYPE_TREESPEC, NULL);
   ret->spec = g_variant_ref (variant);
   ret->dict = g_variant_dict_new (ret->spec);
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 const char *
@@ -397,9 +398,9 @@ rpmostree_context_new_system (OstreeRepo   *repo,
 {
   g_return_val_if_fail (repo != NULL, FALSE);
 
-  RpmOstreeContext *self = g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL);
+  auto self = static_cast<RpmOstreeContext*>(g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL));
   self->is_system = TRUE;
-  self->ostreerepo = g_object_ref (repo);
+  self->ostreerepo = static_cast<OstreeRepo*>(g_object_ref (repo));
 
   /* We can always be control-c'd at any time; this is new API,
    * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
@@ -466,7 +467,7 @@ rpmostree_context_new_tree (int               userroot_dfd,
     dnf_context_set_lock_dir (ret->dnfctx, lockdir);
   }
 
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 static gboolean
@@ -611,9 +612,9 @@ rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self)
     {
       g_auto(GVariantBuilder) repo_builder;
       g_variant_builder_init (&repo_builder, (GVariantType*)"a{sv}");
-      DnfRepo *repo = repos->pdata[i];
+      auto repo = static_cast<DnfRepo *>(repos->pdata[i]);
       const char *id = dnf_repo_get_id (repo);
-     g_variant_builder_add (&repo_builder, "{sv}", "id", g_variant_new_string (id));
+      g_variant_builder_add (&repo_builder, "{sv}", "id", g_variant_new_string (id));
       guint64 ts = dnf_repo_get_timestamp_generated (repo);
       g_variant_builder_add (&repo_builder, "{sv}", "timestamp", g_variant_new_uint64 (ts));
       g_variant_builder_add (&repo_list_builder, "@a{sv}", g_variant_builder_end (&repo_builder));
@@ -641,7 +642,7 @@ enable_one_repo (GPtrArray           *sources,
 {
   for (guint i = 0; i < sources->len; i++)
     {
-      DnfRepo *src = sources->pdata[i];
+      auto src = static_cast<DnfRepo *>(sources->pdata[i]);
       const char *id = dnf_repo_get_id (src);
 
       if (strcmp (reponame, id) != 0)
@@ -660,7 +661,7 @@ disable_all_repos (RpmOstreeContext  *context)
   GPtrArray *sources = dnf_context_get_repos (context->dnfctx);
   for (guint i = 0; i < sources->len; i++)
     {
-      DnfRepo *src = sources->pdata[i];
+      auto src = static_cast<DnfRepo *>(sources->pdata[i]);
       dnf_repo_set_enabled (src, DNF_REPO_ENABLED_NONE);
     }
 }
@@ -711,7 +712,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       self->spec = rpmostree_treespec_new_from_keyfile (kf, NULL);
     }
   else
-    self->spec = g_object_ref (spec);
+    self->spec = (RpmOstreeTreespec*)g_object_ref (spec);
 
   g_variant_dict_lookup (self->spec->dict, "releasever", "&s", &releasever);
 
@@ -835,7 +836,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
    * rpm-ostree we're being more strict about requiring repos.
    */
   for (guint i = 0; i < repos->len; i++)
-    dnf_repo_set_required (repos->pdata[i], TRUE);
+    dnf_repo_set_required (static_cast<DnfRepo*>(repos->pdata[i]), TRUE);
 
   { gboolean docs;
 
@@ -971,7 +972,7 @@ checkout_pkg_metadata (RpmOstreeContext *self,
     return TRUE;
 
   return glnx_file_replace_contents_at (self->tmpdir.fd, path,
-                                        g_variant_get_data (header),
+                                        static_cast<const guint8*>(g_variant_get_data (header)),
                                         g_variant_get_size (header),
                                         GLNX_FILE_REPLACE_NODATASYNC,
                                         cancellable, error);
@@ -1007,7 +1008,7 @@ get_header_variant (OstreeRepo       *repo,
       return FALSE;
     }
 
-  *out_header = g_steal_pointer (&header);
+  *out_header = util::move_nullify (header);
   return TRUE;
 }
 
@@ -1092,7 +1093,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
    * https://github.com/projectatomic/rpm-ostree/issues/1127
    */
   if (self->rojig_pure)
-    flags |= DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS;
+    flags = static_cast<DnfContextSetupSackFlags>(static_cast<int>(flags) | DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS);
   if (flags & DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS)
     dnf_context_set_enable_filelists (self->dnfctx, FALSE);
 
@@ -1119,7 +1120,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
       g_string_append (enabled_repos, "Enabled rpm-md repositories:");
       for (guint i = 0; i < rpmmd_repos->len; i++)
         {
-          DnfRepo *repo = rpmmd_repos->pdata[i];
+          auto repo = static_cast<DnfRepo *>(rpmmd_repos->pdata[i]);
           g_string_append_printf (enabled_repos, " %s", dnf_repo_get_id (repo));
         }
     }
@@ -1134,7 +1135,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
    */
   for (guint i = 0; i < rpmmd_repos->len; i++)
     {
-      DnfRepo *repo = rpmmd_repos->pdata[i];
+      auto repo = static_cast<DnfRepo *>(rpmmd_repos->pdata[i]);
       g_autoptr(DnfState) hifstate = dnf_state_new ();
 
       /* Until libdnf speaks GCancellable: https://github.com/projectatomic/rpm-ostree/issues/897 */
@@ -1223,7 +1224,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
   g_autoptr(GPtrArray) repos =
     rpmostree_get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
   for (guint i = 0; i < repos->len; i++)
-    dnf_repo_set_module_hotfixes (repos->pdata[i], TRUE);
+    dnf_repo_set_module_hotfixes (static_cast<DnfRepo*>(repos->pdata[i]), TRUE);
 
   return TRUE;
 }
@@ -1245,7 +1246,7 @@ journal_rpmmd_info (RpmOstreeContext *self)
 
     for (guint i = 0; i < repos->len; i++)
       {
-        DnfRepo *repo = repos->pdata[i];
+        auto repo = static_cast<DnfRepo *>(repos->pdata[i]);
 
         if (first)
           first = FALSE;
@@ -1311,11 +1312,11 @@ get_pkgcache_repodata_chksum_repr (GVariant    *commit,
           *out_chksum_repr = NULL;
           return TRUE;
         }
-      g_propagate_error (error, g_steal_pointer (&tmp_error));
+      g_propagate_error (error, util::move_nullify (tmp_error));
       return FALSE;
     }
 
-  *out_chksum_repr = g_steal_pointer (&chksum_repr);
+  *out_chksum_repr = util::move_nullify (chksum_repr);
   return TRUE;
 }
 
@@ -1480,7 +1481,7 @@ sort_packages (RpmOstreeContext *self,
   GPtrArray *sources = dnf_context_get_repos (dnfctx);
   for (guint i = 0; i < packages->len; i++)
     {
-      DnfPackage *pkg = packages->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(packages->pdata[i]);
 
       if (g_cancellable_set_error_if_cancelled (cancellable, error))
         return FALSE;
@@ -1497,7 +1498,7 @@ sort_packages (RpmOstreeContext *self,
           /* Hackily look up the source...we need a hash table */
           for (guint j = 0; j < sources->len && !src; j++)
             {
-              DnfRepo *tmpsrc = sources->pdata[j];
+              auto tmpsrc = static_cast<DnfRepo *>(sources->pdata[j]);
               if (g_strcmp0 (reponame, dnf_repo_get_id (tmpsrc)) == 0)
                 src = tmpsrc;
             }
@@ -1556,7 +1557,7 @@ throw_package_list (GError **error, const char *prefix, GPtrArray *pkgs)
     {
       if (!first)
         g_string_append (msg, ", ");
-      g_string_append (msg, pkgs->pdata[i]);
+      g_string_append (msg, static_cast<char*>(pkgs->pdata[i]));
       first = FALSE;
     }
 
@@ -1614,7 +1615,7 @@ check_goal_solution (RpmOstreeContext *self,
                                                            DNF_PACKAGE_INFO_OBSOLETE, -1);
     for (guint i = 0; i < packages->len; i++)
       {
-        DnfPackage *pkg = packages->pdata[i];
+        auto pkg = static_cast<DnfPackage *>(packages->pdata[i]);
         const char *name = dnf_package_get_name (pkg);
         const char *nevra = dnf_package_get_nevra (pkg);
 
@@ -1635,7 +1636,7 @@ check_goal_solution (RpmOstreeContext *self,
 
     for (guint i = 0; i < removed_pkgnames->len; i++)
       {
-        const char *pkgname = removed_pkgnames->pdata[i];
+        auto pkgname = static_cast<const char *>(removed_pkgnames->pdata[i]);
         if (!g_hash_table_contains (self->pkgs_to_remove, pkgname))
           g_ptr_array_add (forbidden, (gpointer)pkgname);
       }
@@ -1667,13 +1668,13 @@ check_goal_solution (RpmOstreeContext *self,
                                                            DNF_PACKAGE_INFO_DOWNGRADE, -1);
     for (guint i = 0; i < packages->len; i++)
       {
-        DnfPackage *pkg = packages->pdata[i];
+        auto pkg = static_cast<DnfPackage *>(packages->pdata[i]);
         const char *nevra = dnf_package_get_nevra (pkg);
 
         /* just pick the first pkg */
         g_autoptr(GPtrArray) old = hy_goal_list_obsoleted_by_package (goal, pkg);
         g_assert_cmpint (old->len, >, 0);
-        DnfPackage *old_pkg = old->pdata[0];
+        auto old_pkg = static_cast<DnfPackage *>(old->pdata[0]);
 
         /* did we expect this nevra to replace a base pkg? */
         if (rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
@@ -1716,9 +1717,9 @@ check_goal_solution (RpmOstreeContext *self,
   /* check that all the pkgs we expect to replace are marked for replacement */
   { g_autoptr(GPtrArray) forbidden = g_ptr_array_new_with_free_func (g_free);
 
-    GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant*, new, GVariant*, old)
+    GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant*, newv, GVariant*, old)
       {
-        g_autoptr(GVariant) nevra_v = g_variant_get_child_value (new, 0);
+        g_autoptr(GVariant) nevra_v = g_variant_get_child_value (newv, 0);
         const char *nevra = g_variant_get_string (nevra_v, NULL);
         if (!rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
           g_ptr_array_add (forbidden, g_strdup (nevra));
@@ -1753,7 +1754,7 @@ add_pkg_from_cache (RpmOstreeContext *self,
   if (!pkg)
     return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
 
-  *out_pkg = g_steal_pointer (&pkg);
+  *out_pkg = util::move_nullify (pkg);
   return TRUE;
 }
 
@@ -1806,15 +1807,15 @@ parse_provided_checksum (const char *provide_data,
                          GError **error)
 {
   if (*provide_data != '(')
-    return glnx_null_throw (error, "Expected '('");
+    return (char*)glnx_null_throw (error, "Expected '('");
   provide_data++;
   const char *closeparen = strchr (provide_data, ')');
   if (!closeparen)
-    return glnx_null_throw (error, "Expected ')'");
+    return (char*)glnx_null_throw (error, "Expected ')'");
   g_autofree char *ret = g_strndup (provide_data, closeparen - provide_data);
   if (strlen (ret) != OSTREE_SHA256_STRING_LEN)
-    return glnx_null_throw (error, "Expected %u characters", OSTREE_SHA256_STRING_LEN);
-  return g_steal_pointer (&ret);
+    return (char*)glnx_null_throw (error, "Expected %u characters", OSTREE_SHA256_STRING_LEN);
+  return util::move_nullify (ret);
 }
 
 static gboolean
@@ -1858,7 +1859,7 @@ setup_rojig_state (RpmOstreeContext *self,
 
   g_ptr_array_sort (pkglist, compare_pkgs);
   /* We use the last package in the array which should be newest */
-  self->rojig_pkg = g_object_ref (pkglist->pdata[pkglist->len-1]);
+  self->rojig_pkg = static_cast<DnfPackage*>(g_object_ref (pkglist->pdata[pkglist->len-1]));
 
   /* Iterate over provides directly to provide a nicer error on mismatch */
   gboolean found_vprovide = FALSE;
@@ -1922,7 +1923,7 @@ find_locked_packages (RpmOstreeContext *self,
       guint n_checksum_mismatches = 0;
       for (guint i = 0; i < matches->len; i++)
         {
-          DnfPackage *match = matches->pdata[i];
+          auto match = static_cast<DnfPackage *>(matches->pdata[i]);
           if (!*chksum)
             {
               /* we could optimize this path outside the loop in the future using the
@@ -1946,13 +1947,13 @@ find_locked_packages (RpmOstreeContext *self,
             }
         }
       if (!at_least_one)
-        return glnx_null_throw (error, "Couldn't find locked package '%s'%s%s "
+        return (GPtrArray*)glnx_null_throw (error, "Couldn't find locked package '%s'%s%s "
                                        "(pkgs matching NEVRA: %d; mismatched checksums: %d)",
                                 nevra, *chksum ? " with checksum " : "",
                                 *chksum ? chksum : "", matches->len, n_checksum_mismatches);
     }
 
-  return g_steal_pointer (&pkgs);
+  return util::move_nullify (pkgs);
 }
 
 /* Check for/download new rpm-md, then depsolve */
@@ -2091,7 +2092,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       /* build a packageset from it */
       DnfPackageSet *locked_pset = dnf_packageset_new (sack);
       for (guint i = 0; i < locked_pkgs->len; i++)
-        dnf_packageset_add (locked_pset, locked_pkgs->pdata[i]);
+        dnf_packageset_add (locked_pset, static_cast<DnfPackage*>(locked_pkgs->pdata[i]));
 
       if (self->vlockmap_strict)
         {
@@ -2191,7 +2192,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
           /* Only keep going if it's ENOENT, so we coalesce into one msg at the end */
           if (!g_error_matches (local_error, DNF_ERROR, DNF_ERROR_PACKAGE_NOT_FOUND))
             {
-              g_propagate_error (error, g_steal_pointer (&local_error));
+              g_propagate_error (error, util::move_nullify (local_error));
               return FALSE;
             }
           /* lazy init since it's unlikely in the common case (e.g. upgrades) */
@@ -2210,7 +2211,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     g_autoptr(GPtrArray) pkgs = hy_query_run (query);
     for (guint i = 0; i < pkgs->len; i++)
       {
-        DnfPackage *pkg = pkgs->pdata[i];
+        auto pkg = static_cast<DnfPackage *>(pkgs->pdata[i]);
         const char *pkgname = dnf_package_get_name (pkg);
         g_assert (pkgname);
 
@@ -2230,12 +2231,12 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   if (!self->rojig_pure)
     {
-      DnfGoalActions actions = DNF_INSTALL | DNF_ALLOW_UNINSTALL;
+      auto actions = static_cast<DnfGoalActions>(DNF_INSTALL | DNF_ALLOW_UNINSTALL);
 
       gboolean recommends;
       g_assert (g_variant_dict_lookup (self->spec->dict, "recommends", "b", &recommends));
       if (!recommends)
-        actions |= DNF_IGNORE_WEAK_DEPS;
+        actions = static_cast<DnfGoalActions>(static_cast<int>(actions) | DNF_IGNORE_WEAK_DEPS);
 
       g_auto(RpmOstreeProgress) task = { 0, };
       rpmostree_output_task_begin (&task, "Resolving dependencies");
@@ -2365,7 +2366,7 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
   g_ptr_array_sort (pkglist, compare_pkgs);
   for (guint i = 0; i < pkglist->len; i++)
     {
-      DnfPackage *pkg = pkglist->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(pkglist->pdata[i]);
       DnfStateAction action = dnf_package_get_action (pkg);
       const char *action_str = convert_dnf_action_to_string (action);
       g_checksum_update (checksum, (guint8*)action_str, strlen (action_str));
@@ -2414,7 +2415,7 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
                                     GError          **error)
 {
   g_autoptr(GChecksum) state_checksum = g_checksum_new (G_CHECKSUM_SHA512);
-  g_checksum_update (state_checksum, g_variant_get_data (self->spec->spec),
+  g_checksum_update (state_checksum, static_cast<const guchar*>(g_variant_get_data (self->spec->spec)),
                      g_variant_get_size (self->spec->spec));
 
   if (!self->empty)
@@ -2437,13 +2438,13 @@ gather_source_to_packages (RpmOstreeContext *self)
 
   for (guint i = 0; i < self->pkgs_to_download->len; i++)
     {
-      DnfPackage *pkg = self->pkgs_to_download->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(self->pkgs_to_download->pdata[i]);
       DnfRepo *src = dnf_package_get_repo (pkg);
       GPtrArray *source_packages;
 
       g_assert (src);
 
-      source_packages = g_hash_table_lookup (source_to_packages, src);
+      source_packages = static_cast<GPtrArray*>(g_hash_table_lookup (source_to_packages, src));
       if (!source_packages)
         {
           source_packages = g_ptr_array_new ();
@@ -2452,7 +2453,7 @@ gather_source_to_packages (RpmOstreeContext *self)
       g_ptr_array_add (source_packages, pkg);
     }
 
-  return g_steal_pointer (&source_to_packages);
+  return util::move_nullify (source_to_packages);
 }
 
 gboolean
@@ -2534,8 +2535,8 @@ on_async_import_done (GObject                    *obj,
                       GAsyncResult               *res,
                       gpointer                    user_data)
 {
-  RpmOstreeImporter *importer = (RpmOstreeImporter*) obj;
-  RpmOstreeContext *self = user_data;
+  auto importer = (RpmOstreeImporter*)(obj);
+  auto self = static_cast<RpmOstreeContext *>(user_data);
   g_autofree char *rev =
     rpmostree_importer_run_async_finish (importer, res,
                                          self->async_error ? NULL : &self->async_error);
@@ -2563,7 +2564,7 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
   GVariant *rojig_xattrs = NULL;
   if (self->rojig_pkg_to_xattrs)
     {
-      rojig_xattrs = g_hash_table_lookup (self->rojig_pkg_to_xattrs, pkg);
+      rojig_xattrs = static_cast<GVariant*>(g_hash_table_lookup (self->rojig_pkg_to_xattrs, pkg));
       if (!rojig_xattrs)
         g_error ("Failed to find rojig xattrs for %s", dnf_package_get_nevra (pkg));
     }
@@ -2595,7 +2596,7 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
   /* TODO - tweak the unpacker flags for containers */
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autoptr(RpmOstreeImporter) unpacker =
-    rpmostree_importer_new_take_fd (&fd, ostreerepo, pkg, flags,
+    rpmostree_importer_new_take_fd (&fd, ostreerepo, pkg, static_cast<RpmOstreeImporterFlags>(flags),
                                     self->sepolicy, error);
   if (!unpacker)
     return glnx_prefix_error (error, "creating importer");
@@ -2618,13 +2619,13 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
 static gboolean
 async_imports_mainctx_iter (gpointer user_data)
 {
-  RpmOstreeContext *self = user_data;
+  auto self = static_cast<RpmOstreeContext *>(user_data);
 
   while (self->async_index < self->pkgs_to_import->len &&
          self->n_async_running < self->n_async_max &&
          self->async_error == NULL)
     {
-      DnfPackage *pkg = self->pkgs_to_import->pdata[self->async_index];
+      auto pkg = static_cast<DnfPackage *>(self->pkgs_to_import->pdata[self->async_index]);
       if (!start_async_import_one_package (self, pkg, self->async_cancellable, &self->async_error))
         {
           g_cancellable_cancel (self->async_cancellable);
@@ -2691,7 +2692,7 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
     g_main_context_iteration (mainctx, TRUE);
   if (self->async_error)
     {
-      g_propagate_error (error, g_steal_pointer (&self->async_error));
+      g_propagate_error (error, util::move_nullify (self->async_error));
       return glnx_prefix_error (error, "importing RPMs");
     }
 
@@ -2786,7 +2787,7 @@ canonicalize_non_usrmove_path (RpmOstreeContext  *self,
   if (!slash)
     return NULL;
   const char *prefix = strndupa (path, slash - path);
-  const char *link = g_hash_table_lookup (self->rootfs_usrlinks, prefix);
+  auto link = static_cast<const char *>(g_hash_table_lookup (self->rootfs_usrlinks, prefix));
   if (!link)
     return NULL;
   return g_build_filename (link, slash + 1, NULL);
@@ -2903,8 +2904,8 @@ handle_file_dispositions (RpmOstreeContext *self,
         }
     }
 
-  *out_files_skip_add = g_steal_pointer (&files_skip_add);
-  *out_files_skip_delete = g_steal_pointer (&files_skip_delete);
+  *out_files_skip_add = util::move_nullify (files_skip_add);
+  *out_files_skip_delete = util::move_nullify (files_skip_delete);
   return TRUE;
 }
 
@@ -2932,8 +2933,8 @@ checkout_filter (OstreeRepo         *self,
     {
       for (guint i = 0; i < files_remove_regex->len; i++)
         {
-          GRegex *regex = g_ptr_array_index (files_remove_regex, i);
-          if (g_regex_match (regex, path, 0, NULL))
+          auto regex = static_cast<GRegex *>(g_ptr_array_index (files_remove_regex, i));
+          if (g_regex_match (regex, path, static_cast<GRegexMatchFlags>(0), NULL))
             {
               g_print ("Skipping file %s from checkout\n", path);
               return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
@@ -3014,7 +3015,7 @@ checkout_package_into_root (RpmOstreeContext *self,
       for (guint i = 0; i < len; i++) 
         {
           const char *remove_regex_pattern = files_remove_regex_patterns[i];
-          GRegex *regex = g_regex_new (remove_regex_pattern, G_REGEX_JAVASCRIPT_COMPAT, 0, NULL);
+          GRegex *regex = g_regex_new (remove_regex_pattern, G_REGEX_JAVASCRIPT_COMPAT, static_cast<GRegexMatchFlags>(0), NULL);
           if (!regex)
             return FALSE;
           g_ptr_array_add (files_remove_regex, regex);
@@ -3064,7 +3065,7 @@ get_rpmdb_pkg_header (rpmts rpmdb_ts,
 
   Header hdr = it ? rpmdbNextIterator (it) : NULL;
   if (hdr == NULL)
-    return glnx_null_throw (error, "Failed to find package '%s' in rpmdb",
+    return (Header)glnx_null_throw (error, "Failed to find package '%s' in rpmdb",
                             dnf_package_get_nevra (pkg));
 
   return headerLink (hdr);
@@ -3110,8 +3111,8 @@ compare_strlen (const void *a,
                 const void *b,
                 void *      data)
 {
-  size_t a_len = strlen (a);
-  size_t b_len = strlen (b);
+  size_t a_len = strlen (static_cast<const char *>(a));
+  size_t b_len = strlen (static_cast<const char *>(b));
   if (a_len == b_len)
     return 0;
   else if (a_len > b_len)
@@ -3210,7 +3211,7 @@ handle_package_deletion_directories (int           rootfs_dfd,
   GSequenceIter *iter = g_sequence_get_begin_iter (dirs_to_remove);
   while (!g_sequence_iter_is_end (iter))
     {
-      const char *fn = g_sequence_get (iter);
+      auto fn = static_cast<const char *>(g_sequence_get (iter));
       if (unlinkat (rootfs_dfd, fn, AT_REMOVEDIR) < 0)
         {
           if (!G_IN_SET (errno, ENOENT, EEXIST, ENOTEMPTY))
@@ -3355,14 +3356,14 @@ relabel_in_thread (GTask            *task,
                    GCancellable     *cancellable)
 {
   g_autoptr(GError) local_error = NULL;
-  RpmOstreeContext *self = source;
-  RelabelTaskData *tdata = task_data;
+  auto self = static_cast<RpmOstreeContext *>(source);
+  auto tdata = static_cast<RelabelTaskData *>(task_data);
 
   gboolean changed = FALSE;
   if (!relabel_in_thread_impl (self, tdata->name, tdata->evr, tdata->arch,
                                tdata->tmpdir_dfd, &changed,
                                cancellable, &local_error))
-    g_task_return_error (task, g_steal_pointer (&local_error));
+    g_task_return_error (task, util::move_nullify (local_error));
   else
     g_task_return_int (task, changed ? 1 : 0);
 }
@@ -3406,7 +3407,7 @@ on_async_relabel_done (GObject                    *obj,
                        GAsyncResult               *res,
                        gpointer                    user_data)
 {
-  RpmOstreeAsyncRelabelData *data = user_data;
+  auto data = static_cast<RpmOstreeAsyncRelabelData *>(user_data);
   RpmOstreeContext *self = data->self;
   gssize n_relabeled =
     relabel_package_async_finish (self, res, self->async_error ? NULL : &self->async_error);
@@ -3466,7 +3467,7 @@ relabel_if_necessary (RpmOstreeContext *self,
   rpmostree_output_progress_nitems_begin (&progress, n_to_relabel, "Relabeling");
   for (guint i = 0; i < n_to_relabel; i++)
     {
-      DnfPackage *pkg = self->pkgs_to_relabel->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(self->pkgs_to_relabel->pdata[i]);
       relabel_package_async (self, pkg, relabel_tmpdir.fd, cancellable,
                              on_async_relabel_done, &data);
     }
@@ -3478,7 +3479,7 @@ relabel_if_necessary (RpmOstreeContext *self,
     g_main_context_iteration (mainctx, TRUE);
   if (self->async_error)
     {
-      g_propagate_error (error, g_steal_pointer (&self->async_error));
+      g_propagate_error (error, util::move_nullify (self->async_error));
       return glnx_prefix_error (error, "relabeling");
     }
 
@@ -3515,7 +3516,7 @@ rpmostree_context_force_relabel (RpmOstreeContext *self,
 
   for (guint i = 0; i < packages->len; i++)
     {
-      DnfPackage *pkg = packages->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(packages->pdata[i]);
 
       if (g_cancellable_set_error_if_cancelled (cancellable, error))
         return FALSE;
@@ -3546,13 +3547,13 @@ ts_callback (const void * h,
              fnpyKey key,
              rpmCallbackData data)
 {
-  TransactionData *tdata = data;
+  auto tdata = static_cast<TransactionData *>(data);
 
   switch (what)
     {
     case RPMCALLBACK_INST_OPEN_FILE:
       {
-        DnfPackage *pkg = (void*)key;
+        auto pkg = static_cast<DnfPackage *>((void*)key);
         /* just bypass fdrel_abspath here since we know the dfd is not ATCWD and
          * it saves us an allocation */
         g_autofree char *relpath = get_package_relpath (pkg);
@@ -3797,8 +3798,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       uid_t uid = 0;
       if (!g_str_equal (user, "root"))
         {
-          struct conv_passwd_ent *passwdent =
-            g_hash_table_lookup (passwdents, user);
+          auto passwdent = static_cast<struct conv_passwd_ent *>(g_hash_table_lookup (passwdents, user));
 
           if (!passwdent)
             {
@@ -3813,8 +3813,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       gid_t gid = 0;
       if (!g_str_equal (group, "root"))
         {
-          struct conv_group_ent *groupent =
-            g_hash_table_lookup (groupents, group);
+          auto groupent = static_cast<struct conv_group_ent *>(g_hash_table_lookup (groupents, group));
 
           if (!groupent)
             {
@@ -3886,9 +3885,9 @@ add_install (RpmOstreeContext *self,
   if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
     return FALSE;
 
-  RpmOstreeTsAddInstallFlags flags = 0;
+  auto flags = static_cast<RpmOstreeTsAddInstallFlags>(0);
   if (is_upgrade)
-    flags |= RPMOSTREE_TS_FLAG_UPGRADE;
+    flags = static_cast<RpmOstreeTsAddInstallFlags>(static_cast<int>(flags) | RPMOSTREE_TS_FLAG_UPGRADE);
   if (!rpmts_add_install (self, ts, pkg, flags, cancellable, error))
     return FALSE;
 
@@ -3933,7 +3932,7 @@ run_all_transfiletriggers (RpmOstreeContext *self,
       rpmte te = rpmtsElement (ts, i);
       if (rpmteType (te) != TR_ADDED)
         continue;
-      DnfPackage *pkg = (void*)rpmteKey (te);
+      DnfPackage *pkg = (DnfPackage*)rpmteKey (te);
       g_autofree char *path = get_package_relpath (pkg);
       g_auto(Header) hdr = NULL;
       if (!get_package_metainfo (self, path, &hdr, NULL, error))
@@ -4153,14 +4152,14 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   for (guint i = 0; i < overrides_remove->len; i++)
     {
-      DnfPackage *pkg = overrides_remove->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(overrides_remove->pdata[i]);
       if (!rpmts_add_erase (self, ordering_ts, pkg, cancellable, error))
         return FALSE;
     }
 
   for (guint i = 0; i < overrides_replace->len; i++)
     {
-      DnfPackage *pkg = overrides_replace->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(overrides_replace->pdata[i]);
       if (!add_install (self, pkg, ordering_ts, TRUE, pkg_to_ostree_commit,
                         cancellable, error))
         return FALSE;
@@ -4168,15 +4167,15 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   for (guint i = 0; i < overlays->len; i++)
     {
-      DnfPackage *pkg = overlays->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(overlays->pdata[i]);
       if (!add_install (self, pkg, ordering_ts, FALSE,
                         pkg_to_ostree_commit, cancellable, error))
         return FALSE;
 
       if (strcmp (dnf_package_get_name (pkg), "filesystem") == 0)
-        filesystem_package = g_object_ref (pkg);
+        filesystem_package = (DnfPackage*)g_object_ref (pkg);
       else if (strcmp (dnf_package_get_name (pkg), "setup") == 0)
-        setup_package = g_object_ref (pkg);
+        setup_package = (DnfPackage*)g_object_ref (pkg);
     }
 
   { DECLARE_RPMSIGHANDLER_RESET;
@@ -4226,10 +4225,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   if (filesystem_package)
     {
       rpmostree_output_set_sub_message ("filesystem");
+      auto c = static_cast<const char*>(g_hash_table_lookup (pkg_to_ostree_commit, filesystem_package));
       if (!checkout_package_into_root (self, filesystem_package,
                                        tmprootfs_dfd, ".", self->devino_cache,
-                                       g_hash_table_lookup (pkg_to_ostree_commit,
-                                                            filesystem_package), NULL,
+                                       c, NULL,
                                        OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL,
                                        cancellable, error))
         return FALSE;
@@ -4286,7 +4285,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         continue;
       g_assert (type == TR_ADDED);
 
-      DnfPackage *pkg = (void*)rpmteKey (te);
+      DnfPackage *pkg = (DnfPackage*)rpmteKey (te);
       if (pkg == filesystem_package)
         continue;
 
@@ -4303,7 +4302,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
       if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", self->devino_cache,
-                                       g_hash_table_lookup (pkg_to_ostree_commit, pkg),
+                                       static_cast<const char*>(g_hash_table_lookup (pkg_to_ostree_commit, pkg)),
                                        files_skip_add, ovwmode, cancellable, error))
         return FALSE;
       n_rpmts_done++;
@@ -4377,7 +4376,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           if (!systemctl_wrapper)
             return FALSE;
           size_t len;
-          const guint8* buf = g_bytes_get_data (systemctl_wrapper, &len);
+          auto buf = static_cast<const guint8*>(g_bytes_get_data (systemctl_wrapper, &len));
           if (!glnx_file_replace_contents_with_perms_at (tmprootfs_dfd, "usr/bin/systemctl",
                                                          buf, len, 0755, (uid_t) -1, (gid_t) -1,
                                                          GLNX_FILE_REPLACE_NODATASYNC,
@@ -4428,7 +4427,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             if (rpmteType (te) != TR_ADDED)
               continue;
 
-            DnfPackage *pkg = (void*)rpmteKey (te);
+            DnfPackage *pkg = (DnfPackage*)rpmteKey (te);
             g_assert (pkg);
 
             rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
@@ -4458,7 +4457,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           passwdents_ptr = rpmostree_passwd_data2passwdents (contents);
           for (guint i = 0; i < passwdents_ptr->len; i++)
             {
-              struct conv_passwd_ent *ent = passwdents_ptr->pdata[i];
+              auto ent = static_cast<struct conv_passwd_ent *>(passwdents_ptr->pdata[i]);
               g_hash_table_insert (passwdents, ent->name, ent);
             }
         }
@@ -4474,7 +4473,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           groupents_ptr = rpmostree_passwd_data2groupents (contents);
           for (guint i = 0; i < groupents_ptr->len; i++)
             {
-              struct conv_group_ent *ent = groupents_ptr->pdata[i];
+              auto ent = static_cast<struct conv_group_ent *>(groupents_ptr->pdata[i]);
               g_hash_table_insert (groupents, ent->name, ent);
             }
         }
@@ -4491,7 +4490,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           if (rpmteType (te) != TR_ADDED)
             continue;
 
-          DnfPackage *pkg = (void*)rpmteKey (te);
+          auto pkg = (DnfPackage *)(rpmteKey (te));
           g_assert (pkg);
 
           rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
@@ -4523,7 +4522,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           if (rpmteType (te) != TR_ADDED)
             continue;
 
-          DnfPackage *pkg = (void*)rpmteKey (te);
+          auto pkg = (DnfPackage *)(rpmteKey (te));
           g_assert (pkg);
 
           rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
@@ -4635,7 +4634,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   RpmOstreeTsAddInstallFlags rpmdb_instflags = RPMOSTREE_TS_FLAG_NOVALIDATE_SCRIPTS;
   for (guint i = 0; i < overlays->len; i++)
     {
-      DnfPackage *pkg = overlays->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(overlays->pdata[i]);
 
       if (!rpmts_add_install (self, rpmdb_ts, pkg, rpmdb_instflags,
                               cancellable, error))
@@ -4644,10 +4643,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   for (guint i = 0; i < overrides_replace->len; i++)
     {
-      DnfPackage *pkg = overrides_replace->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(overrides_replace->pdata[i]);
 
       if (!rpmts_add_install (self, rpmdb_ts, pkg,
-                              rpmdb_instflags | RPMOSTREE_TS_FLAG_UPGRADE,
+                              static_cast<RpmOstreeTsAddInstallFlags>(rpmdb_instflags | RPMOSTREE_TS_FLAG_UPGRADE),
                               cancellable, error))
         return FALSE;
     }
@@ -4655,7 +4654,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   /* and mark removed packages as such so they drop out of rpmdb */
   for (guint i = 0; i < overrides_remove->len; i++)
     {
-      DnfPackage *pkg = overrides_remove->pdata[i];
+      auto pkg = static_cast<DnfPackage*>(overrides_remove->pdata[i]);
       if (!rpmts_add_erase (self, rpmdb_ts, pkg, cancellable, error))
         return FALSE;
     }
@@ -4814,10 +4813,10 @@ rpmostree_context_commit (RpmOstreeContext      *self,
     if (!rpmostree_cleanup_leftover_rpmdb_files (self->tmprootfs_dfd, cancellable, error))
       return FALSE;
 
-    OstreeRepoCommitModifierFlags modflags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE;
+    auto modflags = static_cast<OstreeRepoCommitModifierFlags>(OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE);
     /* For ex-container (bare-user-only), we always need canonical permissions */
     if (ostree_repo_get_mode (self->ostreerepo) == OSTREE_REPO_MODE_BARE_USER_ONLY)
-      modflags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
+      modflags = static_cast<OstreeRepoCommitModifierFlags>(static_cast<int>(modflags) | OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS);
 
     /* if we're SELinux aware, then reload the final policy from the tmprootfs in case it
      * was changed by a scriptlet; this covers the foobar/foobar-selinux path */
@@ -4835,7 +4834,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         if (ostree_sepolicy_get_name (final_sepolicy) == NULL ||
             g_strcmp0 (ostree_sepolicy_get_csum (self->sepolicy),
                        ostree_sepolicy_get_csum (final_sepolicy)) == 0)
-          modflags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_DEVINO_CANONICAL;
+          modflags = static_cast<OstreeRepoCommitModifierFlags>(static_cast<int>(modflags) | OSTREE_REPO_COMMIT_MODIFIER_FLAGS_DEVINO_CANONICAL);
       }
 
     commit_modifier = ostree_repo_commit_modifier_new (modflags, NULL, NULL, NULL);
@@ -4913,6 +4912,6 @@ rpmostree_context_commit (RpmOstreeContext      *self,
     return FALSE;
 
   if (out_commit)
-    *out_commit = g_steal_pointer (&ret_commit_checksum);
+    *out_commit = util::move_nullify (ret_commit_checksum);
   return TRUE;
 }
