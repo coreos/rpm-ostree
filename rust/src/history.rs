@@ -257,7 +257,7 @@ impl HistoryCtx {
         journal.seek(journal::JournalSeek::Tail)?;
 
         Ok(Box::new(HistoryCtx {
-            journal: journal,
+            journal,
             marker_queue: VecDeque::new(),
             current_entry: None,
             search_mode: None,
