@@ -34,6 +34,7 @@
 #include <sys/vfs.h>
 #include <libglnx.h>
 #include <rpm/rpmmacro.h>
+#include <utility>
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
@@ -498,7 +499,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   if (out_unmodified)
     *out_unmodified = FALSE;
-  *out_new_inputhash = (char*) g_steal_pointer (&ret_new_inputhash);
+  *out_new_inputhash = util::move_nullify (ret_new_inputhash);
   return TRUE;
 }
 
@@ -519,8 +520,8 @@ parse_treefile_to_json (const char    *treefile_path,
   if (!json_parser_load_from_data (parser, serialized, -1, error))
     return FALSE;
 
-  *out_parser = static_cast<JsonParser*>(g_steal_pointer (&parser));
-  *out_treefile_rs = static_cast<RORTreefile*>(g_steal_pointer (&treefile_rs));
+  *out_parser = util::move_nullify (parser);
+  *out_treefile_rs = util::move_nullify (treefile_rs);
   return TRUE;
 }
 
@@ -792,7 +793,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
   self->ref = rpmostree_treespec_get_ref (self->treespec);
 
-  *out_context = static_cast<RpmOstreeTreeComposeContext*>(g_steal_pointer (&self));
+  *out_context = util::move_nullify (self);
   return TRUE;
 }
 

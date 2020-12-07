@@ -24,6 +24,8 @@
 #include <err.h>
 #include <stdio.h>
 #include <systemd/sd-journal.h>
+#include "rpmostree-util.h"
+#include <utility>
 
 static void
 teardown_rofiles (GLnxTmpDir *mnt_tmp);
@@ -351,7 +353,7 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
       rpmostree_bwrap_append_bwrap_argv (ret, "--symlink", srcpath, destpath, NULL);
     }
 
-  return (RpmOstreeBwrap*)g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 RpmOstreeBwrap *
@@ -383,7 +385,7 @@ rpmostree_bwrap_new (int rootfs_fd,
       break;
     }
 
-  return (RpmOstreeBwrap*) g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 static void
@@ -489,7 +491,7 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
 GSubprocess *
 rpmostree_bwrap_execute (RpmOstreeBwrap *bwrap, GError **error)
 {
-  g_autoptr(GSubprocessLauncher) launcher = (GSubprocessLauncher*)g_steal_pointer (&bwrap->launcher);
+  g_autoptr(GSubprocessLauncher) launcher = util::move_nullify (bwrap->launcher);
   g_assert (!bwrap->executed);
   bwrap->executed = TRUE;
 
