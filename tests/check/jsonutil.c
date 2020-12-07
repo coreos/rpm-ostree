@@ -165,7 +165,7 @@ test_auto_version (void)
   _VER_TST("10.<wrongtag: >", "10.20001010", "10.<wrongtag: >");
 
   /* Test invalid datetime specifier given. */
-  _VER_TST("10.<date:%f>", "10.20001010", NULL);
+  _VER_TST("10.<date:%E>", "10.20001010", NULL);
 }
 
 int
