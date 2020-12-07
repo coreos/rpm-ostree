@@ -43,6 +43,7 @@ vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 case $versionid in
   31) kernel_release=5.3.7-301.fc31.x86_64;;
   32) kernel_release=5.6.6-300.fc32.x86_64;;
+  33) kernel_release=5.8.15-301.fc33.x86_64;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt $kernel_release
