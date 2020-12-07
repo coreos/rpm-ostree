@@ -65,8 +65,6 @@ parallel insttests: {
         shwrap("""
           dnf install -y *.rpm
           coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
-          # XXX: temporarily keep using f32 FCOS until we move cosa
-          git -C src/config checkout ff607c16562340b9caf2c8128b1d3573abbaccec
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm
           mv *.rpm overrides/rpm
