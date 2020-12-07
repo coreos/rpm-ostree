@@ -29,6 +29,20 @@
 #include "rpmostree.h"
 #include "rpmostree-types.h"
 
+#ifdef __cplusplus
+namespace util {
+// Sadly std::move() doesn't do anything for raw pointer types by default.
+// This is our C++ equivalent of g_steal_pointer().
+template<typename T>
+  T move_nullify(T& v) noexcept
+  {
+    auto p = v;
+    v = nullptr;
+    return p;
+  }
+}
+#endif
+
 G_BEGIN_DECLS
 
 #define _N(single, plural, n) ( (n) == 1 ? (single) : (plural) )
