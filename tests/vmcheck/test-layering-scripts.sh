@@ -226,6 +226,14 @@ vm_cmd test -f /home/core/somedata -a -f /etc/passwd -a -f /tmp/sometmpfile -a -
 assert_file_has_content err.txt 'error: Sanity-checking final rootfs: Executing bwrap(/usr/bin/true)'
 echo "ok impervious to rm -rf post"
 
+cursor=$(vm_get_journal_cursor)
+vm_build_rpm post-query-rpmdb post "rpm -q bash"
+if vm_rpmostree install post-query-rpmdb; then
+  assert_not_reached "Ran rpm -q bash in %post"
+fi
+vm_assert_journal_has_content "$cursor" 'rpm-ostree(post-query-rpmdb.post).*package bash is not installed'
+echo "ok post that calls rpm -q"
+
 # capabilities
 vm_build_rpm test-cap-drop post "capsh --print > /usr/share/rpmostree-capsh.txt"
 vm_rpmostree install test-cap-drop
