@@ -16,7 +16,7 @@ parallel rpms: {
         # binaries from PRs in the future) and meshes well with the following stages.
         export PATH="\$HOME/.cargo/bin:\$PATH"
         cargo install cbindgen
-        cbindgen -c rust/cbindgen.toml -o rpmostree-rust.h rust
+        cbindgen -c cbindgen.toml -o rpmostree-rust.h .
 
         cd packaging
         make -f Makefile.dist-packaging rpm

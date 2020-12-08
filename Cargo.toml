@@ -33,11 +33,11 @@ lazy_static = "1.4.0"
 envsubst = "0.2.0"
 subprocess = "0.2.6"
 chrono = { version = "0.4.19", features = ["serde"] }
-libdnf-sys = { path = "libdnf-sys", version = "0.1.0" }
+libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 
 [lib]
 name = "rpmostree_rust"
-path = "src/lib.rs"
+path = "rust/src/lib.rs"
 crate-type = ["staticlib"]
 
 [profile.release]

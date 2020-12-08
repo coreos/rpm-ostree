@@ -100,23 +100,19 @@ librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmos
 # If the target directory exists, and isn't owned by our uid, then
 # we exit with a fatal error, since someone probably did `make && sudo make install`,
 # and in this case cargo will download into ~/.root which we don't want.
-LIBRPMOSTREE_RUST_SRCS = $(shell find rust/src/ -name '*.rs') rust/cbindgen.toml
+LIBRPMOSTREE_RUST_SRCS = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.lock cbindgen.toml
 $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
-	cd $(top_srcdir)/rust && \
-	  export CARGO_TARGET_DIR=@abs_top_builddir@/target && \
-    target_subdir=@abs_top_builddir@/target/@RUST_TARGET_SUBDIR@; \
-	  if test -d "$${target_subdir}" && [ "$$(stat -c '%u' $${target_subdir})" != "$$(id -u)" ]; then echo "mismatched uids on build"; exit 1; fi && \
-	  $(cargo_build) $(CARGO_RELEASE_ARGS)
-EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
+	$(cargo_build) $(CARGO_RELEASE_ARGS)
+EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS)
 
 # Generate bindings from Rust to C
 if !HAVE_PREBUILT_CBINDGEN
 if HAVE_EXTERNAL_CBINDGEN
 rpmostree-rust.h:
-	$(AM_V_GEN) cbindgen -c rust/cbindgen.toml -o $@ $(top_srcdir)/rust
+	$(AM_V_GEN) cbindgen -c rust/cbindgen.toml -o $@ $(top_srcdir)
 else
 rpmostree-rust.h: rpmostree-bindgen
-	$(AM_V_GEN) ./rpmostree-bindgen $(top_srcdir)/rust
+	$(AM_V_GEN) ./rpmostree-bindgen $(top_srcdir)
 endif
 BUILT_SOURCES += rpmostree-rust.h
 endif
