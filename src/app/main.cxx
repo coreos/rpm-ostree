@@ -28,6 +28,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <locale.h>
+#include <exception>
 
 #include "rpmostree-util.h"
 #include "rpmostree-builtins.h"
@@ -36,95 +37,95 @@
 #include "libglnx.h"
 
 static RpmOstreeCommand commands[] = {
-  { "compose", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
-               RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "compose", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+               RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
     "Commands to compose a tree",
     rpmostree_builtin_compose },
-  { "cleanup", 0,
+  { "cleanup", static_cast<RpmOstreeBuiltinFlags>(0),
     "Clear cached/pending data",
     rpmostree_builtin_cleanup },
-  { "db", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+  { "db", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD),
     "Commands to query the RPM database",
     rpmostree_builtin_db },
-  { "deploy", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "deploy", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS),
     "Deploy a specific commit",
     rpmostree_builtin_deploy },
-  { "rebase", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "rebase", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS),
     "Switch to a different tree",
     rpmostree_builtin_rebase },
-  { "rollback", 0,
+  { "rollback", static_cast<RpmOstreeBuiltinFlags>(0),
     "Revert to the previously booted tree",
     rpmostree_builtin_rollback },
-  { "status", 0,
+  { "status", static_cast<RpmOstreeBuiltinFlags>(0),
     "Get the version of the booted system",
     rpmostree_builtin_status },
-  { "upgrade", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "upgrade", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS),
     "Perform a system upgrade",
     rpmostree_builtin_upgrade },
-  { "update", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "update", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     "Alias for upgrade",
     rpmostree_builtin_upgrade },
-  { "reload", 0,
+  { "reload", static_cast<RpmOstreeBuiltinFlags>(0),
     "Reload configuration",
     rpmostree_builtin_reload },
-  { "usroverlay", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "usroverlay", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
     "Apply a transient overlayfs to /usr",
     rpmostree_builtin_usroverlay },
   /* Let's be "cognitively" compatible with `ostree admin unlock` */
-  { "unlock", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "unlock", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL,
     rpmostree_builtin_usroverlay },
-  { "cancel", 0,
+  { "cancel", static_cast<RpmOstreeBuiltinFlags>(0),
     "Cancel an active transaction",
     rpmostree_builtin_cancel },
-  { "initramfs", 0,
+  { "initramfs", static_cast<RpmOstreeBuiltinFlags>(0),
     "Enable or disable local initramfs regeneration",
     rpmostree_builtin_initramfs },
-  { "install", 0,
+  { "install", static_cast<RpmOstreeBuiltinFlags>(0),
     "Overlay additional packages",
     rpmostree_builtin_install },
-  { "uninstall", 0,
+  { "uninstall", static_cast<RpmOstreeBuiltinFlags>(0),
     "Remove overlayed additional packages",
     rpmostree_builtin_uninstall },
-  { "override", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+  { "override", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD),
     "Manage base package overrides", rpmostree_builtin_override },
-  { "reset", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "reset", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS),
     "Remove all mutations",
     rpmostree_builtin_reset },
-  { "refresh-md", 0,
+  { "refresh-md", static_cast<RpmOstreeBuiltinFlags>(0),
     "Generate rpm repo metadata",
     rpmostree_builtin_refresh_md },
-  { "kargs", 0,
+  { "kargs", static_cast<RpmOstreeBuiltinFlags>(0),
     "Query or modify kernel arguments",
     rpmostree_builtin_kargs },
   /* Legacy aliases */
-  { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "pkg-add", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_install },
-  { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "pkg-remove", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_uninstall },
-  { "rpm", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
-           RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "rpm", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+           RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_db },
   /* Compat with dnf */
-  { "remove", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "remove", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_uninstall },
-  { "makecache", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "makecache", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_refresh_md },
   /* Hidden */
-  { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
-          RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "ex", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+          RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     "Experimental commands that may change or be removed in the future",
     rpmostree_builtin_ex },
-  { "testutils", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
-                 RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "testutils", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+                 RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_testutils },
-  { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+  { "start-daemon", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
-                    RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+                    RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_start_daemon },
-  { "finalize-deployment", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "finalize-deployment", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_finalize_deployment },
-  { "cliwrap", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "cliwrap", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_cliwrap },
   { NULL }
 };
@@ -183,7 +184,7 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
     }
 
   g_option_context_set_summary (context, summary->str);
-  return g_steal_pointer (&context);
+  return util::move_nullify (context);
 }
 
 gboolean
@@ -409,7 +410,7 @@ rebuild_command_line (int    argc,
       g_string_append (command, quoted ?: argv[i]);
       g_string_append_c (command, ' ');
     }
-  return g_string_free (g_steal_pointer (&command), FALSE);
+  return g_string_free (util::move_nullify (command), FALSE);
 }
 
 int
@@ -417,9 +418,11 @@ main (int    argc,
       char **argv)
 {
   RpmOstreeCommand *command;
+  RpmOstreeCommandInvocation invocation;
   const char *command_name = NULL;
   g_autofree char *prgname = NULL;
   GError *local_error = NULL;
+  gboolean funcres;
   /* We can leave this function with an error status from both a command
    * invocation, as well as an option processing failure. Keep an alias to the
    * two places that hold status codes.
@@ -491,11 +494,17 @@ main (int    argc,
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
   g_set_prgname (prgname);
 
-  RpmOstreeCommandInvocation invocation = { .command = command,
-                                            .command_line = command_line,
-                                            .exit_code = -1 };
+  invocation = { .command = command,
+                 .command_line = command_line,
+                 .exit_code = -1 };
   exit_statusp = &(invocation.exit_code);
-  if (!command->fn (argc, argv, &invocation, cancellable, &local_error))
+  try {
+    funcres = command->fn (argc, argv, &invocation, cancellable, &local_error);
+  } catch (std::exception& e) {
+    // Translate exceptions into GError
+    funcres = glnx_throw (&local_error, "%s", e.what());
+  }
+  if (!funcres)
     {
       if (invocation.exit_code == -1)
         invocation.exit_code = EXIT_FAILURE;
