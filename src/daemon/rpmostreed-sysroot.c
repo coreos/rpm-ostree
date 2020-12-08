@@ -743,7 +743,7 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
 {
   g_return_val_if_fail (self != NULL, FALSE);
 
-  /* See also related code in rpmostred-transaction.c */
+  /* See also related code in rpmostred-transaction.cxx */
   const char *sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
   g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
   self->ot_sysroot = ostree_sysroot_new (sysroot_file);

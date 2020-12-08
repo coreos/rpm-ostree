@@ -21,6 +21,7 @@
 
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
+#include <stdexcept>
 
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-errors.h"
@@ -157,7 +158,7 @@ transaction_new_connection_cb (GDBusServer *server,
   g_signal_connect_object (connection,
                            "closed",
                            G_CALLBACK (transaction_connection_closed_cb),
-                           self, 0);
+                           self, static_cast<GConnectFlags>(0));
 
   g_hash_table_add (priv->peer_connections, g_object_ref (connection));
 
@@ -303,7 +304,7 @@ transaction_execute_thread (GTask *task,
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (source_object);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
-  RpmostreedTransactionClass *class = RPMOSTREED_TRANSACTION_GET_CLASS (self);
+  RpmostreedTransactionClass *clazz = RPMOSTREED_TRANSACTION_GET_CLASS (self);
   gboolean success = TRUE;
   GError *local_error = NULL;
   g_autoptr(GMainContext) mctx = g_main_context_new ();
@@ -315,8 +316,14 @@ transaction_execute_thread (GTask *task,
    */
   g_main_context_push_thread_default (mctx);
 
-  if (class->execute != NULL)
-    success = class->execute (self, cancellable, &local_error);
+  if (clazz->execute != NULL)
+    {
+      try {
+        success = clazz->execute (self, cancellable, &local_error);
+      } catch (std::exception& e) {
+        success = glnx_throw (&local_error, "%s", e.what());
+      }
+    }
 
   if (local_error != NULL)
     {
@@ -404,7 +411,7 @@ transaction_set_property (GObject *object,
   switch (property_id)
     {
       case PROP_INVOCATION:
-        priv->invocation = g_value_dup_object (value);
+        priv->invocation = static_cast<GDBusMethodInvocation*>(g_value_dup_object (value));
         break;
       case PROP_SYSROOT_PATH:
         priv->sysroot_path = g_value_dup_string (value);
@@ -524,7 +531,7 @@ foreach_close_peer (gpointer key,
                     gpointer value,
                     gpointer user_data)
 {
-  GDBusConnection *conn = key;
+  auto conn = static_cast<GDBusConnection *>(key);
   g_dbus_connection_close_sync (conn, NULL, NULL);
   return TRUE;
 }
@@ -556,7 +563,7 @@ transaction_initable_init (GInitable *initable,
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   if (G_IS_CANCELLABLE (cancellable))
-    priv->cancellable = g_object_ref (cancellable);
+    priv->cancellable = (GCancellable*)g_object_ref (cancellable);
 
   /* Set up a private D-Bus server over which to emit
    * progress and informational messages to the caller. */
@@ -574,7 +581,7 @@ transaction_initable_init (GInitable *initable,
   g_signal_connect_object (priv->server,
                            "new-connection",
                            G_CALLBACK (transaction_new_connection_cb),
-                           self, 0);
+                           self, static_cast<GConnectFlags>(0));
 
   if (priv->sysroot_path != NULL)
     {
@@ -702,13 +709,13 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
 }
 
 static void
-rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
+rpmostreed_transaction_class_init (RpmostreedTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  g_type_class_add_private (class, sizeof (RpmostreedTransactionPrivate));
+  g_type_class_add_private (clazz, sizeof (RpmostreedTransactionPrivate));
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->set_property = transaction_set_property;
   object_class->get_property = transaction_get_property;
   object_class->dispose = transaction_dispose;
@@ -721,8 +728,8 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
                                                          "Executed",
                                                          "Whether the transaction has finished",
                                                          FALSE,
-                                                         G_PARAM_READABLE |
-                                                         G_PARAM_STATIC_STRINGS));
+                                                         static_cast<GParamFlags>(G_PARAM_READABLE |
+                                                         G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (object_class,
                                    PROP_INVOCATION,
@@ -730,9 +737,9 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
                                                         "Invocation",
                                                         "D-Bus method invocation",
                                                         G_TYPE_DBUS_METHOD_INVOCATION,
-                                                        G_PARAM_READWRITE |
+                                                        static_cast<GParamFlags>(G_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
+                                                        G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (object_class,
                                    PROP_SYSROOT_PATH,
@@ -740,9 +747,9 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
                                                         "Sysroot path",
                                                         "An OstreeSysroot path",
                                                         "",
-                                                        G_PARAM_READWRITE |
+                                                        static_cast<GParamFlags>(G_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
+                                                        G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (object_class,
                                    PROP_REDIRECT_OUTPUT,
@@ -750,9 +757,9 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
                                                          "Output to self",
                                                          "Whether to redirect output to daemon itself",
                                                          FALSE,
-                                                         G_PARAM_READWRITE |
+                                                         static_cast<GParamFlags>(G_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT_ONLY |
-                                                         G_PARAM_STATIC_STRINGS));
+                                                         G_PARAM_STATIC_STRINGS)));
 
   signals[CLOSED] = g_signal_new ("closed",
                                   RPMOSTREED_TYPE_TRANSACTION,
@@ -862,7 +869,7 @@ rpmostreed_transaction_connect_download_progress (RpmostreedTransaction *transac
   g_signal_connect_object (progress,
                            "changed",
                            G_CALLBACK (transaction_progress_changed_cb),
-                           transaction, 0);
+                           transaction, static_cast<GConnectFlags>(0));
 }
 
 void
@@ -874,5 +881,5 @@ rpmostreed_transaction_connect_signature_progress (RpmostreedTransaction *transa
 
   g_signal_connect_object (repo, "gpg-verify-result",
                            G_CALLBACK (transaction_gpg_verify_result_cb),
-                           transaction, 0);
+                           transaction, static_cast<GConnectFlags>(0));
 }

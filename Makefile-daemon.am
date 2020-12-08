@@ -39,7 +39,7 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-deployment-utils.h \
 	src/daemon/rpmostreed-deployment-utils.c \
 	src/daemon/rpmostreed-transaction.h \
-	src/daemon/rpmostreed-transaction.c \
+	src/daemon/rpmostreed-transaction.cxx \
 	src/daemon/rpmostreed-transaction-types.h \
 	src/daemon/rpmostreed-transaction-types.c \
 	src/daemon/rpmostreed-transaction-livefs.c \
@@ -51,9 +51,7 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-os-experimental.c \
 	$(NULL)
 
-librpmostreed_la_CFLAGS = \
-	$(AM_CFLAGS) \
-	$(PKGDEP_RPMOSTREE_CFLAGS) \
+rpmostreed_common_cflags = $(PKGDEP_RPMOSTREE_CFLAGS) \
 	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
 	-fvisibility=hidden \
 	-D_RPMOSTREE_EXTERN= \
@@ -62,6 +60,8 @@ librpmostreed_la_CFLAGS = \
 	-I$(srcdir)/src/libpriv \
 	-I$(libglnx_srcpath) \
 	$(NULL)
+librpmostreed_la_CFLAGS = $(AM_CFLAGS) $(rpmostreed_common_cflags)
+librpmostreed_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
 
 librpmostreed_la_LIBADD = \
 	$(PKGDEP_RPMOSTREE_LIBS) \
