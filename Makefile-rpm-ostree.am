@@ -17,7 +17,7 @@
 
 bin_PROGRAMS += rpm-ostree
 
-rpm_ostree_SOURCES = src/app/main.c \
+rpm_ostree_SOURCES = src/app/main.cxx \
 	rpm-ostreed-generated.h \
 	rpm-ostreed-generated.c \
 	src/app/rpmostree-builtins.h \
