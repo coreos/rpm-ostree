@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.35"
-serde = "1.0.117"
+serde = "1.0.118"
 serde_derive = "1.0.117"
 serde_json = "1.0.60"
 serde_yaml = "0.8.14"
