@@ -40,9 +40,9 @@ mkdir ${tmpd} && touch ${tmpd}/.tmp
 
 (cd ${tmpd}
  mkdir -p .cargo vendor
- (cd ${TOP}/rust && cargo vendor ${tmpd}/vendor)
- cp ${TOP}/rust/Cargo.lock .
- cp ${TOP}/rust/cargo-vendor-config .cargo/config
+ (cd ${TOP} && cargo vendor ${tmpd}/vendor)
+ cp ${TOP}/Cargo.lock .
+ cp ${TOP}/cargo-vendor-config .cargo/config
  # Filter out bundled libcurl and systemd; we always want the pkgconfig ones
  for crate_subdir in curl-sys/curl \
                      libz-sys/src/zlib \
