@@ -20,7 +20,7 @@ ostree = { version = "0.9.1", features = ["v2020_4"] }
 ostree-sys = "0.7.1"
 tempfile = "3.1.0"
 clap = "2.33.3"
-structopt = "0.3.20"
+structopt = "0.3.21"
 openat = "0.1.19"
 openat-ext = "^0.1.9"
 curl = "0.4.34"
