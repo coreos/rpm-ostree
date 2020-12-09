@@ -651,7 +651,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
   guint64 elapsed_ms = end_time_ms - start_time_ms;
 
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PREPOST),
-                   "MESSAGE=Executed %s for %s in %ums", rpmscript->desc, dnf_package_get_name (pkg), elapsed_ms,
+                   "MESSAGE=Executed %s for %s in %" G_GUINT64_FORMAT " ms", rpmscript->desc, dnf_package_get_name (pkg), elapsed_ms,
                    "SCRIPT_TYPE=%s", rpmscript->desc,
                    "PKG=%s", dnf_package_get_name (pkg),
                    "EXEC_TIME_MS=%" G_GUINT64_FORMAT, elapsed_ms,
@@ -1018,7 +1018,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
       (*out_n_run)++;
 
       sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_FILETRIGGER),
-                       "MESSAGE=Executed %%transfiletriggerin(%s) for %s in %ums; %u matched files",
+                       "MESSAGE=Executed %%transfiletriggerin(%s) for %s in %" G_GUINT64_FORMAT " ms; %u matched files",
                        pkg_name, patterns_joined->str, elapsed_ms, n_total_matched,
                        "SCRIPT_TYPE=%%transfiletriggerin"
                        "PKG=%s", pkg_name,
