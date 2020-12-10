@@ -61,7 +61,7 @@ get_args_variant (GError **error)
       g_variant_dict_insert (&dict, "target", "s", ostree_deployment_get_csum (booted));
     }
 
-  return g_variant_dict_end (&dict);
+  return g_variant_ref_sink (g_variant_dict_end (&dict));
 }
 
 gboolean
