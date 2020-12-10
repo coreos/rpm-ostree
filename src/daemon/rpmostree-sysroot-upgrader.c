@@ -1118,6 +1118,16 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
           for (char **it = args; it && *it; it++)
             g_ptr_array_add (initramfs_args, g_strdup (*it));
         }
+      else
+        {
+          /* If no initramfs-args were specified on the server side, for backwards compatibility
+           * let's still assume `--no-hostonly`; losing that will break things because
+           * we intentionally don't leak the system state to dracut.
+           * See https://discussion.fedoraproject.org/t/downgrading-kernel-on-silverblue/1928
+           * https://github.com/coreos/rpm-ostree/issues/2343
+           */
+          g_ptr_array_add (initramfs_args, g_strdup ("--no-hostonly"));
+        }
     }
 
   /* If *just* the kernel changed, all we need to do is run depmod here.
