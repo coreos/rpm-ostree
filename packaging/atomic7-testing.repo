@@ -1,4 +1,0 @@
-[atomic7-testing]
-name=atomic7-testing
-baseurl=http://cbs.centos.org/repos/atomic7-testing/x86_64/os/
-gpgcheck=0
