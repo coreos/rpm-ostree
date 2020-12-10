@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+#![deny(unused_must_use)]
+
 // pub(crate) utilities
 mod ffiutil;
 mod includes;
