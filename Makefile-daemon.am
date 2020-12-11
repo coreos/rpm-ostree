@@ -41,7 +41,7 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-transaction.h \
 	src/daemon/rpmostreed-transaction.cxx \
 	src/daemon/rpmostreed-transaction-types.h \
-	src/daemon/rpmostreed-transaction-types.c \
+	src/daemon/rpmostreed-transaction-types.cxx \
 	src/daemon/rpmostreed-transaction-livefs.c \
 	src/daemon/rpmostree-package-variants.h \
 	src/daemon/rpmostree-package-variants.c \
