@@ -10,11 +10,23 @@
 mod ffiutil;
 mod includes;
 
+#[cxx::bridge(namespace = "rpmostreecxx")]
+mod ffi {
+    // core.rs
+    extern "Rust" {
+        type TempEtcGuard;
+
+        fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>>;
+        fn undo(self: &TempEtcGuard) -> Result<()>;
+    }
+}
+
 mod cliwrap;
 pub use cliwrap::*;
 mod composepost;
 pub use self::composepost::*;
 mod core;
+use crate::core::*;
 mod history;
 pub use self::history::*;
 mod journal;

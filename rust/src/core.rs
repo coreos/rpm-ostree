@@ -1,5 +1,6 @@
-pub use self::ffi::*;
 use crate::ffiutil;
+use anyhow::Result;
+use ffiutil::ffi_view_openat_dir;
 use openat_ext::OpenatDirExt;
 
 /// Guard for running logic in a context with temporary /etc.
@@ -13,27 +14,27 @@ pub struct TempEtcGuard {
     renamed_etc: bool,
 }
 
-impl TempEtcGuard {
-    /// Create a context with a temporary /etc, and return a guard to it.
-    pub fn undo_usretc(rootfs: openat::Dir) -> anyhow::Result<Self> {
-        let has_usretc = rootfs.exists("usr/etc")?;
-        if has_usretc {
-            // In general now, we place contents in /etc when running scripts
-            rootfs.local_rename("usr/etc", "etc")?;
-            // But leave a compat symlink, as we used to bind mount, so scripts
-            // could still use that too.
-            rootfs.symlink("usr/etc", "../etc")?;
-        }
-
-        let guard = Self {
-            rootfs,
-            renamed_etc: has_usretc,
-        };
-        Ok(guard)
+pub fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>> {
+    let rootfs = ffi_view_openat_dir(rootfs);
+    let has_usretc = rootfs.exists("usr/etc")?;
+    let mut renamed_etc = false;
+    if has_usretc {
+        // In general now, we place contents in /etc when running scripts
+        rootfs.local_rename("usr/etc", "etc")?;
+        // But leave a compat symlink, as we used to bind mount, so scripts
+        // could still use that too.
+        rootfs.symlink("usr/etc", "../etc")?;
+        renamed_etc = true;
     }
+    Ok(Box::new(TempEtcGuard {
+        rootfs,
+        renamed_etc,
+    }))
+}
 
+impl TempEtcGuard {
     /// Remove the temporary /etc, and destroy the guard.
-    pub fn redo_usretc(self) -> anyhow::Result<()> {
+    pub fn undo(&self) -> anyhow::Result<()> {
         if self.renamed_etc {
             /* Remove the symlink and swap back */
             self.rootfs.remove_file("usr/etc")?;
@@ -43,28 +44,24 @@ impl TempEtcGuard {
     }
 }
 
-mod ffi {
+#[cfg(test)]
+mod test {
     use super::*;
-    use glib_sys::GError;
+    use std::os::unix::prelude::*;
 
-    #[no_mangle]
-    pub extern "C" fn ror_tempetc_undo_usretc(
-        rootfs: libc::c_int,
-        gerror: *mut *mut GError,
-    ) -> *mut TempEtcGuard {
-        let fd = ffiutil::ffi_view_openat_dir(rootfs);
-        let res = TempEtcGuard::undo_usretc(fd).map(Box::new);
-        ffiutil::ptr_glib_error(res, gerror)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_tempetc_redo_usretc(
-        guard_ptr: *mut TempEtcGuard,
-        gerror: *mut *mut GError,
-    ) -> libc::c_int {
-        assert!(!guard_ptr.is_null());
-        let guard = unsafe { Box::from_raw(guard_ptr) };
-        let res = guard.redo_usretc();
-        ffiutil::int_glib_error(res, gerror)
+    #[test]
+    fn basic() -> Result<()> {
+        let td = tempfile::tempdir()?;
+        let d = openat::Dir::open(td.path())?;
+        let g = super::prepare_tempetc_guard(d.as_raw_fd())?;
+        g.undo()?;
+        d.ensure_dir_all("usr/etc/foo", 0o755)?;
+        assert!(!d.exists("etc/foo")?);
+        let g = super::prepare_tempetc_guard(d.as_raw_fd())?;
+        assert!(d.exists("etc/foo")?);
+        g.undo()?;
+        assert!(!d.exists("etc")?);
+        assert!(d.exists("usr/etc/foo")?);
+        Ok(())
     }
 }

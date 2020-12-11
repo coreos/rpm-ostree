@@ -41,7 +41,7 @@ CC_CHECK_FLAGS_APPEND([WARN_CFLAGS], [CFLAGS], [\
   -Werror=parenthesis \
   -Werror=undef \
   -Werror=misleading-indentation \
-  -Werror=missing-include-dirs -Werror=aggregate-return \
+  -Werror=missing-include-dirs \
   -Wstrict-aliasing=2 \
   -Werror=unused-result \
 ])])

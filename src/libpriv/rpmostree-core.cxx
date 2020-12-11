@@ -43,6 +43,7 @@
 #include "rpmostree-importer.h"
 #include "rpmostree-output.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 #define RPMOSTREE_MESSAGE_COMMIT_STATS SD_ID128_MAKE(e6,37,2e,38,41,21,42,a9,bc,13,b6,32,b3,f8,93,44)
 #define RPMOSTREE_MESSAGE_SELINUX_RELABEL SD_ID128_MAKE(5a,e0,56,34,f2,d7,49,3b,b1,58,79,b7,0c,02,e6,5d)
@@ -4322,9 +4323,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   gboolean skip_sanity_check = FALSE;
   g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
 
-  RORTempEtcGuard * etc_guard = ror_tempetc_undo_usretc (tmprootfs_dfd, error);
-  if (etc_guard == NULL)
-    return FALSE;
+  auto etc_guard = rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd);
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
@@ -4576,8 +4575,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     }
 
   /* Undo the /etc move above */
-  if (!ror_tempetc_redo_usretc (etc_guard, error))
-    return FALSE;
+  etc_guard->undo();
 
   /* And clean up var/tmp, we don't want it in commits */
   if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, "var/tmp", cancellable, error))
