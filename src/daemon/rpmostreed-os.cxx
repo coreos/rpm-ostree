@@ -55,6 +55,7 @@ static void rpmostreed_os_iface_init (RPMOSTreeOSIface *iface);
 static gboolean rpmostreed_os_load_internals (RpmostreedOS *self, GError **error);
 
 static inline void *vardict_lookup_ptr (GVariantDict *dict, const char *key, const char *fmt);
+static inline char **vardict_lookup_strv (GVariantDict *dict, const char *key);
 
 static gboolean vardict_lookup_bool (GVariantDict *dict, const char *key, gboolean dfault);
 
@@ -109,25 +110,25 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
            g_strcmp0 (method_name, "RefreshMd") == 0)
 
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.repo-refresh");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.repo-refresh");
     }
   else if (g_strcmp0 (method_name, "ModifyYumRepo") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.repo-modify");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.repo-modify");
     }
   else if (g_strcmp0 (method_name, "Deploy") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.deploy");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.deploy");
     }
   /* unite these for now; it could make sense at least to make "check" its own action */
   else if (g_strcmp0 (method_name, "Upgrade") == 0 ||
            g_strcmp0 (method_name, "AutomaticUpdateTrigger") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.upgrade");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.upgrade");
     }
   else if (g_strcmp0 (method_name, "Rebase") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.rebase");
     }
   else if (g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0)
     {
@@ -140,20 +141,20 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
            g_strcmp0 (method_name, "KernelArgs") == 0 ||
            g_strcmp0 (method_name, "InitramfsEtc") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.bootconfig");
     }
   else if (g_strcmp0 (method_name, "Cleanup") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.cleanup");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.cleanup");
     }
   else if (g_strcmp0 (method_name, "Rollback") == 0 ||
            g_strcmp0 (method_name, "ClearRollbackTarget") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rollback");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.rollback");
     }
   else if (g_strcmp0 (method_name, "PkgChange") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-uninstall-packages");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.install-uninstall-packages");
     }
   else if (g_strcmp0 (method_name, "UpdateDeployment") == 0)
     {
@@ -163,20 +164,20 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
       g_auto(GVariantDict) options_dict;
       g_variant_dict_init (&modifiers_dict, modifiers);
       g_variant_dict_init (&options_dict, options);
-      const char *refspec =
-        vardict_lookup_ptr (&modifiers_dict, "set-refspec", "&s");
-      const char *revision =
-        vardict_lookup_ptr (&modifiers_dict, "set-revision", "&s");
+      auto refspec =
+        static_cast<const char*>(vardict_lookup_ptr (&modifiers_dict, "set-refspec", "&s"));
+      auto revision =
+        static_cast<const char *>(vardict_lookup_ptr (&modifiers_dict, "set-revision", "&s"));
       g_autofree char **install_pkgs =
-        vardict_lookup_ptr (&modifiers_dict, "install-packages", "^a&s");
+        vardict_lookup_strv (&modifiers_dict, "install-packages");
       g_autofree char **uninstall_pkgs =
-        vardict_lookup_ptr (&modifiers_dict, "uninstall-packages", "^a&s");
+        vardict_lookup_strv (&modifiers_dict, "uninstall-packages");
       g_autofree const char *const *override_replace_pkgs =
-        vardict_lookup_ptr (&modifiers_dict, "override-replace-packages", "^a&s");
+        vardict_lookup_strv (&modifiers_dict, "override-replace-packages");
       g_autofree const char *const *override_remove_pkgs =
-        vardict_lookup_ptr (&modifiers_dict, "override-remove-packages", "^a&s");
+        vardict_lookup_strv (&modifiers_dict, "override-remove-packages");
       g_autofree const char *const *override_reset_pkgs =
-        vardict_lookup_ptr (&modifiers_dict, "override-reset-packages", "^a&s");
+        vardict_lookup_strv (&modifiers_dict, "override-reset-packages");
       g_autoptr(GVariant) install_local_pkgs =
         g_variant_dict_lookup_value (&modifiers_dict, "install-local-packages",
                                      G_VARIANT_TYPE("ah"));
@@ -191,29 +192,29 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
         vardict_lookup_bool (&options_dict, "no-layering", FALSE);
 
       if (vardict_lookup_bool (&options_dict, "no-initramfs", FALSE))
-        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
+        g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.bootconfig");
 
       if (refspec != NULL)
-        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
+        g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.rebase");
       else if (revision != NULL)
-        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.deploy");
+        g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.deploy");
       else if (!no_pull_base)
-        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.upgrade");
+        g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.upgrade");
 
       if (install_pkgs != NULL || uninstall_pkgs != NULL || no_layering)
-        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-uninstall-packages");
+        g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.install-uninstall-packages");
 
       if (install_local_pkgs != NULL && g_variant_n_children (install_local_pkgs) > 0)
-        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-local-packages");
+        g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.install-local-packages");
 
       if (override_replace_pkgs != NULL || override_remove_pkgs != NULL || override_reset_pkgs != NULL ||
           (override_replace_local_pkgs != NULL && g_variant_n_children (override_replace_local_pkgs) > 0) ||
           no_overrides)
-        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.override");
+        g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.override");
     }
   else if (g_strcmp0 (method_name, "FinalizeDeployment") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.finalize-deployment");
+      g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.finalize-deployment");
     }
   else
     {
@@ -222,7 +223,7 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
 
   for (guint i = 0; i < actions->len; i++)
     {
-      const gchar *action = g_ptr_array_index (actions, i);
+      auto action = static_cast<const gchar *>(g_ptr_array_index (actions, i));
       glnx_unref_object PolkitSubject *subject = polkit_system_bus_name_new (sender);
       glnx_unref_object PolkitAuthorizationResult *result = NULL;
       g_autoptr(GError) error = NULL;
@@ -538,6 +539,13 @@ vardict_lookup_ptr (GVariantDict  *dict,
   return NULL;
 }
 
+static inline char **
+vardict_lookup_strv (GVariantDict  *dict,
+                     const char    *key)
+{
+  return static_cast<char**>(vardict_lookup_ptr (dict, key, "^a&s"));
+}
+
 static gboolean
 vardict_lookup_bool (GVariantDict *dict,
                      const char   *key,
@@ -565,6 +573,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   g_autoptr(GError) local_error = NULL;
+  const char *client_address = NULL;
 
   /* try to merge with an existing transaction, otherwise start a new one */
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
@@ -598,15 +607,14 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
         g_signal_connect (transaction, "closed", G_CALLBACK (on_auto_update_done), self);
     }
 
-  const char *client_address =
-    rpmostreed_transaction_get_client_address (transaction);
+  client_address = rpmostreed_transaction_get_client_address (transaction);
   completer (interface, invocation, NULL, client_address);
   return TRUE;
  err:
   if (!local_error) /* we should've gotten an error, but let's be safe */
     glnx_throw (&local_error, "Failed to start the transaction");
   g_dbus_method_invocation_take_error (invocation,
-                                       g_steal_pointer (&local_error));
+                                       util::move_nullify (local_error));
   /* We always return TRUE to signal that we handled the invocation. */
   return TRUE;
 }
@@ -639,7 +647,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   g_autoptr(GVariantBuilder) vbuilder = g_variant_builder_new (G_VARIANT_TYPE_VARDICT);
   g_autoptr(RpmOstreeUpdateDeploymentModifiers) modifiers =
     g_variant_ref_sink (g_variant_builder_end (vbuilder));
-  return os_merge_or_start_deployment_txn (interface, invocation, 0,
+  return os_merge_or_start_deployment_txn (interface, invocation, static_cast<RpmOstreeTransactionDeployFlags>(0),
                                            arg_options, modifiers, fd_list,
                                            rpmostree_os_complete_upgrade);
 }
@@ -705,7 +713,7 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
 {
   RpmOstreeUpdateDeploymentModifiers *modifiers = arg_modifiers;
   return os_merge_or_start_deployment_txn (interface, invocation,
-                                           0, arg_options, modifiers, fd_list,
+                                           static_cast<RpmOstreeTransactionDeployFlags>(0), arg_options, modifiers, fd_list,
                                            rpmostree_os_complete_update_deployment);
 }
 
@@ -741,13 +749,13 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
        * current /var/cache, since it's per-OS. If we ever allow this, we'll want to
        * invalidate the auto-update cache on the osname as well. */
       glnx_throw (error, "Cannot trigger auto-update for offline OS '%s'", osname);
-      g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+      g_dbus_method_invocation_take_error (invocation, util::move_nullify (local_error));
       return TRUE;
     }
 
   g_auto(GVariantDict) dict;
   g_variant_dict_init (&dict, arg_options);
-  const char *mode = vardict_lookup_ptr (&dict, "mode", "&s") ?: "auto";
+  auto mode = static_cast<const char *>(vardict_lookup_ptr (&dict, "mode", "&s") ?: "auto");
 
   RpmostreedAutomaticUpdatePolicy autoupdate_policy;
   if (g_str_equal (mode, "auto"))
@@ -756,7 +764,7 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
     {
       if (!rpmostree_str_to_auto_update_policy (mode, &autoupdate_policy, error))
         {
-          g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+          g_dbus_method_invocation_take_error (invocation, util::move_nullify (local_error));
           return TRUE;
         }
     }
@@ -765,7 +773,7 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
    * starting it at all if we're not even on. The benefit of this approach is that we keep
    * the Deploy transaction simpler. */
 
-  RpmOstreeTransactionDeployFlags dfault = 0;
+  auto dfault = static_cast<RpmOstreeTransactionDeployFlags>(0);
   switch (autoupdate_policy)
     {
     case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE:
@@ -876,7 +884,7 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
-  RpmOstreeTransactionRefreshMdFlags flags = 0;
+  int flags = 0;
   g_auto(GVariantDict) dict;
   g_variant_dict_init (&dict, arg_options);
 
@@ -903,7 +911,7 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
 
   transaction = rpmostreed_transaction_new_refresh_md (invocation,
                                                        ot_sysroot,
-                                                       flags,
+                                                       static_cast<RpmOstreeTransactionRefreshMdFlags>(flags),
                                                        osname,
                                                        cancellable,
                                                        &local_error);
@@ -1034,7 +1042,7 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
 {
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
-  RpmOstreeTransactionCleanupFlags flags = 0;
+  auto flags = static_cast<RpmOstreeTransactionCleanupFlags>(0);
   const char *osname;
   GError *local_error = NULL;
 
@@ -1209,6 +1217,7 @@ os_handle_kernel_args (RPMOSTreeOS *interface,
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GError *local_error = NULL;
+  const char *osname = NULL;
 
   /* try to merge with an existing transaction, otherwise start a new one */
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
@@ -1224,7 +1233,7 @@ os_handle_kernel_args (RPMOSTreeOS *interface,
                                       NULL,
                                       &local_error))
     goto out;
-  const char *osname = rpmostree_os_get_name (interface);
+  osname = rpmostree_os_get_name (interface);
 
   transaction = rpmostreed_transaction_new_kernel_arg (invocation,
                                                        ot_sysroot,
@@ -1265,6 +1274,19 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
   glnx_unref_object OstreeDeployment *target_deployment  = NULL;
   GVariantDict boot_config_dict;
   GVariant *boot_config_result = NULL;
+  OstreeBootconfigParser *bootconfig = NULL;
+  const char* osname = NULL;
+  /* Note because boot config is a private structure.. currently I have no good way
+   * other than specifying all the content directly */
+  const char *bootconfig_keys[] = {
+    "title",
+    "linux",
+    "initrd",
+    "options",
+    OSTREE_COMMIT_META_KEY_VERSION,
+    NULL
+  };
+  gboolean staged = FALSE;
 
   /* Load the sysroot */
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
@@ -1273,7 +1295,7 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
                                       NULL,
                                       &local_error))
     goto out;
-  const char* osname = rpmostree_os_get_name (interface);
+  osname = rpmostree_os_get_name (interface);
   if (!*arg_deploy_index || arg_deploy_index[0] == '\0')
     {
       if (is_pending)
@@ -1295,22 +1317,13 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
       if (target_deployment == NULL)
         goto out;
     }
-  OstreeBootconfigParser *bootconfig = ostree_deployment_get_bootconfig (target_deployment);
+  bootconfig = ostree_deployment_get_bootconfig (target_deployment);
 
-  /* Note because boot config is a private structure.. currently I have no good way
-   * other than specifying all the content directly */
-  const char *bootconfig_keys[] = {
-    "title",
-    "linux",
-    "initrd",
-    "options",
-    OSTREE_COMMIT_META_KEY_VERSION,
-    NULL
-  };
+
   /* We initalize a dictionary and put key/value pair in bootconfig into it */
   g_variant_dict_init (&boot_config_dict, NULL);
 
-  gboolean staged = ostree_deployment_is_staged (target_deployment);
+  staged = ostree_deployment_is_staged (target_deployment);
   g_variant_dict_insert (&boot_config_dict, "staged", "b", staged);
 
   /* We loop through the key  and add each key/value pair value into the variant dict */
@@ -1345,9 +1358,10 @@ os_handle_cleanup (RPMOSTreeOS *interface,
 {
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
-  RpmOstreeTransactionCleanupFlags flags = 0;
-  const char *osname;
+  const char *osname = NULL;
   GError *local_error = NULL;
+  const char *client_address = NULL;
+  int flags = 0;
 
   /* try to merge with an existing transaction, otherwise start a new one */
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
@@ -1389,7 +1403,7 @@ os_handle_cleanup (RPMOSTreeOS *interface,
   transaction = rpmostreed_transaction_new_cleanup (invocation,
                                                     ot_sysroot,
                                                     osname,
-                                                    flags,
+                                                    static_cast<RpmOstreeTransactionCleanupFlags>(flags),
                                                     cancellable,
                                                     &local_error);
   if (transaction == NULL)
@@ -1404,7 +1418,6 @@ out:
     }
   else
     {
-      const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
       rpmostree_os_complete_cleanup (interface, invocation, client_address);
     }
@@ -1699,7 +1712,7 @@ refresh_cached_update_impl (RpmostreedOS *self,
                            &local_error))
     {
       if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        return g_propagate_error (error, g_steal_pointer (&local_error)), FALSE;
+        return g_propagate_error (error, util::move_nullify (local_error)), FALSE;
       return TRUE; /* Note early return */
     }
 
@@ -1722,7 +1735,7 @@ refresh_cached_update_impl (RpmostreedOS *self,
   /* check if cache is still valid -- see rpmostreed_update_generate_variant() */
   g_auto(GVariantDict) dict;
   g_variant_dict_init (&dict, cached_update);
-  const char *state = vardict_lookup_ptr (&dict, "update-sha256", "&s");
+  auto state = static_cast<const char*>(vardict_lookup_ptr (&dict, "update-sha256", "&s"));
   if (g_strcmp0 (state, ostree_deployment_get_csum (booted)) != 0)
     {
       sd_journal_print (LOG_INFO, "Deleting outdated cached update for OS '%s'", osname);
@@ -1731,7 +1744,7 @@ refresh_cached_update_impl (RpmostreedOS *self,
         return FALSE;
     }
 
-  *out_cached_update = g_steal_pointer (&cached_update);
+  *out_cached_update = util::move_nullify (cached_update);
   return TRUE;
 }
 
@@ -1854,15 +1867,12 @@ rpmostreed_os_new (OstreeSysroot *sysroot,
                    OstreeRepo *repo,
                    const char *name)
 {
-  RpmostreedOS *obj = NULL;
-  g_autofree char *path = NULL;
-
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (name != NULL, NULL);
 
-  path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
+  g_autofree char *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
 
-  obj = g_object_new (RPMOSTREED_TYPE_OS, "name", name, NULL);
+  auto obj = (RpmostreedOS *)g_object_new (RPMOSTREED_TYPE_OS, "name", name, NULL);
 
   /* FIXME - use GInitable */
   { g_autoptr(GError) local_error = NULL;
