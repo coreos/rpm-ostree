@@ -33,7 +33,7 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostree-sysroot-core.h \
 	src/daemon/rpmostree-sysroot-core.c \
 	src/daemon/rpmostree-sysroot-upgrader.h \
-	src/daemon/rpmostree-sysroot-upgrader.c \
+	src/daemon/rpmostree-sysroot-upgrader.cxx \
 	src/daemon/rpmostreed-errors.h \
 	src/daemon/rpmostreed-errors.c \
 	src/daemon/rpmostreed-deployment-utils.h \
