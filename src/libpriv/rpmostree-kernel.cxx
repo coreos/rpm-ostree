@@ -103,8 +103,8 @@ find_kernel_and_initramfs_in_bootdir (int          rootfs_dfd,
         }
     }
 
-  *out_kernel = g_steal_pointer (&ret_kernel);
-  *out_initramfs = g_steal_pointer (&ret_initramfs);
+  *out_kernel = util::move_nullify (ret_kernel);
+  *out_initramfs = util::move_nullify (ret_initramfs);
   return TRUE;
 }
 
@@ -146,7 +146,7 @@ find_ensure_one_subdirectory (int            rootfs_dfd,
       ret_subdir = g_strconcat (subpath, "/", dent->d_name, NULL);
     }
 
-  *out_subdir = g_steal_pointer (&ret_subdir);
+  *out_subdir = util::move_nullify (ret_subdir);
   return TRUE;
 }
 
@@ -243,7 +243,7 @@ rpmostree_find_kernel (int rootfs_dfd,
     return NULL;
 
   if (!modversion_dir)
-    return glnx_null_throw (error, "/usr/lib/modules is empty");
+    return (GVariant*)glnx_null_throw (error, "/usr/lib/modules is empty");
 
   const char *kver = glnx_basename (modversion_dir);
 
@@ -272,7 +272,7 @@ rpmostree_find_kernel (int rootfs_dfd,
   if (kernel_path == NULL)
     {
       g_free (bootdir);
-      bootdir = g_steal_pointer (&modversion_dir);
+      bootdir = util::move_nullify (modversion_dir);
       if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
                                                  &kernel_path, &initramfs_path,
                                                  cancellable, error))
@@ -280,8 +280,8 @@ rpmostree_find_kernel (int rootfs_dfd,
     }
 
   if (kernel_path == NULL)
-    return glnx_null_throw (error, "Unable to find kernel (vmlinuz) in /boot "
-                                   "or /usr/lib/modules (bootdir=%s)", bootdir);
+    return (GVariant*)glnx_null_throw (error, "Unable to find kernel (vmlinuz) in /boot "
+                                              "or /usr/lib/modules (bootdir=%s)", bootdir);
 
   return g_variant_ref_sink (g_variant_new ("(sssms)", kver, bootdir, kernel_path, initramfs_path));
 }
@@ -449,7 +449,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
         return glnx_throw (error, "Unexpected / in .vmlinuz.hmac: %s", new_contents);
 
       if (!glnx_file_replace_contents_at (rootfs_dfd, hmac_path,
-                                          (guint8*)new_contents, -1, 0,
+                                          (guint8*)new_contents, -1, static_cast<GLnxFileReplaceFlags>(0),
                                           cancellable, error))
         return FALSE;
     }
@@ -484,6 +484,15 @@ dracut_child_setup (gpointer data)
   if (dup2 (fd, 3) < 0)
     err (1, "dup2");
 }
+
+struct Unlinker {
+  int rootfs_dfd;
+  const char *path;
+
+  ~Unlinker() {
+    (void) unlinkat (rootfs_dfd, path, 0);
+  }
+};
 
 gboolean
 rpmostree_run_dracut (int     rootfs_dfd,
@@ -538,7 +547,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (rebuild_from_initramfs)
     {
       rebuild_argv = g_ptr_array_new ();
-      g_ptr_array_add (rebuild_argv, "--rebuild");
+      g_ptr_array_add (rebuild_argv, (char*)"--rebuild");
       g_ptr_array_add (rebuild_argv, (char*)rebuild_from_initramfs);
 
       /* In this case, any args specified in argv are *additional*
@@ -554,20 +563,19 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "usr/bin",
                                       O_RDWR | O_CLOEXEC,
                                       &tmpf, error))
-    goto out;
+    return FALSE;
   if (glnx_loop_write (tmpf.fd, rpmostree_dracut_wrapper, strlen (rpmostree_dracut_wrapper)) < 0
       || fchmod (tmpf.fd, 0755) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
+    return glnx_throw_errno_prefix (error, "writing");
 
   if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
                              rootfs_dfd, rpmostree_dracut_wrapper_path,
                              error))
-    goto out;
+    return FALSE;
   /* Close the fd now, otherwise an exec will fail */
   glnx_tmpfile_clear (&tmpf);
+
+  auto unlinker = Unlinker{ .rootfs_dfd=rootfs_dfd, .path=rpmostree_dracut_wrapper_path };
 
   /* Second tempfile is the initramfs contents.  Note we generate the tmpfile
    * in . since in the current rpm-ostree design the temporary rootfs may not have tmp/
@@ -576,7 +584,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".",
                                       O_RDWR | O_CLOEXEC,
                                       &tmpf, error))
-    goto out;
+    return FALSE;
 
   if (use_root_etc)
     {
@@ -609,7 +617,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
   rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmpf.fd));
 
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
-    goto out;
+    return FALSE;
 
   /* For FIPS mode we need /dev/urandom pre-created because the FIPS
    * standards authors require that randomness is tested in a
@@ -625,27 +633,21 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (!random_cpio_data)
     return FALSE;
   gsize random_cpio_data_len = 0;
-  const guint8* random_cpio_data_p = g_bytes_get_data (random_cpio_data, &random_cpio_data_len);
+  auto random_cpio_data_p = static_cast<const guint8*>(g_bytes_get_data (random_cpio_data, &random_cpio_data_len));
   if (lseek (tmpf.fd, 0, SEEK_END) < 0)
     return glnx_throw_errno_prefix (error, "lseek");
   if (glnx_loop_write (tmpf.fd, random_cpio_data_p, random_cpio_data_len) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
+    return glnx_throw_errno_prefix (error, "write");
 
   if (rebuild_from_initramfs)
     (void) unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
 
   if (have_passwd && !rpmostree_passwd_complete_rpm_layering (rootfs_dfd, error))
-    goto out;
+    return FALSE;
 
   if (!ror_tempetc_redo_usretc (etc_guard, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
   *out_initramfs_tmpf = tmpf; tmpf.initialized = FALSE; /* Transfer */
- out:
-  (void) unlinkat (rootfs_dfd, rpmostree_dracut_wrapper_path, 0);
-  return ret;
+  return TRUE;
 }
