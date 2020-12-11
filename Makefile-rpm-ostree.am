@@ -106,6 +106,10 @@ $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS)
 
 # Generate bindings from Rust to C
+if BUILDOPT_PREBUILT_BINDINGS
+rpmostree-rust.h:
+	ln -sfr rpmostree-rust-prebuilt.h $@
+else
 if !HAVE_PREBUILT_CBINDGEN
 if HAVE_EXTERNAL_CBINDGEN
 rpmostree-rust.h:
@@ -114,8 +118,9 @@ else
 rpmostree-rust.h: rpmostree-bindgen
 	$(AM_V_GEN) ./rpmostree-bindgen $(top_srcdir)
 endif
-BUILT_SOURCES += rpmostree-rust.h
 endif
+endif
+BUILT_SOURCES += rpmostree-rust.h
 
 rpm_ostree_CFLAGS += $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++
