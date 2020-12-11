@@ -39,6 +39,7 @@
 #include "rpmostree-kernel.h"
 #include "rpmostree-bwrap.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-util.h"
 
 static const char usrlib_ostreeboot[] = "usr/lib/ostree-boot";
@@ -530,9 +531,8 @@ rpmostree_run_dracut (int     rootfs_dfd,
    * today.  Though maybe in the future we should add it, but
    * in the end we want to use systemd-sysusers of course.
    **/
-  RORTempEtcGuard * etc_guard = ror_tempetc_undo_usretc (rootfs_dfd, error);
-  if (etc_guard == NULL)
-    return FALSE;
+  auto etc_guard = rpmostreecxx::prepare_tempetc_guard (rootfs_dfd);
+
   gboolean have_passwd = FALSE;
   if (!rpmostree_passwd_prepare_rpm_layering (rootfs_dfd,
                                               NULL,
@@ -645,8 +645,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (have_passwd && !rpmostree_passwd_complete_rpm_layering (rootfs_dfd, error))
     return FALSE;
 
-  if (!ror_tempetc_redo_usretc (etc_guard, error))
-    return FALSE;
+  etc_guard->undo();
 
   *out_initramfs_tmpf = tmpf; tmpf.initialized = FALSE; /* Transfer */
   return TRUE;

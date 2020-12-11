@@ -87,3 +87,13 @@ AM_V_GPERF_0 = @echo "  GPERF   " $@;
 src/%.c: src/%.gperf Makefile
 	$(AM_V_at)$(MKDIR_P) $(dir $@)
 	$(AM_V_GPERF)$(GPERF) < $< > $@.tmp && mv $@.tmp $@
+
+# Also we now use cxx.rs
+rpmostree-cxxrs.h: rust/src/lib.rs
+	$(AM_V_GEN) cxxbridge rust/src/lib.rs --header > $@
+rpmostree-cxxrs.cxx: rust/src/lib.rs
+	$(AM_V_GEN) cxxbridge --include rpmostree-cxxrs.h rust/src/lib.rs > $@
+cxxrs_sources = rpmostree-cxxrs.h rpmostree-cxxrs.cxx
+librpmostreepriv_sources += $(cxxrs_sources)
+BUILT_SOURCES += $(cxxrs_sources)
+GITIGNOREFILES += $(cxxrs_sources)
