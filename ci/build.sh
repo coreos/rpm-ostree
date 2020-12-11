@@ -6,6 +6,7 @@ set -xeuo pipefail
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
 
+${dn}/install-extra-builddeps.sh
 ${dn}/installdeps.sh
 
 # create an unprivileged user for testing
