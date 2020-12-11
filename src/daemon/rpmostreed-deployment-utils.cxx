@@ -54,9 +54,9 @@ rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   for (guint i = 0; i < deployments->len; i++)
     {
-      g_autofree gchar *id = rpmostreed_deployment_generate_id (deployments->pdata[i]);
+      g_autofree gchar *id = rpmostreed_deployment_generate_id (static_cast<OstreeDeployment*>(deployments->pdata[i]));
       if (g_strcmp0 (deploy_id, id) == 0)
-        return g_object_ref (deployments->pdata[i]);
+        return (OstreeDeployment*)g_object_ref (deployments->pdata[i]);
     }
 
   return NULL;
@@ -91,7 +91,7 @@ rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
                                      RPM_OSTREED_ERROR_FAILED,
                                      "Invalid deployment index %s, must be a number and >= 0",
                                      index);
-          g_propagate_error (error, g_steal_pointer (&local_error));
+          g_propagate_error (error, util::move_nullify (local_error));
           return NULL;
         }
     }
@@ -104,10 +104,10 @@ rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
                                  RPM_OSTREED_ERROR_FAILED,
                                  "Out of range deployment index %d, expected < %d",
                                  deployment_index, deployments->len);
-      g_propagate_error (error, g_steal_pointer (&local_error));
+      g_propagate_error (error, util::move_nullify (local_error));
       return NULL;
     }
-  return g_object_ref (deployments->pdata[deployment_index]);
+  return (OstreeDeployment*)g_object_ref (deployments->pdata[deployment_index]);
 }
 
 static gboolean
@@ -137,7 +137,7 @@ variant_add_remote_status (OstreeRepo  *repo,
               g_variant_dict_insert (dict, "remote-error", "s", local_error->message);
               return TRUE;
             }
-          g_propagate_error (error, g_steal_pointer (&local_error));
+          g_propagate_error (error, util::move_nullify (local_error));
           return FALSE;
         }
     }
@@ -630,13 +630,13 @@ rpm_diff_add_db_diff (RpmDiff      *diff,
 
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
   for (guint i = 0; i < removed->len; i++)
-    g_ptr_array_add (diff->removed, single_pkg_variant_new (type, removed->pdata[i]));
+    g_ptr_array_add (diff->removed, single_pkg_variant_new (type, static_cast<RpmOstreePackage*>(removed->pdata[i])));
   for (guint i = 0; i < added->len; i++)
-    g_ptr_array_add (diff->added, single_pkg_variant_new (type, added->pdata[i]));
+    g_ptr_array_add (diff->added, single_pkg_variant_new (type, static_cast<RpmOstreePackage*>(added->pdata[i])));
   for (guint i = 0; i < modified_old->len; i++)
     {
-      RpmOstreePackage *old_pkg = modified_old->pdata[i];
-      RpmOstreePackage *new_pkg = modified_new->pdata[i];
+      auto old_pkg = static_cast<RpmOstreePackage *>(modified_old->pdata[i]);
+      auto new_pkg = static_cast<RpmOstreePackage *>(modified_new->pdata[i]);
       if (rpm_ostree_package_cmp (old_pkg, new_pkg) < 0)
         g_ptr_array_add (diff->upgraded,
                          modified_pkg_variant_new (type, old_pkg, new_pkg));
@@ -646,7 +646,7 @@ rpm_diff_add_db_diff (RpmDiff      *diff,
     }
 
   if (out_modified_new)
-    *out_modified_new = g_steal_pointer (&modified_new);
+    *out_modified_new = util::move_nullify (modified_new);
   return TRUE;
 }
 
@@ -687,7 +687,7 @@ array_to_variant_new (const char *format, GPtrArray *array)
   g_auto(GVariantBuilder) builder;
   g_variant_builder_init (&builder, G_VARIANT_TYPE (format));
   for (guint i = 0; i < array->len; i++)
-    g_variant_builder_add_value (&builder, array->pdata[i]);
+    g_variant_builder_add_value (&builder, static_cast<GVariant*>(array->pdata[i]));
   return g_variant_builder_end (&builder);
 }
 
@@ -740,7 +740,7 @@ find_package (DnfSack          *sack,
   if (pkgs->len == 0)
     return NULL; /* canonicalize to NULL */
   g_ptr_array_sort (pkgs, (GCompareFunc)rpmostree_pkg_array_compare);
-  return g_object_ref (pkgs->pdata[pkgs->len-1]);
+  return (DnfPackage*)g_object_ref (pkgs->pdata[pkgs->len-1]);
 }
 
 /* For all layered pkgs, check if there are newer versions in the rpmmd. Add diff to
@@ -786,7 +786,7 @@ rpmmd_diff_guess (OstreeRepo       *repo,
     g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   for (guint i = 0; i < all_layered_pkgs->len; i++)
     {
-      RpmOstreePackage *pkg = all_layered_pkgs->pdata[i];
+      auto pkg = static_cast<RpmOstreePackage *>(all_layered_pkgs->pdata[i]);
       g_autoptr(DnfPackage) newer_pkg = find_package (sack, TRUE, pkg);
       if (!newer_pkg)
         continue;
@@ -799,7 +799,7 @@ rpmmd_diff_guess (OstreeRepo       *repo,
   if (newer_packages->len == 0)
     g_clear_pointer (&newer_packages, (GDestroyNotify)g_ptr_array_unref);
 
-  *out_newer_packages = g_steal_pointer (&newer_packages);
+  *out_newer_packages = util::move_nullify (newer_packages);
   return TRUE;
 }
 
@@ -854,7 +854,7 @@ advisory_variant_new (DnfAdvisory *adv,
 
   if (g_once_init_enter (&cve_regex_initialized))
     {
-      cve_regex = g_regex_new ("\\b" CVE_REGEXP "\\b", 0, 0, NULL);
+      cve_regex = g_regex_new ("\\b" CVE_REGEXP "\\b", static_cast<GRegexCompileFlags>(0), static_cast<GRegexMatchFlags>(0), NULL);
       g_assert (cve_regex);
       g_once_init_leave (&cve_regex_initialized, 1);
     }
@@ -870,7 +870,7 @@ advisory_variant_new (DnfAdvisory *adv,
   { g_auto(GVariantBuilder) pkgs_array;
     g_variant_builder_init (&pkgs_array, G_VARIANT_TYPE ("as"));
     for (guint i = 0; i < pkgs->len; i++)
-      g_variant_builder_add (&pkgs_array, "s", dnf_package_get_nevra (pkgs->pdata[i]));
+      g_variant_builder_add (&pkgs_array, "s", dnf_package_get_nevra (static_cast<DnfPackage*>(pkgs->pdata[i])));
     g_variant_builder_add_value (&builder, g_variant_builder_end (&pkgs_array));
   }
 
@@ -892,7 +892,7 @@ advisory_variant_new (DnfAdvisory *adv,
      * new CVEs. */
     for (guint i = 0; i < refs->len; i++)
       {
-        DnfAdvisoryRef *ref = refs->pdata[i];
+        auto ref = static_cast<DnfAdvisoryRef *>(refs->pdata[i]);
         if (dnf_advisoryref_get_kind (ref) != DNF_REFERENCE_KIND_BUGZILLA)
           continue;
 
@@ -903,7 +903,7 @@ advisory_variant_new (DnfAdvisory *adv,
         if (!url || !title)
           continue;
 
-        if (!g_regex_match (cve_regex, title, 0, &match))
+        if (!g_regex_match (cve_regex, title, static_cast<GRegexMatchFlags>(0), &match))
           continue;
 
         /* collect all the found CVEs first */
@@ -925,7 +925,7 @@ advisory_variant_new (DnfAdvisory *adv,
             /* steal all the cves and transfer to set, autofree'ing dupes */
             g_ptr_array_add (found_cves, NULL);
             g_autofree char **cves =
-              (char**)g_ptr_array_free (g_steal_pointer (&found_cves), FALSE);
+              (char**)g_ptr_array_free (util::move_nullify (found_cves), FALSE);
             for (char **cve = cves; cve && *cve; cve++)
               g_hash_table_add (created_cves, *cve);
           }
@@ -958,8 +958,9 @@ advisory_equal (gconstpointer v1,
 static void
 advisory_free (gpointer p)
 {
-  if (p)
-    dnf_advisory_free (p);
+  auto adv = static_cast<DnfAdvisory*>(p);
+  if (adv)
+    dnf_advisory_free (adv);
 }
 
 /* Go through the list of @pkgs and check if there are any advisories open for them. If
@@ -978,18 +979,18 @@ advisories_variant (DnfSack    *sack,
    * making sure we only keep the pkgs we actually care about */
   for (guint i = 0; i < pkgs->len; i++)
     {
-      DnfPackage *pkg = pkgs->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(pkgs->pdata[i]);
       g_autoptr(GPtrArray) advisories_with_pkg = dnf_package_get_advisories (pkg, HY_EQ);
       for (guint j = 0; j < advisories_with_pkg->len; j++)
         {
-          DnfAdvisory *advisory = advisories_with_pkg->pdata[j];
+          auto advisory = static_cast<DnfAdvisory *>(advisories_with_pkg->pdata[j]);
 
           /* for now we're only interested in security erratas */
           if (dnf_advisory_get_kind (advisory) != DNF_ADVISORY_KIND_SECURITY)
             continue;
 
           /* reverse mapping */
-          GPtrArray *pkgs_in_advisory = g_hash_table_lookup (advisories, advisory);
+          auto pkgs_in_advisory = static_cast<GPtrArray *>(g_hash_table_lookup (advisories, advisory));
           if (!pkgs_in_advisory)
             {
               /* take it out of the array, transferring ownership to the hash table; there's
@@ -1024,7 +1025,7 @@ rpm_ostree_pkgs_to_dnf (DnfSack   *sack,
   const guint n = rpm_ostree_pkgs->len;
   for (guint i = 0; i < n; i++)
     {
-      RpmOstreePackage *pkg = rpm_ostree_pkgs->pdata[i];
+      auto pkg = static_cast<RpmOstreePackage*>(rpm_ostree_pkgs->pdata[i]);
       hy_autoquery HyQuery query = hy_query_create (sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, rpm_ostree_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_EVR, HY_EQ, rpm_ostree_package_get_evr (pkg));
@@ -1036,7 +1037,7 @@ rpm_ostree_pkgs_to_dnf (DnfSack   *sack,
         g_ptr_array_add (dnf_pkgs, g_object_ref (pkgs->pdata[0]));
     }
 
-  return g_steal_pointer (&dnf_pkgs);
+  return util::move_nullify (dnf_pkgs);
 }
 
 /* The variant returned by this function is backwards compatible with the one returned by
@@ -1107,7 +1108,7 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
     }
   else
     {
-      if (!ostree_repo_resolve_rev_ext (repo, refspec, TRUE, 0,
+      if (!ostree_repo_resolve_rev_ext (repo, refspec, TRUE, static_cast<OstreeRepoResolveRevExtFlags>(0),
                                         &new_base_checksum_owned, error))
         return FALSE;
       new_base_checksum = new_base_checksum_owned;
