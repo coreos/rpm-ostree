@@ -159,10 +159,10 @@ change_origin_refspec (GVariantDict    *options,
     rpmostree_output_message ("Rebasing to %s:%s", new_remote, current_branch);
 
   if (out_new_refspec != NULL)
-    *out_new_refspec = g_steal_pointer (&new_refspec);
+    *out_new_refspec = util::move_nullify (new_refspec);
 
   if (out_old_refspec != NULL)
-    *out_old_refspec = g_strdup (current_refspec);
+    *out_old_refspec = util::move_nullify (current_refspec);
 
   return TRUE;
 }
@@ -271,9 +271,9 @@ generate_update_variant (OstreeRepo       *repo,
   if (update != NULL)
     {
       if (!glnx_file_replace_contents_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
-                                          g_variant_get_data (update),
+                                          static_cast<const guint8*>(g_variant_get_data (update)),
                                           g_variant_get_size (update),
-                                          0, cancellable, error))
+                                          static_cast<GLnxFileReplaceFlags>(0), cancellable, error))
         return FALSE;
     }
 
@@ -319,14 +319,14 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
    * new pkglist metadata when possible */
 
   PackageDiffTransaction *self = (PackageDiffTransaction *) transaction;
-  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
+  int upgrader_flags = 0;
 
   if (self->revision != NULL || self->refspec != NULL)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
 
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, (RpmOstreeSysrootUpgraderFlags)upgrader_flags,
                                     cancellable, error);
   if (upgrader == NULL)
     return FALSE;
@@ -375,7 +375,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   { g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
     rpmostreed_transaction_connect_download_progress (transaction, progress);
     if (!rpmostree_sysroot_upgrader_pull_base (upgrader, "/usr/share/rpm",
-                                               0, progress, &changed,
+                                               (OstreeRepoPullFlags)0, progress, &changed,
                                                cancellable, error))
       return FALSE;
     rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -405,14 +405,14 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-package_diff_transaction_class_init (PackageDiffTransactionClass *class)
+package_diff_transaction_class_init (PackageDiffTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = package_diff_transaction_finalize;
 
-  class->execute = package_diff_transaction_execute;
+  clazz->execute = package_diff_transaction_execute;
 }
 
 static void
@@ -429,13 +429,13 @@ rpmostreed_transaction_new_package_diff (GDBusMethodInvocation *invocation,
                                          GCancellable *cancellable,
                                          GError **error)
 {
-  PackageDiffTransaction *self;
 
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (osname != NULL, NULL);
 
-  self = g_initable_new (package_diff_transaction_get_type (),
+  auto self = (PackageDiffTransaction *)
+     g_initable_new (package_diff_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
                          "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
@@ -505,7 +505,7 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
       /* If there isn't a rollback deployment, but there *is* a pending deployment, then we
        * want "rpm-ostree rollback" to put the currently booted deployment back on top. This
        * also allows users to effectively undo a rollback operation. */
-      rollback_deployment = g_object_ref (booted_deployment);
+      rollback_deployment = (OstreeDeployment*)g_object_ref (booted_deployment);
     }
 
   g_autoptr(GPtrArray) old_deployments =
@@ -522,7 +522,7 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
 
   for (guint i = 0; i < old_deployments->len; i++)
     {
-      OstreeDeployment *deployment = old_deployments->pdata[i];
+      auto deployment = static_cast<OstreeDeployment *>(old_deployments->pdata[i]);
       if (!ostree_deployment_equal (deployment, rollback_deployment))
         g_ptr_array_add (new_deployments, g_object_ref (deployment));
     }
@@ -544,14 +544,14 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-rollback_transaction_class_init (RollbackTransactionClass *class)
+rollback_transaction_class_init (RollbackTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = rollback_transaction_finalize;
 
-  class->execute = rollback_transaction_execute;
+  clazz->execute = rollback_transaction_execute;
 }
 
 static void
@@ -567,13 +567,13 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
                                      GCancellable *cancellable,
                                      GError **error)
 {
-  RollbackTransaction *self;
 
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (osname != NULL, NULL);
 
-  self = g_initable_new (rollback_transaction_get_type (),
+  auto self = (RollbackTransaction *)
+  g_initable_new (rollback_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
                          "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
@@ -655,7 +655,7 @@ import_local_rpm (OstreeRepo    *repo,
   if (policy == NULL)
     return FALSE;
 
-  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (fd, repo, NULL, 0, policy, error);
+  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (fd, repo, NULL, static_cast<RpmOstreeImporterFlags>(0), policy, error);
   if (unpacker == NULL)
     return FALSE;
 
@@ -718,14 +718,14 @@ import_many_local_rpms (OstreeRepo    *repo,
       if (!import_local_rpm (repo, &fd, &sha256_nevra, cancellable, error))
         return FALSE;
 
-      g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));
+      g_ptr_array_add (pkgs, util::move_nullify (sha256_nevra));
     }
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     return FALSE;
   txn.initialized = FALSE;
 
-  *out_pkgs = g_steal_pointer (&pkgs);
+  *out_pkgs = util::move_nullify (pkgs);
   return TRUE;
 }
 
@@ -770,12 +770,12 @@ get_sack_for_booted (OstreeSysroot    *sysroot,
 
   /* streamline: we don't need rpmdb or filelists, but we *do* need updateinfo */
   if (!rpmostree_context_download_metadata (ctx,
-        DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB |
+        (DnfContextSetupSackFlags)(DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB |
         DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS |
-        DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO, cancellable, error))
+        DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO), cancellable, error))
     return FALSE;
 
-  *out_sack = g_object_ref (dnf_context_get_sack (dnfctx));
+  *out_sack = (DnfSack*)g_object_ref (dnf_context_get_sack (dnfctx));
   return TRUE;
 }
 
@@ -835,7 +835,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
     }
 
-  const char *command_line =
+  auto command_line = (const char *)
     vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
 
   /* If we're not actively holding back pulling a new update and we're staying on the same
@@ -889,7 +889,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), txn_title->str);
     }
 
-  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
+  int upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (dry_run)
@@ -934,7 +934,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, (RpmOstreeSysrootUpgraderFlags)upgrader_flags,
                                     cancellable, error);
   if (upgrader == NULL)
     return FALSE;
@@ -1064,7 +1064,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
               g_autoptr(GString) pkgnames = g_string_new ("");
               for (guint i = 0; i < pkgs->len; i++)
                 {
-                  DnfPackage *p = pkgs->pdata[i];
+                  auto p = static_cast<DnfPackage *>(pkgs->pdata[i]);
                   g_string_append_printf (pkgnames, " %s", dnf_package_get_nevra (p));
                 }
               return glnx_throw (error, "\"%s\" is already provided by:%s. Use "
@@ -1137,7 +1137,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_autoptr(GVariant) gv_nevra;
           g_variant_get_child (removed, i, "v", &gv_nevra);
           gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
-          g_ptr_array_add (gv_nevras, g_steal_pointer (&gv_nevra));
+          g_ptr_array_add (gv_nevras, util::move_nullify (gv_nevra));
         }
 
       const guint nreplaced = g_variant_n_children (replaced);
@@ -1146,14 +1146,14 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_autoptr(GVariant) gv_nevra;
           g_variant_get_child (replaced, i, "(vv)", &gv_nevra, NULL);
           gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
-          g_ptr_array_add (gv_nevras, g_steal_pointer (&gv_nevra));
+          g_ptr_array_add (gv_nevras, util::move_nullify (gv_nevra));
         }
 
       for (char **it = self->override_reset_pkgs; it && *it; it++)
         {
           const char *name_or_nevra = *it;
-          const char *name = g_hash_table_lookup (nevra_to_name, name_or_nevra);
-          const char *nevra = g_hash_table_lookup (name_to_nevra, name_or_nevra);
+          auto name = static_cast<const char *>(g_hash_table_lookup (nevra_to_name, name_or_nevra));
+          auto nevra = static_cast<const char *>(g_hash_table_lookup (name_to_nevra, name_or_nevra));
 
           if (name == NULL && nevra == NULL)
             {
@@ -1210,13 +1210,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       gboolean base_changed;
 
-      OstreeRepoPullFlags flags = OSTREE_REPO_PULL_FLAGS_NONE;
+      int flags = OSTREE_REPO_PULL_FLAGS_NONE;
       if (download_metadata_only)
         flags |= OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY;
 
       g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
       rpmostreed_transaction_connect_download_progress (transaction, progress);
-      if (!rpmostree_sysroot_upgrader_pull_base (upgrader, NULL, flags, progress,
+      if (!rpmostree_sysroot_upgrader_pull_base (upgrader, NULL, (OstreeRepoPullFlags)flags, progress,
                                                  &base_changed, cancellable, error))
         return FALSE;
       rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -1275,7 +1275,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             return glnx_throw (error, "Multiple packages match \"%s\"", pkg);
 
           /* canonicalize to just the pkg name */
-          const char *pkgname = dnf_package_get_name (pkgs->pdata[0]);
+          const char *pkgname = dnf_package_get_name (static_cast<DnfPackage*>(pkgs->pdata[0]));
           g_ptr_array_add (pkgnames, (void*)pkgname);
         }
 
@@ -1421,14 +1421,14 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-deploy_transaction_class_init (DeployTransactionClass *class)
+deploy_transaction_class_init (DeployTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = deploy_transaction_finalize;
 
-  class->execute = deploy_transaction_execute;
+  clazz->execute = deploy_transaction_execute;
 }
 
 static void
@@ -1474,7 +1474,7 @@ static inline char **
 vardict_lookup_strv_canonical (GVariantDict  *dict,
                                const char    *key)
 {
-  char **v = vardict_lookup_ptr (dict, key, "^a&s");
+  auto v = (char**)vardict_lookup_ptr (dict, key, "^a&s");
   if (!v)
     return NULL;
   if (v && !*v)
@@ -1491,9 +1491,9 @@ set_deploy_flag (RpmOstreeTransactionDeployFlags flags,
                  gboolean val)
 {
   /* first, make sure it's cleared */
-  flags &= ~flag;
+  flags = static_cast<RpmOstreeTransactionDeployFlags>(flags & ~flag);
   if (val)
-    flags |= flag;
+    flags = static_cast<RpmOstreeTransactionDeployFlags>(flags | flag);
   return flags;
 }
 
@@ -1558,7 +1558,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   const gboolean output_to_self =
     vardict_lookup_bool (options_dict, "output-to-self", FALSE);
 
-  g_autoptr(DeployTransaction) self =
+  g_autoptr(DeployTransaction) self = (DeployTransaction*)
     g_initable_new (deploy_transaction_get_type (),
                     cancellable, error,
                     "invocation", invocation,
@@ -1580,7 +1580,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
 
   self->flags = deploy_flags_from_options (self->options, default_flags);
 
-  const char *refspec = vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
+  auto refspec = (const char *)vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
   /* Canonicalize here; the later code actually ends up peeling it
    * again, but long term we want to manipulate canonicalized refspecs
    * internally, and only peel when writing origin files for ostree:// types.
@@ -1593,7 +1593,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
     }
   const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
 
-  self->revision = vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
+  self->revision = (char*)vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
   self->install_pkgs = vardict_lookup_strv_canonical (self->modifiers, "install-packages");
   self->uninstall_pkgs = vardict_lookup_strv_canonical (self->modifiers, "uninstall-packages");
   self->override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
@@ -1602,7 +1602,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
 
   /* default to allowing downgrades for rebases & deploys (without --disallow-downgrade) */
   if (vardict_lookup_bool (self->options, "allow-downgrade", refspec_or_revision))
-    self->flags |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
+    self->flags = static_cast<RpmOstreeTransactionDeployFlags>(self-> flags | RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE);
 
   g_autoptr(GVariant) install_local_pkgs_idxs =
     g_variant_dict_lookup_value (self->modifiers, "install-local-packages",
@@ -1635,7 +1635,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
     actual_fdn = g_unix_fd_list_get_length (fd_list);
 
   if (expected_fdn != actual_fdn)
-    return glnx_null_throw (error, "Expected %u fds but received %u",
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Expected %u fds but received %u",
                             expected_fdn, actual_fdn);
 
   /* split into two fd lists to make it easier for deploy_transaction_execute */
@@ -1669,32 +1669,32 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   /* Also check for conflicting options -- this is after all a public API. */
 
   if (!self->refspec && vardict_lookup_bool (self->options, "skip-purge", FALSE))
-    return glnx_null_throw (error, "Can't specify skip-purge if not setting a "
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify skip-purge if not setting a "
                                    "new refspec");
   if (refspec_or_revision &&
       vardict_lookup_bool (self->options, "no-pull-base", FALSE))
-    return glnx_null_throw (error, "Can't specify no-pull-base if setting a "
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify no-pull-base if setting a "
                                    "new refspec or revision");
   if (vardict_lookup_bool (self->options, "cache-only", FALSE) &&
       vardict_lookup_bool (self->options, "download-only", FALSE))
-    return glnx_null_throw (error, "Can't specify cache-only and download-only");
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify cache-only and download-only");
   if (vardict_lookup_bool (self->options, "dry-run", FALSE) &&
       vardict_lookup_bool (self->options, "download-only", FALSE))
-    return glnx_null_throw (error, "Can't specify dry-run and download-only");
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify dry-run and download-only");
   if (self->override_replace_pkgs)
-    return glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
 
   if (vardict_lookup_bool (self->options, "no-overrides", FALSE) &&
       (self->override_remove_pkgs || self->override_reset_pkgs ||
        self->override_replace_pkgs || override_replace_local_pkgs_idxs))
-    return glnx_null_throw (error, "Can't specify no-overrides if setting "
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify no-overrides if setting "
                                    "override modifiers");
   if (!self->refspec && self->local_repo_remote_dfd != -1)
-    return glnx_null_throw (error, "Missing ref for transient local rebases");
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Missing ref for transient local rebases");
   if (self->revision && self->local_repo_remote_dfd != -1)
-    return glnx_null_throw (error, "Revision overrides for transient local rebases not implemented yet");
+    return (RpmostreedTransaction*)glnx_null_throw (error, "Revision overrides for transient local rebases not implemented yet");
 
-  return (RpmostreedTransaction *) g_steal_pointer (&self);
+  return (RpmostreedTransaction *) util::move_nullify (self);
 }
 
 /* ================================ InitramfsEtc ================================ */
@@ -1738,17 +1738,17 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
 {
   InitramfsEtcTransaction *self = (InitramfsEtcTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
-  const char *command_line =
+  auto command_line = (const char *)
     vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
 
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "initramfs-etc");
 
-  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
+  int upgrader_flags = 0;
   if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
 
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags, cancellable, error);
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags), cancellable, error);
   if (upgrader == NULL)
     return FALSE;
 
@@ -1800,14 +1800,14 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-initramfs_etc_transaction_class_init (InitramfsEtcTransactionClass *class)
+initramfs_etc_transaction_class_init (InitramfsEtcTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = initramfs_etc_transaction_finalize;
 
-  class->execute = initramfs_etc_transaction_execute;
+  clazz->execute = initramfs_etc_transaction_execute;
 }
 
 static void
@@ -1827,12 +1827,12 @@ rpmostreed_transaction_new_initramfs_etc (GDBusMethodInvocation *invocation,
                                           GCancellable          *cancellable,
                                           GError               **error)
 {
-  InitramfsEtcTransaction *self;
 
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  self = g_initable_new (initramfs_etc_transaction_get_type (),
+  auto self = (InitramfsEtcTransaction *)
+    g_initable_new (initramfs_etc_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
                          "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
@@ -1890,17 +1890,17 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 
   InitramfsStateTransaction *self = (InitramfsStateTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
-  const char *command_line =
+  auto command_line = (const char*)
     vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
 
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "initramfs");
 
-  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
+  int upgrader_flags = 0;
   if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
 
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags, cancellable, error);
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags), cancellable, error);
   if (upgrader == NULL)
     return FALSE;
 
@@ -1935,14 +1935,14 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-initramfs_state_transaction_class_init (InitramfsStateTransactionClass *class)
+initramfs_state_transaction_class_init (InitramfsStateTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = initramfs_state_transaction_finalize;
 
-  class->execute = initramfs_state_transaction_execute;
+  clazz->execute = initramfs_state_transaction_execute;
 }
 
 static void
@@ -1960,12 +1960,12 @@ rpmostreed_transaction_new_initramfs_state (GDBusMethodInvocation *invocation,
                                             GCancellable          *cancellable,
                                             GError               **error)
 {
-  InitramfsStateTransaction *self;
-
+  
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  self = g_initable_new (initramfs_state_transaction_get_type (),
+  auto self = (InitramfsStateTransaction *)
+    g_initable_new (initramfs_state_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
                          "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
@@ -2076,7 +2076,7 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
 
           /* And ensure we fall through to base cleanup */
-          self->flags |= RPMOSTREE_TRANSACTION_CLEANUP_BASE;
+          self->flags = static_cast<RpmOstreeTransactionCleanupFlags>(self->flags | RPMOSTREE_TRANSACTION_CLEANUP_BASE);
         }
       else
         {
@@ -2098,14 +2098,14 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-cleanup_transaction_class_init (CleanupTransactionClass *class)
+cleanup_transaction_class_init (CleanupTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = cleanup_transaction_finalize;
 
-  class->execute = cleanup_transaction_execute;
+  clazz->execute = cleanup_transaction_execute;
 }
 
 static void
@@ -2124,7 +2124,7 @@ rpmostreed_transaction_new_cleanup (GDBusMethodInvocation *invocation,
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  CleanupTransaction *self =
+  auto self = (CleanupTransaction *)
     g_initable_new (cleanup_transaction_get_type (),
                     cancellable, error,
                     "invocation", invocation,
@@ -2216,14 +2216,14 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-refresh_md_transaction_class_init (CleanupTransactionClass *class)
+refresh_md_transaction_class_init (CleanupTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = refresh_md_transaction_finalize;
 
-  class->execute = refresh_md_transaction_execute;
+  clazz->execute = refresh_md_transaction_execute;
 }
 
 static void
@@ -2242,7 +2242,7 @@ rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  RefreshMdTransaction *self =
+  auto self = (RefreshMdTransaction *)
     g_initable_new (refresh_md_transaction_get_type (),
                     cancellable, error,
                     "invocation", invocation,
@@ -2297,7 +2297,7 @@ get_dnf_repo_by_id (RpmOstreeContext *ctx, const char *repo_id)
   GPtrArray *repos = dnf_context_get_repos (dnfctx);
   for (guint i = 0; i < repos->len; i++)
     {
-      DnfRepo *repo = repos->pdata[i];
+      auto repo = static_cast<DnfRepo *>(repos->pdata[i]);
       if (g_strcmp0 (dnf_repo_get_id (repo), repo_id) == 0)
         return repo;
     }
@@ -2364,14 +2364,14 @@ modify_yum_repo_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-modify_yum_repo_transaction_class_init (CleanupTransactionClass *class)
+modify_yum_repo_transaction_class_init (CleanupTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = modify_yum_repo_transaction_finalize;
 
-  class->execute = modify_yum_repo_transaction_execute;
+  clazz->execute = modify_yum_repo_transaction_execute;
 }
 
 static void
@@ -2391,7 +2391,7 @@ rpmostreed_transaction_new_modify_yum_repo (GDBusMethodInvocation *invocation,
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  ModifyYumRepoTransaction *self =
+  auto self = (ModifyYumRepoTransaction*)
     g_initable_new (modify_yum_repo_transaction_get_type (),
                     cancellable, error,
                     "invocation", invocation,
@@ -2445,7 +2445,7 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
 
-  const char *command_line =
+  auto command_line = (const char*)
     vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
 
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "finalize-deployment");
@@ -2454,7 +2454,7 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   if (deployments->len == 0)
     return glnx_throw (error, "No deployments found");
 
-  OstreeDeployment *default_deployment = deployments->pdata[0];
+  auto default_deployment = static_cast<OstreeDeployment *>(deployments->pdata[0]);
   if (!ostree_deployment_is_staged (default_deployment))
     return glnx_throw (error, "No pending staged deployment found");
   if (!g_str_equal (ostree_deployment_get_osname (default_deployment), self->osname))
@@ -2467,8 +2467,8 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
   const char *checksum = base_checksum ?: ostree_deployment_get_csum (default_deployment);
 
-  const char *expected_checksum =
-    vardict_lookup_ptr (self->options, "checksum", "&s");
+  auto expected_checksum =
+    (char*)vardict_lookup_ptr (self->options, "checksum", "&s");
   const gboolean allow_missing_checksum =
     vardict_lookup_bool (self->options, "allow-missing-checksum", FALSE);
   if (!expected_checksum && !allow_missing_checksum)
@@ -2497,14 +2497,14 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-finalize_deployment_transaction_class_init (FinalizeDeploymentTransactionClass *class)
+finalize_deployment_transaction_class_init (FinalizeDeploymentTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = finalize_deployment_transaction_finalize;
 
-  class->execute = finalize_deployment_transaction_execute;
+  clazz->execute = finalize_deployment_transaction_execute;
 }
 
 static void
@@ -2525,7 +2525,7 @@ rpmostreed_transaction_new_finalize_deployment (GDBusMethodInvocation *invocatio
 
   g_autoptr(GVariantDict) options_dict = g_variant_dict_new (options);
 
-  FinalizeDeploymentTransaction *self =
+  auto self = (FinalizeDeploymentTransaction*)
     g_initable_new (finalize_deployment_transaction_get_type (),
                     cancellable, error,
                     "invocation", invocation,
@@ -2583,9 +2583,8 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
 {
   KernelArgTransaction *self = (KernelArgTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
-  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
-  const char *command_line =
-    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
+  int upgrader_flags = 0;
+  auto command_line = static_cast<const char *>(vardict_lookup_ptr (self->options, "initiating-command-line", "&s"));
 
   /* don't want to pull new content for this */
   upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
@@ -2598,7 +2597,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
   g_autoptr(OstreeKernelArgs) kargs = ostree_kernel_args_from_string (self->existing_kernel_args);
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags),
                                     cancellable, error);
 
   /* We need the upgrader to perform the deployment */
@@ -2645,14 +2644,14 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-kernel_arg_transaction_class_init (KernelArgTransactionClass *class)
+kernel_arg_transaction_class_init (KernelArgTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = kernel_arg_transaction_finalize;
 
-  class->execute = kernel_arg_transaction_execute;
+  clazz->execute = kernel_arg_transaction_execute;
 }
 
 static void
@@ -2672,12 +2671,10 @@ rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
                                        GCancellable          *cancellable,
                                        GError               **error)
 {
-  KernelArgTransaction *self;
-
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  self = g_initable_new (kernel_arg_transaction_get_type (),
+  auto self = (KernelArgTransaction*)g_initable_new (kernel_arg_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
                          "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
