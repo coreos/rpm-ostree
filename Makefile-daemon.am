@@ -37,7 +37,7 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-errors.h \
 	src/daemon/rpmostreed-errors.c \
 	src/daemon/rpmostreed-deployment-utils.h \
-	src/daemon/rpmostreed-deployment-utils.c \
+	src/daemon/rpmostreed-deployment-utils.cxx \
 	src/daemon/rpmostreed-transaction.h \
 	src/daemon/rpmostreed-transaction.cxx \
 	src/daemon/rpmostreed-transaction-types.h \
