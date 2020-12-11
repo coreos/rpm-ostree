@@ -235,13 +235,13 @@ rpmostree_sysroot_upgrader_set_property (GObject         *object,
   switch (prop_id)
     {
     case PROP_SYSROOT:
-      self->sysroot = g_value_dup_object (value);
+      self->sysroot = (OstreeSysroot*)g_value_dup_object (value);
       break;
     case PROP_OSNAME:
       self->osname = g_value_dup_string (value);
       break;
     case PROP_FLAGS:
-      self->flags = g_value_get_flags (value);
+      self->flags = static_cast<RpmOstreeSysrootUpgraderFlags>(g_value_get_flags (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -298,19 +298,19 @@ rpmostree_sysroot_upgrader_class_init (RpmOstreeSysrootUpgraderClass *klass)
                                    PROP_SYSROOT,
                                    g_param_spec_object ("sysroot", "", "",
                                                         OSTREE_TYPE_SYSROOT,
-                                                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+                                                        static_cast<GParamFlags>(G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 
   g_object_class_install_property (object_class,
                                    PROP_OSNAME,
                                    g_param_spec_string ("osname", "", "", NULL,
-                                                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+                                                        static_cast<GParamFlags>(G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 
   g_object_class_install_property (object_class,
                                    PROP_FLAGS,
                                    g_param_spec_flags ("flags", "", "",
                                                        rpmostree_sysroot_upgrader_flags_get_type (),
                                                        0,
-                                                       G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+                                                       static_cast<GParamFlags>(G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 }
 
 static void
@@ -334,7 +334,7 @@ rpmostree_sysroot_upgrader_new (OstreeSysroot              *sysroot,
                                 GCancellable               *cancellable,
                                 GError                    **error)
 {
-  return g_initable_new (RPMOSTREE_TYPE_SYSROOT_UPGRADER, cancellable, error,
+  return (RpmOstreeSysrootUpgrader*)g_initable_new (RPMOSTREE_TYPE_SYSROOT_UPGRADER, cancellable, error,
                          "sysroot", sysroot, "osname", osname, "flags", flags, NULL);
 }
 
@@ -523,7 +523,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         }
 
       g_free (self->base_revision);
-      self->base_revision = g_steal_pointer (&new_base_rev);
+      self->base_revision = util::move_nullify (new_base_rev);
     }
 
   *out_changed = changed;
@@ -745,7 +745,7 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self,
     }
 
   g_assert (!self->override_remove_packages);
-  self->override_remove_packages = g_steal_pointer (&ret_final_removals);
+  self->override_remove_packages = util::move_nullify (ret_final_removals);
   return TRUE;
 }
 
@@ -791,7 +791,7 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
     }
 
   g_assert (!self->override_replace_local_packages);
-  self->override_replace_local_packages = g_steal_pointer (&ret_final_local_replacements);
+  self->override_replace_local_packages = util::move_nullify (ret_final_local_replacements);
   return TRUE;
 }
 
@@ -846,7 +846,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
             return FALSE;
 
           if (!glnx_file_replace_contents_at (AT_FDCWD, path,
-                                              g_variant_get_data (header),
+                                              static_cast<const guint8*>(g_variant_get_data (header)),
                                               g_variant_get_size (header),
                                               GLNX_FILE_REPLACE_NODATASYNC,
                                               cancellable, error))
@@ -884,7 +884,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
        * that might be confusing to users. */
       for (guint i = 0; i < matches->len; i++)
         {
-          DnfPackage *pkg = matches->pdata[i];
+          auto pkg = static_cast<DnfPackage*>(matches->pdata[i]);
           const char *name = dnf_package_get_name (pkg);
           const char *repo = dnf_package_get_reponame (pkg);
 
@@ -899,7 +899,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
 
       /* Otherwise, it's an inactive request: remember them so we can print a nice notice.
        * Just use the first package as the "providing" pkg. */
-      const char *providing_nevra = dnf_package_get_nevra (matches->pdata[0]);
+      const char *providing_nevra = dnf_package_get_nevra (static_cast<DnfPackage*>(matches->pdata[0]));
       g_hash_table_insert (inactive_requests, (gpointer)pattern,
                            g_strdup (providing_nevra));
     }
@@ -912,7 +912,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
     }
 
   g_assert (!self->overlay_packages);
-  self->overlay_packages = g_steal_pointer (&ret_missing_pkgs);
+  self->overlay_packages = util::move_nullify (ret_missing_pkgs);
   return TRUE;
 }
 
@@ -1004,7 +1004,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
 
       /* keep a ref on it in case the level higher up needs it */
       self->rpmmd_sack =
-        g_object_ref (dnf_context_get_sack (rpmostree_context_get_dnf (self->ctx)));
+        (DnfSack*)g_object_ref (dnf_context_get_sack (rpmostree_context_get_dnf (self->ctx)));
     }
   else
     {
@@ -1330,9 +1330,9 @@ write_history (RpmOstreeSysrootUpgrader *self,
    * we include the full `rpmostree.rpmdb.pkglist` in there). */
 
   if (!glnx_file_replace_contents_at (AT_FDCWD, fn,
-                                      g_variant_get_data (deployment_variant),
+                                      static_cast<const guint8*>(g_variant_get_data (deployment_variant)),
                                       g_variant_get_size (deployment_variant),
-                                      0, cancellable, error))
+                                      static_cast<GLnxFileReplaceFlags>(0), cancellable, error))
     return FALSE;
 
   g_autofree char *version = NULL;
@@ -1535,7 +1535,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
     }
 
   if (out_deployment)
-    *out_deployment = g_steal_pointer (&new_deployment);
+    *out_deployment = util::move_nullify (new_deployment);
   return TRUE;
 }
 
