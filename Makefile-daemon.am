@@ -46,7 +46,7 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostree-package-variants.h \
 	src/daemon/rpmostree-package-variants.c \
 	src/daemon/rpmostreed-os.h \
-	src/daemon/rpmostreed-os.c \
+	src/daemon/rpmostreed-os.cxx \
 	src/daemon/rpmostreed-os-experimental.h \
 	src/daemon/rpmostreed-os-experimental.c \
 	$(NULL)
