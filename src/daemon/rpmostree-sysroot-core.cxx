@@ -79,13 +79,13 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
     /* existing deployments */
     for (; i < deployments->len; i++)
       {
-        OstreeDeployment *deployment = deployments->pdata[i];
+        auto deployment = static_cast<OstreeDeployment*>(deployments->pdata[i]);
         g_autofree char *base_rev = NULL;
         if (!rpmostree_deployment_get_base_layer (repo, deployment, &base_rev, error))
           return FALSE;
 
         if (base_rev)
-          g_hash_table_add (bases, g_steal_pointer (&base_rev));
+          g_hash_table_add (bases, util::move_nullify (base_rev));
       }
   }
 
@@ -125,10 +125,10 @@ add_package_refs_to_set (RpmOstreeRefSack *rsack,
     {
       for (guint i = 0; i < pkglist->len; i++)
         {
-          DnfPackage *pkg = pkglist->pdata[i];
+          auto pkg = static_cast<DnfPackage *>(pkglist->pdata[i]);
           g_autofree char *pkgref =
             is_rojig ? rpmostree_get_rojig_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
-          g_hash_table_add (referenced_pkgs, g_steal_pointer (&pkgref));
+          g_hash_table_add (referenced_pkgs, util::move_nullify (pkgref));
         }
     }
 
@@ -153,7 +153,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   for (guint i = 0; i < deployments->len; i++)
     {
-      OstreeDeployment *deployment = deployments->pdata[i];
+      auto deployment = static_cast<OstreeDeployment *>(deployments->pdata[i]);
       const char *current_checksum = ostree_deployment_get_csum (deployment);
 
       g_autofree char *base_commit = NULL;
@@ -209,7 +209,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
           if (!rpmostree_nevra_to_cache_branch (nevra, &cachebranch, error))
             return FALSE;
 
-          g_hash_table_add (referenced_pkgs, g_steal_pointer (&cachebranch));
+          g_hash_table_add (referenced_pkgs, util::move_nullify (cachebranch));
         }
     }
 
@@ -361,12 +361,12 @@ rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *self, const char *
 
   for (guint i = 0; i < deployments->len; i++)
     {
-      OstreeDeployment *deployment = deployments->pdata[i];
+      auto deployment = static_cast<OstreeDeployment*>(deployments->pdata[i]);
 
       if (strcmp (ostree_deployment_get_osname (deployment), osname) != 0)
         continue;
 
-      return g_object_ref (deployment);
+      return (OstreeDeployment*)g_object_ref (deployment);
     }
 
   return NULL;
@@ -415,7 +415,7 @@ rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
 
   for (guint i = 0; i < deployments->len; i++)
     {
-      OstreeDeployment *deployment = deployments->pdata[i];
+      auto deployment = static_cast<OstreeDeployment*>(deployments->pdata[i]);
 
       /* Is this deployment booted?  If so, note we're past the booted,
        * and ensure it's added. */
@@ -449,7 +449,7 @@ rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
 
   if (new_deployments->len == deployments->len)
     return NULL;
-  return g_steal_pointer (&new_deployments);
+  return util::move_nullify (new_deployments);
 }
 
 /* A wrapper around ostree_sysroot_simple_write_deployment() that makes it easy to push
@@ -465,11 +465,10 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
 
   /* we do our own cleanup afterwards */
-  OstreeSysrootSimpleWriteDeploymentFlags flags =
-    OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NO_CLEAN;
+  auto flags = static_cast<OstreeSysrootSimpleWriteDeploymentFlags>(OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NO_CLEAN);
 
   if (pushing_rollback)
-    flags |= (OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NOT_DEFAULT |
+    flags = static_cast<OstreeSysrootSimpleWriteDeploymentFlags>(flags | OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NOT_DEFAULT |
               OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_PENDING);
   else
     {
@@ -481,7 +480,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
           if (!rpmostree_syscore_livefs_query (sysroot, booted, &is_live, error))
             return FALSE;
           if (is_live)
-            flags |= OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK;
+            flags = static_cast<OstreeSysrootSimpleWriteDeploymentFlags>(flags | OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK);
         }
     }
 
