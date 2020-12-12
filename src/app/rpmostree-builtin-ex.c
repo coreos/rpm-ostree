@@ -23,7 +23,10 @@
 #include "rpmostree-ex-builtins.h"
 
 static RpmOstreeCommand ex_subcommands[] = {
-  { "livefs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "livefs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    "Apply pending deployment changes to booted deployment",
+    rpmostree_ex_builtin_livefs },
+  { "apply-live", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_livefs },
 #ifdef BUILDOPT_ROJIG

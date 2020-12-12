@@ -136,7 +136,7 @@ assert_file_has_content_literal status.txt 'LiveDiff: 3 added'
 echo "ok livefs stage2"
 
 # Now undo it all
-vm_rpmostree ex livefs --reset
+vm_rpmostree ex apply-live --reset
 vm_cmd rpm -qa | sort > current-rpmdb.txt
 diff -u original-rpmdb.txt current-rpmdb.txt
 if vm_cmd test -f /usr/bin/bar; then
