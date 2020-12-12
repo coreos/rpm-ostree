@@ -110,5 +110,7 @@ rpmostree_ex_builtin_livefs (int             argc,
                                                 error))
     return FALSE;
 
+  g_print ("Successfully updated running filesystem tree; some services may need to be restarted.\n");
+
   return TRUE;
 }
