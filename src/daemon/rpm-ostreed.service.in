@@ -2,6 +2,7 @@
 Description=rpm-ostree System Management Daemon
 Documentation=man:rpm-ostree(1)
 ConditionPathExists=/ostree
+RequiresMountsFor=/boot
 
 [Service]
 Type=dbus
