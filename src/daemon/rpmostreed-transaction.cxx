@@ -21,6 +21,7 @@
 
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
+#include <systemd/sd-login.h>
 #include <stdexcept>
 
 #include "rpmostreed-transaction.h"
@@ -121,6 +122,18 @@ transaction_maybe_emit_closed (RpmostreedTransaction *self)
   rpmostreed_sysroot_finish_txn (rpmostreed_sysroot_get (), self);
 }
 
+static char *
+creds_to_string (GCredentials *creds)
+{
+  auto uid = g_credentials_get_unix_user (creds, NULL);
+  auto pid = g_credentials_get_unix_pid (creds, NULL);
+  g_autofree char *unit = NULL;
+  if (pid != -1)
+    sd_pid_get_unit (pid, &unit);
+
+  return g_strdup_printf ("[pid: %u uid: %u unit: %s]", (guint32) pid, (guint32) uid, unit ?: "(unknown)");
+}
+
 static void
 transaction_connection_closed_cb (GDBusConnection *connection,
                                   gboolean remote_peer_vanished,
@@ -129,8 +142,11 @@ transaction_connection_closed_cb (GDBusConnection *connection,
 {
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
-  g_debug ("%s (%p): Client disconnected",
-           G_OBJECT_TYPE_NAME (self), self);
+  g_autofree char *creds = creds_to_string (g_dbus_connection_get_peer_credentials (connection));
+  if (remote_peer_vanished)
+    sd_journal_print (LOG_INFO, "Process %s disconnected from transaction progress", creds);
+  else
+    sd_journal_print (LOG_INFO, "Disconnecting process %s from transaction progress", creds);
 
   g_hash_table_remove (priv->peer_connections, connection);
 
@@ -162,8 +178,8 @@ transaction_new_connection_cb (GDBusServer *server,
 
   g_hash_table_add (priv->peer_connections, g_object_ref (connection));
 
-  g_debug ("%s (%p): Client connected",
-           G_OBJECT_TYPE_NAME (self), self);
+  g_autofree char *creds = creds_to_string (g_dbus_connection_get_peer_credentials (connection));
+  sd_journal_print (LOG_INFO, "Process %s connected to transaction progress", creds);
 
   return TRUE;
 }
