@@ -52,6 +52,7 @@ BUILTINPROTO(override);
 BUILTINPROTO(kargs);
 BUILTINPROTO(reset);
 BUILTINPROTO(start_daemon);
+BUILTINPROTO(shlib_backend);
 BUILTINPROTO(coreos_rootfs);
 BUILTINPROTO(testutils);
 BUILTINPROTO(ex);

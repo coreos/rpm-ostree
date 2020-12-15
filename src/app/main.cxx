@@ -119,6 +119,9 @@ static RpmOstreeCommand commands[] = {
   { "testutils", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                  RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_testutils },
+  { "shlib-backend", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+                 RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
+    NULL, rpmostree_builtin_shlib_backend },
   { "start-daemon", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                     RPM_OSTREE_BUILTIN_FLAG_HIDDEN),

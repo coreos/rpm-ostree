@@ -42,6 +42,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-builtin-status.c \
 	src/app/rpmostree-builtin-ex.c \
 	src/app/rpmostree-builtin-testutils.c \
+	src/app/rpmostree-builtin-shlib-backend.c \
 	src/app/rpmostree-builtin-db.c \
 	src/app/rpmostree-builtin-start-daemon.c \
 	src/app/rpmostree-builtin-finalize-deployment.c \
