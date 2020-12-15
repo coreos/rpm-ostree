@@ -20,11 +20,15 @@
 
 #include "config.h"
 
+#include <gio/gio.h>
+#include <gio/gunixfdmessage.h>
+#include <gio/gunixsocketaddress.h>
 #include "string.h"
 
 #include "rpmostree.h"
 #include "rpmostree-core.h"
 #include "rpmostree-util.h"
+#include "rpmostree-shlib-ipc-private.h"
 
 /**
  * SECTION:librpmostree
@@ -33,6 +37,69 @@
  *
  * These APIs access generic global state.
  */
+
+#define IPC_FD 3
+
+GVariant *
+_rpmostree_shlib_ipc_send (const char *variant_type, char **args, GError **error)
+{
+  g_autoptr(GSubprocessLauncher) launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_PIPE);
+  int pair[2];
+  if (socketpair (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) < 0)
+    return (GVariant*)glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
+  glnx_fd_close int my_sock_fd = glnx_steal_fd (&pair[0]);
+  g_subprocess_launcher_take_fd (launcher, pair[1], IPC_FD);
+
+  g_autoptr(GSocket) my_sock = g_socket_new_from_fd (my_sock_fd, error);
+  if (!my_sock)
+    return NULL;
+  my_sock_fd = -1; /* Ownership was transferred */
+  g_autoptr(GPtrArray) full_args = g_ptr_array_new ();
+  g_ptr_array_add (full_args, "rpm-ostree");
+  g_ptr_array_add (full_args, "shlib-backend");
+  for (char **it = args; it && *it; it++)
+    g_ptr_array_add (full_args, *it);
+  g_ptr_array_add (full_args, NULL);
+  g_autoptr(GSubprocess) proc = g_subprocess_launcher_spawnv (launcher, (const char*const*)full_args->pdata, error);
+  if (!proc)
+    return NULL;
+  
+  g_autofree char *stderr = NULL;
+  if (!g_subprocess_communicate_utf8 (proc, NULL, NULL, NULL, &stderr, error))
+    return NULL;
+
+  if (!g_subprocess_get_successful (proc))
+    return glnx_null_throw (error, "Failed to invoke rpm-ostree shlib-backend: %s", stderr);
+  int flags = 0;
+  int nm = 0;
+  GInputVector iv;
+  GUnixFDMessage **mv;
+  char buffer[1024];
+  iv.buffer = buffer;
+  iv.size = 1;
+  gssize r = g_socket_receive_message (my_sock, NULL, &iv, 1,
+                                       (GSocketControlMessage ***) &mv,
+                                       &nm, &flags, NULL, error);
+  if (r < 0)
+    return NULL;
+  g_assert_cmpint (r, ==, 1);
+
+  if (nm != 1)
+    return glnx_null_throw (error, "Got %d control messages, expected 1", nm);
+  GUnixFDMessage *message = mv[0];
+  g_assert (G_IS_UNIX_FD_MESSAGE (message));
+  GUnixFDList *fdlist = g_unix_fd_message_get_fd_list (message);
+  const int nfds = g_unix_fd_list_get_length (fdlist);
+  if (nfds != 1)
+    return glnx_null_throw (error, "Got %d fds, expected 1", nfds);
+  const int *fds = g_unix_fd_list_peek_fds (fdlist, NULL);
+  const int result_memfd = fds[0];
+  g_assert_cmpint (result_memfd, !=, -1);
+  g_autoptr(GMappedFile) retmap = g_mapped_file_new_from_fd (result_memfd, FALSE, error);
+  if (!retmap)
+    return FALSE;
+  return g_variant_new_from_bytes ((GVariantType*) variant_type, g_mapped_file_get_bytes (retmap), FALSE);
+}
 
 /**
  * rpm_ostree_get_basearch:
@@ -43,9 +110,11 @@
 char *
 rpm_ostree_get_basearch (void)
 {
-  g_autoptr(DnfContext) ctx = dnf_context_new ();
-  /* Need to strdup since we unref the context */
-  return g_strdup (dnf_context_get_base_arch (ctx));
+  g_autoptr(GError) local_error = NULL;
+  char *args[] = { "get-basearch", NULL };
+  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, &local_error);
+  g_assert_no_error (local_error);
+  return g_variant_dup_string (ret, NULL);
 }
 
 /**
@@ -58,9 +127,11 @@ rpm_ostree_get_basearch (void)
 char *
 rpm_ostree_varsubst_basearch (const char *src, GError **error)
 {
-  g_autoptr(DnfContext) ctx = dnf_context_new ();
-  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (ctx);
-  return _rpmostree_varsubst_string (src, varsubsts, error);
+  g_autoptr(GError) local_error = NULL;
+  char *args[] = { "varsubst-basearch", (char*)src, NULL };
+  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, &local_error);
+  g_assert_no_error (local_error);
+  return g_variant_dup_string (ret, NULL);
 }
 
 /**
