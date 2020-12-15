@@ -24,17 +24,27 @@ lib_LTLIBRARIES += librpmostree-1.la
 librpmostreeincludedir = $(includedir)/rpm-ostree-1
 librpmostreeinclude_HEADERS = $(librpmostree_public_headers)
 
-librpmostree_1_la_SOURCES = \
+rpmostree_shlib_sources = \
 	src/lib/rpmostree.c \
 	src/lib/rpmostree-db.c \
 	src/lib/rpmostree-package.c \
 	$(NULL)
 
-librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libpriv -I$(srcdir)/src/lib \
+# Build as both a shared library and executable
+# https://unix.stackexchange.com/questions/223385/why-and-how-are-some-shared-libraries-runnable-as-though-they-are-executables
+librpmostree_1_la_SOURCES = $(rpmostree_shlib_sources) $(rpmostree_executable_sources) $(rpmostree_daemon_sources)
+nodist_librpmostree_1_la_SOURCES = $(nodist_rpmostree_daemon_sources)
+
+rpmostree_common_cflags = \
+	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
+ 	-I$(srcdir)/src/daemon -I$(srcdir)/src/app \
 	-fvisibility=hidden '-D_RPMOSTREE_EXTERN=__attribute((visibility("default"))) extern' \
-	$(PKGDEP_RPMOSTREE_CFLAGS)
-librpmostree_1_la_LDFLAGS = $(AM_LDFLAGS) -version-number 1:0:0 -Bsymbolic-functions
-librpmostree_1_la_LIBADD =  $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la $(librpmostree_rust_path)
+	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
+	-DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+librpmostree_1_la_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
+librpmostree_1_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
+librpmostree_1_la_LDFLAGS = $(AM_LDFLAGS) -version-number 1:0:0 -Bsymbolic-functions -e __rpmostree_shlibpriv_main
+librpmostree_1_la_LIBADD = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) librpmostreepriv.la $(librpmostree_rust_path)
 
 # The g-ir-scanner creates a stub executable (to help introspect type information) which
 # links to our stuff. We want to make sure it picks up our fresh libdnf and not a possibly
@@ -52,7 +62,7 @@ RpmOstree_1_0_gir_INCLUDES = OSTree-1.0 Gio-2.0
 RpmOstree_1_0_gir_CFLAGS = $(librpmostree_1_la_CFLAGS)
 RpmOstree_1_0_gir_LIBS = librpmostree-1.la
 RpmOstree_1_0_gir_SCANNERFLAGS = --warn-all --identifier-prefix=RpmOstree --symbol-prefix=rpm_ostree
-RpmOstree_1_0_gir_FILES = $(librpmostreeinclude_HEADERS) $(filter-out %-private.h,$(librpmostree_1_la_SOURCES))
+RpmOstree_1_0_gir_FILES = $(librpmostreeinclude_HEADERS) $(filter-out %-private.h,$(rpmostree_shlib_sources))
 INTROSPECTION_GIRS += RpmOstree-1.0.gir
 gir_DATA += RpmOstree-1.0.gir
 typelib_DATA += RpmOstree-1.0.typelib

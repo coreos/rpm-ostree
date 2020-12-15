@@ -413,9 +413,12 @@ rebuild_command_line (int    argc,
   return g_string_free (util::move_nullify (command), FALSE);
 }
 
+// See https://unix.stackexchange.com/questions/223385/why-and-how-are-some-shared-libraries-runnable-as-though-they-are-executables
+int __rpmostree_shlibpriv_main (int argc, char **argv);
+
 int
-main (int    argc,
-      char **argv)
+__rpmostree_shlibpriv_main (int    argc,
+                            char **argv)
 {
   RpmOstreeCommand *command;
   RpmOstreeCommandInvocation invocation;

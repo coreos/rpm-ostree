@@ -15,11 +15,7 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-bin_PROGRAMS += rpm-ostree
-
-rpm_ostree_SOURCES = src/app/main.cxx \
-	rpm-ostreed-generated.h \
-	rpm-ostreed-generated.c \
+rpmostree_executable_sources = src/app/main.cxx \
 	src/app/rpmostree-builtins.h \
 	src/app/rpmostree-db-builtins.h \
 	src/app/rpmostree-compose-builtins.h \
@@ -64,16 +60,14 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	$(NULL)
 
 if BUILDOPT_ROJIG
-rpm_ostree_SOURCES += \
+rpmostree_executable_sources += \
 	src/app/rpmostree-ex-builtin-commit2rojig.c \
 	src/app/rpmostree-ex-builtin-rojig2commit.c \
 	src/app/rpmostree-compose-builtin-rojig.c \
 	$(NULL)
 endif
 
-rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
-	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
-	-fvisibility=hidden -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+
 rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
 rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
 rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.la librpmostreed.la

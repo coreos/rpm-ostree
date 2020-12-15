@@ -19,10 +19,8 @@ CLEANFILES += rpm-ostreed-generated-org.projectatomic.rpmostree1.OS.xml \
 	rpm-ostreed-generated-org.projectatomic.rpmostree1.Transaction.xml \
 	$(NULL)
 
-noinst_LTLIBRARIES += librpmostreed.la
-nodist_librpmostreed_la_SOURCES = $(dbus_built_sources)
-
-librpmostreed_la_SOURCES = \
+nodist_rpmostree_daemon_sources = $(dbus_built_sources)
+rpmostree_daemon_sources = \
 	src/daemon/rpmostreed-types.h \
 	src/daemon/rpmostreed-daemon.h \
 	src/daemon/rpmostreed-daemon.c \
@@ -49,25 +47,6 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-os.cxx \
 	src/daemon/rpmostreed-os-experimental.h \
 	src/daemon/rpmostreed-os-experimental.c \
-	$(NULL)
-
-rpmostreed_common_cflags = $(PKGDEP_RPMOSTREE_CFLAGS) \
-	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
-	-fvisibility=hidden \
-	-D_RPMOSTREE_EXTERN= \
-	-I$(srcdir)/src/daemon \
-	-I$(srcdir)/src/lib \
-	-I$(srcdir)/src/libpriv \
-	-I$(libglnx_srcpath) \
-	$(NULL)
-librpmostreed_la_CFLAGS = $(AM_CFLAGS) $(rpmostreed_common_cflags)
-librpmostreed_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
-
-librpmostreed_la_LIBADD = \
-	$(PKGDEP_RPMOSTREE_LIBS) \
-	librpmostreepriv.la \
-	librpmostree-1.la \
-	$(CAP_LIBS)
 	$(NULL)
 
 dbusconf_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.conf
