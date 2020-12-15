@@ -48,6 +48,7 @@ GType           rpmostreed_transaction_get_type            (void) G_GNUC_CONST;
 gboolean        rpmostreed_transaction_get_active          (RpmostreedTransaction *transaction);
 OstreeSysroot * rpmostreed_transaction_get_sysroot         (RpmostreedTransaction *transaction);
 const char *    rpmostreed_transaction_get_client          (RpmostreedTransaction *transaction);
+const char *    rpmostreed_transaction_get_agent_id        (RpmostreedTransaction *transaction);
 GDBusMethodInvocation *
                 rpmostreed_transaction_get_invocation      (RpmostreedTransaction *transaction);
 const char *    rpmostreed_transaction_get_client_address  (RpmostreedTransaction *transaction);

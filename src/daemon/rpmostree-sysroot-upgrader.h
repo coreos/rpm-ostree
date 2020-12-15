@@ -78,6 +78,8 @@ RpmOstreeSysrootUpgrader *rpmostree_sysroot_upgrader_new (OstreeSysroot         
                                                           GCancellable               *cancellable,
                                                           GError                    **error);
 
+void rpmostree_sysroot_upgrader_set_caller_info (RpmOstreeSysrootUpgrader *self, const char *initiating_command_line, const char *agent);
+
 OstreeDeployment* rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self);
 
 RpmOstreeOrigin *
@@ -128,7 +130,6 @@ rpmostree_sysroot_upgrader_pull_repos (RpmOstreeSysrootUpgrader  *self,
 
 gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
-                                   const char               *initiating_command_line,
                                    OstreeDeployment        **out_deployment,
                                    GCancellable             *cancellable,
                                    GError                  **error);

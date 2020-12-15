@@ -42,6 +42,8 @@ void               rpmostreed_daemon_remove_client  (RpmostreedDaemon *self,
                                                      const char *client);
 char *             rpmostreed_daemon_client_get_string (RpmostreedDaemon *self,
                                                         const char *client);
+char *             rpmostreed_daemon_client_get_agent_id (RpmostreedDaemon *self,
+                                                        const char *client);
 void               rpmostreed_daemon_exit_now       (RpmostreedDaemon *self);
 void               rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self);
 void               rpmostreed_daemon_publish        (RpmostreedDaemon *self,

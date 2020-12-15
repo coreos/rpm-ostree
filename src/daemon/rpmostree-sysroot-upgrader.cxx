@@ -65,6 +65,7 @@ struct RpmOstreeSysrootUpgrader {
   char *osname;
   RpmOstreeSysrootUpgraderFlags flags;
   char *command_line;
+  char *agent;
 
   OstreeDeployment *cfg_merge_deployment;
   OstreeDeployment *origin_merge_deployment;
@@ -211,6 +212,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_clear_object (&self->repo);
   g_free (self->osname);
   g_free (self->command_line);
+  g_free (self->agent);
 
   g_clear_object (&self->cfg_merge_deployment);
   g_clear_object (&self->origin_merge_deployment);
@@ -336,6 +338,15 @@ rpmostree_sysroot_upgrader_new (OstreeSysroot              *sysroot,
 {
   return (RpmOstreeSysrootUpgrader*)g_initable_new (RPMOSTREE_TYPE_SYSROOT_UPGRADER, cancellable, error,
                          "sysroot", sysroot, "osname", osname, "flags", flags, NULL);
+}
+
+void
+rpmostree_sysroot_upgrader_set_caller_info (RpmOstreeSysrootUpgrader *self, const char *initiating_command_line, const char *agent)
+{
+  g_free (self->command_line);
+  self->command_line = g_strdup (initiating_command_line);
+  g_free (self->agent);
+  self->agent = g_strdup (agent);
 }
 
 RpmOstreeOrigin *
@@ -1298,7 +1309,6 @@ rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self,
 static gboolean
 write_history (RpmOstreeSysrootUpgrader *self,
                OstreeDeployment         *new_deployment,
-               const char               *initiating_command_line,
                GCancellable             *cancellable,
                GError                  **error)
 {
@@ -1355,7 +1365,8 @@ write_history (RpmOstreeSysrootUpgrader *self,
                    /* we could use iovecs here and sd_journal_sendv to make these truly
                     * conditional, but meh, empty field works fine too */
                    "DEPLOYMENT_VERSION=%s", version ?: "",
-                   "COMMAND_LINE=%s", initiating_command_line ?: "",
+                   "COMMAND_LINE=%s", self->command_line ?: "",
+                   "AGENT=%s", self->agent ?: "",
                    NULL);
 
   return TRUE;
@@ -1374,7 +1385,6 @@ write_history (RpmOstreeSysrootUpgrader *self,
  */
 gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
-                                   const char               *initiating_command_line,
                                    OstreeDeployment        **out_deployment,
                                    GCancellable             *cancellable,
                                    GError                  **error)
@@ -1484,7 +1494,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
         return FALSE;
     }
 
-  if (!write_history (self, new_deployment, initiating_command_line, cancellable, error))
+  if (!write_history (self, new_deployment, cancellable, error))
     return FALSE;
 
   /* Also do a sanitycheck even if there's no local mutation; it's basically free
