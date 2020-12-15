@@ -1,2 +1,7 @@
 [workspace]
 members = ["bindgen"]
+
+# Might as well keep these from the main Rust source
+[profile.release]
+panic = "abort"
+debug = true
