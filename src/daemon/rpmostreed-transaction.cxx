@@ -41,8 +41,9 @@ struct _RpmostreedTransactionPrivate {
   char *sysroot_path;
   OstreeSysroot *sysroot;
   gboolean sysroot_locked;
-  /* Capture of the client description at txn creation time */
+  /* Capture of the client description and agent at txn creation time */
   char *client_description;
+  char *agent_id;
 
   gboolean redirect_output;
 
@@ -505,6 +506,7 @@ transaction_finalize (GObject *object)
   g_hash_table_destroy (priv->peer_connections);
 
   g_free (priv->client_description);
+  g_free (priv->agent_id);
 
   G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->finalize (object);
 }
@@ -538,6 +540,7 @@ transaction_constructed (GObject *object)
                                                        NULL);
 
       priv->client_description = rpmostreed_daemon_client_get_string (rpmostreed_daemon_get(), sender);
+      priv->agent_id = rpmostreed_daemon_client_get_agent_id (rpmostreed_daemon_get(), sender);
       rpmostree_transaction_set_initiating_client_description ((RPMOSTreeTransaction*)self, priv->client_description);
     }
 }
@@ -836,6 +839,15 @@ rpmostreed_transaction_get_client (RpmostreedTransaction *transaction)
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->client_description;
+}
+
+const char *
+rpmostreed_transaction_get_agent_id (RpmostreedTransaction *transaction)
+{
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
+  return priv->agent_id;
 }
 
 GDBusMethodInvocation *

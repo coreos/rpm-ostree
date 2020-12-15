@@ -721,6 +721,17 @@ rpmostreed_daemon_client_get_string (RpmostreedDaemon *self, const char *client)
     return rpmostree_client_to_string (clientdata);
 }
 
+/* Returns the caller's agent ID string; may be NULL if it's unset or the default */
+char *
+rpmostreed_daemon_client_get_agent_id (RpmostreedDaemon *self, const char *client)
+{
+  struct RpmOstreeClient *clientdata = g_hash_table_lookup (self->bus_clients, client);
+  if (!clientdata || clientdata->id == NULL || g_str_equal (clientdata->id, "cli"))
+    return NULL;
+  else
+    return g_strdup (clientdata->id);
+}
+
 void
 rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
                                  const char       *client)

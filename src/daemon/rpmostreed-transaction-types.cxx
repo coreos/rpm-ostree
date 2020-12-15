@@ -1344,6 +1344,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
     }
 
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)));
+
   /* TODO - better logic for "changed" based on deployments */
   if (changed || self->refspec)
     {
@@ -1359,7 +1361,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
 
       g_autoptr(OstreeDeployment) new_deployment = NULL;
-      if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, &new_deployment,
+      if (!rpmostree_sysroot_upgrader_deploy (upgrader, &new_deployment,
                                               cancellable, error))
         return FALSE;
 
@@ -1751,6 +1753,7 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags), cancellable, error);
   if (upgrader == NULL)
     return FALSE;
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)));
 
   g_autoptr(RpmOstreeOrigin) origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
@@ -1790,7 +1793,7 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, NULL, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
@@ -1924,8 +1927,9 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_origin_set_regenerate_initramfs (origin, self->regenerate, self->args);
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)));
 
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, NULL, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
@@ -2599,6 +2603,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags),
                                     cancellable, error);
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)));
 
   /* We need the upgrader to perform the deployment */
   if (upgrader == NULL)
@@ -2634,7 +2639,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   g_auto(GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);
   rpmostree_sysroot_upgrader_set_kargs (upgrader, kargs_strv);
 
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, NULL, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
