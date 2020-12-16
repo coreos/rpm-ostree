@@ -34,7 +34,8 @@ librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libp
 	-fvisibility=hidden '-D_RPMOSTREE_EXTERN=__attribute((visibility("default"))) extern' \
 	$(PKGDEP_RPMOSTREE_CFLAGS)
 librpmostree_1_la_LDFLAGS = $(AM_LDFLAGS) -version-number 1:0:0 -Bsymbolic-functions
-librpmostree_1_la_LIBADD =  $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la $(librpmostree_rust_path)
+librpmostree_1_la_LIBADD =  $(PKGDEP_RPMOSTREE_LIBS) libglnx.la
+EXTRA_librpmostree_1_la_DEPENDENCIES = libdnf.so.2
 
 # The g-ir-scanner creates a stub executable (to help introspect type information) which
 # links to our stuff. We want to make sure it picks up our fresh libdnf and not a possibly

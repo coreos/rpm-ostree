@@ -44,10 +44,6 @@ typedef GObjectClass RpmOstreePackageClass;
 struct RpmOstreePackage
 {
   GObject parent_instance;
-  /* libdnf-based pkg */
-  RpmOstreeRefSack *sack;
-  DnfPackage *hypkg;
-  /* gvariant-based pkg */
   GVariant *gv_nevra;
   /* deconstructed/cached values */
   char *nevra;
@@ -63,8 +59,6 @@ static void
 rpm_ostree_package_finalize (GObject *object)
 {
   RpmOstreePackage *pkg = (RpmOstreePackage*)object;
-  g_clear_pointer (&pkg->hypkg, g_object_unref);
-  g_clear_pointer (&pkg->sack, rpmostree_refsack_unref);
   g_clear_pointer (&pkg->gv_nevra, g_variant_unref);
 
   g_clear_pointer (&pkg->nevra, g_free);
@@ -150,9 +144,6 @@ rpm_ostree_package_get_arch (RpmOstreePackage *p)
 int
 rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
 {
-  if (p1->hypkg && p2->hypkg)
-    return dnf_package_cmp (p1->hypkg, p2->hypkg);
-
   int ret = strcmp (p1->name, p2->name);
   if (ret)
     return ret;
@@ -167,25 +158,6 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
     return ret;
 
   return strcmp (p1->arch, p2->arch);
-}
-
-RpmOstreePackage *
-_rpm_ostree_package_new (RpmOstreeRefSack *rsack, DnfPackage *hypkg)
-{
-  RpmOstreePackage *p = g_object_new (RPM_OSTREE_TYPE_PACKAGE, NULL);
-  /* We do internal refcounting of the sack because hawkey doesn't */
-  p->sack = rpmostree_refsack_ref (rsack);
-  p->hypkg = g_object_ref (hypkg);
-
-  /* we deconstruct now to make accessors simpler */
-
-  /* cache nevra internally because we can't rely on libsolv
-   * https://github.com/rpm-software-management/libdnf/pull/388 */
-  p->nevra = g_strdup (dnf_package_get_nevra (p->hypkg));
-  p->name = dnf_package_get_name (p->hypkg);
-  p->evr = dnf_package_get_evr (p->hypkg);
-  p->arch = dnf_package_get_arch (p->hypkg);
-  return p;
 }
 
 RpmOstreePackage*
@@ -220,22 +192,6 @@ get_commit_rpmdb_pkglist (GVariant *commit)
                                       G_VARIANT_TYPE ("a(sssss)"));
 }
 
-static GPtrArray *
-query_all_packages_in_sack (RpmOstreeRefSack *rsack)
-{
-  g_autoptr(GPtrArray) result = g_ptr_array_new_with_free_func (g_object_unref);
-  g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (rsack->sack);
-
-  const guint c = pkglist->len;
-  for (guint i = 0; i < c; i++)
-    {
-      DnfPackage *pkg = pkglist->pdata[i];
-      g_ptr_array_add (result, _rpm_ostree_package_new (rsack, pkg));
-    }
-
-  return g_steal_pointer (&result);
-}
-
 /* Opportunistically try to use the new rpmostree.rpmdb.pkglist metadata, otherwise fall
  * back to commit rpmdb if available.
  *
@@ -260,28 +216,7 @@ _rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
 
   g_autoptr(GVariant) pkglist_v = get_commit_rpmdb_pkglist (commit);
   if (!pkglist_v)
-    {
-      /* file-based rpmdb fallback; let fail if rpmdb not available */
-      g_autoptr(GError) local_error = NULL;
-      g_autoptr(RpmOstreeRefSack) rsack =
-        rpmostree_get_refsack_for_commit (repo, rev, cancellable, &local_error);
-      if (!rsack)
-        {
-          if (allow_noent &&
-              g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-            {
-              *out_pkglist = NULL;
-              return TRUE; /* NB: early return */
-            }
-
-          g_propagate_error (error, g_steal_pointer (&local_error));
-          return FALSE;
-        }
-
-      /* Note early return */
-      *out_pkglist = query_all_packages_in_sack (rsack);
-      return TRUE;
-    }
+    return glnx_throw (error, "No package list in commit %s metadata", checksum);
 
   g_autoptr(GPtrArray) pkglist = g_ptr_array_new_with_free_func (g_object_unref);
   const guint n = g_variant_n_children (pkglist_v);
