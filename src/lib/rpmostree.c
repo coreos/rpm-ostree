@@ -39,8 +39,6 @@
  * These APIs access generic global state.
  */
 
-#define IPC_FD 3
-
 GVariant *
 _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd, GError **error)
 {
@@ -49,7 +47,7 @@ _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd
   if (socketpair (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) < 0)
     return (GVariant*)glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
   glnx_fd_close int my_sock_fd = glnx_steal_fd (&pair[0]);
-  g_subprocess_launcher_take_fd (launcher, pair[1], IPC_FD);
+  g_subprocess_launcher_take_fd (launcher, pair[1], RPMOSTREE_SHLIB_IPC_FD);
 
   if (wd != NULL)
     g_subprocess_launcher_set_cwd (launcher, wd);
@@ -87,6 +85,7 @@ _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd
   if (r < 0)
     return NULL;
   g_assert_cmpint (r, ==, 1);
+  g_assert_cmphex (buffer[0], ==, 0xFF);
 
   if (nm != 1)
     return glnx_null_throw (error, "Got %d control messages, expected 1", nm);
