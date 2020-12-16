@@ -61,6 +61,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-composeutil.h \
 	src/app/rpmostree-builtin-compose.c \
 	$(librpmostreed_sources) \
+	$(librpmostreepriv_sources) \
 	$(NULL)
 
 if BUILDOPT_ROJIG
@@ -71,7 +72,7 @@ rpm_ostree_SOURCES += \
 	$(NULL)
 endif
 
-nodist_rpm_ostree_SOURCES = $(dbus_built_sources)
+nodist_rpm_ostree_SOURCES = $(dbus_built_sources) $(nodist_librpmostreepriv_sources)
 
 rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
@@ -81,7 +82,7 @@ rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	$(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
 rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
-rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostreepriv.la librpmostree-1.la
+rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostree-1.la
 EXTRA_rpm_ostree_DEPENDENCIES = libdnf.so.2
 
 privdatadir=$(pkglibdir)

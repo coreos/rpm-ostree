@@ -15,9 +15,7 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-noinst_LTLIBRARIES += librpmostreepriv.la
-
-librpmostreepriv_la_SOURCES = \
+librpmostreepriv_sources = \
 	src/libpriv/rpmostree-postprocess.cxx \
 	src/libpriv/rpmostree-postprocess.h \
 	src/libpriv/rpmostree-json-parsing.c \
@@ -61,7 +59,7 @@ librpmostreepriv_la_SOURCES = \
 	$(NULL)
 
 if BUILDOPT_ROJIG
-librpmostreepriv_la_SOURCES += \
+librpmostreepriv_sources += \
 	src/libpriv/rpmostree-rojig-build.c \
 	src/libpriv/rpmostree-rojig-build.h \
 	src/libpriv/rpmostree-rojig-assembler.c \
@@ -71,36 +69,16 @@ librpmostreepriv_la_SOURCES += \
 	$(NULL)
 endif
 
-rpmostreepriv_common_cflags = -I$(srcdir)/src/lib \
-	-I$(srcdir)/src/libpriv \
-	-I$(libglnx_srcpath) \
-	-DLIBDIR=\"$(libdir)\" \
-	-DPKGLIBDIR=\"$(pkglibdir)\" \
-	-fvisibility=hidden \
-	$(PKGDEP_RPMOSTREE_CFLAGS) \
-	$(NULL)
-librpmostreepriv_la_CFLAGS = $(AM_CFLAGS) $(rpmostreepriv_common_cflags)
-librpmostreepriv_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostreepriv_common_cflags)
-
-librpmostreepriv_la_LIBADD = \
-	$(PKGDEP_RPMOSTREE_LIBS) \
-	libglnx.la \
-	$(CAP_LIBS) \
-	$(NULL)
-
-# bundled libdnf
-EXTRA_librpmostreepriv_la_DEPENDENCIES = libdnf.so.2
-
 gperf_gperf_sources = src/libpriv/rpmostree-script-gperf.gperf
 BUILT_SOURCES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)
 CLEANFILES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)
 
-nodist_librpmostreepriv_la_SOURCES = src/libpriv/rpmostree-script-gperf.c
+nodist_librpmostreepriv_sources = src/libpriv/rpmostree-script-gperf.c
 
 rpmostree-libpriv-gresources.c: src/libpriv/gresources.xml Makefile $(shell glib-compile-resources --sourcedir=$(srcdir)/src/libpriv --generate-dependencies $(srcdir)/src/libpriv/gresources.xml)
 	$(AM_V_GEN) glib-compile-resources --target=$@ --sourcedir=$(srcdir)/src/libpriv --generate-source --c-name _rpmostree_ $<
 BUILT_SOURCES += rpmostree-libpriv-gresources.c
-librpmostreepriv_la_SOURCES += rpmostree-libpriv-gresources.c
+librpmostreepriv_sources += rpmostree-libpriv-gresources.c
 
 AM_V_GPERF = $(AM_V_GPERF_$(V))
 AM_V_GPERF_ = $(AM_V_GPERF_$(AM_DEFAULT_VERBOSITY))
