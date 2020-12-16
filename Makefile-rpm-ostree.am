@@ -18,8 +18,6 @@
 bin_PROGRAMS += rpm-ostree
 
 rpm_ostree_SOURCES = src/app/main.cxx \
-	rpm-ostreed-generated.h \
-	rpm-ostreed-generated.c \
 	src/app/rpmostree-builtins.h \
 	src/app/rpmostree-db-builtins.h \
 	src/app/rpmostree-compose-builtins.h \
@@ -62,6 +60,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-composeutil.c \
 	src/app/rpmostree-composeutil.h \
 	src/app/rpmostree-builtin-compose.c \
+	$(librpmostreed_sources) \
 	$(NULL)
 
 if BUILDOPT_ROJIG
@@ -72,12 +71,18 @@ rpm_ostree_SOURCES += \
 	$(NULL)
 endif
 
+nodist_rpm_ostree_SOURCES = $(dbus_built_sources)
+
 rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
-	-fvisibility=hidden -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+	-fvisibility=hidden \
+	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
+	-DLIBDIR=\"$(libdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" \
+	$(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
 rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
-rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.la librpmostreed.la
+rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostreepriv.la librpmostree-1.la
+EXTRA_rpm_ostree_DEPENDENCIES = libdnf.so.2
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
