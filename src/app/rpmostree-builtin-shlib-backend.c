@@ -32,6 +32,7 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-rpm-util.h"
 #include "rpmostree.h"
 #include "rpmostree-core.h"
 #include "src/lib/rpmostree-shlib-ipc-private.h"
@@ -39,14 +40,12 @@
 #include <libglnx.h>
 
 static gboolean
-send_memfd_result (int ret_memfd, GError **error)
+send_memfd_result (GSocket *ipc_sock, int ret_memfd, GError **error)
 {
   int fdarray[] = {ret_memfd, -1 };
   g_autoptr(GUnixFDList) list = g_unix_fd_list_new_from_array (fdarray, 1);
   g_autoptr(GUnixFDMessage) message = G_UNIX_FD_MESSAGE (g_unix_fd_message_new_with_fd_list (list));
-  g_autoptr(GSocket) ipc_sock = g_socket_new_from_fd (RPMOSTREE_SHLIB_IPC_FD, error);
-  if (!ipc_sock)
-    return FALSE;
+
   GOutputVector ov;
   char buffer[1];
   buffer[0] = 0xFF;
@@ -62,6 +61,24 @@ send_memfd_result (int ret_memfd, GError **error)
   return TRUE;
 }
 
+static GVariant *
+impl_packagelist_from_commit (OstreeRepo *repo, const char *commit, GError **error)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(RpmOstreeRefSack) rsack =
+    rpmostree_get_refsack_for_commit (repo, commit, NULL, &local_error);
+  if (!rsack)
+    {
+      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        return g_variant_new_maybe ((GVariantType*) RPMOSTREE_SHLIB_IPC_PKGLIST, NULL);
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return NULL;
+    }
+
+  g_autoptr(GVariant) pkgs = rpmostree_variant_pkgs_from_sack (rsack);
+  return g_variant_ref_sink (g_variant_new_maybe ((GVariantType*) RPMOSTREE_SHLIB_IPC_PKGLIST, pkgs));
+}
+
 gboolean
 rpmostree_builtin_shlib_backend (int             argc,
                                  char          **argv,
@@ -73,6 +90,10 @@ rpmostree_builtin_shlib_backend (int             argc,
     return glnx_throw (error, "missing required subcommand");
 
   const char *arg = argv[1];
+
+  g_autoptr(GSocket) ipc_sock = g_socket_new_from_fd (RPMOSTREE_SHLIB_IPC_FD, error);
+  if (!ipc_sock)
+    return FALSE;
 
   g_autoptr(GVariant) ret = NULL;
 
@@ -91,6 +112,16 @@ rpmostree_builtin_shlib_backend (int             argc,
         return FALSE;
       ret = g_variant_new_string (rets);
     }
+   else if (g_str_equal (arg, "packagelist-from-commit"))
+    {
+      OstreeRepo *repo = ostree_repo_open_at (AT_FDCWD, ".", NULL, error);
+      if (!repo)
+        return FALSE;
+      const char *commit = argv[2];
+      ret = impl_packagelist_from_commit (repo, commit, error);
+      if (!ret)
+        return FALSE;
+    }
   else
     return glnx_throw (error, "unknown shlib-backend %s", arg);
 
@@ -103,5 +134,5 @@ rpmostree_builtin_shlib_backend (int             argc,
   if (fcntl (ret_memfd, F_ADD_SEALS, seals) == -1)
     return glnx_throw_errno_prefix (error, "fcntl(sealing)");
 
-  return send_memfd_result (glnx_steal_fd (&ret_memfd), error);
+  return send_memfd_result (ipc_sock, glnx_steal_fd (&ret_memfd), error);
 }
