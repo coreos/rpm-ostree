@@ -1221,17 +1221,9 @@ rpmostree_sack_get_sorted_packages (DnfSack *sack)
   return g_steal_pointer (&pkglist);
 }
 
-gboolean
-rpmostree_create_rpmdb_pkglist_variant (int              dfd,
-                                        const char      *path,
-                                        GVariant       **out_variant,
-                                        GCancellable    *cancellable,
-                                        GError         **error)
+GVariant *
+rpmostree_variant_pkgs_from_sack (RpmOstreeRefSack *refsack)
 {
-  g_autoptr(RpmOstreeRefSack) refsack = rpmostree_get_refsack_for_root (dfd, path, error);
-  if (!refsack)
-    return FALSE;
-
   /* we insert it sorted here so it can efficiently be searched on retrieval */
   g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (refsack->sack);
 
@@ -1253,7 +1245,21 @@ rpmostree_create_rpmdb_pkglist_variant (int              dfd,
                              dnf_package_get_arch (pkg));
     }
 
-  *out_variant = g_variant_ref_sink (g_variant_builder_end (&pkglist_v_builder));
+  return g_variant_ref_sink (g_variant_builder_end (&pkglist_v_builder));
+}
+
+gboolean
+rpmostree_create_rpmdb_pkglist_variant (int              dfd,
+                                        const char      *path,
+                                        GVariant       **out_variant,
+                                        GCancellable    *cancellable,
+                                        GError         **error)
+{
+  g_autoptr(RpmOstreeRefSack) refsack = rpmostree_get_refsack_for_root (dfd, path, error);
+  if (!refsack)
+    return FALSE;
+
+  *out_variant = rpmostree_variant_pkgs_from_sack (refsack);
   return TRUE;
 }
 

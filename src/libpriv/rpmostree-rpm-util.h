@@ -127,6 +127,8 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
                                 GCancellable              *cancellable,
                                 GError                   **error);
 
+GVariant *rpmostree_variant_pkgs_from_sack (RpmOstreeRefSack *sack);
+
 gint
 rpmostree_pkg_array_compare (DnfPackage **p_pkg1,
                              DnfPackage **p_pkg2);

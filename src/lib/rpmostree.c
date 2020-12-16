@@ -23,11 +23,12 @@
 #include <gio/gio.h>
 #include <gio/gunixfdmessage.h>
 #include <gio/gunixsocketaddress.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include "string.h"
+#include "libglnx.h"
 
 #include "rpmostree.h"
-#include "rpmostree-core.h"
-#include "rpmostree-util.h"
 #include "rpmostree-shlib-ipc-private.h"
 
 /**
@@ -41,7 +42,7 @@
 #define IPC_FD 3
 
 GVariant *
-_rpmostree_shlib_ipc_send (const char *variant_type, char **args, GError **error)
+_rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd, GError **error)
 {
   g_autoptr(GSubprocessLauncher) launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_PIPE);
   int pair[2];
@@ -49,6 +50,9 @@ _rpmostree_shlib_ipc_send (const char *variant_type, char **args, GError **error
     return (GVariant*)glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
   glnx_fd_close int my_sock_fd = glnx_steal_fd (&pair[0]);
   g_subprocess_launcher_take_fd (launcher, pair[1], IPC_FD);
+
+  if (wd != NULL)
+    g_subprocess_launcher_set_cwd (launcher, wd);
 
   g_autoptr(GSocket) my_sock = g_socket_new_from_fd (my_sock_fd, error);
   if (!my_sock)
@@ -112,7 +116,7 @@ rpm_ostree_get_basearch (void)
 {
   g_autoptr(GError) local_error = NULL;
   char *args[] = { "get-basearch", NULL };
-  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, &local_error);
+  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, NULL, &local_error);
   g_assert_no_error (local_error);
   return g_variant_dup_string (ret, NULL);
 }
@@ -129,7 +133,7 @@ rpm_ostree_varsubst_basearch (const char *src, GError **error)
 {
   g_autoptr(GError) local_error = NULL;
   char *args[] = { "varsubst-basearch", (char*)src, NULL };
-  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, &local_error);
+  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, NULL, &local_error);
   g_assert_no_error (local_error);
   return g_variant_dup_string (ret, NULL);
 }
