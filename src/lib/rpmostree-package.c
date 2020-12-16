@@ -220,9 +220,6 @@ _rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
    * wants to link to this shared library too.  So for now if we don't
    * find the pkglist in the commit metadata, just return as if it's
    * empty.
-   *
-   * TODO: Rework this to run via the special shlib-ipc that is used
-   * in rpmostree.c.
    */
   g_autoptr(GVariant) pkglist_v = get_commit_rpmdb_pkglist (commit);
   if (!pkglist_v)
