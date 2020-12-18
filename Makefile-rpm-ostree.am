@@ -58,7 +58,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-polkit-agent.h \
 	src/app/rpmostree-builtin-kargs.c \
 	src/app/rpmostree-compose-builtin-tree.cxx \
-	src/app/rpmostree-composeutil.c \
+	src/app/rpmostree-composeutil.cxx \
 	src/app/rpmostree-composeutil.h \
 	src/app/rpmostree-builtin-compose.c \
 	$(NULL)
