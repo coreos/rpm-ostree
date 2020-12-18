@@ -243,7 +243,7 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
   /* at least one of `repos` and `lockfile-repos` should be defined */
   if (!json_object_has_member (treedata, "repos") &&
       !json_object_has_member (treedata, "lockfile-repos"))
-    return glnx_null_throw (error, "Treefile has neither \"repos\" nor \"lockfile-repos\" members");
+    return (RpmOstreeTreespec*)glnx_null_throw (error, "Treefile has neither \"repos\" nor \"lockfile-repos\" members");
 
   if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))
     return NULL;
@@ -357,7 +357,7 @@ rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
       g_variant_unref (orig);
     }
 
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 /* Implements --write-composejson-to, and also prints values.
