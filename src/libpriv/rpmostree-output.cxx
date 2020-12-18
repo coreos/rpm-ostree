@@ -41,7 +41,7 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_BEGIN:
     {
-      RpmOstreeOutputProgressBegin *begin = data;
+      auto begin = static_cast<RpmOstreeOutputProgressBegin *>(data);
       if (begin->percent)
         ror_progress_begin_percent (begin->prefix);
       else if (begin->n > 0)
@@ -52,19 +52,19 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
     {
-      RpmOstreeOutputProgressUpdate *upd = data;
+      auto upd = static_cast<RpmOstreeOutputProgressUpdate *>(data);
       ror_progress_update (upd->c);
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
     {
-      const char *msg = data;
+      auto msg = static_cast<const char *>(data);
       ror_progress_set_sub_message (msg);
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_END:
     {
-      RpmOstreeOutputProgressEnd *end = data;
+      auto end = static_cast<RpmOstreeOutputProgressEnd *>(data);
       ror_progress_end (end->msg);
       break;
     }
@@ -129,7 +129,7 @@ rpmostree_output_progress_end_msg (RpmOstreeProgress *taskp, const char *format,
 void
 rpmostree_output_progress_percent (int percentage)
 {
-  RpmOstreeOutputProgressUpdate progress = { percentage };
+  RpmOstreeOutputProgressUpdate progress = { (guint)percentage };
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
 }
 
