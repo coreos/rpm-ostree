@@ -130,10 +130,10 @@ rpm_ostree_get_basearch (void)
 char *
 rpm_ostree_varsubst_basearch (const char *src, GError **error)
 {
-  g_autoptr(GError) local_error = NULL;
   char *args[] = { "varsubst-basearch", (char*)src, NULL };
-  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, NULL, &local_error);
-  g_assert_no_error (local_error);
+  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, NULL, error);
+  if (!ret)
+    return NULL;
   return g_variant_dup_string (ret, NULL);
 }
 
