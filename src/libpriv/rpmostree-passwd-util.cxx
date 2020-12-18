@@ -134,7 +134,7 @@ dir_contains_gid (int              rootfs_fd,
 static void
 conv_passwd_ent_free (void *vptr)
 {
-  struct conv_passwd_ent *ptr = vptr;
+  auto ptr = static_cast<struct conv_passwd_ent *>(vptr);
 
   g_free (ptr->name);
   g_free (ptr->pw_gecos);
@@ -181,7 +181,7 @@ compare_passwd_ents (gconstpointer a, gconstpointer b)
 static void
 conv_group_ent_free (void *vptr)
 {
-  struct conv_group_ent *ptr = vptr;
+  auto ptr = static_cast<struct conv_group_ent *>(vptr);
 
   g_free (ptr->name);
   g_free (ptr);
@@ -190,7 +190,7 @@ conv_group_ent_free (void *vptr)
 static void
 sysuser_ent_free (void *vptr)
 {
-  struct sysuser_ent *ptr = vptr;
+  auto ptr = static_cast<struct sysuser_ent *>(vptr);
   g_free (ptr->name);
   g_free (ptr->id);
   g_free (ptr->gecos);
@@ -266,7 +266,7 @@ rpmostree_passwdents2sysusers (GPtrArray  *passwd_ents,
 
   for (int counter = 0; counter < passwd_ents->len; counter++)
     {
-      struct conv_passwd_ent *convent = passwd_ents->pdata[counter];
+      auto convent = static_cast<struct conv_passwd_ent *>(passwd_ents->pdata[counter]);
       struct sysuser_ent *sysent = g_new (struct sysuser_ent, 1);
 
       /* Systemd-sysusers also supports uid:gid format. That case was used
@@ -283,14 +283,14 @@ rpmostree_passwdents2sysusers (GPtrArray  *passwd_ents,
       sysent->gecos = (g_str_equal (convent->pw_gecos, "")) ? NULL :
                        g_strdup_printf ("\"%s\"", convent->pw_gecos);
       sysent->dir = (g_str_equal (convent->pw_dir, ""))? NULL :
-                    g_steal_pointer (&convent->pw_dir);
-      sysent->shell = g_steal_pointer (&convent->pw_shell);
+                    util::move_nullify (convent->pw_dir);
+      sysent->shell = util::move_nullify (convent->pw_shell);
 
       g_ptr_array_add (sysusers_array, sysent);
     }
   /* Do the assignment at the end if the sysusers_table was not initialized */
   if (*out_sysusers_entries == NULL)
-    *out_sysusers_entries = g_steal_pointer (&sysusers_array);
+    *out_sysusers_entries = util::move_nullify (sysusers_array);
 
   return TRUE;
 }
@@ -306,11 +306,11 @@ rpmostree_groupents2sysusers (GPtrArray  *group_ents,
 
   for (int counter = 0; counter < group_ents->len; counter++)
     {
-      struct conv_group_ent *convent = group_ents->pdata[counter];
+      auto convent = static_cast<struct conv_group_ent *>(group_ents->pdata[counter]);
       struct sysuser_ent *sysent = g_new (struct sysuser_ent, 1);
 
       sysent->type = "g";
-      sysent->name = g_steal_pointer (&convent->name);
+      sysent->name = util::move_nullify (convent->name);
       sysent->id = g_strdup_printf ("%u", convent->gid);
       sysent->gecos = NULL;
       sysent->dir = NULL;
@@ -320,7 +320,7 @@ rpmostree_groupents2sysusers (GPtrArray  *group_ents,
     }
   /* Do the assignment at the end if the sysusers_array was not initialized */
   if (*out_sysusers_entries == NULL)
-    *out_sysusers_entries = g_steal_pointer (&sysusers_array);
+    *out_sysusers_entries = util::move_nullify (sysusers_array);
 
   return TRUE;
 }
@@ -336,7 +336,7 @@ rpmostree_passwd_sysusers2char (GPtrArray *sysusers_entries,
   g_ptr_array_sort (sysusers_entries, compare_sysuser_ents);
   for (int counter = 0; counter < sysusers_entries->len; counter++)
     {
-      struct sysuser_ent *sysent = sysusers_entries->pdata[counter];
+      auto sysent = static_cast<struct sysuser_ent *>(sysusers_entries->pdata[counter]);
       const char *shell = sysent->shell ?: "-";
       const char *gecos = sysent->gecos ?: "-";
       const char *dir = sysent->dir ?: "-";
@@ -409,7 +409,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
           for (iter = ents; iter; iter = iter->next)
             if (passwd)
             {
-              const char *name = iter->data;
+              auto name = static_cast<const char *>(iter->data);
               JsonNode *val = json_object_get_member (ents_obj, name);
               JsonNodeType child_type = json_node_get_node_type (val);
               gint64 uid = 0;
@@ -445,13 +445,13 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             }
             else
             {
-              const char *name = iter->data;
+              auto name = static_cast<const char *>(iter->data);
               gint64 gid = 0;
 
               if (!_rpmostree_jsonutil_object_require_int_member (ents_obj, name, &gid, error))
                 return FALSE;
 
-              struct conv_group_ent *convent = g_new (struct conv_group_ent, 1);
+              auto convent = static_cast<struct conv_group_ent *>(g_new (struct conv_group_ent, 1));
               convent->name = g_strdup (name);
               convent->gid  = gid;
               g_ptr_array_add (old_ents, convent);
@@ -540,11 +540,9 @@ rpmostree_check_passwd_groups (gboolean         passwd,
   while ((oiter < old_ents->len) && (niter < new_ents->len))
     if (passwd)
     {
-      struct conv_passwd_ent *odata = old_ents->pdata[oiter];
-      struct conv_passwd_ent *ndata = new_ents->pdata[niter];
-      int cmp = 0;
-
-      cmp = g_strcmp0 (odata->name, ndata->name);
+      auto odata = static_cast<struct conv_passwd_ent *>(old_ents->pdata[oiter]);
+      auto ndata = static_cast<struct conv_passwd_ent *>(new_ents->pdata[niter]);
+      int cmp = g_strcmp0 (odata->name, ndata->name);
 
       if (cmp == 0)
         {
@@ -591,8 +589,8 @@ rpmostree_check_passwd_groups (gboolean         passwd,
     }
     else
     {
-      struct conv_group_ent *odata = old_ents->pdata[oiter];
-      struct conv_group_ent *ndata = new_ents->pdata[niter];
+      auto odata = static_cast<struct conv_group_ent *>(old_ents->pdata[oiter]);
+      auto ndata = static_cast<struct conv_group_ent *>(new_ents->pdata[niter]);
       int cmp = 0;
 
       cmp = g_strcmp0 (odata->name, ndata->name);
@@ -644,14 +642,14 @@ rpmostree_check_passwd_groups (gboolean         passwd,
     {
       if (oiter < old_ents->len)
         {
-          struct conv_passwd_ent *odata = old_ents->pdata[oiter];
+          auto odata = static_cast<struct conv_passwd_ent *>(old_ents->pdata[oiter]);
 
           return glnx_throw (error, "User missing from new passwd file: %s", odata->name);
         }
 
       while (niter < new_ents->len)
         {
-          struct conv_passwd_ent *ndata = new_ents->pdata[niter];
+          auto ndata = static_cast<struct conv_passwd_ent *>(new_ents->pdata[niter]);
 
           g_print ("New passwd entry: %s\n", ndata->name);
           ++niter;
@@ -661,14 +659,14 @@ rpmostree_check_passwd_groups (gboolean         passwd,
     {
       if (oiter < old_ents->len)
         {
-          struct conv_group_ent *odata = old_ents->pdata[oiter];
+          auto odata = static_cast<struct conv_group_ent *>(old_ents->pdata[oiter]);
 
           return glnx_throw (error, "Group missing from new group file: %s", odata->name);
         }
 
       while (niter < new_ents->len)
         {
-          struct conv_group_ent *ndata = new_ents->pdata[niter];
+          auto ndata = static_cast<struct conv_group_ent *>(new_ents->pdata[niter]);
 
           g_print ("New group entry: %s\n", ndata->name);
           ++niter;
@@ -727,7 +725,7 @@ open_file_stream_read_at (int dfd,
     return FALSE;
   FILE *ret = fdopen (fd, "r");
   if (!ret)
-    return glnx_null_throw_errno_prefix (error, "fdopen");
+    return (FILE*)glnx_null_throw_errno_prefix (error, "fdopen");
   /* fdopen() steals ownership of fd */
   fd = -1;
   return ret;
@@ -745,10 +743,10 @@ open_file_stream_write_at (int dfd,
    */
   glnx_autofd int fd = openat (dfd, path, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY, 0664);
   if (fd < 0)
-    return glnx_null_throw_errno_prefix (error, "openat(%s)", path);
+    return (FILE*)glnx_null_throw_errno_prefix (error, "openat(%s)", path);
   FILE *ret = fdopen (fd, mode);
   if (!ret)
-    return glnx_null_throw_errno_prefix (error, "fdopen");
+    return (FILE*)glnx_null_throw_errno_prefix (error, "fdopen");
   /* fdopen() steals ownership of fd */
   fd = -1;
   return ret;
@@ -890,7 +888,7 @@ _rpmostree_gfile2stdio (GFile         *source,
   if (!src_stream)
     return glnx_throw_errno_prefix (error, "fmemopen");
 
-  *ret_src_stream = g_steal_pointer (&src_stream);
+  *ret_src_stream = util::move_nullify (src_stream);
   return TRUE;
 }
 
@@ -1245,7 +1243,7 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
           if (!glnx_file_copy_at (AT_FDCWD,
                                   glnx_strjoina (merge_passwd_dir, "/", file), NULL,
                                   rootfs_dfd, usrlibfiletmp,
-                                  GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOXATTRS,
+                                  static_cast<GLnxFileCopyFlags>(GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOXATTRS),
                                   cancellable, error))
             return FALSE;
 
@@ -1351,19 +1349,19 @@ rpmostree_passwddb_open (int rootfs, GCancellable *cancellable, GError **error)
   if (!add_groups_to_hash (rootfs, "usr/lib/group", ret->groups, error))
     return NULL;
 
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 const char *
 rpmostree_passwddb_lookup_user (RpmOstreePasswdDB *db, uid_t uid)
 {
-  return g_hash_table_lookup (db->users, GUINT_TO_POINTER (uid));
+  return static_cast<const char*>(g_hash_table_lookup (db->users, GUINT_TO_POINTER (uid)));
 }
 
 const char *
 rpmostree_passwddb_lookup_group (RpmOstreePasswdDB *db, gid_t gid)
 {
-  return g_hash_table_lookup (db->groups, GUINT_TO_POINTER (gid));
+  return static_cast<const char*>(g_hash_table_lookup (db->groups, GUINT_TO_POINTER (gid)));
 }
 
 void
