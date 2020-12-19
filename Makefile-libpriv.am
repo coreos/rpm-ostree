@@ -54,7 +54,7 @@ librpmostreepriv_sources = \
 	src/libpriv/libsd-locale-util.h \
 	src/libpriv/libsd-time-util.c \
 	src/libpriv/libsd-time-util.h \
-	src/libpriv/rpmostree-libarchive-input-stream.c \
+	src/libpriv/rpmostree-libarchive-input-stream.cxx \
 	src/libpriv/rpmostree-libarchive-input-stream.h \
 	$(NULL)
 
