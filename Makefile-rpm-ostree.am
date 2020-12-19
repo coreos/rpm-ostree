@@ -68,7 +68,7 @@ if BUILDOPT_ROJIG
 rpm_ostree_SOURCES += \
 	src/app/rpmostree-ex-builtin-commit2rojig.cxx \
 	src/app/rpmostree-ex-builtin-rojig2commit.cxx \
-	src/app/rpmostree-compose-builtin-rojig.c \
+	src/app/rpmostree-compose-builtin-rojig.cxx \
 	$(NULL)
 endif
 
