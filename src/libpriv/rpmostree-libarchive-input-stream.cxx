@@ -82,9 +82,9 @@ _rpm_ostree_libarchive_input_stream_class_init (RpmOstreeLibarchiveInputStreamCl
                                    PROP_ARCHIVE,
                                    g_param_spec_pointer ("archive",
                                                          "", "",
-                                                         G_PARAM_READWRITE |
+                                                         (GParamFlags)(G_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT_ONLY |
-                                                         G_PARAM_STATIC_STRINGS));
+                                                         G_PARAM_STATIC_STRINGS)));
 
 }
 
@@ -98,7 +98,7 @@ rpm_ostree_libarchive_input_stream_set_property (GObject         *object,
   switch (prop_id)
     {
     case PROP_ARCHIVE:
-      self->priv->archive = g_value_get_pointer (value);
+      self->priv->archive = static_cast<archive*>(g_value_get_pointer (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
