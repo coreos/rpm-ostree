@@ -221,7 +221,7 @@ install_packages (RpmOstreeRojigCompose  *self,
 
   if (out_unmodified)
     *out_unmodified = FALSE;
-  *out_new_inputhash = g_steal_pointer (&ret_new_inputhash);
+  *out_new_inputhash = util::move_nullify (ret_new_inputhash);
   return TRUE;
 }
 
@@ -310,7 +310,7 @@ rpm_ostree_rojig_compose_new (const char    *treefile_path,
                                                        TRUE,
                                                        error);
 
-  *out_context = g_steal_pointer (&self);
+  *out_context = util::move_nullify (self);
   return TRUE;
 }
 
@@ -356,7 +356,7 @@ impl_rojig_build (RpmOstreeRojigCompose *self,
                                                       rojig_output_repo_id,
                                                       outdir);
     if (!glnx_file_replace_contents_at (self->workdir_dfd, repopath,
-                                        (guint8*)repo_contents, -1, 0,
+                                        (guint8*)repo_contents, -1, (GLnxFileReplaceFlags)0,
                                         cancellable, error))
       return FALSE;
   }
@@ -414,7 +414,7 @@ impl_rojig_build (RpmOstreeRojigCompose *self,
     }
   else
     {
-      GVariant *v = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
+      auto v = (GVariant *)g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
       if (v)
         {
           g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
