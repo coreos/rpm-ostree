@@ -19,6 +19,11 @@ mod ffi {
         fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>>;
         fn undo(self: &TempEtcGuard) -> Result<()>;
     }
+
+    // utils.rs
+    extern "Rust" {
+        fn download_to_fd(url: &str) -> Result<i32>;
+    }
 }
 
 mod cliwrap;
