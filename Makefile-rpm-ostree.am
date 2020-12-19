@@ -51,7 +51,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-dbus-helpers.h \
 	src/app/rpmostree-override-builtins.h \
 	src/app/rpmostree-override-builtins.c \
-	src/app/rpmostree-libbuiltin.c \
+	src/app/rpmostree-libbuiltin.cxx \
 	src/app/rpmostree-libbuiltin.h \
 	src/app/rpmostree-polkit-agent.c \
 	src/app/rpmostree-polkit-agent.h \
