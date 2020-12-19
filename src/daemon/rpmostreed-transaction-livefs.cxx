@@ -86,14 +86,14 @@ livefs_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-livefs_transaction_class_init (LiveFsTransactionClass *class)
+livefs_transaction_class_init (LiveFsTransactionClass *clazz)
 {
   GObjectClass *object_class;
 
-  object_class = G_OBJECT_CLASS (class);
+  object_class = G_OBJECT_CLASS (clazz);
   object_class->finalize = livefs_transaction_finalize;
 
-  class->execute = livefs_transaction_execute;
+  clazz->execute = livefs_transaction_execute;
 }
 
 static void
@@ -108,21 +108,17 @@ rpmostreed_transaction_new_livefs (GDBusMethodInvocation *invocation,
                                    GCancellable          *cancellable,
                                    GError               **error)
 {
-  LiveFsTransaction *self;
-
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  self = g_initable_new (livefs_transaction_get_type (),
+  auto self = (LiveFsTransaction *)g_initable_new (livefs_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
                          "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
                          NULL);
 
   if (self != NULL)
-    {
-      self->options = g_variant_ref (options);
-    }
+    self->options = g_variant_ref (options);
 
   return (RpmostreedTransaction *) self;
 }
