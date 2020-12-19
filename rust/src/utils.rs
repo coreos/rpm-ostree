@@ -206,19 +206,8 @@ mod ffi {
     use std::os::unix::io::IntoRawFd;
     use std::ptr;
 
-    #[no_mangle]
-    pub extern "C" fn ror_download_to_fd(
-        url: *const libc::c_char,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let url: Borrowed<glib::GString> = unsafe { from_glib_borrow(url) };
-        match download_url_to_tmpfile(url.as_str()) {
-            Ok(f) => f.into_raw_fd(),
-            Err(e) => {
-                error_to_glib(&e, gerror);
-                -1
-            }
-        }
+    pub(crate) fn download_to_fd(url: &str) -> Result<i32> {
+        download_url_to_tmpfile(url).map(|f| f.into_raw_fd())
     }
 
     #[no_mangle]
