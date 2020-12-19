@@ -97,7 +97,7 @@ rpm_ostree_rojig2commit_context_new (RpmOstreeRojig2CommitContext **out_context,
   if (opt_rpmmd_reposdir)
     dnf_context_set_repo_dir (dnfctx, opt_rpmmd_reposdir);
 
-  *out_context = g_steal_pointer (&self);
+  *out_context = util::move_nullify (self);
   return TRUE;
 }
 
