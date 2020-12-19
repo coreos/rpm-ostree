@@ -40,8 +40,8 @@ int
 rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
                                          gconstpointer bp)
 {
-  char **asp = (gpointer)ap;
-  char **bsp = (gpointer)bp;
+  char **asp = (char**)(gpointer)ap;
+  char **bsp = (char**)(gpointer)bp;
   return strcmp (*asp, *bsp);
 }
 
@@ -223,17 +223,17 @@ increment_version (const char *version_suffix_str,
 
   g_autofree char *incremented = g_strdup_printf ("%s%c%s", prefix, version_suffix, increment_start);
   if (!last_version || !g_str_has_prefix (last_version, prefix))
-    return increment_given ? g_steal_pointer (&incremented) : g_strdup (prefix);
+    return increment_given ? util::move_nullify (incremented) : g_strdup (prefix);
 
   if (g_str_equal (last_version, prefix))
-    return increment_given ? g_steal_pointer (&incremented)
+    return increment_given ? util::move_nullify (incremented)
                            : g_strdup_printf ("%s%c1", prefix, version_suffix);
 
   g_assert_cmpuint (strlen (last_version), >, strlen (prefix));
   const char *end = last_version + strlen (prefix);
 
   if (*end != version_suffix)
-    return increment_given ? g_steal_pointer (&incremented) : g_strdup (prefix);
+    return increment_given ? util::move_nullify (incremented) : g_strdup (prefix);
   ++end;
 
   unsigned long long num = g_ascii_strtoull (end, NULL, 10);
@@ -258,7 +258,7 @@ _rpmostree_util_next_version (const char   *auto_version_prefix,
   static GRegex *tag_regex;
   if (g_once_init_enter (&tag_regex_initialized))
     {
-      tag_regex = g_regex_new (VERSION_TAG_REGEX, 0, 0, error);
+      tag_regex = g_regex_new (VERSION_TAG_REGEX, (GRegexCompileFlags)0, (GRegexMatchFlags)0, error);
       if (!tag_regex)
         return NULL;
       g_once_init_leave (&tag_regex_initialized, 1);
@@ -270,7 +270,7 @@ _rpmostree_util_next_version (const char   *auto_version_prefix,
 
   g_autoptr(GMatchInfo) tag_match_info = NULL;
   g_regex_match (tag_regex, next_version->str,
-                 0, &tag_match_info);
+                 (GRegexMatchFlags)0, &tag_match_info);
 
   while (g_match_info_matches (tag_match_info))
     {
@@ -300,16 +300,16 @@ _rpmostree_util_next_version (const char   *auto_version_prefix,
 char *
 rpmostree_str_replace (const char  *buf,
                        const char  *old,
-                       const char  *new,
+                       const char  *newv,
                        GError     **error)
 {
   g_autofree char *literal_old = g_regex_escape_string (old, -1);
-  g_autoptr(GRegex) regex = g_regex_new (literal_old, 0, 0, error);
+  g_autoptr(GRegex) regex = g_regex_new (literal_old, (GRegexCompileFlags)0, (GRegexMatchFlags)0, error);
 
   if (regex == NULL)
     return NULL;
 
-  return g_regex_replace_literal (regex, buf, -1, 0, new, 0, error);
+  return g_regex_replace_literal (regex, buf, -1, 0, newv, static_cast<GRegexMatchFlags>(0), error);
 }
 
 /* FIXME: This is a copy of ot_admin_checksum_version */
@@ -430,7 +430,6 @@ G_LOCK_DEFINE_STATIC (pathname_cache);
 const char *
 rpmostree_file_get_path_cached (GFile *file)
 {
-  const char *path;
   static GQuark _file_path_quark = 0;
 
   if (G_UNLIKELY (_file_path_quark) == 0)
@@ -438,7 +437,7 @@ rpmostree_file_get_path_cached (GFile *file)
 
   G_LOCK (pathname_cache);
 
-  path = g_object_get_qdata ((GObject*)file, _file_path_quark);
+  auto path = (const char*)g_object_get_qdata ((GObject*)file, _file_path_quark);
   if (!path)
     {
       path = g_file_get_path (file);
@@ -589,26 +588,26 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
   if (out_layer_version != NULL)
     *out_layer_version = clientlayer_version;
   if (out_base_layer != NULL)
-    *out_base_layer = g_steal_pointer (&base_layer);
+    *out_base_layer = util::move_nullify (base_layer);
   if (out_layered_pkgs != NULL)
     {
       if (!layered_pkgs)
         layered_pkgs = g_new0 (char*, 1);
-      *out_layered_pkgs = g_steal_pointer (&layered_pkgs);
+      *out_layered_pkgs = util::move_nullify (layered_pkgs);
     }
   if (out_removed_base_pkgs != NULL)
     {
       if (!removed_base_pkgs)
         removed_base_pkgs =
           g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("v"), NULL, 0));
-      *out_removed_base_pkgs = g_steal_pointer (&removed_base_pkgs);
+      *out_removed_base_pkgs = util::move_nullify (removed_base_pkgs);
     }
   if (out_replaced_base_pkgs != NULL)
     {
       if (!replaced_base_pkgs)
         replaced_base_pkgs =
           g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("(vv)"), NULL, 0));
-      *out_replaced_base_pkgs = g_steal_pointer (&replaced_base_pkgs);
+      *out_replaced_base_pkgs = util::move_nullify (replaced_base_pkgs);
     }
 
   return TRUE;
@@ -742,7 +741,7 @@ rpmostree_decompose_sha256_nevra (const char **nevra, /* gets incremented */
 
   *nevra += 65;
   if (out_sha256)
-    *out_sha256 = g_steal_pointer (&sha256);
+    *out_sha256 = util::move_nullify (sha256);
 
   return TRUE;
 }
@@ -821,7 +820,7 @@ rpmostree_generate_diff_summary (guint upgraded,
         g_string_append (summary, ", ");
       g_string_append_printf (summary, "%u %s", args[i], arg_desc[i]);
     }
-  return g_string_free (g_steal_pointer (&summary), FALSE);
+  return g_string_free (util::move_nullify (summary), FALSE);
 }
 
 /* Given the result of rpm_ostree_db_diff(), print it in a nice formatted way for humans. */
@@ -840,8 +839,8 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
   guint upgraded = 0;
   for (guint i = 0; i < modified_old->len; i++)
     {
-      RpmOstreePackage *oldpkg = modified_old->pdata[i];
-      RpmOstreePackage *newpkg = modified_new->pdata[i];
+      auto oldpkg = static_cast<RpmOstreePackage *>(modified_old->pdata[i]);
+      auto newpkg = static_cast<RpmOstreePackage *>(modified_new->pdata[i]);
       const char *name = rpm_ostree_package_get_name (oldpkg);
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
@@ -873,8 +872,8 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
   guint downgraded = 0;
   for (guint i = 0; i < modified_old->len; i++)
     {
-      RpmOstreePackage *oldpkg = modified_old->pdata[i];
-      RpmOstreePackage *newpkg = modified_new->pdata[i];
+      auto oldpkg = static_cast<RpmOstreePackage *>(modified_old->pdata[i]);
+      auto newpkg = static_cast<RpmOstreePackage *>(modified_new->pdata[i]);
       const char *name = rpm_ostree_package_get_name (oldpkg);
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) < 0)
@@ -921,7 +920,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
 
   for (guint i = 0; i < removed->len; i++)
     {
-      RpmOstreePackage *pkg = removed->pdata[i];
+      auto pkg = static_cast<RpmOstreePackage *>(removed->pdata[i]);
       const char *nevra = rpm_ostree_package_get_nevra (pkg);
 
       switch (format)
@@ -946,7 +945,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
 
   for (guint i = 0; i < added->len; i++)
     {
-      RpmOstreePackage *pkg = added->pdata[i];
+      auto pkg = static_cast<RpmOstreePackage *>(added->pdata[i]);
       const char *nevra = rpm_ostree_package_get_nevra (pkg);
 
       switch (format)
@@ -1043,15 +1042,15 @@ rpmostree_diff_print (GPtrArray *removed,
   guint cur_m = 0;
   while (cur_a < an || cur_r < rn || cur_m < mn)
     {
-      RpmOstreePackage *pkg_a = cur_a < an ? added->pdata[cur_a] : NULL;
-      RpmOstreePackage *pkg_r = cur_r < rn ? removed->pdata[cur_r] : NULL;
-      RpmOstreePackage *pkg_m = cur_m < mn ? modified_old->pdata[cur_m] : NULL;
+      auto pkg_a = (RpmOstreePackage *)(cur_a < an ? added->pdata[cur_a] : NULL);
+      auto pkg_r = (RpmOstreePackage *)(cur_r < rn ? removed->pdata[cur_r] : NULL);
+      auto pkg_m = (RpmOstreePackage *)(cur_m < mn ? modified_old->pdata[cur_m] : NULL);
 
       if (pkg_cmp_end (pkg_m, pkg_r) < 0)
         if (pkg_cmp_end (pkg_m, pkg_a) < 0)
           { /* mod is first */
             g_print ("!%s\n", rpm_ostree_package_get_nevra (pkg_m));
-            g_print ("=%s\n", rpm_ostree_package_get_nevra (modified_new->pdata[cur_m]));
+            g_print ("=%s\n", rpm_ostree_package_get_nevra (static_cast<RpmOstreePackage*>(modified_new->pdata[cur_m])));
             cur_m++;
           }
         else
@@ -1143,7 +1142,7 @@ rpmostree_auto_update_policy_to_str (RpmostreedAutomaticUpdatePolicy policy,
     case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_STAGE:
       return "stage";
     default:
-      return glnx_null_throw (error, "Invalid policy value %u", policy);
+      return (char*)glnx_null_throw (error, "Invalid policy value %u", policy);
     }
 }
 
@@ -1194,12 +1193,12 @@ rpmostree_maybe_shell_quote (const char *s)
   static GRegex *safe_chars_regex;
   if (g_once_init_enter (&regex_initialized))
     {
-      safe_chars_regex = g_regex_new ("^[[:alnum:]-._/=]+$", 0, 0, NULL);
+      safe_chars_regex = g_regex_new ("^[[:alnum:]-._/=]+$", (GRegexCompileFlags)0, (GRegexMatchFlags)0, NULL);
       g_assert (safe_chars_regex);
       g_once_init_leave (&regex_initialized, 1);
     }
 
-  if (g_regex_match (safe_chars_regex, s, 0, 0))
+  if (g_regex_match (safe_chars_regex, s, (GRegexMatchFlags)0, 0))
     return NULL;
   return g_shell_quote (s);
 }
