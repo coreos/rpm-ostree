@@ -21,8 +21,12 @@
 #include "config.h"
 
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-util.h"
 #include "rpmostree-output.h"
 #include "rpmostree-core.h"
+#include <exception>
+#include <stdexcept>
+#include <string>
 
 #include <inttypes.h>
 #include <fnmatch.h>
@@ -1292,70 +1296,28 @@ rpmostree_decompose_nevra (const char  *nevra,
 }
 
 /* translates NEVRA to its cache branch */
-gboolean
-rpmostree_nevra_to_cache_branch (const char *nevra,
-                                 char      **cache_branch,
-                                 GError    **error)
+namespace rpmostreecxx {
+std::unique_ptr<std::string>
+nevra_to_cache_branch (const std::string &nevra)
 {
   /* It's cumbersome, but we have to decompose the NEVRA and the rebuild it into a cache
    * branch. Something something Rust slices... */
-
+  g_autoptr(GError) local_error = NULL;
   g_autofree char *name = NULL;
   guint64 epoch = 0;
   g_autofree char *version = NULL;
   g_autofree char *release = NULL;
   g_autofree char *arch = NULL;
 
-  if (!rpmostree_decompose_nevra (nevra, &name, &epoch, &version, &release, &arch, error))
-    return FALSE;
+  if (!rpmostree_decompose_nevra (nevra.c_str(), &name, &epoch, &version, &release, &arch, &local_error))
+    util::throw_gerror(local_error);
 
   g_autofree char *evr = rpmostree_custom_nevra_strdup (name, epoch, version, release, arch,
                                                         PKG_NEVRA_FLAGS_EVR);
-  *cache_branch = rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
-  return TRUE;
+  g_autofree char *branch = rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
+  auto ret = std::string (branch);
+  return std::make_unique<std::string>(ret);
 }
-
-/* translates cachebranch back to nevra (inverse of rpmostree_cache_branch_to_nevra) */
-char *
-rpmostree_cache_branch_to_nevra (const char *cachebranch)
-{
-  GString *r = g_string_new ("");
-  const char *p;
-
-  g_assert (g_str_has_prefix (cachebranch, "rpmostree/pkg/"));
-  cachebranch += strlen ("rpmostree/pkg/");
-
-  for (p = cachebranch; *p; p++)
-    {
-      char c = *p;
-
-      if (c != '_')
-        {
-          if (c == '/')
-            g_string_append_c (r, '-');
-          else
-            g_string_append_c (r, c);
-          continue;
-        }
-
-      p++;
-      c = *p;
-
-      if (c == '_')
-        {
-          g_string_append_c (r, c);
-          continue;
-        }
-
-      if (!*p || !*(p+1))
-        break;
-
-      const char h[3] = { *p, *(p+1) };
-      g_string_append_c (r, g_ascii_strtoull (h, NULL, 16));
-      p++;
-    }
-
-  return g_string_free (r, FALSE);
 }
 
 /* Quote/squash all non-(alphanumeric plus `.` and `-`); this

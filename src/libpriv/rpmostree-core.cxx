@@ -1002,8 +1002,8 @@ get_header_variant (OstreeRepo       *repo,
                                               (GVariantType*)"ay", error);
   if (!header)
     {
-      g_autofree char *nevra = rpmostree_cache_branch_to_nevra (cachebranch);
-      g_prefix_error (error, "In commit %s of %s: ", cached_rev, nevra);
+      auto nevra = std::string (rpmostreecxx::cache_branch_to_nevra (cachebranch));
+      g_prefix_error (error, "In commit %s of %s: ", cached_rev, nevra.c_str());
       return FALSE;
     }
 
@@ -1037,9 +1037,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     GCancellable  *cancellable,
                                     GError       **error)
 {
-  g_autofree char *cache_branch = NULL;
-  if (!rpmostree_nevra_to_cache_branch (nevra, &cache_branch, error))
-    return FALSE;
+  auto cachebranch = rpmostreecxx::nevra_to_cache_branch (nevra);
 
   if (expected_sha256 != NULL)
     {
@@ -1047,7 +1045,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
       g_autoptr(GVariant) commit = NULL;
       g_autofree char *actual_sha256 = NULL;
 
-      if (!ostree_repo_resolve_rev (pkgcache, cache_branch, TRUE, &commit_csum, error))
+      if (!ostree_repo_resolve_rev (pkgcache, cachebranch->c_str(), TRUE, &commit_csum, error))
         return FALSE;
 
       if (!ostree_repo_load_commit (pkgcache, commit_csum, &commit, NULL, error))
@@ -1060,7 +1058,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
         return glnx_throw (error, "Checksum mismatch for package %s", nevra);
     }
 
-  return get_header_variant (pkgcache, cache_branch, out_header, cancellable, error);
+  return get_header_variant (pkgcache, cachebranch->c_str(), out_header, cancellable, error);
 }
 
 static gboolean
@@ -1781,21 +1779,21 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
 
   GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
     {
-      g_autofree char *nevra = rpmostree_cache_branch_to_nevra (ref);
-      if (g_hash_table_contains (already_added, nevra))
+      auto nevra = std::string (rpmostreecxx::cache_branch_to_nevra (ref));
+      if (g_hash_table_contains (already_added, nevra.c_str()))
         continue;
 
       g_autoptr(GVariant) header = NULL;
       if (!get_header_variant (pkgcache_repo, ref, &header, cancellable, error))
         return FALSE;
 
-      if (!checkout_pkg_metadata (self, nevra, header, cancellable, error))
+      if (!checkout_pkg_metadata (self, nevra.c_str(), header, cancellable, error))
         return FALSE;
 
-      g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
+      g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra.c_str());
       g_autoptr(DnfPackage) pkg = dnf_sack_add_cmdline_package (sack, rpm);
       if (!pkg)
-        return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
+        return glnx_throw (error, "Failed to add local pkg %s to sack", nevra.c_str());
     }
 
   return TRUE;

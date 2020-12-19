@@ -25,6 +25,7 @@
 #include <systemd/sd-journal.h>
 #include "rpmostreed-utils.h"
 #include "rpmostree-util.h"
+#include <string>
 
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostree-sysroot-core.h"
@@ -207,11 +208,8 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
       GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
       GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
         {
-          g_autofree char *cachebranch = NULL;
-          if (!rpmostree_nevra_to_cache_branch (nevra, &cachebranch, error))
-            return FALSE;
-
-          g_hash_table_add (referenced_pkgs, util::move_nullify (cachebranch));
+          auto cachebranch = rpmostreecxx::nevra_to_cache_branch (std::string(nevra));
+          g_hash_table_add (referenced_pkgs, g_strdup (cachebranch->c_str()));
         }
     }
 
