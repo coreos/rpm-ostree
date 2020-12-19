@@ -99,7 +99,7 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar   *sysroot_path,
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   g_assert_cmpuint (deployments->len, >, 1);
 
-  OstreeDeployment *new_deployment = deployments->pdata[0];
+  auto new_deployment = static_cast<OstreeDeployment *>(deployments->pdata[0]);
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
 
   if (!booted_deployment || ostree_deployment_equal (booted_deployment, new_deployment))
