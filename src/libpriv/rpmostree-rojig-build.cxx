@@ -87,7 +87,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeCommit2RojigContext, rpm_ostree_commit2ro
 static void
 add_objid (GHashTable *object_to_objid, const char *checksum, const char *objid)
 {
-  GHashTable *objids = g_hash_table_lookup (object_to_objid, checksum);
+  auto objids = static_cast<GHashTable *>(g_hash_table_lookup (object_to_objid, checksum));
   if (!objids)
     {
       objids = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -176,7 +176,7 @@ build_objid_map_for_tree (RpmOstreeCommit2RojigContext *self,
         }
       else
         {
-          const char *existing_path = g_hash_table_lookup (build->seen_objid_to_path, bn);
+          auto existing_path = static_cast<const char *>(g_hash_table_lookup (build->seen_objid_to_path, bn));
           if (!existing_path)
             {
               g_hash_table_insert (build->seen_objid_to_path, g_strdup (bn), g_strdup (path));
@@ -185,7 +185,7 @@ build_objid_map_for_tree (RpmOstreeCommit2RojigContext *self,
             }
           else
             {
-              const char *previous_obj = g_hash_table_lookup (build->seen_path_to_object, existing_path);
+              auto previous_obj = static_cast<const char *>(g_hash_table_lookup (build->seen_path_to_object, existing_path));
               g_assert (previous_obj);
               /* Replace the previous basename with a full path */
               add_objid (object_to_objid, previous_obj, existing_path);
@@ -252,7 +252,7 @@ contentonly_hash_for_object (OstreeRepo      *repo,
   if (size > 0)
     {
       gsize bufsize = MIN (size, 128 * 1024);
-      g_autofree char *buf = g_malloc (bufsize);
+      g_autofree char *buf = (char*)g_malloc (bufsize);
       gsize bytes_read;
       do
         {
@@ -312,7 +312,7 @@ write_one_new_object (OstreeRepo             *repo,
     return FALSE;
   g_autoptr(GOutputStream) ostream = g_unix_output_stream_new (tmpf.fd, FALSE);
 
-  if (g_output_stream_splice (ostream, istream, G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE | G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+  if (g_output_stream_splice (ostream, istream, (GOutputStreamSpliceFlags)(G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE | G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET),
                               cancellable, error) < 0)
     return FALSE;
   if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE, tmp_dfd,
@@ -343,7 +343,7 @@ write_content_identical_set (OstreeRepo             *repo,
   g_autoptr(GVariantBuilder) builder = g_variant_builder_new (RPMOSTREE_ROJIG_NEW_CONTENTIDENT_VARIANT_FORMAT);
   for (guint i = 0; i < identicals->len; i++)
     {
-      const char *checksum = identicals->pdata[i];
+      auto checksum = static_cast<const char *>(identicals->pdata[i]);
       g_autoptr(GFileInfo) finfo = NULL;
       g_autoptr(GVariant) xattrs = NULL;
       if (!ostree_repo_load_file (repo, checksum, NULL, &finfo, &xattrs,
@@ -359,14 +359,14 @@ write_content_identical_set (OstreeRepo             *repo,
   g_autoptr(GVariant) meta = g_variant_ref_sink (g_variant_builder_end (builder));
   g_autofree char *meta_path = g_strconcat (subdir, "/01meta", NULL);
   if (!glnx_file_replace_contents_at (tmp_dfd, meta_path,
-                                      g_variant_get_data (meta),
+                                      (const guint8*)g_variant_get_data (meta),
                                       g_variant_get_size (meta),
                                       GLNX_FILE_REPLACE_NODATASYNC,
                                       cancellable, error))
     return FALSE;
 
   /* Write the content */
-  const char *checksum = identicals->pdata[0];
+  auto checksum = static_cast<const char *>(identicals->pdata[0]);
   g_autoptr(GInputStream) istream = NULL;
   if (!ostree_repo_load_file (repo, checksum, &istream,
                               NULL, NULL, cancellable, error))
@@ -377,7 +377,7 @@ write_content_identical_set (OstreeRepo             *repo,
                                       &tmpf, error))
     return FALSE;
   g_autoptr(GOutputStream) ostream = g_unix_output_stream_new (tmpf.fd, FALSE);
-  if (g_output_stream_splice (ostream, istream, G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE | G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+  if (g_output_stream_splice (ostream, istream, (GOutputStreamSpliceFlags)(G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE | G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET),
                               cancellable, error) < 0)
     return FALSE;
   if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE, tmp_dfd,
@@ -418,7 +418,7 @@ xattr_chunk_hash (const void *vp)
 
       g_variant_get_child (v, i, "(^&ay@ay)",
                            &name, &value);
-      value_data = g_variant_get_fixed_array (value, &value_len, 1);
+      value_data = (const guint8*)g_variant_get_fixed_array (value, &value_len, 1);
 
       h += g_str_hash (name);
       h += bufhash (value_data, value_len);
@@ -540,10 +540,10 @@ build_objid_map_for_package (RpmOstreeCommit2RojigContext *self,
           /* Add object → pkgobjid to the global map */
           g_hash_table_iter_steal (&it);
           PkgObjid *pkgobjid = g_new (PkgObjid, 1);
-          pkgobjid->pkg = g_object_ref (pkg);
-          pkgobjid->objids = g_steal_pointer (&objid_set);
+          pkgobjid->pkg = (DnfPackage*)g_object_ref (pkg);
+          pkgobjid->objids = util::move_nullify (objid_set);
 
-          g_hash_table_insert (self->content_object_to_pkg_objid, g_steal_pointer (&checksum), pkgobjid);
+          g_hash_table_insert (self->content_object_to_pkg_objid, util::move_nullify (checksum), pkgobjid);
         }
     }
 
@@ -573,7 +573,7 @@ generate_spec (RpmOstreeCommit2RojigContext  *self,
   /* Look for the magic comment */
   const char *meta = strstr (spec_contents, "\n" RPMOSTREE_ROJIG_SPEC_META_MAGIC);
   if (!meta)
-    return glnx_null_throw (error, "Missing magic '%s' in %s", RPMOSTREE_ROJIG_SPEC_META_MAGIC, spec_path);
+    return (char*)glnx_null_throw (error, "Missing magic '%s' in %s", RPMOSTREE_ROJIG_SPEC_META_MAGIC, spec_path);
 
   /* Generate a replacement in memory */
   g_autoptr(GString) replacement = g_string_new ("");
@@ -596,7 +596,7 @@ generate_spec (RpmOstreeCommit2RojigContext  *self,
    */
   for (guint i = 0; i < rojig_packages->len; i++)
     {
-      DnfPackage *pkg = rojig_packages->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(rojig_packages->pdata[i]);
       if (g_str_equal (dnf_package_get_arch (pkg), "noarch"))
         {
           g_string_append_printf (replacement, "Requires: %s = %s\n",
@@ -616,17 +616,17 @@ generate_spec (RpmOstreeCommit2RojigContext  *self,
   g_autofree char *tmppath = g_strdup ("/tmp/rpmostree-rojig-spec.XXXXXX");
   glnx_autofd int fd = g_mkstemp_full (tmppath, O_WRONLY | O_CLOEXEC, 0644);
   if (glnx_loop_write (fd, replacement->str, replacement->len) < 0)
-    return glnx_null_throw_errno_prefix (error, "write");
+    return (char*)glnx_null_throw_errno_prefix (error, "write");
 
-  return g_steal_pointer (&tmppath);
+  return util::move_nullify (tmppath);
 }
 
 static int
 compare_pkgs (gconstpointer ap,
               gconstpointer bp)
 {
-  DnfPackage **a = (gpointer)ap;
-  DnfPackage **b = (gpointer)bp;
+  auto a = (DnfPackage**)(gpointer)ap;
+  auto b = (DnfPackage**)(gpointer)bp;
   return dnf_package_cmp (*a, *b);
 }
 
@@ -667,7 +667,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
       return FALSE;
     g_autofree char *commit_path = g_strconcat (commit_dir, "/", commit+2, NULL);
     if (!glnx_file_replace_contents_at (oirpm_tmpd.fd, commit_path,
-                                        g_variant_get_data (commit_obj),
+                                        (const guint8*)g_variant_get_data (commit_obj),
                                         g_variant_get_size (commit_obj),
                                         GLNX_FILE_REPLACE_NODATASYNC,
                                         cancellable, error))
@@ -679,7 +679,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
     g_autofree char *commit_metapath = g_strconcat (RPMOSTREE_ROJIG_COMMIT_DIR, "/meta", NULL);
     if (commit_detached_meta)
       {
-        buf = g_variant_get_data (commit_detached_meta);
+        buf = (const guint8*)g_variant_get_data (commit_detached_meta);
         buflen = g_variant_get_size (commit_detached_meta);
       }
     if (!glnx_file_replace_contents_at (oirpm_tmpd.fd, commit_metapath,
@@ -736,7 +736,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
       g_assert_cmpint (identicals->len, >=, 1);
       if (identicals->len == 1)
         {
-          const char *checksum = identicals->pdata[0];
+          auto checksum = static_cast<const char *>(identicals->pdata[0]);
           if (!write_one_new_object (self->repo, oirpm_tmpd.fd,
                                      OSTREE_OBJECT_TYPE_FILE, checksum,
                                      cancellable, error))
@@ -758,7 +758,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
       g_assert_cmpint (identicals->len, >=, 1);
       if (identicals->len == 1)
         {
-          const char *checksum = identicals->pdata[0];
+          auto checksum = static_cast<const char *>(identicals->pdata[0]);
           if (!write_one_new_object (self->repo, oirpm_tmpd.fd,
                                      OSTREE_OBJECT_TYPE_FILE, checksum,
                                      cancellable, error))
@@ -796,7 +796,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
         /* Is this content object associated with a package? If not, it was
          * already processed.
          */
-        PkgObjid *pkgobjid = g_hash_table_lookup (self->content_object_to_pkg_objid, checksum);
+        auto pkgobjid = (PkgObjid *)g_hash_table_lookup (self->content_object_to_pkg_objid, checksum);
         if (!pkgobjid)
           {
             g_hash_table_iter_remove (&it);
@@ -821,7 +821,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
         if (!g_hash_table_lookup_extended (xattr_table_hash, xattrs, NULL, &xattr_idx_p))
           {
             g_variant_builder_add (xattr_table_builder, "@a(ayay)", xattrs);
-            g_hash_table_insert (xattr_table_hash, g_steal_pointer (&xattrs),
+            g_hash_table_insert (xattr_table_hash, util::move_nullify (xattrs),
                                  GUINT_TO_POINTER (global_xattr_idx));
             this_xattr_idx = global_xattr_idx;
             /* Increment this for the next loop */
@@ -833,8 +833,8 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
           }
 
         /* Add this to our map of pkg → [objidxattrs] */
-        DnfPackage *pkg = pkgobjid->pkg;
-        GPtrArray *pkg_objidxattrs = g_hash_table_lookup (pkg_to_objidxattrs, pkg);
+        auto pkg = (DnfPackage *)pkgobjid->pkg;
+        auto pkg_objidxattrs = (GPtrArray *)g_hash_table_lookup (pkg_to_objidxattrs, pkg);
         if (!pkg_objidxattrs)
           {
             pkg_objidxattrs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
@@ -859,8 +859,8 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
      */
     for (guint i = 0; i < pkglist->len; i++)
       {
-        DnfPackage *pkg = pkglist->pdata[i];
-        GPtrArray *pkg_objidxattrs = g_hash_table_lookup (pkg_to_objidxattrs, pkg);
+        auto pkg = (DnfPackage *)pkglist->pdata[i];
+        auto pkg_objidxattrs = (GPtrArray *)g_hash_table_lookup (pkg_to_objidxattrs, pkg);
         if (!pkg_objidxattrs)
           {
             pkg_objidxattrs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
@@ -875,7 +875,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
       return FALSE;
     { g_autoptr(GVariant) xattr_table = g_variant_ref_sink (g_variant_builder_end (xattr_table_builder));
       if (!glnx_file_replace_contents_at (oirpm_tmpd.fd, RPMOSTREE_ROJIG_XATTRS_TABLE,
-                                          g_variant_get_data (xattr_table),
+                                          (const guint8*)g_variant_get_data (xattr_table),
                                           g_variant_get_size (xattr_table),
                                           GLNX_FILE_REPLACE_NODATASYNC,
                                           cancellable, error))
@@ -921,7 +921,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
 
         for (guint i = 0; i < objidxattrs->len; i++)
           {
-            GVariant *objidxattr = objidxattrs->pdata[i];
+            auto objidxattr = static_cast<GVariant *>(objidxattrs->pdata[i]);
             g_variant_builder_add (objid_xattr_builder, "@(su)", objidxattr);
           }
         g_variant_builder_close (objid_xattr_builder);
@@ -929,8 +929,8 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
 
         g_autofree char *path = g_strconcat (RPMOSTREE_ROJIG_XATTRS_PKG_DIR, "/", nevra, NULL);
         /* The "unused set" will have empty maps for xattrs */
-        const guint8 *buf = g_variant_get_data (objid_xattrs_final) ?: "";
-        if (!glnx_file_replace_contents_at (oirpm_tmpd.fd, path, buf,
+        auto buf = (const guint8 *)g_variant_get_data (objid_xattrs_final) ?: (const guint8*)"";
+        if (!glnx_file_replace_contents_at (oirpm_tmpd.fd, path, static_cast<const guint8*>(buf),
                                             g_variant_get_size (objid_xattrs_final),
                                             GLNX_FILE_REPLACE_NODATASYNC,
                                             cancellable, error))
@@ -1081,7 +1081,7 @@ impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
 
   for (guint i = 0; i < pkglist->len; i++)
     {
-      DnfPackage *pkg = pkglist->pdata[i];
+      auto pkg = (DnfPackage *)pkglist->pdata[i];
       if (!build_objid_map_for_package (self, pkg, cancellable, error))
         return FALSE;
     }
@@ -1110,7 +1110,7 @@ impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
         return FALSE;
       const gboolean is_big = objsize >= BIG_OBJ_SIZE;
 
-      PkgObjid *pkgobjid = g_hash_table_lookup (self->content_object_to_pkg_objid, checksum);
+      auto pkgobjid = (PkgObjid *)g_hash_table_lookup (self->content_object_to_pkg_objid, checksum);
       if (!pkgobjid)
         g_hash_table_add (is_big ? new_reachable_big : new_reachable_small, g_strdup (checksum));
       else
@@ -1133,7 +1133,7 @@ impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
       g_print ("Packages without content:\n");
       for (guint i = 0; i < pkglist->len; i++)
         {
-          DnfPackage *pkg = pkglist->pdata[i];
+          auto pkg = (DnfPackage *)pkglist->pdata[i];
           if (!g_hash_table_contains (pkgs_with_content, pkg))
             {
               g_autofree char *tmpfiles_d_path = g_strconcat ("usr/lib/tmpfiles.d/pkg-",
@@ -1213,7 +1213,7 @@ impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
 #endif
 
       /* OK, see if it duplicates another *new* object */
-      GPtrArray *identicals = g_hash_table_lookup (new_big_content_identical, obj_contenthash);
+      auto identicals = (GPtrArray *)g_hash_table_lookup (new_big_content_identical, obj_contenthash);
       if (!identicals)
         {
           identicals = g_ptr_array_new_with_free_func (g_free);
@@ -1258,8 +1258,8 @@ rpmostree_commit2rojig (OstreeRepo   *repo,
 {
   g_autoptr(RpmOstreeCommit2RojigContext) self = g_new0 (RpmOstreeCommit2RojigContext, 1);
 
-  self->repo = g_object_ref (repo);
-  self->pkgcache_repo = g_object_ref (pkgcache_repo);
+  self->repo = (OstreeRepo*)g_object_ref (repo);
+  self->pkgcache_repo = (OstreeRepo*)g_object_ref (pkgcache_repo);
 
   self->commit_content_objects = g_hash_table_new_full (g_str_hash, g_str_equal, (GDestroyNotify)g_free, NULL);
   self->content_object_to_pkg_objid = g_hash_table_new_full (g_str_hash, g_str_equal,

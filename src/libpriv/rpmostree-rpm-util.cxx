@@ -141,30 +141,30 @@ rpmostree_header_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags)
 static char *
 pkg_nevra_strdup (Header h1)
 {
-  return rpmostree_header_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
+  return rpmostree_header_custom_nevra_strdup (h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME |
                                                    PKG_NEVRA_FLAGS_EVR |
-                                                   PKG_NEVRA_FLAGS_ARCH);
+                                                   PKG_NEVRA_FLAGS_ARCH));
 }
 
 static char *
 pkg_na_strdup (Header h1)
 {
-  return rpmostree_header_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
-                                                   PKG_NEVRA_FLAGS_ARCH);
+  return rpmostree_header_custom_nevra_strdup (h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME |
+                                                   PKG_NEVRA_FLAGS_ARCH));
 }
 
 static char *
 pkg_nvr_strdup (Header h1)
 {
-  return rpmostree_header_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
-                                                   PKG_NEVRA_FLAGS_VERSION_RELEASE);
+  return rpmostree_header_custom_nevra_strdup (h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME |
+                                                   PKG_NEVRA_FLAGS_VERSION_RELEASE));
 }
 
 static char *
 pkg_evra_strdup (Header h1)
 {
-  return rpmostree_header_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-                                                   PKG_NEVRA_FLAGS_ARCH);
+  return rpmostree_header_custom_nevra_strdup (h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+                                                   PKG_NEVRA_FLAGS_ARCH));
 }
 
 static void
@@ -198,7 +198,7 @@ pat_fnmatch_prefix (const GPtrArray *patterns)
 
   for (num = 0; num < patterns->len; num++)
     {
-      const char *pat = patterns->pdata[num];
+      auto pat = static_cast<const char *>(patterns->pdata[num]);
       gsize prefix = 0;
 
       while (*pat)
@@ -240,7 +240,7 @@ pat_fnmatch_match (Header pkg, const char *name,
 
   for (num = 0; num < patterns->len; num++)
     {
-      const char *pattern = patterns->pdata[num];
+      auto pattern = static_cast<const char *>(patterns->pdata[num]);
 
       if (patprefixlen && !CASENCMP_EQ (name, pattern, patprefixlen))
         continue;
@@ -266,19 +266,17 @@ pat_fnmatch_match (Header pkg, const char *name,
 static void
 header_free_p (gpointer data)
 {
-  headerFree (data);
+  headerFree (static_cast<Header>(data));
 }
 
 static int
 header_cmp_p (gconstpointer gph1, gconstpointer gph2)
 {
-  const Header *ph1 = gph1;
-  const Header *ph2 = gph2;
-  Header h1 = *ph1;
-  Header h2 = *ph2;
-  int cmp = header_name_cmp (h1, h2);
+  auto h1 = (Header *)gph1;
+  auto h2 = (Header *)gph2;
+  int cmp = header_name_cmp (*h1, *h2);
   if (!cmp)
-    cmp = rpmVersionCompare (h1, h2);
+    cmp = rpmVersionCompare (*h1, *h2);
   return cmp;
 }
 
@@ -311,7 +309,7 @@ rpmhdrs_new (RpmOstreeRefTs *refts, const GPtrArray *patterns)
 
   g_ptr_array_sort (hs, header_cmp_p);
 
-  ret = g_malloc0 (sizeof (struct RpmHeaders));
+  ret = (struct RpmHeaders*)g_malloc0 (sizeof (struct RpmHeaders));
 
   ret->refts = rpmostree_refts_ref (refts);
   ret->hs = hs;
@@ -335,7 +333,7 @@ rpmhdrs_free (struct RpmHeaders *hdrs)
 static struct RpmHeadersDiff *
 rpmhdrs_diff_new (void)
 {
-  struct RpmHeadersDiff *ret = g_malloc0(sizeof (struct RpmHeadersDiff));
+  auto ret = static_cast<struct RpmHeadersDiff *>(g_malloc0(sizeof (struct RpmHeadersDiff)));
 
   ret->hs_add = g_ptr_array_new ();
   ret->hs_del = g_ptr_array_new ();
@@ -366,7 +364,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
 
   while (n1 < l1->hs->len)
     {
-      Header h1 = l1->hs->pdata[n1];
+      auto h1 = static_cast<Header>(l1->hs->pdata[n1]);
       if (n2 >= l2->hs->len)
         {
           g_ptr_array_add (ret->hs_del, h1);
@@ -374,7 +372,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
         }
       else
         {
-          Header h2 = l2->hs->pdata[n2];
+          auto h2 = static_cast<Header>(l2->hs->pdata[n2]);
           int cmp = header_name_cmp (h1, h2);
 
           if (cmp > 0)
@@ -402,7 +400,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
 
   while (n2 < l2->hs->len)
     {
-      Header h2 = l2->hs->pdata[n2];
+      auto h2 = static_cast<Header>(l2->hs->pdata[n2]);
 
       g_ptr_array_add (ret->hs_add, h2);
       ++n2;
@@ -418,7 +416,7 @@ rpmhdrs_list (struct RpmHeaders *l1)
 
   while (num < l1->hs->len)
     {
-      Header h1 = l1->hs->pdata[num++];
+      auto h1 = static_cast<Header>(l1->hs->pdata[num++]);
       g_print (" ");
       pkg_print (h1);
     }
@@ -436,7 +434,7 @@ rpmhdrs_rpmdbv (struct RpmHeaders *l1,
 
   while (num < l1->hs->len)
     {
-      Header pkg = l1->hs->pdata[num++];
+      auto pkg = static_cast<Header>(l1->hs->pdata[num++]);
       g_autofree char *envra = pkg_envra_strdup (pkg);
 
       g_checksum_update (checksum, (guint8*)envra, strlen(envra));
@@ -476,16 +474,13 @@ _gptr_array_reverse (GPtrArray *data)
 static int
 _rpmhdrs_diff_cmp_end (const GPtrArray *hs1, const GPtrArray *hs2)
 {
-  Header h1 = NULL;
-  Header h2 = NULL;
-
   if (!hs2->len)
     return -1;
   if (!hs1->len)
     return  1;
 
-  h1 = hs1->pdata[hs1->len - 1];
-  h2 = hs2->pdata[hs2->len - 1];
+  auto h1 = static_cast<Header>(hs1->pdata[hs1->len - 1]);
+  auto h2 = static_cast<Header>(hs2->pdata[hs2->len - 1]);
 
   return header_name_cmp (h1, h2);
 }
@@ -505,8 +500,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
       const char *next_srpm = NULL;
       for (num = 0; num < diff->hs_mod_new->len; ++num)
         {
-          Header ho = diff->hs_mod_old->pdata[num];
-          Header hn = diff->hs_mod_new->pdata[num];
+          auto ho = static_cast<Header>(diff->hs_mod_old->pdata[num]);
+          auto hn = static_cast<Header>(diff->hs_mod_new->pdata[num]);
           struct rpmtd_s ochanges_date_s;
           _cleanup_rpmtddata_ rpmtd ochanges_date = NULL;
           struct rpmtd_s ochanges_name_s;
@@ -549,7 +544,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
             next_srpm = NULL;
           else
             {
-              Header next_ho = diff->hs_mod_old->pdata[num+1];
+              auto next_ho = static_cast<Header>(diff->hs_mod_old->pdata[num+1]);
               next_srpm = headerGetString(next_ho, RPMTAG_SOURCERPM);
             }
           if (g_strcmp0 (current_srpm, next_srpm) == 0)
@@ -636,8 +631,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
       done = FALSE;
       for (num = 0; num < diff->hs_mod_new->len; ++num)
         {
-          Header ho = diff->hs_mod_old->pdata[num];
-          Header hn = diff->hs_mod_new->pdata[num];
+          auto ho = static_cast<Header>(diff->hs_mod_old->pdata[num]);
+          auto hn = static_cast<Header>(diff->hs_mod_new->pdata[num]);
 
           g_assert (!header_name_cmp (ho, hn));
           if (rpmVersionCompare (ho, hn) < 0)
@@ -660,7 +655,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
 
       for (num = 0; num < diff->hs_del->len; ++num)
         {
-          Header hd = diff->hs_del->pdata[num];
+          auto hd = static_cast<Header>(diff->hs_del->pdata[num]);
 
           g_print ("  ");
           pkg_print (hd);
@@ -673,7 +668,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
 
       for (num = 0; num < diff->hs_add->len; ++num)
         {
-          Header ha = diff->hs_add->pdata[num];
+          auto ha = static_cast<Header>(diff->hs_add->pdata[num]);
 
           g_print ("  ");
           pkg_print (ha);
@@ -700,19 +695,19 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
       if (_rpmhdrs_diff_cmp_end (diff->hs_mod_old, diff->hs_del) < 0)
         if (_rpmhdrs_diff_cmp_end (diff->hs_mod_old, diff->hs_add) < 0)
           { /* mod is first */
-            Header hm = diff->hs_mod_old->pdata[diff->hs_mod_old->len-1];
+            auto hm = static_cast<Header>(diff->hs_mod_old->pdata[diff->hs_mod_old->len-1]);
 
             g_print ("!");
             pkg_print (hm);
             g_ptr_array_remove_index(diff->hs_mod_old, diff->hs_mod_old->len-1);
             g_print ("=");
-            hm = diff->hs_mod_new->pdata[diff->hs_mod_new->len-1];
+            hm = static_cast<Header>(diff->hs_mod_new->pdata[diff->hs_mod_new->len-1]);
             pkg_print (hm);
             g_ptr_array_remove_index(diff->hs_mod_new, diff->hs_mod_new->len-1);
           }
         else
           { /* add is first */
-            Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
+            auto ha = static_cast<Header>(diff->hs_add->pdata[diff->hs_add->len-1]);
 
             g_print ("+");
             pkg_print (ha);
@@ -721,7 +716,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
       else
         if (_rpmhdrs_diff_cmp_end (diff->hs_del, diff->hs_add) < 0)
           { /* del is first */
-            Header hd = diff->hs_del->pdata[diff->hs_del->len-1];
+            auto hd = static_cast<Header>(diff->hs_del->pdata[diff->hs_del->len-1]);
 
             g_print ("-");
             pkg_print (hd);
@@ -729,7 +724,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
           }
         else
           { /* add is first */
-            Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
+            auto ha = static_cast<Header>(diff->hs_add->pdata[diff->hs_add->len-1]);
 
             g_print ("+");
             pkg_print (ha);
@@ -754,9 +749,9 @@ rpmrev_new (OstreeRepo *repo, const char *rev,
   if (!rpmostree_get_refts_for_commit (repo, commit, &refts, cancellable, error))
     return NULL;
 
-  RpmRevisionData *rpmrev = g_malloc0 (sizeof(struct RpmRevisionData));
-  rpmrev->refts = g_steal_pointer (&refts);
-  rpmrev->commit = g_steal_pointer (&commit);
+  auto rpmrev = static_cast<RpmRevisionData *>(g_malloc0 (sizeof(struct RpmRevisionData)));
+  rpmrev->refts = util::move_nullify (refts);
+  rpmrev->commit = util::move_nullify (commit);
   rpmrev->rpmdb = rpmhdrs_new (rpmrev->refts, patterns);
   return rpmrev;
 }
@@ -808,7 +803,7 @@ checkout_only_rpmdb (OstreeRepo       *repo,
     return FALSE;
 
   /* Check out the database (via copy) */
-  OstreeRepoCheckoutAtOptions checkout_options = { 0, };
+  OstreeRepoCheckoutAtOptions checkout_options = { (OstreeRepoCheckoutMode)0, };
   checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
   const char *subpath = glnx_strjoina ("/", rpmdb);
   checkout_options.subpath = subpath;
@@ -846,7 +841,7 @@ get_sack_for_root (int               dfd,
   if (!dnf_sack_load_system_repo (sack, NULL, 0, error))
     return FALSE;
 
-  *out_sack = g_steal_pointer (&sack);
+  *out_sack = util::move_nullify (sack);
   return TRUE;
 }
 
@@ -1012,7 +1007,7 @@ print_pkglist (GPtrArray *pkglist)
 
   for (guint i = 0; i < pkglist->len; i++)
     {
-      DnfPackage *pkg = pkglist->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(pkglist->pdata[i]);
       rpmostree_output_message ("  %s (%s)", dnf_package_get_nevra (pkg),
                                              dnf_package_get_reponame (pkg));
     }
@@ -1170,7 +1165,7 @@ rpmostree_get_matching_packages (DnfSack *sack,
   hy_selector_free (selector);
   hy_subject_free (subject);
 
-  return g_steal_pointer (&matches);
+  return util::move_nullify (matches);
 }
 
 gboolean
@@ -1197,11 +1192,11 @@ rpmostree_sack_get_by_pkgname (DnfSack     *sack,
   if (pkgs->len > 1)
     return glnx_throw (error, "Multiple packages match \"%s\"", pkgname);
   else if (pkgs->len == 1)
-    ret_pkg = g_object_ref (pkgs->pdata[0]);
+    ret_pkg = (DnfPackage*)g_object_ref (pkgs->pdata[0]);
   else /* for obviousness */
     ret_pkg = NULL;
 
-  *out_pkg = g_steal_pointer (&ret_pkg);
+  *out_pkg = util::move_nullify (ret_pkg);
   return TRUE;
 }
 
@@ -1218,7 +1213,7 @@ rpmostree_sack_get_sorted_packages (DnfSack *sack)
 {
   g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_packages (sack);
   g_ptr_array_sort (pkglist, (GCompareFunc)rpmostree_pkg_array_compare);
-  return g_steal_pointer (&pkglist);
+  return util::move_nullify (pkglist);
 }
 
 GVariant *
@@ -1233,7 +1228,7 @@ rpmostree_variant_pkgs_from_sack (RpmOstreeRefSack *refsack)
   const guint n = pkglist->len;
   for (guint i = 0; i < n; i++)
     {
-      DnfPackage *pkg = pkglist->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(pkglist->pdata[i]);
 
       /* put epoch as a string so we're indifferent to endianness -- also note that unlike
        * librpm, libdnf doesn't care about unset vs 0 epoch and neither do we */
@@ -1283,15 +1278,15 @@ rpmostree_decompose_nevra (const char  *nevra,
     return glnx_throw (error, "Failed to decompose NEVRA string '%s'", nevra);
 
   if (out_name)
-    *out_name = g_steal_pointer (&name);
+    *out_name = util::move_nullify (name);
   if (out_epoch)
     *out_epoch = epoch; /* note widening */
   if (out_version)
-    *out_version = g_steal_pointer (&version);
+    *out_version = util::move_nullify (version);
   if (out_release)
-    *out_release = g_steal_pointer (&release);
+    *out_release = util::move_nullify (release);
   if (out_arch)
-    *out_arch = g_steal_pointer (&arch);
+    *out_arch = util::move_nullify (arch);
 
   return TRUE;
 }
@@ -1471,9 +1466,9 @@ rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx,
 
   for (guint i = 0; i < repos->len; i++)
     {
-      DnfRepo *repo = repos->pdata[i];
+      auto repo = static_cast<DnfRepo *>(repos->pdata[i]);
       if (dnf_repo_get_enabled (repo) & enablement)
         g_ptr_array_add (ret, repo);
     }
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }

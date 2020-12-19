@@ -40,7 +40,7 @@ librpmostreepriv_sources = \
 	src/libpriv/rpmostree-scripts.h \
 	src/libpriv/rpmostree-refsack.h \
 	src/libpriv/rpmostree-refsack.cxx \
-	src/libpriv/rpmostree-rpm-util.c \
+	src/libpriv/rpmostree-rpm-util.cxx \
 	src/libpriv/rpmostree-rpm-util.h \
 	src/libpriv/rpmostree-importer.c \
 	src/libpriv/rpmostree-importer.h \
@@ -60,7 +60,7 @@ librpmostreepriv_sources = \
 
 if BUILDOPT_ROJIG
 librpmostreepriv_sources += \
-	src/libpriv/rpmostree-rojig-build.c \
+	src/libpriv/rpmostree-rojig-build.cxx \
 	src/libpriv/rpmostree-rojig-build.h \
 	src/libpriv/rpmostree-rojig-assembler.c \
 	src/libpriv/rpmostree-rojig-assembler.h \
