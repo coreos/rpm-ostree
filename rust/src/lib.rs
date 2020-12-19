@@ -196,6 +196,17 @@ mod ffi {
         fn state_checksum_changed(&self, chksum: &str, output_dir: &str) -> Result<bool>;
         fn update_state_checksum(&self, chksum: &str, output_dir: &str) -> Result<()>;
     }
+
+    // rpmutils.rs
+    extern "Rust" {
+        fn cache_branch_to_nevra(nevra: &str) -> String;
+    }
+
+    // rpmostree-rpm-util.h
+    unsafe extern "C++" {
+        include!("rpmostree-rpm-util.h");
+        fn nevra_to_cache_branch(nevra: &CxxString) -> Result<UniquePtr<CxxString>>;
+    }
 }
 
 mod client;
@@ -236,6 +247,8 @@ mod progress;
 pub(crate) use self::progress::*;
 mod scripts;
 pub(crate) use self::scripts::*;
+mod rpmutils;
+pub(crate) use self::rpmutils::*;
 mod testutils;
 pub(crate) use self::testutils::*;
 mod treefile;

@@ -60,6 +60,15 @@ template<typename T>
     throw std::runtime_error(msg.str());
   }
 
+// Convert a GError into a C++ exception.  Takes ownership of the error.
+static inline void 
+throw_gerror (GError *&error)
+{
+  auto s = std::string (error->message);
+  g_error_free (error);
+  error = NULL;
+  throw std::runtime_error (s);
+}
 }
 
 // Below here is C code
