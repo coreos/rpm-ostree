@@ -4369,15 +4369,9 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       else
         {
           have_systemctl = TRUE;
-          g_autoptr(GBytes) systemctl_wrapper = g_resources_lookup_data ("/rpmostree/systemctl-wrapper.sh",
-                                                                         G_RESOURCE_LOOKUP_FLAGS_NONE,
-                                                                         error);
-          if (!systemctl_wrapper)
-            return FALSE;
-          size_t len;
-          auto buf = static_cast<const guint8*>(g_bytes_get_data (systemctl_wrapper, &len));
+          auto systemctl_wrapper = rpmostreecxx::get_systemctl_wrapper ();
           if (!glnx_file_replace_contents_with_perms_at (tmprootfs_dfd, "usr/bin/systemctl",
-                                                         buf, len, 0755, (uid_t) -1, (gid_t) -1,
+                                                         systemctl_wrapper.data(), systemctl_wrapper.length(), 0755, (uid_t) -1, (gid_t) -1,
                                                          GLNX_FILE_REPLACE_NODATASYNC,
                                                          cancellable, error))
             return FALSE;

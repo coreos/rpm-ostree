@@ -75,11 +75,6 @@ CLEANFILES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)
 
 nodist_librpmostreepriv_sources = src/libpriv/rpmostree-script-gperf.c
 
-rpmostree-libpriv-gresources.c: src/libpriv/gresources.xml Makefile $(shell glib-compile-resources --sourcedir=$(srcdir)/src/libpriv --generate-dependencies $(srcdir)/src/libpriv/gresources.xml)
-	$(AM_V_GEN) glib-compile-resources --target=$@ --sourcedir=$(srcdir)/src/libpriv --generate-source --c-name _rpmostree_ $<
-BUILT_SOURCES += rpmostree-libpriv-gresources.c
-librpmostreepriv_sources += rpmostree-libpriv-gresources.c
-
 AM_V_GPERF = $(AM_V_GPERF_$(V))
 AM_V_GPERF_ = $(AM_V_GPERF_$(AM_DEFAULT_VERBOSITY))
 AM_V_GPERF_0 = @echo "  GPERF   " $@;

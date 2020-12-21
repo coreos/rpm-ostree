@@ -18,6 +18,13 @@ mod ffi {
 
         fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>>;
         fn undo(self: &TempEtcGuard) -> Result<()>;
+
+        fn get_systemctl_wrapper() -> &'static [u8];
+    }
+
+    // initramfs.rs
+    extern "Rust" {
+        fn get_dracut_random_cpio() -> &'static [u8];
     }
 
     // utils.rs
@@ -37,7 +44,7 @@ pub use self::history::*;
 mod journal;
 pub use self::journal::*;
 mod initramfs;
-pub use self::initramfs::ffi::*;
+pub use self::initramfs::*;
 mod lockfile;
 pub use self::lockfile::*;
 mod livefs;

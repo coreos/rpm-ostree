@@ -118,6 +118,11 @@ fn generate_initramfs_overlay_etc<P: glib::IsA<gio::Cancellable>>(
     generate_initramfs_overlay(&root, files, cancellable)
 }
 
+pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
+    // Generated with: fakeroot /bin/sh -c 'cd dracut-urandom && find . -print0 | sort -z | (mknod dev/random c 1 8 && mknod dev/urandom c 1 9 && cpio -o --null -H newc -R 0:0 --reproducible --quiet -D . -O /tmp/dracut-urandom.cpio)'
+    include_bytes!("../../src/libpriv/dracut-random.cpio.gz")
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -143,7 +148,7 @@ mod test {
     }
 }
 
-pub mod ffi {
+mod ffi {
     use super::*;
     use crate::ffiutil::error_to_glib;
     use glib::translate::*;
@@ -177,3 +182,4 @@ pub mod ffi {
         }
     }
 }
+pub use self::ffi::*;
