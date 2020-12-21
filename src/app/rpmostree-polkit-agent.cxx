@@ -120,7 +120,7 @@ fork_agent (pid_t *pid, const char *path, ...)
   va_end(ap);
 
   /* Allocate strv */
-  l = alloca (sizeof(char *) * (n + 1));
+  l = (char**)alloca (sizeof(char *) * (n + 1));
 
   /* Fill in arguments */
   va_start (ap, path);
