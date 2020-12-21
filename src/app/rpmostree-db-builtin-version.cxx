@@ -34,7 +34,7 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
 {
   for (guint num = 0; num < revs->len; num++)
     {
-      const char *rev = revs->pdata[num];
+      auto rev = static_cast<const char *>(revs->pdata[num]);
 
       g_autoptr(RpmRevisionData) rpmrev = rpmrev_new (repo, rev, NULL, cancellable, error);
       if (!rpmrev)
