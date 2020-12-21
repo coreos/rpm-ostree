@@ -36,7 +36,7 @@ _builtin_db_list (OstreeRepo      *repo,
 {
   for (guint num = 0; num < revs->len; num++)
     {
-      const char *rev = revs->pdata[num];
+      auto rev = static_cast<const char *>(revs->pdata[num]);
 
       g_autofree char *checksum = NULL;
       if (!ostree_repo_resolve_rev (repo, rev, FALSE, &checksum, error))
@@ -57,7 +57,7 @@ _builtin_db_list (OstreeRepo      *repo,
 
           for (guint i = 0; i < packages->len; i++)
             {
-              RpmOstreePackage *package = g_ptr_array_index (packages, i);
+              auto package = static_cast<RpmOstreePackage *>(g_ptr_array_index (packages, i));
               g_print (" %s\n", rpm_ostree_package_get_nevra (package));
             }
         }
