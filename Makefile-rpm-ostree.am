@@ -26,7 +26,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-builtin-deploy.cxx \
 	src/app/rpmostree-builtin-reload.cxx \
 	src/app/rpmostree-builtin-rebase.cxx \
-	src/app/rpmostree-builtin-cancel.c \
+	src/app/rpmostree-builtin-cancel.cxx \
 	src/app/rpmostree-builtin-cliwrap.c \
 	src/app/rpmostree-builtin-cleanup.c \
 	src/app/rpmostree-builtin-initramfs.c \
