@@ -37,7 +37,7 @@ static RpmOstreeCommand testutils_subcommands[] = {
   { "inject-pkglist", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     NULL, rpmostree_testutils_builtin_inject_pkglist },
   // Avoid adding other commands here - write them in Rust in testutils.rs
-  { NULL, 0, NULL, NULL }
+  { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
 gboolean
