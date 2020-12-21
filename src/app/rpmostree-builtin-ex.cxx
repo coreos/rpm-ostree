@@ -23,23 +23,23 @@
 #include "rpmostree-ex-builtins.h"
 
 static RpmOstreeCommand ex_subcommands[] = {
-  { "livefs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "livefs", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_livefs },
-  { "apply-live", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "apply-live", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_livefs },
 #ifdef BUILDOPT_ROJIG
-  { "commit2rojig", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+  { "commit2rojig", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an OSTree commit into an rpm-ostree rojig", rpmostree_ex_builtin_commit2rojig },
-  { "rojig2commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+  { "rojig2commit", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an rpm-ostree rojig into an OSTree commit", rpmostree_ex_builtin_rojig2commit },
 #endif
-  { "history", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+  { "history", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
-  { "initramfs-etc", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "initramfs-etc", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     "Track initramfs configuration files", rpmostree_ex_builtin_initramfs_etc },
-  { NULL, 0, NULL, NULL }
+  { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
 /*
