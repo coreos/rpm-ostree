@@ -33,7 +33,7 @@ static RpmOstreeCommand override_subcommands[] = {
   { "reset", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     "Reset currently active package overrides",
     rpmostree_override_builtin_reset },
-  { NULL, 0, NULL, NULL }
+  { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
 gboolean
