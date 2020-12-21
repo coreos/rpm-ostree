@@ -32,21 +32,21 @@ static RpmOstreeCommand compose_subcommands[] = {
   { "tree", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Process a \"treefile\"; install packages and commit the result to an OSTree repository",
     rpmostree_compose_builtin_tree },
-  { "install", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "install", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
     "Install packages into a target path",
     rpmostree_compose_builtin_install },
-  { "postprocess", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "postprocess", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
     "Perform final postprocessing on an installation root",
     rpmostree_compose_builtin_postprocess },
-  { "commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "commit", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
     "Commit a target path to an OSTree repository",
     rpmostree_compose_builtin_commit },
 #ifdef BUILDOPT_ROJIG
-  { "rojig", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "rojig", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     "EXPERIMENTAL: Build a rojig RPM from a treefile, output to a local rpm-md repo",
     rpmostree_compose_builtin_rojig },
 #endif
-  { NULL, 0, NULL, NULL }
+  { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
 gboolean
