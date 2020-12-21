@@ -91,6 +91,10 @@ privdata_DATA = src/app/rpm-ostree-0-integration.conf
 # Propagate automake verbose mode
 cargo_build = $(cargo) build $(if $(subst 0,,$(V)),--verbose,)
 
+if BUILDOPT_ENABLE_SQLITE_RPMDB_DEFAULT
+cargo_build += --features sqlite-rpmdb-default
+endif
+
 tooling_src = bindgen/Cargo.toml bindgen/src/main.rs
 tooling-build:
 	cd $(top_srcdir)/tooling && $(cargo_build) --release --all-targets

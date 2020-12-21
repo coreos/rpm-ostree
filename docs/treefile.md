@@ -99,7 +99,8 @@ It supports the following parameters:
 
  * `rpmdb`: String, optional: The RPM database backend.  Can be one of
     `bdb`, `ndb`, or `sqlite`.  If unspecified, defaults to `bdb` for
-    compatibility.
+    compatibility. The default can be set to `sqlite` at compile-time
+    via `--enable-sqlite-rpmdb-default`.
 
  * `cliwrap`: boolean, optional.  Defaults to `false`.  If enabled,
     rpm-ostree will replace binaries such as `/usr/bin/rpm` with

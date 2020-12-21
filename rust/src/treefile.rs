@@ -24,6 +24,11 @@ use crate::utils;
 
 const INCLUDE_MAXDEPTH: u32 = 50;
 
+#[cfg(not(feature = "sqlite-rpmdb-default"))]
+const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::BDB;
+#[cfg(feature = "sqlite-rpmdb-default")]
+const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Sqlite;
+
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
 struct TreefileExternals {
@@ -1558,7 +1563,7 @@ mod ffi {
     #[no_mangle]
     pub extern "C" fn ror_treefile_get_rpmdb(tf: *mut Treefile) -> *mut libc::c_char {
         let tf = ref_from_raw_ptr(tf);
-        let s: &str = match tf.parsed.rpmdb.as_ref().unwrap_or(&RpmdbBackend::BDB) {
+        let s: &str = match tf.parsed.rpmdb.as_ref().unwrap_or(&DEFAULT_RPMDB_BACKEND) {
             RpmdbBackend::BDB => "bdb",
             RpmdbBackend::Sqlite => "sqlite",
             RpmdbBackend::NDB => "ndb",
