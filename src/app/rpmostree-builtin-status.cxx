@@ -114,7 +114,7 @@ print_packages (const char *k, guint max_key_len,
         continue;
 
       g_autofree char *quoted = rpmostree_maybe_shell_quote (pkg) ?: g_strdup (pkg);
-      g_ptr_array_add (packages_sorted, g_steal_pointer (&quoted));
+      g_ptr_array_add (packages_sorted, util::move_nullify (quoted));
     }
 
   const guint n_packages = packages_sorted->len;
@@ -128,7 +128,7 @@ print_packages (const char *k, guint max_key_len,
   guint current_width = 0;
   for (guint i = 0; i < n_packages; i++)
     {
-      const char *pkg = packages_sorted->pdata[i];
+      auto pkg = static_cast<const char *>(packages_sorted->pdata[i]);
       const guint pkg_width = strlen (pkg);
 
       /* first print */
@@ -166,7 +166,7 @@ lookup_array_and_canonicalize (GVariantDict *dict,
         g_clear_pointer (&ret, g_free);
     }
 
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 static void
@@ -268,7 +268,7 @@ get_last_auto_update_run (GDBusConnection   *connection,
     }
 
   *out_state = AUTO_UPDATE_SDSTATE_SERVICE_EXITED;
-  *out_last_run = g_steal_pointer (&last_run);
+  *out_last_run = util::move_nullify (last_run);
   return TRUE;
 }
 
@@ -763,7 +763,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
 
           gv_nevra_to_evr (str, gv_nevra);
           const char *evr = str->str;
-          GPtrArray *pkgs = g_hash_table_lookup (grouped_evrs, evr);
+          auto pkgs = static_cast<GPtrArray *>(g_hash_table_lookup (grouped_evrs, evr));
           if (!pkgs)
             {
               pkgs = g_ptr_array_new_with_free_func (g_free);
@@ -781,7 +781,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
 
           for (guint i = 0, n = pkgs->len; i < n; i++)
             {
-              const char *pkgname = g_ptr_array_index (pkgs, i);
+              auto pkgname = static_cast<const char *>(g_ptr_array_index (pkgs, i));
               if (i > 0)
                 g_string_append_c (str, ' ');
               g_string_append (str, pkgname);
@@ -829,7 +829,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
               g_string_append (str, " -> ");
               gv_nevra_to_evr (str, gv_nevra_new);
               const char *diff = str->str + original_size;
-              GPtrArray *pkgs = g_hash_table_lookup (grouped_diffs, diff);
+              auto pkgs = static_cast<GPtrArray *>(g_hash_table_lookup (grouped_diffs, diff));
               if (!pkgs)
                 {
                   pkgs = g_ptr_array_new_with_free_func (g_free);
@@ -856,7 +856,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
             g_string_append (str, ", ");
           for (guint i = 0, n = pkgs->len; i < n; i++)
             {
-              const char *pkgname = g_ptr_array_index (pkgs, i);
+              auto pkgname = static_cast<const char *>(g_ptr_array_index (pkgs, i));
               if (i > 0)
                 g_string_append_c (str, ' ');
               g_string_append (str, pkgname);
@@ -1184,7 +1184,7 @@ fetch_history_deployment_gvariant (RORHistoryEntry  *entry,
   if (!glnx_openat_rdonly (AT_FDCWD, fn, TRUE, &fd, &local_error))
     {
       if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        return g_propagate_error (error, g_steal_pointer (&local_error)), FALSE;
+        return g_propagate_error (error, util::move_nullify (local_error)), FALSE;
       return TRUE; /* Note early return */
     }
 
