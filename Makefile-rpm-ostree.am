@@ -59,7 +59,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-compose-builtin-tree.cxx \
 	src/app/rpmostree-composeutil.cxx \
 	src/app/rpmostree-composeutil.h \
-	src/app/rpmostree-builtin-compose.c \
+	src/app/rpmostree-builtin-compose.cxx \
 	$(librpmostreed_sources) \
 	$(librpmostreepriv_sources) \
 	$(NULL)
