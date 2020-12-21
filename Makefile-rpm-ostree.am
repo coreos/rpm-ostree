@@ -44,7 +44,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-builtin-db.cxx \
 	src/app/rpmostree-builtin-start-daemon.cxx \
 	src/app/rpmostree-builtin-finalize-deployment.cxx \
-	src/app/rpmostree-db-builtin-diff.c \
+	src/app/rpmostree-db-builtin-diff.cxx \
 	src/app/rpmostree-db-builtin-list.c \
 	src/app/rpmostree-db-builtin-version.c \
 	src/app/rpmostree-dbus-helpers.cxx \

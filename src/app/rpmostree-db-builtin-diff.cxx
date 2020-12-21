@@ -30,7 +30,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-package-variants.h"
 
-static char *opt_format = "block";
+static char *opt_format;
 static gboolean opt_changelogs;
 static char *opt_sysroot;
 static gboolean opt_base;
@@ -117,7 +117,7 @@ get_checksum_from_deployment (OstreeRepo       *repo,
   if (!checksum)
     checksum = g_strdup (ostree_deployment_get_csum (deployment));
 
-  *out_checksum = g_steal_pointer (&checksum);
+  *out_checksum = util::move_nullify (checksum);
   return TRUE;
 }
 
@@ -161,6 +161,9 @@ rpmostree_db_builtin_diff (int argc, char **argv,
       rpmostree_usage_error (context, message, error);
       return FALSE;
     }
+
+  if (!opt_format)
+    opt_format = g_strdup ("block");
 
   if (g_str_equal (opt_format, "json") && opt_changelogs)
     {
