@@ -36,7 +36,7 @@ librpmostreepriv_sources = \
 	src/libpriv/rpmostree-kernel.h \
 	src/libpriv/rpmostree-origin.c \
 	src/libpriv/rpmostree-origin.h \
-	src/libpriv/rpmostree-scripts.c \
+	src/libpriv/rpmostree-scripts.cxx \
 	src/libpriv/rpmostree-scripts.h \
 	src/libpriv/rpmostree-refsack.h \
 	src/libpriv/rpmostree-refsack.cxx \

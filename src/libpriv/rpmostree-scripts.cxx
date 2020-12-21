@@ -280,7 +280,7 @@ struct ChildSetupData {
 static void
 script_child_setup (gpointer opaque)
 {
-  struct ChildSetupData *data = opaque;
+  auto data = static_cast<struct ChildSetupData *>(opaque);
 
   /* make it really obvious for new users that we expect all fds to be initialized or -1 */
   if (!data || !data->all_fds_initialized)
@@ -372,6 +372,12 @@ run_script_in_bwrap_container (int rootfs_fd,
   glnx_autofd int stdout_fd = -1;
   glnx_autofd int stderr_fd = -1;
   struct stat stbuf;
+  gboolean is_glibc_locales = FALSE;
+  RpmOstreeBwrapMutability mutability;
+  gboolean debugging_script = FALSE;
+  GLnxTmpfile buffered_output = { 0, };
+  const char *id = NULL;
+  int fd = -1;
 
   /* TODO - Create a pipe and send this to bwrap so it's inside the
    * tmpfs.  Note the +1 on the path to skip the leading /.
@@ -411,9 +417,9 @@ run_script_in_bwrap_container (int rootfs_fd,
    *
    * See above for why we special case glibc.
    */
-  const gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0 ||
+  is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0 ||
     strcmp (pkg_script, "glibc-common.post") == 0;
-  RpmOstreeBwrapMutability mutability =
+  mutability =
     (is_glibc_locales || !enable_fuse) ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES;
   bwrap = rpmostree_bwrap_new (rootfs_fd,
                                mutability,
@@ -432,8 +438,7 @@ run_script_in_bwrap_container (int rootfs_fd,
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "run", 0755, cancellable, error))
     return FALSE;
   rpmostree_bwrap_bind_readwrite (bwrap, "./run", "/run");
-  int fd =
-    openat (rootfs_fd, "run/ostree-booted", O_CREAT | O_WRONLY | O_NOCTTY | O_CLOEXEC, 0640);
+  fd = openat (rootfs_fd, "run/ostree-booted", O_CREAT | O_WRONLY | O_NOCTTY | O_CLOEXEC, 0640);
   if (fd == -1)
     return glnx_throw_errno_prefix (error, "touch(run/ostree-booted)");
   (void) close (fd);
@@ -442,7 +447,7 @@ run_script_in_bwrap_container (int rootfs_fd,
   if (var_lib_rpm_statedir)
     rpmostree_bwrap_bind_readwrite (bwrap, var_lib_rpm_statedir->path, "/var/lib/rpm-state");
 
-  const gboolean debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
+  debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
 
   /* https://github.com/systemd/systemd/pull/7631 AKA
    * "systemctl,verbs: Introduce SYSTEMD_OFFLINE environment variable"
@@ -450,8 +455,7 @@ run_script_in_bwrap_container (int rootfs_fd,
    */
   rpmostree_bwrap_setenv (bwrap, "SYSTEMD_OFFLINE", "1");
 
-  GLnxTmpfile buffered_output = { 0, };
-  const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
+  id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
   if (debugging_script)
     {
       rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/bash", NULL);
@@ -559,7 +563,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
   struct rpmtd_s td;
   g_autofree char **args = NULL;
   if (headerGet (hdr, rpmscript->progtag, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
-    args = td.data;
+    args = static_cast<char**>(td.data);
 
   const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
   const char *script;
@@ -981,7 +985,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
       for (guint j = 0; j < patterns->len; j++)
         {
           guint n_matched = 0;
-          const char *pattern = patterns->pdata[j];
+          auto pattern = static_cast<const char *>(patterns->pdata[j]);
           if (j > 0)
             g_string_append (patterns_joined, ", ");
           g_string_append (patterns_joined, pattern);
@@ -1072,7 +1076,7 @@ verify_packages_in_sack (DnfSack      *sack,
 
   for (guint i = 0; i < pkgs->len; i++)
     {
-      DnfPackage *pkg = pkgs->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(pkgs->pdata[i]);
       const char *nevra = dnf_package_get_nevra (pkg);
       if (!rpmostree_sack_has_subject (sack, nevra))
         return glnx_throw (error, "Didn't find package '%s'", nevra);
