@@ -47,7 +47,7 @@ get_args_variant (GError **error)
   if (opt_target)
     {
       if (opt_reset)
-        return glnx_null_throw (error, "Cannot specify both --target and --reset");
+        return (GVariant*)glnx_null_throw (error, "Cannot specify both --target and --reset");
       g_variant_dict_insert (&dict, "target", "s", opt_target);
     }
   else if (opt_reset)
@@ -57,7 +57,7 @@ get_args_variant (GError **error)
         return FALSE;
       OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
       if (!booted)
-        return glnx_null_throw (error, "Not in a booted OSTree deployment");
+        return (GVariant*)glnx_null_throw (error, "Not in a booted OSTree deployment");
       g_variant_dict_insert (&dict, "target", "s", ostree_deployment_get_csum (booted));
     }
 
