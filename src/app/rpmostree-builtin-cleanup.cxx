@@ -78,13 +78,13 @@ rpmostree_builtin_cleanup (int             argc,
     }
 
   if (opt_base)
-    g_ptr_array_add (cleanup_types, "base");
+    g_ptr_array_add (cleanup_types, (char*)"base");
   if (opt_pending)
-    g_ptr_array_add (cleanup_types, "pending-deploy");
+    g_ptr_array_add (cleanup_types, (char*)"pending-deploy");
   if (opt_rollback)
-    g_ptr_array_add (cleanup_types, "rollback-deploy");
+    g_ptr_array_add (cleanup_types, (char*)"rollback-deploy");
   if (opt_repomd)
-    g_ptr_array_add (cleanup_types, "repomd");
+    g_ptr_array_add (cleanup_types, (char*)"repomd");
   if (cleanup_types->len == 0)
     {
       glnx_throw (error, "At least one cleanup option must be specified");
