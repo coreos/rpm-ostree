@@ -17,7 +17,12 @@
 
 bin_PROGRAMS += rpm-ostree
 
-rpm_ostree_SOURCES = src/app/main.cxx \
+rpm_ostree_SOURCES = src/app/main.cxx
+
+noinst_LTLIBRARIES += librpmostreeinternals.la
+
+librpmostreeinternals_la_SOURCES = \
+    src/app/libmain.cxx \
 	src/app/rpmostree-builtins.h \
 	src/app/rpmostree-db-builtins.h \
 	src/app/rpmostree-compose-builtins.h \
@@ -65,25 +70,30 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	$(NULL)
 
 if BUILDOPT_ROJIG
-rpm_ostree_SOURCES += \
+librpmostreeinternals_la_SOURCES += \
 	src/app/rpmostree-ex-builtin-commit2rojig.cxx \
 	src/app/rpmostree-ex-builtin-rojig2commit.cxx \
 	src/app/rpmostree-compose-builtin-rojig.cxx \
 	$(NULL)
 endif
 
-nodist_rpm_ostree_SOURCES = $(dbus_built_sources) $(nodist_librpmostreepriv_sources)
+nodist_librpmostreeinternals_la_SOURCES = $(dbus_built_sources) $(nodist_librpmostreepriv_sources)
 
 rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
-	-fvisibility=hidden \
 	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
 	-DLIBDIR=\"$(libdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" \
-	$(PKGDEP_RPMOSTREE_CFLAGS)
-rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
-rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
-rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostree-1.la
+	$(PKGDEP_RPMOSTREE_CFLAGS) $(PKGDEP_RPMOSTREE_RS_CFLAGS)
+rpmostree_bin_common_cflags = $(rpmostree_common_cflags)
+rpmostree_bin_common_libs = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostree-1.la $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++
+rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_bin_common_cflags)
+rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_bin_common_cflags)
+rpm_ostree_LDADD = librpmostreeinternals.la $(rpmostree_bin_common_libs)
 EXTRA_rpm_ostree_DEPENDENCIES = libdnf.so.2
+librpmostreeinternals_la_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
+librpmostreeinternals_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
+librpmostreeinternals_la_LIBADD = $(rpmostree_bin_common_libs)
+EXTRA_librpmostreeinternals_la_DEPENDENCIES = libdnf.so.2
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
@@ -107,7 +117,7 @@ endif
 endif
 GITIGNOREFILES += tooling/target/ rpmostree-bindgen
 
-librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
+librpmostree_rust_path = $(top_srcdir)/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
 # If the target directory exists, and isn't owned by our uid, then
 # we exit with a fatal error, since someone probably did `make && sudo make install`,
 # and in this case cargo will download into ~/.root which we don't want.
@@ -132,9 +142,6 @@ endif
 endif
 endif
 BUILT_SOURCES += rpmostree-rust.h
-
-rpm_ostree_CFLAGS += $(PKGDEP_RPMOSTREE_RS_CFLAGS)
-rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++
 
 # Wraps `cargo test`.  This is always a debug non-release build;
 # the main thing here is we still drop the `target` dir in our build
