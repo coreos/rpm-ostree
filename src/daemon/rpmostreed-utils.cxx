@@ -18,6 +18,7 @@
 
 #include "config.h"
 
+#include "rpmostree-util.h"
 #include "rpmostreed-utils.h"
 #include "rpmostreed-errors.h"
 #include "libglnx.h"
@@ -203,7 +204,7 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
     }
 
   if (remote == NULL)
-      *out_refspec = g_steal_pointer (&ref);
+      *out_refspec = util::move_nullify (ref);
   else
       *out_refspec = g_strconcat (remote, ":", ref, NULL);
 
@@ -214,7 +215,7 @@ void
 rpmostreed_reboot (GCancellable *cancellable, GError **error)
 {
   const char *child_argv[] = { "systemctl", "reboot", NULL };
-  (void) g_spawn_sync (NULL, (char**)child_argv, NULL, G_SPAWN_CHILD_INHERITS_STDIN | G_SPAWN_SEARCH_PATH,
+  (void) g_spawn_sync (NULL, (char**)child_argv, NULL, (GSpawnFlags)(G_SPAWN_CHILD_INHERITS_STDIN | G_SPAWN_SEARCH_PATH),
                        NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
@@ -361,7 +362,7 @@ version_visitor (OstreeRepo  *repo,
                  gboolean    *out_stop,
                  GError     **error)
 {
-  VersionVisitorClosure *closure = user_data;
+  auto closure = static_cast<VersionVisitorClosure *>(user_data);
   g_autoptr(GVariant) metadict = NULL;
   const char *version = NULL;
 
@@ -403,7 +404,6 @@ rpmostreed_repo_lookup_version (OstreeRepo           *repo,
                                 GError              **error)
 {
   VersionVisitorClosure closure = { version, NULL };
-  gboolean ret = FALSE;
 
   g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
   g_return_val_if_fail (refspec != NULL, FALSE);
@@ -412,24 +412,19 @@ rpmostreed_repo_lookup_version (OstreeRepo           *repo,
   if (!rpmostreed_repo_pull_ancestry (repo, refspec,
                                       version_visitor, &closure,
                                       progress, cancellable, error))
-    goto out;
+    return FALSE;
 
-  if (closure.checksum == NULL)
+  g_autofree char *checksum = util::move_nullify (closure.checksum);
+  if (checksum == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
                    "Version %s not found in %s", version, refspec);
-      goto out;
+      return FALSE;
     }
 
   if (out_checksum != NULL)
-    *out_checksum = g_steal_pointer (&closure.checksum);
-
-  g_free (closure.checksum);
-
-  ret = TRUE;
-
-out:
-  return ret;
+    *out_checksum = util::move_nullify (checksum);
+  return TRUE;
 }
 
 typedef struct {
@@ -445,7 +440,7 @@ checksum_visitor (OstreeRepo  *repo,
                   gboolean    *out_stop,
                   GError     **error)
 {
-  ChecksumVisitorClosure *closure = user_data;
+  auto closure = static_cast<ChecksumVisitorClosure *>(user_data);
   *out_stop = closure->found = g_str_equal (checksum, closure->wanted_checksum);
   return TRUE;
 }
@@ -553,7 +548,7 @@ rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
     }
 
   if (out_checksum != NULL)
-    *out_checksum = g_steal_pointer (&closure.checksum);
+    *out_checksum = util::move_nullify (closure.checksum);
 
   g_free (closure.checksum);
 
