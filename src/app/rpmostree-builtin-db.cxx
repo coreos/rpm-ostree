@@ -33,7 +33,7 @@ static RpmOstreeCommand rpm_subcommands[] = {
   { "version", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Show rpmdb version of packages within the commits",
     rpmostree_db_builtin_version },
-  { NULL, 0, NULL, NULL }
+  { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
 static char *opt_repo;
@@ -86,7 +86,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
   if (rpmReadConfigFiles (NULL, NULL))
     return glnx_throw (error, "rpm failed to init: %s", rpmlogMessage ());
 
-  *out_repo = g_steal_pointer (&repo);
+  *out_repo = util::move_nullify (repo);
   return TRUE;
 }
 
