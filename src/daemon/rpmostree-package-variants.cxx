@@ -134,7 +134,7 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
                             GCancellable *cancellable,
                             GError **error)
 {
-  RpmOstreeDbDiffExtFlags flags = 0;
+  int flags = 0;
   if (allow_noent)
     flags |= RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
 
@@ -142,7 +142,7 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   g_autoptr(GPtrArray) added = NULL;
   g_autoptr(GPtrArray) modified_old = NULL;
   g_autoptr(GPtrArray) modified_new = NULL;
-  if (!rpm_ostree_db_diff_ext (repo, from_rev, to_rev, flags,
+  if (!rpm_ostree_db_diff_ext (repo, from_rev, to_rev, (RpmOstreeDbDiffExtFlags)flags,
                                &removed, &added, &modified_old, &modified_new,
                                cancellable, error))
     return FALSE;
@@ -161,8 +161,8 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   for (guint i = 0; i < modified_old->len; i++)
     {
       guint type = RPM_OSTREE_PACKAGE_UPGRADED;
-      RpmOstreePackage *oldpkg = modified_old->pdata[i];
-      RpmOstreePackage *newpkg = modified_new->pdata[i];
+      auto oldpkg = static_cast<RpmOstreePackage *>(modified_old->pdata[i]);
+      auto newpkg = static_cast<RpmOstreePackage *>(modified_new->pdata[i]);
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
         type = RPM_OSTREE_PACKAGE_DOWNGRADED;
@@ -174,7 +174,7 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   for (guint i = 0; i < removed->len; i++)
     {
       guint type = RPM_OSTREE_PACKAGE_REMOVED;
-      RpmOstreePackage *pkg = removed->pdata[i];
+      auto pkg = static_cast<RpmOstreePackage *>(removed->pdata[i]);
       const char *name = rpm_ostree_package_get_name (pkg);
       g_ptr_array_add (found, build_diff_variant (name, type, pkg, NULL));
     }
@@ -182,7 +182,7 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   for (guint i = 0; i < added->len; i++)
     {
       guint type = RPM_OSTREE_PACKAGE_ADDED;
-      RpmOstreePackage *pkg = added->pdata[i];
+      auto pkg = static_cast<RpmOstreePackage *>(added->pdata[i]);
       const char *name = rpm_ostree_package_get_name (pkg);
       g_ptr_array_add (found, build_diff_variant (name, type, NULL, pkg));
     }
@@ -192,7 +192,7 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   GVariantBuilder builder;
   g_variant_builder_init (&builder, RPMOSTREE_DB_DIFF_VARIANT_FORMAT);
   for (guint i = 0; i < found->len; i++)
-    g_variant_builder_add_value (&builder, found->pdata[i]);
+    g_variant_builder_add_value (&builder, (GVariant*)found->pdata[i]);
 
   *out_variant = g_variant_builder_end (&builder);
   g_variant_ref_sink (*out_variant);
