@@ -26,7 +26,7 @@ CLEANFILES += rpm-ostreed-generated-org.projectatomic.rpmostree1.OS.xml \
 librpmostreed_sources = \
 	src/daemon/rpmostreed-types.h \
 	src/daemon/rpmostreed-daemon.h \
-	src/daemon/rpmostreed-daemon.c \
+	src/daemon/rpmostreed-daemon.cxx \
 	src/daemon/rpmostreed-utils.h \
 	src/daemon/rpmostreed-utils.c \
 	src/daemon/rpmostreed-sysroot.h \
