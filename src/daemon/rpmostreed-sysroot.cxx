@@ -131,7 +131,7 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_BEGIN:
     {
-      RpmOstreeOutputProgressBegin *begin = data;
+      auto begin = static_cast<RpmOstreeOutputProgressBegin *>(data);
       g_clear_pointer (&progress_str, g_free);
       progress_state_percent = false;
       progress_state_n_items = 0;
@@ -156,7 +156,7 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
     {
-      RpmOstreeOutputProgressUpdate *update = data;
+      auto update = static_cast<RpmOstreeOutputProgressUpdate *>(data);
       if (progress_state_n_items)
         {
           /* We still emit PercentProgress for compatibility with older clients as
@@ -210,7 +210,7 @@ handle_get_os (RPMOSTreeSysroot *object,
     }
 
   g_autoptr(GDBusInterfaceSkeleton) os_interface =
-    g_hash_table_lookup (self->os_interfaces, arg_name);
+    (GDBusInterfaceSkeleton*)g_hash_table_lookup (self->os_interfaces, arg_name);
   if (os_interface != NULL)
     g_object_ref (os_interface);
 
@@ -285,7 +285,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
 
   for (guint i = 0; deployments != NULL && i < deployments->len; i++)
     {
-      OstreeDeployment *deployment = deployments->pdata[i];
+      auto deployment = static_cast<OstreeDeployment *>(deployments->pdata[i]);
       GVariant *variant =
         rpmostreed_deployment_generate_variant (self->ot_sysroot, deployment,
                                                 booted_id, self->repo, TRUE, error);
@@ -393,7 +393,7 @@ typedef struct {
 static gboolean
 handle_reload_via_idle (gpointer data)
 {
-  ReloadIdleData *idata = data;
+  auto idata = static_cast<ReloadIdleData *>(data);
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (idata->object);
   GDBusMethodInvocation *invocation = idata->invocation;
 
@@ -410,7 +410,7 @@ out:
   if (local_error)
     {
       g_prefix_error (&local_error, "Handling reload: ");
-      g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+      g_dbus_method_invocation_take_error (invocation, util::move_nullify (local_error));
     }
   return G_SOURCE_REMOVE;
 }
@@ -461,7 +461,7 @@ out:
   if (local_error)
     {
       g_prefix_error (&local_error, "Handling config reload: ");
-      g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+      g_dbus_method_invocation_take_error (invocation, util::move_nullify (local_error));
     }
 
   return TRUE;
@@ -770,7 +770,7 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
       g_autofree char *sysroot_deploy_path = g_build_filename (sysroot_path, "ostree/deploy", NULL);
       g_autoptr(GFile) sysroot_deploy = g_file_new_for_path (sysroot_deploy_path);
 
-      self->monitor = g_file_monitor (sysroot_deploy, 0, NULL, error);
+      self->monitor = g_file_monitor (sysroot_deploy, (GFileMonitorFlags)0, NULL, error);
 
       if (self->monitor == NULL)
         return FALSE;
@@ -804,9 +804,9 @@ rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
   if (!rpmostreed_sysroot_reload (self, error))
     return FALSE;
   if (out_sysroot)
-    *out_sysroot = g_object_ref (rpmostreed_sysroot_get_root (self));
+    *out_sysroot = (OstreeSysroot*)g_object_ref (rpmostreed_sysroot_get_root (self));
   if (out_repo)
-    *out_repo = g_object_ref (rpmostreed_sysroot_get_repo (self));
+    *out_repo = (OstreeRepo*)g_object_ref (rpmostreed_sysroot_get_repo (self));
   return TRUE;
 }
 
@@ -820,7 +820,7 @@ rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot     *self,
     {
       if (rpmostreed_transaction_is_compatible (self->transaction, invocation))
         {
-          *out_compat_txn = g_object_ref (self->transaction);
+          *out_compat_txn = (RpmostreedTransaction*)g_object_ref (self->transaction);
           return TRUE;
         }
       const char *title = rpmostree_transaction_get_title ((RPMOSTreeTransaction*)(self->transaction));
@@ -839,7 +839,7 @@ rpmostreed_sysroot_has_txn (RpmostreedSysroot     *self)
 static gboolean
 on_force_close (gpointer data)
 {
-  RpmostreedSysroot *self = data;
+  auto self = static_cast<RpmostreedSysroot *>(data);
 
   if (self->transaction)
     {
@@ -856,7 +856,7 @@ on_txn_executed_changed (GObject    *object,
                          GParamSpec *pspec,
                          gpointer    user_data)
 {
-  RpmostreedSysroot *self = user_data;
+  auto self = static_cast<RpmostreedSysroot *>(user_data);
   gboolean executed;
   g_object_get (object, "executed", &executed, NULL);
   if (executed && self->close_transaction_timeout_id == 0)
@@ -880,7 +880,7 @@ rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
   if (txn != NULL)
     {
       g_assert (self->transaction == NULL);
-      self->transaction = g_object_ref (txn);
+      self->transaction = (RpmostreedTransaction*)g_object_ref (txn);
 
       g_signal_connect (self->transaction, "notify::executed",
                         G_CALLBACK (on_txn_executed_changed), self);
