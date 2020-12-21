@@ -84,11 +84,11 @@ parse_packages_strv (GKeyFile *kf,
           g_autofree char *sha256 = NULL;
           if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
             return glnx_throw (error, "Invalid SHA-256 NEVRA string: %s", nevra);
-          g_hash_table_replace (ht, g_strdup (nevra), g_steal_pointer (&sha256));
+          g_hash_table_replace (ht, g_strdup (nevra), util::move_nullify (sha256));
         }
       else
         {
-          g_hash_table_add (ht, g_steal_pointer (it));
+          g_hash_table_add (ht, util::move_nullify (*it));
         }
     }
 
@@ -123,10 +123,10 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
     {
       refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
       if (!refspec && !rojig_spec)
-        return glnx_null_throw (error, "No origin/refspec, origin/rojig, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
+        return (RpmOstreeOrigin *)glnx_null_throw (error, "No origin/refspec, origin/rojig, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
     }
   if (refspec && rojig_spec)
-    return glnx_null_throw (error, "Duplicate origin/refspec and origin/rojig in deployment origin");
+    return (RpmOstreeOrigin *)glnx_null_throw (error, "Duplicate origin/refspec and origin/rojig in deployment origin");
   else if (refspec)
     {
       if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, NULL, error))
@@ -135,7 +135,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
        * rpmostree_origin_get_refspec() in the ostree:// case
        * sees it without the prefix for compatibility.
        */
-      ret->cached_refspec = g_steal_pointer (&refspec);
+      ret->cached_refspec = util::move_nullify (refspec);
       ret->cached_override_commit =
         g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
     }
@@ -143,7 +143,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
     {
       g_assert (rojig_spec);
       ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_ROJIG;
-      ret->cached_refspec = g_steal_pointer (&rojig_spec);
+      ret->cached_refspec = util::move_nullify (rojig_spec);
       ret->cached_rojig_version = g_key_file_get_string (ret->kf, "origin", "rojig-override-version", NULL);
       ret->cached_rojig_description = g_key_file_get_string (ret->kf, "origin", "rojig-description", NULL);
     }
@@ -167,12 +167,12 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   g_auto(GStrv) initramfs_etc_files =
     g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-etc", NULL, NULL);
   for (char **f = initramfs_etc_files; f && *f; f++)
-    g_hash_table_add (ret->cached_initramfs_etc_files, g_steal_pointer (f));
+    g_hash_table_add (ret->cached_initramfs_etc_files, util::move_nullify (*f));
 
   ret->cached_initramfs_args =
     g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
 
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 RpmOstreeOrigin *
@@ -727,7 +727,7 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
 
       if (local)
         g_hash_table_insert (origin->cached_local_packages,
-                             g_strdup (pkg), g_steal_pointer (&sha256));
+                             g_strdup (pkg), util::move_nullify (sha256));
       else
         g_hash_table_add (origin->cached_packages, g_strdup (pkg));
       changed = TRUE;
@@ -755,10 +755,10 @@ build_name_to_nevra_map (GHashTable  *nevras,
       g_autofree char *name = NULL;
       if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
         return FALSE;
-      g_hash_table_insert (name_to_nevra, g_steal_pointer (&name), (gpointer)nevra);
+      g_hash_table_insert (name_to_nevra, util::move_nullify (name), (gpointer)nevra);
     }
 
-  *out_name_to_nevra = g_steal_pointer (&name_to_nevra);
+  *out_name_to_nevra = util::move_nullify (name_to_nevra);
   return TRUE;
 }
 
@@ -873,7 +873,7 @@ rpmostree_origin_add_overrides (RpmOstreeOrigin  *origin,
 
       if (type == RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL)
         g_hash_table_insert (origin->cached_overrides_local_replace, g_strdup (pkg),
-                             g_steal_pointer (&sha256));
+                             util::move_nullify (sha256));
       else if (type == RPMOSTREE_ORIGIN_OVERRIDE_REMOVE)
         g_hash_table_add (origin->cached_overrides_remove, g_strdup (pkg));
       else
