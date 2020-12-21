@@ -189,9 +189,9 @@ rpmostree_importer_read_metainfo (int fd,
 
   ret = TRUE;
   if (out_header)
-    *out_header = g_steal_pointer (&ret_header);
+    *out_header = util::move_nullify (ret_header);
   if (out_fi)
-    *out_fi = g_steal_pointer (&ret_fi);
+    *out_fi = util::move_nullify (ret_fi);
   if (out_cpio_offset)
     *out_cpio_offset = ret_cpio_offset;
  out:
@@ -269,17 +269,17 @@ rpmostree_importer_new_take_fd (int                     *fd,
   if (!rpmostree_importer_read_metainfo (*fd, &hdr, &cpio_offset, &fi, error))
     goto out;
 
-  ret = g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
+  ret = (RpmOstreeImporter*)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
   ret->fd = glnx_steal_fd (fd);
-  ret->repo = g_object_ref (repo);
-  ret->sepolicy = sepolicy ? g_object_ref (sepolicy) : NULL;
-  ret->fi = g_steal_pointer (&fi);
-  ret->archive = g_steal_pointer (&archive);
+  ret->repo = (OstreeRepo*)g_object_ref (repo);
+  ret->sepolicy = (OstreeSePolicy*)(sepolicy ? g_object_ref (sepolicy) : NULL);
+  ret->fi = util::move_nullify (fi);
+  ret->archive = util::move_nullify (archive);
   ret->flags = flags;
   ret->unpacking_as_nonroot = (getuid () != 0);
-  ret->hdr = g_steal_pointer (&hdr);
+  ret->hdr = util::move_nullify (hdr);
   ret->cpio_offset = cpio_offset;
-  ret->pkg = pkg ? g_object_ref (pkg) : NULL;
+  ret->pkg = (DnfPackage*)(pkg ? g_object_ref (pkg) : NULL);
   ret->opt_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
@@ -354,7 +354,7 @@ get_lead_sig_header_as_bytes (RpmOstreeImporter *self,
   /* Inline a pread() based reader here to avoid affecting the file
    * offset since both librpm and libarchive have references.
    */
-  g_autofree char *buf = g_malloc (self->cpio_offset);
+  g_autofree char *buf = (char*)g_malloc (self->cpio_offset);
   char *bufp = buf;
   size_t bytes_remaining = self->cpio_offset;
   while (bytes_remaining > 0)
@@ -371,7 +371,7 @@ get_lead_sig_header_as_bytes (RpmOstreeImporter *self,
     return glnx_throw (error, "Failed to read %" G_GSIZE_FORMAT " bytes of metadata",
                        bytes_remaining);
 
-  *out_metadata = g_bytes_new_take (g_steal_pointer (&buf), self->cpio_offset);
+  *out_metadata = g_bytes_new_take (util::move_nullify (buf), self->cpio_offset);
   return TRUE;
 }
 
@@ -429,7 +429,7 @@ build_metadata_variant (RpmOstreeImporter *self,
                            g_variant_new_from_bytes ((GVariantType*)"ay",
                                                      metadata, TRUE));
 
-    g_checksum_update (pkg_checksum, g_bytes_get_data (metadata, NULL),
+    g_checksum_update (pkg_checksum, (const guint8*)g_bytes_get_data (metadata, NULL),
                                      g_bytes_get_size (metadata));
 
     self->hdr_sha256 = g_strdup (g_checksum_get_string (pkg_checksum));
@@ -810,8 +810,8 @@ rojig_xattr_cb (OstreeRepo  *repo,
                 GFileInfo   *file_info,
                 gpointer     user_data)
 {
-  RpmOstreeImporter *self = user_data;
-  return g_steal_pointer (&self->rojig_next_xattrs);
+  auto self = static_cast<RpmOstreeImporter *>(user_data);
+  return util::move_nullify (self->rojig_next_xattrs);
 }
 #endif
 
@@ -821,7 +821,7 @@ xattr_cb (OstreeRepo  *repo,
           GFileInfo   *file_info,
           gpointer     user_data)
 {
-  RpmOstreeImporter *self = user_data;
+  auto self = static_cast<RpmOstreeImporter *>(user_data);
   const char *fcaps = NULL;
 
   get_rpmfi_override (self, path, NULL, NULL, &fcaps);
@@ -852,7 +852,7 @@ handle_translate_pathname (OstreeRepo   *repo,
                            const char   *path,
                            gpointer      user_data)
 {
-  RpmOstreeImporter *self = user_data;
+  auto self = static_cast<RpmOstreeImporter *>(user_data);
 
   if (g_str_has_prefix (path, "opt/"))
     g_hash_table_add (self->opt_files,
@@ -891,12 +891,12 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     filter = compose_filter_cb;
 
   /* If changing this, also look at changing rpmostree-postprocess.cxx */
-  OstreeRepoCommitModifierFlags modifier_flags =
+  int modifier_flags =
     OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
   if (unprivileged)
     modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
   g_autoptr(OstreeRepoCommitModifier) modifier =
-    ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
+    ostree_repo_commit_modifier_new (static_cast<OstreeRepoCommitModifierFlags>(modifier_flags), filter, &fdata, NULL);
   if (self->rojig_mode)
     {
 #ifdef BUILDOPT_ROJIG
@@ -1017,7 +1017,7 @@ rpmostree_importer_run (RpmOstreeImporter *self,
   ostree_repo_transaction_set_ref (self->repo, NULL, branch, csum);
 
   if (out_csum)
-    *out_csum = g_steal_pointer (&csum);
+    *out_csum = util::move_nullify (csum);
   return TRUE;
 }
 
@@ -1028,13 +1028,13 @@ import_in_thread (GTask            *task,
                   GCancellable     *cancellable)
 {
   GError *local_error = NULL;
-  RpmOstreeImporter *self = source;
+  auto self = static_cast<RpmOstreeImporter *>(source);
   g_autofree char *rev = NULL;
 
   if (!rpmostree_importer_run (self, &rev, cancellable, &local_error))
     g_task_return_error (task, local_error);
   else
-    g_task_return_pointer (task, g_steal_pointer (&rev), g_free);
+    g_task_return_pointer (task, util::move_nullify (rev), g_free);
 }
 
 void
@@ -1053,7 +1053,7 @@ rpmostree_importer_run_async_finish (RpmOstreeImporter  *self,
                                      GError            **error)
 {
   g_return_val_if_fail (g_task_is_valid (result, self), FALSE);
-  return g_task_propagate_pointer ((GTask*)result, error);
+  return static_cast<char*>(g_task_propagate_pointer ((GTask*)result, error));
 }
 
 char *
@@ -1062,9 +1062,9 @@ rpmostree_importer_get_nevra (RpmOstreeImporter *self)
   if (self->hdr == NULL)
     return NULL;
   return rpmostree_header_custom_nevra_strdup (self->hdr,
-                                               PKG_NEVRA_FLAGS_NAME |
+                                               (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME |
                                                PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-                                               PKG_NEVRA_FLAGS_ARCH);
+                                               PKG_NEVRA_FLAGS_ARCH));
 }
 
 const char *
