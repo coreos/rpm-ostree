@@ -525,7 +525,6 @@ rpmostree_run_dracut (int     rootfs_dfd,
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   g_autoptr(GPtrArray) rebuild_argv = NULL;
   g_auto(GLnxTmpfile) tmpf = { 0, };
-  g_autoptr(GBytes) random_cpio_data = NULL;
 
   /* We need to have /etc/passwd since dracut doesn't have altfiles
    * today.  Though maybe in the future we should add it, but
@@ -627,16 +626,10 @@ rpmostree_run_dracut (int     rootfs_dfd,
    * https://bugzilla.redhat.com/show_bug.cgi?id=1401444
    * https://bugzilla.redhat.com/show_bug.cgi?id=1380866
    * */
-  random_cpio_data = g_resources_lookup_data ("/rpmostree/dracut-random.cpio.gz",
-                                              G_RESOURCE_LOOKUP_FLAGS_NONE,
-                                              error);
-  if (!random_cpio_data)
-    return FALSE;
-  gsize random_cpio_data_len = 0;
-  auto random_cpio_data_p = static_cast<const guint8*>(g_bytes_get_data (random_cpio_data, &random_cpio_data_len));
+  auto random_cpio_data = rpmostreecxx::get_dracut_random_cpio ();
   if (lseek (tmpf.fd, 0, SEEK_END) < 0)
     return glnx_throw_errno_prefix (error, "lseek");
-  if (glnx_loop_write (tmpf.fd, random_cpio_data_p, random_cpio_data_len) < 0)
+  if (glnx_loop_write (tmpf.fd, random_cpio_data.data(), random_cpio_data.length()) < 0)
     return glnx_throw_errno_prefix (error, "write");
 
   if (rebuild_from_initramfs)

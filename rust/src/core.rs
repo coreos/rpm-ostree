@@ -44,6 +44,10 @@ impl TempEtcGuard {
     }
 }
 
+pub(crate) fn get_systemctl_wrapper() -> &'static [u8] {
+    include_bytes!("../../src/libpriv/systemctl-wrapper.sh")
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
