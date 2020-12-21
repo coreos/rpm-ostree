@@ -31,7 +31,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-builtin-cleanup.c \
 	src/app/rpmostree-builtin-initramfs.c \
 	src/app/rpmostree-builtin-initramfs-etc.c \
-	src/app/rpmostree-builtin-livefs.c \
+	src/app/rpmostree-builtin-livefs.cxx \
 	src/app/rpmostree-builtin-usroverlay.cxx \
 	src/app/rpmostree-builtin-override.cxx \
 	src/app/rpmostree-builtin-refresh-md.cxx \
