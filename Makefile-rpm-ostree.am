@@ -124,7 +124,7 @@ else
 if !HAVE_PREBUILT_CBINDGEN
 if HAVE_EXTERNAL_CBINDGEN
 rpmostree-rust.h:
-	$(AM_V_GEN) cbindgen -c rust/cbindgen.toml -o $@ $(top_srcdir)
+	$(AM_V_GEN) cbindgen -c cbindgen.toml -o $@ $(top_srcdir)
 else
 rpmostree-rust.h: rpmostree-bindgen
 	$(AM_V_GEN) ./rpmostree-bindgen $(top_srcdir)
