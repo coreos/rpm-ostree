@@ -57,7 +57,7 @@ _rpmostree_jsonutil_object_require_string_member (JsonObject     *object,
   if (!_rpmostree_jsonutil_object_get_optional_string_member (object, member_name, &ret, error))
     return NULL;
   if (!ret)
-    return glnx_null_throw (error, "Member '%s' not found", member_name);
+    return (char*)glnx_null_throw (error, "Member '%s' not found", member_name);
   return ret;
 }
 
@@ -141,7 +141,7 @@ _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
 {
   const char *ret = json_array_get_string_element (array, i);
   if (!ret)
-    return glnx_null_throw (error, "Element at index %u is not a string", i);
+    return (char*)glnx_null_throw (error, "Element at index %u is not a string", i);
   return ret;
 }
 
