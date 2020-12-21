@@ -28,7 +28,7 @@ librpmostreed_sources = \
 	src/daemon/rpmostreed-daemon.h \
 	src/daemon/rpmostreed-daemon.cxx \
 	src/daemon/rpmostreed-utils.h \
-	src/daemon/rpmostreed-utils.c \
+	src/daemon/rpmostreed-utils.cxx \
 	src/daemon/rpmostreed-sysroot.h \
 	src/daemon/rpmostreed-sysroot.c \
 	src/daemon/rpmostree-sysroot-core.h \
