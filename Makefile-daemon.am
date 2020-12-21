@@ -30,7 +30,7 @@ librpmostreed_sources = \
 	src/daemon/rpmostreed-utils.h \
 	src/daemon/rpmostreed-utils.cxx \
 	src/daemon/rpmostreed-sysroot.h \
-	src/daemon/rpmostreed-sysroot.c \
+	src/daemon/rpmostreed-sysroot.cxx \
 	src/daemon/rpmostree-sysroot-core.h \
 	src/daemon/rpmostree-sysroot-core.cxx \
 	src/daemon/rpmostree-sysroot-upgrader.h \
