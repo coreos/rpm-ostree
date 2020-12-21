@@ -51,7 +51,7 @@ on_active_txn_path_changed (GObject    *object,
                             GParamSpec *pspec,
                             gpointer    user_data)
 {
-  gboolean *donep = user_data;
+  auto donep = static_cast<gboolean *>(user_data);
   *donep = TRUE;
   g_main_context_wakeup (NULL);
 }
