@@ -18,7 +18,7 @@
 librpmostreepriv_sources = \
 	src/libpriv/rpmostree-postprocess.cxx \
 	src/libpriv/rpmostree-postprocess.h \
-	src/libpriv/rpmostree-json-parsing.c \
+	src/libpriv/rpmostree-json-parsing.cxx \
 	src/libpriv/rpmostree-json-parsing.h \
 	src/libpriv/rpmostree-util.cxx \
 	src/libpriv/rpmostree-util.h \
