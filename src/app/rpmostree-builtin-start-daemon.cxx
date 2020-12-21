@@ -45,7 +45,7 @@ typedef enum {
 
 static AppState appstate = APPSTATE_STARTING;
 static gboolean opt_debug = FALSE;
-static char *opt_sysroot = "/";
+static char *opt_sysroot = NULL;
 static gint service_dbus_fd = -1;
 static GOptionEntry opt_entries[] =
 {
@@ -79,10 +79,10 @@ start_daemon (GDBusConnection *connection,
               GError         **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Couldn't start daemon", error);
-  rpm_ostree_daemon = g_initable_new (RPMOSTREED_TYPE_DAEMON,
+  rpm_ostree_daemon = (RpmostreedDaemon*)g_initable_new (RPMOSTREED_TYPE_DAEMON,
                                       NULL, error,
                                       "connection", connection,
-                                      "sysroot-path", opt_sysroot,
+                                      "sysroot-path", opt_sysroot ?: "/",
                                       NULL);
   return rpm_ostree_daemon != NULL;
 }
@@ -268,8 +268,8 @@ connect_to_peer (int fd, GError **error)
 
   guid = g_dbus_generate_guid ();
   g_dbus_connection_new (G_IO_STREAM (stream), guid,
-                         G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER |
-                         G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
+                         (GDBusConnectionFlags)(G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER |
+                         G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING),
                          NULL, NULL, on_peer_acquired, NULL);
   return TRUE;
 }
@@ -290,8 +290,8 @@ rpmostree_builtin_start_daemon (int             argc,
   if (opt_debug)
     {
       g_autoptr(GIOChannel) channel = NULL;
-      g_log_set_handler (G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO, on_log_debug, NULL);
-      g_log_set_always_fatal (G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING);
+      g_log_set_handler (G_LOG_DOMAIN, (GLogLevelFlags)(G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO), on_log_debug, NULL);
+      g_log_set_always_fatal ((GLogLevelFlags)(G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING));
 
       /* When in debug mode (often testing) we exit when stdin closes */
       channel = g_io_channel_unix_new (0);
