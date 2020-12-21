@@ -42,7 +42,7 @@ librpmostreepriv_sources = \
 	src/libpriv/rpmostree-refsack.cxx \
 	src/libpriv/rpmostree-rpm-util.cxx \
 	src/libpriv/rpmostree-rpm-util.h \
-	src/libpriv/rpmostree-importer.c \
+	src/libpriv/rpmostree-importer.cxx \
 	src/libpriv/rpmostree-importer.h \
 	src/libpriv/rpmostree-unpacker-core.cxx \
 	src/libpriv/rpmostree-unpacker-core.h \
