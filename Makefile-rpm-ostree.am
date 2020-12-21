@@ -38,7 +38,7 @@ rpm_ostree_SOURCES = src/app/main.cxx \
 	src/app/rpmostree-builtin-reset.cxx \
 	src/app/rpmostree-pkg-builtins.cxx \
 	src/app/rpmostree-builtin-status.cxx \
-	src/app/rpmostree-builtin-ex.c \
+	src/app/rpmostree-builtin-ex.cxx \
 	src/app/rpmostree-builtin-testutils.c \
 	src/app/rpmostree-builtin-shlib-backend.c \
 	src/app/rpmostree-builtin-db.c \
