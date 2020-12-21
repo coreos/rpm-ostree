@@ -31,6 +31,10 @@ BuildRequires: rust
 %bcond_without zchunk
 %endif
 
+%if 0%{?fedora} >= 34
+%define sqlite_rpmdb_default "--enable-sqlite-rpmdb-default"
+%endif
+
 # For the autofiles bits below
 BuildRequires: /usr/bin/python3
 # We always run autogen.sh
@@ -135,7 +139,7 @@ env NOCONFIGURE=1 ./autogen.sh
 # the %%configure macro today assumes (reasonably) that one is building
 # C/C++ and sets C{,XX}FLAGS
 export RUSTFLAGS="%{build_rustflags}"
-%configure --disable-silent-rules --enable-gtk-doc
+%configure --disable-silent-rules --enable-gtk-doc %{?sqlite_rpmdb_default}
 %make_build
 
 %install

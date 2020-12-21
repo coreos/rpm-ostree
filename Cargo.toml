@@ -49,3 +49,8 @@ debug = true
 # We need this to avoid leaking symbols, see
 # https://internals.rust-lang.org/t/rust-staticlibs-and-optimizing-for-size/5746
 lto = true
+
+[features]
+sqlite-rpmdb-default = []
+
+default = []

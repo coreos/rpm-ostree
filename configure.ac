@@ -176,6 +176,12 @@ AC_ARG_WITH(bubblewrap,
               [with_bubblewrap=/usr/bin/bwrap])
 AC_DEFINE_UNQUOTED(WITH_BUBBLEWRAP_PATH, ["$with_bubblewrap"], [Define to bubblewrap path])
 
+AC_ARG_ENABLE(sqlite_rpmdb_default,
+              AS_HELP_STRING([--enable-sqlite-rpmdb-default],
+                             [Default to sqlite rpmdb backend (default: no)]),,
+              [enable_sqlite_rpmdb_default=no])
+AM_CONDITIONAL(BUILDOPT_ENABLE_SQLITE_RPMDB_DEFAULT, test x$enable_sqlite_rpmdb_default = xyes)
+
 RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"
 
 dnl PKG_CHECK_VAR added to pkg-config 0.28 (though it's already in the new pkgconf; this
@@ -290,4 +296,5 @@ echo "
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release
     cbindgen:                                ${cbindgen:-internal}
+    sqlite rpmdb default:                    ${enable_sqlite_rpmdb_default}
 "
