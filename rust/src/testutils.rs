@@ -181,10 +181,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     }
     assert!(mutated > 0);
     println!("Mutated ELF files: {}", mutated);
-    let src_ref = opts
-        .src_ref
-        .as_deref()
-        .unwrap_or(opts.ostref.as_str());
+    let src_ref = opts.src_ref.as_deref().unwrap_or(opts.ostref.as_str());
     let mut cmd = Command::new("ostree");
     cmd.arg(format!("--repo={}", repo_path.to_str().unwrap()))
         .args(&["commit", "--consume", "-b"])

@@ -11,12 +11,10 @@ fi
 echo "ok"
 
 echo -n "checking rustfmt..."
-cd rust
 for crate in $(find -iname Cargo.toml); do
     if ! cargo fmt --manifest-path ${crate} -- --check; then
         echo "cargo fmt failed; run: cd $(dirname ${crate}) && cargo fmt" 1>&2
         exit 1
     fi
 done
-cd ..
 echo "ok"

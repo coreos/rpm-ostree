@@ -540,7 +540,13 @@ impl Treefile {
         let description = r
             .description
             .as_ref()
-            .and_then(|v| if !v.is_empty() { Some(v.as_str()) } else { None })
+            .and_then(|v| {
+                if !v.is_empty() {
+                    Some(v.as_str())
+                } else {
+                    None
+                }
+            })
             .unwrap_or(r.summary.as_str());
         let name: String = format!("{}.spec", r.name);
         {
@@ -1418,11 +1424,7 @@ mod ffi {
         // Run code, map error if any, otherwise extract raw pointer, passing
         // ownership back to C.
         ptr_glib_error(
-            Treefile::new_boxed(
-                filename.as_ref(),
-                basearch.as_deref(),
-                workdir,
-            ),
+            Treefile::new_boxed(filename.as_ref(), basearch.as_deref(), workdir),
             gerror,
         )
     }
