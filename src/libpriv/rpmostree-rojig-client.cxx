@@ -61,16 +61,16 @@ query_rojig_pkg (DnfContext *dnfctx,
   hy_query_filter (query, HY_PKG_EVR, HY_EQ, evr);
   g_autoptr(GPtrArray) pkglist = hy_query_run (query);
   if (pkglist->len == 0)
-    return glnx_null_throw (error, "Failed to find package %s = %s", name_arch, evr);
-  return g_object_ref (pkglist->pdata[0]);
+    return (DnfPackage*)glnx_null_throw (error, "Failed to find package %s = %s", name_arch, evr);
+  return (DnfPackage*)g_object_ref (pkglist->pdata[0]);
 }
 
 static int
 compare_pkgs (gconstpointer ap,
                       gconstpointer bp)
 {
-  DnfPackage **a = (gpointer)ap;
-  DnfPackage **b = (gpointer)bp;
+  DnfPackage **a = (DnfPackage**)ap;
+  DnfPackage **b = (DnfPackage**)bp;
   return dnf_package_cmp (*a, *b);
 }
 
@@ -263,7 +263,7 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
   guint n_invalidated = 0;
   for (guint i = 0; i < pkgs_required->len; i++)
     {
-      DnfPackage *pkg = pkgs_required->pdata[i];
+      auto pkg = static_cast<DnfPackage *>(pkgs_required->pdata[i]);
       g_autoptr(GVariant) objid_to_xattrs = NULL;
       if (!rpmostree_rojig_assembler_next_xattrs (rojig, &objid_to_xattrs, cancellable, error))
         return FALSE;
@@ -272,7 +272,7 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
       if (!invalidate_changed_cacheids (self, pkg, objid_to_xattrs,
                                         &n_invalidated, cancellable, error))
         return FALSE;
-      g_hash_table_insert (pkg_to_xattrs, g_object_ref (pkg), g_steal_pointer (&objid_to_xattrs));
+      g_hash_table_insert (pkg_to_xattrs, g_object_ref (pkg), util::move_nullify (objid_to_xattrs));
     }
 
   /* And now, process the rojig set */
@@ -287,7 +287,7 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
     guint64 dlsize = 0;
     for (guint i = 0; i < pkgs_to_import->len; i++)
       {
-        DnfPackage *pkg = pkgs_to_import->pdata[i];
+        auto pkg = static_cast<DnfPackage *>(pkgs_to_import->pdata[i]);
         dlsize += dnf_package_get_size (pkg);
         g_hash_table_add (pkgset_to_import, pkg);
       }
