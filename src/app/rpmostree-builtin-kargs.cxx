@@ -123,7 +123,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
     }
 
   /* Transfer the ownership to a new string, so we can remove the trailing spaces */
-  g_autofree char *kernel_args_str = g_string_free (g_steal_pointer (&kernel_arg_buf), FALSE);
+  g_autofree char *kernel_args_str = g_string_free (util::move_nullify (kernel_arg_buf), FALSE);
   g_strchomp (kernel_args_str);
 
   g_autoptr(OstreeKernelArgs) input_kargs = ostree_kernel_args_from_string (kernel_args_str);
@@ -152,7 +152,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
       return FALSE;
     }
 
-  *out_kernel_arg = g_steal_pointer (&kernel_args_str);
+  *out_kernel_arg = util::move_nullify (kernel_args_str);
 
   return TRUE;
 }
