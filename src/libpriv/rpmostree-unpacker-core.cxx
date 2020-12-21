@@ -99,7 +99,7 @@ rpmostree_unpack_rpm2cpio (int fd, GError **error)
   success = TRUE;
  out:
   if (success)
-    return g_steal_pointer (&ret);
+    return util::move_nullify (ret);
   else
     {
       if (ret)
