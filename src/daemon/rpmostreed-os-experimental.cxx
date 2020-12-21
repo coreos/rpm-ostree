@@ -179,15 +179,12 @@ rpmostreed_osexperimental_new (OstreeSysroot *sysroot,
                                OstreeRepo *repo,
                                const char *name)
 {
-  RpmostreedOSExperimental *obj = NULL;
-  g_autofree char *path = NULL;
-
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (name != NULL, NULL);
 
-  path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
+  g_autofree char *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
 
-  obj = g_object_new (RPMOSTREED_TYPE_OSEXPERIMENTAL, NULL);
+  auto obj = (RpmostreedOSExperimental *)g_object_new (RPMOSTREED_TYPE_OSEXPERIMENTAL, NULL);
 
   rpmostreed_daemon_publish (rpmostreed_daemon_get (), path, FALSE, obj);
 
