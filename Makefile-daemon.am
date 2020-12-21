@@ -49,7 +49,7 @@ librpmostreed_sources = \
 	src/daemon/rpmostreed-os.h \
 	src/daemon/rpmostreed-os.cxx \
 	src/daemon/rpmostreed-os-experimental.h \
-	src/daemon/rpmostreed-os-experimental.c \
+	src/daemon/rpmostreed-os-experimental.cxx \
 	$(NULL)
 
 dbusconf_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.conf
