@@ -71,7 +71,7 @@ impl_packagelist_from_commit (OstreeRepo *repo, const char *commit, GError **err
     {
       if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
         return g_variant_new_maybe ((GVariantType*) RPMOSTREE_SHLIB_IPC_PKGLIST, NULL);
-      g_propagate_error (error, g_steal_pointer (&local_error));
+      g_propagate_error (error, util::move_nullify (local_error));
       return NULL;
     }
 
