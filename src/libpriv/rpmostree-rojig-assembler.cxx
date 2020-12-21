@@ -124,12 +124,12 @@ rpmostree_rojig_assembler_new_take_fd (int *fd,
   if (archive == NULL)
     return NULL;
 
-  RpmOstreeRojigAssembler *ret = g_object_new (RPMOSTREE_TYPE_ROJIG_ASSEMBLER, NULL);
-  ret->archive = g_steal_pointer (&archive);
-  ret->pkg = pkg ? g_object_ref (pkg) : NULL;
+  auto ret = (RpmOstreeRojigAssembler *)g_object_new (RPMOSTREE_TYPE_ROJIG_ASSEMBLER, NULL);
+  ret->archive = util::move_nullify (archive);
+  ret->pkg = (DnfPackage*)(pkg ? g_object_ref (pkg) : NULL);
   ret->fd = glnx_steal_fd (&owned_fd);
 
-  return g_steal_pointer (&ret);
+  return util::move_nullify (ret);
 }
 
 static GVariant *
@@ -142,19 +142,19 @@ rojig_read_variant (const GVariantType   *vtype,
   const char *path = archive_entry_pathname (entry);
   const struct stat *stbuf = archive_entry_stat (entry);
   if (!S_ISREG (stbuf->st_mode))
-    return glnx_null_throw (error, "Expected regular file for entry: %s", path);
+    return (GVariant*)glnx_null_throw (error, "Expected regular file for entry: %s", path);
   if (!rpmostree_check_size_within_limit (stbuf->st_size, OSTREE_MAX_METADATA_SIZE,
                                           path, error))
     return NULL;
   g_assert_cmpint (stbuf->st_size, >=, 0);
   const size_t total = stbuf->st_size;
-  g_autofree guint8* buf = g_malloc (total);
+  g_autofree guint8* buf = (guint8*)g_malloc (total);
   size_t bytes_read = 0;
   while (bytes_read < total)
     {
       ssize_t r = archive_read_data (a, buf + bytes_read, total - bytes_read);
       if (r < 0)
-        return throw_libarchive_error (error, a), NULL;
+        return throw_libarchive_error (error, a), nullptr;
       if (r == 0)
         break;
       bytes_read += r;
@@ -162,7 +162,7 @@ rojig_read_variant (const GVariantType   *vtype,
   g_assert_cmpint (bytes_read, ==, total)
 ;
   /* Need to take ownership once now, then pass it as a parameter twice */
-  guint8* buf_owned = g_steal_pointer (&buf);
+  guint8* buf_owned = util::move_nullify (buf);
   return g_variant_new_from_data (vtype, buf_owned, bytes_read, FALSE, g_free, buf_owned);
 }
 
@@ -174,11 +174,11 @@ peel_entry_pathname (struct archive_entry *entry,
   const char *pathname = archive_entry_pathname (entry);
   static const char prefix[] = "./usr/lib/ostree-jigdo/";
   if (!g_str_has_prefix (pathname, prefix))
-    return glnx_null_throw (error, "Entry does not have prefix '%s': %s", prefix, pathname);
+    return (const char*)glnx_null_throw (error, "Entry does not have prefix '%s': %s", prefix, pathname);
   pathname += strlen (prefix);
   const char *nextslash = strchr (pathname, '/');
   if (!nextslash)
-    return glnx_null_throw (error, "Missing subdir in %s", pathname);
+    return (const char*)glnx_null_throw (error, "Missing subdir in %s", pathname);
   return nextslash+1;
 }
 
@@ -196,7 +196,7 @@ rojig_next_entry (RpmOstreeRojigAssembler     *self,
 
   if (self->next_entry)
     {
-      *out_entry = g_steal_pointer (&self->next_entry);
+      *out_entry = util::move_nullify (self->next_entry);
       return TRUE; /* 🔚 Early return */
     }
 
@@ -237,7 +237,7 @@ rojig_require_next_entry (RpmOstreeRojigAssembler    *self,
   if (!rojig_next_entry (self, &eof, &entry, cancellable, error))
     return FALSE;
   if (eof)
-    return glnx_null_throw (error, "Unexpected end of archive");
+    return (decltype(entry))glnx_null_throw (error, "Unexpected end of archive");
   return entry;
 }
 
@@ -247,11 +247,11 @@ parse_checksum_from_pathname (const char *pathname,
 {
   /* We have an extra / */
   if (strlen (pathname) != OSTREE_SHA256_STRING_LEN + 1)
-    return glnx_null_throw (error, "Invalid checksum path: %s", pathname);
+    return (char*)glnx_null_throw (error, "Invalid checksum path: %s", pathname);
   g_autoptr(GString) buf = g_string_new ("");
   g_string_append_len (buf, pathname, 2);
   g_string_append (buf, pathname+3);
-  return g_string_free (g_steal_pointer (&buf), FALSE);
+  return g_string_free (util::move_nullify (buf), FALSE);
 }
 
 /* First step: read metadata: the commit object and its metadata, suitable for
@@ -285,7 +285,7 @@ rpmostree_rojig_assembler_read_meta (RpmOstreeRojigAssembler    *self,
   g_autoptr(GVariant) meta = NULL;
 
   g_autoptr(GChecksum) hasher = g_checksum_new (G_CHECKSUM_SHA256);
-  g_checksum_update (hasher, g_variant_get_data (commit), g_variant_get_size (commit));
+  g_checksum_update (hasher, (const guint8*)g_variant_get_data (commit), g_variant_get_size (commit));
   const char *actual_checksum = g_checksum_get_string (hasher);
 
   if (!g_str_equal (checksum, actual_checksum))
@@ -312,9 +312,9 @@ rpmostree_rojig_assembler_read_meta (RpmOstreeRojigAssembler    *self,
   self->checksum = g_strdup (actual_checksum);
   self->commit = g_variant_ref (commit);
   self->meta = meta ? g_variant_ref (meta) : NULL;
-  *out_checksum = g_steal_pointer (&checksum);
-  *out_commit = g_steal_pointer (&commit);
-  *out_detached_meta = g_steal_pointer (&meta);
+  *out_checksum = util::move_nullify (checksum);
+  *out_commit = util::move_nullify (commit);
+  *out_detached_meta = util::move_nullify (meta);
   return TRUE;
 }
 
@@ -368,7 +368,7 @@ process_contentident (RpmOstreeRojigAssembler    *self,
 
   const size_t total = stbuf->st_size;
   const size_t bufsize = MIN (128*1024, total);
-  g_autofree guint8* buf = g_malloc (bufsize);
+  g_autofree guint8* buf = (guint8*)g_malloc (bufsize);
   size_t bytes_read = 0;
   while (bytes_read < total)
     {
@@ -527,7 +527,7 @@ rpmostree_rojig_assembler_write_new_objects (RpmOstreeRojigAssembler    *self,
         }
       else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_XATTRS_DIR "/"))
         {
-          self->next_entry = g_steal_pointer (&entry); /* Stash for next call */
+          self->next_entry = util::move_nullify (entry); /* Stash for next call */
           break;
         }
       else
@@ -569,7 +569,7 @@ rpmostree_rojig_assembler_next_xattrs (RpmOstreeRojigAssembler    *self,
       if (!xattrs_table)
         return FALSE;
       g_assert (!self->xattrs_table);
-      self->xattrs_table = g_steal_pointer (&xattrs_table);
+      self->xattrs_table = util::move_nullify (xattrs_table);
       self->state = STATE_XATTRS_TABLE;
     }
 
