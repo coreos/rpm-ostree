@@ -86,7 +86,7 @@ rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-DLIBDIR=\"$(libdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" \
 	$(PKGDEP_RPMOSTREE_CFLAGS) $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpmostree_bin_common_cflags = $(rpmostree_common_cflags)
-rpmostree_bin_common_libs = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostree-1.la $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++ -lrt
+rpmostree_bin_common_libs = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostree-1.la librpmostreecxxrs.la $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++ -lrt
 rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_bin_common_cflags)
 rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_bin_common_cflags)
 rpm_ostree_LDADD = librpmostreeinternals.la $(rpmostree_bin_common_libs)
@@ -131,9 +131,14 @@ rpmostree-cxxrs.cxx:
 else
 include Makefile.bindings
 endif
+
+noinst_LTLIBRARIES += librpmostreecxxrs.la
+librpmostreecxxrs_la_SOURCES = rpmostree-cxxrs.h rpmostree-cxxrs.cxx
+# Suppress missing-declarations because https://github.com/dtolnay/cxx/issues/590
+librpmostreecxxrs_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags) -Wno-missing-declarations
+librpmostreecxxrs_la_LIBADD = -lstdc++
 GITIGNOREFILES += $(binding_generated_sources)
 BUILT_SOURCES += $(binding_generated_sources)
-librpmostreepriv_sources += $(binding_generated_sources)
 
 # Wraps `cargo test`.  This is always a debug non-release build;
 # the main thing here is we still drop the `target` dir in our build
