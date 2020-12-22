@@ -87,7 +87,7 @@ rpm-ostreed: $(srcdir)/src/daemon/rpm-ostreed-stub.sh.in Makefile
 # We don't yet rename the DBus related items
 service_in_files = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.service.in
 service_DATA     = $(service_in_files:.service.in=.service)
-servicedir       = $(dbusservicedir)
+servicedir       = $(datadir)/dbus-1/system-services
 %.service: %.service.in Makefile
 	$(SED_SUBST) $@.in > $@.tmp && mv $@.tmp $@
 
