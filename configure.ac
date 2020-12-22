@@ -172,14 +172,6 @@ AM_CONDITIONAL(BUILDOPT_ENABLE_SQLITE_RPMDB_DEFAULT, test x$enable_sqlite_rpmdb_
 
 RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"
 
-dnl PKG_CHECK_VAR added to pkg-config 0.28 (though it's already in the new pkgconf; this
-dnl backport is more for el7)
-m4_define_default(
-    [PKG_CHECK_VAR],
-    [AC_ARG_VAR([$1], [value of $3 for $2, overriding pkg-config])
-     AS_IF([test -z "$$1"], [$1=`$PKG_CONFIG --variable="$3" "$2"`])
-     AS_IF([test -n "$$1"], [$4], [$5])])
-
 PKG_CHECK_VAR(BASH_COMPLETIONSDIR, [bash-completion], [completionsdir],,
   BASH_COMPLETIONSDIR="${datadir}/bash-completion/completions")
 AC_SUBST(BASH_COMPLETIONSDIR)
