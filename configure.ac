@@ -164,12 +164,6 @@ GTK_DOC_CHECK([1.15], [--flavour no-tmpl])
 AM_CONDITIONAL([ENABLE_GTK_DOC],[false])
 ])
 
-AC_ARG_ENABLE(installed_tests,
-              AS_HELP_STRING([--enable-installed-tests],
-                             [Install test programs (default: no)]),,
-              [enable_installed_tests=no])
-AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
-
 AC_ARG_WITH(bubblewrap,
               AS_HELP_STRING([--with-bubblewrap],
                              [Path to bubblewrap binary (default: /usr/bin/bwrap)]),,
