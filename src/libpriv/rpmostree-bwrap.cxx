@@ -282,7 +282,7 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
 
   /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
   rpmostree_bwrap_append_bwrap_argv (ret,
-                                     WITH_BUBBLEWRAP_PATH,
+                                     "bwrap",
                                      "--dev", "/dev",
                                      "--proc", "/proc",
                                      "--dir", "/run",

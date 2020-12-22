@@ -164,12 +164,6 @@ GTK_DOC_CHECK([1.15], [--flavour no-tmpl])
 AM_CONDITIONAL([ENABLE_GTK_DOC],[false])
 ])
 
-AC_ARG_WITH(bubblewrap,
-              AS_HELP_STRING([--with-bubblewrap],
-                             [Path to bubblewrap binary (default: /usr/bin/bwrap)]),,
-              [with_bubblewrap=/usr/bin/bwrap])
-AC_DEFINE_UNQUOTED(WITH_BUBBLEWRAP_PATH, ["$with_bubblewrap"], [Define to bubblewrap path])
-
 AC_ARG_ENABLE(sqlite_rpmdb_default,
               AS_HELP_STRING([--enable-sqlite-rpmdb-default],
                              [Default to sqlite rpmdb backend (default: no)]),,
@@ -286,7 +280,6 @@ echo "
 
     introspection:                           $found_introspection
     rojig:                                   ${enable_rojig:-no}
-    bubblewrap:                              $with_bubblewrap
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release
     cbindgen:                                ${cbindgen:-internal}
