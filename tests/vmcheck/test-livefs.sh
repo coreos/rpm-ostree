@@ -67,7 +67,9 @@ vm_rpmostree install bar
 vm_assert_status_jq '.deployments|length == 2' \
                     '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]'
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs | tee out.txt
+assert_file_has_content out.txt 'Added:'
+assert_file_has_content out.txt '  bar-1.0'
 vm_cmd rpm -qa > rpmq.txt
 assert_file_has_content rpmq.txt bar-1.0-1
 assert_not_file_has_content rpmq.txt foo-1.0-1

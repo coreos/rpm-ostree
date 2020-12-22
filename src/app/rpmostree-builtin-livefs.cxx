@@ -26,6 +26,7 @@
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
+#include "rpmostree-rust.h"
 
 #include <libglnx.h>
 
@@ -109,6 +110,46 @@ rpmostree_ex_builtin_livefs (int             argc,
                                                 cancellable,
                                                 error))
     return FALSE;
+
+  /* TODO - we compute all this client side right now for multiple reasons.
+   * - The diff printing code all lives on the client right now
+   * - We don't bind `rpmostree_output_message()` into Rust yet
+   * - We've historically accessed RPM diffs client side
+   */
+  g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new_default ();
+  if (!ostree_sysroot_load (sysroot, cancellable, error))
+    return FALSE;
+  g_autoptr(OstreeRepo) repo = NULL;
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+    return FALSE;
+  OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
+  g_assert (booted_deployment);
+  const char *booted_commit = ostree_deployment_get_csum (booted_deployment);
+
+  g_autofree char *live_replaced = NULL;
+  if (!ror_livefs_get_state (sysroot, booted_deployment, NULL, &live_replaced, error))
+    return FALSE;
+  g_assert (live_replaced);
+
+  gboolean have_target = FALSE;
+  if (!ostree_repo_has_object (repo, OSTREE_OBJECT_TYPE_COMMIT, live_replaced, &have_target, NULL, error))
+    return FALSE;
+  /* It might happen that the live target commit was GC'd somehow; we're not writing
+   * an explicit ref for it.  In that case skip the diff.
+   */
+  if (have_target)
+    {
+      g_autoptr(GPtrArray) removed = NULL;
+      g_autoptr(GPtrArray) added = NULL;
+      g_autoptr(GPtrArray) modified_old = NULL;
+      g_autoptr(GPtrArray) modified_new = NULL;
+      if (!rpm_ostree_db_diff (repo, booted_commit, live_replaced,
+                              &removed, &added, &modified_old, &modified_new,
+                              cancellable, error))
+        return FALSE;
+      rpmostree_diff_print_formatted (RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, NULL, 0,
+                                      removed, added, modified_old, modified_new);
+    }
 
   g_print ("Successfully updated running filesystem tree; some services may need to be restarted.\n");
 
