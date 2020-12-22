@@ -1,16 +1,15 @@
 # The canonical copy of this spec file is upstream at:
-# https://github.com/projectatomic/rpm-ostree/blob/master/packaging/rpm-ostree.spec.in
+# https://github.com/coreos/rpm-ostree/blob/master/packaging/rpm-ostree.spec.in
 
 Summary: Hybrid image/package system
 Name: rpm-ostree
 Version: 2020.10
 Release: 1%{?dist}
-#VCS: https://github.com/cgwalters/rpm-ostree
-# This tarball is generated via "cd packaging && make -f Makefile.dist-packaging dist-snapshot"
-# in the upstream git.  If rust is enabled, it contains vendored sources.
-Source0: rpm-ostree-%{version}.tar.xz
 License: LGPLv2+
-URL: https://github.com/projectatomic/rpm-ostree
+URL: https://github.com/coreos/rpm-ostree
+# This tarball is generated via "cd packaging && make -f Makefile.dist-packaging dist-snapshot"
+# in the upstream git.  It also contains vendored Rust sources.
+Source0: https://github.com/coreos/rpm-ostree/releases/download/v%{version}/rpm-ostree-%{version}.tar.xz
 
 ExclusiveArch: %{rust_arches}
 
