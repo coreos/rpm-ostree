@@ -27,6 +27,7 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 #include <libglnx.h>
 
@@ -126,13 +127,11 @@ rpmostree_ex_builtin_livefs (int             argc,
   g_assert (booted_deployment);
   const char *booted_commit = ostree_deployment_get_csum (booted_deployment);
 
-  g_autofree char *live_replaced = NULL;
-  if (!ror_livefs_get_state (sysroot, booted_deployment, NULL, &live_replaced, error))
-    return FALSE;
-  g_assert (live_replaced);
+  auto live_state = rpmostreecxx::get_live_apply_state(*sysroot, *booted_deployment);
+  g_assert (live_state.commit.length() > 0);
 
   gboolean have_target = FALSE;
-  if (!ostree_repo_has_object (repo, OSTREE_OBJECT_TYPE_COMMIT, live_replaced, &have_target, NULL, error))
+  if (!ostree_repo_has_object (repo, OSTREE_OBJECT_TYPE_COMMIT, live_state.commit.c_str(), &have_target, NULL, error))
     return FALSE;
   /* It might happen that the live target commit was GC'd somehow; we're not writing
    * an explicit ref for it.  In that case skip the diff.
@@ -143,7 +142,7 @@ rpmostree_ex_builtin_livefs (int             argc,
       g_autoptr(GPtrArray) added = NULL;
       g_autoptr(GPtrArray) modified_old = NULL;
       g_autoptr(GPtrArray) modified_new = NULL;
-      if (!rpm_ostree_db_diff (repo, booted_commit, live_replaced,
+      if (!rpm_ostree_db_diff (repo, booted_commit, live_state.commit.c_str(),
                               &removed, &added, &modified_old, &modified_new,
                               cancellable, error))
         return FALSE;

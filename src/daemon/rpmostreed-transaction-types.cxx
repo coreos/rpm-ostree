@@ -34,6 +34,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-importer.h"
 #include "rpmostreed-utils.h"
+#include "rpmostree-cxxrs.h"
 
 static gboolean
 vardict_lookup_bool (GVariantDict *dict,
@@ -1231,10 +1232,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           OstreeDeployment *deployment =
             rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
 
-          gboolean is_live;
-          if (!rpmostree_syscore_livefs_query (sysroot, deployment, &is_live, error))
-            return FALSE;
-
+          auto is_live = rpmostreecxx::has_live_apply_state(*sysroot, *deployment);
           if (is_live)
             changed = TRUE;
         }
