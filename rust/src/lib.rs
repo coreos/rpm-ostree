@@ -7,7 +7,9 @@
 #![deny(unused_must_use)]
 
 // pub(crate) utilities
+mod cxx_bridge_gobject;
 mod ffiutil;
+pub use cxx_bridge_gobject::*;
 mod includes;
 
 #[cxx::bridge(namespace = "rpmostreecxx")]
@@ -35,6 +37,14 @@ mod ffi {
     // utils.rs
     extern "Rust" {
         fn download_to_fd(url: &str) -> Result<i32>;
+    }
+
+    extern "C++" {
+        include!("src/libpriv/rpmostree-cxxrs-prelude.h");
+
+        type OstreeSysroot = crate::FFIOstreeSysroot;
+        type OstreeRepo = crate::FFIOstreeRepo;
+        type OstreeDeployment = crate::FFIOstreeDeployment;
     }
 }
 
