@@ -38,6 +38,7 @@
 #include "rpmostree-output.h"
 #include "rpmostree-scripts.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 #include "ostree-repo.h"
 
@@ -603,10 +604,7 @@ try_load_base_rsack_from_pending (RpmOstreeSysrootUpgrader *self,
                                   GCancellable             *cancellable,
                                   GError                  **error)
 {
-  gboolean is_live;
-  if (!rpmostree_syscore_livefs_query (self->sysroot, self->origin_merge_deployment, &is_live, error))
-    return FALSE;
-
+  auto is_live = rpmostreecxx::has_live_apply_state(*self->sysroot, *self->origin_merge_deployment);
   /* livefs invalidates the deployment */
   if (is_live)
     return TRUE;

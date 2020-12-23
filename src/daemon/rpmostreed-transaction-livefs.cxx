@@ -34,6 +34,7 @@
 #include "rpmostree-db.h"
 #include "rpmostree-output.h"
 #include "rpmostree-core.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostreed-utils.h"
 
 typedef struct {
@@ -74,15 +75,19 @@ livefs_transaction_execute (RpmostreedTransaction *transaction,
   (void) g_variant_dict_lookup (&options_dict, "target", "&s", &target);
 
   /* Run the transaction */
-  gboolean ret = ror_transaction_livefs (sysroot, target, error);
+  try {
+    rpmostreecxx::transaction_livefs(*sysroot, target ?: "");
+  } catch (std::exception& e) {
+    (void) rpmostree_syscore_bump_mtime (sysroot, NULL);
+    throw;
+  }
 
   /* We use this to notify ourselves of changes, which is a bit silly, but it
    * keeps things consistent if `ostree admin` is invoked directly.  Always
    * invoke it, in case we error out, so that we correctly update for the
    * partial state.
    */
-  (void) rpmostree_syscore_bump_mtime (sysroot, NULL);
-  return ret;
+  return rpmostree_syscore_bump_mtime (sysroot, error);
 }
 
 static void

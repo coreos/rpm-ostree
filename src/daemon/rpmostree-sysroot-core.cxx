@@ -20,6 +20,7 @@
 
 #include "config.h"
 
+#include <memory>
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
 #include "rpmostreed-utils.h"
@@ -34,6 +35,7 @@
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 #include "ostree-repo.h"
 
@@ -309,13 +311,9 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
     return FALSE;
 
   OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
-  g_autofree char *live_inprogress = NULL;
-  g_autofree char *live_replaced = NULL;
+  auto live_state = std::unique_ptr<rpmostreecxx::LiveApplyState>();
   if (booted)
-    {
-      if (!ror_livefs_get_state (sysroot, booted, &live_inprogress, &live_replaced, error))
-        return FALSE;
-    }
+    live_state = std::make_unique<rpmostreecxx::LiveApplyState>(rpmostreecxx::get_live_apply_state(*sysroot, *booted));
 
   /* And do a prune */
   guint64 freed_space;
@@ -324,14 +322,17 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
 
     /* We don't currently write refs for these since the content can be
      * ephemeral; add them to the strong set */
-    if (live_inprogress && 
-        !ostree_repo_traverse_commit_union (repo, live_inprogress, 0, reachable,
-                                            cancellable, error))
-        return FALSE;
-    if (live_replaced && 
-        !ostree_repo_traverse_commit_union (repo, live_replaced, 0, reachable,
-                                            cancellable, error))
-        return FALSE;
+    if (live_state != nullptr)
+      {
+        if (live_state->inprogress.length() > 0 && 
+            !ostree_repo_traverse_commit_union (repo, live_state->inprogress.c_str(), 0, reachable,
+                                                cancellable, error))
+          return FALSE;
+        if (live_state->commit.length() > 0 && 
+            !ostree_repo_traverse_commit_union (repo, live_state->commit.c_str(), 0, reachable,
+                                                cancellable, error))
+            return FALSE;
+      }
 
     OstreeRepoPruneOptions opts = { OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, reachable };
     if (!ostree_sysroot_cleanup_prune_repo (sysroot, &opts, &n_objects_total,
@@ -370,18 +371,6 @@ rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *self, const char *
     }
 
   return NULL;
-}
-
-/* Return TRUE in *out_is_live if the target deployment has a live overlay */
-gboolean 
-rpmostree_syscore_livefs_query (OstreeSysroot *self, OstreeDeployment *deployment, gboolean *out_is_live, GError **error)
-{
-  g_autofree char *live_inprogress = NULL;
-  g_autofree char *live_replaced = NULL;
-  if (!ror_livefs_get_state (self, deployment, &live_inprogress, &live_replaced, error))
-    return FALSE;
-  *out_is_live = (live_inprogress != NULL) || (live_replaced != NULL);
-  return TRUE;
 }
 
 /* Copy of currently private _ostree_sysroot_bump_mtime()
@@ -476,9 +465,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
       OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
       if (booted)
         {
-          gboolean is_live;
-          if (!rpmostree_syscore_livefs_query (sysroot, booted, &is_live, error))
-            return FALSE;
+          auto is_live = rpmostreecxx::has_live_apply_state(*sysroot, *booted);
           if (is_live)
             flags = static_cast<OstreeSysrootSimpleWriteDeploymentFlags>(flags | OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK);
         }

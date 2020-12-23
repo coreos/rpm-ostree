@@ -39,12 +39,35 @@ mod ffi {
         fn download_to_fd(url: &str) -> Result<i32>;
     }
 
+    #[derive(Default)]
+    /// A copy of LiveFsState that is bridged to C++; the main
+    /// change here is we can't use Option<> yet, so empty values
+    /// are represented by the empty string.
+    struct LiveApplyState {
+        inprogress: String,
+        commit: String,
+    }
+
     extern "C++" {
         include!("src/libpriv/rpmostree-cxxrs-prelude.h");
 
         type OstreeSysroot = crate::FFIOstreeSysroot;
         type OstreeRepo = crate::FFIOstreeRepo;
         type OstreeDeployment = crate::FFIOstreeDeployment;
+    }
+
+    // livefs.rs
+    extern "Rust" {
+        fn get_live_apply_state(
+            sysroot: Pin<&mut OstreeSysroot>,
+            deployment: Pin<&mut OstreeDeployment>,
+        ) -> Result<LiveApplyState>;
+        fn has_live_apply_state(
+            sysroot: Pin<&mut OstreeSysroot>,
+            deployment: Pin<&mut OstreeDeployment>,
+        ) -> Result<bool>;
+        // FIXME/cxx make this Option<&str>
+        fn transaction_livefs(sysroot: Pin<&mut OstreeSysroot>, target: &str) -> Result<()>;
     }
 }
 
@@ -63,7 +86,7 @@ pub use self::initramfs::*;
 mod lockfile;
 pub use self::lockfile::*;
 mod livefs;
-pub use self::livefs::*;
+pub(crate) use self::livefs::*;
 // An origin parser in Rust but only built when testing until
 // we're ready to try porting the C++ code.
 #[cfg(test)]

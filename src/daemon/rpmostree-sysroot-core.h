@@ -47,8 +47,6 @@ OstreeDeployment *rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *
 
 gboolean rpmostree_syscore_bump_mtime (OstreeSysroot *self, GError **error);
 
-gboolean rpmostree_syscore_livefs_query (OstreeSysroot *self, OstreeDeployment *deployment, gboolean *out_is_live, GError **error);
-
 GPtrArray *rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
                                                  const char         *osname,
                                                  gboolean            remove_pending,

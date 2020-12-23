@@ -7,6 +7,8 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+use crate::cxx_bridge_gobject::*;
+use crate::ffi::LiveApplyState;
 use anyhow::{bail, Context, Result};
 use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
@@ -16,6 +18,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::process::Command;
 
 /// The directory where ostree stores transient per-deployment state.
@@ -25,16 +28,36 @@ const OSTREE_RUNSTATE_DIR: &str = "/run/ostree/deployment-state";
 /// Filename we use for serialized state, stored in the above directory.
 const LIVEFS_STATE_NAME: &str = "rpmostree-livefs-state.json";
 
-/// The model for livefs state.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-struct LiveFsState {
+/// The model for livefs state.  This representation is
+/// just used "on disk" right now because
+/// TODO(cxx-rs) doesn't support Option<T>
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
+struct LiveApplyStateSerialized {
     /// The OSTree commit that the running root filesystem is using,
     /// as distinct from the one it was booted with.
     commit: Option<String>,
     /// Set when a livefs operation is in progress; if the process
     /// is interrupted, some files from this commit may exist
     /// on disk but in an incomplete state.
-    inprogress_commit: Option<String>,
+    inprogress: Option<String>,
+}
+
+impl From<&LiveApplyStateSerialized> for LiveApplyState {
+    fn from(s: &LiveApplyStateSerialized) -> LiveApplyState {
+        LiveApplyState {
+            inprogress: s.inprogress.clone().unwrap_or_default(),
+            commit: s.commit.clone().unwrap_or_default(),
+        }
+    }
+}
+
+impl From<&LiveApplyState> for LiveApplyStateSerialized {
+    fn from(s: &LiveApplyState) -> LiveApplyStateSerialized {
+        LiveApplyStateSerialized {
+            inprogress: Some(s.inprogress.clone()).filter(|s| !s.is_empty()),
+            commit: Some(s.commit.clone()).filter(|s| !s.is_empty()),
+        }
+    }
 }
 
 /// Get the transient state directory for a deployment; TODO
@@ -50,22 +73,24 @@ fn get_runstate_dir(deploy: &ostree::Deployment) -> PathBuf {
 }
 
 /// Get the livefs state
-fn get_livefs_state(deploy: &ostree::Deployment) -> Result<Option<LiveFsState>> {
+fn get_livefs_state(deploy: &ostree::Deployment) -> Result<Option<LiveApplyState>> {
     let root = openat::Dir::open("/")?;
     if let Some(f) = root.open_file_optional(&get_runstate_dir(deploy).join(LIVEFS_STATE_NAME))? {
-        let s: LiveFsState = serde_json::from_reader(std::io::BufReader::new(f))?;
-        Ok(Some(s))
+        let s: LiveApplyStateSerialized = serde_json::from_reader(std::io::BufReader::new(f))?;
+        let s = &s;
+        Ok(Some(s.into()))
     } else {
         Ok(None)
     }
 }
 
 /// Write new livefs state
-fn write_livefs_state(deploy: &ostree::Deployment, state: &LiveFsState) -> Result<()> {
+fn write_livefs_state(deploy: &ostree::Deployment, state: &LiveApplyState) -> Result<()> {
     let rundir = get_runstate_dir(deploy);
     let rundir = openat::Dir::open(&rundir)?;
+    let state: LiveApplyStateSerialized = state.into();
     rundir.write_file_with(LIVEFS_STATE_NAME, 0o644, |w| -> Result<_> {
-        Ok(serde_json::to_writer(w, state)?)
+        Ok(serde_json::to_writer(w, &state)?)
     })?;
     Ok(())
 }
@@ -313,9 +338,13 @@ fn rerun_tmpfiles() -> Result<()> {
 }
 
 /// Implementation of `rpm-ostree ex livefs`.
-fn livefs(sysroot: &ostree::Sysroot, target: Option<&str>) -> Result<()> {
-    let repo = sysroot.repo().expect("repo");
-    let repo = &repo;
+pub(crate) fn transaction_livefs(
+    mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+    target: &str,
+) -> Result<()> {
+    let sysroot = &sysroot.gobj_wrap();
+    let target = if target.len() > 0 { Some(target) } else { None };
+    let repo = &sysroot.repo().expect("repo");
 
     let booted = if let Some(b) = sysroot.get_booted_deployment() {
         b
@@ -379,11 +408,11 @@ fn livefs(sysroot: &ostree::Sysroot, target: Option<&str>) -> Result<()> {
     }
 
     if let Some(ref state) = state {
-        if let Some(ref inprogress) = state.inprogress_commit {
-            if inprogress.as_str() != target_commit {
+        if !state.inprogress.is_empty() {
+            if state.inprogress.as_str() != target_commit {
                 bail!(
                     "Previously interrupted while targeting commit {}, cannot change target to {}",
-                    inprogress,
+                    state.inprogress,
                     target_commit
                 )
             }
@@ -392,8 +421,8 @@ fn livefs(sysroot: &ostree::Sysroot, target: Option<&str>) -> Result<()> {
 
     let source_commit = state
         .as_ref()
-        .map(|s| s.commit.as_deref())
-        .flatten()
+        .map(|s| s.commit.as_str())
+        .filter(|s| !s.is_empty())
         .unwrap_or(booted_commit);
     let diff = crate::ostree_diff::diff(repo, source_commit, &target_commit, Some("/usr"))
         .context("Failed computing diff")?;
@@ -404,7 +433,7 @@ fn livefs(sysroot: &ostree::Sysroot, target: Option<&str>) -> Result<()> {
     let sepolicy = ostree::SePolicy::new_at(rootfs_dfd.as_raw_fd(), gio::NONE_CANCELLABLE)?;
 
     // Record that we're targeting this commit
-    state.inprogress_commit = Some(target_commit.to_string());
+    state.inprogress = target_commit.to_string();
     write_livefs_state(&booted, &state)?;
 
     // The heart of things: updating the overlayfs on /usr
@@ -421,8 +450,8 @@ fn livefs(sysroot: &ostree::Sysroot, target: Option<&str>) -> Result<()> {
     rerun_tmpfiles()?;
 
     // Success! Update the recorded state.
-    state.commit = Some(target_commit.to_string());
-    state.inprogress_commit = None;
+    state.commit = target_commit.to_string();
+    state.inprogress = "".to_string();
     write_livefs_state(&booted, &state)?;
 
     Ok(())
@@ -441,59 +470,43 @@ mod test {
         let s = subpath(&d, Path::new("/foo"));
         assert_eq!(s.as_ref().map(|s| s.as_path()), Some(Path::new("/usr/foo")));
     }
-}
 
-mod ffi {
-    use super::*;
-    use glib;
-    use glib::translate::*;
-    use glib::GString;
-    use glib_sys;
-    use libc;
-
-    use crate::ffiutil::*;
-
-    #[no_mangle]
-    pub extern "C" fn ror_livefs_get_state(
-        sysroot: *mut ostree_sys::OstreeSysroot,
-        deployment: *mut ostree_sys::OstreeDeployment,
-        out_inprogress: *mut *mut libc::c_char,
-        out_replaced: *mut *mut libc::c_char,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let _sysroot: ostree::Sysroot = unsafe { from_glib_none(sysroot) };
-        let deployment: ostree::Deployment = unsafe { from_glib_none(deployment) };
-        match get_livefs_state(&deployment) {
-            Ok(Some(state)) => {
-                unsafe {
-                    if let Some(c) = state.inprogress_commit {
-                        *out_inprogress = c.to_glib_full();
-                    }
-                    if let Some(c) = state.commit {
-                        *out_replaced = c.to_glib_full();
-                    }
-                }
-                1
-            }
-            Ok(None) => 1,
-            Err(ref e) => {
-                error_to_glib(e, gerror);
-                0
-            }
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_transaction_livefs(
-        sysroot: *mut ostree_sys::OstreeSysroot,
-        target: *const libc::c_char,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let sysroot: ostree::Sysroot = unsafe { from_glib_none(sysroot) };
-        let target: Borrowed<Option<GString>> = unsafe { from_glib_borrow(target) };
-        // The reference hole goes deep
-        let target = target.as_ref().as_ref().map(|s| s.as_str());
-        int_glib_error(livefs(&sysroot, target), gerror)
+    #[test]
+    fn test_repr() {
+        let s: LiveApplyStateSerialized = Default::default();
+        let b: LiveApplyState = (&s).into();
+        assert_eq!(b.commit, "");
+        assert_eq!(b.inprogress, "");
+        let rs: LiveApplyStateSerialized = (&b).into();
+        assert_eq!(rs, s);
+        let s = LiveApplyStateSerialized {
+            commit: Some("42".to_string()),
+            inprogress: None,
+        };
+        let b: LiveApplyState = (&s).into();
+        assert_eq!(b.commit, "42");
+        assert_eq!(b.inprogress, "");
+        let rs: LiveApplyStateSerialized = (&b).into();
+        assert_eq!(rs, s);
     }
 }
-pub use self::ffi::*;
+
+pub(crate) fn get_live_apply_state(
+    mut _sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+    mut deployment: Pin<&mut crate::ffi::OstreeDeployment>,
+) -> Result<LiveApplyState> {
+    let deployment = deployment.gobj_wrap();
+    if let Some(state) = get_livefs_state(&deployment)? {
+        Ok(state)
+    } else {
+        Ok(Default::default())
+    }
+}
+
+pub(crate) fn has_live_apply_state(
+    sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+    deployment: Pin<&mut crate::ffi::OstreeDeployment>,
+) -> Result<bool> {
+    let state = get_live_apply_state(sysroot, deployment)?;
+    Ok(!(state.commit.is_empty() && state.inprogress.is_empty()))
+}

@@ -31,6 +31,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-package-variants.h"
 #include "rpmostreed-utils.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostreed-errors.h"
 
 /* Get a currently unique (for this host) identifier for the
@@ -369,15 +370,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   if (is_booted)
     {
-      g_autofree char *live_inprogress = NULL;
-      g_autofree char *live_replaced = NULL;
-      if (!ror_livefs_get_state (sysroot, deployment, &live_inprogress, &live_replaced, error))
-        return FALSE;
+      auto live_state = rpmostreecxx::get_live_apply_state(*sysroot, *deployment);
 
-      if (live_inprogress)
-        g_variant_dict_insert (&dict, "live-inprogress", "s", live_inprogress);
-      if (live_replaced)
-        g_variant_dict_insert (&dict, "live-replaced", "s", live_replaced);
+      if (live_state.inprogress.length() > 0)
+        g_variant_dict_insert (&dict, "live-inprogress", "s", live_state.inprogress.c_str());
+      if (live_state.commit.length() > 0)
+        g_variant_dict_insert (&dict, "live-replaced", "s", live_state.commit.c_str());
     }
 
   if (ostree_deployment_is_staged (deployment))
