@@ -35,19 +35,6 @@
 G_BEGIN_DECLS
 
 typedef enum {
-  RPMOSTREE_SCRIPT_ACTION_DEFAULT = 0,
-  RPMOSTREE_SCRIPT_ACTION_IGNORE,
-  RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS = RPMOSTREE_SCRIPT_ACTION_IGNORE,
-} RpmOstreeScriptAction;
-
-struct RpmOstreePackageScriptHandler {
-  const char *package_script;
-  RpmOstreeScriptAction action;
-};
-
-const struct RpmOstreePackageScriptHandler* rpmostree_script_gperf_lookup(const char *key, GPERF_LEN_TYPE length);
-
-typedef enum {
   RPMOSTREE_SCRIPT_PREIN,
   RPMOSTREE_SCRIPT_POSTIN,
   RPMOSTREE_SCRIPT_POSTTRANS,

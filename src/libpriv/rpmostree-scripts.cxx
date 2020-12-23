@@ -24,6 +24,7 @@
 #include <systemd/sd-journal.h>
 #include "rpmostree-output.h"
 #include "rpmostree-util.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-bwrap.h"
 #include <err.h>
 #include <systemd/sd-journal.h>
@@ -229,17 +230,6 @@ fail_if_interp_is_lua (const char *interp,
   return TRUE;
 }
 
-static RpmOstreeScriptAction
-lookup_script_action (const char *pkg_name,
-                      const char *scriptdesc)
-{
-  const char *pkg_script = glnx_strjoina (pkg_name, ".", scriptdesc+1);
-  const struct RpmOstreePackageScriptHandler *handler = rpmostree_script_gperf_lookup (pkg_script, strlen (pkg_script));
-  if (!handler)
-    return RPMOSTREE_SCRIPT_ACTION_DEFAULT;
-  return handler->action;
-}
-
 gboolean
 rpmostree_script_txn_validate (DnfPackage    *package,
                                Header         hdr,
@@ -255,14 +245,10 @@ rpmostree_script_txn_validate (DnfPackage    *package,
       if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
         continue;
 
-      RpmOstreeScriptAction action = lookup_script_action (dnf_package_get_name (package), desc);
-      switch (action)
+      if (!rpmostreecxx::script_is_ignored (dnf_package_get_name (package), desc))
         {
-        case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
           return glnx_throw (error, "Package '%s' has (currently) unsupported script of type '%s'; see https://github.com/coreos/rpm-ostree/issues/749",
                              dnf_package_get_name (package), desc);
-        case RPMOSTREE_SCRIPT_ACTION_IGNORE:
-          continue;
         }
     }
 
@@ -691,14 +677,8 @@ run_script (const KnownRpmScriptKind *rpmscript,
     return TRUE;
 
   const char *desc = rpmscript->desc;
-  RpmOstreeScriptAction action = lookup_script_action (dnf_package_get_name (pkg), desc);
-  switch (action)
-    {
-    case RPMOSTREE_SCRIPT_ACTION_IGNORE:
-      return TRUE; /* Note early return */
-    case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
-      break; /* Continue below */
-    }
+  if (rpmostreecxx::script_is_ignored (dnf_package_get_name (pkg), desc))
+    return TRUE; /* Note early return */
 
   *out_did_run = TRUE;
   return impl_run_rpm_script (rpmscript, pkg, hdr, rootfs_fd, var_lib_rpm_statedir,
@@ -869,14 +849,8 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
   g_autofree char *error_prefix = g_strconcat ("Executing %transfiletriggerin for ", pkg_name, NULL);
   GLNX_AUTO_PREFIX_ERROR (error_prefix, error);
 
-  RpmOstreeScriptAction action = lookup_script_action (pkg_name, "%transfiletriggerin");
-  switch (action)
-    {
-    case RPMOSTREE_SCRIPT_ACTION_IGNORE:
-      return TRUE; /* Note early return */
-    case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
-      break; /* Continue below */
-    }
+  if (rpmostreecxx::script_is_ignored (pkg_name, "%transfiletriggerin"))
+    return TRUE; /* Note early return */
 
   headerGetFlags hgflags = HEADERGET_MINMEM;
   struct rpmtd_s tname, tscripts, tprogs, tflags, tscriptflags;

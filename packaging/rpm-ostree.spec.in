@@ -41,7 +41,6 @@ BuildRequires: autoconf automake libtool git
 # For docs
 BuildRequires: chrpath
 BuildRequires: gtk-doc
-BuildRequires: gperf
 BuildRequires: gnome-common
 BuildRequires: /usr/bin/g-ir-scanner
 # Core requirements

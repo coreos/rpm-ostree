@@ -69,20 +69,6 @@ librpmostreepriv_sources += \
 	$(NULL)
 endif
 
-gperf_gperf_sources = src/libpriv/rpmostree-script-gperf.gperf
-BUILT_SOURCES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)
-CLEANFILES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)
-
-nodist_librpmostreepriv_sources = src/libpriv/rpmostree-script-gperf.c
-
-AM_V_GPERF = $(AM_V_GPERF_$(V))
-AM_V_GPERF_ = $(AM_V_GPERF_$(AM_DEFAULT_VERBOSITY))
-AM_V_GPERF_0 = @echo "  GPERF   " $@;
-
-src/%.c: src/%.gperf Makefile
-	$(AM_V_at)$(MKDIR_P) $(dir $@)
-	$(AM_V_GPERF)$(GPERF) < $< > $@.tmp && mv $@.tmp $@
-
 # Also we now use cxx.rs
 rpmostree-cxxrs.h: rust/src/lib.rs
 	$(AM_V_GEN) cxxbridge rust/src/lib.rs --header > $@

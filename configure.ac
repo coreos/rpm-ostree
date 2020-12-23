@@ -115,31 +115,6 @@ AC_PATH_PROG([XSLTPROC], [xsltproc])
 GLIB_TESTS
 LIBGLNX_CONFIGURE
 
-AC_CHECK_TOOL(GPERF, gperf)
-AS_IF([test -z "$GPERF"],
-  AC_MSG_ERROR([*** gperf not found])
-)
-dnl stolen from https://github.com/systemd/systemd/commit/c9f7b4d
-GPERF_TEST="$(echo foo,bar | ${GPERF} -L ANSI-C)"
-AC_COMPILE_IFELSE(
-[AC_LANG_PROGRAM([
-#include <string.h>
-const char * in_word_set(const char *, size_t);
-$GPERF_TEST]
-)],
-[GPERF_LEN_TYPE=size_t],
-[AC_COMPILE_IFELSE(
-[AC_LANG_PROGRAM([
-#include <string.h>
-const char * in_word_set(const char *, unsigned);
-$GPERF_TEST]
-)],
-[GPERF_LEN_TYPE=unsigned],
-[AC_MSG_ERROR([** unable to determine gperf len type])]
-)]
-)
-AC_DEFINE_UNQUOTED([GPERF_LEN_TYPE], [$GPERF_LEN_TYPE], [gperf len type])
-
 m4_ifdef([GOBJECT_INTROSPECTION_CHECK], [
   GOBJECT_INTROSPECTION_CHECK([1.34.0])
 ])

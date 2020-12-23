@@ -27,6 +27,11 @@ mod ffi {
         fn get_dracut_random_cpio() -> &'static [u8];
     }
 
+    // scripts.rs
+    extern "Rust" {
+        fn script_is_ignored(pkg: &str, script: &str) -> bool;
+    }
+
     // utils.rs
     extern "Rust" {
         fn download_to_fd(url: &str) -> Result<i32>;
@@ -53,6 +58,8 @@ mod ostree_diff;
 mod ostree_utils;
 mod progress;
 pub use self::progress::*;
+mod scripts;
+pub(crate) use self::scripts::*;
 mod testutils;
 pub use self::testutils::*;
 mod treefile;
