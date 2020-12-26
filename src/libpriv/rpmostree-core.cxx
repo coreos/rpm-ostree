@@ -623,13 +623,11 @@ rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self)
   return g_variant_ref_sink (g_variant_builder_end (&repo_list_builder));
 }
 
-GHashTable *
+std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping>> 
 rpmostree_dnfcontext_get_varsubsts (DnfContext *context)
 {
-  GHashTable *r = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-
-  g_hash_table_insert (r, g_strdup ("basearch"), g_strdup (dnf_context_get_base_arch (context)));
-
+  auto r = std::make_unique<rust::Vec<rpmostreecxx::StringMapping>>();
+  r->push_back(rpmostreecxx::StringMapping {k: "basearch", v: dnf_context_get_base_arch (context) });
   return r;
 }
 

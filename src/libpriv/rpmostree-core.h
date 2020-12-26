@@ -23,10 +23,17 @@
 #include <gio/gio.h>
 #include <libdnf/libdnf.h>
 #include <ostree.h>
+#include <memory>
 
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 #include "libglnx.h"
 
+
+// C++ APIs
+std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping>> rpmostree_dnfcontext_get_varsubsts (DnfContext *context);
+
+// Begin C APIs
 G_BEGIN_DECLS
 
 #define RPMOSTREE_CORE_CACHEDIR "/var/cache/rpm-ostree/"
@@ -101,8 +108,6 @@ DnfContext * rpmostree_context_get_dnf (RpmOstreeContext *self);
 RpmOstreeTreespec *rpmostree_treespec_new_from_keyfile (GKeyFile *keyfile, GError  **error);
 RpmOstreeTreespec *rpmostree_treespec_new_from_path (const char *path, GError  **error);
 RpmOstreeTreespec *rpmostree_treespec_new (GVariant   *variant);
-
-GHashTable *rpmostree_dnfcontext_get_varsubsts (DnfContext *context);
 
 GVariant *rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self);
 
