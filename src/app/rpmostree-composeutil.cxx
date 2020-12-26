@@ -225,7 +225,7 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     GError     **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Parsing treefile", error);
-  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (ctx));
+  auto varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (ctx));
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
 
   // TODO: Rework things so we always use this data going forward
@@ -277,10 +277,8 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
     return NULL;
   if (input_ref)
     {
-      g_autofree char *ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
-      if (!ref)
-        return NULL;
-      g_key_file_set_string (treespec, "tree", "ref", ref);
+      auto ref = rpmostreecxx::varsubstitute (input_ref, *varsubsts);
+      g_key_file_set_string (treespec, "tree", "ref", ref.c_str());
     }
 
   return rpmostree_treespec_new_from_keyfile (treespec, error);

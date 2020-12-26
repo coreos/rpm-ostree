@@ -106,11 +106,9 @@ rpmostree_builtin_shlib_backend (int             argc,
     {
       const char *src = argv[2];
       g_autoptr(DnfContext) ctx = dnf_context_new ();
-      g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (ctx);
-      g_autofree char *rets = _rpmostree_varsubst_string (src, varsubsts, error);
-      if (rets == NULL)
-        return FALSE;
-      ret = g_variant_new_string (rets);
+      auto varsubsts = rpmostree_dnfcontext_get_varsubsts (ctx);
+      auto rets = rpmostreecxx::varsubstitute (src, *varsubsts);
+      ret = g_variant_new_string (rets.c_str());
     }
    else if (g_str_equal (arg, "packagelist-from-commit"))
     {

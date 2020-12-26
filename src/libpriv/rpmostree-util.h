@@ -79,11 +79,6 @@ GVariant *_rpmostree_vardict_lookup_value_required (GVariantDict *dict,
                                                     const GVariantType *fmt,
                                                     GError     **error);
 
-char *
-_rpmostree_varsubst_string (const char *instr,
-                            GHashTable *substitutions,
-                            GError **error);
-
 gboolean
 _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
                                            int           rootfs_dfd,

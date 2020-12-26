@@ -55,6 +55,20 @@ mod ffi {
         fn script_is_ignored(pkg: &str, script: &str) -> bool;
     }
 
+    /// Currently cxx-rs doesn't support mappings; like probably most projects,
+    /// by far our most common case is a mapping from string -> string and since
+    /// our data sizes aren't large, we serialize this as a vector of strings pairs.
+    #[derive(Clone, Debug)]
+    struct StringMapping {
+        k: String,
+        v: String,
+    }
+
+    // utils.rs
+    extern "Rust" {
+        fn varsubstitute(s: &str, vars: &Vec<StringMapping>) -> Result<String>;
+    }
+
     #[derive(Default)]
     /// A copy of LiveFsState that is bridged to C++; the main
     /// change here is we can't use Option<> yet, so empty values

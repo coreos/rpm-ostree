@@ -165,7 +165,7 @@ pub fn decompose_sha256_nevra(v: &str) -> Result<(&str, &str)> {
 /// Given an input string `s`, replace variables of the form `${foo}` with
 /// values provided in `vars`.  No quoting syntax is available, so it is
 /// not possible to have a literal `${` in the string.
-pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
+fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
     let mut buf = instr;
     let mut s = "".to_string();
     while !buf.is_empty() {
@@ -252,6 +252,32 @@ mod tests {
     }
 
     #[test]
+    fn more_varsubsts() -> Result<()> {
+        let mut subs = HashMap::new();
+        subs.insert("basearch".to_string(), "bacon".to_string());
+        subs.insert("v".to_string(), "42".to_string());
+        let subs = &subs;
+
+        assert_eq!(varsubst("${basearch}", subs)?, "bacon");
+        assert_eq!(varsubst("foo/${basearch}/bar", subs)?, "foo/bacon/bar");
+        assert_eq!(varsubst("${basearch}/bar", subs)?, "bacon/bar");
+        assert_eq!(varsubst("foo/${basearch}", subs)?, "foo/bacon");
+        assert_eq!(
+            varsubst("foo/${basearch}/${v}/bar", subs)?,
+            "foo/bacon/42/bar"
+        );
+        assert_eq!(varsubst("${v}", subs)?, "42");
+
+        let subs = HashMap::new();
+        assert!(varsubst("${v}", &subs).is_err());
+        assert!(varsubst("foo/${v}/bar", &subs).is_err());
+
+        assert!(varsubst("${", &subs).is_err());
+        assert!(varsubst("foo/${", &subs).is_err());
+        Ok(())
+    }
+
+    #[test]
     fn test_open_file_nonexistent() {
         let path = "/usr/share/empty/manifest.yaml";
         match open_file(path) {
@@ -263,32 +289,8 @@ mod tests {
     }
 }
 
-mod ffi {
-    use super::*;
-    use crate::ffiutil::*;
-    use glib;
-    use glib::translate::*;
-    use glib_sys;
-    use libc;
-    use std::ffi::CString;
-    use std::ptr;
-
-    #[no_mangle]
-    pub extern "C" fn ror_util_varsubst(
-        s: *const libc::c_char,
-        h: *mut glib_sys::GHashTable,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> *mut libc::c_char {
-        let s: Borrowed<glib::GString> = unsafe { from_glib_borrow(s) };
-        let h_rs: HashMap<String, String> =
-            unsafe { glib::translate::FromGlibPtrContainer::from_glib_none(h) };
-        match varsubst(s.as_str(), &h_rs) {
-            Ok(s) => CString::new(s).unwrap().into_raw(),
-            Err(e) => {
-                error_to_glib(&e, gerror);
-                ptr::null_mut()
-            }
-        }
-    }
+/// TODO: cxx-rs doesn't support maps yet
+pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> Result<String> {
+    let m = subs.iter().cloned().map(|i| (i.k, i.v)).collect();
+    varsubst(s, &m)
 }
-pub use self::ffi::*;

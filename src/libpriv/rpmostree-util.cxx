@@ -61,18 +61,6 @@ _rpmostree_vardict_lookup_value_required (GVariantDict *dict,
   return r;
 }
 
-/* Given a string of the form
- * "bla blah ${foo} blah ${bar}"
- * and a hash table of variables, substitute the variable values.
- */
-char *
-_rpmostree_varsubst_string (const char *instr,
-                            GHashTable *substitutions,
-                            GError **error)
-{
-  return ror_util_varsubst (instr, substitutions, error);
-}
-
 gboolean
 _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
                                            int           dfd,
