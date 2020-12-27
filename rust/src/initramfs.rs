@@ -1,14 +1,17 @@
 //! Generate an "overlay" initramfs image
 
+use crate::cxx_bridge_gobject::*;
 use anyhow::{Context, Result};
 use gio::prelude::*;
 use openat::SimpleType;
 use std::collections::BTreeSet;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::io::prelude::*;
 use std::os::unix::io::AsRawFd;
+use std::os::unix::io::IntoRawFd;
+use std::pin::Pin;
 use std::rc;
 use subprocess::Exec;
 
@@ -123,6 +126,17 @@ pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
     include_bytes!("../../src/libpriv/dracut-random.cpio.gz")
 }
 
+/// cxx-rs entrypoint; we can't use generics and need to return a raw integer for fd
+pub(crate) fn initramfs_overlay_generate(
+    files: &Vec<String>,
+    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+) -> Result<i32> {
+    let cancellable = &cancellable.gobj_wrap();
+    let files: HashSet<String> = files.iter().cloned().collect();
+    let r = generate_initramfs_overlay_etc(&files, Some(cancellable))?;
+    Ok(r.into_raw_fd())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -147,39 +161,3 @@ mod test {
         Ok(())
     }
 }
-
-mod ffi {
-    use super::*;
-    use crate::ffiutil::error_to_glib;
-    use glib::translate::*;
-    use std::os::unix::io::IntoRawFd;
-
-    #[no_mangle]
-    pub extern "C" fn ror_initramfs_overlay_generate(
-        files: *mut glib_sys::GHashTable,
-        out_fd: *mut libc::c_int,
-        cancellable: *mut gio_sys::GCancellable,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        // TODO glib-rs doesn't allow directly converting to HashSet;
-        // probably best to fix the calling code to pass a GStrv anyways.
-        let mut files: HashMap<String, String> =
-            unsafe { FromGlibPtrContainer::from_glib_none(files) };
-        let files: HashSet<String> = files.drain().map(|(k, _)| k).collect();
-        let cancellable: Option<gio::Cancellable> = unsafe { from_glib_none(cancellable) };
-        let cancellable = cancellable.as_ref();
-        match generate_initramfs_overlay_etc(&files, cancellable) {
-            Ok(fd) => {
-                unsafe {
-                    *out_fd = fd.into_raw_fd();
-                }
-                1
-            }
-            Err(ref e) => {
-                error_to_glib(e, gerror);
-                0
-            }
-        }
-    }
-}
-pub use self::ffi::*;

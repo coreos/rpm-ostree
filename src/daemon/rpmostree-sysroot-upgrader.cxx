@@ -19,6 +19,7 @@
  */
 
 #include "config.h"
+#include <sstream>
 
 #include <libglnx.h>
 #include <gio/gunixoutputstream.h>
@@ -1439,9 +1440,17 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   if (g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->origin)) > 0)
     {
       glnx_fd_close int fd = -1;
-      if (!ror_initramfs_overlay_generate (rpmostree_origin_get_initramfs_etc_files (self->origin),
-                                           &fd, cancellable, error))
-        return glnx_prefix_error (error, "Generating initramfs overlay");
+      auto etc_files_gset = rpmostree_origin_get_initramfs_etc_files (self->origin);
+      rust::Vec<rust::String> etc_files;
+      GLNX_HASH_TABLE_FOREACH(etc_files_gset, const char *, key)
+        {
+          etc_files.push_back(std::string(key));
+        }
+      try {
+        fd = rpmostreecxx::initramfs_overlay_generate (etc_files, *cancellable);
+      } catch (std::exception& e) {
+        util::rethrow_prefixed(e, "Generating initramfs overlay");
+      }
 
       if (!ostree_sysroot_stage_overlay_initrd (self->sysroot, fd,
                                                 &overlay_initrd_checksum,

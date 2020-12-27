@@ -14,6 +14,18 @@ mod includes;
 
 #[cxx::bridge(namespace = "rpmostreecxx")]
 mod ffi {
+    // Types that are defined by gtk-rs generated bindings that
+    // we want to pass across the cxx-rs boundary.  For more
+    // information, see cxx_bridge_gobject.rs.
+    extern "C++" {
+        include!("src/libpriv/rpmostree-cxxrs-prelude.h");
+
+        type OstreeSysroot = crate::FFIOstreeSysroot;
+        type OstreeRepo = crate::FFIOstreeRepo;
+        type OstreeDeployment = crate::FFIOstreeDeployment;
+        type GCancellable = crate::FFIGCancellable;
+    }
+
     // core.rs
     extern "Rust" {
         type TempEtcGuard;
@@ -27,6 +39,10 @@ mod ffi {
     // initramfs.rs
     extern "Rust" {
         fn get_dracut_random_cpio() -> &'static [u8];
+        fn initramfs_overlay_generate(
+            files: &Vec<String>,
+            cancellable: Pin<&mut GCancellable>,
+        ) -> Result<i32>;
     }
 
     // scripts.rs
@@ -46,14 +62,6 @@ mod ffi {
     struct LiveApplyState {
         inprogress: String,
         commit: String,
-    }
-
-    extern "C++" {
-        include!("src/libpriv/rpmostree-cxxrs-prelude.h");
-
-        type OstreeSysroot = crate::FFIOstreeSysroot;
-        type OstreeRepo = crate::FFIOstreeRepo;
-        type OstreeDeployment = crate::FFIOstreeDeployment;
     }
 
     // livefs.rs
@@ -82,7 +90,7 @@ pub use self::history::*;
 mod journal;
 pub use self::journal::*;
 mod initramfs;
-pub use self::initramfs::*;
+pub(crate) use self::initramfs::*;
 mod lockfile;
 pub use self::lockfile::*;
 mod livefs;
