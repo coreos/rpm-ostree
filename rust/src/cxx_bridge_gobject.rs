@@ -48,6 +48,19 @@ macro_rules! bind_ostree_obj {
     };
 }
 
+// When extending this list, also update rpmostree-cxxrs-prelude.h and lib.rs
+// This macro is special to ostree types currently.
 bind_ostree_obj!(Sysroot);
 bind_ostree_obj!(Repo);
 bind_ostree_obj!(Deployment);
+
+// List of non-ostree types we want to bind; if you need to extend this list
+// try to instead create a bind_gio_obj!() macro or so.
+#[repr(transparent)]
+pub struct FFIGCancellable(gio_sys::GCancellable);
+
+unsafe impl ExternType for FFIGCancellable {
+    type Id = type_id!(rpmostreecxx::GCancellable);
+    type Kind = cxx::kind::Trivial;
+}
+impl_wrap!(FFIGCancellable, gio::Cancellable);

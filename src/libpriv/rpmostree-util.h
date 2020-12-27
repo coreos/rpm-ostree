@@ -30,6 +30,10 @@
 #include "rpmostree-types.h"
 
 #ifdef __cplusplus
+#include <string>
+#include <exception>
+#include <sstream>
+
 namespace util {
 // Sadly std::move() doesn't do anything for raw pointer types by default.
 // This is our C++ equivalent of g_steal_pointer().
@@ -40,6 +44,20 @@ template<typename T>
     v = nullptr;
     return p;
   }
+
+// In rpm-ostree we always use C++ exceptions as a "fatal error, unwind the stack"
+// tool.  We don't try to catch specific exception types, they just carry
+// a string that will be displayed to a human.  This helper encapsulates a common
+// pattern of adding a "prefix" to the string.  When used multiple times it's
+// a bit like a human-friendly stack trace subset.
+template<typename T>
+  inline void rethrow_prefixed (std::exception& e, T prefix)
+  {
+    std::ostringstream msg;
+    msg << prefix << ": " << e.what();
+    throw std::runtime_error(msg.str());
+  }
+
 }
 #endif
 
