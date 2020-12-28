@@ -40,6 +40,7 @@ libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 
 [build-dependencies]
 cbindgen = "0.16.0"
+anyhow = "1.0"
 
 [lib]
 name = "rpmostree_rust"
@@ -58,5 +59,6 @@ lto = true
 
 [features]
 sqlite-rpmdb-default = []
+fedora-integration = []
 
 default = []
