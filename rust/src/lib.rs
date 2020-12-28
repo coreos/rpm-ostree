@@ -113,6 +113,8 @@ mod composepost;
 pub(crate) use composepost::*;
 mod core;
 use crate::core::*;
+#[cfg(feature = "fedora-integration")]
+mod fedora_integration;
 mod history;
 pub use self::history::*;
 mod journal;

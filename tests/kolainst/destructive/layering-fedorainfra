@@ -1,0 +1,20 @@
+#!/bin/bash
+# kola: { "tags": "needs-internet" }
+# Test https://github.com/coreos/rpm-ostree/pull/2420
+# i.e. using overrides from Fedora Infrastructure tools (koji/bodhi)
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+cd $(mktemp -d)
+
+# bodhi update for rpm-ostree (Fedora 33)
+rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2020-6e743def1d
+rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt "Diff: 2 downgraded"
+rpm-ostree cleanup -p
+# Same build directly via Koji
+rpm-ostree override replace https://koji.fedoraproject.org/koji/buildinfo?buildID=1637715
+rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt "Diff: 2 downgraded"
+
+echo "ok"
