@@ -68,13 +68,3 @@ librpmostreepriv_sources += \
 	src/libpriv/rpmostree-rojig-client.cxx \
 	$(NULL)
 endif
-
-# Also we now use cxx.rs
-rpmostree-cxxrs.h: rust/src/lib.rs
-	$(AM_V_GEN) cxxbridge rust/src/lib.rs --header > $@
-rpmostree-cxxrs.cxx: rust/src/lib.rs
-	$(AM_V_GEN) cxxbridge --include rpmostree-cxxrs.h rust/src/lib.rs > $@
-cxxrs_sources = rpmostree-cxxrs.h rpmostree-cxxrs.cxx
-librpmostreepriv_sources += $(cxxrs_sources)
-BUILT_SOURCES += $(cxxrs_sources)
-GITIGNOREFILES += $(cxxrs_sources)

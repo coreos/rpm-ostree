@@ -143,20 +143,8 @@ AS_IF([test -z "$cargo"], [AC_MSG_ERROR([cargo is required for --enable-rust])])
 AC_PATH_PROG([rustc], [rustc])
 AS_IF([test -z "$rustc"], [AC_MSG_ERROR([rustc is required for --enable-rust])])
 
-dnl this is true effectively iff we used make-git-snapshot.sh
+dnl See comment in install-extra-builddeps.sh
 AM_CONDITIONAL(BUILDOPT_PREBUILT_BINDINGS, [test -f rpmostree-rust-prebuilt.h])
-
-AM_COND_IF([BUILDOPT_PREBUILT_BINDINGS], [cbindgen=prebuilt], [
-dnl https://github.com/projectatomic/rpm-ostree/pull/1573
-dnl We support 2 modes for bindgen:
-dnl  - External /usr/bin/cbindgen (Fedora + CI)
-dnl  - Downloading it from crates.io (CentOS + CI builds)
-AS_IF([test -d "${srcdir}"/rust/vendor],
-      [cbindgen=dist],
-      [AC_PATH_PROG([cbindgen], [cbindgen])])
-])
-AM_CONDITIONAL(HAVE_PREBUILT_CBINDGEN, [test "${cbindgen}" = "dist"])
-AM_CONDITIONAL(HAVE_EXTERNAL_CBINDGEN, [test -n "${cbindgen}" && test "${cbindgen}" != dist])
 
 AC_MSG_CHECKING(whether to build in debug mode)
 debug_release=release
@@ -236,6 +224,6 @@ echo "
     rojig:                                   ${enable_rojig:-no}
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release
-    cbindgen:                                ${cbindgen:-internal}
+    cbindgen:                                ${cbindgen:-external}
     sqlite rpmdb default:                    ${enable_sqlite_rpmdb_default}
 "

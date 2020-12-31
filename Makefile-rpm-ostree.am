@@ -105,18 +105,6 @@ if BUILDOPT_ENABLE_SQLITE_RPMDB_DEFAULT
 cargo_build += --features sqlite-rpmdb-default
 endif
 
-tooling_src = bindgen/Cargo.toml bindgen/src/main.rs
-tooling-build:
-	cd $(top_srcdir)/tooling && $(cargo_build) --release --all-targets
-
-if !HAVE_PREBUILT_CBINDGEN
-if !HAVE_EXTERNAL_CBINDGEN
-rpmostree-bindgen: tooling-build
-	ln -sf tooling/target/release/rpmostree-bindgen $(abs_top_builddir)/rpmostree-bindgen
-endif
-endif
-GITIGNOREFILES += tooling/target/ rpmostree-bindgen
-
 librpmostree_rust_path = $(top_srcdir)/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
 # If the target directory exists, and isn't owned by our uid, then
 # we exit with a fatal error, since someone probably did `make && sudo make install`,
@@ -126,22 +114,22 @@ $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	$(cargo_build) $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS)
 
-# Generate bindings from Rust to C
+# cbindgen + cxx.rs
+binding_generated_sources = rpmostree-rust.h rpmostree-cxxrs.h rpmostree-cxxrs.cxx
 if BUILDOPT_PREBUILT_BINDINGS
+# In this case we shipped prebuilt versions in the source tarball
 rpmostree-rust.h:
 	ln -sfr rpmostree-rust-prebuilt.h $@
+rpmostree-cxxrs.h:
+	ln -sfr rpmostree-cxxrs-prebuilt.h $@
+rpmostree-cxxrs.cxx:
+	ln -sfr rpmostree-cxxrs-prebuilt.cxx $@
 else
-if !HAVE_PREBUILT_CBINDGEN
-if HAVE_EXTERNAL_CBINDGEN
-rpmostree-rust.h:
-	$(AM_V_GEN) cbindgen -c cbindgen.toml -o $@ $(top_srcdir)
-else
-rpmostree-rust.h: rpmostree-bindgen
-	$(AM_V_GEN) ./rpmostree-bindgen $(top_srcdir)
+include Makefile.bindings
 endif
-endif
-endif
-BUILT_SOURCES += rpmostree-rust.h
+GITIGNOREFILES += $(binding_generated_sources)
+BUILT_SOURCES += $(binding_generated_sources)
+librpmostreepriv_sources += $(binding_generated_sources)
 
 # Wraps `cargo test`.  This is always a debug non-release build;
 # the main thing here is we still drop the `target` dir in our build
