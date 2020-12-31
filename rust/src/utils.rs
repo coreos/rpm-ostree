@@ -112,6 +112,18 @@ pub fn parent_dir(filename: &Path) -> Option<&Path> {
         .map(|p| if p.as_os_str() == "" { ".".as_ref() } else { p })
 }
 
+pub fn decompose_sha256_nevra(v: &str) -> Result<(&str, &str)> {
+    let parts: Vec<&str> = v.splitn(2, ':').collect();
+    match (parts.get(0), parts.get(1)) {
+        (Some(_), None) => bail!("Missing : in {}", v),
+        (Some(first), Some(rest)) => {
+            ostree::validate_checksum_string(rest)?;
+            Ok((first, rest))
+        }
+        (_, _) => unreachable!(),
+    }
+}
+
 /// Given an input string `s`, replace variables of the form `${foo}` with
 /// values provided in `vars`.  No quoting syntax is available, so it is
 /// not possible to have a literal `${` in the string.
@@ -181,6 +193,24 @@ mod tests {
         assert_eq!(r, "fedorappc64le");
         let r = varsubst("${osvendor}", &subs).unwrap();
         assert_eq!(r, "fedora");
+    }
+
+    #[test]
+    fn test_decompose_sha256_nevra() -> Result<()> {
+        assert!(decompose_sha256_nevra("").is_err());
+        assert!(decompose_sha256_nevra("foo:bar").is_err());
+        // Has a Q in the middle
+        assert!(decompose_sha256_nevra(
+            "foo:41af286dc0b172ed2f1ca934fd2278de4a119Q302ffa07087cea2682e7d372e3"
+        )
+        .is_err());
+        assert!(decompose_sha256_nevra("foo:bar:baz").is_err());
+        let c = "41af286dc0b172ed2f1ca934fd2278de4a1199302ffa07087cea2682e7d372e3";
+        let foo = format!("foo:{}", c);
+        let (n, p) = decompose_sha256_nevra(&foo).context("testing foo")?;
+        assert_eq!(n, "foo");
+        assert_eq!(p, c);
+        Ok(())
     }
 
     #[test]
