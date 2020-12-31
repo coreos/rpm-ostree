@@ -54,6 +54,10 @@ mod lockfile;
 pub use self::lockfile::*;
 mod livefs;
 pub use self::livefs::*;
+// An origin parser in Rust but only built when testing until
+// we're ready to try porting the C++ code.
+#[cfg(test)]
+mod origin;
 mod ostree_diff;
 mod ostree_utils;
 mod progress;
