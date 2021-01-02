@@ -1,11 +1,28 @@
+# This is duplicated with LIBRPMOSTREE_RUST_SRCS because this
+# Makefile needs to be independent
+binding_rust_sources = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.lock cbindgen.toml
+
 # A plain Makefile (not automake) so that we can run this logic
 # without running the autotools.
-rpmostree-rust.h:
-	$(AM_V_GEN) cbindgen -c cbindgen.toml -o $@ $(top_srcdir)
+rpmostree-rust.h: $(binding_rust_sources)
+	$(AM_V_GEN) if cbindgen -c cbindgen.toml -o $@.tmp $(top_srcdir); then \
+	  if test -f $@ && cmp $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else \
+	    mv $@.tmp $@; \
+	  fi; \
+	else \
+	  echo cbindgen failed; exit 1; \
+	fi
+
 BUILT_SOURCES += rpmostree-rust.h
-rpmostree-cxxrs.h: rust/src/lib.rs
-	$(AM_V_GEN) cxxbridge rust/src/lib.rs --header > $@
-rpmostree-cxxrs.cxx: rust/src/lib.rs
+rpmostree-cxxrs.h: $(binding_rust_sources)
+	$(AM_V_GEN) if cxxbridge rust/src/lib.rs --header > $@.tmp; then \
+	  if test -f $@ && cmp $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else \
+	    mv $@.tmp $@; \
+	  fi; \
+	else \
+	  echo cxxbridge failed; exit 1; \
+	fi
+rpmostree-cxxrs.cxx: $(binding_rust_sources) rpmostree-cxxrs.h
 	$(AM_V_GEN) cxxbridge --include rpmostree-cxxrs.h rust/src/lib.rs > $@
 
 # Invoked in CI
