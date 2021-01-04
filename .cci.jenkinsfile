@@ -14,13 +14,7 @@ parallel rpms: {
         export PATH="\$HOME/.cargo/bin:\$PATH"
         # Our primary CI build goes via RPM rather than direct to binaries
         # to better test that path, including our vendored spec file, etc.
-        # However, to do that we need to generate
-        # the source code expected via the RPM path.  Because the binding
-        # build rules are part of an Automake-generated Makefile we end
-        # up running autotools twice, which is annoying but extracting
-        #
-        env NOCONFIGURE=1 ./autogen.sh
-        ./configure --prefix=/usr
+        # The RPM build expects pre-generated bindings, so do that now.
         make -f Makefile.bindings bindings
         cd packaging
         make -f Makefile.dist-packaging rpm
