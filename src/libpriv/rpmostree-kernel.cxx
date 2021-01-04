@@ -605,6 +605,10 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (dracut_host_tmpdir)
     rpmostree_bwrap_bind_readwrite (bwrap, dracut_host_tmpdir->path, "/tmp/dracut");
 
+  // Avoid dracut wanting to do SELinux labeling itself, which triggers an AVC denial.
+  // https://bugzilla.redhat.com/show_bug.cgi?id=1911505
+  rpmostree_bwrap_bind_read (bwrap, "usr/bin/true", "/usr/sbin/setfiles");
+
   /* Set up argv and run */
   rpmostree_bwrap_append_child_argv (bwrap, (char*)glnx_basename (rpmostree_dracut_wrapper_path), NULL);
   for (char **iter = (char**)argv; iter && *iter; iter++)
