@@ -20,20 +20,22 @@
 
 #pragma once
 
+// C++ includes
+#include <string>
+#include <exception>
+#include <sstream>
+// C includes
 #include <gio/gio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <ostree.h>
 #include <libdnf/libdnf.h>
+
 #include "libglnx.h"
 #include "rpmostree.h"
 #include "rpmostree-types.h"
 
-#ifdef __cplusplus
-#include <string>
-#include <exception>
-#include <sstream>
-
+// C++ code here
 namespace util {
 // Sadly std::move() doesn't do anything for raw pointer types by default.
 // This is our C++ equivalent of g_steal_pointer().
@@ -59,8 +61,8 @@ template<typename T>
   }
 
 }
-#endif
 
+// Below here is C code
 G_BEGIN_DECLS
 
 #define _N(single, plural, n) ( (n) == 1 ? (single) : (plural) )
