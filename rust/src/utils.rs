@@ -66,22 +66,60 @@ where
     Ok(parsed)
 }
 
-fn download_url_to_tmpfile(url: &str) -> Result<fs::File> {
-    let mut tmpf = tempfile::tempfile()?;
-    {
-        let mut output = io::BufWriter::new(&mut tmpf);
-        let mut handle = Easy::new();
-        handle.follow_location(true)?;
-        handle.fail_on_error(true)?;
-        handle.url(url)?;
+/// Given a URL, download it to an O_TMPFILE (temporary file descriptor).
+/// This is a thin wrapper for `download_urls_to_tmpfiles`.
+pub(crate) fn download_url_to_tmpfile(url: &str, progress: bool) -> Result<fs::File> {
+    // Unwrap safety: multiple case returns the same number of values
+    Ok(download_urls_to_tmpfiles(vec![url], progress)?
+        .into_iter()
+        .next()
+        .expect("file"))
+}
 
-        let mut transfer = handle.transfer();
-        transfer.write_function(|data| output.write_all(data).and(Ok(data.len())).or(Ok(0)))?;
-        transfer.perform()?;
-    }
+/// Given multiple URLs, download them to an O_TMPFILE (temporary file descriptor).
+/// This uses sane defaults for fetching files, such as following the location
+/// and making HTTP level errors also return an error rather than the error page HTML.
+pub(crate) fn download_urls_to_tmpfiles<S: AsRef<str>>(
+    urls: Vec<S>,
+    progress: bool,
+) -> Result<Vec<fs::File>> {
+    let mut handle = Easy::new();
+    handle.follow_location(true)?;
+    handle.fail_on_error(true)?;
+    urls.iter()
+        .map(|url| {
+            let url = url.as_ref();
+            let mut tmpf = tempfile::tempfile()?;
+            if progress {
+                print!("Downloading {}...", url);
+            }
+            // Create an internally invoked closure so we can
+            // capture the success/error case to complete the progress output line.
+            let mut dl = || -> Result<()> {
+                let mut output = io::BufWriter::new(&mut tmpf);
+                handle.url(url)?;
 
-    tmpf.seek(io::SeekFrom::Start(0))?;
-    Ok(tmpf)
+                let mut transfer = handle.transfer();
+                transfer
+                    .write_function(|data| output.write_all(data).and(Ok(data.len())).or(Ok(0)))?;
+                transfer.perform()?;
+                Ok(())
+            };
+            if progress {
+                match dl() {
+                    Ok(()) => println!("done"),
+                    Err(e) => {
+                        println!("failed");
+                        return Err(e);
+                    }
+                }
+            } else {
+                dl()?;
+            }
+            tmpf.seek(io::SeekFrom::Start(0))?;
+            Ok(tmpf)
+        })
+        .collect()
 }
 
 /// Open file for reading and provide context containing filename on failures.
@@ -233,12 +271,7 @@ mod ffi {
     use glib_sys;
     use libc;
     use std::ffi::CString;
-    use std::os::unix::io::IntoRawFd;
     use std::ptr;
-
-    pub(crate) fn download_to_fd(url: &str) -> Result<i32> {
-        download_url_to_tmpfile(url).map(|f| f.into_raw_fd())
-    }
 
     #[no_mangle]
     pub extern "C" fn ror_util_varsubst(
