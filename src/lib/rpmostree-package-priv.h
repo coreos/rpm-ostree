@@ -23,11 +23,8 @@
 
 #include <ostree.h>
 #include "rpmostree-package.h"
-#include "rpmostree-refsack.h"
 
 G_BEGIN_DECLS
-
-RpmOstreePackage * _rpm_ostree_package_new (RpmOstreeRefSack *rsack, DnfPackage *hypkg);
 
 RpmOstreePackage * _rpm_ostree_package_new_from_variant (GVariant *gv_nevra);
 
