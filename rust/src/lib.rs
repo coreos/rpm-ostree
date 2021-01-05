@@ -26,6 +26,11 @@ mod ffi {
         type GCancellable = crate::FFIGCancellable;
     }
 
+    // client.rs
+    extern "Rust" {
+        fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
+    }
+
     // core.rs
     extern "Rust" {
         type TempEtcGuard;
@@ -48,11 +53,6 @@ mod ffi {
     // scripts.rs
     extern "Rust" {
         fn script_is_ignored(pkg: &str, script: &str) -> bool;
-    }
-
-    // utils.rs
-    extern "Rust" {
-        fn download_to_fd(url: &str) -> Result<i32>;
     }
 
     #[derive(Default)]
@@ -79,6 +79,8 @@ mod ffi {
     }
 }
 
+mod client;
+pub(crate) use client::*;
 mod cliwrap;
 pub use cliwrap::*;
 mod composepost;

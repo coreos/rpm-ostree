@@ -1055,44 +1055,27 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
 {
   g_autoptr(GPtrArray) repo_pkgs = g_ptr_array_new_with_free_func (g_free);
   g_auto(GVariantBuilder) builder;
+  // TODO: better API/cache for this
+  g_autoptr(DnfContext) ctx = dnf_context_new ();
+  auto basearch = dnf_context_get_base_arch (ctx);
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("ah"));
   for (const char *const* pkgiter = pkgs; pkgiter && *pkgiter; pkgiter++)
     {
       auto pkg = *pkgiter;
-      if (g_str_has_prefix (pkg, "http://") ||
-          g_str_has_prefix (pkg, "https://"))
+      auto fds = rpmostreecxx::client_handle_fd_argument(pkg, basearch);
+      if (fds.size() > 0)
         {
-          g_print ("Downloading '%s'... ", pkg);
-          glnx_autofd int fd = -1;
-          try {
-            fd = rpmostreecxx::download_to_fd (pkg);
-          } catch (std::exception& e) {
-            g_print ("failed!\n");
-            throw;
-          }
-          g_print ("done!\n");
-
-          int idx = g_unix_fd_list_append (fd_list, fd, error);
-          if (idx < 0)
-            return FALSE;
-
-          g_variant_builder_add (&builder, "h", idx);
+          for (auto fd: fds)
+            {
+              auto idx = g_unix_fd_list_append (fd_list, fd, error);
+              if (idx < 0)
+                return FALSE;
+              g_variant_builder_add (&builder, "h", idx);
+            }
         }
-      else if (!g_str_has_suffix (pkg, ".rpm"))
-        g_ptr_array_add (repo_pkgs, g_strdup (pkg));
       else
-        {
-          glnx_autofd int fd = -1;
-          if (!glnx_openat_rdonly (AT_FDCWD, pkg, TRUE, &fd, error))
-            return FALSE;
-
-          int idx = g_unix_fd_list_append (fd_list, fd, error);
-          if (idx < 0)
-            return FALSE;
-
-          g_variant_builder_add (&builder, "h", idx);
-        }
+        g_ptr_array_add (repo_pkgs, g_strdup (pkg));
     }
 
   *out_fd_idxs = g_variant_ref_sink (g_variant_new ("ah", &builder));
