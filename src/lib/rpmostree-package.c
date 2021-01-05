@@ -30,11 +30,13 @@
 
 #include "config.h"
 
-#include "rpmostree-shlib-ipc-private.h"
-#include "rpmostree-package-priv.h"
-
 #include <string.h>
 #include <stdlib.h>
+#include <libdnf/libdnf.h>
+#include "libglnx.h"
+
+#include "rpmostree-shlib-ipc-private.h"
+#include "rpmostree-package-priv.h"
 
 typedef GObjectClass RpmOstreePackageClass;
 

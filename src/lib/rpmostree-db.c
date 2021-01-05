@@ -19,13 +19,9 @@
  */
 
 #include "config.h"
-
 #include "string.h"
-
 #include "rpmostree-db.h"
-#include "rpmostree-rpm-util.h"
 #include "rpmostree-package-priv.h"
-#include "rpmostree-refsack.h"
 
 /**
  * SECTION:librpmostree-dbquery
