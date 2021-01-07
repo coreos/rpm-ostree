@@ -41,6 +41,11 @@ mod ffi {
         fn get_systemctl_wrapper() -> &'static [u8];
     }
 
+    // composepost.rs
+    extern "Rust" {
+        fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()>;
+    }
+
     // initramfs.rs
     extern "Rust" {
         fn get_dracut_random_cpio() -> &'static [u8];
@@ -98,7 +103,7 @@ pub(crate) use client::*;
 mod cliwrap;
 pub use cliwrap::*;
 mod composepost;
-pub use self::composepost::*;
+pub(crate) use composepost::*;
 mod core;
 use crate::core::*;
 mod history;
