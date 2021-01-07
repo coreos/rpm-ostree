@@ -4561,10 +4561,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     }
 
   if (self->treefile_rs && ror_treefile_get_cliwrap (self->treefile_rs))
-    {
-      if (!ror_cliwrap_write_wrappers (tmprootfs_dfd, error))
-        return FALSE;
-    }
+    rpmostreecxx::cliwrap_write_wrappers (tmprootfs_dfd);
 
   /* Undo the /etc move above */
   etc_guard->undo();

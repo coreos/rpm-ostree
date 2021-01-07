@@ -26,6 +26,7 @@ mod cliutil;
 mod dracut;
 mod grubby;
 mod rpm;
+use crate::ffiutil::*;
 
 /// Location for the underlying (not wrapped) binaries.
 pub const CLIWRAP_DESTDIR: &str = "usr/libexec/rpm-ostree/wrapped";
@@ -41,7 +42,7 @@ pub(crate) enum RunDisposition {
 }
 
 /// Main entrypoint for cliwrap
-fn cliwrap_main(args: &[String]) -> Result<()> {
+pub(crate) fn cliwrap_entrypoint(args: Vec<String>) -> Result<()> {
     // We'll panic here if the vector is empty, but that is intentional;
     // the outer code should always pass us at least one arg.
     let name = args[0].as_str();
@@ -101,42 +102,11 @@ fn write_wrappers(rootfs_dfd: &openat::Dir) -> Result<()> {
     })
 }
 
-mod ffi {
-    use super::*;
-    use crate::ffiutil::*;
-    use anyhow::Context;
-    use glib;
-    use lazy_static::lazy_static;
-    use libc;
-    use std::ffi::CString;
-
-    #[no_mangle]
-    pub extern "C" fn ror_cliwrap_write_wrappers(
-        rootfs_dfd: libc::c_int,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let rootfs_dfd = ffi_view_openat_dir(rootfs_dfd);
-        int_glib_error(
-            write_wrappers(&rootfs_dfd).context("cli wrapper replacement failed"),
-            gerror,
-        )
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_cliwrap_entrypoint(
-        argv: *mut *mut libc::c_char,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let v: Vec<String> = unsafe { glib::translate::FromGlibPtrContainer::from_glib_none(argv) };
-        int_glib_error(cliwrap_main(&v), gerror)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_cliwrap_destdir() -> *const libc::c_char {
-        lazy_static! {
-            static ref CLIWRAP_DESTDIR_C: CString = CString::new(CLIWRAP_DESTDIR).unwrap();
-        }
-        CLIWRAP_DESTDIR_C.as_ptr()
-    }
+pub(crate) fn cliwrap_write_wrappers(rootfs_dfd: i32) -> Result<()> {
+    write_wrappers(&ffi_view_openat_dir(rootfs_dfd))
 }
-pub use self::ffi::*;
+
+pub(crate) fn cliwrap_destdir() -> String {
+    // We return an owned string because it's used by C so we want c_str()
+    CLIWRAP_DESTDIR.to_string()
+}

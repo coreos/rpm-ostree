@@ -31,6 +31,13 @@ mod ffi {
         fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
     }
 
+    // cliwrap.rs
+    extern "Rust" {
+        fn cliwrap_write_wrappers(rootfs: i32) -> Result<()>;
+        fn cliwrap_entrypoint(argv: Vec<String>) -> Result<()>;
+        fn cliwrap_destdir() -> String;
+    }
+
     // core.rs
     extern "Rust" {
         type TempEtcGuard;
