@@ -84,29 +84,12 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
 
 // This function is called from rpmostree_postprocess_final(); think of
 // it as the bits of that function that we've chosen to implement in Rust.
-fn compose_postprocess_final(rootfs_dfd: &openat::Dir) -> Result<()> {
+pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()> {
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
     let tasks = [
         postprocess_useradd,
         postprocess_presets,
         postprocess_subs_dist,
     ];
-    tasks.par_iter().try_for_each(|f| f(rootfs_dfd))
+    tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))
 }
-
-mod ffi {
-    use super::*;
-    use glib_sys;
-    use libc;
-
-    use crate::ffiutil::*;
-
-    #[no_mangle]
-    pub extern "C" fn ror_compose_postprocess_final(
-        rootfs_dfd: libc::c_int,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let rootfs_dfd = ffi_view_openat_dir(rootfs_dfd);
-        int_glib_error(compose_postprocess_final(&rootfs_dfd), gerror)
-    }
-}
-pub use self::ffi::*;

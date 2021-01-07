@@ -984,8 +984,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                                                                error))
     return FALSE;
 
-  if (!ror_compose_postprocess_final (rootfs_dfd, error))
-    return FALSE;
+  rpmostreecxx::compose_postprocess_final (rootfs_dfd);
 
   if (selinux)
     {
