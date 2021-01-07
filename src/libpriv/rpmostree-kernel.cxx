@@ -507,6 +507,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
                       GError **error)
 {
   gboolean ret = FALSE;
+  auto destdir = rpmostreecxx::cliwrap_destdir();
   /* Shell wrapper around dracut to write to the O_TMPFILE fd;
    * at some point in the future we should add --fd X instead of -f
    * to dracut.
@@ -521,7 +522,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
     "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then extra_argv=\"--reproducible --gzip\"; fi\n"
     "mkdir -p /tmp/dracut && dracut $extra_argv -v --add ostree --tmpdir=/tmp/dracut -f /tmp/initramfs.img \"$@\"\n"
     "cat /tmp/initramfs.img >/proc/self/fd/3\n",
-    ror_cliwrap_destdir ());
+    destdir.c_str());
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   g_autoptr(GPtrArray) rebuild_argv = NULL;
   g_auto(GLnxTmpfile) tmpf = { 0, };

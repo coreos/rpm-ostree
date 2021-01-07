@@ -26,7 +26,7 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
-#include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 #include <libglnx.h>
 
@@ -40,9 +40,9 @@ rpmostree_builtin_cliwrap (int             argc,
   if (argc < 2)
     return glnx_throw (error, "cliwrap: missing required subcommand");
 
-  g_autoptr(GPtrArray) args = g_ptr_array_new ();
+  rust::Vec<rust::String> rustargv;
   for (int i = 1; i < argc; i++)
-    g_ptr_array_add (args, argv[i]);
-  g_ptr_array_add (args, NULL);
-  return ror_cliwrap_entrypoint ((char**)args->pdata, error);
+    rustargv.push_back(std::string(argv[i]));
+  rpmostreecxx::cliwrap_entrypoint (rustargv);
+  return TRUE;
 }
