@@ -32,6 +32,7 @@
 
 #include "rpmostree-util.h"
 #include "rpmostree-builtins.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-polkit-agent.h"
 #include "rpmostreemain.h"
 
@@ -248,6 +249,11 @@ rpmostree_option_context_parse (GOptionContext *context,
       g_print (" Features:\n");
       for (char **iter = features; iter && *iter; iter++)
         g_print ("  - %s\n", *iter);
+      auto featuresrs = rpmostreecxx::get_features();
+      for (auto s : featuresrs)
+        {
+          g_print ("  - %s\n", s.c_str());
+        }
       exit (EXIT_SUCCESS);
     }
 
