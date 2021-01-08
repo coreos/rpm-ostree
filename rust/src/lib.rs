@@ -82,6 +82,34 @@ mod ffi {
         fn progress_end(suffix: &str);
     }
 
+    // history.rs
+
+    /// A history entry in the journal. It may represent multiple consecutive boots
+    /// into the same deployment. This struct is exposed directly via FFI to C.
+    #[derive(PartialEq, Debug)]
+    pub struct HistoryEntry {
+        /// The deployment root timestamp.
+        deploy_timestamp: u64,
+        /// The command-line that was used to create the deployment, if any.
+        deploy_cmdline: String,
+        /// The number of consecutive times the deployment was booted.
+        boot_count: u64,
+        /// The first time the deployment was booted if multiple consecutive times.
+        first_boot_timestamp: u64,
+        /// The last time the deployment was booted if multiple consecutive times.
+        last_boot_timestamp: u64,
+        /// `true` if there are no more entries.
+        eof: bool,
+    }
+
+    extern "Rust" {
+        type HistoryCtx;
+
+        fn history_ctx_new() -> Result<Box<HistoryCtx>>;
+        fn next_entry(&mut self) -> Result<HistoryEntry>;
+        fn history_prune() -> Result<()>;
+    }
+
     // scripts.rs
     extern "Rust" {
         fn script_is_ignored(pkg: &str, script: &str) -> bool;
