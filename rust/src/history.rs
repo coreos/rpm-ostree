@@ -16,10 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-//! High-level interface to retrieve host rpm-ostree history. The two main C
-//! APIs are `ror_history_ctx_new()` which creates a context object
-//! (`HistoryCtx`), and `ror_history_ctx_next()`, which iterates through history
-//! entries (`HistoryEntry`).
+//! High-level interface to retrieve host rpm-ostree history.
 //!
 //! The basic idea is that at deployment creation time, the upgrader does two
 //! things: (1) it writes a GVariant file describing the deployment to
@@ -52,13 +49,14 @@
 //! than scanning the whole journal upfront. This can then be e.g. piped through
 //! a pager, stopped after N entries, etc...
 
-use anyhow::{bail, Result};
+use crate::cxxrsutil::*;
+use crate::ffi::HistoryEntry;
+use anyhow::{anyhow, Context, Result};
 use openat::{self, Dir, SimpleType};
 use std::collections::VecDeque;
-use std::ffi::CString;
+use std::fs;
 use std::ops::Deref;
 use std::path::Path;
-use std::{fs, ptr};
 use systemd::journal::JournalRecord;
 
 use openat_ext::OpenatDirExt;
@@ -100,7 +98,7 @@ struct DeploymentMarker {
     timestamp: u64,
     path: String,
     node: DevIno,
-    cmdline: Option<CString>,
+    cmdline: Option<String>,
 }
 
 enum Marker {
@@ -114,25 +112,6 @@ struct DevIno {
     inode: u64,
 }
 
-/// A history entry in the journal. It may represent multiple consecutive boots
-/// into the same deployment. This struct is exposed directly via FFI to C.
-#[repr(C)]
-#[derive(PartialEq, Debug)]
-pub struct HistoryEntry {
-    /// The deployment root timestamp.
-    deploy_timestamp: u64,
-    /// The command-line that was used to create the deployment, if any.
-    deploy_cmdline: *mut libc::c_char,
-    /// The number of consecutive times the deployment was booted.
-    boot_count: u64,
-    /// The first time the deployment was booted if multiple consecutive times.
-    first_boot_timestamp: u64,
-    /// The last time the deployment was booted if multiple consecutive times.
-    last_boot_timestamp: u64,
-    /// `true` if there are no more entries.
-    eof: bool,
-}
-
 impl HistoryEntry {
     /// Create a new `HistoryEntry` from a boot marker and a deployment marker.
     fn new_from_markers(boot: BootMarker, deploy: DeploymentMarker) -> HistoryEntry {
@@ -140,10 +119,7 @@ impl HistoryEntry {
             first_boot_timestamp: boot.timestamp,
             last_boot_timestamp: boot.timestamp,
             deploy_timestamp: deploy.timestamp,
-            deploy_cmdline: deploy
-                .cmdline
-                .map(|s| s.into_raw())
-                .unwrap_or(ptr::null_mut()),
+            deploy_cmdline: deploy.cmdline.map(|s| s.clone()).unwrap_or_default(),
             boot_count: 1,
             eof: false,
         }
@@ -155,7 +131,7 @@ impl HistoryEntry {
             first_boot_timestamp: 0,
             last_boot_timestamp: 0,
             deploy_timestamp: 0,
-            deploy_cmdline: ptr::null_mut(),
+            deploy_cmdline: "".to_string(),
             boot_count: 0,
         }
     }
@@ -215,8 +191,8 @@ fn history_get_oldest_deployment_msg_timestamp() -> Result<Option<u64>> {
 
 /// Gets the oldest deployment message in the journal, and nuke all the GVariant data files
 /// that correspond to deployments older than that one. Essentially, this binds pruning to
-/// journal pruning. Called from C through `ror_history_prune()`.
-fn history_prune() -> Result<()> {
+/// journal pruning.
+fn history_prune_inner() -> Result<()> {
     if !Path::new(RPMOSTREE_HISTORY_DIR).exists() {
         return Ok(());
     }
@@ -250,8 +226,16 @@ fn history_prune() -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn history_prune() -> CxxResult<()> {
+    Ok(history_prune_inner().context("Failed to prune history")?)
+}
+
+pub(crate) fn history_ctx_new() -> CxxResult<Box<HistoryCtx>> {
+    Ok(HistoryCtx::new_boxed()?)
+}
+
 impl HistoryCtx {
-    /// Create a new context object. Called from C through `ror_history_ctx_new()`.
+    /// Create a new context object.
     fn new_boxed() -> Result<Box<HistoryCtx>> {
         let mut journal = journal_open()?;
         journal.seek(journal::JournalSeek::Tail)?;
@@ -309,9 +293,7 @@ impl HistoryCtx {
                 timestamp,
                 node: DevIno { device, inode },
                 path: path.clone(),
-                cmdline: record
-                    .get("COMMAND_LINE")
-                    .and_then(|s| CString::new(s.as_str()).ok()),
+                cmdline: record.get("COMMAND_LINE").cloned(),
             })));
         }
         Ok(None)
@@ -438,11 +420,10 @@ impl HistoryCtx {
     }
 
     /// Returns the next entry. This is a thin wrapper around `scan_until_next_new_entry`
-    /// that mostly just handles the `Option` -> EOF conversion for the C side. Called from
-    /// C through `ror_history_ctx_next()`.
-    fn next_entry(&mut self) -> Result<HistoryEntry> {
+    /// that mostly just handles the `Option` -> EOF conversion for the C side.
+    pub(crate) fn next_entry(&mut self) -> CxxResult<HistoryEntry> {
         if self.reached_eof {
-            bail!("next_entry() called after having reached EOF!")
+            return Err(anyhow!("next_entry() called after having reached EOF!").into());
         }
 
         match self.scan_until_next_new_entry()? {
@@ -554,7 +535,7 @@ mod tests {
                         first_boot_timestamp: first_boot_timestamp,
                         last_boot_timestamp: last_boot_timestamp,
                         deploy_timestamp: deploy_timestamp,
-                        deploy_cmdline: ptr::null_mut(),
+                        deploy_cmdline: "".to_string(),
                         boot_count: boot_count,
                         eof: false,
                     }
@@ -746,53 +727,3 @@ mod tests {
         ctx.assert_eof();
     }
 }
-
-mod ffi {
-    use super::*;
-    use glib_sys;
-    use libc;
-
-    use crate::ffiutil::*;
-
-    #[no_mangle]
-    pub extern "C" fn ror_history_ctx_new(gerror: *mut *mut glib_sys::GError) -> *mut HistoryCtx {
-        ptr_glib_error(HistoryCtx::new_boxed(), gerror)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_history_ctx_next(
-        hist: *mut HistoryCtx,
-        entry: *mut HistoryEntry,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let hist = ref_from_raw_ptr(hist);
-        let entry = ref_from_raw_ptr(entry);
-        int_glib_error(hist.next_entry().map(|e| *entry = e), gerror)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_history_ctx_free(hist: *mut HistoryCtx) {
-        if hist.is_null() {
-            return;
-        }
-        unsafe {
-            Box::from_raw(hist);
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_history_entry_clear(entry: *mut HistoryEntry) {
-        let entry = ref_from_raw_ptr(entry);
-        if !entry.deploy_cmdline.is_null() {
-            unsafe {
-                CString::from_raw(entry.deploy_cmdline);
-            }
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_history_prune(gerror: *mut *mut glib_sys::GError) -> libc::c_int {
-        int_glib_error(history_prune(), gerror)
-    }
-}
-pub use self::ffi::*;

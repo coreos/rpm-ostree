@@ -301,8 +301,7 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
                              cancellable, error))
     return glnx_prefix_error (error, "cleaning tmp rootfs");
   /* also delete extra history entries */
-  if (!ror_history_prune (error))
-    return glnx_prefix_error (error, "pruning history");
+  rpmostreecxx::history_prune();
 
   /* Regenerate all refs */
   guint n_pkgcache_freed = 0;

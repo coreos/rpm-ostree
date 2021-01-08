@@ -1164,12 +1164,12 @@ static GOptionEntry history_option_entries[] = {
 
 /* Read from history db, sets @out_deployment to NULL on ENOENT. */
 static gboolean
-fetch_history_deployment_gvariant (RORHistoryEntry  *entry,
+fetch_history_deployment_gvariant (const rpmostreecxx::HistoryEntry &entry,
                                    GVariant        **out_deployment,
                                    GError          **error)
 {
   g_autofree char *fn =
-    g_strdup_printf ("%s/%" PRIu64, RPMOSTREE_HISTORY_DIR, entry->deploy_timestamp);
+    g_strdup_printf ("%s/%" PRIu64, RPMOSTREE_HISTORY_DIR, entry.deploy_timestamp);
 
   *out_deployment = NULL;
 
@@ -1203,7 +1203,7 @@ print_timestamp_and_relative (const char* key, guint64 t)
 }
 
 static gboolean
-print_history_entry (RORHistoryEntry  *entry,
+print_history_entry (const rpmostreecxx::HistoryEntry &entry,
                      GError          **error)
 {
   g_autoptr(GVariant) deployment = NULL;
@@ -1212,18 +1212,22 @@ print_history_entry (RORHistoryEntry  *entry,
 
   if (!opt_json)
     {
-      print_timestamp_and_relative ("BootTimestamp", entry->last_boot_timestamp);
-      if (entry->boot_count > 1)
+      print_timestamp_and_relative ("BootTimestamp", entry.last_boot_timestamp);
+      if (entry.boot_count > 1)
         {
           g_print ("%s BootCount: %" PRIu64 "; first booted on ",
-                   libsd_special_glyph (TREE_RIGHT), entry->boot_count);
-          print_timestamp_and_relative (NULL, entry->first_boot_timestamp);
+                   libsd_special_glyph (TREE_RIGHT), entry.boot_count);
+          print_timestamp_and_relative (NULL, entry.first_boot_timestamp);
         }
 
-      print_timestamp_and_relative ("CreateTimestamp", entry->deploy_timestamp);
-      if (entry->deploy_cmdline)
-        g_print ("CreateCommand: %s%s%s\n",
-                 get_bold_start (), entry->deploy_cmdline, get_bold_end ());
+      print_timestamp_and_relative ("CreateTimestamp", entry.deploy_timestamp);
+      if (entry.deploy_cmdline.length() > 0)
+        {
+          // Copy so we can use c_str()
+          auto cmdline_copy = std::string(entry.deploy_cmdline);
+          g_print ("CreateCommand: %s%s%s\n",
+                   get_bold_start (), cmdline_copy.c_str(), get_bold_end ());
+        }
       if (!deployment)
         /* somehow we're missing an entry? XXX: just fallback to checksum, version, refspec
          * from journal entry in this case */
@@ -1248,15 +1252,20 @@ print_history_entry (RORHistoryEntry  *entry,
         }
 
       json_builder_set_member_name (builder, "deployment-create-timestamp");
-      json_builder_add_int_value (builder, entry->deploy_timestamp);
-      json_builder_set_member_name (builder, "deployment-create-command-line");
-      json_builder_add_string_value (builder, entry->deploy_cmdline);
+      json_builder_add_int_value (builder, entry.deploy_timestamp);
+      if (entry.deploy_cmdline.length() > 0)
+        {
+          json_builder_set_member_name (builder, "deployment-create-command-line"); 
+          // Copy so we can use c_str()
+          auto cmdline_copy = std::string(entry.deploy_cmdline);
+          json_builder_add_string_value (builder, cmdline_copy.c_str()); 
+        }
       json_builder_set_member_name (builder, "boot-count");
-      json_builder_add_int_value (builder, entry->boot_count);
+      json_builder_add_int_value (builder, entry.boot_count);
       json_builder_set_member_name (builder, "first-boot-timestamp");
-      json_builder_add_int_value (builder, entry->first_boot_timestamp);
+      json_builder_add_int_value (builder, entry.first_boot_timestamp);
       json_builder_set_member_name (builder, "last-boot-timestamp");
-      json_builder_add_int_value (builder, entry->last_boot_timestamp);
+      json_builder_add_int_value (builder, entry.last_boot_timestamp);
       json_builder_end_object (builder);
 
       glnx_unref_object JsonGenerator *generator = json_generator_new ();
@@ -1298,21 +1307,17 @@ rpmostree_ex_builtin_history (int             argc,
   /* initiate a history context, then iterate over each (boot time, deploy time), then print */
 
   /* XXX: enhance with option for going in reverse (oldest first) */
-  g_autoptr(RORHistoryCtx) history_ctx = ror_history_ctx_new (error);
-  if (!history_ctx)
-    return FALSE;
+  auto history_ctx = rpmostreecxx::history_ctx_new ();
 
   /* XXX: use pager here */
 
   gboolean at_least_one = FALSE;
   while (opt_all || opt_limit--)
     {
-      g_auto(RORHistoryEntry) entry = { 0, };
-      if (!ror_history_ctx_next (history_ctx, &entry, error))
-        return FALSE;
+      auto entry = history_ctx->next_entry();
       if (entry.eof)
         break;
-      if (!print_history_entry (&entry, error))
+      if (!print_history_entry (entry, error))
         return FALSE;
       at_least_one = TRUE;
     }
