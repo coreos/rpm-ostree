@@ -84,6 +84,7 @@ mod ffi {
     // utils.rs
     extern "Rust" {
         fn varsubstitute(s: &str, vars: &Vec<StringMapping>) -> Result<String>;
+        fn get_features() -> Vec<String>;
     }
 
     #[derive(Default)]

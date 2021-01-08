@@ -294,3 +294,10 @@ pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> R
     let m = subs.iter().cloned().map(|i| (i.k, i.v)).collect();
     varsubst(s, &m)
 }
+
+pub(crate) fn get_features() -> Vec<String> {
+    let mut r = Vec::new();
+    #[cfg(feature = "fedora-integration")]
+    r.push("fedora-integration".to_string());
+    r
+}
