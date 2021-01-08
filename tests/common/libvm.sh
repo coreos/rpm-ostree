@@ -705,8 +705,7 @@ vm_ostree_repo_commit_layered_as_base() {
   vm_shell_inline_sysroot_rw <<EOF
   ostree checkout --repo=$repo -H --fsync=no $from_rev $d
   # need to update the base rpmdb
-  mkdir -p $d/usr/lib/sysimage/rpm-ostree-base-db
-  rsync -qa --delete $d/usr/share/rpm/ $d/usr/lib/sysimage/rpm-ostree-base-db
+  rsync -qIa --delete $d/usr/share/rpm/ $d/usr/lib/sysimage/rpm-ostree-base-db/
   ostree commit --repo=$repo -b $to_ref --link-checkout-speedup --fsync=no --consume $d
   # and inject pkglist metadata
   rpm-ostree testutils inject-pkglist $repo $to_ref >/dev/null
