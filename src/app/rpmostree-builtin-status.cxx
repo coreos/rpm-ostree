@@ -287,13 +287,7 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
 
   g_print ("State: %s\n", txn_proxy ? "busy" : "idle");
 
-  /* this is a bit of a hack; it's just to avoid duplicating this logic Rust side */
-  g_print ("%s%s", get_red_start (), get_bold_start ());
-  g_autoptr(GError) local_error = NULL;
-  if (!ror_journal_print_staging_failure (&local_error))
-    /* let's not make it fatal if somehow this fails */
-    g_print ("Warning: failed to query journal: %s\n", local_error->message);
-  g_print ("%s%s", get_bold_end (), get_red_end ());
+  rpmostreecxx::journal_print_staging_failure ();
 
   if (g_str_equal (policy, "none"))
     {
