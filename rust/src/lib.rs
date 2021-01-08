@@ -62,6 +62,11 @@ mod ffi {
         ) -> Result<i32>;
     }
 
+    // journal.rs
+    extern "Rust" {
+        fn journal_print_staging_failure();
+    }
+
     // scripts.rs
     extern "Rust" {
         fn script_is_ignored(pkg: &str, script: &str) -> bool;
@@ -116,7 +121,7 @@ use crate::core::*;
 mod history;
 pub use self::history::*;
 mod journal;
-pub use self::journal::*;
+pub(crate) use self::journal::*;
 mod initramfs;
 pub(crate) use self::initramfs::*;
 mod lockfile;

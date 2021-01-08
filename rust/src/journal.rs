@@ -25,7 +25,7 @@ fn print_staging_failure_msg(msg: Option<&str>) -> Result<()> {
 }
 
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.
-fn journal_print_staging_failure() -> Result<()> {
+fn impl_journal_print_staging_failure() -> Result<()> {
     let mut j = journal::OpenOptions::default()
         .system(true)
         .local_only(true)
@@ -138,18 +138,9 @@ fn journal_print_staging_failure() -> Result<()> {
     print_staging_failure_msg(None)
 }
 
-mod ffi {
-    use super::*;
-    use glib_sys;
-    use libc;
-
-    use crate::ffiutil::*;
-
-    #[no_mangle]
-    pub extern "C" fn ror_journal_print_staging_failure(
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        int_glib_error(journal_print_staging_failure(), gerror)
+pub(crate) fn journal_print_staging_failure() {
+    if let Err(e) = impl_journal_print_staging_failure() {
+        // Let's not make this fatal
+        eprintln!("warning: Failed to query journal: {}", e);
     }
 }
-pub use self::ffi::*;
