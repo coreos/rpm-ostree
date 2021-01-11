@@ -180,6 +180,19 @@ mod ffi {
     extern "Rust" {
         fn countme_entrypoint(argv: Vec<String>) -> Result<()>;
     }
+
+    // extensions.rs
+    extern "Rust" {
+        type Extensions;
+        fn extensions_load(
+            path: &str,
+            basearch: &str,
+            base_pkgs: &Vec<StringMapping>,
+        ) -> Result<Box<Extensions>>;
+        fn get_packages(&self) -> Vec<String>;
+        fn state_checksum_changed(&self, chksum: &str, output_dir: &str) -> Result<bool>;
+        fn update_state_checksum(&self, chksum: &str, output_dir: &str) -> Result<()>;
+    }
 }
 
 mod client;
@@ -193,6 +206,8 @@ pub(crate) use composepost::*;
 mod core;
 use crate::core::*;
 mod dirdiff;
+mod extensions;
+pub(crate) use extensions::*;
 #[cfg(feature = "fedora-integration")]
 mod fedora_integration;
 mod history;
