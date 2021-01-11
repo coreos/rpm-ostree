@@ -96,7 +96,7 @@ mod ffi {
         commit: String,
     }
 
-    // livefs.rs
+    // live.rs
     extern "Rust" {
         fn get_live_apply_state(
             sysroot: Pin<&mut OstreeSysroot>,
@@ -107,7 +107,7 @@ mod ffi {
             deployment: Pin<&mut OstreeDeployment>,
         ) -> Result<bool>;
         // FIXME/cxx make this Option<&str>
-        fn transaction_livefs(sysroot: Pin<&mut OstreeSysroot>, target: &str) -> Result<()>;
+        fn transaction_apply_live(sysroot: Pin<&mut OstreeSysroot>, target: &str) -> Result<()>;
     }
 }
 
@@ -129,8 +129,8 @@ mod initramfs;
 pub(crate) use self::initramfs::*;
 mod lockfile;
 pub use self::lockfile::*;
-mod livefs;
-pub(crate) use self::livefs::*;
+mod live;
+pub(crate) use self::live::*;
 // An origin parser in Rust but only built when testing until
 // we're ready to try porting the C++ code.
 #[cfg(test)]
