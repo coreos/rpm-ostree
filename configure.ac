@@ -5,7 +5,7 @@ dnl
 m4_define([year_version], [2020])
 m4_define([release_version], [10])
 m4_define([package_version], [year_version.release_version])
-AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
+AC_INIT([rpm-ostree], [package_version], [coreos@lists.fedoraproject.org])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([buildutil])
 AC_CONFIG_AUX_DIR([build-aux])
