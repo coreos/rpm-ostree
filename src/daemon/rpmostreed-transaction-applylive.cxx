@@ -76,7 +76,7 @@ livefs_transaction_execute (RpmostreedTransaction *transaction,
 
   /* Run the transaction */
   try {
-    rpmostreecxx::transaction_livefs(*sysroot, target ?: "");
+    rpmostreecxx::transaction_apply_live(*sysroot, target ?: "");
   } catch (std::exception& e) {
     (void) rpmostree_syscore_bump_mtime (sysroot, NULL);
     throw;

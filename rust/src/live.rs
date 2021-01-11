@@ -1,4 +1,4 @@
-//! Core implementation logic for "livefs" which applies
+//! Core implementation logic for "apply-live" which applies
 //! changes to an overlayfs on top of `/usr` in the booted
 //! deployment.
 /*
@@ -26,9 +26,9 @@ use std::process::Command;
 /// access it.
 const OSTREE_RUNSTATE_DIR: &str = "/run/ostree/deployment-state";
 /// Filename we use for serialized state, stored in the above directory.
-const LIVEFS_STATE_NAME: &str = "rpmostree-livefs-state.json";
+const LIVE_STATE_NAME: &str = "rpmostree-live-state.json";
 
-/// The model for livefs state.  This representation is
+/// The model for live state.  This representation is
 /// just used "on disk" right now because
 /// TODO(cxx-rs) doesn't support Option<T>
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -36,7 +36,7 @@ struct LiveApplyStateSerialized {
     /// The OSTree commit that the running root filesystem is using,
     /// as distinct from the one it was booted with.
     commit: Option<String>,
-    /// Set when a livefs operation is in progress; if the process
+    /// Set when an apply-live operation is in progress; if the process
     /// is interrupted, some files from this commit may exist
     /// on disk but in an incomplete state.
     inprogress: Option<String>,
@@ -72,10 +72,10 @@ fn get_runstate_dir(deploy: &ostree::Deployment) -> PathBuf {
     .into()
 }
 
-/// Get the livefs state
-fn get_livefs_state(deploy: &ostree::Deployment) -> Result<Option<LiveApplyState>> {
+/// Get the live state
+fn get_live_state(deploy: &ostree::Deployment) -> Result<Option<LiveApplyState>> {
     let root = openat::Dir::open("/")?;
-    if let Some(f) = root.open_file_optional(&get_runstate_dir(deploy).join(LIVEFS_STATE_NAME))? {
+    if let Some(f) = root.open_file_optional(&get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
         let s: LiveApplyStateSerialized = serde_json::from_reader(std::io::BufReader::new(f))?;
         let s = &s;
         Ok(Some(s.into()))
@@ -85,11 +85,11 @@ fn get_livefs_state(deploy: &ostree::Deployment) -> Result<Option<LiveApplyState
 }
 
 /// Write new livefs state
-fn write_livefs_state(deploy: &ostree::Deployment, state: &LiveApplyState) -> Result<()> {
+fn write_live_state(deploy: &ostree::Deployment, state: &LiveApplyState) -> Result<()> {
     let rundir = get_runstate_dir(deploy);
     let rundir = openat::Dir::open(&rundir)?;
     let state: LiveApplyStateSerialized = state.into();
-    rundir.write_file_with(LIVEFS_STATE_NAME, 0o644, |w| -> Result<_> {
+    rundir.write_file_with(LIVE_STATE_NAME, 0o644, |w| -> Result<_> {
         Ok(serde_json::to_writer(w, &state)?)
     })?;
     Ok(())
@@ -180,7 +180,7 @@ fn apply_diff(
 /// We don't try to delete anything yet, because doing so could mess up the actual
 /// `/etc` merge on reboot between the real deployment.  Much of the logic here
 /// is similar to what libostree core does for `/etc` on upgrades.  If we ever
-/// push livefs down into libostree, this logic could be shared.
+/// push apply-live down into libostree, this logic could be shared.
 fn update_etc(
     repo: &ostree::Repo,
     diff: &crate::ostree_diff::FileTreeDiff,
@@ -337,8 +337,8 @@ fn rerun_tmpfiles() -> Result<()> {
     Ok(())
 }
 
-/// Implementation of `rpm-ostree ex livefs`.
-pub(crate) fn transaction_livefs(
+/// Implementation of `rpm-ostree ex apply-live`.
+pub(crate) fn transaction_apply_live(
     mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
     target: &str,
 ) -> Result<()> {
@@ -370,7 +370,7 @@ pub(crate) fn transaction_livefs(
         }
     };
 
-    let state = get_livefs_state(&booted)?;
+    let state = get_live_state(&booted)?;
     if state.is_none() {
         match booted.get_unlocked() {
             DeploymentUnlockedState::None => {
@@ -378,7 +378,7 @@ pub(crate) fn transaction_livefs(
             }
             DeploymentUnlockedState::Transient | DeploymentUnlockedState::Development => {}
             s => {
-                bail!("livefs is incompatible with unlock state: {}", s);
+                bail!("apply-live is incompatible with unlock state: {}", s);
             }
         };
     } else {
@@ -434,7 +434,7 @@ pub(crate) fn transaction_livefs(
 
     // Record that we're targeting this commit
     state.inprogress = target_commit.to_string();
-    write_livefs_state(&booted, &state)?;
+    write_live_state(&booted, &state)?;
 
     // The heart of things: updating the overlayfs on /usr
     apply_diff(repo, &diff, &target_commit, &openat::Dir::open("/usr")?)?;
@@ -452,7 +452,7 @@ pub(crate) fn transaction_livefs(
     // Success! Update the recorded state.
     state.commit = target_commit.to_string();
     state.inprogress = "".to_string();
-    write_livefs_state(&booted, &state)?;
+    write_live_state(&booted, &state)?;
 
     Ok(())
 }
@@ -496,7 +496,7 @@ pub(crate) fn get_live_apply_state(
     mut deployment: Pin<&mut crate::ffi::OstreeDeployment>,
 ) -> Result<LiveApplyState> {
     let deployment = deployment.gobj_wrap();
-    if let Some(state) = get_livefs_state(&deployment)? {
+    if let Some(state) = get_live_state(&deployment)? {
         Ok(state)
     } else {
         Ok(Default::default())

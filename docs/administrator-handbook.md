@@ -134,7 +134,7 @@ command that enables local initramfs generation.
 ### Experimental interface
 
 There is a generic `rpm-ostree ex` command that offers experimental features.
-One of those is `rpm-ostree ex livefs`, which offers the ability to apply
+One of those is `rpm-ostree ex apply-live`, which offers the ability to apply
 changes from the pending deployment to the booted deployment.
 
 See `man rpm-ostree` for more information.
