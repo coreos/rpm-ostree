@@ -83,6 +83,9 @@ static char **opt_lockfiles;
 static gboolean opt_lockfile_strict;
 static char *opt_parent;
 
+static char *opt_extensions_output_dir;
+static char *opt_extensions_base_rev;
+
 /* shared by both install & commit */
 static GOptionEntry common_option_entries[] = {
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
@@ -121,6 +124,14 @@ static GOptionEntry commit_option_entries[] = {
   { "write-composejson-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_composejson_to, "Write JSON to FILE containing information about the compose run", "FILE" },
   { "no-parent", 0, 0, G_OPTION_ARG_NONE, &opt_no_parent, "Always commit without a parent", NULL },
   { "parent", 0, 0, G_OPTION_ARG_STRING, &opt_parent, "Commit with specific parent", "REV" },
+  { NULL }
+};
+
+static GOptionEntry extensions_option_entries[] = {
+  { "output-dir", 0, 0, G_OPTION_ARG_STRING, &opt_extensions_output_dir, "Path to extensions output directory", "PATH" },
+  { "base-rev", 0, 0, G_OPTION_ARG_STRING, &opt_extensions_base_rev, "Base OSTree revision", "REV" },
+  { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+  { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if new extensions were downloaded", "FILE" },
   { NULL }
 };
 
@@ -1427,6 +1438,182 @@ rpmostree_compose_builtin_tree (int             argc,
         return FALSE;
     }
 
+
+  return TRUE;
+}
+
+gboolean
+rpmostree_compose_builtin_extensions (int             argc,
+                                      char          **argv,
+                                      RpmOstreeCommandInvocation *invocation,
+                                      GCancellable   *cancellable,
+                                      GError        **error)
+{
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE EXTYAML");
+  g_option_context_add_main_entries (context, common_option_entries, NULL);
+  g_option_context_add_main_entries (context, extensions_option_entries, NULL);
+
+  if (!rpmostree_option_context_parse (context,
+                                       NULL,
+                                       &argc, &argv,
+                                       invocation,
+                                       cancellable,
+                                       NULL, NULL, NULL, NULL, NULL,
+                                       error))
+    return FALSE;
+
+  if (argc < 3)
+    {
+      rpmostree_usage_error (context, "TREEFILE and EXTYAML must be specified", error);
+      return FALSE;
+    }
+  if (!opt_repo)
+    {
+      rpmostree_usage_error (context, "--repo must be specified", error);
+      return FALSE;
+    }
+  if (!opt_extensions_output_dir)
+    {
+      rpmostree_usage_error (context, "--output-dir must be specified", error);
+      return FALSE;
+    }
+
+  const char *treefile_path = argv[1];
+  const char *extensions_path = argv[2];
+
+  g_autofree char *basearch = rpm_ostree_get_basearch ();
+  g_autoptr(RORTreefile) treefile = ror_treefile_new (treefile_path, basearch, -1, error);
+  if (!treefile)
+    return glnx_prefix_error (error, "Failed to load treefile");
+
+  g_autoptr(OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
+  if (!repo)
+    return FALSE;
+
+  /* this is a similar construction to what's in rpm_ostree_compose_context_new() */
+  g_auto(GLnxTmpDir) cachedir_tmp = { 0, };
+  glnx_autofd int cachedir_dfd = -1;
+  if (opt_cachedir)
+    {
+      if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &cachedir_dfd, error))
+        return glnx_prefix_error (error, "Opening cachedir");
+    }
+  else
+    {
+      if (!glnx_mkdtempat (ostree_repo_get_dfd (repo),
+                           "tmp/rpm-ostree-compose.XXXXXX", 0700,
+                           &cachedir_tmp, error))
+        return FALSE;
+
+      cachedir_dfd = fcntl (cachedir_tmp.fd, F_DUPFD_CLOEXEC, 3);
+      if (cachedir_dfd < 0)
+        return glnx_throw_errno_prefix (error, "fcntl");
+    }
+
+  g_autofree char *base_rev = NULL;
+  if (!ostree_repo_resolve_rev (repo, opt_extensions_base_rev, FALSE, &base_rev, error))
+    return FALSE;
+
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_commit (repo, base_rev, &commit, NULL, error))
+    return FALSE;
+
+  g_autoptr(GPtrArray) packages =
+      rpm_ostree_db_query_all (repo, opt_extensions_base_rev, cancellable, error);
+  if (!packages)
+      return FALSE;
+
+  auto packages_mapping = std::make_unique<rust::Vec<rpmostreecxx::StringMapping>>();
+  for (guint i = 0; i < packages->len; i++)
+    {
+      RpmOstreePackage *pkg = (RpmOstreePackage*)packages->pdata[i];
+      const char *name = rpm_ostree_package_get_name (pkg);
+      const char *evr = rpm_ostree_package_get_evr (pkg);
+      packages_mapping->push_back(rpmostreecxx::StringMapping {k: name, v: evr});
+    }
+
+  auto extensions = rpmostreecxx::extensions_load (extensions_path, basearch, *packages_mapping);
+
+  g_autoptr(RpmOstreeContext) ctx =
+      rpmostree_context_new_tree (cachedir_dfd, repo, cancellable, error);
+  if (!ctx)
+      return FALSE;
+
+  { int tf_dfd = ror_treefile_get_dfd (treefile);
+    g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
+    dnf_context_set_repo_dir (rpmostree_context_get_dnf (ctx), abs_tf_path);
+  }
+
+#define TMP_EXTENSIONS_ROOTFS "rpmostree-extensions.tmp"
+
+  if (!glnx_shutil_rm_rf_at (cachedir_dfd, TMP_EXTENSIONS_ROOTFS, cancellable, error))
+    return FALSE;
+
+  g_print ("Checking out %.7s... ", base_rev);
+  OstreeRepoCheckoutAtOptions opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_USER };
+  if (!ostree_repo_checkout_at (repo, &opts, cachedir_dfd, TMP_EXTENSIONS_ROOTFS,
+                                base_rev, cancellable, error))
+    return FALSE;
+  g_print ("done!\n");
+
+  g_autoptr(RpmOstreeTreespec) spec = NULL;
+  { g_autoptr(GPtrArray) gpkgs = g_ptr_array_new_with_free_func (g_free);
+    auto pkgs = extensions->get_packages();
+    for (auto pkg : pkgs)
+      g_ptr_array_add (gpkgs, (gpointer*) g_strdup (pkg.c_str()));
+    char **repos = ror_treefile_get_repos (treefile);
+    g_autoptr(GKeyFile) treespec = g_key_file_new ();
+    g_key_file_set_string_list (treespec, "tree", "packages",
+                                (const char* const*)gpkgs->pdata, gpkgs->len);
+    g_key_file_set_string_list (treespec, "tree", "repos",
+                                (const char* const*)repos,
+                                g_strv_length (repos));
+    spec = rpmostree_treespec_new_from_keyfile (treespec, NULL);
+  }
+
+  g_autofree char *checkout_path = glnx_fdrel_abspath (cachedir_dfd, TMP_EXTENSIONS_ROOTFS);
+  if (!rpmostree_context_setup (ctx, checkout_path, checkout_path, spec, cancellable, error))
+    return FALSE;
+
+#undef TMP_EXTENSIONS_ROOTFS
+
+  if (!rpmostree_context_prepare (ctx, cancellable, error))
+    return FALSE;
+
+  if (!glnx_shutil_mkdir_p_at (AT_FDCWD, opt_extensions_output_dir, 0755, cancellable, error))
+    return FALSE;
+
+  glnx_autofd int output_dfd = -1;
+  if (!glnx_opendirat (AT_FDCWD, opt_extensions_output_dir, TRUE, &output_dfd, error))
+    return glnx_prefix_error (error, "Opening output dir");
+
+  g_autofree char *state_checksum;
+  if (!rpmostree_context_get_state_sha512 (ctx, &state_checksum, error))
+    return FALSE;
+
+  if (!extensions->state_checksum_changed (state_checksum, opt_extensions_output_dir))
+    {
+      g_print ("No change.\n");
+      return TRUE;
+    }
+
+  if (!rpmostree_context_download (ctx, cancellable, error))
+    return FALSE;
+
+  g_autoptr(GPtrArray) extensions_pkgs = rpmostree_context_get_packages (ctx);
+  for (guint i = 0; i < extensions_pkgs->len; i++)
+    {
+      DnfPackage *pkg = (DnfPackage*)extensions_pkgs->pdata[i];
+      const char *src = dnf_package_get_filename (pkg);
+      const char *basename = glnx_basename (src);
+      if (!glnx_file_copy_at (AT_FDCWD, dnf_package_get_filename (pkg), NULL, output_dfd,
+                              basename, GLNX_FILE_COPY_NOXATTRS, cancellable, error))
+        return FALSE;
+    }
+
+  extensions->update_state_checksum (state_checksum, opt_extensions_output_dir);
+  if (!process_touch_if_changed (error))
+    return FALSE;
 
   return TRUE;
 }

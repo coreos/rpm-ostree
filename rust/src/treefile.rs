@@ -1478,6 +1478,16 @@ mod ffi {
     }
 
     #[no_mangle]
+    pub extern "C" fn ror_treefile_get_repos(tf: *mut Treefile) -> *mut *mut libc::c_char {
+        let tf = ref_from_raw_ptr(tf);
+        if let Some(ref repos) = tf.parsed.repos {
+            repos.to_glib_full()
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[no_mangle]
     pub extern "C" fn ror_treefile_get_ostree_layers(tf: *mut Treefile) -> *mut *mut libc::c_char {
         let tf = ref_from_raw_ptr(tf);
         if let Some(ref layers) = tf.parsed.ostree_layers {

@@ -84,3 +84,36 @@ if ostree rev-parse --repo "${repo}" "${newrev}"^ 2>error.txt; then
 fi
 assert_file_has_content_literal error.txt 'has no parent'
 echo "ok --no-parent"
+
+build_rpm dodo-base
+build_rpm dodo requires dodo-base
+build_rpm solitaire
+
+cat > extensions.yaml << EOF
+extensions:
+  extinct-birds:
+    packages:
+      - dodo
+      - solitaire
+EOF
+
+# we don't actually need root here, but in CI the cache may be in a qcow2 and
+# the supermin code is gated behind `runasroot`
+runasroot rpm-ostree compose extensions --repo=${repo} \
+  --cachedir=${test_tmpdir}/cache --base-rev ${treeref} \
+  --output-dir extensions ${treefile} extensions.yaml \
+  --touch-if-changed extensions-changed
+
+ls extensions/{dodo-1.0,dodo-base-1.0,solitaire-1.0}-*.rpm
+test -f extensions-changed
+echo "ok extensions"
+
+rm extensions-changed
+runasroot rpm-ostree compose extensions --repo=${repo} \
+  --cachedir=${test_tmpdir}/cache --base-rev ${treeref} \
+  --output-dir extensions ${treefile} extensions.yaml \
+  --touch-if-changed extensions-changed
+if test -f extensions-changed; then
+  fatal "found extensions-changed"
+fi
+echo "ok extensions no change"
