@@ -187,6 +187,7 @@ rpmostree_context_set_vlockmap (RpmOstreeContext *self,
                                 gboolean          strict);
 
 gboolean rpmostree_context_download (RpmOstreeContext *self,
+                                     const char       *target_dir,
                                      GCancellable     *cancellable,
                                      GError           **error);
 
