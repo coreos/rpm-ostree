@@ -31,8 +31,6 @@ gboolean rpmostree_compose_builtin_rojig (int argc, char **argv, RpmOstreeComman
 gboolean rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
 gboolean rpmostree_compose_builtin_postprocess (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
 gboolean rpmostree_compose_builtin_commit (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
-gboolean rpmostree_compose_builtin_commit2rojig (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
-gboolean rpmostree_compose_builtin_rojig2commit (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
 
 G_END_DECLS
 
