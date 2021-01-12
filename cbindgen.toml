@@ -13,6 +13,9 @@ prefix = "ROR"
 # Here we exclude entries belonging to the C side which we use on the Rust side and so
 # doesn't make sense to re-export.
 exclude = ["RpmOstreeOrigin",
+           "PasswdDB",
+           "rpmostree_add_group_to_hash",
+           "rpmostree_add_passwd_to_hash",
            "rpmostree_get_repodata_chksum_repr",
            "rpmostree_origin_get_live_state" ]
 

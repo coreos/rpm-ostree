@@ -1278,15 +1278,10 @@ rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
   return TRUE;
 }
 
-struct RpmOstreePasswdDB
-{
-  GHashTable *users;
-  GHashTable *groups;
-};
-
-static gboolean
-add_passwd_to_hash (int rootfs_dfd, const char *path,
-                    GHashTable *users, GError **error)
+gboolean
+rpmostree_add_passwd_to_hash (int rootfs_dfd, const char *path,
+                              rpmostreecxx::PasswdDB *db,
+                              GError **error)
 {
   g_autoptr(FILE) src_stream = open_file_stream_read_at (rootfs_dfd, path, error);
   if (!src_stream)
@@ -1302,15 +1297,20 @@ add_passwd_to_hash (int rootfs_dfd, const char *path,
             return glnx_throw_errno_prefix (error, "fgetpwent");
           break;
         }
-      g_hash_table_insert (users, GUINT_TO_POINTER (pw->pw_uid), g_strdup (pw->pw_name));
+      if (pw->pw_name != NULL)
+        {
+          std::string username(pw->pw_name);
+          db->add_user (pw->pw_uid, username);
+        }
     }
 
   return TRUE;
 }
 
-static gboolean
-add_groups_to_hash (int rootfs_dfd, const char *path,
-                   GHashTable *groups, GError **error)
+gboolean
+rpmostree_add_group_to_hash (int rootfs_dfd, const char *path,
+                             rpmostreecxx::PasswdDB *db,
+                             GError **error)
 {
   g_autoptr(FILE) src_stream = open_file_stream_read_at (rootfs_dfd, path, error);
   if (!src_stream)
@@ -1326,48 +1326,12 @@ add_groups_to_hash (int rootfs_dfd, const char *path,
             return glnx_throw_errno_prefix (error, "fgetgrent");
           break;
         }
-      g_hash_table_insert (groups, GUINT_TO_POINTER (gr->gr_gid), g_strdup (gr->gr_name));
+      if (gr->gr_name != NULL)
+        {
+          std::string groupname(gr->gr_name);
+          db->add_group (gr->gr_gid, groupname);
+        }
     }
 
   return TRUE;
-}
-
-RpmOstreePasswdDB *
-rpmostree_passwddb_open (int rootfs, GCancellable *cancellable, GError **error)
-{
-  g_autoptr(RpmOstreePasswdDB) ret = g_new0 (RpmOstreePasswdDB, 1);
-  ret->users = g_hash_table_new_full (NULL, NULL, NULL, g_free);
-  ret->groups = g_hash_table_new_full (NULL, NULL, NULL, g_free);
-
-  if (!add_passwd_to_hash (rootfs, "usr/etc/passwd", ret->users, error))
-    return NULL;
-  if (!add_passwd_to_hash (rootfs, "usr/lib/passwd", ret->users, error))
-    return NULL;
-
-  if (!add_groups_to_hash (rootfs, "usr/etc/group", ret->groups, error))
-    return NULL;
-  if (!add_groups_to_hash (rootfs, "usr/lib/group", ret->groups, error))
-    return NULL;
-
-  return util::move_nullify (ret);
-}
-
-const char *
-rpmostree_passwddb_lookup_user (RpmOstreePasswdDB *db, uid_t uid)
-{
-  return static_cast<const char*>(g_hash_table_lookup (db->users, GUINT_TO_POINTER (uid)));
-}
-
-const char *
-rpmostree_passwddb_lookup_group (RpmOstreePasswdDB *db, gid_t gid)
-{
-  return static_cast<const char*>(g_hash_table_lookup (db->groups, GUINT_TO_POINTER (gid)));
-}
-
-void
-rpmostree_passwddb_free (RpmOstreePasswdDB *db)
-{
-  g_hash_table_unref (db->users);
-  g_hash_table_unref (db->groups);
-  g_free (db);
 }

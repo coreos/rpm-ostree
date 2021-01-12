@@ -23,6 +23,7 @@
 #include <ostree.h>
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 G_BEGIN_DECLS
 
