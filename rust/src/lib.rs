@@ -72,6 +72,11 @@ mod ffi {
         fn script_is_ignored(pkg: &str, script: &str) -> bool;
     }
 
+    // testutils.rs
+    extern "Rust" {
+        fn testutils_entrypoint(argv: Vec<String>) -> Result<()>;
+    }
+
     /// Currently cxx-rs doesn't support mappings; like probably most projects,
     /// by far our most common case is a mapping from string -> string and since
     /// our data sizes aren't large, we serialize this as a vector of strings pairs.
@@ -158,7 +163,7 @@ pub use self::progress::*;
 mod scripts;
 pub(crate) use self::scripts::*;
 mod testutils;
-pub use self::testutils::*;
+pub(crate) use self::testutils::*;
 mod treefile;
 pub use self::treefile::*;
 mod utils;
