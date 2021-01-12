@@ -7,6 +7,7 @@
 use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::io::prelude::*;
+use std::os::unix::io::IntoRawFd;
 use std::path::Path;
 use std::{fs, io};
 use tempfile;
@@ -300,4 +301,23 @@ pub(crate) fn get_features() -> Vec<String> {
     #[cfg(feature = "fedora-integration")]
     r.push("fedora-integration".to_string());
     r
+}
+
+/// Create a fully sealed "memfd" (memory file descriptor) from an array of bytes.
+/// For more information see https://docs.rs/memfd/0.3.0/memfd/ and
+/// `man memfd_create`.
+pub(crate) fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32> {
+    let mfd = memfd::MemfdOptions::default()
+        .allow_sealing(true)
+        .close_on_exec(true)
+        .create(description)?;
+    mfd.as_file().set_len(content.len() as u64)?;
+    mfd.as_file().write_all(content)?;
+    let mut seals = memfd::SealsHashSet::new();
+    seals.insert(memfd::FileSeal::SealShrink);
+    seals.insert(memfd::FileSeal::SealGrow);
+    seals.insert(memfd::FileSeal::SealWrite);
+    seals.insert(memfd::FileSeal::SealSeal);
+    mfd.add_seals(&seals)?;
+    Ok(mfd.into_file().into_raw_fd())
 }

@@ -659,6 +659,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
 
 [[package]]
+name = "memfd"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59c3b335b96d56e116c654a994b2b1b83b4e5b4d0a2a95085fc35464eecf4f03"
+dependencies = [
+ "either",
+ "libc",
+ "thiserror",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1093,6 +1104,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libdnf-sys",
+ "memfd",
  "nix 0.19.1",
  "openat",
  "openat-ext",
