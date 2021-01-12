@@ -77,4 +77,17 @@ rpmostree_deployment_sanitycheck_rpmdb (int           rootfs_fd,
                                         GCancellable *cancellable,
                                         GError      **error);
 
+gboolean
+rpmostree_run_script_in_bwrap_container (int rootfs_fd,
+                               GLnxTmpDir *var_lib_rpm_statedir,
+                               gboolean    enable_fuse,
+                               const char *name,
+                               const char *scriptdesc,
+                               const char *interp,
+                               const char *script,
+                               const char *script_arg,
+                               int         stdin_fd,
+                               GCancellable  *cancellable,
+                               GError       **error);
+
 G_END_DECLS

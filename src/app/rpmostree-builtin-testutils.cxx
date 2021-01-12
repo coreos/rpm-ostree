@@ -28,15 +28,22 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
+#include "rpmostree-scripts.h"
 
-gboolean
-rpmostree_testutils_builtin_inject_pkglist (int argc, char **argv,
-                                            RpmOstreeCommandInvocation *invocation,
-                                            GCancellable *cancellable, GError **error);
+#define BUILTIN(n) \
+  gboolean \
+  rpmostree_testutils_builtin_ ## n (int argc, char **argv, \
+                                     RpmOstreeCommandInvocation *invocation, \
+                                     GCancellable *cancellable, GError **error);
+BUILTIN(inject_pkglist)
+BUILTIN(script_shell)
+#undef BUILTIN
 
 static RpmOstreeCommand testutils_subcommands[] = {
   { "inject-pkglist", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     NULL, rpmostree_testutils_builtin_inject_pkglist },
+  { "script-shell", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    NULL, rpmostree_testutils_builtin_script_shell },
   // Avoid adding other commands here - write them in Rust in testutils.rs
   { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
@@ -47,17 +54,20 @@ rpmostree_builtin_testutils (int argc, char **argv,
                              GCancellable *cancellable, GError **error)
 {
   // See above; avoid adding other commands here - write them in Rust in testutils.rs
-  if (argc >= 2 && g_str_equal (argv[1], "inject-pkglist"))
-    return rpmostree_handle_subcommand (argc, argv, testutils_subcommands,
-                                        invocation, cancellable, error);
-  else
+  if (argc >= 2)
     {
-      rust::Vec<rust::String> rustargv;
-      for (int i = 0; i < argc; i++)
-        rustargv.push_back(std::string(argv[i]));
-      rpmostreecxx::testutils_entrypoint (rustargv);
-      return TRUE;
+      if (g_str_equal (argv[1], "inject-pkglist"))
+        return rpmostree_handle_subcommand (argc, argv, testutils_subcommands,
+                                            invocation, cancellable, error);
+      else if (g_str_equal (argv[1], "script-shell"))
+        return rpmostree_handle_subcommand (argc, argv, testutils_subcommands,
+                                            invocation, cancellable, error);
     }
+  rust::Vec<rust::String> rustargv;
+  for (int i = 0; i < argc; i++)
+    rustargv.push_back(std::string(argv[i]));
+  rpmostreecxx::testutils_entrypoint (rustargv);
+  return TRUE;
 }
 
 /*
@@ -135,4 +145,21 @@ rpmostree_testutils_builtin_inject_pkglist (int argc, char **argv,
 
   g_print("%s => %s\n", refspec, new_checksum);
   return TRUE;
+}
+
+gboolean
+rpmostree_testutils_builtin_script_shell (int argc, char **argv,
+                                          RpmOstreeCommandInvocation *invocation,
+                                          GCancellable *cancellable, GError **error)
+{
+  const char *rootpath = "/";
+  if (argc > 1)
+    rootpath = argv[1];
+  glnx_autofd int rootfs_dfd = -1;
+  if (!glnx_opendirat (AT_FDCWD, rootpath, TRUE, &rootfs_dfd, error))
+    return FALSE;
+
+  return rpmostree_run_script_in_bwrap_container (rootfs_dfd, NULL, TRUE, "testscript",
+                                                  NULL, NULL, NULL, NULL, 
+                                                  STDIN_FILENO, cancellable, error);
 }
