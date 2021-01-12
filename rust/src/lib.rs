@@ -109,6 +109,20 @@ mod ffi {
         // FIXME/cxx make this Option<&str>
         fn transaction_apply_live(sysroot: Pin<&mut OstreeSysroot>, target: &str) -> Result<()>;
     }
+
+    // passwd.rs
+    extern "Rust" {
+        fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>>;
+
+        type PasswdDB;
+        fn add_user(self: &mut PasswdDB, uid: u32, username: &str);
+        fn lookup_user(self: &PasswdDB, uid: u32) -> Result<String>;
+        fn add_group(self: &mut PasswdDB, gid: u32, groupname: &str);
+        fn lookup_group(self: &PasswdDB, gid: u32) -> Result<String>;
+        // TODO(lucab): get rid of the two methods below.
+        fn add_group_content(self: &mut PasswdDB, rootfs: i32, group_path: &str) -> Result<()>;
+        fn add_passwd_content(self: &mut PasswdDB, rootfs: i32, passwd_path: &str) -> Result<()>;
+    }
 }
 
 mod client;
@@ -137,6 +151,8 @@ pub(crate) use self::live::*;
 mod origin;
 mod ostree_diff;
 mod ostree_utils;
+mod passwd;
+use passwd::{passwddb_open, PasswdDB};
 mod progress;
 pub use self::progress::*;
 mod scripts;

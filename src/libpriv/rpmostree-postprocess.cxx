@@ -479,12 +479,12 @@ process_kernel_and_initramfs (int            rootfs_dfd,
 }
 
 static gboolean
-convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
-                                   int            dfd,
-                                   RpmOstreePasswdDB *pwdb,
-                                   GString       *prefix,
-                                   GCancellable  *cancellable,
-                                   GError       **error)
+convert_var_to_tmpfiles_d_recurse (GOutputStream          *tmpfiles_out,
+                                   int                    dfd,
+                                   rpmostreecxx::PasswdDB &pwdb,
+                                   GString                *prefix,
+                                   GCancellable           *cancellable,
+                                   GError                 **error)
 {
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
   gsize bytes_written;
@@ -538,15 +538,11 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
           struct stat stbuf;
           if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
             return FALSE;
-
           g_string_append_printf (tmpfiles_d_buf, " 0%02o", stbuf.st_mode & ~S_IFMT);
-          const char *user = rpmostree_passwddb_lookup_user (pwdb, stbuf.st_uid);
-          if (!user)
-            return glnx_throw (error, "Failed to find user '%u' for %s", stbuf.st_uid, dent->d_name);
-          const char *group = rpmostree_passwddb_lookup_group (pwdb, stbuf.st_gid);
-          if (!group)
-            return glnx_throw (error, "Failed to find group '%u' for %s", stbuf.st_gid, dent->d_name);
-          g_string_append_printf (tmpfiles_d_buf, " %s %s - -", user, group);
+
+          auto username = pwdb.lookup_user (stbuf.st_uid);
+          auto groupname = pwdb.lookup_group (stbuf.st_gid);
+          g_string_append_printf (tmpfiles_d_buf, " %s %s - -", username.c_str(), groupname.c_str());
 
           if (filetype_c == 'd')
             {
@@ -595,9 +591,7 @@ convert_var_to_tmpfiles_d (int            rootfs_dfd,
 {
   GLNX_AUTO_PREFIX_ERROR ("Converting /var to tmpfiles.d", error);
 
-  g_autoptr(RpmOstreePasswdDB) pwdb = rpmostree_passwddb_open (rootfs_dfd, cancellable, error);
-  if (!pwdb)
-    return FALSE;
+  auto pwdb = rpmostreecxx::passwddb_open (rootfs_dfd);
 
   glnx_autofd int var_dfd = -1;
   /* List of files that are known to possibly exist, but in practice
@@ -647,7 +641,7 @@ convert_var_to_tmpfiles_d (int            rootfs_dfd,
     return FALSE;
 
   g_autoptr(GString) prefix = g_string_new ("/var");
-  if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, rootfs_dfd, pwdb, prefix, cancellable, error))
+  if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, rootfs_dfd, *pwdb, prefix, cancellable, error))
     return FALSE;
 
   if (!g_output_stream_close (tmpfiles_out, cancellable, error))

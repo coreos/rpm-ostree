@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+use c_utf8::CUtf8;
 use gio_sys;
 use glib_sys;
 use libc;
@@ -119,6 +120,17 @@ pub(crate) fn ref_from_raw_ptr<T>(p: *mut T) -> &'static mut T {
 // Use e.g. int_glib_error() to map to a plain "int" C return.
 // return a Result (using the std Error).
 // TODO: Try upstreaming this into the glib crate?
+
+/// Convert C results (int + GError convention) to anyhow.
+pub(crate) fn int_gerror_to_result(res: i32, gerror: *mut glib_sys::GError) -> anyhow::Result<()> {
+    if res != 0 {
+        Ok(())
+    } else {
+        assert!(!gerror.is_null(), "invalid failure, NULL Gerror");
+        let err_msg = unsafe { CUtf8::from_ptr((*gerror).message) }?;
+        anyhow::bail!("{}", err_msg)
+    }
+}
 
 pub(crate) fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GError) {
     if gerror.is_null() {

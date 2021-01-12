@@ -25,9 +25,19 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-rust.h"
 
 G_BEGIN_DECLS
+
+gboolean
+rpmostree_add_passwd_to_hash (int rootfs_dfd, const char *path,
+                              rpmostreecxx::PasswdDB *db,
+                              GError **error);
+gboolean
+rpmostree_add_group_to_hash (int rootfs_dfd, const char *path,
+                             rpmostreecxx::PasswdDB *db,
+                             GError **error);
 
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
@@ -68,17 +78,6 @@ rpmostree_passwd_compose_prep (int              rootfs_dfd,
                                const char      *previous_checksum,
                                GCancellable    *cancellable,
                                GError         **error);
-
-typedef struct RpmOstreePasswdDB RpmOstreePasswdDB;
-RpmOstreePasswdDB *
-rpmostree_passwddb_open (int rootfs, GCancellable *cancellable, GError **error);
-const char *
-rpmostree_passwddb_lookup_user (RpmOstreePasswdDB *db, uid_t uid);
-const char *
-rpmostree_passwddb_lookup_group (RpmOstreePasswdDB *db, gid_t gid);
-void
-rpmostree_passwddb_free (RpmOstreePasswdDB *db);
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreePasswdDB, rpmostree_passwddb_free)
 
 gboolean
 rpmostree_passwd_cleanup (int rootfs_dfd, GCancellable *cancellable, GError **error);
