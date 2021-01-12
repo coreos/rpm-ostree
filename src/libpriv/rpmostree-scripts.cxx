@@ -334,8 +334,8 @@ dump_buffered_output_noerr (const char *prefix,
 /* Lowest level script handler in this file; create a bwrap instance and run it
  * synchronously.
  */
-static gboolean
-run_script_in_bwrap_container (int rootfs_fd,
+gboolean
+rpmostree_run_script_in_bwrap_container (int rootfs_fd,
                                GLnxTmpDir *var_lib_rpm_statedir,
                                gboolean    enable_fuse,
                                const char *name,
@@ -348,8 +348,7 @@ run_script_in_bwrap_container (int rootfs_fd,
                                GError       **error)
 {
   gboolean ret = FALSE;
-  const char *pkg_script = glnx_strjoina (name, ".", scriptdesc+1);
-  const char *postscript_name = glnx_strjoina ("/", pkg_script);
+  const char *pkg_script = scriptdesc ? glnx_strjoina (name, ".", scriptdesc+1) : name;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_lib_rpmstate = FALSE;
   gboolean created_run_ostree_booted = FALSE;
@@ -379,8 +378,6 @@ run_script_in_bwrap_container (int rootfs_fd,
       else
         created_var_lib_rpmstate = TRUE;
     }
-
-  /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
 
   /* We just did a ro bind mount over /var above. However we want a writable
    * var/tmp, so we need to tmpfs mount on top of it. See also
@@ -428,7 +425,7 @@ run_script_in_bwrap_container (int rootfs_fd,
   rpmostree_bwrap_setenv (bwrap, "SYSTEMD_OFFLINE", "1");
 
   id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
-  if (debugging_script)
+  if (debugging_script || stdin_fd == STDIN_FILENO)
     {
       rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/bash", NULL);
       rpmostree_bwrap_set_inherit_stdin (bwrap);
@@ -623,7 +620,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
     }
 
   guint64 start_time_ms = g_get_monotonic_time () / 1000;
-  if (!run_script_in_bwrap_container (rootfs_fd, var_lib_rpm_statedir, enable_fuse,
+  if (!rpmostree_run_script_in_bwrap_container (rootfs_fd, var_lib_rpm_statedir, enable_fuse,
                                       dnf_package_get_name (pkg),
                                       rpmscript->desc, interp, script, script_arg,
                                       -1, cancellable, error))
@@ -977,7 +974,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
 
       /* Run it, and log the result */
       guint64 start_time_ms = g_get_monotonic_time () / 1000;
-      if (!run_script_in_bwrap_container (rootfs_fd, NULL, enable_fuse, pkg_name,
+      if (!rpmostree_run_script_in_bwrap_container (rootfs_fd, NULL, enable_fuse, pkg_name,
                                           "%transfiletriggerin", interp, script, NULL,
                                           fileno (tmpf_file), cancellable, error))
         return FALSE;
