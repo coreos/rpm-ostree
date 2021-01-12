@@ -28,6 +28,9 @@
 #include "rpmostree-bwrap.h"
 #include <err.h>
 #include <systemd/sd-journal.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "libglnx.h"
 
 #include "rpmostree-scripts.h"
@@ -350,8 +353,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   gboolean ret = FALSE;
   const char *pkg_script = glnx_strjoina (name, ".", scriptdesc+1);
   const char *postscript_name = glnx_strjoina ("/", pkg_script);
-  const char *postscript_path_container = glnx_strjoina ("/usr", postscript_name);
-  const char *postscript_path_host = postscript_path_container + 1;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_lib_rpmstate = FALSE;
   gboolean created_run_ostree_booted = FALSE;
@@ -365,17 +366,14 @@ run_script_in_bwrap_container (int rootfs_fd,
   const char *id = NULL;
   int fd = -1;
 
-  /* TODO - Create a pipe and send this to bwrap so it's inside the
-   * tmpfs.  Note the +1 on the path to skip the leading /.
-   */
-  if (!glnx_file_replace_contents_at (rootfs_fd, postscript_path_host,
-                                      (guint8*)script, -1,
-                                      GLNX_FILE_REPLACE_NODATASYNC,
-                                      NULL, error))
-    {
-      g_prefix_error (error, "Writing script to %s: ", postscript_path_host);
-      goto out;
-    }
+  glnx_fd_close int script_memfd = memfd_create (pkg_script, MFD_CLOEXEC | MFD_ALLOW_SEALING);
+  if (script_memfd < 0)
+    return glnx_throw_errno_prefix (error, "memfd_create");
+  if (glnx_loop_write (script_memfd, (guint8*)script, strlen (script)) < 0)
+    return glnx_throw_errno_prefix (error, "Failed to write to memfd");
+  const int seals = (F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_WRITE);
+  if (fcntl (script_memfd, F_ADD_SEALS, seals) == -1)
+    return glnx_throw_errno_prefix (error, "fcntl(sealing)");
 
   /* And similarly for /var/lib/rpm-state */
   if (var_lib_rpm_statedir)
@@ -497,9 +495,12 @@ run_script_in_bwrap_container (int rootfs_fd,
           g_strfreev (trace_argv);
         }
 
+      const int script_child_fd = 5;
+      rpmostree_bwrap_take_fd (bwrap, glnx_steal_fd (&script_memfd), script_child_fd);
+      g_autofree char *procpath = g_strdup_printf ("/proc/self/fd/%d", script_child_fd);
       rpmostree_bwrap_append_child_argv (bwrap,
                                          interp,
-                                         postscript_path_container,
+                                         procpath,
                                          script_arg,
                                          NULL);
     }
@@ -524,7 +525,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   ret = TRUE;
  out:
   glnx_tmpfile_clear (&buffered_output);
-  (void) unlinkat (rootfs_fd, postscript_path_host, 0);
   if (created_var_lib_rpmstate)
     (void) unlinkat (rootfs_fd, "var/lib/rpm-state", AT_REMOVEDIR);
   if (created_run_ostree_booted)
