@@ -350,8 +350,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   gboolean ret = FALSE;
   const char *pkg_script = glnx_strjoina (name, ".", scriptdesc+1);
   const char *postscript_name = glnx_strjoina ("/", pkg_script);
-  const char *postscript_path_container = glnx_strjoina ("/usr", postscript_name);
-  const char *postscript_path_host = postscript_path_container + 1;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_lib_rpmstate = FALSE;
   gboolean created_run_ostree_booted = FALSE;
@@ -364,18 +362,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   GLnxTmpfile buffered_output = { 0, };
   const char *id = NULL;
   int fd = -1;
-
-  /* TODO - Create a pipe and send this to bwrap so it's inside the
-   * tmpfs.  Note the +1 on the path to skip the leading /.
-   */
-  if (!glnx_file_replace_contents_at (rootfs_fd, postscript_path_host,
-                                      (guint8*)script, -1,
-                                      GLNX_FILE_REPLACE_NODATASYNC,
-                                      NULL, error))
-    {
-      g_prefix_error (error, "Writing script to %s: ", postscript_path_host);
-      goto out;
-    }
 
   /* And similarly for /var/lib/rpm-state */
   if (var_lib_rpm_statedir)
@@ -453,6 +439,9 @@ run_script_in_bwrap_container (int rootfs_fd,
                                      .stdout_fd = -1,
                                      .stderr_fd = -1, };
 
+      rust::Slice<const uint8_t> scriptslice{(guint8*)script, strlen (script)};
+      glnx_fd_close int script_memfd = rpmostreecxx::sealed_memfd (pkg_script, scriptslice);
+
       /* Only try to log to the journal if we're already set up that way (normally
        * rpm-ostreed for host system management). Otherwise we might be in a Docker
        * container, or directly on a host system being executed unprivileged
@@ -497,9 +486,12 @@ run_script_in_bwrap_container (int rootfs_fd,
           g_strfreev (trace_argv);
         }
 
+      const int script_child_fd = 5;
+      rpmostree_bwrap_take_fd (bwrap, glnx_steal_fd (&script_memfd), script_child_fd);
+      g_autofree char *procpath = g_strdup_printf ("/proc/self/fd/%d", script_child_fd);
       rpmostree_bwrap_append_child_argv (bwrap,
                                          interp,
-                                         postscript_path_container,
+                                         procpath,
                                          script_arg,
                                          NULL);
     }
@@ -524,7 +516,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   ret = TRUE;
  out:
   glnx_tmpfile_clear (&buffered_output);
-  (void) unlinkat (rootfs_fd, postscript_path_host, 0);
   if (created_var_lib_rpmstate)
     (void) unlinkat (rootfs_fd, "var/lib/rpm-state", AT_REMOVEDIR);
   if (created_run_ostree_booted)
