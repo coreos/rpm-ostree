@@ -32,6 +32,7 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree.h"
 #include "rpmostree-core.h"
@@ -123,14 +124,7 @@ rpmostree_builtin_shlib_backend (int             argc,
   else
     return glnx_throw (error, "unknown shlib-backend %s", arg);
 
-  glnx_fd_close int ret_memfd = memfd_create ("rpm-ostree-shlib-backend", MFD_CLOEXEC | MFD_ALLOW_SEALING);
-  if (ret_memfd < 0)
-    return glnx_throw_errno_prefix (error, "memfd_create");
-  if (glnx_loop_write (ret_memfd, g_variant_get_data (ret), g_variant_get_size (ret)) < 0)
-    return glnx_throw_errno_prefix (error, "Failed to write to memfd");
-  const int seals = (F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_WRITE);
-  if (fcntl (ret_memfd, F_ADD_SEALS, seals) == -1)
-    return glnx_throw_errno_prefix (error, "fcntl(sealing)");
-
+  rust::Slice<const uint8_t> dataslice{(guint8*)g_variant_get_data (ret), g_variant_get_size (ret)};
+  glnx_fd_close int ret_memfd = rpmostreecxx::sealed_memfd("rpm-ostree-shlib-backend", dataslice);
   return send_memfd_result (ipc_sock, glnx_steal_fd (&ret_memfd), error);
 }

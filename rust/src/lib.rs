@@ -90,6 +90,7 @@ mod ffi {
     extern "Rust" {
         fn varsubstitute(s: &str, vars: &Vec<StringMapping>) -> Result<String>;
         fn get_features() -> Vec<String>;
+        fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32>;
     }
 
     #[derive(Default)]
