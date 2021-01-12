@@ -58,6 +58,7 @@ fn impl_journal_print_staging_failure() -> Result<()> {
     // look for OSTree's finalization msg
     // NB: we avoid using _SYSTEMD_UNIT here because it's not fully reliable (at least on el7)
     // see: https://github.com/systemd/systemd/issues/2913
+    j.match_add("_UID", "0")?;
     j.match_add("MESSAGE_ID", OSTREE_DEPLOYMENT_FINALIZING_MSG_ID)?;
     j.match_add("SYSLOG_IDENTIFIER", "ostree")?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
@@ -71,6 +72,7 @@ fn impl_journal_print_staging_failure() -> Result<()> {
 
     // and now check if it actually completed the transaction
     j.match_flush()?;
+    j.match_add("_UID", "0")?;
     j.match_add("MESSAGE_ID", OSTREE_DEPLOYMENT_COMPLETE_MSG_ID)?;
     j.match_add("SYSLOG_IDENTIFIER", "ostree")?;
     j.match_add("_PID", ostree_pid.as_str())?;
@@ -119,6 +121,7 @@ fn impl_journal_print_staging_failure() -> Result<()> {
 
     // just find the last msg from ostree, it's probably an error msg
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
+    j.match_add("_UID", "0")?;
     j.match_add("SYSLOG_IDENTIFIER", "ostree")?;
     j.match_add("_PID", ostree_pid.as_str())?;
     // otherwise we risk matching the finalization msg (journal transport), which on el7
