@@ -27,6 +27,7 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 gboolean
 rpmostree_testutils_builtin_inject_pkglist (int argc, char **argv,
@@ -51,11 +52,11 @@ rpmostree_builtin_testutils (int argc, char **argv,
                                         invocation, cancellable, error);
   else
     {
-        g_autoptr(GPtrArray) args = g_ptr_array_new ();
-        for (int i = 0; i < argc; i++)
-          g_ptr_array_add (args, argv[i]);
-        g_ptr_array_add (args, NULL);
-        return ror_testutils_entrypoint ((char**)args->pdata, error);
+      rust::Vec<rust::String> rustargv;
+      for (int i = 0; i < argc; i++)
+        rustargv.push_back(std::string(argv[i]));
+      rpmostreecxx::testutils_entrypoint (rustargv);
+      return TRUE;
     }
 }
 

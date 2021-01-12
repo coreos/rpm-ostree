@@ -208,28 +208,10 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     Ok(())
 }
 
-fn testutils_main(args: &[String]) -> Result<()> {
+pub(crate) fn testutils_entrypoint(args: Vec<String>) -> Result<()> {
     let opt = Opt::from_iter(args.iter());
     match opt {
         Opt::GenerateSyntheticUpgrade(ref opts) => update_os_tree(opts)?,
     };
     Ok(())
 }
-
-mod ffi {
-    use super::*;
-    use glib_sys;
-    use libc;
-
-    use crate::ffiutil::*;
-
-    #[no_mangle]
-    pub extern "C" fn ror_testutils_entrypoint(
-        argv: *mut *mut libc::c_char,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let v: Vec<String> = unsafe { glib::translate::FromGlibPtrContainer::from_glib_none(argv) };
-        int_glib_error(testutils_main(&v), gerror)
-    }
-}
-pub use self::ffi::*;
