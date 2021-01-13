@@ -86,6 +86,7 @@ vm_build_rpm test-livefs-with-etc \
   build 'echo "A config file for %{name}" > %{name}.conf' \
   install 'mkdir -p %{buildroot}/etc
            install %{name}.conf %{buildroot}/etc
+           echo otherconf > %{buildroot}/etc/%{name}-other.conf
            mkdir -p %{buildroot}/etc/%{name}/
            echo subconfig-one > %{buildroot}/etc/%{name}/subconfig-one.conf
            echo subconfig-two > %{buildroot}/etc/%{name}/subconfig-two.conf
@@ -94,6 +95,7 @@ vm_build_rpm test-livefs-with-etc \
            mkdir -p %{buildroot}/etc/opt
            echo file-in-opt-subdir > %{buildroot}/etc/opt/%{name}-opt.conf' \
   files "/etc/%{name}.conf
+         /etc/%{name}-other.conf
          /etc/%{name}/*
          /etc/opt/%{name}*"
 
@@ -111,13 +113,18 @@ vm_build_rpm test-livefs-service \
 vm_cmd rm -rf /etc/test-livefs-with-etc \
               /etc/test-livefs-with-etc.conf \
               /etc/opt/test-livefs-with-etc-opt.conf
+# But test with a modified config file
+vm_cmd echo myconfig \> /etc/test-livefs-with-etc-other.conf
+vm_cmd grep myconfig /etc/test-livefs-with-etc-other.conf
 
 vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-{with-etc,service}-1.0-1.x86_64.rpm
-vm_rpmostree ex livefs
+vm_rpmostree ex apply-live
 vm_cmd rpm -q bar test-livefs-{with-etc,service} > rpmq.txt
 assert_file_has_content rpmq.txt bar-1.0-1 test-livefs-{with-etc,service}-1.0-1
 vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
 assert_file_has_content test-livefs-with-etc.conf "A config file for test-livefs-with-etc"
+vm_cmd cat /etc/test-livefs-with-etc-other.conf > conf
+assert_file_has_content conf myconfig
 for v in subconfig-one subconfig-two subdir/subconfig-three; do
     vm_cmd cat /etc/test-livefs-with-etc/${v}.conf > test-livefs-with-etc.conf
     assert_file_has_content_literal test-livefs-with-etc.conf $(basename $v)

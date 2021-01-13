@@ -9,6 +9,7 @@ use gio::prelude::*;
 use ostree::RepoFileExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use std::fmt;
 
 /// Like `g_file_query_info()`, but return None if the target doesn't exist.
 fn query_info_optional(
@@ -51,6 +52,21 @@ pub(crate) struct FileTreeDiff {
     pub(crate) changed_files: FileSet,
     /// Directories that changed mode/permissions
     pub(crate) changed_dirs: FileSet,
+}
+
+impl fmt::Display for FileTreeDiff {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "files(added:{} removed:{} changed:{}) dirs(added:{} removed:{} changed:{})",
+            self.added_files.len(),
+            self.removed_files.len(),
+            self.changed_files.len(),
+            self.added_dirs.len(),
+            self.removed_dirs.len(),
+            self.changed_dirs.len()
+        )
+    }
 }
 
 fn diff_recurse(
