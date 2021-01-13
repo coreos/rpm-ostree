@@ -139,6 +139,7 @@ mod composepost;
 pub(crate) use composepost::*;
 mod core;
 use crate::core::*;
+mod dirdiff;
 #[cfg(feature = "fedora-integration")]
 mod fedora_integration;
 mod history;

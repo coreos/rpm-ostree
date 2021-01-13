@@ -184,6 +184,7 @@ fn apply_diff(
 fn update_etc(
     repo: &ostree::Repo,
     diff: &crate::ostree_diff::FileTreeDiff,
+    config_diff: &crate::dirdiff::Diff,
     sepolicy: &ostree::SePolicy,
     commit: &str,
     destdir: &openat::Dir,
@@ -191,12 +192,14 @@ fn update_etc(
     let expected_subpath = "/usr";
     // We stripped both /usr and /etc, we need to readd them both
     // for the checkout.
-    fn filtermap_paths(s: &String) -> Option<(Option<PathBuf>, &Path)> {
-        s.strip_prefix("/etc").map(|p| {
-            let p = Path::new(p).strip_prefix("/").expect("prefix");
-            (Some(Path::new("/usr/etc").join(p)), p)
-        })
-    }
+    let filtermap_paths = |s: &String| -> Option<(Option<PathBuf>, PathBuf)> {
+        s.strip_prefix("/etc/")
+            .filter(|p| !config_diff.contains(p))
+            .map(|p| {
+                let p = Path::new(p);
+                (Some(Path::new("/usr/etc").join(p)), p.into())
+            })
+    };
     // For some reason in Rust the `parent()` of `foo` is just the empty string `""`; we
     // need it to be the self-link `.` path.
     fn canonicalized_parent(p: &Path) -> &Path {
@@ -234,7 +237,7 @@ fn update_etc(
         repo.checkout_at(
             Some(&opts),
             destdir.as_raw_fd(),
-            target,
+            &target,
             commit,
             cancellable,
         )
@@ -245,7 +248,7 @@ fn update_etc(
         repo.checkout_at(
             Some(&opts),
             destdir.as_raw_fd(),
-            canonicalized_parent(target),
+            canonicalized_parent(&target),
             commit,
             cancellable,
         )
@@ -257,7 +260,7 @@ fn update_etc(
         repo.checkout_at(
             Some(&opts),
             destdir.as_raw_fd(),
-            canonicalized_parent(target),
+            canonicalized_parent(&target),
             commit,
             cancellable,
         )
@@ -277,7 +280,7 @@ fn update_etc(
         .filter_map(filtermap_paths)
         .try_for_each(|(_, target)| -> Result<()> {
             destdir
-                .remove_all(target)
+                .remove_all(&target)
                 .with_context(|| format!("Failed to remove {:?}", target))?;
             Ok(())
         })?;
@@ -426,6 +429,7 @@ pub(crate) fn transaction_apply_live(
         .unwrap_or(booted_commit);
     let diff = crate::ostree_diff::diff(repo, source_commit, &target_commit, Some("/usr"))
         .context("Failed computing diff")?;
+    println!("Computed /usr diff: {}", &diff);
 
     let mut state = state.unwrap_or_default();
 
@@ -436,6 +440,15 @@ pub(crate) fn transaction_apply_live(
     state.inprogress = target_commit.to_string();
     write_live_state(&booted, &state)?;
 
+    // Gather the current diff of /etc - we need to avoid changing
+    // any files which are locally modified.
+    let config_diff = {
+        let usretc = &rootfs_dfd.sub_dir("usr/etc")?;
+        let etc = &rootfs_dfd.sub_dir("etc")?;
+        crate::dirdiff::diff(usretc, etc)?
+    };
+    println!("Computed /etc diff: {}", &config_diff);
+
     // The heart of things: updating the overlayfs on /usr
     apply_diff(repo, &diff, &target_commit, &openat::Dir::open("/usr")?)?;
 
@@ -443,6 +456,7 @@ pub(crate) fn transaction_apply_live(
     update_etc(
         repo,
         &diff,
+        &config_diff,
         &sepolicy,
         &target_commit,
         &openat::Dir::open("/etc")?,
