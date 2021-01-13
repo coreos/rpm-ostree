@@ -1,9 +1,0 @@
-site_name: rpm-ostree
-pages:
-  - Home: 'index.md'
-  - Contributing: 'CONTRIBUTING.md'
-  - Manual:
-      - Background: 'manual/background.md'
-      - Client Administration: 'manual/administrator-handbook.md'
-      - Compose Server: 'manual/compose-server.md'
-      - Treefile: 'manual/treefile.md'
