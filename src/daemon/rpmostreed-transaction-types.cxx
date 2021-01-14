@@ -1342,7 +1342,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
     }
 
-  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)));
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
+                                              rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
+                                              rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
 
   /* TODO - better logic for "changed" based on deployments */
   if (changed || self->refspec)
@@ -1751,7 +1753,9 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags), cancellable, error);
   if (upgrader == NULL)
     return FALSE;
-  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)));
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
+                                              rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
+                                              rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
 
   g_autoptr(RpmOstreeOrigin) origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
@@ -1925,7 +1929,9 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_origin_set_regenerate_initramfs (origin, self->regenerate, self->args);
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
-  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)));
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
+                                              rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
+                                              rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
 
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
@@ -2601,7 +2607,9 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags),
                                     cancellable, error);
-  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)));
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
+                                              rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
+                                              rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
 
   /* We need the upgrader to perform the deployment */
   if (upgrader == NULL)

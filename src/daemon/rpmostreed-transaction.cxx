@@ -41,9 +41,10 @@ struct _RpmostreedTransactionPrivate {
   char *sysroot_path;
   OstreeSysroot *sysroot;
   gboolean sysroot_locked;
-  /* Capture of the client description and agent at txn creation time */
+  /* Capture of the client description, agent, and systemd unit at txn creation time */
   char *client_description;
   char *agent_id;
+  char *sd_unit;
 
   gboolean redirect_output;
 
@@ -507,6 +508,7 @@ transaction_finalize (GObject *object)
 
   g_free (priv->client_description);
   g_free (priv->agent_id);
+  g_free (priv->sd_unit);
 
   G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->finalize (object);
 }
@@ -541,6 +543,7 @@ transaction_constructed (GObject *object)
 
       priv->client_description = rpmostreed_daemon_client_get_string (rpmostreed_daemon_get(), sender);
       priv->agent_id = rpmostreed_daemon_client_get_agent_id (rpmostreed_daemon_get(), sender);
+      priv->sd_unit = rpmostreed_daemon_client_get_sd_unit (rpmostreed_daemon_get(), sender);
       rpmostree_transaction_set_initiating_client_description ((RPMOSTreeTransaction*)self, priv->client_description);
     }
 }
@@ -848,6 +851,15 @@ rpmostreed_transaction_get_agent_id (RpmostreedTransaction *transaction)
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->agent_id;
+}
+
+const char *
+rpmostreed_transaction_get_sd_unit (RpmostreedTransaction *transaction)
+{
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
+  return priv->sd_unit;
 }
 
 GDBusMethodInvocation *
