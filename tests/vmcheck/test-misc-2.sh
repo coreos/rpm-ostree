@@ -56,6 +56,9 @@ fi
 vm_cmd journalctl --after-cursor "'$from_cursor'" -u rpm-ostreed -o json | jq -r '.AGENT//""' > agent.txt
 assert_file_has_content agent.txt testing-agent-id
 cursor=$(vm_get_journal_cursor)
+vm_cmd journalctl --after-cursor "'$from_cursor'" -u rpm-ostreed -o json | jq -r '.AGENT_SD_UNIT//""' > agent_sd_unit.txt
+assert_file_has_content agent_sd_unit.txt sshd.service
+cursor=$(vm_get_journal_cursor)
 vm_reboot_cmd rpm-ostree finalize-deployment "${commit}"
 assert_streq "$(vm_get_booted_csum)" "${commit}"
 vm_assert_journal_has_content $cursor "Finalized deployment; rebooting into ${commit}"

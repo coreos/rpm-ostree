@@ -68,6 +68,7 @@ struct RpmOstreeSysrootUpgrader {
   RpmOstreeSysrootUpgraderFlags flags;
   char *command_line;
   char *agent;
+  char *sd_unit;
 
   OstreeDeployment *cfg_merge_deployment;
   OstreeDeployment *origin_merge_deployment;
@@ -215,6 +216,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_free (self->osname);
   g_free (self->command_line);
   g_free (self->agent);
+  g_free (self->sd_unit);
 
   g_clear_object (&self->cfg_merge_deployment);
   g_clear_object (&self->origin_merge_deployment);
@@ -343,12 +345,17 @@ rpmostree_sysroot_upgrader_new (OstreeSysroot              *sysroot,
 }
 
 void
-rpmostree_sysroot_upgrader_set_caller_info (RpmOstreeSysrootUpgrader *self, const char *initiating_command_line, const char *agent)
+rpmostree_sysroot_upgrader_set_caller_info (RpmOstreeSysrootUpgrader *self, 
+                                            const char               *initiating_command_line, 
+                                            const char               *agent, 
+                                            const char               *sd_unit)
 {
   g_free (self->command_line);
   self->command_line = g_strdup (initiating_command_line);
   g_free (self->agent);
   self->agent = g_strdup (agent);
+  g_free (self->sd_unit);
+  self->sd_unit = g_strdup (sd_unit);
 }
 
 RpmOstreeOrigin *
@@ -1366,6 +1373,7 @@ write_history (RpmOstreeSysrootUpgrader *self,
                    "DEPLOYMENT_VERSION=%s", version ?: "",
                    "COMMAND_LINE=%s", self->command_line ?: "",
                    "AGENT=%s", self->agent ?: "",
+                   "AGENT_SD_UNIT=%s", self->sd_unit ?: "",
                    NULL);
 
   return TRUE;

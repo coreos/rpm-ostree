@@ -78,7 +78,10 @@ RpmOstreeSysrootUpgrader *rpmostree_sysroot_upgrader_new (OstreeSysroot         
                                                           GCancellable               *cancellable,
                                                           GError                    **error);
 
-void rpmostree_sysroot_upgrader_set_caller_info (RpmOstreeSysrootUpgrader *self, const char *initiating_command_line, const char *agent);
+void rpmostree_sysroot_upgrader_set_caller_info (RpmOstreeSysrootUpgrader *self, 
+                                                 const char               *initiating_command_line, 
+                                                 const char               *agent,
+                                                 const char               *sd_unit);
 
 OstreeDeployment* rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self);
 

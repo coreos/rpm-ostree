@@ -732,6 +732,17 @@ rpmostreed_daemon_client_get_agent_id (RpmostreedDaemon *self, const char *clien
     return g_strdup (clientdata->id);
 }
 
+/* Returns a string representing the systemd unit for @client, or %NULL if unknown */
+char *
+rpmostreed_daemon_client_get_sd_unit (RpmostreedDaemon *self, const char *client)
+{
+  auto clientdata = static_cast<struct RpmOstreeClient *>(g_hash_table_lookup (self->bus_clients, client));
+  if (!clientdata || clientdata->sd_unit == NULL)
+    return NULL;
+  else
+    return g_strdup (clientdata->sd_unit);
+}
+
 void
 rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
                                  const char       *client)
