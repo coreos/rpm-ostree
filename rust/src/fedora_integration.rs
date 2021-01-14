@@ -1,3 +1,4 @@
+use crate::cxxrsutil::CxxResult;
 use anyhow::{Context, Result};
 use serde_derive::Deserialize;
 use std::borrow::Cow;
@@ -153,7 +154,7 @@ fn is_debug_rpm(rpm: &str) -> bool {
     rpm.contains("-debuginfo-") || rpm.contains("-debugsource-")
 }
 
-pub(crate) fn handle_cli_arg(url: &str, arch: &str) -> Result<Option<Vec<File>>> {
+pub(crate) fn handle_cli_arg(url: &str, arch: &str) -> CxxResult<Option<Vec<File>>> {
     if url.starts_with(BODHI_URL_PREFIX) {
         let urls = bodhi::get_rpm_urls_from_update(url, arch)?;
         Ok(Some(

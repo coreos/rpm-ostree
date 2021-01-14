@@ -7,9 +7,9 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use crate::cxx_bridge_gobject::*;
+use crate::cxxrsutil::*;
 use crate::ffi::LiveApplyState;
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
@@ -344,7 +344,7 @@ fn rerun_tmpfiles() -> Result<()> {
 pub(crate) fn transaction_apply_live(
     mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
     target: &str,
-) -> Result<()> {
+) -> CxxResult<()> {
     let sysroot = &sysroot.gobj_wrap();
     let target = if target.len() > 0 { Some(target) } else { None };
     let repo = &sysroot.repo().expect("repo");
@@ -352,7 +352,7 @@ pub(crate) fn transaction_apply_live(
     let booted = if let Some(b) = sysroot.get_booted_deployment() {
         b
     } else {
-        bail!("Not booted into an OSTree system")
+        return Err(anyhow!("Not booted into an OSTree system").into());
     };
     let osname = booted.get_osname().expect("osname");
     let booted_commit = booted.get_csum().expect("csum");
@@ -368,7 +368,7 @@ pub(crate) fn transaction_apply_live(
                 Cow::Owned(pending_commit.to_string())
             }
             (None, _) => {
-                anyhow::bail!("No target commit specified and no pending deployment");
+                return Err(anyhow!("No target commit specified and no pending deployment").into());
             }
         }
     };
@@ -381,14 +381,14 @@ pub(crate) fn transaction_apply_live(
             }
             DeploymentUnlockedState::Transient | DeploymentUnlockedState::Development => {}
             s => {
-                bail!("apply-live is incompatible with unlock state: {}", s);
+                return Err(anyhow!("apply-live is incompatible with unlock state: {}", s).into());
             }
         };
     } else {
         match booted.get_unlocked() {
             DeploymentUnlockedState::Transient | DeploymentUnlockedState::Development => {}
             s => {
-                bail!("deployment not unlocked, is in state: {}", s);
+                return Err(anyhow!("deployment not unlocked, is in state: {}", s).into());
             }
         };
     }
@@ -413,11 +413,11 @@ pub(crate) fn transaction_apply_live(
     if let Some(ref state) = state {
         if !state.inprogress.is_empty() {
             if state.inprogress.as_str() != target_commit {
-                bail!(
+                Err(anyhow::anyhow!(
                     "Previously interrupted while targeting commit {}, cannot change target to {}",
                     state.inprogress,
                     target_commit
-                )
+                ))?;
             }
         }
     }
@@ -508,7 +508,7 @@ mod test {
 pub(crate) fn get_live_apply_state(
     mut _sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
     mut deployment: Pin<&mut crate::ffi::OstreeDeployment>,
-) -> Result<LiveApplyState> {
+) -> CxxResult<LiveApplyState> {
     let deployment = deployment.gobj_wrap();
     if let Some(state) = get_live_state(&deployment)? {
         Ok(state)
@@ -520,7 +520,7 @@ pub(crate) fn get_live_apply_state(
 pub(crate) fn has_live_apply_state(
     sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
     deployment: Pin<&mut crate::ffi::OstreeDeployment>,
-) -> Result<bool> {
+) -> CxxResult<bool> {
     let state = get_live_apply_state(sysroot, deployment)?;
     Ok(!(state.commit.is_empty() && state.inprogress.is_empty()))
 }

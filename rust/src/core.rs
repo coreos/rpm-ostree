@@ -1,6 +1,6 @@
+use crate::cxxrsutil::CxxResult;
 use crate::ffiutil;
-use anyhow::Result;
-use ffiutil::ffi_view_openat_dir;
+use ffiutil::*;
 use openat_ext::OpenatDirExt;
 
 /// Guard for running logic in a context with temporary /etc.
@@ -14,7 +14,7 @@ pub struct TempEtcGuard {
     renamed_etc: bool,
 }
 
-pub fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>> {
+pub(crate) fn prepare_tempetc_guard(rootfs: i32) -> CxxResult<Box<TempEtcGuard>> {
     let rootfs = ffi_view_openat_dir(rootfs);
     let has_usretc = rootfs.exists("usr/etc")?;
     let mut renamed_etc = false;
@@ -34,7 +34,7 @@ pub fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>> {
 
 impl TempEtcGuard {
     /// Remove the temporary /etc, and destroy the guard.
-    pub fn undo(&self) -> anyhow::Result<()> {
+    pub(crate) fn undo(&self) -> CxxResult<()> {
         if self.renamed_etc {
             /* Remove the symlink and swap back */
             self.rootfs.remove_file("usr/etc")?;
@@ -51,6 +51,7 @@ pub(crate) fn get_systemctl_wrapper() -> &'static [u8] {
 #[cfg(test)]
 mod test {
     use super::*;
+    use anyhow::Result;
     use std::os::unix::prelude::*;
 
     #[test]
