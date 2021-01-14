@@ -7,9 +7,9 @@
 #![deny(unused_must_use)]
 
 // pub(crate) utilities
-mod cxx_bridge_gobject;
+mod cxxrsutil;
 mod ffiutil;
-pub use cxx_bridge_gobject::*;
+pub(crate) use cxxrsutil::*;
 mod includes;
 
 #[cxx::bridge(namespace = "rpmostreecxx")]

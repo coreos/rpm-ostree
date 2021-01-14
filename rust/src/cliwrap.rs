@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, Result};
 use std::io::prelude::*;
 use std::path;
 
@@ -26,6 +26,7 @@ mod cliutil;
 mod dracut;
 mod grubby;
 mod rpm;
+use crate::cxxrsutil::CxxResult;
 use crate::ffiutil::*;
 
 /// Location for the underlying (not wrapped) binaries.
@@ -42,13 +43,13 @@ pub(crate) enum RunDisposition {
 }
 
 /// Main entrypoint for cliwrap
-pub(crate) fn cliwrap_entrypoint(args: Vec<String>) -> Result<()> {
+pub(crate) fn cliwrap_entrypoint(args: Vec<String>) -> CxxResult<()> {
     // We'll panic here if the vector is empty, but that is intentional;
     // the outer code should always pass us at least one arg.
     let name = args[0].as_str();
     let name = match std::path::Path::new(name).file_name() {
         Some(name) => name,
-        None => bail!("Invalid wrapped binary: {}", name),
+        None => return Err(anyhow!("Invalid wrapped binary: {}", name).into()),
     };
     // We know we had a string from above
     let name = name.to_str().unwrap();
@@ -57,13 +58,13 @@ pub(crate) fn cliwrap_entrypoint(args: Vec<String>) -> Result<()> {
 
     // If we're not booted into ostree, just run the child directly.
     if !cliutil::is_ostree_booted() {
-        cliutil::exec_real_binary(name, &args)
+        Ok(cliutil::exec_real_binary(name, &args)?)
     } else {
         match name {
-            "rpm" => self::rpm::main(&args),
-            "dracut" => self::dracut::main(&args),
-            "grubby" => self::grubby::main(&args),
-            _ => bail!("Unknown wrapped binary: {}", name),
+            "rpm" => Ok(self::rpm::main(&args)?),
+            "dracut" => Ok(self::dracut::main(&args)?),
+            "grubby" => Ok(self::grubby::main(&args)?),
+            _ => return Err(anyhow!("Unknown wrapped binary: {}", name).into()),
         }
     }
 }
@@ -102,8 +103,8 @@ fn write_wrappers(rootfs_dfd: &openat::Dir) -> Result<()> {
     })
 }
 
-pub(crate) fn cliwrap_write_wrappers(rootfs_dfd: i32) -> Result<()> {
-    write_wrappers(&ffi_view_openat_dir(rootfs_dfd))
+pub(crate) fn cliwrap_write_wrappers(rootfs_dfd: i32) -> CxxResult<()> {
+    Ok(write_wrappers(&ffi_view_openat_dir(rootfs_dfd))?)
 }
 
 pub(crate) fn cliwrap_destdir() -> String {

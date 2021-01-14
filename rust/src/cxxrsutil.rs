@@ -64,3 +64,83 @@ unsafe impl ExternType for FFIGCancellable {
     type Kind = cxx::kind::Trivial;
 }
 impl_wrap!(FFIGCancellable, gio::Cancellable);
+
+// An error type helper; separate from the GObject bridging
+mod err {
+    use std::error::Error as StdError;
+    use std::fmt::Display;
+    use std::io::Error as IoError;
+
+    // See the documentation for CxxResult
+    #[derive(Debug)]
+    pub(crate) struct CxxError(String);
+
+    impl Display for CxxError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(self.0.as_str())
+        }
+    }
+
+    impl StdError for CxxError {
+        fn source(&self) -> Option<&(dyn StdError + 'static)> {
+            None
+        }
+
+        fn description(&self) -> &str {
+            "description() is deprecated; use Display"
+        }
+
+        fn cause(&self) -> Option<&dyn StdError> {
+            None
+        }
+    }
+
+    impl From<anyhow::Error> for CxxError {
+        fn from(v: anyhow::Error) -> Self {
+            Self(format!("{:#}", v))
+        }
+    }
+
+    impl From<IoError> for CxxError {
+        fn from(v: IoError) -> Self {
+            Self(format!("{}", v))
+        }
+    }
+
+    impl From<nix::Error> for CxxError {
+        fn from(v: nix::Error) -> Self {
+            Self(format!("{}", v))
+        }
+    }
+
+    impl From<glib::error::Error> for CxxError {
+        fn from(v: glib::error::Error) -> Self {
+            Self(format!("{}", v))
+        }
+    }
+
+    // Use this on exit from Rust functions that return to C++ (bridged via cxx-rs).
+    // This is a workaround for https://github.com/dtolnay/cxx/issues/290#issuecomment-756432907
+    // which is that cxx-rs only shows the first entry in the cause chain.
+    pub(crate) type CxxResult<T> = std::result::Result<T, CxxError>;
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn throwchain() {
+            use anyhow::Context;
+            fn outer() -> CxxResult<()> {
+                fn inner() -> anyhow::Result<()> {
+                    anyhow::bail!("inner")
+                }
+                Ok(inner().context("Failed in outer")?)
+            }
+            assert_eq!(
+                format!("{}", outer().err().unwrap()),
+                "Failed in outer: inner"
+            )
+        }
+    }
+}
+pub(crate) use err::*;

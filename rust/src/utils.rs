@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+use crate::cxxrsutil::*;
 use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::io::prelude::*;
@@ -291,9 +292,9 @@ mod tests {
 }
 
 /// TODO: cxx-rs doesn't support maps yet
-pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> Result<String> {
+pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> CxxResult<String> {
     let m = subs.iter().cloned().map(|i| (i.k, i.v)).collect();
-    varsubst(s, &m)
+    Ok(varsubst(s, &m)?)
 }
 
 pub(crate) fn get_features() -> Vec<String> {
@@ -303,10 +304,7 @@ pub(crate) fn get_features() -> Vec<String> {
     r
 }
 
-/// Create a fully sealed "memfd" (memory file descriptor) from an array of bytes.
-/// For more information see https://docs.rs/memfd/0.3.0/memfd/ and
-/// `man memfd_create`.
-pub(crate) fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32> {
+fn impl_sealed_memfd(description: &str, content: &[u8]) -> Result<std::fs::File> {
     let mfd = memfd::MemfdOptions::default()
         .allow_sealing(true)
         .close_on_exec(true)
@@ -319,5 +317,13 @@ pub(crate) fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32> {
     seals.insert(memfd::FileSeal::SealWrite);
     seals.insert(memfd::FileSeal::SealSeal);
     mfd.add_seals(&seals)?;
-    Ok(mfd.into_file().into_raw_fd())
+    Ok(mfd.into_file())
+}
+
+/// Create a fully sealed "memfd" (memory file descriptor) from an array of bytes.
+/// For more information see https://docs.rs/memfd/0.3.0/memfd/ and
+/// `man memfd_create`.
+pub(crate) fn sealed_memfd(description: &str, content: &[u8]) -> CxxResult<i32> {
+    let mfd = impl_sealed_memfd(description, content)?;
+    Ok(mfd.into_raw_fd())
 }

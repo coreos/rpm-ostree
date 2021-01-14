@@ -1,6 +1,6 @@
 //! Generate an "overlay" initramfs image
 
-use crate::cxx_bridge_gobject::*;
+use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use gio::prelude::*;
 use openat::SimpleType;
@@ -130,7 +130,7 @@ pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
 pub(crate) fn initramfs_overlay_generate(
     files: &Vec<String>,
     mut cancellable: Pin<&mut crate::FFIGCancellable>,
-) -> Result<i32> {
+) -> CxxResult<i32> {
     let cancellable = &cancellable.gobj_wrap();
     let files: HashSet<String> = files.iter().cloned().collect();
     let r = generate_initramfs_overlay_etc(&files, Some(cancellable))?;

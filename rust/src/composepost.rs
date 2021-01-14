@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+use crate::cxxrsutil::CxxResult;
 use anyhow::Result;
 use openat;
 use openat_ext::OpenatDirExt;
@@ -84,12 +85,12 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
 
 // This function is called from rpmostree_postprocess_final(); think of
 // it as the bits of that function that we've chosen to implement in Rust.
-pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()> {
+pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
     let tasks = [
         postprocess_useradd,
         postprocess_presets,
         postprocess_subs_dist,
     ];
-    tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))
+    Ok(tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))?)
 }

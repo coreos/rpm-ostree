@@ -9,6 +9,7 @@
 //! This backs the hidden `rpm-ostree testutils` CLI.  Subject
 //! to change.
 
+use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use openat;
 use openat_ext::{FileExt, OpenatDirExt};
@@ -208,7 +209,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn testutils_entrypoint(args: Vec<String>) -> Result<()> {
+pub(crate) fn testutils_entrypoint(args: Vec<String>) -> CxxResult<()> {
     let opt = Opt::from_iter(args.iter());
     match opt {
         Opt::GenerateSyntheticUpgrade(ref opts) => update_os_tree(opts)?,

@@ -1,6 +1,6 @@
 use crate::ffiutil;
 use crate::includes::*;
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use c_utf8::CUtf8Buf;
 use nix::unistd::{Gid, Uid};
 use std::collections::HashMap;
