@@ -1,3 +1,6 @@
+//! rpm-ostree is split into a C/C++ portion and a Rust portion, the latter
+//! of which is compiled into a shared library, which is defined here.
+
 /*
  * Copyright (C) 2018 Red Hat, Inc.
  *
@@ -12,6 +15,7 @@ mod ffiutil;
 pub(crate) use cxxrsutil::*;
 mod includes;
 
+/// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
 #[cxx::bridge(namespace = "rpmostreecxx")]
 mod ffi {
     // Types that are defined by gtk-rs generated bindings that
@@ -141,7 +145,7 @@ pub(crate) use client::*;
 mod cliwrap;
 pub use cliwrap::*;
 mod countme;
-pub use countme::*;
+pub(crate) use countme::*;
 mod composepost;
 pub(crate) use composepost::*;
 mod core;
