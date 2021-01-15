@@ -49,7 +49,7 @@ gboolean        rpmostreed_transaction_get_active          (RpmostreedTransactio
 OstreeSysroot * rpmostreed_transaction_get_sysroot         (RpmostreedTransaction *transaction);
 const char *    rpmostreed_transaction_get_client          (RpmostreedTransaction *transaction);
 const char *    rpmostreed_transaction_get_agent_id        (RpmostreedTransaction *transaction);
-const char *    rpmostreed_transaction_get_sd_unit        (RpmostreedTransaction *transaction);
+const char *    rpmostreed_transaction_get_sd_unit         (RpmostreedTransaction *transaction);
 GDBusMethodInvocation *
                 rpmostreed_transaction_get_invocation      (RpmostreedTransaction *transaction);
 const char *    rpmostreed_transaction_get_client_address  (RpmostreedTransaction *transaction);

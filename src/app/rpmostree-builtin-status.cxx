@@ -31,6 +31,7 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
+#include "rpmostreed-transaction-types.h"
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
@@ -289,7 +290,20 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
 
   rpmostreecxx::journal_print_staging_failure ();
 
-  if (g_str_equal (policy, "none"))
+  g_autofree char *update_driver_sd_unit = NULL;
+  g_autofree char *update_driver_name = NULL;
+  if (!get_driver_info (&update_driver_name, &update_driver_sd_unit, error))
+    return FALSE;
+
+  if (update_driver_name && update_driver_sd_unit)
+    {
+      if (opt_verbose)
+        g_print ("AutomaticUpdates: driven by %s (%s)\n", 
+                 update_driver_name, update_driver_sd_unit);
+      else
+        g_print ("AutomaticUpdates: driven by %s\n", update_driver_name);
+    }
+  else if (g_str_equal (policy, "none"))
     {
       /* https://github.com/coreos/fedora-coreos-tracker/issues/271
        * https://github.com/coreos/rpm-ostree/issues/1747
@@ -1061,6 +1075,9 @@ rpmostree_builtin_status (int             argc,
   g_autoptr(GVariant) cached_update = NULL;
   if (rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
     cached_update = rpmostree_os_dup_cached_update (os_proxy);
+  g_autoptr(GVariant) driver_info = NULL;
+  if (!get_driver_g_variant (&driver_info, error))
+    return FALSE;
 
   if (opt_json || opt_jsonpath)
     {
@@ -1081,6 +1098,10 @@ rpmostree_builtin_status (int             argc,
       else
         cached_update_node = json_node_new (JSON_NODE_NULL);
       json_builder_add_value (builder, cached_update_node);
+      json_builder_set_member_name (builder, "update-driver");
+      JsonNode *update_driver_node =
+        driver_info ? json_gvariant_serialize (driver_info) : json_node_new (JSON_NODE_NULL);
+      json_builder_add_value (builder, update_driver_node);
       json_builder_end_object (builder);
 
       JsonNode *json_root = json_builder_get_root (builder);
