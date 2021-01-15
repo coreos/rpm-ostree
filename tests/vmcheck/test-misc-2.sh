@@ -44,9 +44,12 @@ assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
 vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
 echo "ok locked rebase staging"
 
-# This also now tests custom client IDs in the journal
+# This also now tests custom client IDs in the journal and the `deploy --register-driver` option.
 cursor=$(vm_get_journal_cursor)
-vm_cmd env RPMOSTREE_CLIENT_ID=testing-agent-id rpm-ostree deploy revision="${commit}" --lock-finalization
+vm_cmd env RPMOSTREE_CLIENT_ID=testing-agent-id \
+       rpm-ostree deploy revision="${commit}" \
+       --lock-finalization --register-driver TestDriver
+vm_cmd test -f /run/rpm-ostree/update-driver.gv
 vm_cmd test -f /run/ostree/staged-deployment-locked
 if vm_rpmostree finalize-deployment; then
   assert_not_reached "finalized without expected checksum"
@@ -57,6 +60,12 @@ vm_cmd journalctl --after-cursor "'$cursor'" -u rpm-ostreed -o json | jq -r '.AG
 assert_file_has_content agent.txt testing-agent-id
 vm_cmd journalctl --after-cursor "'$cursor'" -u rpm-ostreed -o json | jq -r '.AGENT_SD_UNIT//""' > agent_sd_unit.txt
 assert_file_has_content agent_sd_unit.txt sshd.service
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content status.txt 'driven by TestDriver'
+vm_cmd rpm-ostree status -v > verbose_status.txt
+assert_file_has_content verbose_status.txt 'driven by TestDriver (sshd.service)'
+vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"TestDriver\"" \
+                    ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
 vm_reboot_cmd rpm-ostree finalize-deployment "${commit}"
 assert_streq "$(vm_get_booted_csum)" "${commit}"
 vm_assert_journal_has_content $cursor "Finalized deployment; rebooting into ${commit}"
