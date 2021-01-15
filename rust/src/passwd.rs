@@ -1,11 +1,11 @@
 use crate::cxxrsutil;
 use crate::ffiutil;
-use crate::includes::*;
+use crate::nameservice;
 use anyhow::{anyhow, Result};
-use c_utf8::CUtf8Buf;
 use nix::unistd::{Gid, Uid};
 use openat_ext::OpenatDirExt;
 use std::collections::HashMap;
+use std::io::BufReader;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 
@@ -167,37 +167,29 @@ impl PasswdDB {
             .ok_or_else(|| anyhow!("failed to find group ID '{}'", gid))
     }
 
-    /// Add a user ID with the associated name.
-    pub fn add_user(&mut self, uid: u32, username: &str) {
-        let id = Uid::from_raw(uid);
-        self.users.insert(id, username.to_string());
-    }
-
-    /// Add a group ID with the associated name.
-    pub fn add_group(&mut self, gid: u32, groupname: &str) {
-        let id = Gid::from_raw(gid);
-        self.groups.insert(id, groupname.to_string());
-    }
-
     /// Add content from a `group` file.
-    pub fn add_group_content(&mut self, rootfs: i32, group_path: &str) -> anyhow::Result<()> {
-        let c_path: CUtf8Buf = group_path.to_string().into();
-        let db_ptr = self as *mut Self;
-        let mut gerror: *mut glib_sys::GError = std::ptr::null_mut();
-        // TODO(lucab): find a replacement for `fgetgrent` and drop this.
-        let res =
-            unsafe { rpmostree_add_group_to_hash(rootfs, c_path.as_ptr(), db_ptr, &mut gerror) };
-        ffiutil::int_gerror_to_result(res, gerror)
+    fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> anyhow::Result<()> {
+        let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+        let db = rootfs.open_file(group_path)?;
+        let entries = nameservice::group::parse_group_content(BufReader::new(db))?;
+
+        for group in entries {
+            let id = Gid::from_raw(group.gid);
+            self.groups.insert(id, group.name);
+        }
+        Ok(())
     }
 
     /// Add content from a `passwd` file.
-    pub fn add_passwd_content(&mut self, rootfs: i32, passwd_path: &str) -> anyhow::Result<()> {
-        let c_path: CUtf8Buf = passwd_path.to_string().into();
-        let db_ptr = self as *mut Self;
-        let mut gerror: *mut glib_sys::GError = std::ptr::null_mut();
-        // TODO(lucab): find a replacement for `fgetpwent` and drop this.
-        let res =
-            unsafe { rpmostree_add_passwd_to_hash(rootfs, c_path.as_ptr(), db_ptr, &mut gerror) };
-        ffiutil::int_gerror_to_result(res, gerror)
+    fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> anyhow::Result<()> {
+        let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+        let db = rootfs.open_file(passwd_path)?;
+        let entries = nameservice::passwd::parse_passwd_content(BufReader::new(db))?;
+
+        for user in entries {
+            let id = Uid::from_raw(user.uid);
+            self.users.insert(id, user.name);
+        }
+        Ok(())
     }
 }

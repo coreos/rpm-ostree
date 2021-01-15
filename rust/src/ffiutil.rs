@@ -122,6 +122,7 @@ pub(crate) fn ref_from_raw_ptr<T>(p: *mut T) -> &'static mut T {
 // TODO: Try upstreaming this into the glib crate?
 
 /// Convert C results (int + GError convention) to anyhow.
+#[allow(dead_code)]
 pub(crate) fn int_gerror_to_result(res: i32, gerror: *mut glib_sys::GError) -> anyhow::Result<()> {
     if res != 0 {
         Ok(())

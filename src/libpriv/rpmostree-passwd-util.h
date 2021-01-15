@@ -31,15 +31,6 @@
 G_BEGIN_DECLS
 
 gboolean
-rpmostree_add_passwd_to_hash (int rootfs_dfd, const char *path,
-                              rpmostreecxx::PasswdDB *db,
-                              GError **error);
-gboolean
-rpmostree_add_group_to_hash (int rootfs_dfd, const char *path,
-                             rpmostreecxx::PasswdDB *db,
-                             GError **error);
-
-gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
                         int              rootfs_dfd,
                         RORTreefile     *treefile_rs,

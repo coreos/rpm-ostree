@@ -175,13 +175,8 @@ mod ffi {
         fn passwd_cleanup(rootfd: i32) -> Result<()>;
 
         type PasswdDB;
-        fn add_user(self: &mut PasswdDB, uid: u32, username: &str);
         fn lookup_user(self: &PasswdDB, uid: u32) -> Result<String>;
-        fn add_group(self: &mut PasswdDB, gid: u32, groupname: &str);
         fn lookup_group(self: &PasswdDB, gid: u32) -> Result<String>;
-        // TODO(lucab): get rid of the two methods below.
-        fn add_group_content(self: &mut PasswdDB, rootfs: i32, group_path: &str) -> Result<()>;
-        fn add_passwd_content(self: &mut PasswdDB, rootfs: i32, passwd_path: &str) -> Result<()>;
     }
 
     // countme.rs
@@ -228,6 +223,7 @@ mod lockfile;
 pub use self::lockfile::*;
 mod live;
 pub(crate) use self::live::*;
+mod nameservice;
 // An origin parser in Rust but only built when testing until
 // we're ready to try porting the C++ code.
 #[cfg(test)]
