@@ -19,6 +19,8 @@
 #include "config.h"
 #include "ostree.h"
 
+#include <json-glib/json-glib.h>
+#include <gio/gunixoutputstream.h>
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
 
@@ -26,6 +28,7 @@
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-sysroot.h"
+#include "rpmostreed-daemon.h"
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostree-sysroot-core.h"
 #include "rpmostree-rpm-util.h"
@@ -787,6 +790,103 @@ deploy_has_bool_option (DeployTransaction *self,
   return vardict_lookup_bool (self->options, option, FALSE);
 }
 
+static const char *
+deploy_has_string_option (DeployTransaction *self,
+                          const char        *option)
+{
+  return static_cast<const char*>(vardict_lookup_ptr (self->options, option, "s"));
+}
+
+/* Write a state file which records information about the agent that is "driving" updates */
+static gboolean
+record_driver_info (RpmostreedTransaction *transaction,
+                    const gchar           *update_driver,
+                    GCancellable          *cancellable,
+                    GError               **error)
+{
+  g_auto(GVariantBuilder) caller_info_builder;
+  g_variant_builder_init (&caller_info_builder, G_VARIANT_TYPE ("a{sv}"));
+
+  const char *sd_unit = rpmostreed_transaction_get_sd_unit (transaction);
+  if (!update_driver)
+    return glnx_throw (error, "update driver name not provided");
+  g_variant_builder_add (&caller_info_builder, "{sv}", RPMOSTREE_DRIVER_NAME,
+                         g_variant_new_string (update_driver));
+  if (!sd_unit)
+    return glnx_throw (error, "could not find caller systemd unit");
+  g_variant_builder_add (&caller_info_builder, "{sv}", RPMOSTREE_DRIVER_SD_UNIT,
+                         g_variant_new_string (sd_unit));
+
+  g_autoptr(GVariant) driver_info =
+    g_variant_ref_sink (g_variant_builder_end (&caller_info_builder));
+
+  if (!glnx_shutil_mkdir_p_at (AT_FDCWD, RPMOSTREE_RUN_DIR, 0755, cancellable, error))
+    return FALSE;
+  if (!glnx_file_replace_contents_at (AT_FDCWD, RPMOSTREE_DRIVER_STATE,
+                                      static_cast<const guint8*>(g_variant_get_data (driver_info)),
+                                      g_variant_get_size (driver_info),
+                                      static_cast<GLnxFileReplaceFlags>(0), cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+/* Sets `driver_info` if driver state file is found, leave as NULL otherwise. */
+gboolean
+get_driver_g_variant (GVariant **driver_info,
+                      GError   **error)
+{
+  glnx_autofd int fd = -1;
+  g_autoptr(GError) local_error = NULL;
+  if (!glnx_openat_rdonly (AT_FDCWD, RPMOSTREE_DRIVER_STATE, TRUE, &fd,
+                           &local_error))
+    {
+      if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        g_propagate_error (error, util::move_nullify (local_error)), FALSE;
+      // Don't propagate error if state file not found; just return early.
+      return TRUE;
+    }
+
+  g_autoptr(GBytes) data = glnx_fd_readall_bytes (fd, NULL, error);
+  if (!data)
+    return FALSE;
+
+  *driver_info =
+    g_variant_ref_sink (g_variant_new_from_bytes (G_VARIANT_TYPE_VARDICT, data, FALSE));
+
+  return TRUE;
+}
+
+/* Read from state file that records information about the agent that is "driving" updates */
+gboolean
+get_driver_info (char   **name,
+                 char   **sd_unit,
+                 GError **error)
+{
+  g_autoptr(GVariant) driver_info = NULL;
+  if (!get_driver_g_variant (&driver_info, error))
+    return FALSE;
+  if (!driver_info)
+    return TRUE; // driver state file not found, return early.
+
+  g_auto(GVariantDict) driver_info_dict;
+  g_variant_dict_init (&driver_info_dict, driver_info);
+  auto v = static_cast<char*>(vardict_lookup_ptr (&driver_info_dict,
+                                                  RPMOSTREE_DRIVER_NAME, "s"));
+  if (!v)
+    return glnx_throw (error, "could not find update driver name in %s",
+                       RPMOSTREE_DRIVER_STATE);
+  *name = v;
+  v = static_cast<char*>(vardict_lookup_ptr (&driver_info_dict,
+                                             RPMOSTREE_DRIVER_SD_UNIT, "s"));
+  if (!v)
+    return glnx_throw (error, "could not find update driver systemd unit in %s",
+                       RPMOSTREE_DRIVER_STATE);
+  *sd_unit = v;
+
+  return TRUE;
+}
+
 static gboolean
 deploy_transaction_execute (RpmostreedTransaction *transaction,
                             GCancellable *cancellable,
@@ -812,6 +912,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   const gboolean download_metadata_only =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY) > 0);
   const gboolean allow_inactive = deploy_has_bool_option (self, "allow-inactive");
+  g_autofree const char *update_driver = deploy_has_string_option (self, "register-driver");
 
   gboolean is_install = FALSE;
   gboolean is_uninstall = FALSE;
@@ -1331,6 +1432,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                                  cancellable, error))
     return FALSE;
   changed = changed || layering_changed;
+
+  if (update_driver)
+    {
+      if (!record_driver_info (transaction, update_driver, cancellable, error))
+        return FALSE;
+    }
 
   if (dry_run)
     /* Note early return here; we printed the transaction already */

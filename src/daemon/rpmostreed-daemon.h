@@ -30,6 +30,12 @@ G_BEGIN_DECLS
 #define DBUS_NAME "org.projectatomic.rpmostree1"
 #define BASE_DBUS_PATH "/org/projectatomic/rpmostree1"
 
+/* Update driver info */
+#define RPMOSTREE_RUN_DIR "/run/rpm-ostree/"
+#define RPMOSTREE_DRIVER_STATE RPMOSTREE_RUN_DIR "update-driver.gv"
+#define RPMOSTREE_DRIVER_SD_UNIT "driver-sd-unit"
+#define RPMOSTREE_DRIVER_NAME "driver-name"
+
 GType              rpmostreed_daemon_get_type       (void) G_GNUC_CONST;
 RpmostreedDaemon * rpmostreed_daemon_get            (void);
 gboolean           rpmostreed_get_client_uid        (RpmostreedDaemon *self,
