@@ -28,6 +28,7 @@
 #include <libglnx.h>
 
 static char *opt_osname;
+static char *opt_register_driver;
 static gboolean opt_reboot;
 static gboolean opt_preview;
 static gboolean opt_cache_only;
@@ -49,6 +50,7 @@ static GOptionEntry option_entries[] = {
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade, "Forbid deployment of chronologically older trees", NULL },
   { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no new deployment made, exit 77", NULL },
+  { "register-driver", 0, 0, G_OPTION_ARG_STRING, &opt_register_driver, "Register the calling agent as the driver for updates. Takes a human-readable string as name for driver", "DRIVERNAME" },
   { NULL }
 };
 
@@ -125,6 +127,8 @@ rpmostree_builtin_deploy (int            argc,
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
       g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
       g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
+      if (opt_register_driver)
+        g_variant_dict_insert (&dict, "register-driver", "s", opt_register_driver);
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to so we maintain coverage. */

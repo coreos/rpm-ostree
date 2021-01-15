@@ -157,3 +157,12 @@ rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
                                        GError               **error);
 
 G_END_DECLS
+
+gboolean
+get_driver_info (char   **name,
+                 char   **sd_unit,
+                 GError **error);
+
+gboolean
+get_driver_g_variant (GVariant **driver_info,
+                      GError   **error);

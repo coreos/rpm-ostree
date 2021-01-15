@@ -321,6 +321,9 @@
             Stop short of deploying the new tree. If layering packages,
             the pkg diff is printed but packages are not downloaded or
             imported.
+         "register-driver" (type 's')
+            Register the calling agent as the driver for updates. Takes
+            a human-readable string as the name for the update driver.
          "no-layering" (type 'b')
             Remove all package requests. Requests in "install-packages"
             are still subsequently processed if specified.
