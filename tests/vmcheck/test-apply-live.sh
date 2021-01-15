@@ -91,7 +91,12 @@ vm_build_rpm test-livefs-with-etc \
            echo subconfig-one > %{buildroot}/etc/%{name}/subconfig-one.conf
            echo subconfig-two > %{buildroot}/etc/%{name}/subconfig-two.conf
            mkdir -p %{buildroot}/etc/%{name}/subdir
-           echo subconfig-three > %{buildroot}/etc/%{name}/subdir/subconfig-three.conf
+           install -d %{buildroot}/etc/%{name}/subdir/subsubdir
+           echo subconfig-three > %{buildroot}/etc/%{name}/subdir/subsubdir/subconfig-three.conf
+           ln -s / %{buildroot}/etc/%{name}/subdir/link2root
+           ln -s nosuchfile %{buildroot}/etc/%{name}/link2nowhere
+           ln -s . %{buildroot}/etc/%{name}/subdir/link2self
+           ln -s ../.. %{buildroot}/etc/%{name}/subdir/link2parent
            mkdir -p %{buildroot}/etc/opt
            echo file-in-opt-subdir > %{buildroot}/etc/opt/%{name}-opt.conf' \
   files "/etc/%{name}.conf
@@ -125,7 +130,7 @@ vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
 assert_file_has_content test-livefs-with-etc.conf "A config file for test-livefs-with-etc"
 vm_cmd cat /etc/test-livefs-with-etc-other.conf > conf
 assert_file_has_content conf myconfig
-for v in subconfig-one subconfig-two subdir/subconfig-three; do
+for v in subconfig-one subconfig-two subdir/subsubdir/subconfig-three; do
     vm_cmd cat /etc/test-livefs-with-etc/${v}.conf > test-livefs-with-etc.conf
     assert_file_has_content_literal test-livefs-with-etc.conf $(basename $v)
 done
