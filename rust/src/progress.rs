@@ -8,6 +8,7 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
 
 #[derive(PartialEq)]
 enum ProgressType {
@@ -153,72 +154,57 @@ mod tests {
     }
 }
 
-mod ffi {
-    use super::*;
-    use glib::translate::*;
-    use libc;
-    use std::sync::MutexGuard;
-
-    fn assert_empty(m: &MutexGuard<Option<ProgressState>>) {
-        if let Some(ref state) = **m {
-            panic!("Overwriting task: \"{}\"", state.message)
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_progress_begin_task(msg: *const libc::c_char) {
-        let msg: String = unsafe { from_glib_none(msg) };
-        let mut lock = PROGRESS.lock().unwrap();
-        assert_empty(&lock);
-        *lock = Some(ProgressState::new(msg, ProgressType::Task));
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_progress_begin_n_items(msg: *const libc::c_char, n: libc::c_int) {
-        let msg: String = unsafe { from_glib_none(msg) };
-        let mut lock = PROGRESS.lock().unwrap();
-        assert_empty(&lock);
-        *lock = Some(ProgressState::new(msg, ProgressType::NItems(n as u64)));
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_progress_begin_percent(msg: *const libc::c_char) {
-        let msg: String = unsafe { from_glib_none(msg) };
-
-        let mut lock = PROGRESS.lock().unwrap();
-        assert_empty(&lock);
-        *lock = Some(ProgressState::new(msg, ProgressType::Percent));
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_progress_set_message(msg: *const libc::c_char) {
-        let msg: String = unsafe { from_glib_none(msg) };
-        let mut lock = PROGRESS.lock().unwrap();
-        let state = lock.as_mut().expect("progress to update");
-        state.set_message(msg);
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_progress_set_sub_message(msg: *const libc::c_char) {
-        let msg: Option<String> = unsafe { from_glib_none(msg) };
-        let mut lock = PROGRESS.lock().unwrap();
-        let state = lock.as_mut().expect("progress to update");
-        state.set_sub_message(msg);
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_progress_update(n: libc::c_int) {
-        let lock = PROGRESS.lock().unwrap();
-        let state = lock.as_ref().expect("progress to update");
-        state.update(n as u64);
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_progress_end(suffix: *const libc::c_char) {
-        let suffix: Option<String> = unsafe { from_glib_none(suffix) };
-        let mut lock = PROGRESS.lock().unwrap();
-        let state = lock.take().expect("progress to end");
-        state.end(suffix);
+fn assert_empty(m: &MutexGuard<Option<ProgressState>>) {
+    if let Some(ref state) = **m {
+        panic!("Overwriting task: \"{}\"", state.message)
     }
 }
-pub use self::ffi::*;
+
+// TODO cxx-rs Option<T>
+fn optional_str(s: &str) -> Option<&str> {
+    Some(s).filter(|s| !s.is_empty())
+}
+
+pub(crate) fn progress_begin_task(msg: &str) {
+    let mut lock = PROGRESS.lock().unwrap();
+    assert_empty(&lock);
+    *lock = Some(ProgressState::new(msg, ProgressType::Task));
+}
+
+pub(crate) fn progress_begin_n_items(msg: &str, n: u64) {
+    let mut lock = PROGRESS.lock().unwrap();
+    assert_empty(&lock);
+    *lock = Some(ProgressState::new(msg, ProgressType::NItems(n as u64)));
+}
+
+pub(crate) fn progress_begin_percent(msg: &str) {
+    let mut lock = PROGRESS.lock().unwrap();
+    assert_empty(&lock);
+    *lock = Some(ProgressState::new(msg, ProgressType::Percent));
+}
+
+pub(crate) fn progress_set_message(msg: &str) {
+    let mut lock = PROGRESS.lock().unwrap();
+    let state = lock.as_mut().expect("progress to update");
+    state.set_message(msg);
+}
+
+pub(crate) fn progress_set_sub_message(msg: &str) {
+    let msg = optional_str(msg);
+    let mut lock = PROGRESS.lock().unwrap();
+    let state = lock.as_mut().expect("progress to update");
+    state.set_sub_message(msg);
+}
+
+pub(crate) fn progress_update(n: u64) {
+    let lock = PROGRESS.lock().unwrap();
+    let state = lock.as_ref().expect("progress to update");
+    state.update(n);
+}
+
+pub(crate) fn progress_end(suffix: &str) {
+    let suffix = optional_str(suffix);
+    let mut lock = PROGRESS.lock().unwrap();
+    let state = lock.take().expect("progress to end");
+    state.end(suffix);
+}

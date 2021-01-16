@@ -71,6 +71,17 @@ mod ffi {
         fn journal_print_staging_failure();
     }
 
+    // progress.rs
+    extern "Rust" {
+        fn progress_begin_task(msg: &str);
+        fn progress_begin_n_items(msg: &str, n: u64);
+        fn progress_begin_percent(msg: &str);
+        fn progress_set_message(msg: &str);
+        fn progress_set_sub_message(msg: &str);
+        fn progress_update(n: u64);
+        fn progress_end(suffix: &str);
+    }
+
     // scripts.rs
     extern "Rust" {
         fn script_is_ignored(pkg: &str, script: &str) -> bool;
@@ -172,7 +183,7 @@ mod ostree_utils;
 mod passwd;
 use passwd::{passwddb_open, PasswdDB};
 mod progress;
-pub use self::progress::*;
+pub(crate) use self::progress::*;
 mod scripts;
 pub(crate) use self::scripts::*;
 mod testutils;
