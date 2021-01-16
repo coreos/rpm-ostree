@@ -347,19 +347,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
                                GCancellable  *cancellable,
                                GError       **error)
 {
-  gboolean ret = FALSE;
   const char *pkg_script = scriptdesc ? glnx_strjoina (name, ".", scriptdesc+1) : name;
-  g_autoptr(RpmOstreeBwrap) bwrap = NULL;
-  gboolean created_var_lib_rpmstate = FALSE;
-  glnx_autofd int stdout_fd = -1;
-  glnx_autofd int stderr_fd = -1;
-  struct stat stbuf;
-  gboolean is_glibc_locales = FALSE;
-  RpmOstreeBwrapMutability mutability;
-  gboolean debugging_script = FALSE;
-  GLnxTmpfile buffered_output = { 0, };
-  const char *id = NULL;
-  int fd = -1;
 
   // A dance just to pass a well-known fd for /dev/null to bwrap as fd 3
   // so that we can use it for --ro-bind-data.
@@ -369,23 +357,6 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   const int devnull_target_fd = 3;
   g_autofree char *bwrap_devnull_fd = g_strdup_printf ("%d", devnull_target_fd);
 
-  /* And similarly for /var/lib/rpm-state */
-  if (var_lib_rpm_statedir)
-    {
-      if (mkdirat (rootfs_fd, "var/lib/rpm-state", 0755) < 0)
-        {
-          if (errno == EEXIST)
-            ;
-          else
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
-        }
-      else
-        created_var_lib_rpmstate = TRUE;
-    }
-
   /* We just did a ro bind mount over /var above. However we want a writable
    * var/tmp, so we need to tmpfs mount on top of it. See also
    * https://github.com/projectatomic/bubblewrap/issues/182
@@ -393,18 +364,17 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
    *
    * See above for why we special case glibc.
    */
-  is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0 ||
+  gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0 ||
     strcmp (pkg_script, "glibc-common.post") == 0;
-  mutability =
+  RpmOstreeBwrapMutability mutability =
     (is_glibc_locales || !enable_fuse) ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES;
-  bwrap = rpmostree_bwrap_new (rootfs_fd,
-                               mutability,
-                               error);
+  g_autoptr(RpmOstreeBwrap) bwrap = rpmostree_bwrap_new (rootfs_fd, mutability, error);
   if (!bwrap)
-    goto out;
+    return FALSE;
   /* Scripts can see a /var with compat links like alternatives */
   rpmostree_bwrap_var_tmp_tmpfs (bwrap);
 
+  struct stat stbuf;
   if (glnx_fstatat (rootfs_fd, "usr/lib/opt", &stbuf, AT_SYMLINK_NOFOLLOW, NULL) && S_ISDIR(stbuf.st_mode))
     rpmostree_bwrap_append_bwrap_argv (bwrap, "--symlink", "usr/lib/opt", "/opt", NULL);
 
@@ -421,7 +391,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   if (var_lib_rpm_statedir)
     rpmostree_bwrap_bind_readwrite (bwrap, var_lib_rpm_statedir->path, "/var/lib/rpm-state");
 
-  debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
+  gboolean debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
 
   /* https://github.com/systemd/systemd/pull/7631 AKA
    * "systemctl,verbs: Introduce SYSTEMD_OFFLINE environment variable"
@@ -429,7 +399,10 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
    */
   rpmostree_bwrap_setenv (bwrap, "SYSTEMD_OFFLINE", "1");
 
-  id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
+  glnx_autofd int stdout_fd = -1;
+  glnx_autofd int stderr_fd = -1;
+  GLnxTmpfile buffered_output = { 0, };
+  const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
   if (debugging_script || stdin_fd == STDIN_FILENO)
     {
       rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/bash", NULL);
@@ -454,17 +427,11 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
         {
           data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
           if (stdout_fd < 0)
-            {
-              glnx_throw_errno_prefix (error, "While creating stdout stream fd");
-              goto out;
-            }
+            return glnx_prefix_error (error, "While creating stdout stream fd");
 
           data.stderr_fd = stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
           if (stderr_fd < 0)
-            {
-              glnx_throw_errno_prefix (error, "While creating stderr stream fd");
-              goto out;
-            }
+            return glnx_prefix_error (error, "While creating stderr stream fd");
         }
       else
         {
@@ -510,17 +477,12 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
           (*error)->message =
             g_strdup_printf ("%s; run `journalctl -t '%s'` for more information", errmsg, id);
         }
-      goto out;
+      return FALSE;
     }
   else
     dump_buffered_output_noerr (pkg_script, &buffered_output);
 
-  ret = TRUE;
- out:
-  glnx_tmpfile_clear (&buffered_output);
-  if (created_var_lib_rpmstate)
-    (void) unlinkat (rootfs_fd, "var/lib/rpm-state", AT_REMOVEDIR);
-  return ret;
+  return TRUE;
 }
 
 /* Medium level script entrypoint; we already validated it exists and isn't

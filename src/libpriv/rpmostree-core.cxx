@@ -4387,6 +4387,9 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       if (!glnx_mkdtempat (AT_FDCWD, "/tmp/rpmostree-state.XXXXXX", 0700,
                            &var_lib_rpm_statedir, error))
         return FALSE;
+      /* We need to pre-create this dir */
+      if (!glnx_ensure_dir (tmprootfs_dfd, "var/lib/rpm-state", 0755, error))
+        return FALSE;
 
       /* Workaround for https://github.com/projectatomic/rpm-ostree/issues/1804 */
       gboolean created_etc_selinux_config = FALSE;
@@ -4572,6 +4575,9 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   /* And clean up var/tmp, we don't want it in commits */
   if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, "var/tmp", cancellable, error))
+    return FALSE;
+  // And the state dir
+  if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, "var/lib/rpm-state", cancellable, error))
     return FALSE;
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
