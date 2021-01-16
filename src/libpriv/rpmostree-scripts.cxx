@@ -351,7 +351,6 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   const char *pkg_script = scriptdesc ? glnx_strjoina (name, ".", scriptdesc+1) : name;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_lib_rpmstate = FALSE;
-  gboolean created_run_ostree_booted = FALSE;
   glnx_autofd int stdout_fd = -1;
   glnx_autofd int stderr_fd = -1;
   struct stat stbuf;
@@ -361,6 +360,14 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   GLnxTmpfile buffered_output = { 0, };
   const char *id = NULL;
   int fd = -1;
+
+  // A dance just to pass a well-known fd for /dev/null to bwrap as fd 3
+  // so that we can use it for --ro-bind-data.
+  glnx_autofd int devnull_fd = -1;
+  if (!glnx_openat_rdonly (AT_FDCWD, "/dev/null", TRUE, &devnull_fd, error))
+    return FALSE;
+  const int devnull_target_fd = 3;
+  g_autofree char *bwrap_devnull_fd = g_strdup_printf ("%d", devnull_target_fd);
 
   /* And similarly for /var/lib/rpm-state */
   if (var_lib_rpm_statedir)
@@ -407,11 +414,9 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "run", 0755, cancellable, error))
     return FALSE;
   rpmostree_bwrap_bind_readwrite (bwrap, "./run", "/run");
-  fd = openat (rootfs_fd, "run/ostree-booted", O_CREAT | O_WRONLY | O_NOCTTY | O_CLOEXEC, 0640);
-  if (fd == -1)
-    return glnx_throw_errno_prefix (error, "touch(run/ostree-booted)");
-  (void) close (fd);
-  created_run_ostree_booted = TRUE;
+
+  rpmostree_bwrap_take_fd (bwrap, glnx_steal_fd (&devnull_fd), devnull_target_fd);
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--ro-bind-data", bwrap_devnull_fd, "/run/ostree-booted", NULL);
 
   if (var_lib_rpm_statedir)
     rpmostree_bwrap_bind_readwrite (bwrap, var_lib_rpm_statedir->path, "/var/lib/rpm-state");
@@ -515,8 +520,6 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   glnx_tmpfile_clear (&buffered_output);
   if (created_var_lib_rpmstate)
     (void) unlinkat (rootfs_fd, "var/lib/rpm-state", AT_REMOVEDIR);
-  if (created_run_ostree_booted)
-    (void) unlinkat (rootfs_fd, "run/ostree-booted", 0);
   return ret;
 }
 
