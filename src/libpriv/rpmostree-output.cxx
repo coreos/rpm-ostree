@@ -23,6 +23,7 @@
 
 #include "rpmostree-output.h"
 #include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 /* These are helper functions that automatically determine whether data should
  * be sent through an appropriate D-Bus signal or sent directly to the local
@@ -43,29 +44,29 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
     {
       auto begin = static_cast<RpmOstreeOutputProgressBegin *>(data);
       if (begin->percent)
-        ror_progress_begin_percent (begin->prefix);
+        rpmostreecxx::progress_begin_percent (begin->prefix);
       else if (begin->n > 0)
-        ror_progress_begin_n_items (begin->prefix, begin->n);
+        rpmostreecxx::progress_begin_n_items (begin->prefix, begin->n);
       else
-        ror_progress_begin_task (begin->prefix);
+        rpmostreecxx::progress_begin_task (begin->prefix);
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
     {
       auto upd = static_cast<RpmOstreeOutputProgressUpdate *>(data);
-      ror_progress_update (upd->c);
+      rpmostreecxx::progress_update (upd->c);
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
     {
       auto msg = static_cast<const char *>(data);
-      ror_progress_set_sub_message (msg);
+      rpmostreecxx::progress_set_sub_message (rust::Str(msg ?: ""));
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_END:
     {
       auto end = static_cast<RpmOstreeOutputProgressEnd *>(data);
-      ror_progress_end (end->msg);
+      rpmostreecxx::progress_end (rust::Str(end->msg ?: ""));
       break;
     }
   }

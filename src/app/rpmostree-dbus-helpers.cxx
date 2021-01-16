@@ -443,7 +443,7 @@ transaction_progress_end (TransactionProgress *self)
 {
   if (self->progress)
     {
-      ror_progress_end (NULL);
+      rpmostreecxx::progress_end(rust::Str());
       self->progress = FALSE;
     }
   g_main_loop_quit (self->loop);
@@ -476,7 +476,7 @@ on_transaction_progress (GDBusProxy *proxy,
       const gchar *message = NULL;
       g_variant_get_child (parameters, 0, "&s", &message);
       tp->progress = TRUE;
-      ror_progress_begin_task (message);
+      rpmostreecxx::progress_begin_task (message);
     }
   else if (g_strcmp0 (signal_name, "TaskEnd") == 0)
     {
@@ -485,7 +485,7 @@ on_transaction_progress (GDBusProxy *proxy,
       if (tp->progress)
         {
           g_assert (tp->progress);
-          ror_progress_end (message);
+          rpmostreecxx::progress_end (message);
           tp->progress = FALSE;
         }
     }
@@ -494,7 +494,7 @@ on_transaction_progress (GDBusProxy *proxy,
       if (tp->progress)
         {
           g_assert (tp->progress);
-          ror_progress_end (NULL);
+          rpmostreecxx::progress_end (rust::Str());
           tp->progress = FALSE;
         }
     }
@@ -507,9 +507,9 @@ on_transaction_progress (GDBusProxy *proxy,
       if (!tp->progress)
         {
           tp->progress = TRUE;
-          ror_progress_begin_percent (message);
+          rpmostreecxx::progress_begin_percent (message);
         }
-      ror_progress_update (percentage);
+      rpmostreecxx::progress_update (percentage);
     }
   else if (g_strcmp0 (signal_name, "DownloadProgress") == 0)
     {
@@ -555,10 +555,10 @@ on_transaction_progress (GDBusProxy *proxy,
       if (!tp->progress)
         {
           tp->progress = TRUE;
-          ror_progress_begin_task (line);
+          rpmostreecxx::progress_begin_task (line);
         }
       else
-        ror_progress_set_message (line);
+        rpmostreecxx::progress_set_message (line);
     }
   else if (g_strcmp0 (signal_name, "Finished") == 0)
     {
