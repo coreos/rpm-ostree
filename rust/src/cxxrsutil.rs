@@ -11,6 +11,12 @@
 use cxx::{type_id, ExternType};
 use paste::paste;
 
+/// Map an empty string to a `None`.
+pub(crate) fn opt_string(input: &str) -> Option<&str> {
+    // TODO(lucab): drop this polyfill once cxx-rs starts supporting Option<_>.
+    Some(input).filter(|s| !s.is_empty())
+}
+
 /// A custom trait used to translate a *_sys C type wrapper
 /// to its GObject version.
 pub trait FFIGObjectWrapper {

@@ -79,20 +79,6 @@ rpmostree_passwd_compose_prep (int              rootfs_dfd,
                                GCancellable    *cancellable,
                                GError         **error);
 
-gboolean
-rpmostree_passwd_cleanup (int rootfs_dfd, GCancellable *cancellable, GError **error);
-
-gboolean
-rpmostree_passwd_prepare_rpm_layering (int       rootfs_dfd,
-                                       const char        *merge_passwd_dir,
-                                       gboolean          *out_have_usrlib_passwd,
-                                       GCancellable      *cancellable,
-                                       GError  **error);
-
-gboolean
-rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
-                                        GError  **error);
-
 struct sysuser_ent {
   const char *type; /* type of sysuser entry, can be 1: u (user) 2: g (group) 3: m (mixed) 4: r (ranged ids) */
   char *name;

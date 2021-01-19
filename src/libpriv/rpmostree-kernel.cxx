@@ -533,13 +533,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
    **/
   auto etc_guard = rpmostreecxx::prepare_tempetc_guard (rootfs_dfd);
 
-  gboolean have_passwd = FALSE;
-  if (!rpmostree_passwd_prepare_rpm_layering (rootfs_dfd,
-                                              NULL,
-                                              &have_passwd,
-                                              cancellable,
-                                              error))
-    return FALSE;
+  gboolean have_passwd = rpmostreecxx::prepare_rpm_layering (rootfs_dfd, "");
 
   /* Note rebuild_from_initramfs now is only used as a fallback in the client-side regen
    * path when we can't fetch the canonical initramfs args to use. */
@@ -636,8 +630,8 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (rebuild_from_initramfs)
     (void) unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
 
-  if (have_passwd && !rpmostree_passwd_complete_rpm_layering (rootfs_dfd, error))
-    return FALSE;
+  if (have_passwd)
+    rpmostreecxx::complete_rpm_layering (rootfs_dfd);
 
   etc_guard->undo();
 
