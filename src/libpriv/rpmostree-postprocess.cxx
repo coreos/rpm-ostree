@@ -1301,8 +1301,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
     return FALSE;
 
-  if (!rpmostree_passwd_cleanup (rootfs_fd, cancellable, error))
-    return FALSE;
+  rpmostreecxx::passwd_cleanup(rootfs_fd);
 
   return TRUE;
 }

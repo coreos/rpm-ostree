@@ -134,6 +134,9 @@ mod ffi {
     // passwd.rs
     extern "Rust" {
         fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>>;
+        fn prepare_rpm_layering(rootfs: i32, merge_passwd_dir: &str) -> Result<bool>;
+        fn complete_rpm_layering(rootfs: i32) -> Result<()>;
+        fn passwd_cleanup(rootfd: i32) -> Result<()>;
 
         type PasswdDB;
         fn add_user(self: &mut PasswdDB, uid: u32, username: &str);
@@ -181,7 +184,7 @@ mod origin;
 mod ostree_diff;
 mod ostree_utils;
 mod passwd;
-use passwd::{passwddb_open, PasswdDB};
+use passwd::*;
 mod progress;
 pub(crate) use self::progress::*;
 mod scripts;

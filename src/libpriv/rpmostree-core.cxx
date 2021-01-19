@@ -4344,12 +4344,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       g_autoptr(GHashTable) groupents = g_hash_table_new (g_str_hash,
                                                           g_str_equal);
 
-      if (!rpmostree_passwd_prepare_rpm_layering (tmprootfs_dfd,
-                                                  self->passwd_dir,
-                                                  &have_passwd,
-                                                  cancellable,
-                                                  error))
-        return FALSE;
+      std::string passwd_dir(self->passwd_dir ?: "");
+      have_passwd = rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dir);
 
       /* Also neuter systemctl - at least glusterfs for example calls `systemctl
        * start` in its %post which both violates Fedora policy and also will not
@@ -4555,8 +4551,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       if (have_passwd)
         {
-          if (!rpmostree_passwd_complete_rpm_layering (tmprootfs_dfd, error))
-            return FALSE;
+          rpmostreecxx::complete_rpm_layering (tmprootfs_dfd);
         }
     }
   else
