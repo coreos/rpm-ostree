@@ -13,6 +13,7 @@ Source0: https://github.com/coreos/rpm-ostree/releases/download/v%{version}/rpm-
 
 ExclusiveArch: %{rust_arches}
 
+BuildRequires: make
 %if 0%{?rhel} && !0%{?eln}
 BuildRequires: rust-toolset
 %else
