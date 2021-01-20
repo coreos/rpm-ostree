@@ -36,15 +36,15 @@ rot_test_run_libtest (const char *cmd, GError **error)
   g_autoptr(GPtrArray) argv = g_ptr_array_new ();
   g_autoptr(GString) cmdstr = g_string_new ("");
 
-  g_ptr_array_add (argv, "bash");
-  g_ptr_array_add (argv, "-c");
+  g_ptr_array_add (argv, (char*)"bash");
+  g_ptr_array_add (argv, (char*)"-c");
 
   g_string_append (cmdstr, "set -xeuo pipefail; . ");
   g_string_append (cmdstr, srcdir);
   g_string_append (cmdstr, "/tests/common/libtest.sh; ");
   g_string_append (cmdstr, cmd);
 
-  g_ptr_array_add (argv, cmdstr->str);
+  g_ptr_array_add (argv, (char*)cmdstr->str);
   g_ptr_array_add (argv, NULL);
 
   if (!g_spawn_sync (NULL, (char**)argv->pdata, NULL, G_SPAWN_SEARCH_PATH,

@@ -137,7 +137,7 @@ test_variant_to_nevra(void)
     glnx_autofd int foo_fd = -1;
     glnx_openat_rdonly (AT_FDCWD, foo_rpm, TRUE, &foo_fd, &error);
     g_assert_no_error (error);
-    importer = rpmostree_importer_new_take_fd (&foo_fd, repo, NULL, 0, NULL, &error);
+    importer = rpmostree_importer_new_take_fd (&foo_fd, repo, NULL, (RpmOstreeImporterFlags)0, NULL, &error);
     g_assert_no_error (error);
     g_assert (importer);
 
