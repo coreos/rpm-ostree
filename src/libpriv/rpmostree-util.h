@@ -287,4 +287,7 @@ rpmostree_relative_path_is_ostree_compliant (const char *path);
 char*
 rpmostree_maybe_shell_quote (const char *s);
 
+void
+rpmostree_journal_error (GError *error);
+
 G_END_DECLS

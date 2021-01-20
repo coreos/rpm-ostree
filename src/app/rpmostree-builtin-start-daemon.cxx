@@ -100,21 +100,20 @@ on_peer_acquired (GObject *source,
                   GAsyncResult *result,
                   gpointer user_data)
 {
-  g_autoptr(GDBusConnection) connection = NULL;
   g_autoptr(GError) error = NULL;
-
-  connection = g_dbus_connection_new_finish (result, &error);
+  g_autoptr(GDBusConnection) connection = g_dbus_connection_new_finish (result, &error);
   if (!connection)
-    goto out;
+    {
+      state_transition_fatal_err (error);
+      return;
+    }
 
   if (!start_daemon (connection, &error))
-    goto out;
-
- out:
-  if (error)
-    state_transition_fatal_err (error);
+    {
+      state_transition_fatal_err (error);
+      return;
+    }
 }
-
 
 static gboolean
 on_sigint (gpointer user_data)
