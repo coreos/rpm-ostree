@@ -6,12 +6,7 @@ updates:
     interval: weekly
   open-pull-requests-limit: 3
 - package-ecosystem: cargo
-  directory: "/rust"
-  schedule:
-    interval: weekly
-  open-pull-requests-limit: 3
-- package-ecosystem: cargo
-  directory: "/tooling"
+  directory: "/"
   schedule:
     interval: weekly
   open-pull-requests-limit: 3
