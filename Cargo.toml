@@ -9,7 +9,7 @@ anyhow = "1.0.35"
 paste = "1.0"
 serde = { version = "1.0.118", features = ["derive"] }
 serde_derive = "1.0.118"
-serde_json = "1.0.60"
+serde_json = "1.0.61"
 serde_yaml = "0.8.14"
 libc = "0.2.81"
 cxx = "1.0.18"
