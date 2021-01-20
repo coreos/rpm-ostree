@@ -60,7 +60,7 @@ verify_sysuser_ent_content (GPtrArray       *sysusers_entries,
   for (int counter = 0; counter < sysusers_entries->len; counter++)
     {
       g_autofree gchar** sysent_list = g_strsplit (expected_content[counter], " ", -1);
-      struct sysuser_ent *sysuser_ent = sysusers_entries->pdata[counter];
+      auto sysuser_ent = (struct sysuser_ent *)sysusers_entries->pdata[counter];
       const char *shell = sysuser_ent->shell ?: "-";
       const char *gecos = sysuser_ent->gecos ?: "-";
       const char *dir = sysuser_ent->dir ?: "-";
