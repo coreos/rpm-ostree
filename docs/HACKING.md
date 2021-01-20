@@ -51,8 +51,16 @@ rpm-ostree has some tests that use the [coreos-assembler/kola framework](https:/
 
 You will want to [build a custom image](https://github.com/coreos/coreos-assembler/blob/94602e26678fd1a8fa3bda37b3b1d980967be2d6/README-devel.md#using-overrides) and use `kola run -E /path/to/rpm-ostree.git ext.rpm-ostree.*'.
 
-There's also a `make vmcheck` test suite that requires a `ssh-config` in the
-source directory toplevel.  You can provision a VM however you want; libvirt
+There's also a `vmcheck` test suite. This model always operates on an immutable base image. It takes that image and dynamically launches a separate VM for each test using `kola spawn`. For example, using the [CoreOS Assembler](https://coreos.github.io/coreos-assembler/building-fcos/), you can build a FCOS image that contains the version of rpm-ostree that you would like to test. To run the `vmcheck` test suite on it, symlink the built image to `${topsrcdir}/tests/vmcheck/image.qcow2` and execute `tests/vmcheck.sh`. 
+
+To filter tests, use the `TESTS=` environment variable. For example, to run only `tests/vmcheck/test-misc-2.sh`, you can do:
+
+```sh
+TESTS='misc-2' ./tests/vmcheck.sh
+```
+
+You can also run this test suite by provisioning your own VM, it would require a 
+`ssh-config` in the source directory toplevel. You can provision a VM however you want; libvirt
 directly, vagrant, a remote OpenStack/EC2 instance, etc.  If you choose
 vagrant for example, do something like this:
 
