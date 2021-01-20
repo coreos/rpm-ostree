@@ -5,10 +5,15 @@ use std::borrow::Cow;
 use std::fs::File;
 
 const KOJI_URL_PREFIX: &str = "https://koji.fedoraproject.org/koji/";
-/// See https://github.com/cgwalters/koji-sane-json-api
-const KOJI_JSON_API_URL: &str = "kojiproxy-coreos.svc.ci.openshift.org";
 const BODHI_URL_PREFIX: &str = "https://bodhi.fedoraproject.org/updates/";
 const BODHI_UPDATE_PREFIX: &str = "FEDORA-";
+
+lazy_static::lazy_static! {
+    /// See https://github.com/cgwalters/koji-sane-json-api
+    static ref KOJI_JSON_API_HOST: String = {
+        std::env::var("RPMOSTREE_KOJI_JSON_API_HOST").ok().unwrap_or("kojiproxy-coreos.svc.ci.openshift.org".to_string())
+    };
+}
 
 mod bodhi {
     use super::*;
@@ -107,7 +112,7 @@ mod koji {
     }
 
     pub(crate) fn get_build(buildid: &str) -> Result<KojiBuildInfo> {
-        let url = format!("{}/buildinfo/{}", KOJI_JSON_API_URL, buildid);
+        let url = format!("https://{}/buildinfo/{}", &*KOJI_JSON_API_HOST, buildid);
         let f = crate::utils::download_url_to_tmpfile(&url, false)
             .context("Failed to download buildinfo from koji proxy")?;
         Ok(serde_json::from_reader(std::io::BufReader::new(f))?)
