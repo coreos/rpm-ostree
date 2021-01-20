@@ -199,6 +199,18 @@ setup_rofiles (RpmOstreeBwrap *bwrap,
   return TRUE;
 }
 
+
+/* We don't want a failure to unmount to be fatal, so all we do here
+ * is log.  Though in practice what we *really* want is for the
+ * fusermount to be in the bwrap namespace, and hence tied by the
+ * kernel to the lifecycle of the container.  This would require
+ * special casing for somehow doing FUSE mounts in bwrap.  Which
+ * would be hard because NO_NEW_PRIVS turns off the setuid bits for
+ * fuse.
+ *
+ * Or: just hard switch to overlayfs now that it will soon be
+ * available even unprivileged https://lwn.net/Articles/803203/
+ */
 static void
 teardown_rofiles (GLnxTmpDir *mnt_tmp)
 {
@@ -216,27 +228,17 @@ teardown_rofiles (GLnxTmpDir *mnt_tmp)
                      NULL, NULL, NULL, NULL, &estatus, &tmp_error))
     {
       g_prefix_error (&tmp_error, "Executing fusermount: ");
-      goto out;
+      rpmostree_journal_error (tmp_error);
+      return;
     }
   if (!g_spawn_check_exit_status (estatus, &tmp_error))
     {
       g_prefix_error (&tmp_error, "Executing fusermount: ");
-      goto out;
+      rpmostree_journal_error (tmp_error);
+      return;
     }
 
   (void)glnx_tmpdir_delete (mnt_tmp, NULL, NULL);
-
- out:
-  /* We don't want a failure to unmount to be fatal, so all we do here
-   * is log.  Though in practice what we *really* want is for the
-   * fusermount to be in the bwrap namespace, and hence tied by the
-   * kernel to the lifecycle of the container.  This would require
-   * special casing for somehow doing FUSE mounts in bwrap.  Which
-   * would be hard because NO_NEW_PRIVS turns off the setuid bits for
-   * fuse.
-   */
-  if (tmp_error)
-    sd_journal_print (LOG_WARNING, "%s", tmp_error->message);
 }
 
 /* nspawn by default doesn't give us CAP_NET_ADMIN; see

@@ -521,7 +521,7 @@ rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
   g_return_val_if_fail (version != NULL, FALSE);
 
   if (!ostree_repo_resolve_rev (repo, refspec, FALSE, &checksum, error))
-    goto out;
+    return FALSE;
 
   while (checksum != NULL)
     {
@@ -529,10 +529,10 @@ rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
       gboolean stop = FALSE;
 
       if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
-        goto out;
+        return FALSE;
 
       if (!version_visitor (repo, checksum, commit, &closure, &stop, error))
-        goto out;
+        return FALSE;
 
       g_clear_pointer (&checksum, g_free);
 
@@ -541,21 +541,13 @@ rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
     }
 
   if (closure.checksum == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                   "Version %s not cached in %s", version, refspec);
-      goto out;
-    }
+    return glnx_throw (error, "Version %s not cached in %s", version, refspec);
 
   if (out_checksum != NULL)
     *out_checksum = util::move_nullify (closure.checksum);
 
   g_free (closure.checksum);
-
-  ret = TRUE;
-
-out:
-  return ret;
+  return TRUE;
 }
 
 /**

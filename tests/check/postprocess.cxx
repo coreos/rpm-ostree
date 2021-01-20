@@ -70,15 +70,10 @@ test_postprocess_altfiles (void)
     {
       AltfilesTest *test = &altfiles_tests[i];
       g_autofree char *newbuf = rpmostree_postprocess_replace_nsswitch (test->input, error);
-
-      if (!newbuf)
-        goto out;
-
+      g_assert_no_error (error);
+      g_assert (newbuf);
       g_assert_cmpstr (newbuf, ==, test->output);
     }
-
- out:
-  g_assert_no_error (local_error);
 }
 
 int

@@ -1190,3 +1190,13 @@ rpmostree_maybe_shell_quote (const char *s)
     return NULL;
   return g_shell_quote (s);
 }
+
+/* Given an error, log it to the systemd journal; use this
+ * for code paths where we can't easily propagate it back
+ * up the stack - particularly "shouldn't happen" errors.
+ */
+void
+rpmostree_journal_error (GError *error)
+{
+  sd_journal_print (LOG_WARNING, "%s", error->message);
+}
