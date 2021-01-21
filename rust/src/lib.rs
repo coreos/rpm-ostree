@@ -16,6 +16,12 @@ pub(crate) use cxxrsutil::*;
 mod includes;
 
 /// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
+///
+/// Usage guidelines:
+///
+/// - Keep this content roughly ordered alphabetically
+/// - While the return type here will be `Result<T>` on the implementation
+///   side you currently *should* use `CxxResult`; see the docs of that for more information.
 #[cxx::bridge(namespace = "rpmostreecxx")]
 mod ffi {
     // Types that are defined by gtk-rs generated bindings that
@@ -28,6 +34,17 @@ mod ffi {
         type OstreeRepo = crate::FFIOstreeRepo;
         type OstreeDeployment = crate::FFIOstreeDeployment;
         type GCancellable = crate::FFIGCancellable;
+    }
+
+    /// Currently cxx-rs doesn't support mappings; like probably most projects,
+    /// by far our most common case is a mapping from string -> string and since
+    /// our data sizes aren't large, we serialize this as a vector of strings pairs.
+    /// In the future it's also likely that cxx-rs will support a C++ string_view
+    /// so we could avoid duplicating in that direction.
+    #[derive(Clone, Debug)]
+    struct StringMapping {
+        k: String,
+        v: String,
     }
 
     // client.rs
@@ -118,15 +135,6 @@ mod ffi {
     // testutils.rs
     extern "Rust" {
         fn testutils_entrypoint(argv: Vec<String>) -> Result<()>;
-    }
-
-    /// Currently cxx-rs doesn't support mappings; like probably most projects,
-    /// by far our most common case is a mapping from string -> string and since
-    /// our data sizes aren't large, we serialize this as a vector of strings pairs.
-    #[derive(Clone, Debug)]
-    struct StringMapping {
-        k: String,
-        v: String,
     }
 
     // utils.rs
