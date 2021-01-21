@@ -59,40 +59,20 @@ To filter tests, use the `TESTS=` environment variable. For example, to run only
 TESTS='misc-2' ./tests/vmcheck.sh
 ```
 
-You can also run this test suite by provisioning your own VM, it would require a 
-`ssh-config` in the source directory toplevel. You can provision a VM however you want; libvirt
-directly, vagrant, a remote OpenStack/EC2 instance, etc.  If you choose
+For development, there is also a `make vmsync` which copies the built rpm-ostree
+into an unlocked VM. To use this, you must have an `ssh-config` file with a host
+defined in it called `vmcheck`. You can provision the VM however you want;
+libvirt directly, vagrant, a remote OpenStack/EC2 instance, etc.  If you choose
 vagrant for example, do something like this:
 
 ```sh
 vagrant ssh-config > /path/to/src/rpm-ostree/ssh-config
 ```
 
-The host is expected to be called `vmcheck` in the
-`ssh-config`. You can specify multiple hosts and parallelize
-the `make vmcheck` testsuite run through the `HOSTS`
-variable. For example, if you have three nodes named
-`vmcheck[123]`, you can use:
-
-```sh
-make vmcheck HOSTS='vmcheck1 vmcheck2 vmcheck3'
-```
-
-Once you have a `ssh-config` set up:
-
-`make vmsync` will do an unlock, and sync the container build
-into the VM.
-
-`make vmoverlay` will do a non-live overlay, and reboot the VM.
-
 Note that by default, these commands will retrieve the latest version of ostree
 from the build environment and include those binaries when syncing to the VM.
-
-Ideally, you should be installing `ostree` from streams like
-[FAHC](https://pagure.io/fedora-atomic-host-continuous/) and
-[CAHC](https://wiki.centos.org/SpecialInterestGroup/Atomic/Devel), which closely
-track ostree's git master. This allows you to not have to worry about using
-libostree APIs that are not yet released.
+So make sure to have the latest ostree installed or built. This allows you to
+not have to worry about using libostree APIs that are not yet released.
 
 For more details on how tests are structured, see [tests/README.md](tests/README.md).
 
