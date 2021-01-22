@@ -10,9 +10,7 @@
 
 use anyhow::{anyhow, bail, Result};
 use c_utf8::CUtf8Buf;
-use openat;
 use serde_derive::{Deserialize, Serialize};
-use serde_json;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::io::prelude::*;
@@ -536,7 +534,7 @@ impl Treefile {
     }
 
     /// Generate a rojig spec file.
-    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> Result<CUtf8Buf> {
+    fn write_rojig_spec(workdir: &openat::Dir, r: &Rojig) -> Result<CUtf8Buf> {
         let description = r
             .description
             .as_ref()
@@ -547,7 +545,7 @@ impl Treefile {
                     None
                 }
             })
-            .unwrap_or(r.summary.as_str());
+            .unwrap_or_else(|| r.summary.as_str());
         let name: String = format!("{}.spec", r.name);
         {
             let mut f = workdir.write_file(name.as_str(), 0o644)?;
@@ -1393,8 +1391,6 @@ etc-group-members:
 mod ffi {
     use super::*;
     use glib::translate::*;
-    use glib_sys;
-    use libc;
     use std::io::Seek;
     use std::os::unix::io::{AsRawFd, RawFd};
     use std::{fs, io, ptr};

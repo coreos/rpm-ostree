@@ -64,7 +64,7 @@ pub(crate) fn cliwrap_entrypoint(args: Vec<String>) -> CxxResult<()> {
             "rpm" => Ok(self::rpm::main(&args)?),
             "dracut" => Ok(self::dracut::main(&args)?),
             "grubby" => Ok(self::grubby::main(&args)?),
-            _ => return Err(anyhow!("Unknown wrapped binary: {}", name).into()),
+            _ => Err(anyhow!("Unknown wrapped binary: {}", name).into()),
         }
     }
 }

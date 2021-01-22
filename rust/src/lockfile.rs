@@ -13,7 +13,6 @@ use anyhow::Result;
 use chrono::prelude::*;
 use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
-use serde_json;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryInto;
 use std::io;
@@ -195,8 +194,6 @@ mod ffi {
     use crate::includes::*;
     use glib::translate::*;
     use glib::GString;
-    use glib_sys;
-    use libc;
     use libdnf_sys::*;
     use std::ptr;
 
@@ -216,7 +213,10 @@ mod ffi {
                 let map = lockfile.packages.into_iter().fold(
                     HashMap::<String, String>::new(),
                     |mut acc, (k, v)| {
-                        acc.insert(format!("{}-{}", k, v.evra), v.digest.unwrap_or("".into()));
+                        acc.insert(
+                            format!("{}-{}", k, v.evra),
+                            v.digest.unwrap_or_else(|| "".into()),
+                        );
                         acc
                     },
                 );
@@ -293,7 +293,8 @@ mod ffi {
 
         int_glib_error(
             || -> Result<()> {
-                let lockfile_dir = openat::Dir::open(filename.parent().unwrap_or(Path::new("/")))?;
+                let lockfile_dir =
+                    openat::Dir::open(filename.parent().unwrap_or_else(|| Path::new("/")))?;
                 let basename = filename.file_name().expect("filename");
                 lockfile_dir.write_file_with(basename, 0o644, |w| -> Result<()> {
                     Ok(serde_json::to_writer_pretty(w, &lockfile)?)

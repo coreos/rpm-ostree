@@ -44,7 +44,7 @@ fn impl_journal_print_staging_failure() -> Result<()> {
     // Now, go backwards until we hit the first entry from the previous boot. In theory that should
     // just be a single `sd_journal_previous()` call, but we need a loop here, see:
     // https://github.com/systemd/systemd/commit/dc00966228ff90c554fd034e588ea55eb605ec52
-    let mut previous_boot_id: Id128 = boot_id.clone();
+    let mut previous_boot_id: Id128 = boot_id;
     while previous_boot_id == boot_id {
         match j.previous_entry()? {
             Some(_) => previous_boot_id = j.monotonic_timestamp()?.1,

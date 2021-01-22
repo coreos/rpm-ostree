@@ -26,7 +26,7 @@ static PWGRP_LOCK_AND_BACKUP_FILES: &[&str] = &[
 /// Populate a new DB with content from `passwd` and `group` files.
 pub fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>> {
     let fd = ffiutil::ffi_view_openat_dir(rootfs);
-    PasswdDB::populate_new(&fd).map(|db| Box::new(db))
+    PasswdDB::populate_new(&fd).map(Box::new)
 }
 
 /// Prepare passwd content before layering RPMs.
