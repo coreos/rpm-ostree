@@ -2457,7 +2457,6 @@ gather_source_to_packages (RpmOstreeContext *self)
 
 gboolean
 rpmostree_context_download (RpmOstreeContext *self,
-                            const char       *target_dir,
                             GCancellable     *cancellable,
                             GError          **error)
 {
@@ -2477,9 +2476,7 @@ rpmostree_context_download (RpmOstreeContext *self,
     g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (self);
     GLNX_HASH_TABLE_FOREACH_KV (source_to_packages, DnfRepo*, src, GPtrArray*, src_packages)
       {
-        const char *final_target_dir = target_dir;
-        g_autofree char *final_target_dir_owned = NULL;
-
+        g_autofree char *target_dir = NULL;
         glnx_unref_object DnfState *hifstate = dnf_state_new ();
 
         progress_sigid = g_signal_connect (hifstate, "percentage-changed",
@@ -2489,12 +2486,11 @@ rpmostree_context_download (RpmOstreeContext *self,
         rpmostree_output_progress_percent_begin (&progress, "Downloading from '%s'",
                                                  dnf_repo_get_id (src));
 
-        if (!final_target_dir)
-          final_target_dir = final_target_dir_owned = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
-        if (!glnx_shutil_mkdir_p_at (AT_FDCWD, final_target_dir, 0755, cancellable, error))
+        target_dir = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
+        if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
           return FALSE;
 
-        if (!dnf_repo_download_packages (src, src_packages, final_target_dir,
+        if (!dnf_repo_download_packages (src, src_packages, target_dir,
                                          hifstate, error))
           return FALSE;
 

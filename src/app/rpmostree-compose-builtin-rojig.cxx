@@ -191,7 +191,7 @@ install_packages (RpmOstreeRojigCompose  *self,
     return FALSE;
 
   /* --- Downloading packages --- */
-  if (!rpmostree_context_download (self->corectx, NULL, cancellable, error))
+  if (!rpmostree_context_download (self->corectx, cancellable, error))
     return FALSE;
   if (!rpmostree_context_import (self->corectx, cancellable, error))
     return FALSE;

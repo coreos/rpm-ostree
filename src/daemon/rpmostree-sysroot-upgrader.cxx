@@ -1288,7 +1288,7 @@ rpmostree_sysroot_upgrader_import_pkgs (RpmOstreeSysrootUpgrader *self,
 
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
     {
-      if (!rpmostree_context_download (self->ctx, NULL, cancellable, error))
+      if (!rpmostree_context_download (self->ctx, cancellable, error))
         return FALSE;
       if (!rpmostree_context_import (self->ctx, cancellable, error))
         return FALSE;
