@@ -413,7 +413,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
     return FALSE;
 
   /* --- Downloading packages --- */
-  if (!rpmostree_context_download (self->corectx, NULL, cancellable, error))
+  if (!rpmostree_context_download (self->corectx, cancellable, error))
     return FALSE;
 
   if (opt_download_only || opt_download_only_rpms)

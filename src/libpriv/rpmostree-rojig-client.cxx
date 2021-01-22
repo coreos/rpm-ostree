@@ -206,7 +206,7 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
       return FALSE;
   }
 
-  if (!rpmostree_context_download (self, NULL, cancellable, error))
+  if (!rpmostree_context_download (self, cancellable, error))
     return FALSE;
 
   glnx_fd_close int oirpm_fd = -1;
@@ -301,7 +301,7 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
   }
 
   /* Start the download and import, using the xattr data from the rojigRPM */
-  if (!rpmostree_context_download (self, NULL, cancellable, error))
+  if (!rpmostree_context_download (self, cancellable, error))
     return FALSE;
   g_autoptr(GVariant) xattr_table = rpmostree_rojig_assembler_get_xattr_table (rojig);
   if (!rpmostree_context_import_rojig (self, xattr_table, pkg_to_xattrs,
