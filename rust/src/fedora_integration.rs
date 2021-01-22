@@ -11,7 +11,7 @@ const BODHI_UPDATE_PREFIX: &str = "FEDORA-";
 lazy_static::lazy_static! {
     /// See https://github.com/cgwalters/koji-sane-json-api
     static ref KOJI_JSON_API_HOST: String = {
-        std::env::var("RPMOSTREE_KOJI_JSON_API_HOST").ok().unwrap_or("kojiproxy-coreos.svc.ci.openshift.org".to_string())
+        std::env::var("RPMOSTREE_KOJI_JSON_API_HOST").ok().unwrap_or_else(|| "kojiproxy-coreos.svc.ci.openshift.org".to_string())
     };
 }
 

@@ -6,7 +6,6 @@
 
 use crate::cxxrsutil::CxxResult;
 use anyhow::Result;
-use openat;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
 use std::io;

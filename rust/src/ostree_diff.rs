@@ -90,10 +90,7 @@ fn diff_recurse(
         let to_child = to.get_child(&name).expect("child");
         let to_info = query_info_optional(&to_child, queryattrs, queryflags)
             .context("querying optional to")?;
-        let is_dir = match from_info.get_file_type() {
-            gio::FileType::Directory => true,
-            _ => false,
-        };
+        let is_dir = matches!(from_info.get_file_type(), gio::FileType::Directory);
         if to_info.is_some() {
             let to_child = to_child.downcast::<ostree::RepoFile>().expect("downcast");
             to_child.ensure_resolved()?;
@@ -120,12 +117,10 @@ fn diff_recurse(
                     diff.changed_files.insert(path);
                 }
             }
+        } else if is_dir {
+            diff.removed_dirs.insert(path);
         } else {
-            if is_dir {
-                diff.removed_dirs.insert(path);
-            } else {
-                diff.removed_files.insert(path);
-            }
+            diff.removed_files.insert(path);
         }
     }
     // Iterate over the target (to) directory, and find any
@@ -141,10 +136,7 @@ fn diff_recurse(
         if from_info.is_some() {
             continue;
         }
-        let is_dir = match to_info.get_file_type() {
-            gio::FileType::Directory => true,
-            _ => false,
-        };
+        let is_dir = matches!(to_info.get_file_type(), gio::FileType::Directory);
         if is_dir {
             diff.added_dirs.insert(path);
         } else {

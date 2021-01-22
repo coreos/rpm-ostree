@@ -5,10 +5,6 @@
  */
 
 use c_utf8::CUtf8;
-use gio_sys;
-use glib_sys;
-use libc;
-use openat;
 use std::ffi::CString;
 use std::ffi::{CStr, OsStr};
 use std::fmt::Display;

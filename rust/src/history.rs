@@ -119,7 +119,7 @@ impl HistoryEntry {
             first_boot_timestamp: boot.timestamp,
             last_boot_timestamp: boot.timestamp,
             deploy_timestamp: deploy.timestamp,
-            deploy_cmdline: deploy.cmdline.map(|s| s.clone()).unwrap_or_default(),
+            deploy_cmdline: deploy.cmdline.unwrap_or_default(),
             boot_count: 1,
             eof: false,
         }

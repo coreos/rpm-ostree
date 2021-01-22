@@ -346,7 +346,11 @@ pub(crate) fn transaction_apply_live(
     target: &str,
 ) -> CxxResult<()> {
     let sysroot = &sysroot.gobj_wrap();
-    let target = if target.len() > 0 { Some(target) } else { None };
+    let target = if !target.is_empty() {
+        Some(target)
+    } else {
+        None
+    };
     let repo = &sysroot.repo().expect("repo");
 
     let booted = if let Some(b) = sysroot.get_booted_deployment() {
@@ -411,14 +415,13 @@ pub(crate) fn transaction_apply_live(
     }
 
     if let Some(ref state) = state {
-        if !state.inprogress.is_empty() {
-            if state.inprogress.as_str() != target_commit {
-                Err(anyhow::anyhow!(
-                    "Previously interrupted while targeting commit {}, cannot change target to {}",
-                    state.inprogress,
-                    target_commit
-                ))?;
-            }
+        if !state.inprogress.is_empty() && state.inprogress.as_str() != target_commit {
+            return Err(anyhow::anyhow!(
+                "Previously interrupted while targeting commit {}, cannot change target to {}",
+                state.inprogress,
+                target_commit
+            )
+            .into());
         }
     }
 

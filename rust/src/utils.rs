@@ -11,12 +11,8 @@ use std::io::prelude::*;
 use std::os::unix::io::IntoRawFd;
 use std::path::Path;
 use std::{fs, io};
-use tempfile;
 
 use curl::easy::Easy;
-
-use serde_json;
-use serde_yaml;
 
 #[derive(PartialEq)]
 /// Supported config serialization used by treefile and lockfile
