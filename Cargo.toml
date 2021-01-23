@@ -3,6 +3,17 @@ name = "rpmostree-rust"
 version = "0.1.0"
 authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
 edition = "2018"
+links = "rpmostreeinternals"
+
+# This currently needs to duplicate the libraries in configure.ac
+# until we unify on Cargo as our build system
+[package.metadata.system-deps]
+libarchive = "3.0"
+jsonglib = { name = "json-glib-1.0", version = "1" }
+polkitgobject = { name = "polkit-gobject-1", version = "0" }
+rpm = "4"
+librepo = "1"
+libsolv = "0.7"
 
 [dependencies]
 anyhow = "1.0.38"
@@ -43,6 +54,7 @@ os-release = "0.1.0"
 
 [build-dependencies]
 cbindgen = "0.16.0"
+system-deps = "2.0"
 anyhow = "1.0"
 
 [lib]

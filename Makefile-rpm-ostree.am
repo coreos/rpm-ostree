@@ -86,14 +86,15 @@ rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-DLIBDIR=\"$(libdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" \
 	$(PKGDEP_RPMOSTREE_CFLAGS) $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpmostree_bin_common_cflags = $(rpmostree_common_cflags)
-rpmostree_bin_common_libs = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostree-1.la librpmostreecxxrs.la $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++ -lrt
+rpmostree_common_libs = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++ -lrt
+rpmostree_bin_common_libs = librpmostreeinternals.la $(librpmostree_rust_path) $(rpmostree_common_libs)
 rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_bin_common_cflags)
 rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_bin_common_cflags)
 rpm_ostree_LDADD = librpmostreeinternals.la $(rpmostree_bin_common_libs)
 EXTRA_rpm_ostree_DEPENDENCIES = libdnf.so.2
 librpmostreeinternals_la_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
 librpmostreeinternals_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
-librpmostreeinternals_la_LIBADD = $(rpmostree_bin_common_libs)
+librpmostreeinternals_la_LIBADD = $(rpmostree_common_libs)
 EXTRA_librpmostreeinternals_la_DEPENDENCIES = libdnf.so.2
 
 privdatadir=$(pkglibdir)
@@ -114,7 +115,9 @@ librpmostree_rust_path = $(top_srcdir)/target/@RUST_TARGET_SUBDIR@/librpmostree_
 # we exit with a fatal error, since someone probably did `make && sudo make install`,
 # and in this case cargo will download into ~/.root which we don't want.
 LIBRPMOSTREE_RUST_SRCS = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.lock cbindgen.toml
-$(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
+# FIXME - build all this code in a rpmostree-sys crate, or just move all the C/C++ build
+# to Rust.  Currently this forces build system serialization
+$(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS) librpmostreeinternals.la
 	$(cargo_build) $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS)
 

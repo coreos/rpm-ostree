@@ -16,6 +16,15 @@ fn detect_fedora_feature() -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    let cwd = std::env::current_dir()?;
+    let cwd = cwd.to_str().expect("utf8 pwd");
+    println!("cargo:rustc-link-search={}/.libs", cwd);
+    println!("cargo:rustc-link-lib=static=rpmostreeinternals");
+    println!("cargo:rustc-link-lib=cap");
+    println!("cargo:rustc-link-search={}/libdnf-build/libdnf", cwd);
+    println!("cargo:rustc-link-lib=dnf");
+    println!("cargo:rustc-link-lib=rpmostree-1");
+    system_deps::Config::new().probe()?;
     detect_fedora_feature()?;
     Ok(())
 }
