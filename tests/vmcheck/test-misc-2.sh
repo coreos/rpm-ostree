@@ -71,6 +71,18 @@ assert_streq "$(vm_get_booted_csum)" "${commit}"
 vm_assert_journal_has_content $cursor "Finalized deployment; rebooting into ${commit}"
 echo "ok finalize-deployment"
 
+# Test `deploy --register-driver` option with empty string as revision.
+vm_cmd rpm-ostree deploy \'\' \
+       --register-driver=OtherTestDriver
+vm_cmd test -f /run/rpm-ostree/update-driver.gv
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content status.txt 'driven by OtherTestDriver'
+vm_cmd rpm-ostree status -v > verbose_status.txt
+assert_file_has_content verbose_status.txt 'driven by OtherTestDriver (sshd.service)'
+vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"OtherTestDriver\"" \
+                    ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
+echo "ok deploy --register-driver with empty string revision"
+
 # Custom origin and local repo rebases. This is essentially the RHCOS workflow.
 # https://github.com/projectatomic/rpm-ostree/pull/1406
 # https://github.com/projectatomic/rpm-ostree/pull/1732

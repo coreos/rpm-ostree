@@ -991,6 +991,20 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), txn_title->str);
     }
 
+  if (update_driver)
+    {
+      if (!record_driver_info (transaction, update_driver, cancellable, error))
+        return FALSE;
+      /* If revision is an empty string, we interpret this to mean that the invocation
+       * was called solely for the purpose of registering the update driver. Exit early without
+       * doing any further work. */
+      if (self->revision && self->revision[0] == '\0')
+        {
+          rpmostree_output_message ("Empty string revision found; registering update driver only");
+          return TRUE;
+        }
+    }
+
   int upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
@@ -1432,12 +1446,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                                  cancellable, error))
     return FALSE;
   changed = changed || layering_changed;
-
-  if (update_driver)
-    {
-      if (!record_driver_info (transaction, update_driver, cancellable, error))
-        return FALSE;
-    }
 
   if (dry_run)
     /* Note early return here; we printed the transaction already */
