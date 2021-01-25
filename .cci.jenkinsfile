@@ -45,7 +45,7 @@ unit: {
   cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi", cpu: "${n}") {
       checkout scm
       shwrap("""
-        MAKE_JOBS=${n} CARGO_BUILD_JOBS=${n} ci/msrv.sh
+        MAKE_JOBS=${n} CARGO_BUILD_JOBS=${n} ci/unit.sh
       """)
   }
 }}

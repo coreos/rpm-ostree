@@ -8,7 +8,8 @@ set -euo pipefail
 MINIMUM_SUPPORTED_RUST_VERSION=1.48
 
 ci/installdeps.sh
-dnf remove -y cargo
+dnf remove -y cargo rust
 curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain ${MINIMUM_SUPPORTED_RUST_VERSION} -y
 export PATH="$HOME/.cargo/bin:$PATH"
+ci/build.sh
 cargo +${MINIMUM_SUPPORTED_RUST_VERSION} test
