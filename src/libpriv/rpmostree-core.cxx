@@ -4668,6 +4668,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   rpmostree_output_progress_end (&task);
 
+  /* And finally revert the _dbpath setting because libsolv relies on it as well
+   * to find the rpmdb and RPM macros are global state. */
+  set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
+
   /* And now also sanity check the rpmdb */
   if (!skip_sanity_check)
     {
