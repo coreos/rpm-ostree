@@ -30,7 +30,7 @@ rayon = "1.5.0"
 c_utf8 = "0.1.0"
 rand = "0.7.3"
 phf = { version = "0.8", features = ["macros"] }
-systemd = "0.8.1"
+systemd = "0.8.2"
 indicatif = "0.15.0"
 lazy_static = "1.4.0"
 envsubst = "0.2.0"
