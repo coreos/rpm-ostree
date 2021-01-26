@@ -31,6 +31,7 @@ mod ffi {
         include!("src/libpriv/rpmostree-cxxrs-prelude.h");
 
         type OstreeSysroot = crate::FFIOstreeSysroot;
+        #[allow(dead_code)]
         type OstreeRepo = crate::FFIOstreeRepo;
         type OstreeDeployment = crate::FFIOstreeDeployment;
         type GCancellable = crate::FFIGCancellable;
@@ -205,6 +206,8 @@ mod ffi {
     // rpmostree-rpm-util.h
     unsafe extern "C++" {
         include!("rpmostree-rpm-util.h");
+        // Currently only used in unit tests
+        #[allow(dead_code)]
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<UniquePtr<CxxString>>;
     }
 }
