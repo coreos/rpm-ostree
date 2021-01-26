@@ -196,6 +196,7 @@ mod ffi {
         fn get_packages(&self) -> Vec<String>;
         fn state_checksum_changed(&self, chksum: &str, output_dir: &str) -> Result<bool>;
         fn update_state_checksum(&self, chksum: &str, output_dir: &str) -> Result<()>;
+        fn serialize_to_dir(&self, output_dir: &str) -> Result<()>;
     }
 
     // rpmutils.rs

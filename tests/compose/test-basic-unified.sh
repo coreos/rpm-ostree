@@ -95,6 +95,11 @@ extensions:
     packages:
       - dodo
       - solitaire
+  another-arch:
+    packages:
+      - nonexistent
+    architectures:
+      - badarch
 EOF
 
 # we don't actually need root here, but in CI the cache may be in a qcow2 and
@@ -106,6 +111,9 @@ runasroot rpm-ostree compose extensions --repo=${repo} \
 
 ls extensions/{dodo-1.0,dodo-base-1.0,solitaire-1.0}-*.rpm
 test -f extensions-changed
+assert_jq extensions/extensions.json \
+  '.extensions|length == 1' \
+  '.extensions["extinct-birds"]'
 echo "ok extensions"
 
 rm extensions-changed

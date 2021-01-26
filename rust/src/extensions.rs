@@ -8,7 +8,7 @@
 
 use anyhow::{bail, Context, Result};
 use openat_ext::OpenatDirExt;
-use serde_derive::Deserialize;
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::cxxrsutil::*;
@@ -17,17 +17,19 @@ use crate::utils;
 
 const RPMOSTREE_EXTENSIONS_STATE_FILE: &str = ".rpm-ostree-state-chksum";
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Extensions {
     extensions: HashMap<String, Extension>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Extension {
     packages: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     architectures: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     match_base_evr: Option<String>,
 }
 
@@ -106,6 +108,15 @@ impl Extensions {
         Ok(output_dir
             .write_file_contents(RPMOSTREE_EXTENSIONS_STATE_FILE, 0o644, chksum)
             .with_context(|| format!("updating state file {}", RPMOSTREE_EXTENSIONS_STATE_FILE))?)
+    }
+
+    pub(crate) fn serialize_to_dir(&self, output_dir: &str) -> CxxResult<()> {
+        let output_dir = openat::Dir::open(output_dir)?;
+        Ok(output_dir
+            .write_file_with("extensions.json", 0o644, |w| -> Result<_> {
+                Ok(serde_json::to_writer_pretty(w, self)?)
+            })
+            .context("while serializing")?)
     }
 }
 
