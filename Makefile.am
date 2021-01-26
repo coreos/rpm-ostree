@@ -49,7 +49,7 @@ warn_only_c_flags = -Werror=strict-prototypes \
 # that project for more information about e.g. -fno-strict-aliasing
 AM_CFLAGS += -std=gnu11 -fno-strict-aliasing $(WARN_CFLAGS) $(warn_only_c_flags)
 # Our default CXX flags
-AM_CXXFLAGS += -std=c++14 -fno-strict-aliasing $(WARN_CFLAGS)
+AM_CXXFLAGS += -std=c++17 -fno-strict-aliasing $(WARN_CFLAGS)
 # bundled libdnf; --enable-new-dtags emits DT_RUNPATH instead of deprecated DT_RPATH, which
 # can't be overridden by LD_LIBRARY_PATH; which is useful for uninstalled runs/tests
 AM_LDFLAGS += "-Wl,-rpath=$(libdir)/rpm-ostree,--enable-new-dtags"
