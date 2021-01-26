@@ -38,6 +38,7 @@
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
 #include <utility>
+#include <vector>
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-kernel.h"
@@ -998,23 +999,33 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                                                                error))
     return FALSE;
 
-  g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
-  if (!rpmostree_passwd_migrate_except_root (rootfs_dfd, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
-                                             cancellable, error))
-    return FALSE;
+  try {
+    g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
+    rpmostreecxx::migrate_passwd_except_root(rootfs_dfd);
+  } catch (std::exception& e) {
+    util::rethrow_prefixed(e, "failed to migrate 'passwd' to /usr/lib");
+  }
 
-  g_autoptr(GHashTable) preserve_groups_set = NULL;
+  rust::Vec<rust::String> preserve_groups_set;
   if (treefile && json_object_has_member (treefile, "etc-group-members"))
     {
       JsonArray *etc_group_members = json_object_get_array_member (treefile, "etc-group-members");
-      preserve_groups_set = _rpmostree_jsonutil_jsarray_strings_to_set (etc_group_members);
+      const guint len = json_array_get_length (etc_group_members);
+      for (guint i = 0; i < len; i++)
+        {
+          const char *elt = json_array_get_string_element (etc_group_members, i);
+          g_assert (elt != NULL);
+          auto entry = std::string(elt);
+          preserve_groups_set.push_back(entry);
+        }
     }
 
-  g_print ("Migrating /usr/etc/group to /usr/lib/\n");
-  if (!rpmostree_passwd_migrate_except_root (rootfs_dfd, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
-                                             preserve_groups_set,
-                                             cancellable, error))
-    return FALSE;
+  try {
+    g_print ("Migrating /usr/etc/group to /usr/lib/\n");
+    rpmostreecxx::migrate_group_except_root(rootfs_dfd, preserve_groups_set);
+  } catch (std::exception& e) {
+    util::rethrow_prefixed(e, "failed to migrate 'group' to /usr/lib");
+  }
 
   /* NSS configuration to look at the new files */
   if (!replace_nsswitch (rootfs_dfd, cancellable, error))

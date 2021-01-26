@@ -1,7 +1,7 @@
 //! Helpers for [user passwd file](https://man7.org/linux/man-pages/man5/passwd.5.html).
 
 use anyhow::{anyhow, Context, Result};
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 
 // Entry from group file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,6 +13,7 @@ pub(crate) struct GroupEntry {
 }
 
 impl GroupEntry {
+    /// Parse a single group entry.
     pub fn parse_line(s: impl AsRef<str>) -> Option<Self> {
         let mut parts = s.as_ref().splitn(4, ':');
         let entry = Self {
@@ -25,6 +26,20 @@ impl GroupEntry {
             },
         };
         Some(entry)
+    }
+
+    /// Serialize entry to writer, as a group line.
+    pub fn to_writer(&self, writer: &mut impl Write) -> Result<()> {
+        let users: String = self.users.join(",");
+        std::writeln!(
+            writer,
+            "{}:{}:{}:{}",
+            self.name,
+            self.passwd,
+            self.gid,
+            users,
+        )
+        .with_context(|| "failed to write passwd entry")
     }
 }
 
@@ -61,6 +76,15 @@ mod tests {
     use super::*;
     use std::io::{BufReader, Cursor};
 
+    fn mock_group_entry() -> GroupEntry {
+        GroupEntry {
+            name: "staff".to_string(),
+            passwd: "x".to_string(),
+            gid: 50,
+            users: vec!["operator".to_string()],
+        }
+    }
+
     #[test]
     fn test_parse_lines() {
         let content = r#"
@@ -85,13 +109,15 @@ staff:x:50:operator
         let input = BufReader::new(Cursor::new(content));
         let groups = parse_group_content(input).unwrap();
         assert_eq!(groups.len(), 9);
+        assert_eq!(groups[8], mock_group_entry());
+    }
 
-        let staff = GroupEntry {
-            name: "staff".to_string(),
-            passwd: "x".to_string(),
-            gid: 50,
-            users: vec!["operator".to_string()],
-        };
-        assert_eq!(groups[8], staff);
+    #[test]
+    fn test_write_entry() {
+        let entry = mock_group_entry();
+        let expected = b"staff:x:50:operator\n";
+        let mut buf = Vec::new();
+        entry.to_writer(&mut buf).unwrap();
+        assert_eq!(&buf, expected);
     }
 }

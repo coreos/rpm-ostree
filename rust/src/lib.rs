@@ -174,6 +174,8 @@ mod ffi {
         fn prepare_rpm_layering(rootfs: i32, merge_passwd_dir: &str) -> Result<bool>;
         fn complete_rpm_layering(rootfs: i32) -> Result<()>;
         fn passwd_cleanup(rootfd: i32) -> Result<()>;
+        fn migrate_group_except_root(rootfd: i32, preserved_groups: &Vec<String>) -> Result<()>;
+        fn migrate_passwd_except_root(rootfd: i32) -> Result<()>;
 
         type PasswdDB;
         fn lookup_user(self: &PasswdDB, uid: u32) -> Result<String>;
