@@ -61,13 +61,6 @@ BuildRequires: pkgconfig(librepo)
 # Needed by curl-rust
 BuildRequires: pkgconfig(libcurl)
 
-# libdnf bundling
-# We're using RPATH to pick up our bundled version
-%global __requires_exclude ^libdnf[.]so[.].*$
-
-# Our bundled libdnf.so.2 is for us only
-%global __provides_exclude_from ^%{_libdir}/%{name}/.*$
-
 BuildRequires: cmake
 BuildRequires: pkgconfig(expat)
 BuildRequires: pkgconfig(check)

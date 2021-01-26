@@ -74,11 +74,12 @@ LIBS="$save_LIBS"
 
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
+# librepo libsolv etc. are libdnf dependencies
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0
 				     ostree-1 >= 2020.7
 				     libsystemd
 				     polkit-gobject-1
-				     rpm librepo libsolv
+				     rpm librepo libsolv libsolvext sqlite3 gpgme modulemd-2.0 json-c libcurl openssl
 				     libarchive])
 
 dnl -ldl: https://github.com/ostreedev/ostree/commit/1f832597fc83fda6cb8daf48c4495a9e1590774c
@@ -188,16 +189,18 @@ export cmake_args
 dnl I picked /usr/libexec/rpm-ostree just because we need an
 dnl arbitrary path - we don't actually install there.
 dnl Use `WITH_GIR=0`; it's our private libdnf bundle and we don't need the bindings.
+dnl -fPIE for hardening
 (set -euo pipefail; mkdir -p libdnf-build && cd libdnf-build &&
  set -x && 
- export CXXFLAGS &&
+ export CXXFLAGS="-fPIE $CXXFLAGS" &&
  cmake \
      -DCMAKE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree \
      -DINCLUDE_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/include \
      -DLIB_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree \
      -DSYSCONF_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/etc \
      -DSHARE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree/share \
-     -DBUILD_SHARED_LIBS:BOOL=ON \
+     -DENABLE_STATIC:BOOL=1 \
+     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
      -DWITH_SWDB:BOOL=0 \
      -DWITH_BINDINGS:BOOL=0 \
      -DWITH_HTML:BOOL=0 \

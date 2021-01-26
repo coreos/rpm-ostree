@@ -1,9 +1,11 @@
 #pragma once
 
-#include <glib.h>
+#include "rust/cxx.h"
 
-G_BEGIN_DECLS
+namespace rpmostreecxx {
 
-int rpmostree_main (int argc, char **argv);
+void early_main ();
+void main_print_error (rust::Str msg);
+void rpmostree_main (rust::Slice<const rust::Str> args);
 
-G_END_DECLS
+}

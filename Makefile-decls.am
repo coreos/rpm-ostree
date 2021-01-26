@@ -55,6 +55,8 @@ include $(top_srcdir)/buildutil/glib-tap.mk
 # This is a special facility to chain together hooks easily
 INSTALL_DATA_HOOKS =
 install-data-hook: $(INSTALL_DATA_HOOKS)
+INSTALL_EXEC_HOOKS =
+install-exec-hook: $(INSTALL_EXEC_HOOKS)
 
 ALL_LOCAL_HOOKS =
 all-local: $(ALL_LOCAL_HOOKS)
