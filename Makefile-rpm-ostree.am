@@ -15,10 +15,6 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-bin_PROGRAMS += rpm-ostree
-
-rpm_ostree_SOURCES = src/app/main.cxx
-
 noinst_LTLIBRARIES += librpmostreeinternals.la
 
 librpmostreeinternals_la_SOURCES = \
@@ -34,7 +30,6 @@ librpmostreeinternals_la_SOURCES = \
 	src/app/rpmostree-builtin-cancel.cxx \
 	src/app/rpmostree-builtin-cleanup.cxx \
 	src/app/rpmostree-builtin-cliwrap.cxx \
-	src/app/rpmostree-builtin-countme.cxx \
 	src/app/rpmostree-builtin-initramfs.cxx \
 	src/app/rpmostree-builtin-initramfs-etc.cxx \
 	src/app/rpmostree-builtin-livefs.cxx \
@@ -87,17 +82,12 @@ rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I $(top_srcdir)/libdnf -I $(top_srcdir)/libdnf-build \
 	$(PKGDEP_RPMOSTREE_CFLAGS) $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpmostree_bin_common_cflags = $(rpmostree_common_cflags)
-rpmostree_common_libs = $(PKGDEP_RPMOSTREE_LIBS) -L$(top_srcdir)/libdnf-build/libdnf -ldnf $(CAP_LIBS) libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++ -lrt
+rpmostree_common_libs = $(CAP_LIBS) libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_RS_LIBS) $(PKGDEP_RPMOSTREE_LIBS) -L$(top_srcdir)/libdnf-build/libdnf -ldnf -lstdc++ -lrt
 
-rpmostree_bin_common_libs = librpmostreeinternals.la $(librpmostree_rust_path) $(rpmostree_common_libs)
-rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_bin_common_cflags)
-rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_bin_common_cflags)
-rpm_ostree_LDADD = librpmostreeinternals.la $(rpmostree_bin_common_libs)
-EXTRA_rpm_ostree_DEPENDENCIES = libdnf.so.2
+rpmostree_bin_common_libs = librpmostreeinternals.la $(rpmostree_common_libs)
 librpmostreeinternals_la_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
 librpmostreeinternals_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
 librpmostreeinternals_la_LIBADD = $(rpmostree_common_libs)
-EXTRA_librpmostreeinternals_la_DEPENDENCIES = libdnf.so.2
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
@@ -112,16 +102,20 @@ if BUILDOPT_ENABLE_SQLITE_RPMDB_DEFAULT
 cargo_build += --features sqlite-rpmdb-default
 endif
 
-librpmostree_rust_path = $(top_srcdir)/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
-# If the target directory exists, and isn't owned by our uid, then
-# we exit with a fatal error, since someone probably did `make && sudo make install`,
-# and in this case cargo will download into ~/.root which we don't want.
+if RUST_DEBUG
+	cargo_target_dir=debug
+else
+	cargo_target_dir=release
+endif
 LIBRPMOSTREE_RUST_SRCS = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.lock cbindgen.toml
 # FIXME - build all this code in a rpmostree-sys crate, or just move all the C/C++ build
 # to Rust.  Currently this forces build system serialization
-$(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS) librpmostreeinternals.la
+rpm-ostree: Makefile $(LIBRPMOSTREE_RUST_SRCS) librpmostreeinternals.la
 	$(cargo_build) $(CARGO_RELEASE_ARGS)
+	ln -sfr target/$(cargo_target_dir)/rpm-ostree $@
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS)
+ALL_LOCAL_HOOKS += rpm-ostree
+CLEANFILES += rpm-ostree
 
 # cbindgen + cxx.rs
 binding_generated_sources = rpmostree-rust.h rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
@@ -146,6 +140,12 @@ librpmostreecxxrs_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags) -Wno-m
 librpmostreecxxrs_la_LIBADD = -lstdc++
 GITIGNOREFILES += $(binding_generated_sources)
 BUILT_SOURCES += $(binding_generated_sources)
+
+# And install our binary
+install-rpmostree-hook:
+	install -d -m 0755 $(DESTDIR)$(bindir)
+	install -m 0755 -t $(DESTDIR)$(bindir) target/release/rpm-ostree
+INSTALL_EXEC_HOOKS += install-rpmostree-hook
 
 # Wraps `cargo test`.  This is always a debug non-release build;
 # the main thing here is we still drop the `target` dir in our build

@@ -132,8 +132,6 @@ static RpmOstreeCommand commands[] = {
     NULL, rpmostree_builtin_finalize_deployment },
   { "cliwrap", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_cliwrap },
-  { "countme", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |   RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
-    NULL, rpmostree_builtin_countme },
   { NULL }
 };
 
@@ -425,18 +423,16 @@ rebuild_command_line (int    argc,
   return g_string_free (util::move_nullify (command), FALSE);
 }
 
-static int
-rpmostree_main_inner (int argc, char **argv, GError **error)
-{
-  /* We can leave this function with an error status from both a command
-   * invocation, as well as an option processing failure. Keep an alias to the
-   * two places that hold status codes.
-   */
-  int exit_status = EXIT_SUCCESS;
-  int *exit_statusp = &exit_status;
+/* See comment in main.cxx */
+namespace rpmostreecxx {
 
+/* Initialize process global state, used by both Rust and C++ */
+void
+early_main (void)
+{
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
   g_setenv ("GIO_USE_VFS", "local", TRUE);
+
   /* There's not really a "root dconf" right now; otherwise we might
    * try to spawn one via GSocketClient → GProxyResolver → GSettings.
    *
@@ -445,7 +441,6 @@ rpmostree_main_inner (int argc, char **argv, GError **error)
    **/
   if (getuid () == 0)
     g_assert (g_setenv ("GSETTINGS_BACKEND", "memory", TRUE));
-  g_set_prgname (argv[0]);
 
   setlocale (LC_ALL, "");
 
@@ -455,8 +450,33 @@ rpmostree_main_inner (int argc, char **argv, GError **error)
    * `DnfSack` and Repo too. So just do this upfront. XXX: Clean up that API so it's always
    * attached to a context object. */
   dnf_context_set_config_file_path("");
+}
+
+static int
+rpmostree_main_inner (const rust::Slice<const rust::Str> args)
+{
+  /* We can leave this function with an error status from both a command
+   * invocation, as well as an option processing failure. Keep an alias to the
+   * two places that hold status codes.
+   */
+  int exit_status = EXIT_SUCCESS;
+  int *exit_statusp = &exit_status;
+
+  auto argv0 = std::string(args[0]);
+  g_set_prgname (argv0.c_str());
 
   GCancellable *cancellable = g_cancellable_new ();
+
+  int argc = args.size();
+  /* For now we intentionally leak these because the command parsing
+   * code can end up reordering the array which will totally break
+   * us calling free().  The right solution is to replace this with Rust.
+   */
+  g_autoptr(GPtrArray) argv_p = g_ptr_array_new ();
+  for (auto arg: args) {
+    g_ptr_array_add (argv_p, g_strndup (arg.data(), arg.size()));
+  }
+  char **argv = (char**)argv_p->pdata;
 
   g_autofree char *command_line = rebuild_command_line (argc, argv);
 
@@ -468,30 +488,20 @@ rpmostree_main_inner (int argc, char **argv, GError **error)
   const char *command_name = rpmostree_subcommand_parse (&argc, argv);
 
   RpmOstreeCommand *command = lookup_command (command_name);
-
   if (!command)
     {
       g_autoptr(GOptionContext) context =
         option_context_new_with_commands (NULL, commands);
-      g_autofree char *help = NULL;
-
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
                                              NULL, NULL, NULL, NULL, NULL,
                                              NULL, NULL, NULL);
-      if (command_name == NULL)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No command specified");
-        }
-      else
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unknown command '%s'", command_name);
-        }
-
-      help = g_option_context_get_help (context, FALSE, NULL);
+      g_autofree char *help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
-      return EXIT_FAILURE;
+      if (command_name == NULL)
+        throw std::runtime_error ("No command specified");
+      else
+        throw std::runtime_error (std::string("Unknown command '") + command_name + "'");
     }
 
   g_autofree char *prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
@@ -503,17 +513,18 @@ rpmostree_main_inner (int argc, char **argv, GError **error)
       .command_line = command_line,
       .exit_code = -1 };
   exit_statusp = &(invocation.exit_code);
-  try {
-    funcres = command->fn (argc, argv, &invocation, cancellable, error);
-  } catch (std::exception& e) {
-    // Translate exceptions into GError
-    funcres = glnx_throw (error, "%s", e.what());
-  }
-  if (!funcres)
+  /* Note this may also throw a C++ exception, which will
+   * be caught by a higher level.
+   */
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
+  if (!command->fn (argc, argv, &invocation, cancellable, error))
     {
       if (invocation.exit_code == -1)
         invocation.exit_code = EXIT_FAILURE;
       g_assert (error && *error);
+      g_dbus_error_strip_remote_error (local_error);
+      util::throw_gerror (local_error);
     }
   else
     {
@@ -526,28 +537,36 @@ rpmostree_main_inner (int argc, char **argv, GError **error)
   return *exit_statusp;
 }
 
-/* See comment in main.cxx */
-int
-rpmostree_main (int    argc,
-                char **argv)
+/* Never returns */
+void
+rpmostree_main (const rust::Slice<const rust::Str> args)
 {
-  g_autoptr(GError) local_error = NULL;
-  int r = rpmostree_main_inner (argc, argv, &local_error);
-  if (local_error != NULL)
-    {
-      int is_tty = isatty (1);
-      const char *prefix = "";
-      const char *suffix = "";
-      if (is_tty)
-        {
-          prefix = "\x1b[31m\x1b[1m"; /* red, bold */
-          suffix = "\x1b[22m\x1b[0m"; /* bold off, color reset */
-        }
-      g_dbus_error_strip_remote_error (local_error);
-      g_printerr ("%serror: %s%s\n", prefix, suffix, local_error->message);
-    }
+  int r = EXIT_FAILURE;
+  try {
+    r = rpmostree_main_inner (args);
+  } catch (std::exception& e) {
+    auto msg = std::string(e.what());
+    main_print_error(msg);
+  }
   
   /* Teardown any important process global state here */
   rpmostree_polkit_agent_close ();
-  return r;
+
+  exit (r);
 }
+
+void
+main_print_error (rust::Str msg)
+{
+  int is_tty = isatty (1);
+  const char *prefix = "";
+  const char *suffix = "";
+  if (is_tty)
+    {
+      prefix = "\x1b[31m\x1b[1m"; /* red, bold */
+      suffix = "\x1b[22m\x1b[0m"; /* bold off, color reset */
+    }
+  g_printerr ("%serror: %s%.*s\n", prefix, suffix, (int)msg.length(), msg.data());
+}
+
+} /* namespace */

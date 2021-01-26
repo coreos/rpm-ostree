@@ -20,43 +20,6 @@ endif
 
 GITIGNOREFILES += ssh-config ansible-inventory.yml vmcheck-logs/ test-compose-logs/ tests/vmcheck/image.qcow2
 
-testbin_cppflags = $(AM_CPPFLAGS) -I $(srcdir)/src/lib -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx -I $(srcdir)/tests/common
-testbin_cflags = $(AM_CXXFLAGS) $(rpmostree_bin_common_cflags)
-testbin_ldadd =  librpmostreeinternals.la $(rpmostree_bin_common_libs)
-
-noinst_LTLIBRARIES += libtest.la
-libtest_la_SOURCES = tests/common/libtest.cxx
-libtest_la_CPPFLAGS = $(testbin_cppflags)
-libtest_la_CXXFLAGS = $(testbin_cflags)
-libtest_la_LIBADD = $(testbin_ldadd)
-
-tests_check_jsonutil_SOURCES = tests/check/jsonutil.cxx
-tests_check_jsonutil_CPPFLAGS = $(testbin_cppflags)
-tests_check_jsonutil_CXXFLAGS = $(testbin_cflags)
-tests_check_jsonutil_LDADD = $(testbin_ldadd) libtest.la
-
-tests_check_postprocess_SOURCES = tests/check/postprocess.cxx
-tests_check_postprocess_CPPFLAGS = $(testbin_cppflags)
-tests_check_postprocess_CXXFLAGS = $(testbin_cflags)
-tests_check_postprocess_LDADD = $(testbin_ldadd) libtest.la
-
-tests_check_test_utils_SOURCES = tests/check/test-utils.cxx
-tests_check_test_utils_CPPFLAGS = $(testbin_cppflags)
-tests_check_test_utils_CXXFLAGS = $(testbin_cflags)
-tests_check_test_utils_LDADD = $(testbin_ldadd) libtest.la
-
-tests_check_test_sysusers_SOURCES = tests/check/test-sysusers.cxx
-tests_check_test_sysusers_CPPFLAGS = $(testbin_cppflags)
-tests_check_test_sysusers_CXXFLAGS = $(testbin_cflags)
-tests_check_test_sysusers_LDADD = $(testbin_ldadd) libtest.la
-
-uninstalled_test_programs = \
-	tests/check/jsonutil			\
-	tests/check/postprocess			\
-	tests/check/test-utils			\
-	tests/check/test-sysusers		\
-	$(NULL)
-
 uninstalled_test_scripts = \
 	tests/check/test-lib-introspection.sh \
 	$(NULL)

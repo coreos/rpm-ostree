@@ -23,7 +23,7 @@ mod includes;
 /// - While the return type here will be `Result<T>` on the implementation
 ///   side you currently *should* use `CxxResult`; see the docs of that for more information.
 #[cxx::bridge(namespace = "rpmostreecxx")]
-mod ffi {
+pub mod ffi {
     // Types that are defined by gtk-rs generated bindings that
     // we want to pass across the cxx-rs boundary.  For more
     // information, see cxx_bridge_gobject.rs.
@@ -182,11 +182,6 @@ mod ffi {
         fn lookup_group(self: &PasswdDB, gid: u32) -> Result<String>;
     }
 
-    // countme.rs
-    extern "Rust" {
-        fn countme_entrypoint(argv: Vec<String>) -> Result<()>;
-    }
-
     // extensions.rs
     extern "Rust" {
         type Extensions;
@@ -217,6 +212,13 @@ mod ffi {
         ) -> Result<String>;
     }
 
+    unsafe extern "C++" {
+        include!("rpmostreemain.h");
+        fn early_main();
+        fn rpmostree_main(args: &[&str]) -> Result<()>;
+        fn main_print_error(msg: &str);
+    }
+
     // rpmostree-rpm-util.h
     unsafe extern "C++" {
         include!("rpmostree-rpm-util.h");
@@ -230,9 +232,8 @@ mod client;
 pub(crate) use client::*;
 mod cliwrap;
 pub use cliwrap::*;
-mod countme;
-pub(crate) use countme::*;
 mod composepost;
+pub mod countme;
 pub(crate) use composepost::*;
 mod core;
 use crate::core::*;
