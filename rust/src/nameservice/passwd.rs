@@ -1,7 +1,7 @@
 //! Helpers for [user group file](https://man7.org/linux/man-pages/man5/group.5.html).
 
 use anyhow::{anyhow, Context, Result};
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 
 // Entry from passwd file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +16,7 @@ pub(crate) struct PasswdEntry {
 }
 
 impl PasswdEntry {
+    /// Parse a single passwd entry.
     pub fn parse_line(s: impl AsRef<str>) -> Option<Self> {
         let mut parts = s.as_ref().splitn(7, ':');
         let entry = Self {
@@ -28,6 +29,22 @@ impl PasswdEntry {
             shell: parts.next()?.to_string(),
         };
         Some(entry)
+    }
+
+    /// Serialize entry to writer, as a passwd line.
+    pub fn to_writer(&self, writer: &mut impl Write) -> Result<()> {
+        std::writeln!(
+            writer,
+            "{}:{}:{}:{}:{}:{}:{}",
+            self.name,
+            self.passwd,
+            self.uid,
+            self.gid,
+            self.gecos,
+            self.home_dir,
+            self.shell
+        )
+        .with_context(|| "failed to write passwd entry")
     }
 }
 
@@ -64,6 +81,18 @@ mod tests {
     use super::*;
     use std::io::{BufReader, Cursor};
 
+    fn mock_passwd_entry() -> PasswdEntry {
+        PasswdEntry {
+            name: "someuser".to_string(),
+            passwd: "x".to_string(),
+            uid: 1000,
+            gid: 1000,
+            gecos: "Foo BAR,,,".to_string(),
+            home_dir: "/home/foobar".to_string(),
+            shell: "/bin/bash".to_string(),
+        }
+    }
+
     #[test]
     fn test_parse_lines() {
         let content = r#"
@@ -87,16 +116,15 @@ someuser:x:1000:1000:Foo BAR,,,:/home/foobar:/bin/bash
         let input = BufReader::new(Cursor::new(content));
         let groups = parse_passwd_content(input).unwrap();
         assert_eq!(groups.len(), 4);
+        assert_eq!(groups[3], mock_passwd_entry());
+    }
 
-        let someuser = PasswdEntry {
-            name: "someuser".to_string(),
-            passwd: "x".to_string(),
-            uid: 1000,
-            gid: 1000,
-            gecos: "Foo BAR,,,".to_string(),
-            home_dir: "/home/foobar".to_string(),
-            shell: "/bin/bash".to_string(),
-        };
-        assert_eq!(groups[3], someuser);
+    #[test]
+    fn test_write_entry() {
+        let entry = mock_passwd_entry();
+        let expected = b"someuser:x:1000:1000:Foo BAR,,,:/home/foobar:/bin/bash\n";
+        let mut buf = Vec::new();
+        entry.to_writer(&mut buf).unwrap();
+        assert_eq!(&buf, expected);
     }
 }
