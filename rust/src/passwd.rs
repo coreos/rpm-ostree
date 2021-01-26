@@ -102,9 +102,11 @@ fn prepare_pwgrp(rootfs: &openat::Dir, merge_passwd_dir: Option<PathBuf>) -> Res
 
         // Copy the merge's passwd/group to usr/lib (breaking hardlinks).
         if let Some(ref merge_dir) = merge_passwd_dir {
-            let merge_file = format!("{}/{}", merge_dir.display(), &filename);
-            let tmp_target = format!("/proc/self/fd/{}/{}", rootfs.as_raw_fd(), &usrlib_file_tmp);
-            std::fs::copy(merge_file, tmp_target)?;
+            {
+                let current_root = openat::Dir::open("/")?;
+                let merge_file = format!("{}/{}", merge_dir.display(), &filename);
+                current_root.copy_file_at(&merge_file, rootfs, &usrlib_file_tmp)?;
+            }
             rootfs.local_rename(&usrlib_file_tmp, &usrlib_file)?;
         }
     }
