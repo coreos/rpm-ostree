@@ -425,17 +425,9 @@ rebuild_command_line (int    argc,
   return g_string_free (util::move_nullify (command), FALSE);
 }
 
-/* See comment in main.cxx */
-int
-rpmostree_main (int    argc,
-                char **argv)
+static int
+rpmostree_main_inner (int argc, char **argv, GError **error)
 {
-  RpmOstreeCommand *command;
-  RpmOstreeCommandInvocation invocation;
-  const char *command_name = NULL;
-  g_autofree char *prgname = NULL;
-  GError *local_error = NULL;
-  gboolean funcres;
   /* We can leave this function with an error status from both a command
    * invocation, as well as an option processing failure. Keep an alias to the
    * two places that hold status codes.
@@ -473,9 +465,9 @@ rpmostree_main (int    argc,
    * necessary, in order to pass relevant options through
    * to the commands, but also have them take effect globally.
    */
-  command_name = rpmostree_subcommand_parse (&argc, argv);
+  const char *command_name = rpmostree_subcommand_parse (&argc, argv);
 
-  command = lookup_command (command_name);
+  RpmOstreeCommand *command = lookup_command (command_name);
 
   if (!command)
     {
@@ -489,40 +481,39 @@ rpmostree_main (int    argc,
                                              NULL, NULL, NULL);
       if (command_name == NULL)
         {
-          local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED,
-                                             "No command specified");
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No command specified");
         }
       else
         {
-          local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
-                                     "Unknown command '%s'", command_name);
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unknown command '%s'", command_name);
         }
 
       help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
-      exit_status = EXIT_FAILURE;
-      goto out;
+      return EXIT_FAILURE;
     }
 
-  prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
+  g_autofree char *prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
   g_set_prgname (prgname);
 
-  invocation = { .command = command,
-                 .command_line = command_line,
-                 .exit_code = -1 };
+  gboolean funcres = FALSE;
+  RpmOstreeCommandInvocation invocation = 
+    { .command = command,
+      .command_line = command_line,
+      .exit_code = -1 };
   exit_statusp = &(invocation.exit_code);
   try {
-    funcres = command->fn (argc, argv, &invocation, cancellable, &local_error);
+    funcres = command->fn (argc, argv, &invocation, cancellable, error);
   } catch (std::exception& e) {
     // Translate exceptions into GError
-    funcres = glnx_throw (&local_error, "%s", e.what());
+    funcres = glnx_throw (error, "%s", e.what());
   }
   if (!funcres)
     {
       if (invocation.exit_code == -1)
         invocation.exit_code = EXIT_FAILURE;
-      g_assert (local_error);
-      goto out;
+      g_assert (error && *error);
     }
   else
     {
@@ -532,7 +523,16 @@ rpmostree_main (int    argc,
         g_assert (invocation.exit_code != EXIT_SUCCESS);
     }
 
- out:
+  return *exit_statusp;
+}
+
+/* See comment in main.cxx */
+int
+rpmostree_main (int    argc,
+                char **argv)
+{
+  g_autoptr(GError) local_error = NULL;
+  int r = rpmostree_main_inner (argc, argv, &local_error);
   if (local_error != NULL)
     {
       int is_tty = isatty (1);
@@ -545,10 +545,9 @@ rpmostree_main (int    argc,
         }
       g_dbus_error_strip_remote_error (local_error);
       g_printerr ("%serror: %s%s\n", prefix, suffix, local_error->message);
-      g_error_free (local_error);
     }
-
+  
+  /* Teardown any important process global state here */
   rpmostree_polkit_agent_close ();
-
-  return *exit_statusp;
+  return r;
 }
