@@ -1320,7 +1320,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
  */
 static gboolean
 copy_additional_files (int            rootfs_dfd,
-                       RORTreefile   *treefile_rs,
+                       rpmostreecxx::Treefile &treefile_rs,
                        JsonObject    *treefile,
                        GCancellable  *cancellable,
                        GError       **error)
@@ -1378,7 +1378,7 @@ copy_additional_files (int            rootfs_dfd,
       if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dn, 0755, cancellable, error))
         return FALSE;
 
-      int src_fd = ror_treefile_get_add_file_fd (treefile_rs, src);
+      int src_fd = treefile_rs.get_add_file_fd(src);
       g_assert_cmpint (src_fd, !=, -1);
 
       g_auto(GLnxTmpfile) tmpf = { 0, };
@@ -1454,14 +1454,13 @@ mutate_os_release (const char    *contents,
  */
 gboolean
 rpmostree_treefile_postprocessing (int            rootfs_fd,
-                                   RORTreefile   *treefile_rs,
+                                   rpmostreecxx::Treefile &treefile_rs,
                                    JsonObject    *treefile,
                                    const char    *next_version,
                                    gboolean       unified_core_mode,
                                    GCancellable  *cancellable,
                                    GError       **error)
 {
-  g_assert (treefile_rs);
   g_assert (treefile);
 
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
@@ -1524,8 +1523,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/share/rpm-ostree", 0755, cancellable, error))
     return FALSE;
 
+  auto json = treefile_rs.get_json_string();
   if (!glnx_file_replace_contents_at (rootfs_fd, "usr/share/rpm-ostree/treefile.json",
-                                      (guint8*)ror_treefile_get_json_string (treefile_rs), -1,
+                                      (guint8*)json.data(), json.length(),
                                       GLNX_FILE_REPLACE_NODATASYNC,
                                       cancellable, error))
     return FALSE;
@@ -1715,7 +1715,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
         }
     }
 
-  int postprocess_script_fd = ror_treefile_get_postprocess_script_fd (treefile_rs);
+  int postprocess_script_fd = treefile_rs.get_postprocess_script_fd();
   if (postprocess_script_fd != -1)
     {
       const char *binpath = "/usr/bin/rpmostree-treefile-postprocess-script";

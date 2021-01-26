@@ -23,14 +23,14 @@
 #include <ostree.h>
 
 #include "rpmostree-core.h"
-#include "rpmostree-rust.h"
+#include "rpmostree-cxxrs.h"
 
 G_BEGIN_DECLS
 
 gboolean
 rpmostree_composeutil_checksum (HyGoal             goal,
                                 OstreeRepo        *repo,
-                                RORTreefile       *tf,
+                                const rpmostreecxx::Treefile &tf,
                                 JsonObject        *treefile,
                                 char             **out_checksum,
                                 GError           **error);
@@ -40,13 +40,13 @@ rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
                                        GError    **error);
 
 gboolean
-rpmostree_composeutil_sanity_checks (RORTreefile  *tf,
+rpmostree_composeutil_sanity_checks (rpmostreecxx::Treefile &tf,
                                      JsonObject   *treefile,
                                      GCancellable *cancellable,
                                      GError      **error);
 RpmOstreeTreespec *
 rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
-                                    RORTreefile *treefile_rs,
+                                    rpmostreecxx::Treefile &treefile_rs,
                                     JsonObject  *treedata,
                                     gboolean     bind_selinux,
                                     GError     **error);

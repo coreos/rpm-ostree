@@ -530,7 +530,7 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
  * is a temporary escape hatch.
  */
 void
-rpmostree_context_set_treefile (RpmOstreeContext *self, RORTreefile *treefile_rs)
+rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile *treefile_rs)
 {
   self->treefile_rs = treefile_rs;
 }
@@ -762,8 +762,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
    */
   if (self->treefile_rs)
     {
-      g_autofree char *rpmdb_backend = ror_treefile_get_rpmdb (self->treefile_rs);
-      dnf_context_set_rpm_macro (self->dnfctx, "_db_backend", rpmdb_backend);
+      auto rpmdb_backend = self->treefile_rs->get_rpmdb();
+      dnf_context_set_rpm_macro (self->dnfctx, "_db_backend", rpmdb_backend.c_str());
     }
 
   if (!dnf_context_setup (self->dnfctx, cancellable, error))
@@ -2607,7 +2607,7 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
       flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
   }
 
-  if (self->treefile_rs && ror_treefile_get_readonly_executables (self->treefile_rs))
+  if (self->treefile_rs && self->treefile_rs->get_readonly_executables())
     flags |= RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES;
 
   /* TODO - tweak the unpacker flags for containers */
@@ -3025,14 +3025,11 @@ checkout_package_into_root (RpmOstreeContext *self,
   g_autoptr(GPtrArray) files_remove_regex = NULL;
   if (self->treefile_rs)
     {
-      g_auto(GStrv) files_remove_regex_patterns = 
-        ror_treefile_get_files_remove_regex (self->treefile_rs, dnf_package_get_name (pkg));
-      guint len = g_strv_length (files_remove_regex_patterns);
-      files_remove_regex = g_ptr_array_new_full (len, (GDestroyNotify)g_regex_unref);
-      for (guint i = 0; i < len; i++) 
+      auto files_remove_regex_patterns = self->treefile_rs->get_files_remove_regex(dnf_package_get_name (pkg));
+      files_remove_regex = g_ptr_array_new_full (files_remove_regex_patterns.size(), (GDestroyNotify)g_regex_unref);
+      for (auto pattern : files_remove_regex_patterns) 
         {
-          const char *remove_regex_pattern = files_remove_regex_patterns[i];
-          GRegex *regex = g_regex_new (remove_regex_pattern, G_REGEX_JAVASCRIPT_COMPAT, static_cast<GRegexMatchFlags>(0), NULL);
+          GRegex *regex = g_regex_new (pattern.c_str(), G_REGEX_JAVASCRIPT_COMPAT, static_cast<GRegexMatchFlags>(0), NULL);
           if (!regex)
             return FALSE;
           g_ptr_array_add (files_remove_regex, regex);
@@ -4051,28 +4048,26 @@ process_ostree_layers (RpmOstreeContext *self,
   if (!self->treefile_rs)
     return TRUE;
   
-  g_auto(GStrv) layers = ror_treefile_get_ostree_layers (self->treefile_rs);
-  g_auto(GStrv) override_layers = ror_treefile_get_ostree_override_layers (self->treefile_rs);
-  const size_t n = (layers ? g_strv_length (layers) : 0) + (override_layers ? g_strv_length (override_layers) : 0);
+  auto layers = self->treefile_rs->get_ostree_layers();
+  auto override_layers = self->treefile_rs->get_ostree_override_layers();
+  const size_t n = layers.size() + override_layers.size();
   if (n == 0)
     return TRUE;
 
   auto progress = rpmostreecxx::progress_nitems_begin(n, "Checking out ostree layers");
   size_t i = 0;
-  for (char **iter = layers; iter && *iter; iter++)
+  for (auto ref : layers)
     {
-      const char *ref = *iter;
-      if (!process_one_ostree_layer (self, rootfs_dfd, ref,
+      if (!process_one_ostree_layer (self, rootfs_dfd, ref.c_str(),
                                      OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL,
                                      cancellable, error))
         return FALSE;
       i++;
       progress->nitems_update(i);
     }
-  for (char **iter = override_layers; iter && *iter; iter++)
+  for (auto ref: override_layers)
     {
-      const char *ref = *iter;
-      if (!process_one_ostree_layer (self, rootfs_dfd, ref,
+      if (!process_one_ostree_layer (self, rootfs_dfd, ref.c_str(),
                                      OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES,
                                      cancellable, error))
         return FALSE;
@@ -4575,7 +4570,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
     }
 
-  if (self->treefile_rs && ror_treefile_get_cliwrap (self->treefile_rs))
+  if (self->treefile_rs && self->treefile_rs->get_cliwrap())
     rpmostreecxx::cliwrap_write_wrappers (tmprootfs_dfd);
 
   /* Undo the /etc move above */

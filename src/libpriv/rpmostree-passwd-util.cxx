@@ -357,7 +357,7 @@ static gboolean
 rpmostree_check_passwd_groups (gboolean         passwd,
                                OstreeRepo      *repo,
                                int              rootfs_fd,
-                               RORTreefile     *treefile_rs,
+                               rpmostreecxx::Treefile &treefile_rs,
                                JsonObject      *treedata,
                                const char      *previous_commit,
                                GCancellable    *cancellable,
@@ -487,8 +487,8 @@ rpmostree_check_passwd_groups (gboolean         passwd,
     }
   else if (g_str_equal (chk_type, "file"))
     {
-      int fd = passwd ? ror_treefile_get_passwd_fd (treefile_rs) :
-        ror_treefile_get_group_fd (treefile_rs);
+      int fd = passwd ? treefile_rs.get_passwd_fd() :
+        treefile_rs.get_group_fd();
       old_contents = glnx_fd_readall_utf8 (fd, NULL, cancellable, error);
       if (!old_contents)
         return FALSE;
@@ -682,7 +682,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
                         int              rootfs_fd,
-                        RORTreefile     *treefile_rs,
+                        rpmostreecxx::Treefile &treefile_rs,
                         JsonObject      *treedata,
                         const char      *previous_commit,
                         GCancellable    *cancellable,
@@ -699,7 +699,7 @@ rpmostree_check_passwd (OstreeRepo      *repo,
 gboolean
 rpmostree_check_groups (OstreeRepo      *repo,
                         int              rootfs_fd,
-                        RORTreefile     *treefile_rs,
+                        rpmostreecxx::Treefile &treefile_rs,
                         JsonObject      *treedata,
                         const char      *previous_commit,
                         GCancellable    *cancellable,
@@ -784,7 +784,7 @@ concat_entries (FILE    *src_stream,
 static gboolean
 _data_from_json (int              rootfs_dfd,
                  const char      *dest,
-                 RORTreefile     *treefile_rs,
+                 rpmostreecxx::Treefile &treefile_rs,
                  JsonObject      *treedata,
                  RpmOstreePasswdMigrateKind kind,
                  gboolean        *out_found,
@@ -815,8 +815,7 @@ _data_from_json (int              rootfs_dfd,
     return FALSE;
 
   /* migrate the check data from the specified file to /etc */
-  int fd = passwd ? ror_treefile_get_passwd_fd (treefile_rs) :
-    ror_treefile_get_group_fd (treefile_rs);
+  int fd = passwd ? treefile_rs.get_passwd_fd() : treefile_rs.get_group_fd();
   size_t len = 0;
   g_autofree char *contents = glnx_fd_readall_utf8 (fd, &len, cancellable, error);
   if (!contents)
@@ -851,7 +850,7 @@ gboolean
 rpmostree_passwd_compose_prep (int              rootfs_dfd,
                                OstreeRepo      *repo,
                                gboolean         unified_core,
-                               RORTreefile     *treefile_rs,
+                               rpmostreecxx::Treefile &treefile_rs,
                                JsonObject      *treedata,
                                const char      *previous_checksum,
                                GCancellable    *cancellable,
