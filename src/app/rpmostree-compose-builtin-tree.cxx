@@ -1612,6 +1612,7 @@ rpmostree_compose_builtin_extensions (int             argc,
     }
 
   extensions->update_state_checksum (state_checksum, opt_extensions_output_dir);
+  extensions->serialize_to_dir (opt_extensions_output_dir);
   if (!process_touch_if_changed (error))
     return FALSE;
 
