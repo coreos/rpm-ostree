@@ -737,10 +737,19 @@ char *
 rpmostreed_daemon_client_get_sd_unit (RpmostreedDaemon *self, const char *client)
 {
   auto clientdata = static_cast<struct RpmOstreeClient *>(g_hash_table_lookup (self->bus_clients, client));
-  if (!clientdata || clientdata->sd_unit == NULL)
-    return NULL;
-  else
+  if (clientdata)
     return g_strdup (clientdata->sd_unit);
+  /* If the caller didn't register (e.g. Zincati doesn't today because it runs as a
+   * separate UID which systemd doesn't consider `active`), then let's look up its
+   * systemd unit now.
+   */
+  pid_t pid;
+  char *sd_unit = NULL;
+  if (!get_client_pid (self, client, &pid))
+    return NULL;
+  if (sd_pid_get_user_unit (pid, &sd_unit) < 0)
+    sd_pid_get_unit (pid, &sd_unit);
+  return sd_unit;
 }
 
 void
