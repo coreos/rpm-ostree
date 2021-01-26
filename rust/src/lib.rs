@@ -138,6 +138,32 @@ pub mod ffi {
         fn testutils_entrypoint(argv: Vec<String>) -> Result<()>;
     }
 
+    // treefile.rs
+    extern "Rust" {
+        type Treefile;
+
+        fn treefile_new(filename: &str, basearch: &str, workdir: i32) -> Result<Box<Treefile>>;
+
+        fn get_workdir(&self) -> i32;
+        fn get_postprocess_script_fd(&mut self) -> i32;
+        fn get_add_file_fd(&mut self, filename: &str) -> i32;
+        fn get_passwd_fd(&mut self) -> i32;
+        fn get_group_fd(&mut self) -> i32;
+        fn get_json_string(&self) -> String;
+        fn get_ostree_layers(&self) -> Vec<String>;
+        fn get_ostree_override_layers(&self) -> Vec<String>;
+        fn get_all_ostree_layers(&self) -> Vec<String>;
+        fn get_repos(&self) -> Vec<String>;
+        fn get_rojig_spec_path(&self) -> String;
+        fn get_rojig_name(&self) -> String;
+        fn get_cliwrap(&self) -> bool;
+        fn get_readonly_executables(&self) -> bool;
+        fn get_rpmdb(&self) -> String;
+        fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
+        fn print_deprecation_warnings(&self);
+        fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
+    }
+
     // utils.rs
     extern "Rust" {
         fn varsubstitute(s: &str, vars: &Vec<StringMapping>) -> Result<String>;

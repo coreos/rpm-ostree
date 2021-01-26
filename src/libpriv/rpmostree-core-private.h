@@ -24,6 +24,7 @@
 #include "rpmostree-rojig-core.h"
 #include "rpmostree-core.h"
 #include "rpmostree-output.h"
+#include "rpmostree-cxxrs.h"
 
 G_BEGIN_DECLS
 
@@ -33,7 +34,7 @@ struct _RpmOstreeContext {
   /* Whether we were created with new_system() */
   gboolean is_system;
   RpmOstreeTreespec *spec;
-  RORTreefile *treefile_rs; /* For composes for now */
+  rpmostreecxx::Treefile *treefile_rs; /* For composes for now */
   gboolean empty;
 
   /* rojig-mode data */

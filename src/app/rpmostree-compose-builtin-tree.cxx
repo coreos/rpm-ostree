@@ -153,7 +153,7 @@ typedef struct {
   char *rojig_spec;
   char *previous_checksum;
 
-  RORTreefile *treefile_rs;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_rs;
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile; /* Unowned */
@@ -182,7 +182,6 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->pkgcache_repo);
   g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
   g_free (ctx->previous_checksum);
-  g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) ror_treefile_free);
   g_clear_object (&ctx->treefile_parser);
   g_clear_object (&ctx->treespec);
   g_free (ctx);
@@ -292,7 +291,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
     rpmlogSetFile(NULL);
   }
 
-  { int tf_dfd = ror_treefile_get_dfd (self->treefile_rs);
+  { int tf_dfd = (*self->treefile_rs)->get_workdir();
     g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
     dnf_context_set_repo_dir (dnfctx, abs_tf_path);
   }
@@ -389,7 +388,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;
   if (!rpmostree_composeutil_checksum (dnf_context_get_goal (dnfctx), self->repo,
-                                       self->treefile_rs, self->treefile,
+                                       **self->treefile_rs, self->treefile,
                                        &ret_new_inputhash, error))
     return FALSE;
 
@@ -418,7 +417,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   if (opt_dry_run)
     return TRUE; /* NB: early return */
 
-  if (!rpmostree_composeutil_sanity_checks (self->treefile_rs,
+  if (!rpmostree_composeutil_sanity_checks (**self->treefile_rs,
                                             self->treefile,
                                             cancellable, error))
     return FALSE;
@@ -439,7 +438,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
   if (!rpmostree_passwd_compose_prep (rootfs_dfd, self->repo, opt_unified_core,
-                                      self->treefile_rs, self->treefile,
+                                      **self->treefile_rs, self->treefile,
                                       self->previous_checksum, cancellable, error))
     return FALSE;
 
@@ -511,28 +510,6 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   if (out_unmodified)
     *out_unmodified = FALSE;
   *out_new_inputhash = util::move_nullify (ret_new_inputhash);
-  return TRUE;
-}
-
-static gboolean
-parse_treefile_to_json (const char    *treefile_path,
-                        int            workdir_dfd,
-                        const char    *arch,
-                        RORTreefile  **out_treefile_rs,
-                        JsonParser   **out_parser,
-                        GError       **error)
-{
-  g_autoptr(JsonParser) parser = json_parser_new ();
-  g_autoptr(RORTreefile) treefile_rs = ror_treefile_new (treefile_path, arch, workdir_dfd, error);
-  if (!treefile_rs)
-    return glnx_prefix_error (error, "Failed to load treefile");
-
-  const char *serialized = ror_treefile_get_json_string (treefile_rs);
-  if (!json_parser_load_from_data (parser, serialized, -1, error))
-    return FALSE;
-
-  *out_parser = util::move_nullify (parser);
-  *out_treefile_rs = util::move_nullify (treefile_rs);
   return TRUE;
 }
 
@@ -734,13 +711,14 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     }
 
   const char *arch = dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx));
-  if (!parse_treefile_to_json (gs_file_get_path_cached (self->treefile_path),
-                               self->workdir_dfd, arch,
-                               &self->treefile_rs, &self->treefile_parser,
-                               error))
+
+  self->treefile_rs = rpmostreecxx::treefile_new(gs_file_get_path_cached (self->treefile_path), arch, self->workdir_dfd);
+  auto serialized = (*self->treefile_rs)->get_json_string();
+  self->treefile_parser = json_parser_new ();
+  if (!json_parser_load_from_data (self->treefile_parser, serialized.c_str(), -1, error))
     return FALSE;
 
-  ror_treefile_print_deprecation_warnings (self->treefile_rs);
+  (*self->treefile_rs)->print_deprecation_warnings();
 
   self->treefile_rootval = json_parser_get_root (self->treefile_parser);
   if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
@@ -780,23 +758,22 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         return FALSE;
     }
 
-  g_auto(GStrv) layers = ror_treefile_get_all_ostree_layers (self->treefile_rs);
-  if (layers && *layers && !opt_unified_core)
+  auto layers = (*self->treefile_rs)->get_all_ostree_layers();
+  if (layers.size() > 0 && !opt_unified_core)
     return glnx_throw (error, "ostree-layers requires unified-core mode");
 
   if (self->build_repo != self->repo)
     {
-      for (char **iter = layers; iter && *iter; iter++)
+      for (auto layer : layers)
         {
-          const char *layer = *iter;
-          if (!pull_local_into_target_repo (self->repo, self->build_repo, layer,
+          if (!pull_local_into_target_repo (self->repo, self->build_repo, layer.c_str(),
                                             cancellable, error))
             return FALSE;
         }
     }
 
   self->treespec = rpmostree_composeutil_get_treespec (self->corectx,
-                                                       self->treefile_rs,
+                                                       **self->treefile_rs,
                                                        self->treefile,
                                                        opt_unified_core,
                                                        error);
@@ -964,7 +941,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   /* Start postprocessing */
-  if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_rs, self->treefile,
+  if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, **self->treefile_rs, self->treefile,
                                           next_version.length() > 0 ? next_version.c_str() : NULL, self->unified_core_and_fuse,
                                           cancellable, error))
     return glnx_prefix_error (error, "Postprocessing");
@@ -1092,12 +1069,12 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   if (self->treefile_rs)
     {
-      if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, self->treefile_rs,
+      if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, **self->treefile_rs,
                                    self->treefile, self->previous_checksum,
                                    cancellable, error))
         return glnx_prefix_error (error, "Handling passwd db");
 
-      if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, self->treefile_rs,
+      if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, **self->treefile_rs,
                                    self->treefile, self->previous_checksum,
                                    cancellable, error))
         return glnx_prefix_error (error, "Handling group db");
@@ -1195,11 +1172,9 @@ static gboolean
 parse_and_print_treefile (const char *treefile_path, GError **error)
 {
   g_autofree char *arch = rpm_ostree_get_basearch ();
-  g_autoptr(RORTreefile) treefile_rs = ror_treefile_new (treefile_path, arch, -1, error);
-  if (!treefile_rs)
-    return glnx_prefix_error (error, "Failed to load treefile");
-
-  g_print ("%s\n", ror_treefile_get_json_string (treefile_rs));
+  auto treefile_rs = rpmostreecxx::treefile_new (treefile_path, arch, -1);
+  auto buf = treefile_rs->get_json_string();
+  g_print ("%s\n", buf.c_str());
   return TRUE;
 }
 
@@ -1304,14 +1279,16 @@ rpmostree_compose_builtin_postprocess (int             argc,
   const char *treefile_path = argc > 2 ? argv[2] : NULL;
   glnx_unref_object JsonParser *treefile_parser = NULL;
   JsonObject *treefile = NULL; /* Owned by parser */
-  g_autoptr(RORTreefile) treefile_rs = NULL;
   g_auto(GLnxTmpDir) workdir_tmp = { 0, };
+
   if (treefile_path)
     {
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
         return FALSE;
-      if (!parse_treefile_to_json (treefile_path, workdir_tmp.fd, NULL,
-                                   &treefile_rs, &treefile_parser, error))
+      auto treefile_rs = rpmostreecxx::treefile_new(treefile_path, "", workdir_tmp.fd);
+      auto serialized = treefile_rs->get_json_string();
+      treefile_parser = json_parser_new ();
+      if (!json_parser_load_from_data (treefile_parser, serialized.c_str(), -1, error))
         return FALSE;
 
       JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
@@ -1480,9 +1457,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   const char *extensions_path = argv[2];
 
   g_autofree char *basearch = rpm_ostree_get_basearch ();
-  g_autoptr(RORTreefile) treefile = ror_treefile_new (treefile_path, basearch, -1, error);
-  if (!treefile)
-    return glnx_prefix_error (error, "Failed to load treefile");
+  auto treefile = rpmostreecxx::treefile_new (treefile_path, basearch, -1);
 
   g_autoptr(OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!repo)
@@ -1542,7 +1517,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   if (!ctx)
       return FALSE;
 
-  { int tf_dfd = ror_treefile_get_dfd (treefile);
+  { int tf_dfd = treefile->get_workdir();
     g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
     dnf_context_set_repo_dir (rpmostree_context_get_dnf (ctx), abs_tf_path);
   }
@@ -1564,16 +1539,13 @@ rpmostree_compose_builtin_extensions (int             argc,
     auto pkgs = extensions->get_os_extension_packages();
     for (auto pkg : pkgs)
       g_ptr_array_add (gpkgs, (gpointer*) g_strdup (pkg.c_str()));
-
-    g_autoptr(GPtrArray) grepos = g_ptr_array_new_with_free_func (g_free);
-    auto repos = extensions->get_repos();
-    for (auto repo : repos)
-      g_ptr_array_add (grepos, (gpointer*) g_strdup (repo.c_str()));
-
-    char **treefile_repos = ror_treefile_get_repos (treefile);
-    for (char **it = treefile_repos; it && *it; it++)
-      g_ptr_array_add (grepos, (gpointer*) g_strdup (*it));
-
+    g_autoptr(GPtrArray) grepos = g_ptr_array_new ();
+    auto repos = treefile->get_repos();
+    for (auto & repo : repos)
+      g_ptr_array_add (grepos, (void*)repo.c_str());
+    auto extrepos = extensions->get_repos();
+    for (auto & repo : extrepos)
+      g_ptr_array_add (grepos, (void*)repo.c_str());
     g_autoptr(GKeyFile) treespec = g_key_file_new ();
     g_key_file_set_string_list (treespec, "tree", "packages",
                                 (const char* const*)gpkgs->pdata, gpkgs->len);

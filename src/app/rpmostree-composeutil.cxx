@@ -51,7 +51,7 @@
 gboolean
 rpmostree_composeutil_checksum (HyGoal             goal,
                                 OstreeRepo        *repo,
-                                RORTreefile       *tf,
+                                const rpmostreecxx::Treefile &tf,
                                 JsonObject        *treefile,
                                 char             **out_checksum,
                                 GError           **error)
@@ -61,10 +61,8 @@ rpmostree_composeutil_checksum (HyGoal             goal,
 
   /* Hash in the treefile inputs (this includes all externals like postprocess, add-files,
    * etc... and the final flattened treefile -- see treefile.rs for more details). */
-  g_autofree char *tf_checksum = ror_treefile_get_checksum (tf, repo, error);
-  if (!tf_checksum)
-    return FALSE;
-  g_checksum_update (checksum, (guint8*) tf_checksum, -1);
+  auto tf_checksum = tf.get_checksum(*repo);
+  g_checksum_update (checksum, (const guint8*)tf_checksum.data(), tf_checksum.size());
 
   /* Hash in each package */
   if (!rpmostree_dnf_add_checksum_goal (checksum, goal, NULL, error))
@@ -128,12 +126,12 @@ rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
 
 
 gboolean
-rpmostree_composeutil_sanity_checks (RORTreefile  *tf,
+rpmostree_composeutil_sanity_checks (rpmostreecxx::Treefile &tf,
                                      JsonObject   *treefile,
                                      GCancellable *cancellable,
                                      GError      **error)
 {
-  int fd = ror_treefile_get_postprocess_script_fd (tf);
+  int fd = tf.get_postprocess_script_fd();
   if (fd != -1)
     {
       /* Check that postprocess-script is executable; https://github.com/projectatomic/rpm-ostree/issues/817 */
@@ -219,7 +217,7 @@ treespec_bind_bool (JsonObject *treedata,
  */
 RpmOstreeTreespec *
 rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
-                                    RORTreefile *treefile_rs,
+                                    rpmostreecxx::Treefile &treefile_rs,
                                     JsonObject  *treedata,
                                     gboolean     bind_selinux,
                                     GError     **error)
@@ -229,7 +227,7 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
 
   // TODO: Rework things so we always use this data going forward
-  rpmostree_context_set_treefile (ctx, treefile_rs);
+  rpmostree_context_set_treefile (ctx, &treefile_rs);
 
   if (!treespec_bind_array (treedata, treespec, "packages", NULL, TRUE, error))
     return NULL;

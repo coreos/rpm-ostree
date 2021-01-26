@@ -84,7 +84,7 @@ typedef struct {
   char *previous_version;
   char *previous_inputhash;
 
-  RORTreefile *treefile_rs;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_rs;
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile; /* Unowned */
@@ -111,7 +111,7 @@ rpm_ostree_rojig_compose_free (RpmOstreeRojigCompose *ctx)
   g_free (ctx->rojig_spec);
   g_free (ctx->previous_version);
   g_free (ctx->previous_inputhash);
-  g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) ror_treefile_free);
+  ctx->treefile_rs = nullptr;
   g_clear_object (&ctx->treefile_parser);
   g_clear_object (&ctx->treespec);
   g_free (ctx);
@@ -127,7 +127,7 @@ install_packages (RpmOstreeRojigCompose  *self,
 {
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->corectx);
 
-  { int tf_dfd = ror_treefile_get_dfd (self->treefile_rs);
+  { int tf_dfd = self->treefile_rs->get_workdir();
     g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
     dnf_context_set_repo_dir (dnfctx, abs_tf_path);
   }
@@ -290,14 +290,11 @@ rpm_ostree_rojig_compose_new (const char    *treefile_path,
     return FALSE;
 
   const char *arch = dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx));
-  self->treefile_rs = ror_treefile_new (treefile_path, arch, self->workdir_dfd, error);
-  if (!self->treefile_rs)
-    return glnx_prefix_error (error, "Failed to load YAML treefile");
+  self->treefile_rs = rpmostreecxx::treefile_new (treefile_path, arch, self->workdir_dfd);
 
   self->treefile_parser = json_parser_new ();
-  if (!json_parser_load_from_data (self->treefile_parser,
-                                   ror_treefile_get_json_string (self->treefile_rs), -1,
-                                   error))
+  auto json = self->treefile_rs->get_json_string()
+  if (!json_parser_load_from_data (self->treefile_parser, json.data(), json.length(), error))
     return FALSE;
 
   self->treefile_rootval = json_parser_get_root (self->treefile_parser);

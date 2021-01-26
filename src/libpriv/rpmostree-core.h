@@ -127,7 +127,7 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
                                              OstreeSysroot    *sysroot,
                                              OstreeDeployment *cfg_deployment);
 
-void rpmostree_context_set_treefile (RpmOstreeContext *self, RORTreefile *treefile_rs);
+void rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile *treefile_rs);
 
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
 

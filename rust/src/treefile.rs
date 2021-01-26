@@ -8,6 +8,7 @@
  * https://github.com/cgwalters/coreos-assembler
  * */
 
+use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Result};
 use c_utf8::CUtf8Buf;
 use serde_derive::{Deserialize, Serialize};
@@ -15,7 +16,9 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::io::prelude::*;
 use std::os::unix::fs::MetadataExt;
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::Path;
+use std::pin::Pin;
 use std::{collections, fs, io};
 
 use crate::utils;
@@ -44,8 +47,8 @@ pub struct Treefile {
     #[allow(dead_code)] // Not used in tests
     parsed: TreeComposeConfig,
     // This is a copy of rojig.name to avoid needing to convert to CStr when reading
-    rojig_name: Option<CUtf8Buf>,
-    rojig_spec: Option<CUtf8Buf>,
+    rojig_name: Option<String>,
+    rojig_spec: Option<String>,
     serialized: CUtf8Buf,
     externals: TreefileExternals,
 }
@@ -428,7 +431,7 @@ impl Treefile {
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
         let (rojig_name, rojig_spec) = match (workdir.as_ref(), parsed.config.rojig.as_ref()) {
             (Some(workdir), Some(rojig)) => (
-                Some(CUtf8Buf::from_string(rojig.name.clone())),
+                Some(rojig.name.clone()),
                 Some(Treefile::write_rojig_spec(workdir, rojig)?),
             ),
             _ => (None, None),
@@ -443,6 +446,99 @@ impl Treefile {
             serialized,
             externals: parsed.externals,
         }))
+    }
+
+    /// Return the raw file descriptor for the workdir
+    pub(crate) fn get_workdir(&self) -> i32 {
+        self.primary_dfd.as_raw_fd()
+    }
+
+    /// Return the raw file descriptor for the postprocess script
+    pub(crate) fn get_postprocess_script_fd(&mut self) -> i32 {
+        self.externals
+            .postprocess_script
+            .as_mut()
+            .map_or(-1, raw_seeked_fd)
+    }
+
+    pub(crate) fn get_add_file_fd(&mut self, filename: &str) -> i32 {
+        raw_seeked_fd(
+            self.externals
+                .add_files
+                .get_mut(filename)
+                .expect("add-file"),
+        )
+    }
+
+    pub(crate) fn get_passwd_fd(&mut self) -> i32 {
+        self.externals.passwd.as_mut().map_or(-1, raw_seeked_fd)
+    }
+
+    pub(crate) fn get_group_fd(&mut self) -> i32 {
+        self.externals.group.as_mut().map_or(-1, raw_seeked_fd)
+    }
+
+    pub(crate) fn get_json_string(&self) -> String {
+        self.serialized.to_string()
+    }
+
+    pub(crate) fn get_ostree_layers(&self) -> Vec<String> {
+        self.parsed.ostree_layers.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_ostree_override_layers(&self) -> Vec<String> {
+        self.parsed
+            .ostree_override_layers
+            .clone()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn get_all_ostree_layers(&self) -> Vec<String> {
+        self.get_ostree_layers()
+            .into_iter()
+            .chain(self.get_ostree_override_layers())
+            .collect()
+    }
+
+    pub(crate) fn get_repos(&self) -> Vec<String> {
+        self.parsed.repos.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_rojig_spec_path(&self) -> String {
+        self.rojig_spec.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_rojig_name(&self) -> String {
+        self.rojig_name.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_cliwrap(&self) -> bool {
+        self.parsed.cliwrap.unwrap_or(false)
+    }
+
+    pub(crate) fn get_readonly_executables(&self) -> bool {
+        self.parsed.readonly_executables.unwrap_or(false)
+    }
+
+    pub(crate) fn get_rpmdb(&self) -> String {
+        let s: &str = match self.parsed.rpmdb.as_ref().unwrap_or(&DEFAULT_RPMDB_BACKEND) {
+            RpmdbBackend::BDB => "bdb",
+            RpmdbBackend::Sqlite => "sqlite",
+            RpmdbBackend::NDB => "ndb",
+        };
+        s.to_string()
+    }
+
+    pub(crate) fn get_files_remove_regex(&self, package: &str) -> Vec<String> {
+        let mut files_to_remove: Vec<String> = Vec::new();
+        if let Some(ref packages) = self.parsed.remove_from_packages {
+            for pkg in packages {
+                if pkg[0] == package {
+                    files_to_remove.extend_from_slice(&pkg[1..]);
+                }
+            }
+        }
+        files_to_remove
     }
 
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
@@ -480,7 +576,7 @@ impl Treefile {
     }
 
     /// Given a treefile, print warnings about items which are deprecated.
-    fn print_deprecation_warnings(&self) {
+    pub(crate) fn print_deprecation_warnings(&self) {
         let mut deprecated = false;
         match self
             .parsed
@@ -504,7 +600,11 @@ impl Treefile {
         }
     }
 
-    fn get_checksum(&self, repo: &ostree::Repo) -> Result<String> {
+    pub(crate) fn get_checksum(
+        &self,
+        mut repo: Pin<&mut crate::ffi::OstreeRepo>,
+    ) -> CxxResult<String> {
+        let repo = &repo.gobj_wrap();
         // Notice we hash the *reserialization* of the final flattened treefile only so that e.g.
         // comments/whitespace/hash table key reorderings don't trigger a respin. We could take
         // this further by using a custom `serialize_with` for Vecs where ordering doesn't matter
@@ -534,7 +634,7 @@ impl Treefile {
     }
 
     /// Generate a rojig spec file.
-    fn write_rojig_spec(workdir: &openat::Dir, r: &Rojig) -> Result<CUtf8Buf> {
+    fn write_rojig_spec(workdir: &openat::Dir, r: &Rojig) -> CxxResult<String> {
         let description = r
             .description
             .as_ref()
@@ -583,7 +683,7 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
                 rpmostree_rojig_description = description,
             )?;
         }
-        Ok(CUtf8Buf::from_string(name))
+        Ok(name)
     }
 }
 
@@ -1387,230 +1487,29 @@ etc-group-members:
     }
 }
 
-mod ffi {
-    use super::*;
-    use glib::translate::*;
-    use std::io::Seek;
-    use std::os::unix::io::{AsRawFd, RawFd};
-    use std::{fs, io, ptr};
-
-    use crate::ffiutil::*;
-
-    // Some of our file descriptors may be read multiple times.
-    // We try to consistently seek to the start to make that
-    // convenient from the C side.  Note that this function
-    // will abort if seek() fails (it really shouldn't).
-    fn raw_seeked_fd(fd: &mut fs::File) -> RawFd {
-        fd.seek(io::SeekFrom::Start(0)).expect("seek");
-        fd.as_raw_fd()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_new(
-        filename: *const libc::c_char,
-        basearch: *const libc::c_char,
-        workdir_dfd: libc::c_int,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> *mut Treefile {
-        // Convert arguments
-        let filename = ffi_view_os_str(filename);
-        let basearch: Option<String> = unsafe { from_glib_none(basearch) };
-        let workdir = ffi_view_openat_dir_option(workdir_dfd);
-        // Run code, map error if any, otherwise extract raw pointer, passing
-        // ownership back to C.
-        ptr_glib_error(
-            Treefile::new_boxed(filename.as_ref(), basearch.as_deref(), workdir),
-            gerror,
-        )
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_dfd(tf: *mut Treefile) -> libc::c_int {
-        ref_from_raw_ptr(tf).primary_dfd.as_raw_fd()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_postprocess_script_fd(tf: *mut Treefile) -> libc::c_int {
-        ref_from_raw_ptr(tf)
-            .externals
-            .postprocess_script
-            .as_mut()
-            .map_or(-1, raw_seeked_fd)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_add_file_fd(
-        tf: *mut Treefile,
-        filename: *const libc::c_char,
-    ) -> libc::c_int {
-        let tf = ref_from_raw_ptr(tf);
-        let filename = ffi_view_os_str(filename);
-        let filename = filename.to_string_lossy().into_owned();
-        raw_seeked_fd(tf.externals.add_files.get_mut(&filename).expect("add-file"))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_passwd_fd(tf: *mut Treefile) -> libc::c_int {
-        ref_from_raw_ptr(tf)
-            .externals
-            .passwd
-            .as_mut()
-            .map_or(-1, raw_seeked_fd)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_group_fd(tf: *mut Treefile) -> libc::c_int {
-        ref_from_raw_ptr(tf)
-            .externals
-            .group
-            .as_mut()
-            .map_or(-1, raw_seeked_fd)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_json_string(tf: *mut Treefile) -> *const libc::c_char {
-        ref_from_raw_ptr(tf).serialized.as_ptr()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_repos(tf: *mut Treefile) -> *mut *mut libc::c_char {
-        let tf = ref_from_raw_ptr(tf);
-        if let Some(ref repos) = tf.parsed.repos {
-            repos.to_glib_full()
-        } else {
-            ptr::null_mut()
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_ostree_layers(tf: *mut Treefile) -> *mut *mut libc::c_char {
-        let tf = ref_from_raw_ptr(tf);
-        if let Some(ref layers) = tf.parsed.ostree_layers {
-            layers.to_glib_full()
-        } else {
-            ptr::null_mut()
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_ostree_override_layers(
-        tf: *mut Treefile,
-    ) -> *mut *mut libc::c_char {
-        let tf = ref_from_raw_ptr(tf);
-        if let Some(ref layers) = tf.parsed.ostree_override_layers {
-            layers.to_glib_full()
-        } else {
-            ptr::null_mut()
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_all_ostree_layers(
-        tf: *mut Treefile,
-    ) -> *mut *mut libc::c_char {
-        let tf = ref_from_raw_ptr(tf);
-        let mut ret: Vec<String> = Vec::new();
-        if let Some(ref layers) = tf.parsed.ostree_layers {
-            ret.extend(layers.iter().cloned())
-        }
-        if let Some(ref layers) = tf.parsed.ostree_override_layers {
-            ret.extend(layers.iter().cloned())
-        }
-        ret.to_glib_full()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {
-        let tf = ref_from_raw_ptr(tf);
-        if let Some(ref rojig) = tf.rojig_spec {
-            rojig.as_ptr()
-        } else {
-            ptr::null_mut()
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_rojig_name(tf: *mut Treefile) -> *const libc::c_char {
-        let tf = ref_from_raw_ptr(tf);
-        tf.rojig_name
-            .as_ref()
-            .map(|v| v.as_ptr())
-            .unwrap_or(ptr::null_mut())
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_checksum(
-        tf: *mut Treefile,
-        repo: *mut ostree_sys::OstreeRepo,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> *mut libc::c_char {
-        let tf = ref_from_raw_ptr(tf);
-        let repo: ostree::Repo = unsafe { from_glib_none(repo) };
-        match tf.get_checksum(&repo) {
-            Ok(c) => c.to_glib_full(),
-            Err(ref e) => {
-                error_to_glib(e, gerror);
-                ptr::null_mut()
-            }
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_cliwrap(tf: *mut Treefile) -> bool {
-        let tf = ref_from_raw_ptr(tf);
-        tf.parsed.cliwrap.unwrap_or(false)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_readonly_executables(tf: *mut Treefile) -> bool {
-        let tf = ref_from_raw_ptr(tf);
-        tf.parsed.readonly_executables.unwrap_or(false)
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_rpmdb(tf: *mut Treefile) -> *mut libc::c_char {
-        let tf = ref_from_raw_ptr(tf);
-        let s: &str = match tf.parsed.rpmdb.as_ref().unwrap_or(&DEFAULT_RPMDB_BACKEND) {
-            RpmdbBackend::BDB => "bdb",
-            RpmdbBackend::Sqlite => "sqlite",
-            RpmdbBackend::NDB => "ndb",
-        };
-        s.to_string().to_glib_full()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_print_deprecation_warnings(tf: *mut Treefile) {
-        let tf = ref_from_raw_ptr(tf);
-        tf.print_deprecation_warnings()
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_free(tf: *mut Treefile) {
-        if tf.is_null() {
-            return;
-        }
-        unsafe {
-            Box::from_raw(tf);
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn ror_treefile_get_files_remove_regex(
-        tf: *mut Treefile,
-        package: *const libc::c_char,
-    ) -> *mut *mut libc::c_char {
-        let package = ffi_view_os_str(package);
-        let package = package.to_string_lossy().into_owned();
-        let mut files_to_remove: Vec<String> = Vec::new();
-        let tf = ref_from_raw_ptr(tf);
-        if let Some(ref packages) = tf.parsed.remove_from_packages {
-            for pkg in packages {
-                if pkg[0] == package {
-                    files_to_remove.extend_from_slice(&pkg[1..]);
-                }
-            }
-        }
-        files_to_remove.to_glib_full()
-    }
+// Some of our file descriptors may be read multiple times.
+// We try to consistently seek to the start to make that
+// convenient from the C side.  Note that this function
+// will abort if seek() fails (it really shouldn't).
+fn raw_seeked_fd(fd: &mut std::fs::File) -> RawFd {
+    fd.seek(std::io::SeekFrom::Start(0)).expect("seek");
+    fd.as_raw_fd()
 }
-pub use self::ffi::*;
+
+pub(crate) fn treefile_new(
+    filename: &str,
+    basearch: &str,
+    workdir: i32,
+) -> CxxResult<Box<Treefile>> {
+    let basearch = opt_string(basearch);
+    let workdir = if workdir != -1 {
+        Some(crate::ffiutil::ffi_view_openat_dir(workdir))
+    } else {
+        None
+    };
+    Ok(Treefile::new_boxed(
+        filename.as_ref(),
+        basearch.as_deref(),
+        workdir,
+    )?)
+}
