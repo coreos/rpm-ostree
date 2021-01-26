@@ -28,7 +28,7 @@ openat-ext = "^0.1.11"
 curl = "0.4.34"
 rayon = "1.5.0"
 c_utf8 = "0.1.0"
-rand = "0.8.2"
+rand = "0.8.3"
 phf = { version = "0.8", features = ["macros"] }
 systemd = "0.8.2"
 indicatif = "0.15.0"
