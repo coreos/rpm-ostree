@@ -1087,7 +1087,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile_rs,
+  if (!rpmostree_postprocess_final (self->rootfs_dfd,
                                     self->treefile, self->unified_core_and_fuse,
                                     cancellable, error))
     return FALSE;
@@ -1327,7 +1327,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (rootfs_dfd, treefile_rs, treefile, opt_unified_core,
+  if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_unified_core,
                                     cancellable, error))
     return FALSE;
   return TRUE;
