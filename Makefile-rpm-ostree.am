@@ -84,9 +84,11 @@ rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
 	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
 	-DLIBDIR=\"$(libdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" \
+	-I $(top_srcdir)/libdnf -I $(top_srcdir)/libdnf-build \
 	$(PKGDEP_RPMOSTREE_CFLAGS) $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpmostree_bin_common_cflags = $(rpmostree_common_cflags)
-rpmostree_common_libs = $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS) libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++ -lrt
+rpmostree_common_libs = $(PKGDEP_RPMOSTREE_LIBS) -L$(top_srcdir)/libdnf-build/libdnf -ldnf $(CAP_LIBS) libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_RS_LIBS) -lstdc++ -lrt
+
 rpmostree_bin_common_libs = librpmostreeinternals.la $(librpmostree_rust_path) $(rpmostree_common_libs)
 rpm_ostree_CFLAGS = $(AM_CFLAGS) $(rpmostree_bin_common_cflags)
 rpm_ostree_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_bin_common_cflags)

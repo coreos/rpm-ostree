@@ -35,16 +35,10 @@ librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libp
 	$(PKGDEP_RPMOSTREE_CFLAGS)
 librpmostree_1_la_LDFLAGS = $(AM_LDFLAGS) -version-number 1:0:0 -Bsymbolic-functions
 librpmostree_1_la_LIBADD =  $(PKGDEP_RPMOSTREE_LIBS) libglnx.la
-EXTRA_librpmostree_1_la_DEPENDENCIES = libdnf.so.2
-
-# The g-ir-scanner creates a stub executable (to help introspect type information) which
-# links to our stuff. We want to make sure it picks up our fresh libdnf and not a possibly
-# stale one from a previously installed rpm-ostree's bundled libdnf.
-INTROSPECTION_SCANNER_ENV = env LD_LIBRARY_PATH=$(top_builddir)/libdnf-build/libdnf
 
 # XXX: work around clang being passed -fstack-clash-protection which it doesn't understand
 # https://github.com/projectatomic/rpm-ostree/pull/1787#issuecomment-473971585
-INTROSPECTION_SCANNER_ENV += CC=gcc
+INTROSPECTION_SCANNER_ENV = CC=gcc
 
 if BUILDOPT_INTROSPECTION
 RpmOstree-1.0.gir: librpmostree-1.la Makefile

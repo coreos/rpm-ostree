@@ -76,3 +76,7 @@ echo "ok reload"
 # See rpmostree-scripts.c
 grep ^DEFAULT /etc/crypto-policies/config
 echo "ok crypto-policies DEFAULT backend"
+
+ldd /usr/lib64/librpmostree-1.so.1 > rpmostree-lib-deps.txt
+assert_not_file_has_content rpmostree-lib-deps.txt libdnf
+echo "ok lib deps"

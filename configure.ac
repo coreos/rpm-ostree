@@ -93,10 +93,6 @@ PKGDEP_RPMOSTREE_LIBS="$PKGDEP_RPMOSTREE_LIBS -Wl,--push-state,--no-as-needed,-l
 # curl-rust uses it.
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE_RS, [libcurl openssl])
 
-dnl bundled libdnf
-PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
-PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"
-
 dnl RHEL8.1 has old libarchive
 AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
   [AC_DEFINE([HAVE_LIBARCHIVE_ZSTD], 1, [Define if we have libarchive with zstd])])

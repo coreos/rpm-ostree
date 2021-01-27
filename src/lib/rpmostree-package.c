@@ -32,7 +32,7 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <libdnf/libdnf.h>
+#include <rpm/rpmver.h>
 #include "libglnx.h"
 
 #include "rpmostree-shlib-ipc-private.h"
@@ -150,12 +150,11 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
   if (ret)
     return ret;
 
-  /* the NULL case is a little wasteful; it needs to allocate a pool to do the comparison.
-   * maybe we should also cache a DnfSack in the GVariant-based case too? OTOH, we shouldn't
-   * hit this case often: the pkglist is already sorted when we read it out of the commit
-   * metadata and we do the diff in _rpm_ostree_diff_package_lists() using a temporary sack.
-   * */
-  ret = dnf_sack_evr_cmp (NULL, p1->evr, p2->evr);
+  /* Note we shouldn't hit this case often: the pkglist is already sorted
+   * when we read it out of the commit metadata and we also sort
+   * the diff in_rpm_ostree_diff_package_lists().
+   **/
+  ret = rpmvercmp (p1->evr, p2->evr);
   if (ret)
     return ret;
 
@@ -296,9 +295,6 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
   g_autoptr(GPtrArray) modified_b = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GPtrArray) common = g_ptr_array_new_with_free_func (g_object_unref);
 
-  /* allocate a sack just for comparisons */
-  g_autoptr(DnfSack) sack = dnf_sack_new ();
-
   guint cur_a = 0;
   guint cur_b = 0;
   while (cur_a < an && cur_b < bn)
@@ -323,7 +319,7 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
           cmp = strcmp (pkg_a->arch, pkg_b->arch);
           if (cmp == 0)
             {
-              cmp = dnf_sack_evr_cmp (sack, pkg_a->evr, pkg_b->evr);
+              cmp = rpmvercmp (pkg_a->evr, pkg_b->evr);
               if (cmp == 0)
                 {
                   g_ptr_array_add (common, g_object_ref (pkg_a));
