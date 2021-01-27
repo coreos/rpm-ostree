@@ -122,7 +122,7 @@ $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS) librpmostreeintern
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS)
 
 # cbindgen + cxx.rs
-binding_generated_sources = rpmostree-rust.h rpmostree-cxxrs.h rpmostree-cxxrs.cxx
+binding_generated_sources = rpmostree-rust.h rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
 if BUILDOPT_PREBUILT_BINDINGS
 # In this case we shipped prebuilt versions in the source tarball
 rpmostree-rust.h:
@@ -131,6 +131,8 @@ rpmostree-cxxrs.h:
 	ln -sfr rpmostree-cxxrs-prebuilt.h $@
 rpmostree-cxxrs.cxx:
 	ln -sfr rpmostree-cxxrs-prebuilt.cxx $@
+rust/cxx.h:
+	ln -sfr rust/cxx-prebuilt.h $@
 else
 include Makefile.bindings
 endif
