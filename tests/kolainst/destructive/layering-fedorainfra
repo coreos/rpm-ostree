@@ -8,13 +8,12 @@ set -euo pipefail
 cd $(mktemp -d)
 
 # bodhi update for rpm-ostree (Fedora 33)
-rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2020-6e743def1d
+rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2021-e55da2fc78
 rpm-ostree status > status.txt
-assert_file_has_content_literal status.txt "Diff: 2 downgraded"
 rpm-ostree cleanup -p
-# Same build directly via Koji
-rpm-ostree override replace https://koji.fedoraproject.org/koji/buildinfo?buildID=1637715
-rpm-ostree status > status.txt
-assert_file_has_content_literal status.txt "Diff: 2 downgraded"
+# A build directly via Koji (this is rpm-ostree-2021.1-2.fc33 - FIXME change
+# this to pull latest tagged...which would require learning more of the Koji API
+# *or* injecting it from the build container)
+rpm-ostree override replace https://koji.fedoraproject.org/koji/buildinfo?buildID=1671410
 
 echo "ok"
