@@ -66,6 +66,7 @@ open(checksum_file, "w").write(json.dumps(j))' $crate_subdir
  cp rpmostree-rust{,-prebuilt}.h
  cp rpmostree-cxxrs{,-prebuilt}.h
  cp rpmostree-cxxrs{,-prebuilt}.cxx
- tar --transform "s,^,${PKG_VER}/," -rf ${TARFILE_TMP} rpmostree-{rust,cxxrs}-prebuilt.h rpmostree-cxxrs-prebuilt.cxx)
+ cp rust/cxx.h rust/cxx-prebuilt.h
+ tar --transform "s,^,${PKG_VER}/," -rf ${TARFILE_TMP} rpmostree-{rust,cxxrs}-prebuilt.h rpmostree-cxxrs-prebuilt.cxx rust/cxx-prebuilt.h)
 
 mv ${TARFILE_TMP} ${TARFILE}

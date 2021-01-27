@@ -12,8 +12,11 @@ rpmostree-rust.h: $(binding_rust_sources)
 	else \
 	  echo cbindgen failed; exit 1; \
 	fi
-
 BUILT_SOURCES += rpmostree-rust.h
+
+rust/cxx.h: Makefile.bindings
+	cxxbridge --header >$@
+
 rpmostree-cxxrs.h: $(binding_rust_sources)
 	$(AM_V_GEN) if cxxbridge rust/src/lib.rs --header > $@.tmp; then \
 	  if test -f $@ && cmp $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else \
@@ -26,5 +29,5 @@ rpmostree-cxxrs.cxx: $(binding_rust_sources) rpmostree-cxxrs.h
 	$(AM_V_GEN) cxxbridge --include rpmostree-cxxrs.h rust/src/lib.rs > $@
 
 # Invoked in CI
-bindings: rpmostree-rust.h rpmostree-cxxrs.h rpmostree-cxxrs.cxx
+bindings: rpmostree-rust.h rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
 .PHONY: bindings
