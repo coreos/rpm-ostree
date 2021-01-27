@@ -49,7 +49,7 @@ fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Result<LockfileCo
 
 /// Lockfile format:
 ///
-/// ```
+/// ```json
 /// {
 ///    "metatada": {
 ///        "generated": "<rfc3339-timestamp>",
