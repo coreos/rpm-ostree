@@ -90,12 +90,12 @@ fn write_wrappers(rootfs_dfd: &openat::Dir) -> Result<()> {
             write!(
                 w,
                 "#!/bin/sh
-    # Wrapper created by rpm-ostree to override
-    # behavior of the underlying binary.  For more
-    # information see `man rpm-ostree`.  The real
-    # binary is now located at: {}
-    exec /usr/bin/rpm-ostree cliwrap $0 \"$@\"
-    ",
+# Wrapper created by rpm-ostree to override
+# behavior of the underlying binary.  For more
+# information see `man rpm-ostree`.  The real
+# binary is now located at: {}
+exec /usr/bin/rpm-ostree cliwrap $0 \"$@\"
+",
                 binpath.to_str().unwrap()
             )
         })?;
