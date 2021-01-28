@@ -176,6 +176,11 @@ pub mod ffi {
         fn passwd_cleanup(rootfd: i32) -> Result<()>;
         fn migrate_group_except_root(rootfd: i32, preserved_groups: &Vec<String>) -> Result<()>;
         fn migrate_passwd_except_root(rootfd: i32) -> Result<()>;
+        fn concat_fs_content(
+            rootfs_dfd: i32,
+            repo: Pin<&mut OstreeRepo>,
+            previous_checksum: &str,
+        ) -> Result<()>;
 
         type PasswdDB;
         fn lookup_user(self: &PasswdDB, uid: u32) -> Result<String>;

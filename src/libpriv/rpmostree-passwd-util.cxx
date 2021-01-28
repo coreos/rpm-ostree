@@ -732,36 +732,6 @@ open_file_stream_write_at (int dfd,
 }
 
 static gboolean
-_rpmostree_gfile2stdio (GFile         *source,
-                        char         **storage_buf,
-                        FILE         **ret_src_stream,
-                        GCancellable  *cancellable,
-                        GError       **error)
-{
-  gsize len;
-
-  /* We read the file into memory using Gio (which talks
-   * to libostree), then memopen it, which works with libc.
-   */
-  if (!g_file_load_contents (source, cancellable,
-                             storage_buf, &len, NULL, error))
-    return FALSE;
-
-  if (len == 0)
-    {
-      *ret_src_stream = NULL;
-      return TRUE; /* Early return */
-    }
-
-  FILE *src_stream = fmemopen (*storage_buf, len, "r");
-  if (!src_stream)
-    return glnx_throw_errno_prefix (error, "fmemopen");
-
-  *ret_src_stream = util::move_nullify (src_stream);
-  return TRUE;
-}
-
-static gboolean
 concat_entries (FILE    *src_stream,
                 FILE    *dest_stream,
                 RpmOstreePasswdMigrateKind kind,
@@ -807,63 +777,6 @@ concat_entries (FILE    *src_stream,
       if (r == -1)
         return glnx_throw_errno_prefix (error, "putpwent");
     }
-
-  return TRUE;
-}
-
-static gboolean
-concat_passwd_file (int              rootfs_fd,
-                    GFile           *previous_commit,
-                    RpmOstreePasswdMigrateKind kind,
-                    GCancellable    *cancellable,
-                    GError         **error)
-{
-  const char *filename = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
-  g_autofree char *usretc_subpath = g_strconcat ("usr/etc/", filename, NULL);
-  g_autofree char *usrlib_subpath = g_strconcat ("usr/lib/", filename, NULL);
-  g_autoptr(GFile) orig_etc_content =
-    g_file_resolve_relative_path (previous_commit, usretc_subpath);
-  g_autoptr(GFile) orig_usrlib_content =
-    g_file_resolve_relative_path (previous_commit, usrlib_subpath);
-  g_autoptr(GHashTable) seen_names =
-    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-  GFile *sources[] = { orig_etc_content, orig_usrlib_content };
-
-  gboolean have_etc = g_file_query_exists (orig_etc_content, NULL);
-  gboolean have_usr = g_file_query_exists (orig_usrlib_content, NULL);
-
-  /* This could actually happen after we transition to
-   * systemd-sysusers; we won't have a need for preallocated user data
-   * in the tree.
-   */
-  if (!(have_etc || have_usr))
-    return TRUE;
-
-  const char *target_etc_filename = glnx_strjoina ("etc/", filename);
-  g_autoptr(FILE) dest_stream = open_file_stream_write_at (rootfs_fd, target_etc_filename, "w", error);
-  if (!dest_stream)
-    return FALSE;
-
-  for (guint i = 0; i < G_N_ELEMENTS (sources); i++)
-    {
-      GFile *source = sources[i];
-      g_autoptr(FILE) src_stream = NULL;
-
-      g_autofree char *contents = NULL;
-      if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
-                                   cancellable, error))
-        return FALSE;
-
-      if (!src_stream)
-        continue;
-
-      if (!concat_entries (src_stream, dest_stream, kind,
-                           seen_names, error))
-        return FALSE;
-    }
-
-  if (!glnx_stdio_file_flush (dest_stream, error))
-    return FALSE;
 
   return TRUE;
 }
@@ -986,19 +899,7 @@ rpmostree_passwd_compose_prep (int              rootfs_dfd,
     return TRUE; /* Nothing to do */
 
   g_assert (repo);
-  g_autoptr(GFile) previous_root = NULL;
-  if (!ostree_repo_read_commit (repo, previous_checksum, &previous_root, NULL,
-                                cancellable, error))
-    return FALSE;
-
-  if (!concat_passwd_file (rootfs_dfd, previous_root, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
-                          cancellable, error))
-    return FALSE;
-
-
-  if (!concat_passwd_file (rootfs_dfd, previous_root, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
-                           cancellable, error))
-    return FALSE;
+  rpmostreecxx::concat_fs_content(rootfs_dfd, *repo, std::string(previous_checksum));
 
   return TRUE;
 }
