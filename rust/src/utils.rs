@@ -285,6 +285,105 @@ mod tests {
             Ok(_) => panic!("Expected nonexistent treefile error for {}", path),
         }
     }
+
+    // Note this is testing C++ code defined in rpmostree-util.cxx
+    #[test]
+    fn test_next_version() {
+        use crate::ffi::util_next_version;
+        fn assert_ver(prefix: &str, v: &str, res: &str) {
+            assert_eq!(util_next_version(prefix, "", v).expect("version"), res);
+        }
+        for v in &["", "xyz", "9", "11"] {
+            assert_ver("10", v, "10");
+        }
+
+        assert_ver("10", "10", "10.1");
+        assert_ver("10.1", "10.1", "10.1.1");
+        assert_ver("10", "10.0", "10.1");
+        assert_ver("10", "10.1", "10.2");
+        assert_ver("10", "10.2", "10.3");
+        assert_ver("10", "10.3", "10.4");
+        assert_ver("10", "10.1.5", "10.2");
+        assert_ver("10.1", "10.1.5", "10.1.6");
+        assert_ver("10.1", "10.1.1.5", "10.1.2");
+        assert_ver("10", "10001", "10");
+        assert_ver("10", "101.1", "10");
+        assert_ver("10", "10x.1", "10");
+        assert_ver("10.1", "10", "10.1");
+        assert_ver("10.1", "10.", "10.1");
+        assert_ver("10.1", "10.0", "10.1");
+        assert_ver("10.1", "10.2", "10.1");
+        assert_ver("10.1", "10.12", "10.1");
+        assert_ver("10.1", "10.1x", "10.1");
+        assert_ver("10.1", "10.1.x", "10.1.1");
+        assert_ver("10.1", "10.1.2x", "10.1.3");
+
+        assert_eq!(util_next_version("10", "-", "10").unwrap(), "10-1");
+        assert_eq!(util_next_version("10", "-", "10-1").unwrap(), "10-2");
+        assert_eq!(util_next_version("10.1", "-", "10.1-5").unwrap(), "10.1-6");
+
+        fn t(pre: &str, last: &str, final_datefmt: &str) {
+            let now = glib::DateTime::new_now_utc();
+            let final_version = now.format(final_datefmt).unwrap();
+            let ver = util_next_version(pre, "", last).expect("version");
+            assert_eq!(ver, final_version);
+        }
+        // Test date updates
+        t("10.<date:%Y%m%d>", "10.20001010", "10.%Y%m%d.0");
+
+        // Test increment reset when date changed.
+        t("10.<date:%Y%m%d>", "10.20001010.5", "10.%Y%m%d.0");
+
+        let now = glib::DateTime::new_now_utc();
+        // Test increment up when same date.
+        let prev_version = now.format("10.%Y%m%d.1").unwrap();
+        t("10.<date:%Y%m%d>", prev_version.as_str(), "10.%Y%m%d.2");
+
+        // Test append version number.
+        t("10.<date:%Y%m%d>", "", "10.%Y%m%d.0");
+        let prev_version = now.format("10.%Y%m%d").unwrap();
+        t("10.<date:%Y%m%d>.0", prev_version.as_str(), "10.%Y%m%d.0.0");
+        let prev_version = now.format("10.%Y%m%d.0").unwrap();
+        t("10.<date:%Y%m%d>.0", prev_version.as_str(), "10.%Y%m%d.0.0");
+        let prev_version = now.format("10.%Y%m%d.x").unwrap();
+        t("10.<date:%Y%m%d>", prev_version.as_str(), "10.%Y%m%d.1");
+        let prev_version = now.format("10.%Y%m%d.2.x").unwrap();
+        t("10.<date:%Y%m%d>.2", prev_version.as_str(), "10.%Y%m%d.2.1");
+        let prev_version = now.format("10.%Y%m%d.1.2x").unwrap();
+        t("10.<date:%Y%m%d>.1", prev_version.as_str(), "10.%Y%m%d.1.3");
+
+        // Test variations to the formatting.
+        t("10.<date: %Y%m%d>", "10.20001010", "10. %Y%m%d.0");
+        t("10.<date:%Y%m%d>.", "10.20001010.", "10.%Y%m%d..0");
+        t("10.<date:%Y%m%d>abc", "10.20001010abc", "10.%Y%m%dabc.0");
+        t("10.<date:%Y%m%d >", "10.20001010", "10.%Y%m%d .0");
+        t(
+            "10.<date:text%Y%m%dhere>",
+            "10.20001010",
+            "10.text%Y%m%dhere.0",
+        );
+        t(
+            "10.<date:text %Y%m%d here>",
+            "10.20001010",
+            "10.text %Y%m%d here.0",
+        );
+        t("10.<date:%Y%m%d here>", "10.20001010", "10.%Y%m%d here.0");
+
+        // Test equal last version and prefix.
+        let prev_version = now.format("10.%Y%m%d").unwrap();
+        t("10.<date:%Y%m%d>", prev_version.as_str(), "10.%Y%m%d.0");
+
+        // Test different prefix from last version.
+        t("10.<date:%Y%m%d>", "10", "10.%Y%m%d.0");
+
+        // Test no field given.
+        t("10.<date: >", "10.20001010", "10. .0");
+        t("10.<date:>", "10.20001010", "10..0");
+        t("10.<wrongtag: >", "10.20001010", "10.<wrongtag: >");
+
+        // Test invalid format
+        assert!(util_next_version("10.<date:%E>", "", "10.20001010").is_err());
+    }
 }
 
 /// TODO: cxx-rs doesn't support maps yet

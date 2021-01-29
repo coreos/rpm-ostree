@@ -34,6 +34,7 @@
 #include "libglnx.h"
 #include "rpmostree.h"
 #include "rpmostree-types.h"
+#include "rust/cxx.h"
 
 // C++ code here
 namespace util {
@@ -69,6 +70,14 @@ throw_gerror (GError *&error)
   error = NULL;
   throw std::runtime_error (s);
 }
+}
+
+namespace rpmostreecxx {
+rust::String
+util_next_version (rust::Str auto_version_prefix,
+                   rust::Str version_suffix,
+                   rust::Str last_version);
+
 }
 
 // Below here is C code
@@ -109,12 +118,6 @@ rpmostree_check_size_within_limit (guint64     actual,
 
 char*
 rpmostree_translate_path_for_ostree (const char *path);
-
-char *
-_rpmostree_util_next_version (const char   *auto_version_prefix,
-                              const char   *version_suffix,
-                              const char   *last_version,
-                              GError      **error);
 
 char *
 rpmostree_str_replace (const char  *buf,

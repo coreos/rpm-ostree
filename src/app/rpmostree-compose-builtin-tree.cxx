@@ -878,7 +878,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                        &self->rootfs_dfd, error))
     return FALSE;
 
-  g_autofree char *next_version = NULL;
+  rust::String next_version;
   if (json_object_has_member (self->treefile, "automatic-version-prefix") &&
       /* let --add-metadata-string=version=... take precedence */
       !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
@@ -903,11 +903,9 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
           (void)g_variant_lookup (previous_metadata, OSTREE_COMMIT_META_KEY_VERSION, "s", &last_version);
         }
 
-      next_version = _rpmostree_util_next_version (ver_prefix, ver_suffix, last_version, error);
-      if (!next_version)
-        return FALSE;
+      next_version = rpmostreecxx::util_next_version (ver_prefix, ver_suffix ?: "", last_version ?: "");
       g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
-                           g_variant_ref_sink (g_variant_new_string (next_version)));
+                           g_variant_ref_sink (g_variant_new_string (next_version.c_str())));
     }
   else
     {
@@ -916,7 +914,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       if (v)
         {
           g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
-          next_version = static_cast<char*>(g_variant_dup_string (v, NULL));
+          next_version = rust::String(static_cast<char*>(g_variant_dup_string (v, NULL)));
         }
     }
 
@@ -967,7 +965,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
 
   /* Start postprocessing */
   if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_rs, self->treefile,
-                                          next_version, self->unified_core_and_fuse,
+                                          next_version.length() > 0 ? next_version.c_str() : NULL, self->unified_core_and_fuse,
                                           cancellable, error))
     return glnx_prefix_error (error, "Postprocessing");
 
