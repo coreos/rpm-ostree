@@ -163,38 +163,6 @@ AM_COND_IF([BUILDOPT_ROJIG], [
   AC_DEFINE([BUILDOPT_ROJIG], 1, [Define if rojig is enabled])
 ])
 
-dnl And propagate the release/debug type to cmake
-cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
-if test ${debug_release} = debug; then
-  cmake_args="-DCMAKE_BUILD_TYPE=Debug"
-fi
-if test x${have_zchunk} = xno; then
-  cmake_args="${cmake_args} -DWITH_ZCHUNK:BOOL=0"
-fi
-export cmake_args
-
-dnl I picked /usr/libexec/rpm-ostree just because we need an
-dnl arbitrary path - we don't actually install there.
-dnl Use `WITH_GIR=0`; it's our private libdnf bundle and we don't need the bindings.
-dnl -fPIE for hardening
-(set -euo pipefail; mkdir -p libdnf-build && cd libdnf-build &&
- set -x && 
- export CXXFLAGS="-fPIE $CXXFLAGS" &&
- cmake \
-     -DCMAKE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree \
-     -DINCLUDE_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/include \
-     -DLIB_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree \
-     -DSYSCONF_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/etc \
-     -DSHARE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree/share \
-     -DENABLE_STATIC:BOOL=1 \
-     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-     -DWITH_SWDB:BOOL=0 \
-     -DWITH_BINDINGS:BOOL=0 \
-     -DWITH_HTML:BOOL=0 \
-     -DWITH_MAN:BOOL=0 \
-     -DWITH_GIR:BOOL=0 \
-     ${cmake_args} ../libdnf) || exit 1
-
 AC_CONFIG_FILES([
 Makefile
 api-doc/Makefile
