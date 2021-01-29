@@ -21,6 +21,8 @@ const RPMOSTREE_EXTENSIONS_STATE_FILE: &str = ".rpm-ostree-state-chksum";
 #[serde(rename_all = "kebab-case")]
 pub struct Extensions {
     extensions: HashMap<String, Extension>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repos: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -85,6 +87,10 @@ pub(crate) fn extensions_load(
 }
 
 impl Extensions {
+    pub(crate) fn get_repos(&self) -> Vec<String> {
+        self.repos.as_ref().map(|v| v.clone()).unwrap_or_default()
+    }
+
     pub(crate) fn get_packages(&self) -> Vec<String> {
         self.extensions
             .iter()
@@ -140,6 +146,8 @@ mod tests {
     #[test]
     fn basic() {
         let buf = r###"
+repos:
+    - my-repo
 extensions:
     bazboo:
         packages:
@@ -147,6 +155,7 @@ extensions:
 "###;
         let mut input = std::io::BufReader::new(buf.as_bytes());
         let extensions = extensions_load_stream(&mut input, "x86_64", &base_rpmdb()).unwrap();
+        assert!(extensions.get_repos() == vec!["my-repo"]);
         assert!(extensions.get_packages() == vec!["bazboo"]);
     }
 
