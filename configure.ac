@@ -75,12 +75,6 @@ PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0
 				     rpm librepo libsolv libsolvext sqlite3 gpgme modulemd-2.0 json-c libcurl openssl
 				     libarchive])
 
-# We just keep rust-specific deps separate for better tracking
-# The `libcurl` one is redundant since we already require it for libostree. `openssl`
-# is required by libcurl anyway, but we need to link to it directly too because
-# curl-rust uses it.
-PKG_CHECK_MODULES(PKGDEP_RPMOSTREE_RS, [libcurl openssl])
-
 dnl RHEL8.1 has old libarchive
 AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
   [AC_DEFINE([HAVE_LIBARCHIVE_ZSTD], 1, [Define if we have libarchive with zstd])])

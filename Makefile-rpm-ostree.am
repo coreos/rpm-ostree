@@ -80,9 +80,9 @@ rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
 	-DLIBDIR=\"$(libdir)\" -DPKGLIBDIR=\"$(pkglibdir)\" \
 	-I $(top_srcdir)/libdnf \
-	$(PKGDEP_RPMOSTREE_CFLAGS) $(PKGDEP_RPMOSTREE_RS_CFLAGS)
+	$(PKGDEP_RPMOSTREE_CFLAGS)
 rpmostree_bin_common_cflags = $(rpmostree_common_cflags)
-rpmostree_common_libs = libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_RS_LIBS) $(PKGDEP_RPMOSTREE_LIBS)
+rpmostree_common_libs = libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_LIBS)
 
 rpmostree_bin_common_libs = librpmostreeinternals.la $(rpmostree_common_libs)
 librpmostreeinternals_la_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
