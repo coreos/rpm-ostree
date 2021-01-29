@@ -65,15 +65,12 @@ AC_SUBST([RPM_OSTREE_FEATURES])
 
 PKG_PROG_PKG_CONFIG
 
-# Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
+dnl Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
-# librepo libsolv etc. are libdnf dependencies
-PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0
-				     ostree-1 >= 2020.7
-				     libsystemd
-				     polkit-gobject-1
-				     rpm librepo libsolv libsolvext sqlite3 gpgme modulemd-2.0 json-c libcurl openssl
-				     libarchive])
+dnl These are the dependencies of the public librpmostree-1.0.0 shared library
+PKG_CHECK_MODULES(PKGDEP_LIBRPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0 ostree-1 >= 2020.7 rpm])
+dnl And these additional ones are used by for the rpmostreeinternals C/C++ library
+PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [polkit-gobject-1 libarchive])
 
 dnl RHEL8.1 has old libarchive
 AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
