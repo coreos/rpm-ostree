@@ -80,10 +80,11 @@ pub(crate) fn extensions_load(
     path: &str,
     basearch: &str,
     base_pkgs: &Vec<StringMapping>,
-) -> Result<Box<Extensions>> {
+) -> CxxResult<Box<Extensions>> {
     let f = utils::open_file(path)?;
     let mut f = std::io::BufReader::new(f);
-    extensions_load_stream(&mut f, basearch, base_pkgs).with_context(|| format!("parsing {}", path))
+    Ok(extensions_load_stream(&mut f, basearch, base_pkgs)
+        .with_context(|| format!("parsing {}", path))?)
 }
 
 impl Extensions {
