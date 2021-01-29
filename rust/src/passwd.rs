@@ -89,34 +89,34 @@ pub fn passwd_cleanup(rootfs_dfd: i32) -> Result<()> {
 /// contains everything else.
 pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> Result<()> {
     static ETCSRC_PATH: &str = "usr/etc/passwd";
-    static ETCTMP_PATH: &str = "usr/etc/passwd.tmp";
     static USRDEST_PATH: &str = "usr/lib/passwd";
 
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-    let entries = {
+    let (roots, others): (Vec<_>, Vec<_>) = {
         let src_rd = rootfs.open_file(ETCSRC_PATH).map(BufReader::new)?;
-        nameservice::passwd::parse_passwd_content(src_rd)?
+        let entries = nameservice::passwd::parse_passwd_content(src_rd)?;
+        entries.into_iter().partition(|e| e.uid == 0)
     };
 
     {
-        let mut etcdest_stream = rootfs.write_file(ETCTMP_PATH, 0o664).map(BufWriter::new)?;
         let mut usrdest_stream = rootfs
             .append_file(USRDEST_PATH, 0o664)
             .map(BufWriter::new)?;
 
-        for user in entries {
-            let mut target = match user.uid {
-                0 => &mut etcdest_stream,
-                _ => &mut usrdest_stream,
-            };
-            user.to_writer(&mut target)?;
+        for entry in &others {
+            entry.to_writer(&mut usrdest_stream)?;
         }
 
-        etcdest_stream.flush()?;
         usrdest_stream.flush()?;
     }
 
-    rootfs.local_rename(ETCTMP_PATH, ETCSRC_PATH)?;
+    rootfs.write_file_with_sync(ETCSRC_PATH, 0o664, |mut etcdest_stream| -> Result<()> {
+        for entry in &roots {
+            entry.to_writer(&mut etcdest_stream)?;
+        }
+        Ok(())
+    })?;
+
     Ok(())
 }
 
@@ -124,48 +124,44 @@ pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> Result<()> {
 ///
 /// This function is taking the /etc/group generated in the install root (really
 /// in /usr/etc at this point), and splitting it into two streams: a new
-/// /etc/group that just contains the root entry, and /usr/lib/group which
-/// contains everything else.
+/// /etc/group that just contains roots and preserved entries, and /usr/lib/group
+/// which contains everything else.
 pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>) -> Result<()> {
     static ETCSRC_PATH: &str = "usr/etc/group";
-    static ETCTMP_PATH: &str = "usr/etc/group.tmp";
     static USRDEST_PATH: &str = "usr/lib/group";
 
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-    let entries = {
+    let (mut roots_preserved, others): (Vec<_>, Vec<_>) = {
         let src_rd = rootfs.open_file(ETCSRC_PATH).map(BufReader::new)?;
-        nameservice::group::parse_group_content(src_rd)?
+        let entries = nameservice::group::parse_group_content(src_rd)?;
+        entries.into_iter().partition(|e| e.gid == 0)
     };
 
     {
-        let mut etcdest_stream = rootfs.write_file(ETCTMP_PATH, 0o664).map(BufWriter::new)?;
         let mut usrdest_stream = rootfs
             .append_file(USRDEST_PATH, 0o664)
             .map(BufWriter::new)?;
 
-        for group in entries {
-            let mut target = match group.gid {
-                0 => &mut etcdest_stream,
-                _ => &mut usrdest_stream,
-            };
-            group.to_writer(&mut target)?;
-
+        for entry in &others {
+            entry.to_writer(&mut usrdest_stream)?;
             // If it's marked in the preserve group, we need to write to
             // *both* /etc and /usr/lib in order to preserve semantics for
             // upgraded systems from before we supported the preserve concept.
-            if preserved_groups.contains(&group.name) {
-                // We should never be trying to preserve the root entry, it
-                // should always be only in /etc.
-                anyhow::ensure!(group.gid != 0, "cannot preserve root entry");
-                group.to_writer(&mut etcdest_stream)?;
+            if preserved_groups.contains(&entry.name) {
+                roots_preserved.push(entry.clone())
             }
         }
 
-        etcdest_stream.flush()?;
         usrdest_stream.flush()?;
     }
 
-    rootfs.local_rename(ETCTMP_PATH, ETCSRC_PATH)?;
+    rootfs.write_file_with_sync(ETCSRC_PATH, 0o664, |mut etcdest_stream| -> Result<()> {
+        for entry in &roots_preserved {
+            entry.to_writer(&mut etcdest_stream)?;
+        }
+        Ok(())
+    })?;
+
     Ok(())
 }
 

@@ -1016,6 +1016,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
           const char *elt = json_array_get_string_element (etc_group_members, i);
           g_assert (elt != NULL);
           auto entry = std::string(elt);
+          // TODO(lucab): drop this once we can pass the treefile directly to Rust.
           preserve_groups_set.push_back(entry);
         }
     }
