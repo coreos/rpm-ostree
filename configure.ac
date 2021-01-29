@@ -65,13 +65,6 @@ AC_SUBST([RPM_OSTREE_FEATURES])
 
 PKG_PROG_PKG_CONFIG
 
-save_LIBS="$LIBS"
-LIBS=
-AC_SEARCH_LIBS([cap_init], [cap], [], [AC_MSG_ERROR([*** POSIX caps library not found])])
-CAP_LIBS="$LIBS"
-AC_SUBST(CAP_LIBS)
-LIBS="$save_LIBS"
-
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 # librepo libsolv etc. are libdnf dependencies
@@ -81,12 +74,6 @@ PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0
 				     polkit-gobject-1
 				     rpm librepo libsolv libsolvext sqlite3 gpgme modulemd-2.0 json-c libcurl openssl
 				     libarchive])
-
-dnl -ldl: https://github.com/ostreedev/ostree/commit/1f832597fc83fda6cb8daf48c4495a9e1590774c
-dnl -ldl: https://github.com/rust-lang/rust/issues/47714
-dnl -lm: needed for rand crate in debug mode
-dnl See also rpmostree_core_linkage_for_rust()
-PKGDEP_RPMOSTREE_LIBS="$PKGDEP_RPMOSTREE_LIBS -Wl,--push-state,--no-as-needed,-ldl,-lm,--pop-state"
 
 # We just keep rust-specific deps separate for better tracking
 # The `libcurl` one is redundant since we already require it for libostree. `openssl`

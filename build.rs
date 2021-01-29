@@ -23,6 +23,12 @@ fn main() -> Result<()> {
     println!("cargo:rustc-link-lib=cap");
     println!("cargo:rustc-link-search={}/libdnf-build/libdnf", cwd);
     println!("cargo:rustc-link-lib=dnf");
+    println!("cargo:rustc-link-lib=rt");
+    println!("cargo:rustc-link-lib=stdc++");
+    // https://github.com/ostreedev/ostree/commit/1f832597fc83fda6cb8daf48c4495a9e1590774c
+    // https://github.com/rust-lang/rust/issues/47714
+    println!("cargo:rustc-link-lib=dl");
+    println!("cargo:rustc-link-lib=m");
     println!("cargo:rustc-link-lib=rpmostree-1");
     system_deps::Config::new().probe()?;
     detect_fedora_feature()?;

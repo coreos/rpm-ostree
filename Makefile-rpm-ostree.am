@@ -82,7 +82,7 @@ rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I $(top_srcdir)/libdnf -I $(top_srcdir)/libdnf-build \
 	$(PKGDEP_RPMOSTREE_CFLAGS) $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpmostree_bin_common_cflags = $(rpmostree_common_cflags)
-rpmostree_common_libs = $(CAP_LIBS) libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_RS_LIBS) $(PKGDEP_RPMOSTREE_LIBS) -L$(top_srcdir)/libdnf-build/libdnf -ldnf -lstdc++ -lrt
+rpmostree_common_libs = libglnx.la librpmostree-1.la librpmostreecxxrs.la $(PKGDEP_RPMOSTREE_RS_LIBS) $(PKGDEP_RPMOSTREE_LIBS)
 
 rpmostree_bin_common_libs = librpmostreeinternals.la $(rpmostree_common_libs)
 librpmostreeinternals_la_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
