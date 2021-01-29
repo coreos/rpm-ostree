@@ -1532,6 +1532,11 @@ rpmostree_compose_builtin_extensions (int             argc,
 
   auto extensions = rpmostreecxx::extensions_load (extensions_path, basearch, *packages_mapping);
 
+  // notice we don't use a pkgcache repo here like in the treecompose path: we
+  // want RPMs, so having them already imported isn't useful to us (and anyway,
+  // for OS extensions by definition they're not expected to be cached since
+  // they're not in the base tree)
+
   g_autoptr(RpmOstreeContext) ctx =
       rpmostree_context_new_tree (cachedir_dfd, repo, cancellable, error);
   if (!ctx)
