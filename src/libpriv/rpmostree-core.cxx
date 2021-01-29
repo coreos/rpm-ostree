@@ -2443,14 +2443,14 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
 }
 
 static GHashTable *
-gather_source_to_packages (RpmOstreeContext *self)
+gather_source_to_packages (GPtrArray *packages)
 {
   g_autoptr(GHashTable) source_to_packages =
     g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify)g_ptr_array_unref);
 
-  for (guint i = 0; i < self->pkgs_to_download->len; i++)
+  for (guint i = 0; i < packages->len; i++)
     {
-      auto pkg = static_cast<DnfPackage *>(self->pkgs_to_download->pdata[i]);
+      auto pkg = static_cast<DnfPackage *>(packages->pdata[i]);
       DnfRepo *src = dnf_package_get_repo (pkg);
       GPtrArray *source_packages;
 
@@ -2466,6 +2466,39 @@ gather_source_to_packages (RpmOstreeContext *self)
     }
 
   return util::move_nullify (source_to_packages);
+}
+
+gboolean
+rpmostree_download_packages (GPtrArray      *packages,
+                             GCancellable   *cancellable,
+                             GError        **error)
+{
+  guint progress_sigid;
+  g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (packages);
+  GLNX_HASH_TABLE_FOREACH_KV (source_to_packages, DnfRepo*, src, GPtrArray*, src_packages)
+    {
+      g_autofree char *target_dir = NULL;
+      glnx_unref_object DnfState *hifstate = dnf_state_new ();
+
+      progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                         G_CALLBACK (on_hifstate_percentage_changed),
+                                         NULL);
+      g_auto(RpmOstreeProgress) progress = { 0, };
+      rpmostree_output_progress_percent_begin (&progress, "Downloading from '%s'",
+                                               dnf_repo_get_id (src));
+
+      target_dir = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
+      if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
+        return FALSE;
+
+      if (!dnf_repo_download_packages (src, src_packages, target_dir,
+                                       hifstate, error))
+        return FALSE;
+
+      g_signal_handler_disconnect (hifstate, progress_sigid);
+    }
+
+  return TRUE;
 }
 
 gboolean
@@ -2485,33 +2518,7 @@ rpmostree_context_download (RpmOstreeContext *self,
   else
     return TRUE;
 
-  { guint progress_sigid;
-    g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (self);
-    GLNX_HASH_TABLE_FOREACH_KV (source_to_packages, DnfRepo*, src, GPtrArray*, src_packages)
-      {
-        g_autofree char *target_dir = NULL;
-        glnx_unref_object DnfState *hifstate = dnf_state_new ();
-
-        progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                           G_CALLBACK (on_hifstate_percentage_changed),
-                                           NULL);
-        g_auto(RpmOstreeProgress) progress = { 0, };
-        rpmostree_output_progress_percent_begin (&progress, "Downloading from '%s'",
-                                                 dnf_repo_get_id (src));
-
-        target_dir = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
-        if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
-          return FALSE;
-
-        if (!dnf_repo_download_packages (src, src_packages, target_dir,
-                                         hifstate, error))
-          return FALSE;
-
-        g_signal_handler_disconnect (hifstate, progress_sigid);
-      }
-  }
-
-  return TRUE;
+  return rpmostree_download_packages (self->pkgs_to_download, cancellable, error);
 }
 
 /* Returns: (transfer none): The rojig package */
