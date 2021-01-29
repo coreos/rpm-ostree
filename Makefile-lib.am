@@ -32,9 +32,9 @@ librpmostree_1_la_SOURCES = \
 
 librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libpriv -I$(srcdir)/src/lib \
 	-fvisibility=hidden '-D_RPMOSTREE_EXTERN=__attribute((visibility("default"))) extern' \
-	$(PKGDEP_RPMOSTREE_CFLAGS)
+	$(PKGDEP_LIBRPMOSTREE_CFLAGS)
 librpmostree_1_la_LDFLAGS = $(AM_LDFLAGS) -version-number 1:0:0 -Bsymbolic-functions
-librpmostree_1_la_LIBADD =  $(PKGDEP_RPMOSTREE_LIBS) libglnx.la
+librpmostree_1_la_LIBADD =  $(PKGDEP_LIBRPMOSTREE_LIBS) libglnx.la
 
 # XXX: work around clang being passed -fstack-clash-protection which it doesn't understand
 # https://github.com/projectatomic/rpm-ostree/pull/1787#issuecomment-473971585
