@@ -48,7 +48,16 @@ unit: {
         MAKE_JOBS=${n} CARGO_BUILD_JOBS=${n} ci/unit.sh
       """)
   }
-}}
+},
+clang: {
+  // Build with clang/clang++
+  def n = 5
+  cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi", cpu: "${n}") {
+      checkout scm
+      shwrap("ci/clang-build-check.sh")
+  }
+}
+}
 
 stage("Test") {
 parallel insttests: {

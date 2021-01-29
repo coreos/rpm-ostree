@@ -11,6 +11,6 @@ dn=$(dirname $0)
 # add cargo's directory to the PATH like we do in CoreOS CI
 export PATH="$HOME/.cargo/bin:$PATH"
 
+export CC=clang CXX=clang++
 ${dn}/build.sh
 make check
-make install
