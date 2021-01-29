@@ -196,7 +196,8 @@ mod ffi {
             base_pkgs: &Vec<StringMapping>,
         ) -> Result<Box<Extensions>>;
         fn get_repos(&self) -> Vec<String>;
-        fn get_packages(&self) -> Vec<String>;
+        fn get_os_extension_packages(&self) -> Vec<String>;
+        fn get_development_packages(&self) -> Vec<String>;
         fn state_checksum_changed(&self, chksum: &str, output_dir: &str) -> Result<bool>;
         fn update_state_checksum(&self, chksum: &str, output_dir: &str) -> Result<()>;
         fn serialize_to_dir(&self, output_dir: &str) -> Result<()>;

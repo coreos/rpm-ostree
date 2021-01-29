@@ -36,6 +36,9 @@ extensions:
   # This can be whatever name you'd like. The name itself
   # isn't used by rpm-ostree.
   sooper-dooper-tracers:
+    # Optional; defaults to `os-extension`. An OS extension
+    # is an extension intended to be `rpm-ostree install`ed.
+    kind: os-extension
     # List of packages for this extension
     packages:
         - strace
@@ -47,6 +50,11 @@ extensions:
         - x86_64
         - aarch64
   kernel-dev:
+    # A development extension lists packages useful for
+    # developing for the target OSTree, but won't be layered
+    # on top. A common example is kernel modules. No
+    # depsolving happens, packages listed are downloaded.
+    kind: development
     packages:
       - kernel-devel
       - kernel-headers

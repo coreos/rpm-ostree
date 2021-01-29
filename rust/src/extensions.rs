@@ -33,6 +33,21 @@ pub struct Extension {
     architectures: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     match_base_evr: Option<String>,
+    #[serde(default)]
+    kind: ExtensionKind,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+enum ExtensionKind {
+    OsExtension,
+    Development,
+}
+
+impl Default for ExtensionKind {
+    fn default() -> Self {
+        ExtensionKind::OsExtension
+    }
 }
 
 fn extensions_load_stream(
@@ -55,9 +70,11 @@ fn extensions_load_stream(
         .collect();
 
     for (_, ext) in parsed.extensions.iter_mut() {
-        for pkg in &ext.packages {
-            if base_pkgs.contains_key(pkg.as_str()) {
-                bail!("package {} already present in base", pkg);
+        if ext.kind == ExtensionKind::OsExtension {
+            for pkg in &ext.packages {
+                if base_pkgs.contains_key(pkg.as_str()) {
+                    bail!("package {} already present in base", pkg);
+                }
             }
         }
         if let Some(ref matched_base_pkg) = ext.match_base_evr {
@@ -92,9 +109,18 @@ impl Extensions {
         self.repos.as_ref().map(|v| v.clone()).unwrap_or_default()
     }
 
-    pub(crate) fn get_packages(&self) -> Vec<String> {
+    pub(crate) fn get_os_extension_packages(&self) -> Vec<String> {
         self.extensions
             .iter()
+            .filter(|(_, ext)| ext.kind == ExtensionKind::OsExtension)
+            .flat_map(|(_, ext)| ext.packages.iter().cloned())
+            .collect()
+    }
+
+    pub(crate) fn get_development_packages(&self) -> Vec<String> {
+        self.extensions
+            .iter()
+            .filter(|(_, ext)| ext.kind == ExtensionKind::Development)
             .flat_map(|(_, ext)| ext.packages.iter().cloned())
             .collect()
     }
@@ -157,7 +183,8 @@ extensions:
         let mut input = std::io::BufReader::new(buf.as_bytes());
         let extensions = extensions_load_stream(&mut input, "x86_64", &base_rpmdb()).unwrap();
         assert!(extensions.get_repos() == vec!["my-repo"]);
-        assert!(extensions.get_packages() == vec!["bazboo"]);
+        assert!(extensions.get_os_extension_packages() == vec!["bazboo"]);
+        assert!(extensions.get_development_packages().is_empty());
     }
 
     #[test]
@@ -173,6 +200,21 @@ extensions:
             Ok(_) => panic!("expected failure from extension in base"),
             Err(ref e) => assert!(e.to_string() == "package foobar already present in base"),
         }
+    }
+
+    #[test]
+    fn ext_in_devel() {
+        let buf = r###"
+extensions:
+    foobar:
+        packages:
+            - foobar
+        kind: development
+"###;
+        let mut input = std::io::BufReader::new(buf.as_bytes());
+        let extensions = extensions_load_stream(&mut input, "x86_64", &base_rpmdb()).unwrap();
+        assert!(extensions.get_os_extension_packages().is_empty());
+        assert!(extensions.get_development_packages() == vec!["foobar"]);
     }
 
     #[test]
@@ -193,10 +235,10 @@ extensions:
 "###;
         let mut input = std::io::BufReader::new(buf.as_bytes());
         let extensions = extensions_load_stream(&mut input, "x86_64", &base_rpmdb()).unwrap();
-        assert!(extensions.get_packages() == vec!["bazboo"]);
+        assert!(extensions.get_os_extension_packages() == vec!["bazboo"]);
         let mut input = std::io::BufReader::new(buf.as_bytes());
         let extensions = extensions_load_stream(&mut input, "s390x", &base_rpmdb()).unwrap();
-        assert!(extensions.get_packages() == vec!["dodo", "dada"]);
+        assert!(extensions.get_os_extension_packages() == vec!["dodo", "dada"]);
     }
 
     #[test]
@@ -207,9 +249,16 @@ extensions:
         packages:
             - foobar-ext
         match-base-evr: foobar
+        kind: os-extension
+    devel:
+        packages:
+            - foobar-devel
+        match-base-evr: foobar
+        kind: development
 "###;
         let mut input = std::io::BufReader::new(buf.as_bytes());
         let extensions = extensions_load_stream(&mut input, "x86_64", &base_rpmdb()).unwrap();
-        assert!(extensions.get_packages() == vec!["foobar-ext-1.2-3"]);
+        assert!(extensions.get_os_extension_packages() == vec!["foobar-ext-1.2-3"]);
+        assert!(extensions.get_development_packages() == vec!["foobar-devel-1.2-3"]);
     }
 }

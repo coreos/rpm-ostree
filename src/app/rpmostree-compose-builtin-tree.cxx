@@ -1561,7 +1561,7 @@ rpmostree_compose_builtin_extensions (int             argc,
 
   g_autoptr(RpmOstreeTreespec) spec = NULL;
   { g_autoptr(GPtrArray) gpkgs = g_ptr_array_new_with_free_func (g_free);
-    auto pkgs = extensions->get_packages();
+    auto pkgs = extensions->get_os_extension_packages();
     for (auto pkg : pkgs)
       g_ptr_array_add (gpkgs, (gpointer*) g_strdup (pkg.c_str()));
 
@@ -1622,6 +1622,44 @@ rpmostree_compose_builtin_extensions (int             argc,
         return FALSE;
     }
 
+  /* This is hacky: for "development" extensions, we don't want any depsolving
+   * against the base OS. Rather than awkwardly teach the core about this, we
+   * just reuse its sack and keep all the functionality here. */
+
+  DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+  DnfSack *sack = dnf_context_get_sack (dnfctx);
+
+  /* disable the system repo; we always want to download, even if already in the base */
+  dnf_sack_repo_enabled (sack, HY_SYSTEM_REPO_NAME, 0);
+
+  auto pkgs = extensions->get_development_packages();
+  g_autoptr(GPtrArray) devel_pkgs_to_download =
+    g_ptr_array_new_with_free_func (g_object_unref);
+  for (auto pkg : pkgs)
+    {
+      g_autoptr(GPtrArray) matches = rpmostree_get_matching_packages (sack, pkg.c_str());
+      if (matches->len == 0)
+        return glnx_throw (error, "Package %s not found", pkg.c_str());
+      DnfPackage *found_pkg = (DnfPackage*)matches->pdata[0];
+      g_ptr_array_add (devel_pkgs_to_download, g_object_ref (found_pkg));
+    }
+
+  rpmostree_set_repos_on_packages (dnfctx, devel_pkgs_to_download);
+
+  if (!rpmostree_download_packages (devel_pkgs_to_download, cancellable, error))
+    return FALSE;
+
+  for (guint i = 0; i < devel_pkgs_to_download->len; i++)
+    {
+      DnfPackage *pkg = (DnfPackage*)devel_pkgs_to_download->pdata[i];
+      const char *src = dnf_package_get_filename (pkg);
+      const char *basename = glnx_basename (src);
+      if (!glnx_file_copy_at (AT_FDCWD, dnf_package_get_filename (pkg), NULL, output_dfd,
+                              basename, GLNX_FILE_COPY_NOXATTRS, cancellable, error))
+        return FALSE;
+    }
+
+  // XXX: account for development extensions
   extensions->update_state_checksum (state_checksum, opt_extensions_output_dir);
   extensions->serialize_to_dir (opt_extensions_output_dir);
   if (!process_touch_if_changed (error))

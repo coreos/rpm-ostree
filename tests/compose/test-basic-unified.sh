@@ -89,6 +89,16 @@ build_rpm dodo-base
 build_rpm dodo requires dodo-base
 build_rpm solitaire
 
+# this is pretty terrible... need --json for `rpm-ostree db list`
+kernel_vra=$(rpm-ostree db list --repo=${repo} ${treeref} kernel | tail -n1 | cut -d- -f2-)
+kernel_v=$(cut -d- -f1 <<< "$kernel_vra")
+kernel_ra=$(cut -d- -f2- <<< "$kernel_vra")
+kernel_r=${kernel_ra%.x86_64}
+
+build_rpm kernel-core version ${kernel_v} release ${kernel_r}
+build_rpm kernel-devel version ${kernel_v} release ${kernel_r}
+build_rpm kernel-headers version ${kernel_v} release ${kernel_r}
+
 cat > extensions.yaml << EOF
 extensions:
   extinct-birds:
@@ -100,6 +110,13 @@ extensions:
       - nonexistent
     architectures:
       - badarch
+  kernel-devel:
+    kind: development
+    packages:
+      - kernel-core
+      - kernel-devel
+      - kernel-headers
+    match-base-evr: kernel
 EOF
 
 # we don't actually need root here, but in CI the cache may be in a qcow2 and
@@ -110,10 +127,12 @@ runasroot rpm-ostree compose extensions --repo=${repo} \
   --touch-if-changed extensions-changed
 
 ls extensions/{dodo-1.0,dodo-base-1.0,solitaire-1.0}-*.rpm
+ls extensions/kernel-{core,devel,headers}-${kernel_v}-${kernel_r}.x86_64.rpm
 test -f extensions-changed
 assert_jq extensions/extensions.json \
-  '.extensions|length == 1' \
-  '.extensions["extinct-birds"]'
+  '.extensions|length == 2' \
+  '.extensions["extinct-birds"]' \
+  '.extensions["kernel-devel"]'
 echo "ok extensions"
 
 rm extensions-changed
