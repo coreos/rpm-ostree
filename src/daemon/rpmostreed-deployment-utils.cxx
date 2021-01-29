@@ -41,7 +41,7 @@
 char *
 rpmostreed_deployment_generate_id (OstreeDeployment *deployment)
 {
-  g_return_val_if_fail (OSTREE_IS_DEPLOYMENT (deployment), NULL);
+  g_assert (OSTREE_IS_DEPLOYMENT (deployment));
   return g_strdup_printf ("%s-%s.%u",
                           ostree_deployment_get_osname (deployment),
                           ostree_deployment_get_csum (deployment),

@@ -557,8 +557,8 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
   /* Require non-empty strings */
   if (custom_origin_url)
     {
-      g_return_val_if_fail (*custom_origin_url, FALSE);
-      g_return_val_if_fail (custom_origin_description && *custom_origin_description, FALSE);
+      g_assert (*custom_origin_url);
+      g_assert (custom_origin_description && *custom_origin_description);
     }
 
    /* We don't want to carry any commit overrides or version pinning during a

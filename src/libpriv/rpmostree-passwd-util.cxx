@@ -149,7 +149,7 @@ rpmostree_passwd_data2passwdents (const char *data)
   struct passwd *ent = NULL;
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_passwd_ent_free);
 
-  g_return_val_if_fail (data != NULL, NULL);
+  g_assert (data != NULL);
 
   g_autoptr(FILE) mf = fmemopen ((void *)data, strlen (data), "r");
 
@@ -201,7 +201,7 @@ sysuser_ent_free (void *vptr)
 GPtrArray *
 rpmostree_passwd_data2groupents (const char *data)
 {
-  g_return_val_if_fail (data != NULL, NULL);
+  g_assert (data != NULL);
 
   g_autoptr(FILE) mf = fmemopen ((void *)data, strlen (data), "r");
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_group_ent_free);

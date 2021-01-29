@@ -832,7 +832,7 @@ get_sack_for_root (int               dfd,
                    GError          **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Loading sack", error);
-  g_return_val_if_fail (out_sack != NULL, FALSE);
+  g_assert (out_sack != NULL);
 
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 

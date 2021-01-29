@@ -282,7 +282,7 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
                                 GPtrArray **out_modified_b,
                                 GPtrArray **out_common)
 {
-  g_return_val_if_fail (a != NULL && b != NULL, FALSE);
+  g_assert (a != NULL && b != NULL);
   g_return_val_if_fail (out_unique_a || out_unique_b ||
                         out_modified_a || out_modified_b || out_common, FALSE);
 

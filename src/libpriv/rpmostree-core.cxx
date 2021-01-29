@@ -397,7 +397,7 @@ rpmostree_context_new_system (OstreeRepo   *repo,
                               GCancellable *cancellable,
                               GError      **error)
 {
-  g_return_val_if_fail (repo != NULL, FALSE);
+  g_assert (repo != NULL);
 
   auto self = static_cast<RpmOstreeContext*>(g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL));
   self->is_system = TRUE;
@@ -2654,7 +2654,7 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
     return TRUE;
 
   OstreeRepo *repo = get_pkgcache_repo (self);
-  g_return_val_if_fail (repo != NULL, FALSE);
+  g_assert (repo != NULL);
 
   if (!dnf_transaction_import_keys (dnf_context_get_transaction (dnfctx), error))
     return FALSE;
@@ -3389,7 +3389,7 @@ relabel_package_async_finish (RpmOstreeContext   *self,
                               GAsyncResult       *result,
                               GError            **error)
 {
-  g_return_val_if_fail (g_task_is_valid (result, self), FALSE);
+  g_assert (g_task_is_valid (result, self));
   return g_task_propagate_int ((GTask*)result, error);
 }
 
@@ -3443,7 +3443,7 @@ relabel_if_necessary (RpmOstreeContext *self,
 
   g_assert (self->sepolicy);
 
-  g_return_val_if_fail (ostreerepo != NULL, FALSE);
+  g_assert (ostreerepo != NULL);
 
   /* Prep a txn and tmpdir for all of the relabels */
   g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };

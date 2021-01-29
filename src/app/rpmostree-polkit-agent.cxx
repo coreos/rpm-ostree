@@ -56,7 +56,7 @@ fork_agent (pid_t *pid, const char *path, ...)
   va_list ap;
   char **l;
 
-  g_return_val_if_fail (pid != 0, 0);
+  g_assert (pid != 0);
   g_assert (path);
 
   parent_pid = getpid ();

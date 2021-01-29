@@ -179,8 +179,8 @@ rpmostreed_osexperimental_new (OstreeSysroot *sysroot,
                                OstreeRepo *repo,
                                const char *name)
 {
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
-  g_return_val_if_fail (name != NULL, NULL);
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
+  g_assert (name != NULL);
 
   g_autofree char *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
 
