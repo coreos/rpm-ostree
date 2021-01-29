@@ -434,9 +434,9 @@ rpmostreed_transaction_new_package_diff (GDBusMethodInvocation *invocation,
                                          GError **error)
 {
 
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
-  g_return_val_if_fail (osname != NULL, NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
+  g_assert (osname != NULL);
 
   auto self = (PackageDiffTransaction *)
      g_initable_new (package_diff_transaction_get_type (),
@@ -572,9 +572,9 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
                                      GError **error)
 {
 
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
-  g_return_val_if_fail (osname != NULL, NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
+  g_assert (osname != NULL);
 
   auto self = (RollbackTransaction *)
   g_initable_new (rollback_transaction_get_type (),
@@ -1665,9 +1665,9 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    GCancellable *cancellable,
                                    GError **error)
 {
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
-  g_return_val_if_fail (osname != NULL, NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
+  g_assert (osname != NULL);
 
   /* Parse this one early as it's used by an object property */
   g_autoptr(GVariantDict) options_dict = g_variant_dict_new (options);
@@ -1948,8 +1948,8 @@ rpmostreed_transaction_new_initramfs_etc (GDBusMethodInvocation *invocation,
                                           GError               **error)
 {
 
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
 
   auto self = (InitramfsEtcTransaction *)
     g_initable_new (initramfs_etc_transaction_get_type (),
@@ -2084,8 +2084,8 @@ rpmostreed_transaction_new_initramfs_state (GDBusMethodInvocation *invocation,
                                             GError               **error)
 {
   
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
 
   auto self = (InitramfsStateTransaction *)
     g_initable_new (initramfs_state_transaction_get_type (),
@@ -2244,8 +2244,8 @@ rpmostreed_transaction_new_cleanup (GDBusMethodInvocation *invocation,
                                     GCancellable          *cancellable,
                                     GError               **error)
 {
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
 
   auto self = (CleanupTransaction *)
     g_initable_new (cleanup_transaction_get_type (),
@@ -2362,8 +2362,8 @@ rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
                                        GCancellable          *cancellable,
                                        GError               **error)
 {
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
 
   auto self = (RefreshMdTransaction *)
     g_initable_new (refresh_md_transaction_get_type (),
@@ -2511,8 +2511,8 @@ rpmostreed_transaction_new_modify_yum_repo (GDBusMethodInvocation *invocation,
                                             GCancellable          *cancellable,
                                             GError               **error)
 {
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
 
   auto self = (ModifyYumRepoTransaction*)
     g_initable_new (modify_yum_repo_transaction_get_type (),
@@ -2643,8 +2643,8 @@ rpmostreed_transaction_new_finalize_deployment (GDBusMethodInvocation *invocatio
                                                 GCancellable          *cancellable,
                                                 GError               **error)
 {
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
 
   g_autoptr(GVariantDict) options_dict = g_variant_dict_new (options);
 
@@ -2797,8 +2797,8 @@ rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
                                        GCancellable          *cancellable,
                                        GError               **error)
 {
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
 
   auto self = (KernelArgTransaction*)g_initable_new (kernel_arg_transaction_get_type (),
                          cancellable, error,

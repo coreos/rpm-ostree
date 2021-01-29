@@ -94,9 +94,9 @@ rpmostreed_generate_object_path_from_va (const gchar *base,
 {
   GString *path;
 
-  g_return_val_if_fail (base != NULL, NULL);
-  g_return_val_if_fail (g_variant_is_object_path (base), NULL);
-  g_return_val_if_fail (!g_str_has_suffix (base, "/"), NULL);
+  g_assert (base != NULL);
+  g_assert (g_variant_is_object_path (base));
+  g_assert (!g_str_has_suffix (base, "/"));
 
   path = g_string_new (base);
 
@@ -261,8 +261,8 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
    * https://github.com/projectatomic/rpm-ostree/pull/557 */
   gboolean first_pass = TRUE;
 
-  g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
-  g_return_val_if_fail (refspec != NULL, FALSE);
+  g_assert (OSTREE_IS_REPO (repo));
+  g_assert (refspec != NULL);
 
   if (!ostree_parse_refspec (refspec, &remote, &ref, error))
     goto out;
@@ -405,9 +405,9 @@ rpmostreed_repo_lookup_version (OstreeRepo           *repo,
 {
   VersionVisitorClosure closure = { version, NULL };
 
-  g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
-  g_return_val_if_fail (refspec != NULL, FALSE);
-  g_return_val_if_fail (version != NULL, FALSE);
+  g_assert (OSTREE_IS_REPO (repo));
+  g_assert (refspec != NULL);
+  g_assert (version != NULL);
 
   if (!rpmostreed_repo_pull_ancestry (repo, refspec,
                                       version_visitor, &closure,
@@ -470,9 +470,9 @@ rpmostreed_repo_lookup_checksum (OstreeRepo           *repo,
 {
   ChecksumVisitorClosure closure = { checksum, FALSE };
 
-  g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
-  g_return_val_if_fail (refspec != NULL, FALSE);
-  g_return_val_if_fail (checksum != NULL, FALSE);
+  g_assert (OSTREE_IS_REPO (repo));
+  g_assert (refspec != NULL);
+  g_assert (checksum != NULL);
 
   if (!rpmostreed_repo_pull_ancestry (repo, refspec,
                                       checksum_visitor, &closure,
@@ -516,9 +516,9 @@ rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
   g_autofree char *checksum = NULL;
   gboolean ret = FALSE;
 
-  g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
-  g_return_val_if_fail (refspec != NULL, FALSE);
-  g_return_val_if_fail (version != NULL, FALSE);
+  g_assert (OSTREE_IS_REPO (repo));
+  g_assert (refspec != NULL);
+  g_assert (version != NULL);
 
   if (!ostree_repo_resolve_rev (repo, refspec, FALSE, &checksum, error))
     return FALSE;
@@ -582,7 +582,7 @@ rpmostreed_parse_revision (const char  *revision,
   const char *version = NULL;
   gboolean ret = FALSE;
 
-  g_return_val_if_fail (revision != NULL, FALSE);
+  g_assert (revision != NULL);
 
   if (g_ascii_strncasecmp (revision, "revision=", 9) == 0)
     {

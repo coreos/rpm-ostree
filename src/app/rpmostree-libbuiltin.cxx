@@ -50,8 +50,8 @@ rpmostree_usage_error (GOptionContext  *context,
                        const char      *message,
                        GError         **error)
 {
-  g_return_if_fail (context != NULL);
-  g_return_if_fail (message != NULL);
+  g_assert (context != NULL);
+  g_assert (message != NULL);
 
   g_autofree char *help = g_option_context_get_help (context, TRUE, NULL);
   g_printerr ("%s\n", help);

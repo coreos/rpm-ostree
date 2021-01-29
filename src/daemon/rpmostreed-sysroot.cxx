@@ -741,7 +741,7 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
                              GCancellable *cancellable,
                              GError **error)
 {
-  g_return_val_if_fail (self != NULL, FALSE);
+  g_assert (self != NULL);
 
   /* See also related code in rpmostred-transaction.cxx */
   const char *sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));

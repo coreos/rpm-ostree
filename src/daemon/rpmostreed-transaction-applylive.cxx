@@ -113,8 +113,8 @@ rpmostreed_transaction_new_livefs (GDBusMethodInvocation *invocation,
                                    GCancellable          *cancellable,
                                    GError               **error)
 {
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
+  g_assert (OSTREE_IS_SYSROOT (sysroot));
 
   auto self = (LiveFsTransaction *)g_initable_new (livefs_transaction_get_type (),
                          cancellable, error,

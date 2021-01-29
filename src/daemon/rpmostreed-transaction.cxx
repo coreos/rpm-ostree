@@ -820,7 +820,7 @@ rpmostreed_transaction_init (RpmostreedTransaction *self)
 gboolean
 rpmostreed_transaction_get_active (RpmostreedTransaction *transaction)
 {
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), FALSE);
+  g_assert (RPMOSTREED_IS_TRANSACTION (transaction));
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return (priv->finished_params == NULL);
@@ -829,7 +829,7 @@ rpmostreed_transaction_get_active (RpmostreedTransaction *transaction)
 OstreeSysroot *
 rpmostreed_transaction_get_sysroot (RpmostreedTransaction *transaction)
 {
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+  g_assert (RPMOSTREED_IS_TRANSACTION (transaction));
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->sysroot;
@@ -838,7 +838,7 @@ rpmostreed_transaction_get_sysroot (RpmostreedTransaction *transaction)
 const char *
 rpmostreed_transaction_get_client (RpmostreedTransaction *transaction)
 {
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+  g_assert (RPMOSTREED_IS_TRANSACTION (transaction));
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->client_description;
@@ -847,7 +847,7 @@ rpmostreed_transaction_get_client (RpmostreedTransaction *transaction)
 const char *
 rpmostreed_transaction_get_agent_id (RpmostreedTransaction *transaction)
 {
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+  g_assert (RPMOSTREED_IS_TRANSACTION (transaction));
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->agent_id;
@@ -856,7 +856,7 @@ rpmostreed_transaction_get_agent_id (RpmostreedTransaction *transaction)
 const char *
 rpmostreed_transaction_get_sd_unit (RpmostreedTransaction *transaction)
 {
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+  g_assert (RPMOSTREED_IS_TRANSACTION (transaction));
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->sd_unit;
@@ -865,7 +865,7 @@ rpmostreed_transaction_get_sd_unit (RpmostreedTransaction *transaction)
 GDBusMethodInvocation *
 rpmostreed_transaction_get_invocation (RpmostreedTransaction *transaction)
 {
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+  g_assert (RPMOSTREED_IS_TRANSACTION (transaction));
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return priv->invocation;
@@ -875,7 +875,7 @@ const char *
 rpmostreed_transaction_get_client_address (RpmostreedTransaction *transaction)
 {
 
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+  g_assert (RPMOSTREED_IS_TRANSACTION (transaction));
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
   return g_dbus_server_get_client_address (priv->server);
@@ -885,8 +885,8 @@ gboolean
 rpmostreed_transaction_is_compatible (RpmostreedTransaction *transaction,
                                       GDBusMethodInvocation *invocation)
 {
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), FALSE);
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), FALSE);
+  g_assert (RPMOSTREED_IS_TRANSACTION (transaction));
+  g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
 
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
 

@@ -993,7 +993,7 @@ pkg_diff_variant_print (GVariant *variant)
   gboolean have_new = FALSE;
 
   details = g_variant_get_child_value (variant, 2);
-  g_return_if_fail (details != NULL);
+  g_assert (details != NULL);
 
   have_old = g_variant_lookup (details,
                                "PreviousPackage", "(&s&s&s)",
@@ -1027,7 +1027,7 @@ rpmostree_print_package_diffs (GVariant *variant)
 
   /* GVariant format should be a(sua{sv}) */
 
-  g_return_if_fail (variant != NULL);
+  g_assert (variant != NULL);
 
   g_variant_iter_init (&iter, variant);
 

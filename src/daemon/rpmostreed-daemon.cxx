@@ -794,8 +794,8 @@ rpmostreed_daemon_publish (RpmostreedDaemon *self,
   GDBusObjectSkeleton *object = NULL;
   g_autoptr(GDBusObjectSkeleton) owned_object = NULL;
 
-  g_return_if_fail (RPMOSTREED_IS_DAEMON (self));
-  g_return_if_fail (path != NULL);
+  g_assert (RPMOSTREED_IS_DAEMON (self));
+  g_assert (path != NULL);
 
   if (G_IS_DBUS_INTERFACE (thing))
     {
@@ -845,8 +845,8 @@ rpmostreed_daemon_unpublish (RpmostreedDaemon *self,
   gboolean unexport = FALSE;
   GList *interfaces, *l;
 
-  g_return_if_fail (RPMOSTREED_IS_DAEMON (self));
-  g_return_if_fail (path != NULL);
+  g_assert (RPMOSTREED_IS_DAEMON (self));
+  g_assert (path != NULL);
 
   if (self->object_manager == NULL)
     return;

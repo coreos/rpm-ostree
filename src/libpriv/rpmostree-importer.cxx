@@ -1052,7 +1052,7 @@ rpmostree_importer_run_async_finish (RpmOstreeImporter  *self,
                                      GAsyncResult       *result,
                                      GError            **error)
 {
-  g_return_val_if_fail (g_task_is_valid (result, self), FALSE);
+  g_assert (g_task_is_valid (result, self));
   return static_cast<char*>(g_task_propagate_pointer ((GTask*)result, error));
 }
 
