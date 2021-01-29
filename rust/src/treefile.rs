@@ -864,9 +864,8 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-commit-metadata")]
     add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "rpmdb")]
     // The database backend
+    #[serde(skip_serializing_if = "Option::is_none")]
     rpmdb: Option<RpmdbBackend>,
 
     #[serde(flatten)]
