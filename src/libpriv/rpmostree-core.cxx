@@ -2451,6 +2451,11 @@ gather_source_to_packages (GPtrArray *packages)
   for (guint i = 0; i < packages->len; i++)
     {
       auto pkg = static_cast<DnfPackage *>(packages->pdata[i]);
+
+      /* ignore local packages */
+      if (rpmostree_pkg_is_local (pkg))
+        continue;
+
       DnfRepo *src = dnf_package_get_repo (pkg);
       GPtrArray *source_packages;
 
