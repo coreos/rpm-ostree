@@ -3,6 +3,7 @@ name = "libdnf-sys"
 version = "0.1.0"
 authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
 edition = "2018"
+links = "dnf"
 
 [dependencies]
 libc = "0.2"
@@ -12,6 +13,7 @@ name = "libdnf_sys"
 path = "lib.rs"
 
 [build-dependencies]
+cmake = "0.1.45"
 system-deps = "2.0"
 anyhow = "1.0"
 

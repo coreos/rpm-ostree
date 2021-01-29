@@ -103,7 +103,6 @@ GITIGNOREFILES += "fastbuild*.qcow2" _kola_temp/
 include libglnx/Makefile-libglnx.am.inc
 noinst_LTLIBRARIES += libglnx.la
 include Makefile-libpriv.am
-include Makefile-libdnf.am
 include Makefile-lib.am
 include Makefile-daemon.am
 include Makefile-rpm-ostree.am
