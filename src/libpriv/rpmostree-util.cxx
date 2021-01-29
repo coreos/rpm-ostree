@@ -207,7 +207,7 @@ increment_version (const char *version_suffix_str,
       version_suffix = version_suffix_str[0];
     }
 
-  g_assert_cmpstr (prefix, !=, NULL);
+  g_assert (prefix != NULL);
 
   g_autofree char *incremented = g_strdup_printf ("%s%c%s", prefix, version_suffix, increment_start);
   if (!last_version || !g_str_has_prefix (last_version, prefix))
@@ -230,29 +230,31 @@ increment_version (const char *version_suffix_str,
 
 #define VERSION_TAG_REGEX "<([a-zA-Z]+):(.*)?>"
 
+namespace rpmostreecxx {
 /* Get the next version, given a version prefix and a last version.
  * Checks for supported version fields in the auto_version_prefix
  * and renders them.
  * 
- * Returns the next version string if successful, NULL otherwise.
+ * Returns the next version string if successful.
  */
-char *
-_rpmostree_util_next_version (const char   *auto_version_prefix,
-                              const char   *version_suffix,
-                              const char   *last_version,
-                              GError      **error)
+rust::String
+util_next_version (rust::Str auto_version_prefix,
+                   rust::Str version_suffix_rs, /* Option<&str> */
+                   rust::Str last_version_rs)
 {
   static gsize tag_regex_initialized;
   static GRegex *tag_regex;
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
   if (g_once_init_enter (&tag_regex_initialized))
     {
-      tag_regex = g_regex_new (VERSION_TAG_REGEX, (GRegexCompileFlags)0, (GRegexMatchFlags)0, error);
-      if (!tag_regex)
-        return NULL;
+      tag_regex = g_regex_new (VERSION_TAG_REGEX, (GRegexCompileFlags)0, (GRegexMatchFlags)0, NULL);
+      g_assert (tag_regex);
       g_once_init_leave (&tag_regex_initialized, 1);
     }
 
-  g_autoptr(GString) next_version = g_string_new (auto_version_prefix);
+  g_autoptr(GString) next_version = g_string_new ("");
+  g_string_append_len (next_version, auto_version_prefix.data(), auto_version_prefix.length());
   g_assert (next_version->str);
   bool date_tag_given = FALSE;
 
@@ -270,7 +272,7 @@ _rpmostree_util_next_version (const char   *auto_version_prefix,
         {
           g_autofree char* date_fmt = g_match_info_fetch (tag_match_info, 2);
           if (!handle_date_tag (next_version, date_fmt, match_start, match_end, error))
-            return NULL;
+            util::throw_gerror(local_error);
           date_tag_given = TRUE;
         }
       else
@@ -279,9 +281,15 @@ _rpmostree_util_next_version (const char   *auto_version_prefix,
       g_match_info_next (tag_match_info, NULL);
     }
 
-  return increment_version (version_suffix, last_version, next_version->str, date_tag_given ? "0" : NULL);
+  /* Just copy as NUL terminated C strings to avoid rewriting this; also
+   * the inner function expects NULL instead of an empty string
+   */
+  g_autofree char *version_suffix = version_suffix_rs.length() > 0 ? g_strndup (version_suffix_rs.data(), version_suffix_rs.length()) : NULL;
+  g_autofree char *last_version = last_version_rs.length() > 0 ? g_strndup (last_version_rs.data(), last_version_rs.length()) : NULL;
+  g_autofree char *v = increment_version (version_suffix, last_version, next_version->str, date_tag_given ? "0" : NULL);
+  return rust::String(v);
 }
-
+} /* namespace */
 #undef VERSION_TAG_REGEX
 
 /* Replace every occurrence of @old in @buf with @new. */

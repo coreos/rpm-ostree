@@ -204,6 +204,17 @@ mod ffi {
         fn cache_branch_to_nevra(nevra: &str) -> String;
     }
 
+    unsafe extern "C++" {
+        include!("rpmostree-util.h");
+        // Currently only used in unit tests
+        #[allow(dead_code)]
+        fn util_next_version(
+            auto_version_prefix: &str,
+            version_suffix: &str,
+            last_version: &str,
+        ) -> Result<String>;
+    }
+
     // rpmostree-rpm-util.h
     unsafe extern "C++" {
         include!("rpmostree-rpm-util.h");
