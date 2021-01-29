@@ -186,6 +186,10 @@ rpmostree_context_set_vlockmap (RpmOstreeContext *self,
                                 GHashTable       *map,
                                 gboolean          strict);
 
+gboolean rpmostree_download_packages (GPtrArray      *packages,
+                                      GCancellable   *cancellable,
+                                      GError        **error);
+
 gboolean rpmostree_context_download (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
                                      GError           **error);
