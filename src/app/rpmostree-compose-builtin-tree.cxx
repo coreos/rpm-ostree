@@ -1559,13 +1559,21 @@ rpmostree_compose_builtin_extensions (int             argc,
     auto pkgs = extensions->get_packages();
     for (auto pkg : pkgs)
       g_ptr_array_add (gpkgs, (gpointer*) g_strdup (pkg.c_str()));
-    char **repos = ror_treefile_get_repos (treefile);
+
+    g_autoptr(GPtrArray) grepos = g_ptr_array_new_with_free_func (g_free);
+    auto repos = extensions->get_repos();
+    for (auto repo : repos)
+      g_ptr_array_add (grepos, (gpointer*) g_strdup (repo.c_str()));
+
+    char **treefile_repos = ror_treefile_get_repos (treefile);
+    for (char **it = treefile_repos; it && *it; it++)
+      g_ptr_array_add (grepos, (gpointer*) g_strdup (*it));
+
     g_autoptr(GKeyFile) treespec = g_key_file_new ();
     g_key_file_set_string_list (treespec, "tree", "packages",
                                 (const char* const*)gpkgs->pdata, gpkgs->len);
     g_key_file_set_string_list (treespec, "tree", "repos",
-                                (const char* const*)repos,
-                                g_strv_length (repos));
+                                (const char* const*)grepos->pdata, grepos->len);
     spec = rpmostree_treespec_new_from_keyfile (treespec, NULL);
   }
 
