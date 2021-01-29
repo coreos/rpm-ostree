@@ -1456,6 +1456,36 @@ find_pkg_in_ostree (RpmOstreeContext *self,
   return TRUE;
 }
 
+void
+rpmostree_set_repos_on_packages (DnfContext *dnfctx,
+                                 GPtrArray  *packages)
+{
+  GPtrArray *sources = dnf_context_get_repos (dnfctx);
+  /* ownership of key and val stays in sources */
+  g_autoptr(GHashTable) name_to_repo = g_hash_table_new (g_str_hash, g_str_equal);
+  for (guint i = 0; i < sources->len; i++)
+    {
+      DnfRepo *source = (DnfRepo*)sources->pdata[i];
+      g_hash_table_insert (name_to_repo, (gpointer)dnf_repo_get_id (source), source);
+    }
+
+  for (guint i = 0; i < packages->len; i++)
+    {
+      DnfPackage *pkg = (DnfPackage*)packages->pdata[i];
+      const char *reponame = dnf_package_get_reponame (pkg);
+      gboolean is_locally_cached =
+        (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0);
+
+      if (is_locally_cached)
+        continue;
+
+      DnfRepo *repo = (DnfRepo*)g_hash_table_lookup (name_to_repo, reponame);
+      g_assert (repo);
+
+      dnf_package_set_repo (pkg, repo);
+    }
+}
+
 /* determine of all the marked packages, which ones we'll need to download,
  * which ones we'll need to import, and which ones we'll need to relabel */
 static gboolean
@@ -1475,7 +1505,9 @@ sort_packages (RpmOstreeContext *self,
   self->pkgs_to_relabel = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   self->n_async_pkgs_relabeled = 0;
 
-  GPtrArray *sources = dnf_context_get_repos (dnfctx);
+  /* make sure all the non-cached pkgs have their repos set */
+  rpmostree_set_repos_on_packages (dnfctx, packages);
+
   for (guint i = 0; i < packages->len; i++)
     {
       auto pkg = static_cast<DnfPackage *>(packages->pdata[i]);
@@ -1486,23 +1518,6 @@ sort_packages (RpmOstreeContext *self,
       const char *reponame = dnf_package_get_reponame (pkg);
       gboolean is_locally_cached =
         (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0);
-
-      /* make sure all the non-cached pkgs have their repos set */
-      if (!is_locally_cached)
-        {
-          DnfRepo *src = NULL;
-
-          /* Hackily look up the source...we need a hash table */
-          for (guint j = 0; j < sources->len && !src; j++)
-            {
-              auto tmpsrc = static_cast<DnfRepo *>(sources->pdata[j]);
-              if (g_strcmp0 (reponame, dnf_repo_get_id (tmpsrc)) == 0)
-                src = tmpsrc;
-            }
-
-          g_assert (src);
-          dnf_package_set_repo (pkg, src);
-        }
 
       /* NB: We're assuming here that the presence of an ostree repo means that
        * the user intends to import the pkg vs e.g. installing it like during a

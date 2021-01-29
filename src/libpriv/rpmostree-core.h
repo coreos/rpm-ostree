@@ -190,6 +190,9 @@ gboolean rpmostree_context_download (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
                                      GError           **error);
 
+void rpmostree_set_repos_on_packages (DnfContext *dnfctx,
+                                      GPtrArray  *packages);
+
 gboolean rpmostree_context_execute_rojig (RpmOstreeContext     *self,
                                           gboolean             *out_changed,
                                           GCancellable         *cancellable,
