@@ -9,11 +9,6 @@ dn=$(dirname $0)
 ${dn}/install-extra-builddeps.sh
 ${dn}/installdeps.sh
 
-# create an unprivileged user for testing
-if ! getent passwd testuser; then
-  adduser testuser
-fi
-
 # make it clear what rustc version we're compiling with (this is grepped in CI)
 rustc --version
 
