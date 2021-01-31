@@ -23,6 +23,7 @@
 #include "libglnx.h"
 #include "rpmostree-rojig-core.h"
 #include "rpmostree-core.h"
+#include "rpmostree-output.h"
 
 G_BEGIN_DECLS
 
@@ -63,6 +64,7 @@ struct _RpmOstreeContext {
   guint n_async_max;
   gboolean async_running;
   GCancellable *async_cancellable;
+  std::unique_ptr<rpmostreecxx::Progress> async_progress;
   GError *async_error;
   GPtrArray *pkgs; /* All packages */
   GPtrArray *pkgs_to_download;

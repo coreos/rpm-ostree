@@ -70,6 +70,27 @@ throw_gerror (GError *&error)
   error = NULL;
   throw std::runtime_error (s);
 }
+
+// Duplicate a non-empty Rust Str to a NUL-terminated C string.
+// The empty string is converted to a NULL pointer.
+// This method should be viewed as a workaround for the lack
+// of Option<> binding in cxx-rs.
+static inline char *
+ruststr_dup_c_optempty(const rust::Str s) {
+  if (s.length() > 0)
+    return g_strndup(s.data(), s.length());
+  return NULL;
+}
+
+// Return a Rust string pointer from a possibly-NULL C string.
+// The NULL C string is converted to the empty string.
+// This method should be viewed as a workaround for the lack
+// of Option<> binding in cxx-rs.
+static inline rust::Str
+ruststr_or_empty (const char *c_str) {
+  return rust::Str(c_str ?: "");
+}
+
 }
 
 namespace rpmostreecxx {

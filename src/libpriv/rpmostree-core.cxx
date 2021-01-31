@@ -882,7 +882,8 @@ on_hifstate_percentage_changed (DnfState   *hifstate,
                                 guint       percentage,
                                 gpointer    user_data)
 {
-  rpmostree_output_progress_percent (percentage);
+  auto progress = (rpmostreecxx::Progress*)user_data;
+  progress->percent_update(percentage);
 }
 
 static gboolean
@@ -1162,18 +1163,18 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                           NULL))
         {
           dnf_state_reset (hifstate);
+          auto msg = g_strdup_printf ("Updating metadata for '%s'", dnf_repo_get_id (repo));
+          auto progress = rpmostreecxx::progress_percent_begin(msg);
           guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                                    G_CALLBACK (on_hifstate_percentage_changed),
-                                                   NULL);
-          g_auto(RpmOstreeProgress) progress = { 0, };
-          rpmostree_output_progress_percent_begin (&progress, "Updating metadata for '%s'",
-                                                   dnf_repo_get_id (repo));
+                                                   (void*)progress.get());
           if (!dnf_repo_update (repo, DNF_REPO_UPDATE_FLAG_FORCE, hifstate, error))
             return glnx_prefix_error (error, "Updating rpm-md repo '%s'", dnf_repo_get_id (repo));
 
           did_update = TRUE;
 
           g_signal_handler_disconnect (hifstate, progress_sigid);
+          progress->end("");
         }
 
       guint64 ts = dnf_repo_get_timestamp_generated (repo);
@@ -1188,11 +1189,10 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
   /* The _setup_sack function among other things imports the metadata into libsolv */
   { g_autoptr(DnfState) hifstate = dnf_state_new ();
+    auto progress = rpmostreecxx::progress_percent_begin("Importing rpm-md");
     guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                              G_CALLBACK (on_hifstate_percentage_changed),
-                                             NULL);
-    g_auto(RpmOstreeProgress) progress = { 0, };
-    rpmostree_output_progress_percent_begin (&progress, "Importing rpm-md");
+                                             (void*)progress.get());
 
     /* We already explictly checked the repos above; don't try to check them
      * again.
@@ -2247,8 +2247,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       if (!recommends)
         actions = static_cast<DnfGoalActions>(static_cast<int>(actions) | DNF_IGNORE_WEAK_DEPS);
 
-      g_auto(RpmOstreeProgress) task = { 0, };
-      rpmostree_output_task_begin (&task, "Resolving dependencies");
+      auto task = rpmostreecxx::progress_begin_task("Resolving dependencies");
 
       /* XXX: consider a --allow-uninstall switch? */
       if (!dnf_goal_depsolve (goal, actions, error) ||
@@ -2479,22 +2478,18 @@ rpmostree_download_packages (GPtrArray      *packages,
   g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (packages);
   GLNX_HASH_TABLE_FOREACH_KV (source_to_packages, DnfRepo*, src, GPtrArray*, src_packages)
     {
-      g_autofree char *target_dir = NULL;
       glnx_unref_object DnfState *hifstate = dnf_state_new ();
-
+      auto msg = g_strdup_printf("Downloading from '%s'", dnf_repo_get_id(src));
+      auto progress = rpmostreecxx::progress_percent_begin(msg);
       progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                         G_CALLBACK (on_hifstate_percentage_changed),
-                                         NULL);
-      g_auto(RpmOstreeProgress) progress = { 0, };
-      rpmostree_output_progress_percent_begin (&progress, "Downloading from '%s'",
-                                               dnf_repo_get_id (src));
-
-      target_dir = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
+                                          G_CALLBACK (on_hifstate_percentage_changed),
+                                          (void*)progress.get());
+      g_autofree char *target_dir = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
       if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
         return FALSE;
 
       if (!dnf_repo_download_packages (src, src_packages, target_dir,
-                                       hifstate, error))
+                                        hifstate, error))
         return FALSE;
 
       g_signal_handler_disconnect (hifstate, progress_sigid);
@@ -2572,7 +2567,7 @@ on_async_import_done (GObject                    *obj,
   self->n_async_pkgs_imported++;
   g_assert_cmpint (self->n_async_running, >, 0);
   self->n_async_running--;
-  rpmostree_output_progress_n_items (self->n_async_pkgs_imported);
+  self->async_progress->nitems_update(self->n_async_pkgs_imported);
   async_imports_mainctx_iter (self);
 }
 
@@ -2697,8 +2692,7 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
   self->n_async_max = g_get_num_processors ();
   self->async_cancellable = cancellable;
 
-  g_auto(RpmOstreeProgress) progress = { 0, };
-  rpmostree_output_progress_nitems_begin (&progress, self->pkgs_to_import->len, "Importing packages");
+  self->async_progress = rpmostreecxx::progress_nitems_begin(self->pkgs_to_import->len, "Importing packages");
 
   /* Process imports */
   GMainContext *mainctx = g_main_context_get_thread_default ();
@@ -2717,7 +2711,8 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
       return glnx_prefix_error (error, "importing RPMs");
     }
 
-  rpmostree_output_progress_end (&progress);
+  self->async_progress->end("");
+  self->async_progress.release();
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     return FALSE;
@@ -3448,7 +3443,7 @@ on_async_relabel_done (GObject                    *obj,
       data->n_changed_files += n_relabeled;
       data->n_changed_pkgs++;
     }
-  rpmostree_output_progress_n_items (self->n_async_pkgs_relabeled);
+  self->async_progress->nitems_update(self->n_async_pkgs_relabeled);
   if (self->n_async_pkgs_relabeled == self->pkgs_to_relabel->len)
     self->async_running = FALSE;
 }
@@ -3486,8 +3481,7 @@ relabel_if_necessary (RpmOstreeContext *self,
 
   RpmOstreeAsyncRelabelData data = { self, 0, };
   const guint n_to_relabel = self->pkgs_to_relabel->len;
-  g_auto(RpmOstreeProgress) progress = { 0, };
-  rpmostree_output_progress_nitems_begin (&progress, n_to_relabel, "Relabeling");
+  self->async_progress = rpmostreecxx::progress_nitems_begin(n_to_relabel, "Relabeling");
   for (guint i = 0; i < n_to_relabel; i++)
     {
       auto pkg = static_cast<DnfPackage *>(self->pkgs_to_relabel->pdata[i]);
@@ -3506,7 +3500,8 @@ relabel_if_necessary (RpmOstreeContext *self,
       return glnx_prefix_error (error, "relabeling");
     }
 
-  rpmostree_output_progress_end (&progress);
+  self->async_progress->end("");
+  self->async_progress.release();
 
   /* Commit */
   if (!ostree_repo_commit_transaction (ostreerepo, NULL, cancellable, error))
@@ -4062,8 +4057,7 @@ process_ostree_layers (RpmOstreeContext *self,
   if (n == 0)
     return TRUE;
 
-  g_auto(RpmOstreeProgress) checkout_progress = { 0, };
-  rpmostree_output_progress_nitems_begin (&checkout_progress, n, "Checking out ostree layers");
+  auto progress = rpmostreecxx::progress_nitems_begin(n, "Checking out ostree layers");
   size_t i = 0;
   for (char **iter = layers; iter && *iter; iter++)
     {
@@ -4073,7 +4067,7 @@ process_ostree_layers (RpmOstreeContext *self,
                                      cancellable, error))
         return FALSE;
       i++;
-      rpmostree_output_progress_n_items (i);
+      progress->nitems_update(i);
     }
   for (char **iter = override_layers; iter && *iter; iter++)
     {
@@ -4083,9 +4077,9 @@ process_ostree_layers (RpmOstreeContext *self,
                                      cancellable, error))
         return FALSE;
       i++;
-      rpmostree_output_progress_n_items (i);
+      progress->nitems_update(i);
     }
-  rpmostree_output_progress_end (&checkout_progress);
+  progress->end("");
   return TRUE;
 }
 
@@ -4232,8 +4226,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   g_assert (n_rpmts_elements > 0);
   guint n_rpmts_done = 0;
 
-  g_auto(RpmOstreeProgress) checkout_progress = { 0, };
-  rpmostree_output_progress_nitems_begin (&checkout_progress, n_rpmts_elements, "%s", progress_msg);
+  auto progress = rpmostreecxx::progress_nitems_begin(n_rpmts_elements, progress_msg);
 
   /* Okay so what's going on in Fedora with incestuous relationship
    * between the `filesystem`, `setup`, `libgcc` RPMs is actively
@@ -4247,7 +4240,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
    */
   if (filesystem_package)
     {
-      rpmostree_output_set_sub_message ("filesystem");
+      progress->set_sub_message("filesystem");
       auto c = static_cast<const char*>(g_hash_table_lookup (pkg_to_ostree_commit, filesystem_package));
       if (!checkout_package_into_root (self, filesystem_package,
                                        tmprootfs_dfd, ".", self->devino_cache,
@@ -4256,7 +4249,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                        cancellable, error))
         return FALSE;
       n_rpmts_done++;
-      rpmostree_output_progress_n_items (n_rpmts_done);
+      progress->nitems_update(n_rpmts_done);
     }
 
   g_autoptr(GHashTable) files_skip_add = NULL;
@@ -4291,7 +4284,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                      dirs_to_remove, cancellable, error))
         return FALSE;
       n_rpmts_done++;
-      rpmostree_output_progress_n_items (n_rpmts_done);
+      progress->nitems_update(n_rpmts_done);
     }
   g_clear_pointer (&files_skip_delete, g_hash_table_unref);
 
@@ -4323,16 +4316,16 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         (pkg == setup_package) ? OSTREE_REPO_CHECKOUT_OVERWRITE_ADD_FILES :
         OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL;
 
-      rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
+      progress->set_sub_message(dnf_package_get_name (pkg));
       if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", self->devino_cache,
                                        static_cast<const char*>(g_hash_table_lookup (pkg_to_ostree_commit, pkg)),
                                        files_skip_add, ovwmode, cancellable, error))
         return FALSE;
       n_rpmts_done++;
-      rpmostree_output_progress_n_items (n_rpmts_done);
+      progress->nitems_update(n_rpmts_done);
     }
 
-  rpmostree_output_progress_end (&checkout_progress);
+  progress->end("");
 
   /* Some packages expect to be able to make temporary files here
    * for obvious reasons, but we otherwise make `/var` read-only.
@@ -4432,8 +4425,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
        * this way is that we only need to read the passwd/group files once
        * before applying the overrides, rather than after each %pre.
        */
-      { g_auto(RpmOstreeProgress) task = { 0, };
-        rpmostree_output_task_begin (&task, "Running pre scripts");
+      { auto task = rpmostreecxx::progress_begin_task("Running pre scripts");
         guint n_pre_scripts_run = 0;
         for (guint i = 0; i < n_rpmts_elements; i++)
           {
@@ -4444,13 +4436,14 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             DnfPackage *pkg = (DnfPackage*)rpmteKey (te);
             g_assert (pkg);
 
-            rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
+            task->set_sub_message(dnf_package_get_name(pkg));
             if (!run_script_sync (self, tmprootfs_dfd, &var_lib_rpm_statedir,
                                   pkg, RPMOSTREE_SCRIPT_PREIN,
                                   &n_pre_scripts_run, cancellable, error))
               return FALSE;
           }
-        rpmostree_output_progress_end_msg (&task, "%u done", n_pre_scripts_run);
+        auto msg = g_strdup_printf ("%u done", n_pre_scripts_run);
+        task->end(msg);
       }
 
       /* Now undo our hack above */
@@ -4493,8 +4486,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         }
 
       {
-      g_auto(RpmOstreeProgress) task = { 0, };
-      rpmostree_output_task_begin (&task, "Running post scripts");
+      auto task = rpmostreecxx::progress_begin_task("Running post scripts");
       guint n_post_scripts_run = 0;
 
       /* %post */
@@ -4507,7 +4499,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           auto pkg = (DnfPackage *)(rpmteKey (te));
           g_assert (pkg);
 
-          rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
+          task->set_sub_message(dnf_package_get_name(pkg));
           if (!apply_rpmfi_overrides (self, tmprootfs_dfd, pkg, passwdents, groupents,
                                       cancellable, error))
             return glnx_prefix_error (error, "While applying overrides for pkg %s",
@@ -4525,8 +4517,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
 
       {
-      g_auto(RpmOstreeProgress) task = { 0, };
-      rpmostree_output_task_begin (&task, "Running posttrans scripts");
+      auto task = rpmostreecxx::progress_begin_task("Running posttrans scripts");
       guint n_posttrans_scripts_run = 0;
 
       /* %posttrans */
@@ -4539,7 +4530,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           auto pkg = (DnfPackage *)(rpmteKey (te));
           g_assert (pkg);
 
-          rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
+          task->set_sub_message(dnf_package_get_name(pkg));
           if (!run_script_sync (self, tmprootfs_dfd, &var_lib_rpm_statedir,
                                 pkg, RPMOSTREE_SCRIPT_POSTTRANS,
                                 &n_posttrans_scripts_run, cancellable, error))
@@ -4551,7 +4542,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                       &n_posttrans_scripts_run, cancellable, error))
         return FALSE;
 
-      rpmostree_output_progress_end_msg (&task, "%u done", n_posttrans_scripts_run);
+      auto msg = g_strdup_printf ("%u done", n_posttrans_scripts_run);
+      task->end(msg);
       }
 
       /* We want this to be the first error message if something went wrong
@@ -4597,8 +4589,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
-  g_auto(RpmOstreeProgress) task = { 0, };
-  rpmostree_output_task_begin (&task, "Writing rpmdb");
+  auto task = rpmostreecxx::progress_begin_task("Writing rpmdb");
 
   if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, 0755, cancellable, error))
     return FALSE;
@@ -4690,7 +4681,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
     }
 
-  rpmostree_output_progress_end (&task);
+  task->end("");
 
   /* And finally revert the _dbpath setting because libsolv relies on it as well
    * to find the rpmdb and RPM macros are global state. */
@@ -4718,8 +4709,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
   g_autoptr(OstreeRepoCommitModifier) commit_modifier = NULL;
   g_autofree char *ret_commit_checksum = NULL;
 
-  g_auto(RpmOstreeProgress) task = { 0, };
-  rpmostree_output_task_begin (&task, "Writing OSTree commit");
+  auto task = rpmostreecxx::progress_begin_task("Writing OSTree commit");
 
   g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
   if (!rpmostree_repo_auto_transaction_start (&txn, self->ostreerepo, FALSE, cancellable, error))

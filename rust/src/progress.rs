@@ -192,14 +192,14 @@ pub(crate) fn console_progress_begin_percent(msg: &str) {
 
 pub(crate) fn console_progress_set_message(msg: &str) {
     let mut lock = PROGRESS.lock().unwrap();
-    let state = lock.as_mut().expect("progress to update");
+    let state = lock.as_mut().expect("progress to set message");
     state.set_message(msg);
 }
 
 pub(crate) fn console_progress_set_sub_message(msg: &str) {
     let msg = optional_str(msg);
     let mut lock = PROGRESS.lock().unwrap();
-    let state = lock.as_mut().expect("progress to update");
+    let state = lock.as_mut().expect("progress sub-msg update");
     state.set_sub_message(msg);
 }
 

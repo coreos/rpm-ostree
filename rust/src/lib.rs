@@ -226,6 +226,14 @@ pub mod ffi {
         fn main_print_error(msg: &str);
     }
 
+    unsafe extern "C++" {
+        include!("rpmostree-output.h");
+        type Progress;
+
+        fn progress_begin_task(msg: &str) -> UniquePtr<Progress>;
+        fn end(self: Pin<&mut Progress>, msg: &str);
+    }
+
     // rpmostree-rpm-util.h
     unsafe extern "C++" {
         include!("rpmostree-rpm-util.h");
