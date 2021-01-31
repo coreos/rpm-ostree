@@ -445,17 +445,22 @@ pub(crate) fn transaction_apply_live(
 
     // Gather the current diff of /etc - we need to avoid changing
     // any files which are locally modified.
+    let task = crate::ffi::progress_begin_task("Computing /etc diff to preserve");
     let config_diff = {
         let usretc = &rootfs_dfd.sub_dir("usr/etc")?;
         let etc = &rootfs_dfd.sub_dir("etc")?;
         crate::dirdiff::diff(usretc, etc)?
     };
     println!("Computed /etc diff: {}", &config_diff);
+    std::mem::drop(task);
 
     // The heart of things: updating the overlayfs on /usr
+    let task = crate::ffi::progress_begin_task("Updating /usr");
     apply_diff(repo, &diff, &target_commit, &openat::Dir::open("/usr")?)?;
+    std::mem::drop(task);
 
     // The other important bits are /etc and /var
+    let task = crate::ffi::progress_begin_task("Updating /etc");
     update_etc(
         repo,
         &diff,
@@ -464,7 +469,10 @@ pub(crate) fn transaction_apply_live(
         &target_commit,
         &openat::Dir::open("/etc")?,
     )?;
+    std::mem::drop(task);
+    let task = crate::ffi::progress_begin_task("Running systemd-tmpfiles for /var");
     rerun_tmpfiles()?;
+    std::mem::drop(task);
 
     // Success! Update the recorded state.
     state.commit = target_commit.to_string();

@@ -1823,6 +1823,7 @@ struct CommitThreadData {
   off_t n_bytes;
   off_t n_processed;
   gint percent;  /* atomic */
+  std::unique_ptr<rpmostreecxx::Progress> progress;
   OstreeRepo *repo;
   int rootfs_fd;
   OstreeMutableTree *mtree;
@@ -1968,7 +1969,7 @@ on_progress_timeout (gpointer datap)
   const gint percent = g_atomic_int_get (&data->percent);
 
   /* clamp to 100 if it somehow goes over (XXX: bad counting?) */
-  rpmostree_output_progress_percent (MIN(percent, 100));
+  data->progress->percent_update(MIN(percent, 100));
 
   return TRUE;
 }
@@ -2038,8 +2039,7 @@ rpmostree_compose_commit (int            rootfs_fd,
   {
     g_autoptr(GThread) commit_thread = g_thread_new ("commit", write_dfd_thread, &tdata);
 
-    g_auto(RpmOstreeProgress) commit_progress = { 0, };
-    rpmostree_output_progress_percent_begin (&commit_progress, "Committing");
+    tdata.progress = rpmostreecxx::progress_percent_begin("Committing");
 
     g_autoptr(GSource) progress_src = g_timeout_source_new_seconds (1);
     g_source_set_callback (progress_src, on_progress_timeout, &tdata, NULL);
@@ -2051,7 +2051,7 @@ rpmostree_compose_commit (int            rootfs_fd,
     g_source_destroy (progress_src);
     g_thread_join (util::move_nullify (commit_thread));
 
-    rpmostree_output_progress_percent (100);
+    tdata.progress->percent_update(100);
   }
 
   if (!tdata.success)

@@ -20,8 +20,10 @@
 
 #include <ostree.h>
 #include <libglnx.h>
+#include <memory>
 
 #include "rpmostree-output.h"
+#include "rpmostree-util.h"
 #include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 
@@ -60,13 +62,13 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
   case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
     {
       auto msg = static_cast<const char *>(data);
-      rpmostreecxx::console_progress_set_sub_message (rust::Str(msg ?: ""));
+      rpmostreecxx::console_progress_set_sub_message (util::ruststr_or_empty(msg));
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_END:
     {
       auto end = static_cast<RpmOstreeOutputProgressEnd *>(data);
-      rpmostreecxx::console_progress_end (rust::Str(end->msg ?: ""));
+      rpmostreecxx::console_progress_end (util::ruststr_or_empty(end->msg));
       break;
     }
   }
@@ -90,6 +92,9 @@ rpmostree_output_set_callback (void (*cb)(RpmOstreeOutputType, void*, void*),
      char *s = g_strdup_vprintf (format, args); \
      va_end (args); s; })
 
+// For a lot of originally-C code it's just convenient to
+// use this global C-style format API and not have to deal
+// with a progress reference.
 void
 rpmostree_output_message (const char *format, ...)
 {
@@ -98,69 +103,91 @@ rpmostree_output_message (const char *format, ...)
   active_cb (RPMOSTREE_OUTPUT_MESSAGE, &task, active_cb_opaque);
 }
 
+namespace rpmostreecxx {
+
 void
-rpmostree_output_task_begin (RpmOstreeProgress *taskp, const char *format, ...)
+output_message (const rust::Str msg)
 {
-  g_assert (taskp && !taskp->initialized);
-  taskp->initialized = TRUE;
-  taskp->type = RPMOSTREE_PROGRESS_TASK;
-  g_autofree char *msg = strdup_vprintf (format);
-  RpmOstreeOutputProgressBegin begin = { msg, false, 0 };
+  auto msg_c = std::string(msg);
+  RpmOstreeOutputMessage task = { msg_c.c_str() };
+  active_cb (RPMOSTREE_OUTPUT_MESSAGE, &task, active_cb_opaque);
+}
+
+// Begin a task (that can't easily be "nitems" or percentage).
+// This will render as a spinner.
+std::unique_ptr<Progress> 
+progress_begin_task(const rust::Str msg) noexcept
+{
+  auto msg_c = std::string(msg);
+  RpmOstreeOutputProgressBegin begin = { msg_c.c_str(), false, 0 };
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
+  return std::make_unique<Progress>(ProgressType::TASK);
 }
 
-void
-rpmostree_output_set_sub_message (const char *sub_message)
+// Output a string.  Note that this should not be called when
+// a "task" is active.
+void 
+Progress::message(const rust::Str msg)
 {
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE, (void*)sub_message, active_cb_opaque);
+  auto msg_c = std::string(msg);
+  RpmOstreeOutputMessage task = { msg_c.c_str() };
+  active_cb (RPMOSTREE_OUTPUT_MESSAGE, &task, active_cb_opaque);
 }
 
-void
-rpmostree_output_progress_end_msg (RpmOstreeProgress *taskp, const char *format, ...)
+// When working on a task/percent/nitems, often we want to display a particular
+// item (such as a package).
+void 
+Progress::set_sub_message(const rust::Str msg)
 {
-  g_assert (taskp);
-  if (!taskp->initialized)
-    return;
-  taskp->initialized = false;
-  g_autofree char *final_msg = format ? strdup_vprintf (format) : NULL;
+  g_autofree char *msg_c = util::ruststr_dup_c_optempty(msg);
+  active_cb (RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE, (void*)msg_c, active_cb_opaque);
+}
+
+// Start working on a 0-n task.
+std::unique_ptr<Progress> 
+progress_nitems_begin(guint n, const rust::Str msg) noexcept
+{
+  auto msg_c = std::string(msg);
+  RpmOstreeOutputProgressBegin begin = { msg_c.c_str(), false, n };
+  active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
+  return std::make_unique<Progress>(ProgressType::N_ITEMS);
+}
+
+// Update the nitems counter.
+void 
+Progress::nitems_update(guint n)
+{
+  RpmOstreeOutputProgressUpdate progress = { n };
+  active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
+}
+
+// Start a percentage task.
+std::unique_ptr<Progress>
+progress_percent_begin(const rust::Str msg) noexcept
+{
+  auto msg_c = std::string(msg);
+  RpmOstreeOutputProgressBegin begin = { msg_c.c_str(), true, 0 };
+  active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
+  return std::make_unique<Progress>(ProgressType::PERCENT);
+}
+
+// Update the percentage.
+void
+Progress::percent_update(guint n)
+{
+  RpmOstreeOutputProgressUpdate progress = { (guint)n };
+  active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
+}
+
+// End the current task.
+void
+Progress::end(const rust::Str msg)
+{
+  g_assert (!this->ended);
+  g_autofree char *final_msg = util::ruststr_dup_c_optempty(msg);
   RpmOstreeOutputProgressEnd done = { final_msg };
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_END, &done, active_cb_opaque);
+  this->ended = true;
 }
 
-void
-rpmostree_output_progress_percent (int percentage)
-{
-  RpmOstreeOutputProgressUpdate progress = { (guint)percentage };
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
-}
-
-void
-rpmostree_output_progress_nitems_begin (RpmOstreeProgress *taskp,
-                                        guint n, const char *format, ...)
-{
-  g_assert (taskp && !taskp->initialized);
-  taskp->initialized = TRUE;
-  taskp->type = RPMOSTREE_PROGRESS_N_ITEMS;
-  g_autofree char *msg = strdup_vprintf (format);
-  RpmOstreeOutputProgressBegin begin = { msg, false, n };
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
-}
-
-void
-rpmostree_output_progress_percent_begin (RpmOstreeProgress *taskp,
-                                         const char *format, ...)
-{
-  g_assert (taskp && !taskp->initialized);
-  taskp->initialized = TRUE;
-  taskp->type = RPMOSTREE_PROGRESS_PERCENT;
-  g_autofree char *msg = strdup_vprintf (format);
-  RpmOstreeOutputProgressBegin begin = { msg, true, 0 };
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
-}
-
-void
-rpmostree_output_progress_n_items (guint current)
-{
-  RpmOstreeOutputProgressUpdate progress = { current };
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
-}
+} /* namespace */

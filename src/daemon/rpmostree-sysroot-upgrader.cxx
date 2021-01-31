@@ -559,8 +559,8 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
     return TRUE; /* already checked out! */
 
   /* let's give the user some feedback so they don't think we're blocked */
-  g_auto(RpmOstreeProgress) task = { 0, };
-  rpmostree_output_task_begin (&task, "Checking out tree %.7s", self->base_revision);
+  auto msg = g_strdup_printf ("Checking out tree %.7s", self->base_revision);
+  auto task = rpmostreecxx::progress_begin_task(msg);
 
   int repo_dfd = ostree_repo_get_dfd (self->repo); /* borrowed */
   /* Always delete this */
@@ -1168,8 +1168,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
         g_ptr_array_add (initramfs_args, g_strdup (*it));
       g_ptr_array_add (initramfs_args, NULL);
 
-      g_auto(RpmOstreeProgress) task = { 0, };
-      rpmostree_output_task_begin (&task, "Generating initramfs");
+      auto task = rpmostreecxx::progress_begin_task("Generating initramfs");
 
       g_assert (kernel_state && kernel_path);
 
@@ -1490,8 +1489,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                             _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED);
         }
 
-      g_auto(RpmOstreeProgress) task = { 0, };
-      rpmostree_output_task_begin (&task, "Staging deployment");
+      auto task = rpmostreecxx::progress_begin_task("Staging deployment");
       if (!ostree_sysroot_stage_tree_with_options (self->sysroot, self->osname,
                                                    target_revision, origin,
                                                    self->cfg_merge_deployment,

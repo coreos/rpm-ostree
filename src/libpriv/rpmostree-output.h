@@ -19,7 +19,46 @@
 #pragma once
 
 #include <stdbool.h>
+#include <memory>
+#include "rust/cxx.h"
 
+// C++ APIs here
+namespace rpmostreecxx {
+
+enum class ProgressType {
+   TASK,
+   N_ITEMS,
+   PERCENT,
+};
+
+void output_message (rust::Str msg);
+
+struct Progress {
+public:
+  void set_sub_message(rust::Str msg);
+  void message (rust::Str msg);
+  void nitems_update(guint n);
+  void percent_update(guint n);
+
+  void end(rust::Str msg);
+  ~Progress() {
+    if (!this->ended)
+      this->end("");
+  }
+  Progress(ProgressType t) {
+    ptype = t;
+    ended = false;
+  }
+  ProgressType ptype;
+  bool ended;
+};
+
+std::unique_ptr<Progress> progress_begin_task(rust::Str msg) noexcept;
+std::unique_ptr<Progress> progress_nitems_begin(guint n, rust::Str msg) noexcept;
+std::unique_ptr<Progress> progress_percent_begin(rust::Str msg) noexcept;
+}
+
+// C APIs
 G_BEGIN_DECLS
 
 typedef enum {
@@ -29,12 +68,6 @@ typedef enum {
   RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE,
   RPMOSTREE_OUTPUT_PROGRESS_END,
 } RpmOstreeOutputType;
-
-typedef enum {
-   RPMOSTREE_PROGRESS_TASK,
-   RPMOSTREE_PROGRESS_N_ITEMS,
-   RPMOSTREE_PROGRESS_PERCENT,
-} RpmOstreeProgressType;
 
 void
 rpmostree_output_default_handler (RpmOstreeOutputType type, void *data, void *opaque);
@@ -48,27 +81,6 @@ typedef struct {
 
 void
 rpmostree_output_message (const char *format, ...) G_GNUC_PRINTF (1,2);
-
-typedef struct {
-  bool initialized;
-  RpmOstreeProgressType type;
-} RpmOstreeProgress;
-void rpmostree_output_task_begin (RpmOstreeProgress *prog, const char *format, ...) G_GNUC_PRINTF (2,3);
-
-void rpmostree_output_set_sub_message (const char *sub_message);
-
-void rpmostree_output_progress_nitems_begin (RpmOstreeProgress *prog, guint n, const char *format, ...) G_GNUC_PRINTF (3,4);
-void rpmostree_output_progress_n_items (guint i);
-
-void rpmostree_output_progress_percent_begin (RpmOstreeProgress *prog, const char *format, ...) G_GNUC_PRINTF (2,3);
-void rpmostree_output_progress_percent (int percentage);
-
-void rpmostree_output_progress_end_msg (RpmOstreeProgress *prog, const char *format, ...) G_GNUC_PRINTF (2,3);
-static inline void rpmostree_output_progress_end (RpmOstreeProgress *task)
-{
-  rpmostree_output_progress_end_msg (task, NULL);
-}
-G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmOstreeProgress, rpmostree_output_progress_end)
 
 /* For implementers of the output backend. If percent is TRUE, then n is
  * ignored. If n is zero, then it is taken to be an indefinite task.  Otherwise,
