@@ -20,6 +20,10 @@ fn main() -> Result<()> {
     let cwd = cwd.to_str().expect("utf8 pwd");
     println!("cargo:rustc-link-search={}/.libs", cwd);
     println!("cargo:rustc-link-lib=static=rpmostreeinternals");
+    println!(
+        "cargo:rerun-if-changed={}/.libs/librpmostreeinternals.a",
+        cwd
+    );
     println!("cargo:rustc-link-lib=cap");
     println!("cargo:rustc-link-search={}/libdnf-build/libdnf", cwd);
     println!("cargo:rustc-link-lib=dnf");
