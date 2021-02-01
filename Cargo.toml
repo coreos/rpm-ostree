@@ -1,3 +1,7 @@
+# Explicitly create a workspace since we have libdnf-sys as a path
+# dependency, and in the future we may use other sub-crates.
+[workspace]
+
 [package]
 name = "rpmostree-rust"
 version = "0.1.0"
@@ -18,16 +22,7 @@ libarchive = "3.0"
 jsonglib = { name = "json-glib-1.0", version = "1" }
 polkitgobject = { name = "polkit-gobject-1", version = "0" }
 rpm = "4"
-# libdnf dependencies
-librepo = "1"
-libsolv = "0.7"
-libsolvext = "0.7"
-gpgme = "1"
-openssl = "1"
 libcurl = "7"
-sqlite3 = "3"
-modulemd = { name = "modulemd-2.0", version = "2" }
-jsonc = { name = "json-c", version = "0" }
 
 [dependencies]
 anyhow = "1.0.38"
