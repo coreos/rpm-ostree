@@ -273,6 +273,83 @@ get_last_auto_update_run (GDBusConnection   *connection,
   return TRUE;
 }
 
+/* Get the ActiveState and StatusText properties of `update_driver_sd_unit`. ActiveState
+ * (and StatusText if found) is returned as a single string in `update_driver_state` if
+ * ActiveState is not empty. */
+static gboolean
+get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy,
+                         const char       *update_driver_sd_unit,
+                         const char      **update_driver_state,
+                         GCancellable     *cancellable,
+                         GError          **error)
+{
+  GDBusConnection *connection =
+    g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+
+  /* Query systemd for update driver's systemd unit's object path. */
+  g_autoptr(GVariant) update_driver_objpath_tuple = 
+    g_dbus_connection_call_sync (connection, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                                 "org.freedesktop.systemd1.Manager", "LoadUnit",
+                                 g_variant_new ("(s)", update_driver_sd_unit), G_VARIANT_TYPE_TUPLE,
+                                 G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
+  if (!update_driver_objpath_tuple)
+    return FALSE;
+  else if (g_variant_n_children (update_driver_objpath_tuple) < 1)
+    return glnx_throw (error, "LoadUnit(%s) returned empty tuple", update_driver_sd_unit);
+
+  g_autoptr(GVariant) update_driver_objpath_val =
+    g_variant_get_child_value (update_driver_objpath_tuple, 0);
+  const char *update_driver_objpath = g_variant_get_string (update_driver_objpath_val, NULL);
+
+  /* Look up ActiveState property of update driver's systemd unit. */
+  g_autoptr(GDBusProxy) update_driver_unit_obj_proxy =
+    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
+                           "org.freedesktop.systemd1", update_driver_objpath,
+                           "org.freedesktop.systemd1.Unit", cancellable, error);
+  if (!update_driver_unit_obj_proxy)
+    return FALSE;
+
+  g_autoptr(GVariant) active_state_val =
+    g_dbus_proxy_get_cached_property (update_driver_unit_obj_proxy, "ActiveState");
+  if (!active_state_val)
+    return glnx_throw (error, "ActiveState property not found in proxy's cache (%s)",
+                       update_driver_objpath);
+
+  const char *active_state = g_variant_get_string (active_state_val, NULL);
+
+  /* Only look up StatusText property if update driver is a service unit. */
+  const char *status_text = NULL;
+  g_autoptr(GVariant) status_text_val = NULL;
+  if (g_str_has_suffix (update_driver_sd_unit, ".service"))
+    {
+      g_autoptr(GDBusProxy) update_driver_service_obj_proxy =
+        g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
+                               "org.freedesktop.systemd1", update_driver_objpath,
+                               "org.freedesktop.systemd1.Service", cancellable, error);
+      if (!update_driver_service_obj_proxy)
+        return FALSE;
+
+      status_text_val =
+        g_dbus_proxy_get_cached_property (update_driver_service_obj_proxy, "StatusText");
+      if (!status_text_val)
+        return glnx_throw (error, "StatusText property not found in proxy's cache (%s)",
+                           update_driver_objpath);
+
+      status_text = g_variant_get_string (status_text_val, NULL);
+    }
+
+  if (active_state[0] != '\0')
+    {
+      /* Only print StatusText if not-NULL (is service unit) and not-empty. */
+      if (status_text && status_text[0] != '\0')
+        *update_driver_state = g_strdup_printf ("%s; %s", active_state, status_text);
+      else
+        *update_driver_state = g_strdup (active_state);
+    }
+
+  return TRUE;
+}
+
 static gboolean
 print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
                     GBusType          bus_type,
@@ -302,6 +379,18 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
                  update_driver_name, update_driver_sd_unit);
       else
         g_print ("AutomaticUpdates: driven by %s\n", update_driver_name);
+
+      /* only try to get unit's StatusText if we're on the system bus */
+      if (bus_type == G_BUS_TYPE_SYSTEM)
+        {
+          g_autofree const char *update_driver_state = NULL;
+          g_autoptr(GError) local_error = NULL;
+          if (!get_update_driver_state (sysroot_proxy, update_driver_sd_unit,
+                                        &update_driver_state, cancellable, &local_error))
+            g_printerr ("%s", local_error->message);
+          else if (update_driver_state)
+            g_print ("  DriverState: %s\n", update_driver_state);
+        }
     }
   else if (g_str_equal (policy, "none"))
     {
