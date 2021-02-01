@@ -64,6 +64,7 @@ vm_cmd rpm-ostree status > status.txt
 assert_file_has_content status.txt 'driven by TestDriver'
 vm_cmd rpm-ostree status -v > verbose_status.txt
 assert_file_has_content verbose_status.txt 'driven by TestDriver (sshd.service)'
+assert_file_has_content verbose_status.txt '  DriverState: active'
 vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"TestDriver\"" \
                     ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
 vm_reboot_cmd rpm-ostree finalize-deployment "${commit}"
