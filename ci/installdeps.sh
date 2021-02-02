@@ -6,7 +6,7 @@ set -xeuo pipefail
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
 
-if [ -n "${SKIP_INSTALLDEPS:-}" ]; then
+if [ -n "${SKIP_INSTALLDEPS:-}" ] || test $(id -u) != 0; then
     exit 0
 fi
 
