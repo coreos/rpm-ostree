@@ -61,9 +61,9 @@ assert_file_has_content agent.txt testing-agent-id
 vm_cmd journalctl --after-cursor "'$cursor'" -u rpm-ostreed -o json | jq -r '.AGENT_SD_UNIT//""' > agent_sd_unit.txt
 assert_file_has_content agent_sd_unit.txt sshd.service
 vm_cmd rpm-ostree status > status.txt
-assert_file_has_content status.txt 'driven by TestDriver'
+assert_file_has_content status.txt 'AutomaticUpdatesDriver: TestDriver'
 vm_cmd rpm-ostree status -v > verbose_status.txt
-assert_file_has_content verbose_status.txt 'driven by TestDriver (sshd.service)'
+assert_file_has_content verbose_status.txt 'AutomaticUpdatesDriver: TestDriver (sshd.service)'
 assert_file_has_content verbose_status.txt '  DriverState: active'
 vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"TestDriver\"" \
                     ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
@@ -77,9 +77,9 @@ vm_cmd rpm-ostree deploy \'\' \
        --register-driver=OtherTestDriver
 vm_cmd test -f /run/rpm-ostree/update-driver.gv
 vm_cmd rpm-ostree status > status.txt
-assert_file_has_content status.txt 'driven by OtherTestDriver'
+assert_file_has_content status.txt 'AutomaticUpdatesDriver: OtherTestDriver'
 vm_cmd rpm-ostree status -v > verbose_status.txt
-assert_file_has_content verbose_status.txt 'driven by OtherTestDriver (sshd.service)'
+assert_file_has_content verbose_status.txt 'AutomaticUpdatesDriver: OtherTestDriver (sshd.service)'
 vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"OtherTestDriver\"" \
                     ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
 echo "ok deploy --register-driver with empty string revision"
