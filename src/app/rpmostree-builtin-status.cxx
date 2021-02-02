@@ -375,10 +375,10 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
   if (update_driver_name && update_driver_sd_unit)
     {
       if (opt_verbose)
-        g_print ("AutomaticUpdates: driven by %s (%s)\n", 
+        g_print ("AutomaticUpdatesDriver: %s (%s)\n", 
                  update_driver_name, update_driver_sd_unit);
       else
-        g_print ("AutomaticUpdates: driven by %s\n", update_driver_name);
+        g_print ("AutomaticUpdatesDriver: %s\n", update_driver_name);
 
       /* only try to get unit's StatusText if we're on the system bus */
       if (bus_type == G_BUS_TYPE_SYSTEM)
