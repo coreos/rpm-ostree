@@ -401,6 +401,9 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
 
   glnx_autofd int stdout_fd = -1;
   glnx_autofd int stderr_fd = -1;
+  struct ChildSetupData data = { .stdin_fd = stdin_fd,
+                                 .stdout_fd = -1,
+                                 .stderr_fd = -1, };
   GLnxTmpfile buffered_output = { 0, };
   const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
   if (debugging_script || stdin_fd == STDIN_FILENO)
@@ -410,9 +413,6 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
     }
   else
     {
-      struct ChildSetupData data = { .stdin_fd = stdin_fd,
-                                     .stdout_fd = -1,
-                                     .stderr_fd = -1, };
 
       rust::Slice<const uint8_t> scriptslice{(guint8*)script, strlen (script)};
       glnx_fd_close int script_memfd = rpmostreecxx::sealed_memfd (pkg_script, scriptslice);
