@@ -47,18 +47,49 @@ if [ ! -d compose-cache ]; then
   rm -rf manifests/
   popd # config
 
-  if ! has_compose_privileges; then
-    # Unlike cosa, we don't need as much flexibility since we don't e.g. build
-    # images. So just create the supermin appliance and root now so each test
-    # doesn't have to build it.
-    mkdir -p supermin.{prepare,build}
-    # we just import the strict minimum here that rpm-ostree needs
-    rpms="rpm-ostree bash rpm-build coreutils selinux-policy-targeted dhcp-client util-linux"
-    # shellcheck disable=SC2086
-    supermin --prepare --use-installed -o supermin.prepare $rpms
-    # the reason we do a heredoc here is so that the var substition takes
-    # place immediately instead of having to proxy them through to the VM
-    cat > init <<EOF
+  mkdir cachedir
+  # we just need a repo so we can download stuff (but see note above about
+  # sharing pkgcache repo in the future)
+  ostree init --repo=repo --mode=archive
+  rpm-ostree compose tree --unified-core --download-only-rpms --repo=repo \
+    config/manifest.json --cachedir cachedir \
+    --ex-lockfile config/manifest-lock.x86_64.json \
+    --ex-lockfile config/manifest-lock.overrides.x86_64.yaml
+  rm -rf repo
+  (cd cachedir && createrepo_c .)
+  echo -e "[cache]\nbaseurl=$(pwd)/cachedir\ngpgcheck=0" > config/cache.repo
+
+  pushd config
+  python3 -c '
+import sys, json
+y = json.load(sys.stdin)
+y["repos"] = ["cache"]
+y["postprocess"] = []
+y.pop("lockfile-repos", None)
+json.dump(y, sys.stdout)' < manifest.json > manifest.json.new
+  mv manifest.json{.new,}
+  git add .
+  git -c user.email="composetest@localhost.com" -c user.name="composetest" \
+    commit -am 'modifications for tests'
+  popd # config
+
+  popd # compose-cache
+fi
+
+if ! has_compose_privileges; then
+  pushd compose-cache
+
+  # Unlike cosa, we don't need as much flexibility since we don't e.g. build
+  # images. So just create the supermin appliance and root now so each test
+  # doesn't have to build it.
+  mkdir -p supermin.{prepare,build}
+  # we just import the strict minimum here that rpm-ostree needs
+  rpms="rpm-ostree bash rpm-build coreutils selinux-policy-targeted dhcp-client util-linux"
+  # shellcheck disable=SC2086
+  supermin --prepare --use-installed -o supermin.prepare $rpms
+  # the reason we do a heredoc here is so that the var substition takes
+  # place immediately instead of having to proxy them through to the VM
+  cat > init <<EOF
 #!/bin/bash
 set -xeuo pipefail
 export PATH=/usr/sbin:$PATH
@@ -104,36 +135,9 @@ if [ -b /dev/sdb1 ]; then
 fi
 /sbin/reboot -f
 EOF
-    chmod a+x init
-    tar -czf supermin.prepare/init.tar.gz --remove-files init
-    supermin --build "${fixtures}/supermin.prepare" --size 5G -f ext2 -o supermin.build
-  fi
-
-  mkdir cachedir
-  # we just need a repo so we can download stuff (but see note above about
-  # sharing pkgcache repo in the future)
-  ostree init --repo=repo --mode=archive
-  rpm-ostree compose tree --unified-core --download-only-rpms --repo=repo \
-    config/manifest.json --cachedir cachedir \
-    --ex-lockfile config/manifest-lock.x86_64.json \
-    --ex-lockfile config/manifest-lock.overrides.x86_64.yaml
-  rm -rf repo
-  (cd cachedir && createrepo_c .)
-  echo -e "[cache]\nbaseurl=$(pwd)/cachedir\ngpgcheck=0" > config/cache.repo
-
-  pushd config
-  python3 -c '
-import sys, json
-y = json.load(sys.stdin)
-y["repos"] = ["cache"]
-y["postprocess"] = []
-y.pop("lockfile-repos", None)
-json.dump(y, sys.stdout)' < manifest.json > manifest.json.new
-  mv manifest.json{.new,}
-  git add .
-  git -c user.email="composetest@localhost.com" -c user.name="composetest" \
-    commit -am 'modifications for tests'
-  popd # config
+  chmod a+x init
+  tar -czf supermin.prepare/init.tar.gz --remove-files init
+  supermin --build "${fixtures}/supermin.prepare" --size 5G -f ext2 -o supermin.build
 
   popd # compose-cache
 fi
