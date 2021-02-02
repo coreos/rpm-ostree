@@ -13,4 +13,3 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 ${dn}/build.sh
 make check
-make install
