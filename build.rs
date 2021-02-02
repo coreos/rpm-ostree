@@ -16,6 +16,11 @@ fn detect_fedora_feature() -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    if std::env::var("CARGO_FEATURE_SANITIZERS").is_ok() {
+        // Force these on
+        println!("cargo:rustc-link-lib=ubsan");
+        println!("cargo:rustc-link-lib=asan");
+    }
     let cwd = std::env::current_dir()?;
     let cwd = cwd.to_str().expect("utf8 pwd");
     println!("cargo:rustc-link-search={}/.libs", cwd);

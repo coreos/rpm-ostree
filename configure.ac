@@ -27,14 +27,11 @@ dnl if not set, which we definitely want; cmake doesn't do that.
 AC_PROG_CXX
 AM_PROG_CC_C_O
 
-AC_MSG_CHECKING([for -fsanitize=address in CFLAGS])
-if echo $CFLAGS | grep -q -e -fsanitize=address; then
-AC_MSG_RESULT([yes])
-using_asan=yes
-else
-AC_MSG_RESULT([no])
-fi
-AM_CONDITIONAL(BUILDOPT_ASAN, [test x$using_asan = xyes])
+AC_ARG_ENABLE(sanitizers,
+              AS_HELP_STRING([--enable-sanitizers],
+                             [Enable ASAN and UBSAN (default: no)]),,
+              [enable_sanitizers=no])
+AM_CONDITIONAL(BUILDOPT_ASAN, [test x$enable_sanitizers != xno])
 
 # Initialize libtool
 LT_PREREQ([2.2.4])
@@ -150,6 +147,7 @@ echo "
 
     introspection:                           $found_introspection
     rojig:                                   ${enable_rojig:-no}
+    ASAN + UBSAN:                            ${enable_sanitizers:-no}
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release
     cbindgen:                                ${cbindgen:-external}

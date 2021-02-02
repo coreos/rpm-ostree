@@ -22,6 +22,9 @@ BuildRequires: cargo
 BuildRequires: rust
 %endif
 
+# Enable ASAN + UBSAN
+%bcond_with sanitizers
+
 # RHEL8 doesn't ship zchunk today.  See also the comments
 # in configure.ac around this as libdnf/librepo need to be in
 # sync, and today we bundle libdnf but not librepo.
@@ -131,7 +134,8 @@ env NOCONFIGURE=1 ./autogen.sh
 # the %%configure macro today assumes (reasonably) that one is building
 # C/C++ and sets C{,XX}FLAGS
 export RUSTFLAGS="%{build_rustflags}"
-%configure --disable-silent-rules --enable-gtk-doc %{?sqlite_rpmdb_default}
+%configure --disable-silent-rules --enable-gtk-doc %{?sqlite_rpmdb_default} %{?with_sanitizers:--enable-sanitizers} 
+
 %make_build
 
 %install

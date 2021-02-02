@@ -87,5 +87,7 @@ lto = true
 [features]
 sqlite-rpmdb-default = []
 fedora-integration = []
+# ASAN+UBSAN
+sanitizers = []
 
 default = []
