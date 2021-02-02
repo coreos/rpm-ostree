@@ -54,10 +54,14 @@ endif
 warnings_error_only_c = strict-prototypes missing-prototypes \
   implicit-function-declaration int-conversion incompatible-pointer-types \
   $(NULL)
+sanitizer_flags =
+if BUILDOPT_ASAN
+sanitizer_flags += -fsanitize=address -fsanitize=undefined -fsanitize-undefined-trap-on-error
+endif
 # See the AM_CFLAGS in libostree for more information about -fno-strict-aliasing
 AM_CFLAGS += -std=gnu11 -fno-strict-aliasing $(warning_flags) $(patsubst %,-Werror=%,$(warnings_error_only_c))
 # Our default CXX flags
-AM_CXXFLAGS += -std=c++17 -fno-strict-aliasing $(warning_flags)
+AM_CXXFLAGS += -std=c++17 -fno-strict-aliasing $(warning_flags) $(sanitizer_flags)
 
 EXTRA_DIST += autogen.sh COPYING
 

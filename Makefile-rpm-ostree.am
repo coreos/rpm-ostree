@@ -88,7 +88,9 @@ rpmostree_common_libs = libglnx.la librpmostreecxxrs.la
 
 rpmostree_bin_common_libs = librpmostreeinternals.la $(rpmostree_common_libs)
 librpmostreeinternals_la_CFLAGS = $(AM_CFLAGS) $(rpmostree_common_cflags)
-librpmostreeinternals_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags)
+# Note for now we only inject the sanitizer flags into our static library,
+# because doing ASAN for a shared library is trickier.
+librpmostreeinternals_la_CXXFLAGS = $(AM_CXXFLAGS) $(sanitizer_flags) $(rpmostree_common_cflags)
 librpmostreeinternals_la_LIBADD = $(rpmostree_common_libs)
 
 privdatadir=$(pkglibdir)
@@ -102,6 +104,9 @@ endif
 
 if BUILDOPT_ENABLE_SQLITE_RPMDB_DEFAULT
 cargo_build += --features sqlite-rpmdb-default
+endif
+if BUILDOPT_ASAN
+cargo_build += --features sanitizers
 endif
 
 if RUST_DEBUG
@@ -138,7 +143,7 @@ endif
 noinst_LTLIBRARIES += librpmostreecxxrs.la
 librpmostreecxxrs_la_SOURCES = rpmostree-cxxrs.h rpmostree-cxxrs.cxx
 # Suppress missing-declarations because https://github.com/dtolnay/cxx/issues/590
-librpmostreecxxrs_la_CXXFLAGS = $(AM_CXXFLAGS) $(rpmostree_common_cflags) -Wno-missing-declarations
+librpmostreecxxrs_la_CXXFLAGS = $(AM_CXXFLAGS) $(SANITIZER_FLAGS) $(rpmostree_common_cflags) -Wno-missing-declarations
 librpmostreecxxrs_la_LIBADD = -lstdc++
 GITIGNOREFILES += $(binding_generated_sources)
 BUILT_SOURCES += $(binding_generated_sources)
