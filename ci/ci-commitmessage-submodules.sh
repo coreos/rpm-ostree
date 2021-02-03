@@ -16,8 +16,8 @@ dn=$(dirname $0)
 # It's very common for people to accidentally change submodules, and having this
 # requirement is a small hurdle to pass.
 
-# If passed the commit, use that. Otherwise, just use HEAD.
-HEAD=${1:-HEAD}
+# If passed the commit, use that. Otherwise, just use the implicit default.
+HEAD=${1:-}
 
 tmpd=$(mktemp -d)
 touch ${tmpd}/.tmpdir
