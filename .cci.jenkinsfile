@@ -38,7 +38,7 @@ clang: {
   def n = 5
   cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi", cpu: "${n}") {
       checkout scm
-      shwrap("ci/clang-build-check.sh")
+      shwrap("MAKE_JOBS=${n} ci/clang-build-check.sh")
   }
 }
 }
