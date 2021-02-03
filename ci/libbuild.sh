@@ -2,7 +2,7 @@
 
 # OpenShift Prow jobs don't set $HOME, but we need
 # one for cargo right now.
-if test -z "$HOME"; then
+if test -z "$HOME" || test ! -w "$HOME"; then
     export HOME=$(mktemp -d -t --suffix .prowhome)
 fi
 
