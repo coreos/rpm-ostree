@@ -1,5 +1,11 @@
 #!/usr/bin/bash
 
+# OpenShift Prow jobs don't set $HOME, but we need
+# one for cargo right now.
+if test -z "$HOME"; then
+    export HOME=$(mktemp -d -t --suffix .prowhome)
+fi
+
 pkg_upgrade() {
     echo "Running dnf -y distro-sync... $(date)"
     dnf -y distro-sync
