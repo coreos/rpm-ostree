@@ -22,24 +22,6 @@ codestyle: {
         ci/commit-validation.sh
       """)
   }
-},
-unit: {
-  // this branch runs unit tests (both Rust-based and C-based)
-  def n = 5
-  cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi", cpu: "${n}") {
-      checkout scm
-      shwrap("""
-        MAKE_JOBS=${n} CARGO_BUILD_JOBS=${n} ci/unit.sh
-      """)
-  }
-},
-clang: {
-  // Build with clang/clang++
-  def n = 5
-  cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi", cpu: "${n}") {
-      checkout scm
-      shwrap("MAKE_JOBS=${n} ci/clang-build-check.sh")
-  }
 }
 }
 
