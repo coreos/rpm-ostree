@@ -18,14 +18,15 @@ fn main() -> Result<()> {
         .define("SHARE_INSTALL_PREFIX:PATH", "/usr/libexec/rpm-ostree/share")
         .define("ENABLE_STATIC:BOOL", "1")
         .define("CMAKE_POSITION_INDEPENDENT_CODE", "ON")
-        // rpm-ostree maintains its own state
-        .define("WITH_SWDB:BOOL", "0")
         // We don't need docs
         .define("WITH_HTML:BOOL", "0")
         .define("WITH_MAN:BOOL", "0")
         // Don't need bindings
         .define("WITH_BINDINGS:BOOL", "0")
-        .define("WITH_GIR:BOOL", "0")
+        // Needed in Koji at least because timestamps(?)
+        // cause cmake to rerun without our -D flags which
+        // breaks the build.
+        .always_configure(false)
         .build_target("all")
         .build();
     println!(
