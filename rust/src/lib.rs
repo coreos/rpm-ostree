@@ -91,13 +91,13 @@ pub mod ffi {
 
     // progress.rs
     extern "Rust" {
-        fn progress_begin_task(msg: &str);
-        fn progress_begin_n_items(msg: &str, n: u64);
-        fn progress_begin_percent(msg: &str);
-        fn progress_set_message(msg: &str);
-        fn progress_set_sub_message(msg: &str);
-        fn progress_update(n: u64);
-        fn progress_end(suffix: &str);
+        fn console_progress_begin_task(msg: &str);
+        fn console_progress_begin_n_items(msg: &str, n: u64);
+        fn console_progress_begin_percent(msg: &str);
+        fn console_progress_set_message(msg: &str);
+        fn console_progress_set_sub_message(msg: &str);
+        fn console_progress_update(n: u64);
+        fn console_progress_end(suffix: &str);
     }
 
     // history.rs
