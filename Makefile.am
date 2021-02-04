@@ -81,11 +81,11 @@ CARGO_RELEASE_ARGS=--release
 endif
 
 check-local-cargo:
-	cd $(srcdir)/rust && CARGO_TARGET_DIR=$(abs_top_builddir)/target cargo test
+	cargo test
 CHECK_LOCAL_HOOKS += check-local-cargo
 
 clean-local-cargo:
-	cd $(srcdir)/rust && CARGO_TARGET_DIR=$(abs_top_builddir)/target cargo clean
+	cargo clean
 CLEAN_LOCAL_HOOKS += clean-local-cargo
 
 use-git-not-dist-hook:
