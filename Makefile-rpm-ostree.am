@@ -103,9 +103,9 @@ cargo_build += --features sqlite-rpmdb-default
 endif
 
 if RUST_DEBUG
-	cargo_target_dir=debug
+cargo_target_dir=debug
 else
-	cargo_target_dir=release
+cargo_target_dir=release
 endif
 LIBRPMOSTREE_RUST_SRCS = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.lock cbindgen.toml
 # FIXME - build all this code in a rpmostree-sys crate, or just move all the C/C++ build
