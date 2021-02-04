@@ -1,3 +1,10 @@
+//! A wrapper around the `indicatif` crate that maintains
+//! stateful drawing to a TTY console.  Note that much
+//! of rpm-ostree needs to work as both a DBus daemon
+//! under systemd, and a direct process in a podman/Kube
+//! container.  So there's a wrapping/indirection layer
+//! which currently lives in C++ in rpmostree-output.h.
+
 /*
  * Copyright (C) 2018 Red Hat, Inc.
  *
@@ -165,44 +172,44 @@ fn optional_str(s: &str) -> Option<&str> {
     Some(s).filter(|s| !s.is_empty())
 }
 
-pub(crate) fn progress_begin_task(msg: &str) {
+pub(crate) fn console_progress_begin_task(msg: &str) {
     let mut lock = PROGRESS.lock().unwrap();
     assert_empty(&lock);
     *lock = Some(ProgressState::new(msg, ProgressType::Task));
 }
 
-pub(crate) fn progress_begin_n_items(msg: &str, n: u64) {
+pub(crate) fn console_progress_begin_n_items(msg: &str, n: u64) {
     let mut lock = PROGRESS.lock().unwrap();
     assert_empty(&lock);
     *lock = Some(ProgressState::new(msg, ProgressType::NItems(n as u64)));
 }
 
-pub(crate) fn progress_begin_percent(msg: &str) {
+pub(crate) fn console_progress_begin_percent(msg: &str) {
     let mut lock = PROGRESS.lock().unwrap();
     assert_empty(&lock);
     *lock = Some(ProgressState::new(msg, ProgressType::Percent));
 }
 
-pub(crate) fn progress_set_message(msg: &str) {
+pub(crate) fn console_progress_set_message(msg: &str) {
     let mut lock = PROGRESS.lock().unwrap();
     let state = lock.as_mut().expect("progress to update");
     state.set_message(msg);
 }
 
-pub(crate) fn progress_set_sub_message(msg: &str) {
+pub(crate) fn console_progress_set_sub_message(msg: &str) {
     let msg = optional_str(msg);
     let mut lock = PROGRESS.lock().unwrap();
     let state = lock.as_mut().expect("progress to update");
     state.set_sub_message(msg);
 }
 
-pub(crate) fn progress_update(n: u64) {
+pub(crate) fn console_progress_update(n: u64) {
     let lock = PROGRESS.lock().unwrap();
     let state = lock.as_ref().expect("progress to update");
     state.update(n);
 }
 
-pub(crate) fn progress_end(suffix: &str) {
+pub(crate) fn console_progress_end(suffix: &str) {
     let suffix = optional_str(suffix);
     let mut lock = PROGRESS.lock().unwrap();
     let state = lock.take().expect("progress to end");

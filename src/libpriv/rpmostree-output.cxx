@@ -44,29 +44,29 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
     {
       auto begin = static_cast<RpmOstreeOutputProgressBegin *>(data);
       if (begin->percent)
-        rpmostreecxx::progress_begin_percent (begin->prefix);
+        rpmostreecxx::console_progress_begin_percent (begin->prefix);
       else if (begin->n > 0)
-        rpmostreecxx::progress_begin_n_items (begin->prefix, begin->n);
+        rpmostreecxx::console_progress_begin_n_items (begin->prefix, begin->n);
       else
-        rpmostreecxx::progress_begin_task (begin->prefix);
+        rpmostreecxx::console_progress_begin_task (begin->prefix);
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
     {
       auto upd = static_cast<RpmOstreeOutputProgressUpdate *>(data);
-      rpmostreecxx::progress_update (upd->c);
+      rpmostreecxx::console_progress_update (upd->c);
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
     {
       auto msg = static_cast<const char *>(data);
-      rpmostreecxx::progress_set_sub_message (rust::Str(msg ?: ""));
+      rpmostreecxx::console_progress_set_sub_message (rust::Str(msg ?: ""));
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_END:
     {
       auto end = static_cast<RpmOstreeOutputProgressEnd *>(data);
-      rpmostreecxx::progress_end (rust::Str(end->msg ?: ""));
+      rpmostreecxx::console_progress_end (rust::Str(end->msg ?: ""));
       break;
     }
   }
