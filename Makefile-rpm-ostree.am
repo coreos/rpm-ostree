@@ -144,7 +144,7 @@ BUILT_SOURCES += $(binding_generated_sources)
 # And install our binary
 install-rpmostree-hook:
 	install -d -m 0755 $(DESTDIR)$(bindir)
-	install -m 0755 -t $(DESTDIR)$(bindir) target/release/rpm-ostree
+	install -m 0755 -t $(DESTDIR)$(bindir) rpm-ostree
 INSTALL_EXEC_HOOKS += install-rpmostree-hook
 
 # Wraps `cargo test`.  This is always a debug non-release build;
