@@ -309,7 +309,7 @@ rpmhdrs_new (RpmOstreeRefTs *refts, const GPtrArray *patterns)
       h1 = headerLink (h1);
       g_ptr_array_add (hs, h1);
     }
-  iter = rpmdbFreeIterator (iter);
+  iter = rpmdbFreeIterator (iter); (void) iter;
 
   g_ptr_array_sort (hs, header_cmp_p);
 

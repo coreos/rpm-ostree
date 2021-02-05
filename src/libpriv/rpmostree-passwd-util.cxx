@@ -727,7 +727,7 @@ open_file_stream_write_at (int dfd,
   if (!ret)
     return (FILE*)glnx_null_throw_errno_prefix (error, "fdopen");
   /* fdopen() steals ownership of fd */
-  fd = -1;
+  fd = -1; (void)fd;
   return ret;
 }
 
