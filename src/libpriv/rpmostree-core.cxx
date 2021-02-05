@@ -3077,6 +3077,7 @@ get_rpmdb_pkg_header (rpmts rpmdb_ts,
   g_auto(rpmts) rpmdb_ts_owned = NULL;
   if (!rpmdb_ts) /* allow callers to pass NULL */
     rpmdb_ts = rpmdb_ts_owned = rpmtsCreate ();
+  (void)rpmdb_ts_owned; /* Pacify static analysis */
 
   unsigned int dbid = dnf_package_get_rpmdbid (pkg);
   g_assert (dbid > 0);
@@ -3189,6 +3190,7 @@ delete_package_from_root (RpmOstreeContext *self,
           if (fn_owned)
             fn = fn_owned;
         }
+      (void)fn_owned; /* Pacify static analysis */
 
       /* for now, we only remove files from /usr */
       if (!g_str_has_prefix (fn, "usr/"))

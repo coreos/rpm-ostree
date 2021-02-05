@@ -465,6 +465,7 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
         return FALSE;
       refspec = refspec_remainder;
     }
+  (void)refspec_owned; /* Pacify static analysis */
   refspec_is_ostree = refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE;
   if (refspec_type == RPMOSTREE_REFSPEC_TYPE_CHECKSUM && !commit)
     checksum = refspec;
