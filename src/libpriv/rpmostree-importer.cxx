@@ -140,7 +140,6 @@ rpmostree_importer_read_metainfo (int fd,
   gboolean ret = FALSE;
   g_auto(rpmts) ts = NULL;
   FD_t rpmfd;
-  int r;
   g_auto(Header) ret_header = NULL;
   g_auto(rpmfi) ret_fi = NULL;
   gsize ret_cpio_offset;

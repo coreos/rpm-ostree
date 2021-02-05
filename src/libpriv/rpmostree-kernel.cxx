@@ -506,7 +506,6 @@ rpmostree_run_dracut (int     rootfs_dfd,
                       GCancellable  *cancellable,
                       GError **error)
 {
-  gboolean ret = FALSE;
   auto destdir = rpmostreecxx::cliwrap_destdir();
   /* Shell wrapper around dracut to write to the O_TMPFILE fd;
    * at some point in the future we should add --fd X instead of -f
