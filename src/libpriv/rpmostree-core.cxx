@@ -3716,7 +3716,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
   if (!get_package_metainfo (self, path, NULL, &fi, error))
     return FALSE;
 
-  while ((i = rpmfiNext (fi)) >= 0)
+  while (rpmfiNext (fi) >= 0)
     {
       const char *fn = rpmfiFN (fi);
       const char *user = rpmfiFUser (fi) ?: "root";

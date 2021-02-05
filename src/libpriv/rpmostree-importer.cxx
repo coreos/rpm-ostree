@@ -169,7 +169,7 @@ rpmostree_importer_read_metainfo (int fd,
       goto out;
     }
 
-  if ((r = rpmReadPackageFile (ts, rpmfd, abspath, &ret_header)) != RPMRC_OK)
+  if (rpmReadPackageFile (ts, rpmfd, abspath, &ret_header) != RPMRC_OK)
     {
       g_set_error (error,
                    G_IO_ERROR,
