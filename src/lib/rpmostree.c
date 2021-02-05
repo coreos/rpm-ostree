@@ -55,7 +55,7 @@ _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd
   g_autoptr(GSocket) my_sock = g_socket_new_from_fd (my_sock_fd, error);
   if (!my_sock)
     return NULL;
-  my_sock_fd = -1; /* Ownership was transferred */
+  my_sock_fd = -1; (void) my_sock_fd; /* Ownership was transferred */
   g_autoptr(GPtrArray) full_args = g_ptr_array_new ();
   g_ptr_array_add (full_args, "rpm-ostree");
   g_ptr_array_add (full_args, "shlib-backend");
