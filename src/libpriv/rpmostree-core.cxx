@@ -778,7 +778,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       /* Makes sure we only disable all repos once. This is more for future proofing against
        * refactors for now since we don't support `lockfile-repos` on the client-side and on
        * the server-side we always require `repos` anyway. */
-      gboolean disabled_all_repos = FALSE;
+      bool disabled_all_repos = false;
 
       /* NB: missing "repos" --> let libdnf figure it out for itself (we're likely doing a
        * client-side compose where we want to use /etc/yum.repos.d/) */
@@ -788,7 +788,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           if (!disabled_all_repos)
             {
               disable_all_repos (self);
-              disabled_all_repos = TRUE;
+              disabled_all_repos = true;
             }
           if (!enable_repos (self, (const char *const*)enabled_repos, error))
             return FALSE;
@@ -802,10 +802,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           if (g_variant_dict_lookup (self->spec->dict, "lockfile-repos", "^a&s", &enabled_lockfile_repos))
             {
               if (!disabled_all_repos)
-                {
-                  disable_all_repos (self);
-                  disabled_all_repos = TRUE;
-                }
+                disable_all_repos (self);
               if (!enable_repos (self, (const char *const*)enabled_lockfile_repos, error))
                 return FALSE;
             }
