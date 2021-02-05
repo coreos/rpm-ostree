@@ -36,6 +36,7 @@
 // C++ code
 namespace rpmostreecxx {
   std::unique_ptr<std::string> nevra_to_cache_branch(const std::string &nevra);
+  rust::String get_repodata_chksum_repr(DnfPackage *pkg);
 }
 
 // C code follows
@@ -188,13 +189,6 @@ rpmostree_custom_nevra_strdup (const char *name,
 
 char *
 rpmostree_header_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags);
-
-// WARNING: This prototype is also redefined in Rust, if changing this
-// please also update `includes.rs`.
-gboolean
-rpmostree_get_repodata_chksum_repr (DnfPackage *pkg,
-                                    char      **out_chksum_repr,
-                                    GError    **error);
 
 GPtrArray*
 rpmostree_get_matching_packages (DnfSack *sack,

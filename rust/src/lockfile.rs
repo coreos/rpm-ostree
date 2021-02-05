@@ -191,7 +191,6 @@ mod tests {
 mod ffi {
     use super::*;
     use crate::ffiutil::*;
-    use crate::includes::*;
     use glib::translate::*;
     use glib::GString;
     use libdnf_sys::*;
@@ -255,12 +254,12 @@ mod ffi {
             let evr: Borrowed<GString> = unsafe { from_glib_borrow(dnf_package_get_evr(pkg)) };
             let arch: Borrowed<GString> = unsafe { from_glib_borrow(dnf_package_get_arch(pkg)) };
 
-            let mut chksum: *mut libc::c_char = ptr::null_mut();
-            let r = unsafe { rpmostree_get_repodata_chksum_repr(pkg, &mut chksum, gerror) };
-            if r == 0 {
-                return r;
-            }
-            let chksum: String = unsafe { from_glib_full(chksum) };
+            let chksum = match crate::ffi::get_repodata_chksum_repr(&*pkg) {
+                Ok(r) => r,
+                e => {
+                    return int_glib_error(e, gerror);
+                }
+            };
 
             lockfile.packages.insert(
                 name.as_str().to_string(),

@@ -1412,14 +1412,11 @@ find_pkg_in_ostree (RpmOstreeContext *self,
   const char *reponame = dnf_package_get_reponame (pkg);
   if (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) != 0)
     {
-      g_autofree char *expected_chksum_repr = NULL;
-      if (!rpmostree_get_repodata_chksum_repr (pkg, &expected_chksum_repr,
-                                               error))
-        return FALSE;
+      auto expected_chksum_repr = rpmostreecxx::get_repodata_chksum_repr(pkg);
 
       gboolean same_pkg_chksum = FALSE;
       if (!commit_has_matching_repodata_chksum_repr (commit,
-                                                     expected_chksum_repr,
+                                                     expected_chksum_repr.c_str(),
                                                      &same_pkg_chksum, error))
         return FALSE;
 
@@ -1945,11 +1942,9 @@ find_locked_packages (RpmOstreeContext *self,
             }
           else
             {
-              g_autofree char *repodata_chksum = NULL;
-              if (!rpmostree_get_repodata_chksum_repr (match, &repodata_chksum, error))
-                return NULL;
+              auto repodata_chksum = rpmostreecxx::get_repodata_chksum_repr(match);
 
-              if (!g_str_equal (chksum, repodata_chksum))
+              if (!g_str_equal (chksum, repodata_chksum.c_str()))
                 n_checksum_mismatches++;
               else
                 {
@@ -2413,9 +2408,8 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
             }
         }
 
-      g_autofree char* chksum_repr = NULL;
-      g_assert (rpmostree_get_repodata_chksum_repr (pkg, &chksum_repr, NULL));
-      g_checksum_update (checksum, (guint8*)chksum_repr, strlen (chksum_repr));
+      auto chksum_repr = rpmostreecxx::get_repodata_chksum_repr(pkg);
+      g_checksum_update (checksum, (guint8*)chksum_repr.data(), chksum_repr.size());
     }
 
   return TRUE;

@@ -21,6 +21,7 @@
 #pragma once
 
 #include <ostree.h>
+#include <libdnf/libdnf.h>
 
 namespace rpmostreecxx {
     // Currently cxx-rs requires that external bindings are in the same namespace as
@@ -29,4 +30,5 @@ namespace rpmostreecxx {
     typedef ::OstreeRepo OstreeRepo;
     typedef ::OstreeDeployment OstreeDeployment;
     typedef ::GCancellable GCancellable;
+    typedef ::DnfPackage DnfPackage;
 }

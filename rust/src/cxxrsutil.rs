@@ -71,6 +71,13 @@ unsafe impl ExternType for FFIGCancellable {
 }
 impl_wrap!(FFIGCancellable, gio::Cancellable);
 
+pub struct FFIDnfPackage(libdnf_sys::DnfPackage);
+
+unsafe impl ExternType for FFIDnfPackage {
+    type Id = type_id!(rpmostreecxx::DnfPackage);
+    type Kind = cxx::kind::Trivial;
+}
+
 // An error type helper; separate from the GObject bridging
 mod err {
     use std::error::Error as StdError;

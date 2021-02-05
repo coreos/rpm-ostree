@@ -13,7 +13,6 @@
 mod cxxrsutil;
 mod ffiutil;
 pub(crate) use cxxrsutil::*;
-mod includes;
 
 /// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
 ///
@@ -35,6 +34,7 @@ pub mod ffi {
         type OstreeRepo = crate::FFIOstreeRepo;
         type OstreeDeployment = crate::FFIOstreeDeployment;
         type GCancellable = crate::FFIGCancellable;
+        type DnfPackage = crate::FFIDnfPackage;
     }
 
     /// Currently cxx-rs doesn't support mappings; like probably most projects,
@@ -232,6 +232,7 @@ pub mod ffi {
         // Currently only used in unit tests
         #[allow(dead_code)]
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<UniquePtr<CxxString>>;
+        fn get_repodata_chksum_repr(pkg: &DnfPackage) -> Result<String>;
     }
 }
 
