@@ -1286,10 +1286,9 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  gboolean have_rpmdb;
   if (!glnx_fstatat_allow_noent (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, NULL, AT_SYMLINK_NOFOLLOW, error))
     return FALSE;
-  have_rpmdb = (errno == 0);
+  const bool have_rpmdb = (errno == 0);
   if (!have_rpmdb)
     {
       /* Try looking in var/lib/rpm */
@@ -1302,7 +1301,6 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
             return FALSE;
           if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
             return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
-          have_rpmdb = TRUE;
         }
     }
 
