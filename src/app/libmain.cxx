@@ -455,13 +455,6 @@ early_main (void)
 static int
 rpmostree_main_inner (const rust::Slice<const rust::Str> args)
 {
-  /* We can leave this function with an error status from both a command
-   * invocation, as well as an option processing failure. Keep an alias to the
-   * two places that hold status codes.
-   */
-  int exit_status = EXIT_SUCCESS;
-  int *exit_statusp = &exit_status;
-
   auto argv0 = std::string(args[0]);
   g_set_prgname (argv0.c_str());
 
@@ -512,7 +505,6 @@ rpmostree_main_inner (const rust::Slice<const rust::Str> args)
     { .command = command,
       .command_line = command_line,
       .exit_code = -1 };
-  exit_statusp = &(invocation.exit_code);
   /* Note this may also throw a C++ exception, which will
    * be caught by a higher level.
    */
@@ -529,12 +521,10 @@ rpmostree_main_inner (const rust::Slice<const rust::Str> args)
   else
     {
       if (invocation.exit_code == -1)
-        invocation.exit_code = EXIT_SUCCESS;
+        return EXIT_SUCCESS;
       else
-        g_assert (invocation.exit_code != EXIT_SUCCESS);
+        return invocation.exit_code;
     }
-
-  return *exit_statusp;
 }
 
 /* Never returns */
