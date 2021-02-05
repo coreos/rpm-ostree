@@ -54,7 +54,7 @@ template<typename T>
 // pattern of adding a "prefix" to the string.  When used multiple times it's
 // a bit like a human-friendly stack trace subset.
 template<typename T>
-  inline void rethrow_prefixed (std::exception& e, T prefix)
+  [[ noreturn ]] inline void rethrow_prefixed (std::exception& e, T prefix)
   {
     std::ostringstream msg;
     msg << prefix << ": " << e.what();
@@ -62,7 +62,7 @@ template<typename T>
   }
 
 // Convert a GError into a C++ exception.  Takes ownership of the error.
-static inline void 
+[[ noreturn ]] static inline void
 throw_gerror (GError *&error)
 {
   auto s = std::string (error->message);
