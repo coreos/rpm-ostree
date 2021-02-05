@@ -514,7 +514,6 @@ rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
 {
   VersionVisitorClosure closure = { version, NULL };
   g_autofree char *checksum = NULL;
-  gboolean ret = FALSE;
 
   g_assert (OSTREE_IS_REPO (repo));
   g_assert (refspec != NULL);

@@ -500,7 +500,6 @@ rpmostree_main_inner (const rust::Slice<const rust::Str> args)
   g_autofree char *prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
   g_set_prgname (prgname);
 
-  gboolean funcres = FALSE;
   RpmOstreeCommandInvocation invocation = 
     { .command = command,
       .command_line = command_line,

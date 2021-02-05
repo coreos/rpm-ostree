@@ -1527,7 +1527,7 @@ rpmostree_compose_builtin_extensions (int             argc,
       RpmOstreePackage *pkg = (RpmOstreePackage*)packages->pdata[i];
       const char *name = rpm_ostree_package_get_name (pkg);
       const char *evr = rpm_ostree_package_get_evr (pkg);
-      packages_mapping->push_back(rpmostreecxx::StringMapping {k: name, v: evr});
+      packages_mapping->push_back(rpmostreecxx::StringMapping{name, evr});
     }
 
   auto extensions = rpmostreecxx::extensions_load (extensions_path, basearch, *packages_mapping);

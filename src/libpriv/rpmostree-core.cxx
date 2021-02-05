@@ -627,7 +627,7 @@ std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping>>
 rpmostree_dnfcontext_get_varsubsts (DnfContext *context)
 {
   auto r = std::make_unique<rust::Vec<rpmostreecxx::StringMapping>>();
-  r->push_back(rpmostreecxx::StringMapping {k: "basearch", v: dnf_context_get_base_arch (context) });
+  r->push_back(rpmostreecxx::StringMapping{"basearch", dnf_context_get_base_arch (context) });
   return r;
 }
 
@@ -3708,7 +3708,6 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
   if (getuid () != 0)
     return TRUE;  /* 🔚 Early return */
 
-  int i;
   g_auto(rpmfi) fi = NULL;
   gboolean emitted_nonusr_warning = FALSE;
   g_autofree char *path = get_package_relpath (pkg);
