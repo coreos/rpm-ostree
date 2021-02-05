@@ -793,12 +793,13 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
     }
 
   /* if output-to-self is not explicitly set, default to TRUE */
-  g_autoptr(GVariant) new_dict = NULL;
+  g_autoptr(GVariant) arg_options_owned = NULL;
   if (!g_variant_dict_contains (&dict, "output-to-self"))
     {
       g_variant_dict_insert (&dict, "output-to-self", "b", TRUE);
-      arg_options = new_dict = g_variant_ref_sink (g_variant_dict_end (&dict));
+      arg_options = arg_options_owned = g_variant_ref_sink (g_variant_dict_end (&dict));
     }
+  (void) arg_options_owned; /* Pacify static analysis */
 
   return os_merge_or_start_deployment_txn (
       interface,

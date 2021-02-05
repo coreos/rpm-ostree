@@ -558,6 +558,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
   g_assert (script);
   if (expand)
     script = script_owned = rpmExpand (script, NULL);
+  (void)script_owned; /* Pacify static analysis */
 
   /* http://ftp.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S2-RPM-INSIDE-ERASE-TIME-SCRIPTS */
   const char *script_arg = NULL;
@@ -855,6 +856,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
         continue;
       if (flags & RPMSCRIPT_FLAG_EXPAND)
         script = script_owned = rpmExpand (script, NULL);
+      (void)script_owned; /* Pacify static analysis */
 
       g_autoptr(GPtrArray) patterns = g_ptr_array_new_with_free_func (g_free);
 

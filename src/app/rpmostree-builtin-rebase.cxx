@@ -130,6 +130,7 @@ rpmostree_builtin_rebase (int             argc,
       else
         new_provided_refspec = opt_branch;
     }
+  (void)new_refspec_owned; /* Pacify static analysis */
 
   const char *remainder = NULL;
   RpmOstreeRefspecType refspectype;

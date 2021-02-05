@@ -821,6 +821,7 @@ rpmostreed_daemon_publish (RpmostreedDaemon *self,
 
       if (object == NULL)
         object = owned_object = g_dbus_object_skeleton_new (path);
+      (void)owned_object; /* Pacify static analysis */
 
       g_dbus_object_skeleton_add_interface (object, (GDBusInterfaceSkeleton*)iface);
     }
