@@ -1042,7 +1042,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
       g_autoptr(GVariant) commit = NULL;
       g_autofree char *actual_sha256 = NULL;
 
-      if (!ostree_repo_resolve_rev (pkgcache, cachebranch->c_str(), TRUE, &commit_csum, error))
+      if (!ostree_repo_resolve_rev (pkgcache, cachebranch->c_str(), FALSE, &commit_csum, error))
         return FALSE;
 
       if (!ostree_repo_load_commit (pkgcache, commit_csum, &commit, NULL, error))
