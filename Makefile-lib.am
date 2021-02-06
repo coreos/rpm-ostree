@@ -36,10 +36,6 @@ librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libp
 librpmostree_1_la_LDFLAGS = $(AM_LDFLAGS) -version-number 1:0:0 -Bsymbolic-functions
 librpmostree_1_la_LIBADD =  $(PKGDEP_LIBRPMOSTREE_LIBS) libglnx.la
 
-# XXX: work around clang being passed -fstack-clash-protection which it doesn't understand
-# https://github.com/projectatomic/rpm-ostree/pull/1787#issuecomment-473971585
-INTROSPECTION_SCANNER_ENV = CC=gcc
-
 if BUILDOPT_INTROSPECTION
 RpmOstree-1.0.gir: librpmostree-1.la Makefile
 RpmOstree_1_0_gir_EXPORT_PACKAGES = rpm-ostree-1
