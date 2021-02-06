@@ -203,6 +203,11 @@ pub mod ffi {
         fn serialize_to_dir(&self, output_dir: &str) -> Result<()>;
     }
 
+    // lockfile.rs
+    extern "Rust" {
+        fn ror_lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMapping>>;
+    }
+
     // rpmutils.rs
     extern "Rust" {
         fn cache_branch_to_nevra(nevra: &str) -> String;

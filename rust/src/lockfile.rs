@@ -13,7 +13,7 @@ use anyhow::Result;
 use chrono::prelude::*;
 use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::io;
 use std::iter::Extend;
@@ -188,41 +188,26 @@ mod tests {
     }
 }
 
+use crate::ffi::*;
+use crate::ffiutil::*;
+use crate::includes::*;
+use glib::translate::*;
+use libdnf_sys::*;
+use std::ptr;
+
+pub(crate) fn ror_lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMapping>> {
+    Ok(lockfile_parse_multiple(&filenames)?
+        .packages
+        .into_iter()
+        .map(|(k, v)| StringMapping {
+            k: format!("{}-{}", k, v.evra),
+            v: v.digest.unwrap_or_else(|| "".into()),
+        })
+        .collect())
+}
+
 mod ffi {
     use super::*;
-    use crate::ffiutil::*;
-    use crate::includes::*;
-    use glib::translate::*;
-    use libdnf_sys::*;
-    use std::ptr;
-
-    #[no_mangle]
-    pub extern "C" fn ror_lockfile_read(
-        filenames: *mut *mut libc::c_char,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> *mut glib_sys::GHashTable {
-        let filenames = ffi_strv_to_os_str_vec(filenames);
-        match lockfile_parse_multiple(&filenames) {
-            Err(ref e) => {
-                error_to_glib(e, gerror);
-                ptr::null_mut()
-            }
-            Ok(lockfile) => {
-                // would be more efficient to just create a GHashTable manually here, but eh...
-                let map = lockfile.packages.into_iter().fold(
-                    HashMap::<String, String>::new(),
-                    |mut acc, (k, v)| {
-                        acc.insert(
-                            format!("{}-{}", k, v.evra),
-                            v.digest.unwrap_or_else(|| "".into()),
-                        );
-                        acc
-                    },
-                );
-                map.to_glib_full()
-            }
-        }
-    }
 
     #[no_mangle]
     pub extern "C" fn ror_lockfile_write(
