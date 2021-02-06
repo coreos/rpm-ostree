@@ -123,7 +123,7 @@ add_package_refs_to_set (RpmOstreeRefSack *rsack,
   /* TODO: convert this to an iterator to avoid lots of malloc */
 
   if (pkglist->len == 0)
-    sd_journal_print (LOG_WARNING, "Failed to find any packages in root");
+    return glnx_throw (error, "Failed to find any packages in root");
   else
     {
       for (guint i = 0; i < pkglist->len; i++)
@@ -187,7 +187,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
             return FALSE;
 
           if (!add_package_refs_to_set (rsack, FALSE, referenced_pkgs, cancellable, error))
-            return FALSE;
+            return glnx_prefix_error (error, "Deployment index=%d", i);
         }
       /* In rojig mode, we need to also reference packages from the base; this
        * is a different refspec format.
