@@ -2260,7 +2260,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
                                           DNF_PACKAGE_INFO_UPDATE,
                                           DNF_PACKAGE_INFO_DOWNGRADE, -1);
       if (!sort_packages (self, self->pkgs, cancellable, error))
-        return FALSE;
+        return glnx_prefix_error (error, "Sorting packages");
     }
 
   return TRUE;
