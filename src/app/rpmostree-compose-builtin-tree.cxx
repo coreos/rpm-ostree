@@ -726,9 +726,13 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   if (opt_lockfiles)
     {
-      g_autoptr(GHashTable) map = ror_lockfile_read (opt_lockfiles, error);
-      if (!map)
-        return FALSE;
+      rust::Vec<rust::String> lockfiles;
+      for (char **it = opt_lockfiles; it && *it; it++)
+        lockfiles.push_back(std::string(*it));
+      auto mappings = rpmostreecxx::ror_lockfile_read (lockfiles);
+      g_autoptr(GHashTable) map = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+      for (auto mapping : mappings)
+        g_hash_table_insert (map, g_strdup (mapping.k.c_str()), g_strdup (mapping.v.c_str()));
       rpmostree_context_set_vlockmap (self->corectx, map, opt_lockfile_strict);
       g_print ("Loaded lockfiles:\n  %s\n", g_strjoinv ("\n  ", opt_lockfiles));
     }
