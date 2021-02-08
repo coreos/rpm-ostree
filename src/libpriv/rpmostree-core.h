@@ -42,6 +42,7 @@ G_BEGIN_DECLS
 #define RPMOSTREE_DIR_LOCK "lock"
 
 /* See http://lists.rpm.org/pipermail/rpm-maint/2017-October/006681.html */
+/* This is also defined on the Rust side. */
 #define RPMOSTREE_RPMDB_LOCATION "usr/share/rpm"
 #define RPMOSTREE_SYSIMAGE_DIR "usr/lib/sysimage"
 #define RPMOSTREE_SYSIMAGE_RPMDB RPMOSTREE_SYSIMAGE_DIR "/rpm"

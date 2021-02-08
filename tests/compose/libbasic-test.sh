@@ -39,6 +39,10 @@ done
 ostree --repo=${repo} ls ${treeref} /usr/lib/sysimage/rpm >/dev/null
 echo "ok db"
 
+ostree --repo=${repo} cat ${treeref} /usr/lib/rpm/macros.d/macros.rpm-ostree > rpm-ostree-macro.txt
+assert_file_has_content_literal rpm-ostree-macro.txt '%_dbpath /usr/share/rpm'
+echo "ok rpm macro"
+
 ostree --repo=${repo} show --print-metadata-key exampleos.gitrepo ${treeref} > meta.txt
 assert_file_has_content meta.txt 'rev.*97ec21c614689e533d294cdae464df607b526ab9'
 assert_file_has_content meta.txt 'src.*https://gitlab.com/exampleos/custom-atomic-host'
