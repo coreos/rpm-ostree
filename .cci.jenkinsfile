@@ -41,6 +41,9 @@ parallel insttests: {
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm
           mv *.rpm overrides/rpm
+          # for now, we cherry-pick newer libsolv to test that it correctly detects our rpmdb
+          # https://github.com/coreos/rpm-ostree/issues/2548
+          (cd overrides/rpm && curl -LO https://kojipkgs.fedoraproject.org//packages/libsolv/0.7.17/1.fc33/x86_64/libsolv-0.7.17-1.fc33.x86_64.rpm)
           coreos-assembler fetch
           coreos-assembler build
         """)
