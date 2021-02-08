@@ -753,7 +753,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       dnf_context_set_rpm_macro (self->dnfctx, "_install_langs", opt->str);
     }
 
-  /* This is what we use as default. */
+  /* This is what we use as default. Note we should be able to drop this in the
+   * future now that we inject a macro to set that value in our OSTrees. */
   dnf_context_set_rpm_macro (self->dnfctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
   /* Set the database backend only in the compose path.  It then becomes the default
@@ -4123,7 +4124,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   rpmtsSetRootDir (ordering_ts, dnf_context_get_install_root (dnfctx));
 
   /* First for the ordering TS, set the dbpath to relative, which will also gain
-   * the root dir.
+   * the root dir. Note we should be able to drop this in the future now that we
+   * inject a macro to set that value in our OSTrees.
    */
   set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
