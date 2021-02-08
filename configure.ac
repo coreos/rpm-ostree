@@ -27,26 +27,6 @@ dnl if not set, which we definitely want; cmake doesn't do that.
 AC_PROG_CXX
 AM_PROG_CC_C_O
 
-dnl Keep this in sync with the version in ostree
-AS_IF([echo "$CFLAGS" | grep -q -E -e '-Werror($| )'], [], [
-CC_CHECK_FLAGS_APPEND([WARN_CFLAGS], [CFLAGS], [\
-  -pipe \
-  -Werror=empty-body \
-  "-Werror=format=2 -Werror=format-security -Werror=format-nonliteral" \
-  -Werror=pointer-arith -Werror=init-self \
-  -Werror=missing-declarations \
-  -Werror=return-type \
-  -Werror=switch \
-  -Werror=overflow \
-  -Werror=parenthesis \
-  -Werror=undef \
-  -Werror=misleading-indentation \
-  -Werror=missing-include-dirs \
-  -Wstrict-aliasing=2 \
-  -Werror=unused-result \
-])])
-AC_SUBST(WARN_CFLAGS)
-
 AC_MSG_CHECKING([for -fsanitize=address in CFLAGS])
 if echo $CFLAGS | grep -q -e -fsanitize=address; then
 AC_MSG_RESULT([yes])
@@ -97,6 +77,12 @@ GTK_DOC_CHECK([1.15], [--flavour no-tmpl])
 ],[
 AM_CONDITIONAL([ENABLE_GTK_DOC],[false])
 ])
+
+AC_ARG_ENABLE(werror,
+              AS_HELP_STRING([--enable-werror],
+                             [Enable -Werror for C/C++ (default: no)]),,
+              [enable_werror=no])
+AM_CONDITIONAL(BUILDOPT_WERROR, [test x$enable_werror != xno])
 
 AC_ARG_ENABLE(sqlite_rpmdb_default,
               AS_HELP_STRING([--enable-sqlite-rpmdb-default],

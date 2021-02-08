@@ -36,20 +36,28 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
 	-DRPM_OSTREE_GITREV='"$(RPM_OSTREE_GITREV)"' \
 	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_56 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_56
+# Compiler warnings
+warnings_skipped = sign-compare
+warnings_error = empty-body format=2 format-security format-nonliteral \
+  missing-declarations return-type switch overflow undef \
+  misleading-indentation missing-include-dirs unused-result \
+  $(NULL)
+warning_flags = -Wall \
+  $(patsubst %,-Wno-%,$(warnings_skipped)) \
+  $(patsubst %,-Werror=%,$(warnings_error)) \
+  $(NULL)
+if BUILDOPT_WERROR
+warning_flags += -Werror
+endif
 # We make some C warnings always a hard error; these should never happen in our code.
 # These flags are not valid for C++.
-warn_only_c_flags = -Werror=strict-prototypes \
-  -Werror=missing-prototypes \
-  -Werror=implicit-function-declaration \
-  -Werror=int-conversion \
-  -Werror=incompatible-pointer-types \
-  -Werror=int-conversion \
+warnings_error_only_c = strict-prototypes missing-prototypes \
+  implicit-function-declaration int-conversion incompatible-pointer-types \
   $(NULL)
-# Keep this in sync with the AM_CFLAGS in libostree; see
-# that project for more information about e.g. -fno-strict-aliasing
-AM_CFLAGS += -std=gnu11 -fno-strict-aliasing $(WARN_CFLAGS) $(warn_only_c_flags)
+# See the AM_CFLAGS in libostree for more information about -fno-strict-aliasing
+AM_CFLAGS += -std=gnu11 -fno-strict-aliasing $(warning_flags) $(patsubst %,-Werror=%,$(warnings_error_only_c))
 # Our default CXX flags
-AM_CXXFLAGS += -std=c++17 -fno-strict-aliasing $(WARN_CFLAGS)
+AM_CXXFLAGS += -std=c++17 -fno-strict-aliasing $(warning_flags)
 
 EXTRA_DIST += autogen.sh COPYING
 

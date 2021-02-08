@@ -8,5 +8,4 @@ set -xeuo pipefail
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
 export CC=clang CXX=clang++
-${dn}/build.sh
-make check
+${dn}/build-check.sh
