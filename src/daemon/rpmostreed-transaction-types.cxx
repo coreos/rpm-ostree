@@ -842,7 +842,7 @@ get_driver_g_variant (GVariant **driver_info,
                            &local_error))
     {
       if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        g_propagate_error (error, util::move_nullify (local_error)), FALSE;
+        return g_propagate_error (error, util::move_nullify (local_error)), FALSE;
       // Don't propagate error if state file not found; just return early.
       return TRUE;
     }
