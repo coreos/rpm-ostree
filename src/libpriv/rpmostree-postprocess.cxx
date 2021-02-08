@@ -1825,6 +1825,7 @@ struct CommitThreadData {
   gint percent;  /* atomic */
   OstreeRepo *repo;
   int rootfs_fd;
+  GVariantDict *xattr_translate;
   OstreeMutableTree *mtree;
   OstreeSePolicy *sepolicy;
   OstreeRepoCommitModifier *commit_modifier;
@@ -1886,7 +1887,21 @@ filter_xattrs_cb (OstreeRepo     *repo,
           const char *validkey = accepted_xattrs[i];
           const char *attrkey = g_variant_get_bytestring (key);
           if (g_str_equal (validkey, attrkey))
-            g_variant_builder_add (&builder, "(@ay@ay)", key, value);
+            {
+              g_variant_builder_add (&builder, "(@ay@ay)", key, value);
+              continue;
+            }
+        }
+      if (tdata->xattr_translate != NULL)
+        {
+          const char *attrkey = g_variant_get_bytestring (key);
+          const char *target_xattr;
+          if (!g_variant_dict_lookup (tdata->xattr_translate, attrkey, "s", &target_xattr))
+            {
+              // This must not have been an interested xattr
+              continue;
+            }
+            g_variant_builder_add (&builder, "(@ay@ay)", target_xattr, value);
         }
     }
 
@@ -1910,10 +1925,10 @@ count_filesizes (int dfd,
                  GError **error)
 {
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  
+
   if (!glnx_dirfd_iterator_init_at (dfd, path, TRUE, &dfd_iter, error))
     return FALSE;
-  
+
   while (TRUE)
     {
       struct dirent *dent = NULL;
@@ -1984,6 +1999,7 @@ rpmostree_compose_commit (int            rootfs_fd,
                           GVariant      *metadata,
                           const char    *gpg_keyid,
                           gboolean       enable_selinux,
+                          GVariantDict  *xattr_translate,
                           OstreeRepoDevInoCache *devino_cache,
                           char         **out_new_revision,
                           GCancellable  *cancellable,
@@ -2032,6 +2048,7 @@ rpmostree_compose_commit (int            rootfs_fd,
   tdata.rootfs_fd = rootfs_fd;
   tdata.mtree = mtree;
   tdata.sepolicy = sepolicy;
+  tdata.xattr_translate = xattr_translate;
   tdata.commit_modifier = commit_modifier;
   tdata.error = error;
 

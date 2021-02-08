@@ -549,7 +549,7 @@ impl_write_rojig (RpmOstreeRojigCompose *self,
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
   if (!rpmostree_compose_commit (self->rootfs_dfd, self->repo, NULL,
-                                 metadata, NULL, selinux, self->devino_cache,
+                                 metadata, NULL, selinux, NULL, self->devino_cache,
                                  &new_revision, cancellable, error))
     return FALSE;
 

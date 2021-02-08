@@ -1130,11 +1130,23 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
         return FALSE;
     }
 
+  /* Build up the xattr translation */
+  g_autoptr(GVariantDict) xattr_translate = NULL;
+  JsonNode *xattr_translate_node =
+    json_object_get_member (self->treefile, "xattr-translation");
+  if (xattr_translate_node)
+    {
+      GVariant *xattr_translate_obj = json_gvariant_deserialize (xattr_translate_node, "a{sv}", error);
+      if (!xattr_translate_obj)
+        return FALSE;
+      xattr_translate = g_variant_dict_new(xattr_translate_obj);
+    }
+
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
   if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision,
-                                 metadata, gpgkey, selinux, self->devino_cache,
-                                 &new_revision, cancellable, error))
+                                 metadata, gpgkey, selinux, xattr_translate,
+                                 self->devino_cache, &new_revision, cancellable, error))
     return FALSE;
 
   OstreeRepoTransactionStats stats = { 0, };
