@@ -1617,8 +1617,9 @@ rpmostree_compose_builtin_extensions (int             argc,
       DnfPackage *pkg = (DnfPackage*)extensions_pkgs->pdata[i];
       const char *src = dnf_package_get_filename (pkg);
       const char *basename = glnx_basename (src);
+      GLnxFileCopyFlags flags = static_cast<GLnxFileCopyFlags>(GLNX_FILE_COPY_NOXATTRS | GLNX_FILE_COPY_NOCHOWN);
       if (!glnx_file_copy_at (AT_FDCWD, dnf_package_get_filename (pkg), NULL, output_dfd,
-                              basename, GLNX_FILE_COPY_NOXATTRS, cancellable, error))
+                              basename, flags, cancellable, error))
         return FALSE;
     }
 
@@ -1654,8 +1655,9 @@ rpmostree_compose_builtin_extensions (int             argc,
       DnfPackage *pkg = (DnfPackage*)devel_pkgs_to_download->pdata[i];
       const char *src = dnf_package_get_filename (pkg);
       const char *basename = glnx_basename (src);
+      GLnxFileCopyFlags flags = static_cast<GLnxFileCopyFlags>(GLNX_FILE_COPY_NOXATTRS | GLNX_FILE_COPY_NOCHOWN);
       if (!glnx_file_copy_at (AT_FDCWD, dnf_package_get_filename (pkg), NULL, output_dfd,
-                              basename, GLNX_FILE_COPY_NOXATTRS, cancellable, error))
+                              basename, flags, cancellable, error))
         return FALSE;
     }
 
