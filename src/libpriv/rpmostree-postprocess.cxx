@@ -1833,9 +1833,8 @@ struct CommitThreadData {
   GError **error;
 };
 
-/* Filters out all xattrs that aren't accepted. */
 static GVariant *
-filter_xattrs_cb (OstreeRepo     *repo,
+filter_xattrs_impl (OstreeRepo     *repo,
                   const char     *relpath,
                   GFileInfo      *file_info,
                   gpointer        user_data)
@@ -1862,13 +1861,13 @@ filter_xattrs_cb (OstreeRepo     *repo,
   if (!*relpath)
     {
       if (!glnx_fd_get_all_xattrs (rootfs_fd, &existing_xattrs, NULL, error))
-        goto out;
+        util::throw_gerror(local_error);
     }
   else
     {
       if (!glnx_dfd_name_get_all_xattrs (rootfs_fd, relpath, &existing_xattrs,
                                          NULL, error))
-        goto out;
+        util::throw_gerror(local_error);
     }
 
   if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
@@ -1890,16 +1889,29 @@ filter_xattrs_cb (OstreeRepo     *repo,
         }
     }
 
- out:
-  if (local_error)
-    {
+  return g_variant_ref_sink (g_variant_builder_end (&builder));
+}
+
+/* Filters out all xattrs that aren't accepted. */
+static GVariant *
+filter_xattrs_cb (OstreeRepo     *repo,
+                  const char     *relpath,
+                  GFileInfo      *file_info,
+                  gpointer        user_data)
+{
+  g_assert (relpath);
+
+  GVariantBuilder builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
+
+  try {
+    return filter_xattrs_impl(repo, relpath, file_info, user_data);
+  } catch (std::exception& e) {
       g_variant_builder_clear (&builder);
       /* Unfortunately we have no way to throw from this callback */
-      g_printerr ("Failed to read xattrs of '%s': %s\n",
-                  relpath, local_error->message);
+      g_printerr ("Failed to read xattrs of '%s': %s\n", relpath, e.what());
       exit (1);
-    }
-  return g_variant_ref_sink (g_variant_builder_end (&builder));
+  }
 }
 
 static gboolean
