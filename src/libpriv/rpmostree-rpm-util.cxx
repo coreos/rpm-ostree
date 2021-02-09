@@ -788,6 +788,26 @@ rpmrev_free (struct RpmRevisionData *ptr)
   g_free (ptr);
 }
 
+/* Currently, our rpmdb lives at /usr/share/rpm. Add symlinks from the legacy
+ * /var/lib/rpm *and* the future /usr/lib/sysimage/rpm paths to that. */
+static gboolean
+mk_rpmdb_compat_symlinks (int            rootfs_dfd,
+                          GCancellable  *cancellable,
+                          GError       **error)
+{
+  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, "var/lib", 0777, cancellable, error))
+    return FALSE;
+  if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_dfd, "var/lib/rpm") == -1)
+    return glnx_throw_errno_prefix (error, "symlinkat");
+
+  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, RPMOSTREE_SYSIMAGE_DIR, 0777, cancellable, error))
+    return FALSE;
+  if (symlinkat ("../../../" RPMOSTREE_RPMDB_LOCATION, rootfs_dfd, RPMOSTREE_SYSIMAGE_RPMDB) == -1)
+    return glnx_throw_errno_prefix (error, "symlinkat");
+
+  return TRUE;
+}
+
 /* Check out a copy of the rpmdb into @tmpdir */
 static gboolean
 checkout_only_rpmdb (OstreeRepo       *repo,
@@ -816,17 +836,8 @@ checkout_only_rpmdb (OstreeRepo       *repo,
                                 cancellable, error))
     return FALSE;
 
-  /* And make a compat symlink to keep rpm happy */
-  if (!glnx_shutil_mkdir_p_at (tmpdir->fd, "var/lib", 0777, cancellable, error))
+  if (!mk_rpmdb_compat_symlinks (tmpdir->fd, cancellable, error))
     return FALSE;
-  if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, tmpdir->fd, "var/lib/rpm") == -1)
-    return glnx_throw_errno_prefix (error, "symlinkat");
-
-  /* And make a symlink from our *future* location too */
-  if (!glnx_shutil_mkdir_p_at (tmpdir->fd, RPMOSTREE_SYSIMAGE_DIR, 0777, cancellable, error))
-    return FALSE;
-  if (symlinkat ("../../../" RPMOSTREE_RPMDB_LOCATION, tmpdir->fd, RPMOSTREE_SYSIMAGE_RPMDB) == -1)
-    return glnx_throw_errno_prefix (error, "symlinkat");
 
   return TRUE;
 }
@@ -890,12 +901,15 @@ rpmostree_get_base_refsack_for_root (int                dfd,
   g_auto(GLnxTmpDir) tmpdir = {0, };
   if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
     return FALSE;
-  if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "var/lib", 0777, cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (tmpdir.fd, dirname (strdupa (RPMOSTREE_RPMDB_LOCATION)), 0777, cancellable, error))
     return FALSE;
 
   g_autofree char *base_rpm = glnx_fdrel_abspath (dfd, subpath);
-  if (symlinkat (base_rpm, tmpdir.fd, "var/lib/rpm") == -1)
+  if (symlinkat (base_rpm, tmpdir.fd, RPMOSTREE_RPMDB_LOCATION) == -1)
     return glnx_throw_errno_prefix (error, "symlinkat");
+
+  if (!mk_rpmdb_compat_symlinks (tmpdir.fd, cancellable, error))
+    return FALSE;
 
   g_autoptr(DnfSack) sack = NULL; /* NB: refsack adds a ref to it */
   if (!get_sack_for_root (tmpdir.fd, ".", &sack, error))
