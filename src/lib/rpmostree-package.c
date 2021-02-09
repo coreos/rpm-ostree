@@ -215,13 +215,8 @@ _rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
   if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum, &commit, error))
     return FALSE;
 
-  /* We used to have a fallback here to checking out the rpmdb from the commit,
-   * but that currently drags in our internal Rust code which bloats this
-   * shared library and causes other problems since the main executable
-   * wants to link to this shared library too.  So for now if we don't
-   * find the pkglist in the commit metadata, just return as if it's
-   * empty.
-   */
+  /* If there's no commit metadata, we fallback to checking out the rpmdb from the commit
+   * using the IPC mechanism. */
   g_autoptr(GVariant) pkglist_v = get_commit_rpmdb_pkglist (commit);
   if (!pkglist_v)
     {
