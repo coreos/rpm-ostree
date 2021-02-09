@@ -822,6 +822,12 @@ checkout_only_rpmdb (OstreeRepo       *repo,
   if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, tmpdir->fd, "var/lib/rpm") == -1)
     return glnx_throw_errno_prefix (error, "symlinkat");
 
+  /* And make a symlink from our *future* location too */
+  if (!glnx_shutil_mkdir_p_at (tmpdir->fd, RPMOSTREE_SYSIMAGE_DIR, 0777, cancellable, error))
+    return FALSE;
+  if (symlinkat ("../../../" RPMOSTREE_RPMDB_LOCATION, tmpdir->fd, RPMOSTREE_SYSIMAGE_RPMDB) == -1)
+    return glnx_throw_errno_prefix (error, "symlinkat");
+
   return TRUE;
 }
 
