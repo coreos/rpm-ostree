@@ -193,7 +193,6 @@ mod ffi {
     use crate::ffiutil::*;
     use crate::includes::*;
     use glib::translate::*;
-    use glib::GString;
     use libdnf_sys::*;
     use std::ptr;
 
@@ -251,9 +250,11 @@ mod ffi {
         };
 
         for pkg in packages {
-            let name: Borrowed<GString> = unsafe { from_glib_borrow(dnf_package_get_name(pkg)) };
-            let evr: Borrowed<GString> = unsafe { from_glib_borrow(dnf_package_get_evr(pkg)) };
-            let arch: Borrowed<GString> = unsafe { from_glib_borrow(dnf_package_get_arch(pkg)) };
+            let pkg_ref = unsafe { &mut *pkg };
+            // XXX: remove unwraps when we move to cxx.rs
+            let name = dnf_package_get_name(pkg_ref).unwrap();
+            let evr = dnf_package_get_evr(pkg_ref).unwrap();
+            let arch = dnf_package_get_arch(pkg_ref).unwrap();
 
             let mut chksum: *mut libc::c_char = ptr::null_mut();
             let r = unsafe { rpmostree_get_repodata_chksum_repr(pkg, &mut chksum, gerror) };
@@ -281,8 +282,9 @@ mod ffi {
             .unwrap();
 
         for rpmmd_repo in rpmmd_repos {
-            let id: String = unsafe { from_glib_none(dnf_repo_get_id(rpmmd_repo)) };
-            let generated = unsafe { dnf_repo_get_timestamp_generated(rpmmd_repo) };
+            let repo_ref = unsafe { &mut *rpmmd_repo };
+            let id = dnf_repo_get_id(repo_ref).unwrap();
+            let generated = dnf_repo_get_timestamp_generated(repo_ref).unwrap();
             lockfile_repos.insert(
                 id,
                 LockfileRepoMetadata {
