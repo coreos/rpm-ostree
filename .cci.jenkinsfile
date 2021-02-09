@@ -5,7 +5,8 @@ parallel rpms: {
   def n = 5
   cosaPod(buildroot: true, runAsUser: 0, memory: "2Gi", cpu: "${n}") {
       checkout scm
-      shwrap("""RPM_BUILD_NCPUS=${n} ./ci/coreosci-rpmbuild.sh
+      // 2:1 job to CPU at most should keep us from getting kicked out
+      shwrap("""RPM_BUILD_NCPUS=${n} CARGO_BUILD_JOBS=${n} ./ci/coreosci-rpmbuild.sh
                 mv packaging/*/*.rpm .
              """)
       // make it easy for anyone to download the RPMs
