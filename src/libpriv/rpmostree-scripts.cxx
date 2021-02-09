@@ -378,6 +378,9 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   if (glnx_fstatat (rootfs_fd, "usr/lib/opt", &stbuf, AT_SYMLINK_NOFOLLOW, NULL) && S_ISDIR(stbuf.st_mode))
     rpmostree_bwrap_append_bwrap_argv (bwrap, "--symlink", "usr/lib/opt", "/opt", NULL);
 
+  /* Don't let scripts see the base rpm database by default */
+  rpmostree_bwrap_bind_read (bwrap, "usr/share/empty", "usr/share/rpm");
+
   /* Add ostree-booted API; some scriptlets may work differently on OSTree systems; e.g.
    * akmods. Just create it manually; /run is usually tmpfs, but scriptlets shouldn't be
    * adding stuff there anyway. */
