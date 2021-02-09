@@ -6,7 +6,7 @@ edition = "2018"
 links = "dnf"
 
 [dependencies]
-libc = "0.2"
+cxx = "1.0.30"
 
 [lib]
 name = "libdnf_sys"
@@ -16,6 +16,7 @@ path = "lib.rs"
 cmake = "0.1.45"
 system-deps = "2.0"
 anyhow = "1.0"
+cxx-build = "1.0.30"
 
 # This currently needs to duplicate the libraries from libdnf
 [package.metadata.system-deps]
@@ -30,3 +31,4 @@ libcurl = "7"
 sqlite3 = "3"
 modulemd = { name = "modulemd-2.0", version = "2" }
 jsonc = { name = "json-c", version = "0" }
+glib = { name = "glib-2.0", version = "2" }

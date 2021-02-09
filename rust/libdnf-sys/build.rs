@@ -1,9 +1,10 @@
 use anyhow::Result;
 
 fn main() -> Result<()> {
-    system_deps::Config::new().probe()?;
-    use cmake::Config;
-    let libdnf = Config::new("../../libdnf")
+    let libs = system_deps::Config::new().probe()?;
+
+    // first, the submodule proper
+    let libdnf = cmake::Config::new("../../libdnf")
         // Needed for hardened builds
         .cxxflag("-fPIC")
         // I picked /usr/libexec/rpm-ostree just because we need an
@@ -34,5 +35,17 @@ fn main() -> Result<()> {
         libdnf.display()
     );
     println!("cargo:rustc-link-lib=static=dnf");
+
+    // now, our thin cxx.rs bridge wrapper
+    let mut libdnfcxx = cxx_build::bridge("lib.rs");
+    libdnfcxx
+        .file("cxx/libdnf.cxx")
+        .flag("-std=c++17")
+        .include("cxx") // this is needed for cxx.rs' `include!("libdnf.hxx")` to work
+        .include("../../libdnf");
+    // until https://github.com/gdesmott/system-deps/pull/32
+    libdnfcxx.includes(libs.iter().flat_map(|lib| lib.1.include_paths.iter()));
+    libdnfcxx.compile("libdnfcxx.a");
+
     Ok(())
 }
