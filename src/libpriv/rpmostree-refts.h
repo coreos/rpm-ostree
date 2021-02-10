@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <gio/gio.h>
 #include <libdnf/libdnf.h>
 #include "libglnx.h"
 
