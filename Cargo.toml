@@ -30,7 +30,7 @@ paste = "1.0"
 serde = { version = "1.0.123", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.62"
-serde_yaml = "0.8.15"
+serde_yaml = "0.8.16"
 libc = "0.2.84"
 cxx = "1.0.30"
 nix = "0.19.1"
