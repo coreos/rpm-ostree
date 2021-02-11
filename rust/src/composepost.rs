@@ -2,7 +2,12 @@
  * Copyright (C) 2018 Red Hat, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0 OR MIT
+ *
  */
+
+//! Code run server side to "postprocess"
+//! a filesystem tree (usually containing mostly RPMs) in
+//! order to prepare it as an OSTree commit.
 
 use crate::cxxrsutil::CxxResult;
 use anyhow::Result;

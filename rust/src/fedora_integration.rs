@@ -1,3 +1,5 @@
+//! APIs used to talk to Fedora Infrastructure tooling (Koji, Bodhi).
+
 use crate::cxxrsutil::CxxResult;
 use anyhow::{Context, Result};
 use serde_derive::Deserialize;

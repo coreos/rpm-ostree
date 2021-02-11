@@ -1,3 +1,5 @@
+//! The main CLI logic.
+
 use anyhow::Result;
 
 fn inner_main(args: &Vec<&str>) -> Result<()> {

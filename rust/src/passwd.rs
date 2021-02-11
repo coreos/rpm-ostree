@@ -1,3 +1,6 @@
+//! APIs for interacting with `/etc/passwd` and `/etc/group`, including
+//! handling the "nss-altfiles" split into `/usr/lib/{passwd,group}`.
+
 use crate::cxxrsutil::{self, FFIGObjectWrapper};
 use crate::ffiutil;
 use crate::nameservice;

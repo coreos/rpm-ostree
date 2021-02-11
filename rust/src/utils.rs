@@ -1,3 +1,6 @@
+//! The generic catchall "utils" file that every
+//! project has.
+
 /*
  * Copyright (C) 2018 Red Hat, Inc.
  *
