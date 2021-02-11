@@ -286,20 +286,10 @@ get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy,
   GDBusConnection *connection =
     g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
 
-  /* Query systemd for update driver's systemd unit's object path. */
-  g_autoptr(GVariant) update_driver_objpath_tuple = 
-    g_dbus_connection_call_sync (connection, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-                                 "org.freedesktop.systemd1.Manager", "LoadUnit",
-                                 g_variant_new ("(s)", update_driver_sd_unit), G_VARIANT_TYPE_TUPLE,
-                                 G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
-  if (!update_driver_objpath_tuple)
+  const char *update_driver_objpath = NULL;
+  if (!get_sd_unit_objpath(connection, update_driver_sd_unit, &update_driver_objpath,
+                           cancellable, error))
     return FALSE;
-  else if (g_variant_n_children (update_driver_objpath_tuple) < 1)
-    return glnx_throw (error, "LoadUnit(%s) returned empty tuple", update_driver_sd_unit);
-
-  g_autoptr(GVariant) update_driver_objpath_val =
-    g_variant_get_child_value (update_driver_objpath_tuple, 0);
-  const char *update_driver_objpath = g_variant_get_string (update_driver_objpath_val, NULL);
 
   /* Look up ActiveState property of update driver's systemd unit. */
   g_autoptr(GDBusProxy) update_driver_unit_obj_proxy =
