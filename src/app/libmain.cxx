@@ -250,7 +250,7 @@ rpmostree_option_context_parse (GOptionContext *context,
       for (char **iter = features; iter && *iter; iter++)
         g_print ("  - %s\n", *iter);
       auto featuresrs = rpmostreecxx::get_features();
-      for (auto s : featuresrs)
+      for (auto & s : featuresrs)
         {
           g_print ("  - %s\n", s.c_str());
         }
@@ -466,7 +466,7 @@ rpmostree_main_inner (const rust::Slice<const rust::Str> args)
    * us calling free().  The right solution is to replace this with Rust.
    */
   g_autoptr(GPtrArray) argv_p = g_ptr_array_new ();
-  for (auto arg: args) {
+  for (const auto & arg: args) {
     g_ptr_array_add (argv_p, g_strndup (arg.data(), arg.size()));
   }
   char **argv = (char**)argv_p->pdata;
