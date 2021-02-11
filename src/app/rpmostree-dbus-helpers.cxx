@@ -1066,7 +1066,7 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
       auto fds = rpmostreecxx::client_handle_fd_argument(pkg, basearch);
       if (fds.size() > 0)
         {
-          for (auto fd: fds)
+          for (const auto & fd: fds)
             {
               auto idx = g_unix_fd_list_append (fd_list, fd, error);
               if (idx < 0)

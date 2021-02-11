@@ -708,7 +708,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         lockfiles.push_back(std::string(*it));
       auto mappings = rpmostreecxx::ror_lockfile_read (lockfiles);
       g_autoptr(GHashTable) map = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-      for (auto mapping : mappings)
+      for (auto & mapping : mappings)
         g_hash_table_insert (map, g_strdup (mapping.k.c_str()), g_strdup (mapping.v.c_str()));
       rpmostree_context_set_vlockmap (self->corectx, map, opt_lockfile_strict);
       g_print ("Loaded lockfiles:\n  %s\n", g_strjoinv ("\n  ", opt_lockfiles));
@@ -1541,7 +1541,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   g_autoptr(RpmOstreeTreespec) spec = NULL;
   { g_autoptr(GPtrArray) gpkgs = g_ptr_array_new_with_free_func (g_free);
     auto pkgs = extensions->get_os_extension_packages();
-    for (auto pkg : pkgs)
+    for (auto & pkg : pkgs)
       g_ptr_array_add (gpkgs, (gpointer*) g_strdup (pkg.c_str()));
     g_autoptr(GPtrArray) grepos = g_ptr_array_new ();
     auto repos = treefile->get_repos();
@@ -1612,7 +1612,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   auto pkgs = extensions->get_development_packages();
   g_autoptr(GPtrArray) devel_pkgs_to_download =
     g_ptr_array_new_with_free_func (g_object_unref);
-  for (auto pkg : pkgs)
+  for (auto & pkg : pkgs)
     {
       g_autoptr(GPtrArray) matches = rpmostree_get_matching_packages (sack, pkg.c_str());
       if (matches->len == 0)
