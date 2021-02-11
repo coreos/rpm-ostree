@@ -44,12 +44,11 @@ assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
 vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
 echo "ok locked rebase staging"
 
-# This also now tests custom client IDs in the journal and the `deploy --register-driver` option.
+# This also now tests custom client IDs in the journal.
 cursor=$(vm_get_journal_cursor)
 vm_cmd env RPMOSTREE_CLIENT_ID=testing-agent-id \
        rpm-ostree deploy revision="${commit}" \
-       --lock-finalization --register-driver TestDriver
-vm_cmd test -f /run/rpm-ostree/update-driver.gv
+       --lock-finalization
 vm_cmd test -f /run/ostree/staged-deployment-locked
 if vm_rpmostree finalize-deployment; then
   assert_not_reached "finalized without expected checksum"
@@ -60,29 +59,10 @@ vm_cmd journalctl --after-cursor "'$cursor'" -u rpm-ostreed -o json | jq -r '.AG
 assert_file_has_content agent.txt testing-agent-id
 vm_cmd journalctl --after-cursor "'$cursor'" -u rpm-ostreed -o json | jq -r '.AGENT_SD_UNIT//""' > agent_sd_unit.txt
 assert_file_has_content agent_sd_unit.txt sshd.service
-vm_cmd rpm-ostree status > status.txt
-assert_file_has_content status.txt 'AutomaticUpdatesDriver: TestDriver'
-vm_cmd rpm-ostree status -v > verbose_status.txt
-assert_file_has_content verbose_status.txt 'AutomaticUpdatesDriver: TestDriver (sshd.service)'
-assert_file_has_content verbose_status.txt '  DriverState: active'
-vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"TestDriver\"" \
-                    ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
 vm_reboot_cmd rpm-ostree finalize-deployment "${commit}"
 assert_streq "$(vm_get_booted_csum)" "${commit}"
 vm_assert_journal_has_content $cursor "Finalized deployment; rebooting into ${commit}"
 echo "ok finalize-deployment"
-
-# Test `deploy --register-driver` option with empty string as revision.
-vm_cmd rpm-ostree deploy \'\' \
-       --register-driver=OtherTestDriver
-vm_cmd test -f /run/rpm-ostree/update-driver.gv
-vm_cmd rpm-ostree status > status.txt
-assert_file_has_content status.txt 'AutomaticUpdatesDriver: OtherTestDriver'
-vm_cmd rpm-ostree status -v > verbose_status.txt
-assert_file_has_content verbose_status.txt 'AutomaticUpdatesDriver: OtherTestDriver (sshd.service)'
-vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"OtherTestDriver\"" \
-                    ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
-echo "ok deploy --register-driver with empty string revision"
 
 # Custom origin and local repo rebases. This is essentially the RHCOS workflow.
 # https://github.com/projectatomic/rpm-ostree/pull/1406
@@ -308,3 +288,26 @@ vm_rpmostree status > status.txt
 assert_file_has_content status.txt "failed to finalize previous deployment"
 assert_file_has_content status.txt "error: opendir"
 echo "ok previous staged failure in status"
+
+# Test `deploy --register-driver` option.
+vm_cmd rpm-ostree deploy \'\' \
+       --register-driver=TestDriver
+vm_cmd test -f /run/rpm-ostree/update-driver.gv
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content status.txt 'AutomaticUpdatesDriver: TestDriver'
+vm_cmd rpm-ostree status -v > verbose_status.txt
+assert_file_has_content verbose_status.txt 'AutomaticUpdatesDriver: TestDriver (sshd.service)'
+vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"TestDriver\"" \
+                    ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
+echo "ok deploy --register-driver with empty string revision"
+
+# Ensure that we are prevented from upgrading when an updates driver is registered
+if vm_rpmostree upgrade 2>err.txt; then
+  assert_not_reached "Upgrade with updates driver registered unexpected succeeded"
+fi
+assert_file_has_content err.txt 'Updates are driven by TestDriver'
+# Bypass updates driver to force an upgrade
+vm_rpmostree upgrade --bypass-driver 2>err.txt
+assert_not_file_has_content err.txt 'Updates are driven by TestDriver'
+vm_rpmostree cleanup -p
+echo "ok upgrade when updates driver is registered"
