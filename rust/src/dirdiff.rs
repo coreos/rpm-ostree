@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+//! Compute difference between two filesystem trees.
+
 use anyhow::{Context, Result};
 use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};

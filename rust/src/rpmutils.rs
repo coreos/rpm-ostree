@@ -1,3 +1,5 @@
+//! Helpers for RPM.
+
 /*
  * Copyright (C) 2018 Red Hat, Inc.
  *

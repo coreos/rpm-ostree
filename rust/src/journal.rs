@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+//! Helper functions for interacting with the systemd journal and specific
+//! services like ostree-finalize-staged.
+
 use anyhow::{bail, Result};
 use systemd::id128::Id128;
 use systemd::journal;

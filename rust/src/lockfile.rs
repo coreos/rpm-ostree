@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+//! Manage lockfiles which are a model to pin specific package
+//! versions via JSON files (usually stored in git).
+
 /* Copied and adapted from: treefile.rs
  */
 

@@ -1,3 +1,5 @@
+//! Compute the difference between two OSTree commits.
+
 /*
  * Copyright (C) 2020 Red Hat, Inc.
  *

@@ -1,3 +1,7 @@
+//! Code mirroring rpmostree-core.cxx which is the shared "core"
+//! binding of rpm and ostree, used by both client-side layering/overrides
+//! and server side composes.
+
 use crate::cxxrsutil::CxxResult;
 use crate::ffiutil;
 use ffiutil::*;

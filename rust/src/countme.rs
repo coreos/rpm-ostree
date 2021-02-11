@@ -16,6 +16,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+//! Implementation of the "DNF Count Me" system.
+
 use anyhow::{bail, Context, Result};
 use curl::easy::Easy;
 use os_release::OsRelease;

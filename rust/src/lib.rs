@@ -1,5 +1,6 @@
-//! rpm-ostree is split into a C/C++ portion and a Rust portion, the latter
-//! of which is compiled into a shared library, which is defined here.
+//! rpm-ostree a hybrid Rust and C/C++ application.  This is the
+//! main library used by the executable, which also links to the
+//! C/C++ `librpmostreeinternals.a` static library.
 
 /*
  * Copyright (C) 2018 Red Hat, Inc.

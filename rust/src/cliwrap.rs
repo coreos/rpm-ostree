@@ -16,6 +16,9 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+//! Implements the `cliwrap` treefile option which intercepts/proxies
+//! other binaries like `/usr/bin/rpm`.
+
 use anyhow::{anyhow, Result};
 use std::io::prelude::*;
 use std::path;

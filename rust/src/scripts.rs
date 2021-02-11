@@ -1,3 +1,6 @@
+//! Code corresponding to rpmostree-scripts.cxx which deals with
+//! RPM scripts, and is in process of being converted to Rust.
+
 /*
  * Copyright (C) 2020 Red Hat, Inc.
  *

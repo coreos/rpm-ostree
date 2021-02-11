@@ -4,9 +4,20 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-/* Copied and adapted from:
- * https://github.com/cgwalters/coreos-assembler
- * */
+//! Code for handling the "treefile" which is a declarative
+//! config file describing how to generate an OSTree commit
+//! from a set of RPMs on the server side.  Today this
+//! code is not used client side; a separate OSTree "origin"
+//! file is used for that.  See also
+//! [this issue](https://github.com/coreos/rpm-ostree/issues/2326).
+
+/*
+ * HACKING: In order to add a entry to the treefile, be sure to:
+ * - Update docs/treefile.md
+ * - Add it to the struct
+ * - Add a merge entry to `treefile_merge()`
+ * - Add a test case in tests/compose
+ */
 
 use anyhow::{anyhow, bail, Result};
 use c_utf8::CUtf8Buf;

@@ -1,3 +1,6 @@
+//! Helpers for the client side binary that will speak DBus
+//! to rpm-ostreed.service.
+
 use crate::cxxrsutil::*;
 use crate::utils;
 use std::os::unix::io::IntoRawFd;
