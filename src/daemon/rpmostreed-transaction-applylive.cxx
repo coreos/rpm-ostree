@@ -107,11 +107,11 @@ livefs_transaction_init (LiveFsTransaction *self)
 }
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_livefs (GDBusMethodInvocation *invocation,
-                                   OstreeSysroot         *sysroot,
-                                   GVariant              *options,
-                                   GCancellable          *cancellable,
-                                   GError               **error)
+rpmostreed_transaction_new_apply_live (GDBusMethodInvocation *invocation,
+                                       OstreeSysroot         *sysroot,
+                                       GVariant              *options,
+                                       GCancellable          *cancellable,
+                                       GError               **error)
 {
   g_assert (G_IS_DBUS_METHOD_INVOCATION (invocation));
   g_assert (OSTREE_IS_SYSROOT (sysroot));

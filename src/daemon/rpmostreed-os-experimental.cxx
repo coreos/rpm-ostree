@@ -140,11 +140,11 @@ osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
                                       &local_error))
     goto out;
 
-  transaction = rpmostreed_transaction_new_livefs (invocation,
-                                                   ot_sysroot,
-                                                   arg_options,
-                                                   cancellable,
-                                                   &local_error);
+  transaction = rpmostreed_transaction_new_apply_live (invocation,
+                                                       ot_sysroot,
+                                                       arg_options,
+                                                       cancellable,
+                                                       &local_error);
   if (transaction == NULL)
     goto out;
 
