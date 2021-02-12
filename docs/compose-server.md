@@ -17,7 +17,13 @@ OSTree commits *also* want to generate bootable disk images, and rpm-ostree
 has nothing to do with that.
 
 One example higher level tool that takes care of both OSTree commit generation
-and bootable disk images is [coreos-assembler](https://github.com/coreos/coreos-assembler).
+and bootable disk images is [coreos-assembler](https://github.com/coreos/coreos-assembler);
+it is strongly oriented towards "CoreOS-like" systems which include rpm-ostree
+and Ignition.
+
+The [osbuild](https://www.osbuild.org/) project has some support for
+rpm-ostree based systems.  See [this blog entry](https://www.osbuild.org/news/2020-06-01-how-to-ostree-anaconda.html)
+for example.
 
 ## Background on managing an OSTree repository
 
@@ -27,60 +33,39 @@ of the OSTree manual:
  - [buildsystem-and-repos](https://ostreedev.github.io/ostree/buildsystem-and-repos/)
  - [repository-management](https://ostreedev.github.io/ostree/repository-management/)
 
-## Generating OSTree commits from a CentOS base
+## Generating OSTree commits in a container
 
-First, you'll need a copy of `rpm-ostree`. The current recommendation is to use
-a privileged container, but you can also install `rpm-ostree` directly to a
-physical or virtual machine.
+`rpm-ostree compose tree` runs well in an unprivileged (or "run as root")
+podman container.  You can also use other container tools, they are just less
+frequently tested.
 
-It's included in the package collection for Fedora, and there
-are [CentOS Core packages](http://buildlogs.centos.org/centos/7/atomic/x86_64/Packages/) as
-well as [bleeding edge CentOS builds](https://ci.centos.org/job/atomic-rdgo-centos7/).
+You can also directly install `rpm-ostree` on a traditional `yum/rpm` based
+virtual (or physical) machine - it won't affect your host.  However, containers
+are encouraged.
 
-You can create a privileged container with e.g. `podman` via: `podman run
---privileged registry.fedoraproject.org/fedora:27 ...`. However you create the
-environment, run `yum -y install rpm-ostree`.
+## Choosing a base config
 
-A good first thing to try would be using
-the
-[CentOS Atomic Host](https://github.com/CentOS/sig-atomic-buildscripts/tree/downstream) metadata
-to generate a custom host.
+Currently, rpm-ostree is fairly coupled to the Fedora project.  We are open to supporting
+other distributions however.
 
-One time setup, where we clone the git repository, then make two OSTree repos,
-one for doing builds, one for export via HTTP:
+Example base rpm-ostree "manifest repositories" are:
 
-```
-# mkdir /srv/centos-atomic
-# cd /srv/centos-atomic
-# git clone https://github.com/CentOS/sig-atomic-buildscripts -b downstream
-# mkdir build-repo
-# ostree --repo=build-repo init --mode=bare-user
-# mkdir repo
-# ostree --repo=repo init --mode=archive
-```
-
-We'll also want to cache downloaded RPMs:
-
-```
-# mkdir cache
-```
+ - [Silverblue](https://pagure.io/workstation-ostree-config)
+ - [IoT](https://pagure.io/fedora-iot/ostree)
+ - [Fedora CoreOS](https://github.com/coreos/fedora-coreos-config/)
 
 ## Running `rpm-ostree compose tree`
 
 This program takes as input a manifest file that describes the target system,
 and commits the result to an OSTree repository.
 
-The input format is a JSON "treefile". See examples in
-`api-doc/treefile-examples`. More real-world examples include the manifest
-for
-[Fedora Atomic](https://pagure.io/fedora-atomic/blob/master/f/fedora-atomic-host.json) and
-[CentOS Atomic](https://github.com/CentOS/sig-atomic-buildscripts/blob/downstream/centos-atomic-host.json).
+The input format is a YAML (or JSON) "treefile".
 
 If you're doing this multiple times, it's strongly recommended to create a cache
 directory:
 
 ```
-# rpm-ostree compose tree --unified-core --cachedir=cache --repo=/srv/centos-atomic/build-repo sig-atomic-buildscripts/centos-atomic-host.json
+# rpm-ostree compose tree --unified-core --cachedir=cache --repo=/srv/repo /path/to/manifest.yaml
 ```
 
 This will download RPMs from the referenced repos, and commit the result to the
@@ -89,7 +74,7 @@ OSTree repository, using the ref named by `ref`.
 Once we have that commit, let's export it:
 
 ```
-# ostree --repo=repo pull-local build-repo centos-atomic-host/7/x86_64/standard
+# ostree --repo=repo pull-local build-repo exampleos/8/x86_64/stable
 ```
 
 You can tell client systems to rebase to it by combining `ostree remote add`,
@@ -97,8 +82,6 @@ and `rpm-ostree rebase` on the client side.
 
 ## More information
 
-  * [run-treecompose script from FAHC](https://pagure.io/fedora-atomic-host-continuous/blob/2f1214c9ff35e55ec111db86be96e14d4b6040d6/f/centos-ci/run-treecompose)
-  * [Build Your Own Atomic](https://github.com/jasonbrooks/byo-atomic)
-  * [Build Your Own Atomic Image, Updated](http://www.projectatomic.io/blog/2014/08/build-your-own-atomic-centos-or-fedora/)
-  * [Creating custom Atomic trees, images, and installers, part 1](http://developerblog.redhat.com/2015/01/08/creating-custom-atomic-trees-images-and-installers-part-1/)
-  * [Creating custom Atomic trees, images, and installers, part 2](http://developerblog.redhat.com/2015/01/15/creating-custom-atomic-trees-images-and-installers-part-2/)
+ - https://www.osbuild.org/news/2020-06-01-how-to-ostree-anaconda.html
+ - https://github.com/coreos/coreos-assembler
+

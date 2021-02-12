@@ -40,9 +40,9 @@ many of the benefits of both together.
 **Features:**
 
  - Transactional, background image-based (versioned/checksummed) upgrades
- - OS rollback without affecting user data (`/usr` but not `/etc`, `/var`) via libostree
+ - OS rollback without affecting user data (`/usr`, `/etc` but not `/var`) via libostree
  - Client-side package layering (and overrides)
- - Easily make your own: `rpm-ostree compose tree` and [CoreOS Assembler](https://github.com/coreos/coreos-assembler)
+ - Easily make your own derivatives
 
 ## Projects using rpm-ostree
 
@@ -61,16 +61,26 @@ Originally, it was productized as part of [Project Atomic](http://www.projectato
 
 ## Getting started
 
-If you want to try the system as a user, we recommend
-[Fedora CoreOS](https://getfedora.org/en/coreos). If you are interested in
-assembling your own systems, see [compose server](compose-server.md).
-
+If you want to try the system as a user, see the main [Fedora website](https://getfedora.org/)
+which has several versions that use rpm-ostree, including Silverblue, IoT and CoreOS.
+If you are interested in assembling your own systems, see [compose server](compose-server.md).
 ## Why?
 
 Package systems such as apt and yum are highly prevalent in Linux-based
-operating systems. The core premise of rpm-ostree is that image-based updates
-should be the default. This provides a high degree of predictability and
-resiliency. However, where rpm-ostree is fairly unique in the ecosystem is
+operating systems. They offer a lot of flexiblity, but have many failure
+modes.
+
+The core premise of rpm-ostree is that offline transactional image-based updates
+should be the default.  This provides a high degree of predictability and
+resiliency.  The operating system vendor can focus a lot of effort
+on testing the "base images" as a unit.
+
+Further, image based updates simply work better at scale.  For "IoT" style devices
+it's very inefficient to have each machine perform dependency resolution,
+run package scripts etc.  And the same is true for many server datacenter
+use cases.
+
+Where rpm-ostree is fairly unique in the ecosystem is
 supporting client-side package layering and overrides; deeply integrating RPM
 as an (optional) layer on top of OSTree.
 
@@ -89,6 +99,10 @@ installing and updating client-side packages constructs a new filesystem root,
 it does not by default affect your booted root. This preserves the "image"
 nature of the system.
 
+By its nature as a hybrid image/package system, rpm-ostree is intended
+to span nearly all use cases of current package systems *and* image
+systems.
+
 ## Why would I want to use it?
 
 One major feature rpm-ostree has over traditional package management
@@ -97,14 +111,6 @@ is atomic upgrade/rollback.  It supports a model where an OS vendor
 [Fedora](https://getfedora.org/)) can provide pre-assembled "base OS
 images", and client systems can replicate those, and possibly layer on
 additional packages.
-
-rpm-ostree is a core part of the [Project Atomic](http://www.projectatomic.io/)
-effort, which uses rpm-ostree to provide a minimal host for
-Docker formatted Linux containers.
-
-We expect most users will be interested in rpm-ostree on the client
-side, using it to replicate a base system, and possibly layer on
-additional packages, and use containers for applications.
 
 ## Why not implement these changes in an existing package manager?
 
