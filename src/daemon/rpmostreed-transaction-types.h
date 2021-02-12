@@ -117,12 +117,12 @@ rpmostreed_transaction_new_cleanup       (GDBusMethodInvocation *invocation,
                                           GError               **error);
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_livefs (GDBusMethodInvocation *invocation,
-                                   OstreeSysroot         *sysroot,
-                                   GVariant              *options,
-                                   GCancellable          *cancellable,
-                                   GError               **error);
-
+rpmostreed_transaction_new_apply_live (GDBusMethodInvocation *invocation,
+                                       OstreeSysroot         *sysroot,
+                                       GVariant              *options,
+                                       GCancellable          *cancellable,
+                                       GError               **error);
+    
 typedef enum {
   RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE = (1 << 0),
 } RpmOstreeTransactionRefreshMdFlags;
