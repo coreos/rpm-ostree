@@ -340,6 +340,12 @@ fn rerun_tmpfiles() -> Result<()> {
     Ok(())
 }
 
+fn require_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::Deployment> {
+    sysroot
+        .get_booted_deployment()
+        .ok_or_else(|| anyhow!("Not booted into an OSTree system"))
+}
+
 /// Implementation of `rpm-ostree ex apply-live`.
 pub(crate) fn transaction_apply_live(
     mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
@@ -353,11 +359,7 @@ pub(crate) fn transaction_apply_live(
     };
     let repo = &sysroot.repo().expect("repo");
 
-    let booted = if let Some(b) = sysroot.get_booted_deployment() {
-        b
-    } else {
-        return Err(anyhow!("Not booted into an OSTree system").into());
-    };
+    let booted = require_booted_deployment(sysroot)?;
     let osname = booted.get_osname().expect("osname");
     let booted_commit = booted.get_csum().expect("csum");
     let booted_commit = booted_commit.as_str();
@@ -479,6 +481,42 @@ pub(crate) fn transaction_apply_live(
     state.inprogress = "".to_string();
     write_live_state(&booted, &state)?;
 
+    Ok(())
+}
+
+pub(crate) fn applylive_client_finish() -> CxxResult<()> {
+    let cancellable = gio::NONE_CANCELLABLE;
+    let sysroot = &ostree::Sysroot::new_default();
+    sysroot.load(cancellable)?;
+    let repo = &sysroot.get_repo(cancellable)?;
+    let booted = &require_booted_deployment(sysroot)?;
+    let booted_commit = booted.get_csum().expect("csum");
+    let booted_commit = booted_commit.as_str();
+
+    let live_state = get_live_state(booted)?
+        .ok_or_else(|| anyhow!("Failed to find expected apply-live state"))?;
+
+    // It might happen that the live target commit was GC'd somehow; we're not writing
+    // an explicit ref for it.  In that case skip the diff.
+    if !repo.has_object(
+        ostree::ObjectType::Commit,
+        live_state.commit.as_str(),
+        cancellable,
+    )? {
+        return Ok(());
+    }
+
+    let pkgdiff = {
+        cxx::let_cxx_string!(from = booted_commit);
+        cxx::let_cxx_string!(to = live_state.commit.as_str());
+        let repo = repo.gobj_rewrap();
+        crate::ffi::rpmdb_diff(repo, &from, &to).map_err(anyhow::Error::msg)?
+    };
+    pkgdiff.print();
+
+    crate::ffi::output_message(
+        "Successfully updated running filesystem tree; some services may need to be restarted.",
+    );
     Ok(())
 }
 
