@@ -33,39 +33,9 @@
 
 use c_utf8::CUtf8;
 use std::ffi::CString;
-use std::ffi::{CStr, OsStr};
 use std::fmt::Display;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::ptr;
-
-// View a C "bytestring" (NUL terminated) as a Rust byte array.
-/// Panics if `s` is `NULL`.
-pub(crate) fn ffi_view_bytestring<'a>(s: *const libc::c_char) -> &'a [u8] {
-    assert!(!s.is_null());
-    unsafe { CStr::from_ptr(s) }.to_bytes()
-}
-
-/// View a C "bytestring" (NUL terminated) as a Rust OsStr.
-/// Panics if `s` is `NULL`.
-pub(crate) fn ffi_view_os_str<'a>(s: *const libc::c_char) -> &'a OsStr {
-    OsStr::from_bytes(ffi_view_bytestring(s))
-}
-
-/// Transform a GPtrArray to a Vec. There's no converter in glib yet to do this. See related
-/// discussions in: https://github.com/gtk-rs/glib/pull/482
-pub(crate) fn ffi_ptr_array_to_vec<T>(a: *mut glib_sys::GPtrArray) -> Vec<*mut T> {
-    assert!(!a.is_null());
-
-    let n = unsafe { (*a).len } as usize;
-    let mut v = Vec::with_capacity(n);
-    unsafe {
-        for i in 0..n {
-            v.push(ptr::read((*a).pdata.add(i as usize)) as *mut T);
-        }
-    }
-    v
-}
 
 // View `fd` as an `openat::Dir` instance.  Lifetime of return value
 // must be less than or equal to that of parameter.

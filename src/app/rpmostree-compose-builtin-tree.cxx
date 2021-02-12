@@ -382,8 +382,13 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       g_autoptr(GPtrArray) rpmmd_repos =
         rpmostree_get_enabled_rpmmd_repos (rpmostree_context_get_dnf (self->corectx),
                                            DNF_REPO_ENABLED_PACKAGES);
-      if (!ror_lockfile_write (opt_write_lockfile_to, pkgs, rpmmd_repos, error))
-        return FALSE;
+      auto pkgs_v = rust::Vec<guint64>();
+      for (guint i = 0; i < pkgs->len; i++)
+        pkgs_v.push_back((guint64)pkgs->pdata[i]);
+      auto repos_v = rust::Vec<guint64>();
+      for (guint i = 0; i < rpmmd_repos->len; i++)
+        repos_v.push_back((guint64)rpmmd_repos->pdata[i]);
+      rpmostreecxx::ror_lockfile_write(opt_write_lockfile_to, pkgs_v, repos_v);
     }
 
   /* FIXME - just do a depsolve here before we compute download requirements */

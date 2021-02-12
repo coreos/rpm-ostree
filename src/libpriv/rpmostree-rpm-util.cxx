@@ -1143,34 +1143,39 @@ rpmostree_fcap_to_xattr_variant (const char *fcap)
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
+namespace rpmostreecxx {
 /* Returns the checksum of the RPM we retrieved from the repodata XML. The
  * actual checksum type used depends on how the repodata was created. Thus, the
  * output is a string representation of the form "TYPE:HASH" where TYPE is the
  * name of the checksum employed. In most cases, it will be "sha256" (the
  * current default for `createrepo_c`). */
-gboolean
-rpmostree_get_repodata_chksum_repr (DnfPackage *pkg,
-                                    char      **out_chksum_repr,
-                                    GError    **error)
+rust::String
+get_repodata_chksum_repr (DnfPackage &pkg)
 {
   int chksum_type;
   g_autofree char *chksum = NULL;
   const unsigned char *chksum_raw = NULL;
 
   /* for rpmdb packages, use the hdr checksum */
-  if (dnf_package_installed (pkg))
-    chksum_raw = dnf_package_get_hdr_chksum (pkg, &chksum_type);
+  if (dnf_package_installed (&pkg))
+    chksum_raw = dnf_package_get_hdr_chksum (&pkg, &chksum_type);
   else
-    chksum_raw = dnf_package_get_chksum (pkg, &chksum_type);
+    chksum_raw = dnf_package_get_chksum (&pkg, &chksum_type);
   if (chksum_raw)
     chksum = hy_chksum_str (chksum_raw, chksum_type);
 
   if (chksum == NULL)
-    return glnx_throw (error, "Couldn't get chksum for pkg %s", dnf_package_get_nevra(pkg));
+    {
+      // TODO try out the tinyformat.hpp in libdnf
+      g_autofree char *msg = g_strdup_printf ("Couldn't get chksum for pkg %s", dnf_package_get_nevra(&pkg));
+      throw std::runtime_error (msg);
+    }
 
-  *out_chksum_repr =
-    g_strconcat (hy_chksum_name (chksum_type), ":", chksum, NULL);
-  return TRUE;
+  // Would be nice to expose a format!() equivalent on rust::String
+  std::ostringstream ss;
+  ss << hy_chksum_name (chksum_type) << ":" << chksum;
+  return rust::String(ss.str());
+}
 }
 
 GPtrArray*

@@ -31,3 +31,10 @@ namespace rpmostreecxx {
     typedef ::GCancellable GCancellable;
     typedef ::GVariantDict GVariantDict;
 }
+
+// XXX: really should just include! libdnf.hxx in the bridge
+#include <libdnf/libdnf.h>
+namespace dnfcxx {
+  typedef ::DnfPackage DnfPackage;
+  typedef ::DnfRepo DnfRepo;
+}
