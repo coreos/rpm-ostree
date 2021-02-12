@@ -45,6 +45,8 @@ struct SyntheticUpgradeOpts {
 enum Opt {
     /// Generate an OS update by changing ELF files
     GenerateSyntheticUpgrade(SyntheticUpgradeOpts),
+    /// Validate that we can parse the output of `rpm-ostree status --json`.
+    ValidateParseStatus,
 }
 
 /// Returns `true` if a file is ELF; see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
@@ -211,10 +213,24 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     Ok(())
 }
 
+// We always expect to be in a booted deployment.  The real goal here
+// is to ensure that everything output from status --json in our
+// test suite can be parsed by our client side bindings.
+//
+// In the future we'll switch the client API to have like
+// query_status_deny_unknown_fields() which will force us
+// to update the client bindings when adding new fields.
+fn validate_parse_status() -> Result<()> {
+    let s = rpmostree_client::query_status().map_err(anyhow::Error::msg)?;
+    assert_ne!(s.deployments.len(), 0);
+    Ok(())
+}
+
 pub(crate) fn testutils_entrypoint(args: Vec<String>) -> CxxResult<()> {
     let opt = Opt::from_iter(args.iter());
     match opt {
         Opt::GenerateSyntheticUpgrade(ref opts) => update_os_tree(opts)?,
+        Opt::ValidateParseStatus => validate_parse_status()?,
     };
     Ok(())
 }

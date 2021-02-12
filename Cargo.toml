@@ -60,6 +60,7 @@ libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 memfd = "0.3.0"
 rust-ini = "0.16.1"
 os-release = "0.1.0"
+rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 
 [build-dependencies]
 cbindgen = "0.16.0"

@@ -1198,6 +1198,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpmostree-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
 name = "rpmostree-rust"
 version = "0.1.0"
 dependencies = [
@@ -1228,6 +1238,7 @@ dependencies = [
  "phf",
  "rand 0.8.3",
  "rayon",
+ "rpmostree-client",
  "rust-ini",
  "serde",
  "serde_derive",

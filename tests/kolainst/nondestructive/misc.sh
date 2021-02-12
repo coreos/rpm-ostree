@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -xeuo pipefail
 
 . ${KOLA_EXT_DATA}/libtest.sh
 cd $(mktemp -d)
@@ -15,6 +15,7 @@ assert_jq status.json \
   '.deployments[0]["requested-base-removals"]' \
   '.deployments[0]["layered-commit-meta"]|not'
 rm status.json
+rpm-ostree testutils validate-parse-status
 echo "ok empty pkg arrays, and commit meta correct in status json"
 
 # Ensure we return an error when passing a wrong option.
