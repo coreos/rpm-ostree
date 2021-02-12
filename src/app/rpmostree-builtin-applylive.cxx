@@ -67,11 +67,11 @@ get_args_variant (GError **error)
 }
 
 gboolean
-rpmostree_ex_builtin_livefs (int             argc,
-                             char          **argv,
-                             RpmOstreeCommandInvocation *invocation,
-                             GCancellable   *cancellable,
-                             GError        **error)
+rpmostree_ex_builtin_apply_live (int             argc,
+                                 char          **argv,
+                                 RpmOstreeCommandInvocation *invocation,
+                                 GCancellable   *cancellable,
+                                 GError        **error)
 {
   _cleanup_peer_ GPid peer_pid = 0;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;

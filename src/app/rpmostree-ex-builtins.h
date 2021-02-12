@@ -31,7 +31,7 @@ G_BEGIN_DECLS
                                                                    GCancellable *cancellable, GError **error)
 
 BUILTINPROTO(unpack);
-BUILTINPROTO(livefs);
+BUILTINPROTO(apply_live);
 #ifdef BUILDOPT_ROJIG
 BUILTINPROTO(commit2rojig);
 BUILTINPROTO(rojig2commit);
