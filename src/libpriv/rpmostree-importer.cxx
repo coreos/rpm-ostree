@@ -478,13 +478,10 @@ build_metadata_variant (RpmOstreeImporter *self,
 
       /* include a checksum of the RPM as a whole; the actual algo used depends
        * on how the repodata was created, so just keep a repr */
-      g_autofree char* chksum_repr = NULL;
-      if (!rpmostree_get_repodata_chksum_repr (self->pkg, &chksum_repr, error))
-        return FALSE;
-
+      auto chksum_repr = rpmostreecxx::get_repodata_chksum_repr(*self->pkg);
       g_variant_builder_add (&metadata_builder, "{sv}",
                              "rpmostree.repodata_checksum",
-                             g_variant_new_string (chksum_repr));
+                             g_variant_new_string (chksum_repr.c_str()));
     }
 
   if (self->rojig_mode)

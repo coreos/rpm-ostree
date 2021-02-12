@@ -15,7 +15,6 @@
 mod cxxrsutil;
 mod ffiutil;
 pub(crate) use cxxrsutil::*;
-mod includes;
 
 /// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
 ///
@@ -38,6 +37,11 @@ pub mod ffi {
         type OstreeDeployment = crate::FFIOstreeDeployment;
         type GCancellable = crate::FFIGCancellable;
         type GVariantDict = crate::FFIGVariantDict;
+
+        #[namespace = "dnfcxx"]
+        type DnfPackage = libdnf_sys::DnfPackage;
+        #[namespace = "dnfcxx"]
+        type DnfRepo = libdnf_sys::DnfRepo;
     }
 
     /// Currently cxx-rs doesn't support mappings; like probably most projects,
@@ -252,6 +256,11 @@ pub mod ffi {
     // lockfile.rs
     extern "Rust" {
         fn ror_lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMapping>>;
+        fn ror_lockfile_write(
+            filename: &str,
+            packages: Vec<u64>,
+            rpmmd_repos: Vec<u64>,
+        ) -> Result<()>;
     }
 
     // rpmutils.rs
@@ -309,6 +318,7 @@ pub mod ffi {
         // Currently only used in unit tests
         #[allow(dead_code)]
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<UniquePtr<CxxString>>;
+        fn get_repodata_chksum_repr(pkg: &mut DnfPackage) -> Result<String>;
     }
 }
 
@@ -335,7 +345,7 @@ pub(crate) use self::journal::*;
 mod initramfs;
 pub(crate) use self::initramfs::*;
 mod lockfile;
-pub use self::lockfile::*;
+pub(crate) use self::lockfile::*;
 mod live;
 pub(crate) use self::live::*;
 mod nameservice;

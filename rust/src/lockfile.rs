@@ -191,14 +191,11 @@ mod tests {
     }
 }
 
+use crate::cxxrsutil::CxxResult;
 use crate::ffi::*;
-use crate::ffiutil::*;
-use crate::includes::*;
-use glib::translate::*;
 use libdnf_sys::*;
-use std::ptr;
 
-pub(crate) fn ror_lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMapping>> {
+pub(crate) fn ror_lockfile_read(filenames: &Vec<String>) -> CxxResult<Vec<StringMapping>> {
     Ok(lockfile_parse_multiple(&filenames)?
         .packages
         .into_iter()
@@ -209,98 +206,76 @@ pub(crate) fn ror_lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMap
         .collect())
 }
 
-mod ffi {
-    use super::*;
+pub(crate) fn ror_lockfile_write(
+    filename: &str,
+    packages: Vec<u64>,
+    rpmmd_repos: Vec<u64>,
+) -> CxxResult<()> {
+    // get current time, but scrub nanoseconds; it's overkill to serialize that
+    let now = {
+        let t = Utc::now();
+        Utc::today().and_hms_nano(t.hour(), t.minute(), t.second(), 0)
+    };
 
-    #[no_mangle]
-    pub extern "C" fn ror_lockfile_write(
-        filename: *const libc::c_char,
-        packages: *mut glib_sys::GPtrArray,
-        rpmmd_repos: *mut glib_sys::GPtrArray,
-        gerror: *mut *mut glib_sys::GError,
-    ) -> libc::c_int {
-        let filename = Path::new(ffi_view_os_str(filename));
-        let packages: Vec<*mut DnfPackage> = ffi_ptr_array_to_vec(packages);
-        let rpmmd_repos: Vec<*mut DnfRepo> = ffi_ptr_array_to_vec(rpmmd_repos);
+    let mut lockfile = LockfileConfig {
+        packages: BTreeMap::new(),
+        metadata: Some(LockfileConfigMetadata {
+            generated: Some(now),
+            rpmmd_repos: Some(BTreeMap::new()),
+        }),
+    };
 
-        // get current time, but scrub nanoseconds; it's overkill to serialize that
-        let now = {
-            let t = Utc::now();
-            Utc::today().and_hms_nano(t.hour(), t.minute(), t.second(), 0)
-        };
+    for pkg in packages {
+        let pkg_ref = unsafe { &mut *(pkg as *mut libdnf_sys::DnfPackage) };
+        let name = dnf_package_get_name(pkg_ref).unwrap();
+        let evr = dnf_package_get_evr(pkg_ref).unwrap();
+        let arch = dnf_package_get_arch(pkg_ref).unwrap();
 
-        let mut lockfile = LockfileConfig {
-            packages: BTreeMap::new(),
-            metadata: Some(LockfileConfigMetadata {
-                generated: Some(now),
-                rpmmd_repos: Some(BTreeMap::new()),
-            }),
-        };
-
-        for pkg in packages {
-            let pkg_ref = unsafe { &mut *pkg };
-            // XXX: remove unwraps when we move to cxx.rs
-            let name = dnf_package_get_name(pkg_ref).unwrap();
-            let evr = dnf_package_get_evr(pkg_ref).unwrap();
-            let arch = dnf_package_get_arch(pkg_ref).unwrap();
-
-            let mut chksum: *mut libc::c_char = ptr::null_mut();
-            let r = unsafe { rpmostree_get_repodata_chksum_repr(pkg, &mut chksum, gerror) };
-            if r == 0 {
-                return r;
-            }
-            let chksum: String = unsafe { from_glib_full(chksum) };
-
-            lockfile.packages.insert(
-                name.as_str().to_string(),
-                LockedPackage {
-                    evra: format!("{}.{}", evr.as_str(), arch.as_str()),
-                    digest: Some(chksum),
-                },
-            );
-        }
-
-        /* just take the ref here to be less verbose */
-        let lockfile_repos = lockfile
-            .metadata
-            .as_mut()
-            .unwrap()
-            .rpmmd_repos
-            .as_mut()
-            .unwrap();
-
-        for rpmmd_repo in rpmmd_repos {
-            let repo_ref = unsafe { &mut *rpmmd_repo };
-            let id = dnf_repo_get_id(repo_ref).unwrap();
-            let generated = dnf_repo_get_timestamp_generated(repo_ref).unwrap();
-            let generated: i64 = match generated.try_into() {
-                Ok(t) => t,
-                Err(e) => {
-                    eprintln!("Invalid rpm-md repo {} timestamp: {}: {}", id, generated, e);
-                    0
-                }
-            };
-            let generated = match Utc.timestamp_opt(generated, 0) {
-                chrono::offset::LocalResult::Single(t) => t,
-                _ => {
-                    eprintln!("Invalid rpm-md repo {} timestamp: {}", id, generated);
-                    Utc.timestamp(0, 0)
-                }
-            };
-            lockfile_repos.insert(id, LockfileRepoMetadata { generated });
-        }
-
-        int_glib_error(
-            || -> Result<()> {
-                let lockfile_dir =
-                    openat::Dir::open(filename.parent().unwrap_or_else(|| Path::new("/")))?;
-                let basename = filename.file_name().expect("filename");
-                lockfile_dir.write_file_with(basename, 0o644, |w| -> Result<()> {
-                    Ok(serde_json::to_writer_pretty(w, &lockfile)?)
-                })?;
-                Ok(())
-            }(),
-            gerror,
-        )
+        let chksum = crate::ffi::get_repodata_chksum_repr(pkg_ref).unwrap();
+        lockfile.packages.insert(
+            name.as_str().to_string(),
+            LockedPackage {
+                evra: format!("{}.{}", evr.as_str(), arch.as_str()),
+                digest: Some(chksum),
+            },
+        );
     }
+
+    /* just take the ref here to be less verbose */
+    let lockfile_repos = lockfile
+        .metadata
+        .as_mut()
+        .unwrap()
+        .rpmmd_repos
+        .as_mut()
+        .unwrap();
+
+    for rpmmd_repo in rpmmd_repos {
+        let repo_ref = unsafe { &mut *(rpmmd_repo as *mut libdnf_sys::DnfRepo) };
+        let id = dnf_repo_get_id(repo_ref).unwrap();
+        let generated = dnf_repo_get_timestamp_generated(repo_ref).unwrap();
+        let generated: i64 = match generated.try_into() {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("Invalid rpm-md repo {} timestamp: {}: {}", id, generated, e);
+                0
+            }
+        };
+        let generated = match Utc.timestamp_opt(generated, 0) {
+            chrono::offset::LocalResult::Single(t) => t,
+            _ => {
+                eprintln!("Invalid rpm-md repo {} timestamp: {}", id, generated);
+                Utc.timestamp(0, 0)
+            }
+        };
+        lockfile_repos.insert(id, LockfileRepoMetadata { generated });
+    }
+
+    let filename = Path::new(filename);
+    let lockfile_dir = openat::Dir::open(filename.parent().unwrap_or_else(|| Path::new("/")))?;
+    let basename = filename.file_name().expect("filename");
+    lockfile_dir.write_file_with(basename, 0o644, |w| -> Result<()> {
+        Ok(serde_json::to_writer_pretty(w, &lockfile)?)
+    })?;
+    Ok(())
 }
