@@ -194,6 +194,7 @@ pub mod ffi {
         ) -> Result<bool>;
         // FIXME/cxx make this Option<&str>
         fn transaction_apply_live(sysroot: Pin<&mut OstreeSysroot>, target: &str) -> Result<()>;
+        fn applylive_client_finish() -> Result<()>;
     }
 
     // passwd.rs
@@ -266,7 +267,13 @@ pub mod ffi {
         fn n_removed(&self) -> i32;
         fn n_added(&self) -> i32;
         fn n_modified(&self) -> i32;
+        fn rpmdb_diff(
+            repo: Pin<&mut OstreeRepo>,
+            src: &CxxString,
             dest: &CxxString,
+        ) -> Result<UniquePtr<RPMDiff>>;
+
+        fn print(&self);
     }
 
     unsafe extern "C++" {
