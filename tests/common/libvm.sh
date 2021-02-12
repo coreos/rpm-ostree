@@ -46,9 +46,18 @@ vm_kola_spawn() {
 
   exec 4> info.json
   mkdir kola-ssh
+  test_image="${topsrcdir}/tests/vmcheck/image.qcow2"
+  if [ ! -e "$test_image" ]; then
+    if  [ -L "$test_image" ]; then
+      echo "$test_image is an invalid symlink" >&3
+    else
+      echo "Cannot find $test_image" >&3
+    fi
+    exit 1
+  fi
   setpriv --pdeathsig SIGKILL -- \
     env MANTLE_SSH_DIR="$PWD/kola-ssh" kola spawn -p qemu-unpriv \
-    --qemu-image "${topsrcdir}/tests/vmcheck/image.qcow2" -v --idle \
+    --qemu-image "$test_image" -v --idle \
     --json-info-fd 4 --output-dir "$outputdir" &
   # hack; need cleaner API for async kola spawn
   while [ ! -s info.json ]; do sleep 1; done
