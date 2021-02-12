@@ -32,7 +32,7 @@ librpmostreeinternals_la_SOURCES = \
 	src/app/rpmostree-builtin-cliwrap.cxx \
 	src/app/rpmostree-builtin-initramfs.cxx \
 	src/app/rpmostree-builtin-initramfs-etc.cxx \
-	src/app/rpmostree-builtin-livefs.cxx \
+	src/app/rpmostree-builtin-applylive.cxx \
 	src/app/rpmostree-builtin-usroverlay.cxx \
 	src/app/rpmostree-builtin-override.cxx \
 	src/app/rpmostree-builtin-refresh-md.cxx \

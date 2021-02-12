@@ -25,10 +25,10 @@
 static RpmOstreeCommand ex_subcommands[] = {
   { "livefs", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     "Apply pending deployment changes to booted deployment",
-    rpmostree_ex_builtin_livefs },
+    rpmostree_ex_builtin_apply_live },
   { "apply-live", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     "Apply pending deployment changes to booted deployment",
-    rpmostree_ex_builtin_livefs },
+    rpmostree_ex_builtin_apply_live },
 #ifdef BUILDOPT_ROJIG
   { "commit2rojig", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an OSTree commit into an rpm-ostree rojig", rpmostree_ex_builtin_commit2rojig },
