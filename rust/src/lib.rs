@@ -266,6 +266,15 @@ pub mod ffi {
     }
 
     unsafe extern "C++" {
+        include!("rpmostree-diff.hpp");
+        type RPMDiff;
+        fn n_removed(&self) -> i32;
+        fn n_added(&self) -> i32;
+        fn n_modified(&self) -> i32;
+            dest: &CxxString,
+    }
+
+    unsafe extern "C++" {
         include!("rpmostree-output.h");
         type Progress;
 
