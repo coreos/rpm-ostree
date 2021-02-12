@@ -114,15 +114,14 @@ cargo_target_dir=debug
 else
 cargo_target_dir=release
 endif
-LIBRPMOSTREE_RUST_SRCS = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.lock cbindgen.toml
 # FIXME - build all this code in a rpmostree-sys crate, or just move all the C/C++ build
 # to Rust.  Currently this forces build system serialization
-rpm-ostree: Makefile $(LIBRPMOSTREE_RUST_SRCS) librpmostreeinternals.la
+cargo-build: librpmostreeinternals.la
 	$(cargo_build) $(CARGO_RELEASE_ARGS)
-	ln -sfr target/$(cargo_target_dir)/rpm-ostree $@
-EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS)
-ALL_LOCAL_HOOKS += rpm-ostree
+	ln -sfr target/$(cargo_target_dir)/rpm-ostree rpm-ostree
 CLEANFILES += rpm-ostree
+.PHONY: cargo-build
+ALL_LOCAL_HOOKS += cargo-build
 
 # cbindgen + cxx.rs
 binding_generated_sources = rpmostree-rust.h rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
