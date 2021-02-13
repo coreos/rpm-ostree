@@ -9,7 +9,9 @@
 //! In the future though hopefully cxx.rs improves this situation.
 
 use cxx::{type_id, ExternType};
+use glib::translate::ToGlibPtr;
 use paste::paste;
+use std::pin::Pin;
 
 /// Map an empty string to a `None`.
 pub(crate) fn opt_string(input: &str) -> Option<&str> {
@@ -22,17 +24,50 @@ pub(crate) fn opt_string(input: &str) -> Option<&str> {
 pub trait FFIGObjectWrapper {
     type Wrapper;
 
+    /// Use this function in Rust code that accepts glib-rs
+    /// objects passed via cxx-rs to synthesize the expected glib-rs
+    /// wrapper type.
     fn gobj_wrap(&mut self) -> Self::Wrapper;
+}
+
+pub trait FFIGObjectReWrap<'a> {
+    type ReWrapped;
+
+    /// Convert a glib-rs wrapper object into a Pin pointer
+    /// to our FFI newtype.  This is necessary to call
+    /// cxx-rs wrapped functions from Rust.
+    fn gobj_rewrap(&'a self) -> Pin<&'a mut Self::ReWrapped>;
 }
 
 /// Implement FFIGObjectWrapper given a pair of wrapper type
 /// and sys type.
 macro_rules! impl_wrap {
-    ($w:ident, $bound:path) => {
+    ($w:ident, $bound:path, $sys:path) => {
         impl FFIGObjectWrapper for $w {
             type Wrapper = $bound;
             fn gobj_wrap(&mut self) -> Self::Wrapper {
                 unsafe { glib::translate::from_glib_none(&mut self.0 as *mut _) }
+            }
+        }
+        impl<'a> FFIGObjectReWrap<'a> for $bound {
+            type ReWrapped = $w;
+            fn gobj_rewrap(&'a self) -> Pin<&'a mut Self::ReWrapped> {
+                // Access the underlying raw pointer behind the glib-rs
+                // newtype wrapper, e.g. `ostree_sys::OstreeRepo`.
+                let p: *mut $sys = self.to_glib_none().0;
+                // Safety: Pin<T> is a #[repr(transparent)] newtype wrapper
+                // around our #[repr(transparent)] FFI newtype wrapper which
+                // for the glib-rs newtype wrapper, which finally holds the real
+                // raw pointer.  Phew!
+                // In other words: Pin(FFINewType(GlibRs(RawPointer)))
+                // Here we're just powering through those layers of wrappers to
+                // convert the raw pointer.  See also https://internals.rust-lang.org/t/pre-rfc-v2-safe-transmute/11431
+                //
+                // However, since what we're handing out is a raw pointer,
+                // we ensure that the lifetime of our return value is tied to
+                // that of the glib-rs wrapper (which holds a GObject strong reference),
+                // which ensures the value isn't freed.
+                unsafe { std::mem::transmute(p) }
             }
         }
     };
@@ -49,7 +84,7 @@ macro_rules! bind_ostree_obj {
                 type Id = type_id!(rpmostreecxx::[<Ostree $w>]);
                 type Kind = cxx::kind::Trivial;
             }
-            impl_wrap!([<FFIOstree $w>], ostree::$w);
+            impl_wrap!([<FFIOstree $w>], ostree::$w, ostree_sys::[<Ostree $w>]);
         }
     };
 }
@@ -69,7 +104,7 @@ unsafe impl ExternType for FFIGCancellable {
     type Id = type_id!(rpmostreecxx::GCancellable);
     type Kind = cxx::kind::Trivial;
 }
-impl_wrap!(FFIGCancellable, gio::Cancellable);
+impl_wrap!(FFIGCancellable, gio::Cancellable, gio_sys::GCancellable);
 
 // An error type helper; separate from the GObject bridging
 mod err {
@@ -150,3 +185,24 @@ mod err {
     }
 }
 pub(crate) use err::*;
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use anyhow::Result;
+
+    #[test]
+    fn passthrough() -> Result<()> {
+        let cancellable = gio::NONE_CANCELLABLE;
+        let td = tempfile::tempdir()?;
+        let p = td.path().join("repo");
+        let r = ostree::Repo::new_for_path(&p);
+        r.create(ostree::RepoMode::Archive, cancellable)?;
+        let fd = r.get_dfd();
+        assert_eq!(
+            fd,
+            crate::ffi::testutil_validate_cxxrs_passthrough(r.gobj_rewrap())
+        );
+        Ok(())
+    }
+}

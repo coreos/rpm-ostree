@@ -289,6 +289,16 @@ util_next_version (rust::Str auto_version_prefix,
   g_autofree char *v = increment_version (version_suffix, last_version, next_version->str, date_tag_given ? "0" : NULL);
   return rust::String(v);
 }
+
+// A test function to validate that we can pass glib-rs types
+// from Rust back through cxx-rs to C++.
+int
+testutil_validate_cxxrs_passthrough(OstreeRepo &repo) noexcept
+{
+  return ostree_repo_get_dfd(&repo);
+}
+
+
 } /* namespace */
 #undef VERSION_TAG_REGEX
 
