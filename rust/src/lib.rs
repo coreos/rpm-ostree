@@ -249,6 +249,7 @@ pub mod ffi {
             version_suffix: &str,
             last_version: &str,
         ) -> Result<String>;
+        fn testutil_validate_cxxrs_passthrough(repo: Pin<&mut OstreeRepo>) -> i32;
     }
 
     unsafe extern "C++" {
