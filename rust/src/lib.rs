@@ -275,6 +275,8 @@ pub mod ffi {
 
         fn progress_begin_task(msg: &str) -> UniquePtr<Progress>;
         fn end(self: Pin<&mut Progress>, msg: &str);
+
+        fn output_message(msg: &str);
     }
 
     // rpmostree-rpm-util.h

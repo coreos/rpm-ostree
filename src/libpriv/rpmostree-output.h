@@ -36,7 +36,6 @@ void output_message (rust::Str msg);
 struct Progress {
 public:
   void set_sub_message(rust::Str msg);
-  void message (rust::Str msg);
   void nitems_update(guint n);
   void percent_update(guint n);
 
