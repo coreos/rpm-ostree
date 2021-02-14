@@ -124,16 +124,6 @@ progress_begin_task(const rust::Str msg) noexcept
   return std::make_unique<Progress>(ProgressType::TASK);
 }
 
-// Output a string.  Note that this should not be called when
-// a "task" is active.
-void 
-Progress::message(const rust::Str msg)
-{
-  auto msg_c = std::string(msg);
-  RpmOstreeOutputMessage task = { msg_c.c_str() };
-  active_cb (RPMOSTREE_OUTPUT_MESSAGE, &task, active_cb_opaque);
-}
-
 // When working on a task/percent/nitems, often we want to display a particular
 // item (such as a package).
 void 
