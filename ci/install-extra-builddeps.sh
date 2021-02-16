@@ -7,7 +7,7 @@
 set -euo pipefail
 
 CXX_VER=$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name == "cxx").version')
-cargo install cxxbridge-cmd --version "${CXX_VER}"
+time cargo install cxxbridge-cmd --version "${CXX_VER}"
 
 CBINDGEN_VER=$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name == "cbindgen").version')
-cargo install cbindgen --version "${CBINDGEN_VER}"
+time cargo install cbindgen --version "${CBINDGEN_VER}"
