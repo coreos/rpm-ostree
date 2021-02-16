@@ -50,8 +50,7 @@ parallel insttests: {
         """)
       }
       stage("Install Deps") {
-        // really, we just need test deps, but meh...
-        shwrap("ci/installdeps.sh")
+        shwrap("ci/install-test-deps.sh")
       }
       stage("Kola") {
         // TODO upstream this into coreos-ci-lib
@@ -86,7 +85,7 @@ compose: {
         unstash 'rpms'
         stage("Install Deps") {
           shwrap("""
-            ci/installdeps.sh  # really, we just need test deps, but meh...
+            ci/install-test-deps.sh
             dnf install -y *.rpm  # install our built rpm-ostree
           """)
         }

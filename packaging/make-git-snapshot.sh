@@ -60,7 +60,7 @@ open(checksum_file, "w").write(json.dumps(j))' $crate_subdir
  tar --transform="s,^,${PKG_VER}/," -rf ${TARFILE_TMP} * .cargo/
  )
 
-# And finally, vendor generated code.  See install-extra-builddeps.sh
+# And finally, vendor generated code.  See installdeps.sh
 # and Makefile-rpm-ostree.am for more.
 (cd ${srcdir}
  cp rpmostree-rust{,-prebuilt}.h

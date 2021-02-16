@@ -98,7 +98,7 @@ AS_IF([test -z "$cargo"], [AC_MSG_ERROR([cargo is required for --enable-rust])])
 AC_PATH_PROG([rustc], [rustc])
 AS_IF([test -z "$rustc"], [AC_MSG_ERROR([rustc is required for --enable-rust])])
 
-dnl See comment in install-extra-builddeps.sh
+dnl See comment in installdeps.sh
 AM_CONDITIONAL(BUILDOPT_PREBUILT_BINDINGS, [test -f rpmostree-rust-prebuilt.h])
 
 AC_MSG_CHECKING(whether to build in debug mode)

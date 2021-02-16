@@ -6,6 +6,18 @@ set -xeuo pipefail
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
 
+# cxx.rs (cxxbridge) isn't packaged in Fedora today.  Both it and cbindgen generate
+# source code, which we vendor along with our dependent crates into release
+# tarballs.  Note in the future it's likely we stop using cbindgen entirely in
+# favor of cxx.rs.
+CXX_VER=$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name == "cxx").version')
+time cargo install cxxbridge-cmd --version "${CXX_VER}"
+CBINDGEN_VER=$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name == "cbindgen").version')
+time cargo install cbindgen --version "${CBINDGEN_VER}"
+
+# Everything below here uses dnf/yum; we don't try to use
+# sudo for you right now.  (Though hopefully you're building
+# in an unprivileged podman container at least)
 if [ -n "${SKIP_INSTALLDEPS:-}" ] || test $(id -u) != 0; then
     exit 0
 fi
@@ -13,9 +25,5 @@ fi
 # we have the canonical spec file handy so just builddep from that
 # XXX: use --allowerasing as a temporary hack to ease the migration to libmodulemd2
 time dnf builddep --spec -y packaging/rpm-ostree.spec.in --allowerasing
-# Mostly dependencies for tests; TODO move these into the spec file
-# and also put them in the cosa buildroot (or another container)
-pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq python3-pyyaml \
-    libubsan libasan libtsan elfutils fuse sudo python3-gobject-base \
-    selinux-policy-devel selinux-policy-targeted python3-createrepo_c \
-    rsync python3-rpm parallel clang rustfmt-preview distribution-gpg-keys
+
+
