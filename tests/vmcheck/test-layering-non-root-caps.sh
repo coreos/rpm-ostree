@@ -115,7 +115,7 @@ check_fcap() {
     fi
     return
   fi
-  # Replace '+' with '='; a libcap change https://bodhi.fedoraproject.org/updates/FEDORA-2021-eeff266a64
+  # Replace '+' with '='; a libcap change https://bodhi.fedoraproject.org/updates/FEDORA-2021-570cc05441
   # changed the output, and the new variant seems more correct
   # because it's matching what we specified above.  But we need
   # to handle the previous case too for backcompat for a bit.
