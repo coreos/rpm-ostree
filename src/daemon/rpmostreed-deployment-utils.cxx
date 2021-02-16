@@ -245,10 +245,46 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                         gboolean          filter,
                                         GError          **error)
 {
-  const gchar *osname = ostree_deployment_get_osname (deployment);
-  const gchar *csum = ostree_deployment_get_csum (deployment);
-  gint serial = ostree_deployment_get_deployserial (deployment);
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
 
+  /* First, basic values from ostree */
+  g_autofree gchar *id = rpmostreed_deployment_generate_id (deployment);
+  g_variant_dict_insert (&dict, "id", "s", id);
+
+  const gchar *osname = ostree_deployment_get_osname (deployment);
+  if (osname != NULL)
+    g_variant_dict_insert (&dict, "osname", "s", osname);
+  const gchar *csum = ostree_deployment_get_csum (deployment);
+  g_variant_dict_insert (&dict, "checksum", "s", csum);
+  gint serial = ostree_deployment_get_deployserial (deployment);
+  g_variant_dict_insert (&dict, "serial", "i", serial);
+
+  /* Booted status */
+  const gboolean is_booted = g_strcmp0 (booted_id, id) == 0;
+  if (booted_id != NULL)
+    g_variant_dict_insert (&dict, "booted", "b", is_booted);
+  if (is_booted)
+    {
+      auto live_state = rpmostreecxx::get_live_apply_state(*sysroot, *deployment);
+
+      if (live_state.inprogress.length() > 0)
+        g_variant_dict_insert (&dict, "live-inprogress", "s", live_state.inprogress.c_str());
+      if (live_state.commit.length() > 0)
+        g_variant_dict_insert (&dict, "live-replaced", "s", live_state.commit.c_str());
+    }
+
+  /* Staging status */
+  if (ostree_deployment_is_staged (deployment))
+    {
+      g_variant_dict_insert (&dict, "staged", "b", TRUE);
+      if (!glnx_fstatat_allow_noent (AT_FDCWD, _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED,
+                                     NULL, 0, error))
+        return FALSE;
+      g_variant_dict_insert (&dict, "finalization-locked", "b", errno == 0);
+    }
+
+  /* Load the commit object */
   g_autoptr(GVariant) commit = NULL;
   if (!ostree_repo_load_variant (repo,
                                  OSTREE_OBJECT_TYPE_COMMIT,
@@ -257,24 +293,13 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                  error))
     return NULL;
 
-  g_autofree gchar *id = rpmostreed_deployment_generate_id (deployment);
+  /* And the origin */
   g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
   if (!origin)
     return NULL;
 
-  const gboolean is_booted = g_strcmp0 (booted_id, id) == 0;
-
   RpmOstreeRefspecType refspec_type;
   g_autofree char *refspec = rpmostree_origin_get_full_refspec (origin, &refspec_type);
-
-  GVariantDict dict;
-  g_variant_dict_init (&dict, NULL);
-
-  g_variant_dict_insert (&dict, "id", "s", id);
-  if (osname != NULL)
-    g_variant_dict_insert (&dict, "osname", "s", osname);
-  g_variant_dict_insert (&dict, "serial", "i", serial);
-  g_variant_dict_insert (&dict, "checksum", "s", csum);
 
   gboolean is_layered = FALSE;
   g_autofree char *base_checksum = NULL;
@@ -367,26 +392,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       break;
     }
 
-
-  if (is_booted)
-    {
-      auto live_state = rpmostreecxx::get_live_apply_state(*sysroot, *deployment);
-
-      if (live_state.inprogress.length() > 0)
-        g_variant_dict_insert (&dict, "live-inprogress", "s", live_state.inprogress.c_str());
-      if (live_state.commit.length() > 0)
-        g_variant_dict_insert (&dict, "live-replaced", "s", live_state.commit.c_str());
-    }
-
-  if (ostree_deployment_is_staged (deployment))
-    {
-      g_variant_dict_insert (&dict, "staged", "b", TRUE);
-      if (!glnx_fstatat_allow_noent (AT_FDCWD, _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED,
-                                     NULL, 0, error))
-        return FALSE;
-      g_variant_dict_insert (&dict, "finalization-locked", "b", errno == 0);
-    }
-
   if (refspec)
     g_variant_dict_insert (&dict, "origin", "s", refspec);
 
@@ -417,9 +422,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   variant_add_from_hash_table (&dict, "initramfs-etc",
                                rpmostree_origin_get_initramfs_etc_files (origin));
-
-  if (booted_id != NULL)
-    g_variant_dict_insert (&dict, "booted", "b", is_booted);
 
   return g_variant_dict_end (&dict);
 }
