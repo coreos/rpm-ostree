@@ -107,7 +107,19 @@ check_group() {
 
 check_fcap() {
   local fcap=$(vm_cmd getcap $1)
-  local fcap=${fcap#* = } # trim filename
+  local fcap=${fcap#* = } # trim filename for pre-2.48 libcap: /usr/bin/foo = cap_net_raw+ep
+  fcap=${fcap#* } # And from the new 2.48+ libcap: /usr/bin/foo cap_net_raw=ep
+  if test -z "$2"; then
+    if test -n "$fcap"; then
+      assert_not_reached "expected no fcaps but found $fcap"
+    fi
+    return
+  fi
+  # Replace '+' with '='; a libcap change https://bodhi.fedoraproject.org/updates/FEDORA-2021-eeff266a64
+  # changed the output, and the new variant seems more correct
+  # because it's matching what we specified above.  But we need
+  # to handle the previous case too for backcompat for a bit.
+  fcap=${fcap/+/=}
   if [[ $fcap != $2 ]]; then
     assert_not_reached "expected fcaps $2 on file $1 but got $fcap"
   fi
@@ -127,12 +139,12 @@ check_file /usr/bin/nrc-none.sh root root
 check_file /usr/bin/nrc-user.sh nrcuser root
 check_file /usr/bin/nrc-user-link.sh nrcuser root
 check_file /usr/bin/nrc-group.sh root nrcgroup
-check_file /usr/bin/nrc-caps.sh root root "cap_net_bind_service+ep"
-check_file /usr/bin/nrc-caps-setuid.sh root root "cap_net_bind_service+ep"
+check_file /usr/bin/nrc-caps.sh root root "cap_net_bind_service=ep"
+check_file /usr/bin/nrc-caps-setuid.sh root root "cap_net_bind_service=ep"
 vm_cmd test -u /usr/bin/nrc-caps-setuid.sh
 check_file /usr/bin/nrc-usergroup.sh nrcuser nrcgroup
-check_file /usr/bin/nrc-usergroupcaps.sh nrcuser nrcgroup "cap_net_bind_service+ep"
-check_file /usr/bin/nrc-usergroupcaps-setuid.sh nrcuser nrcgroup "cap_net_bind_service+ep"
+check_file /usr/bin/nrc-usergroupcaps.sh nrcuser nrcgroup "cap_net_bind_service=ep"
+check_file /usr/bin/nrc-usergroupcaps-setuid.sh nrcuser nrcgroup "cap_net_bind_service=ep"
 vm_cmd test -u /usr/bin/nrc-usergroupcaps-setuid.sh
 check_file /var/lib/nonrootcap nrcuser nrcgroup
 check_file /run/nonrootcap nrcuser nrcgroup
