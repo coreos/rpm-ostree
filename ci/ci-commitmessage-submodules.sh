@@ -30,7 +30,6 @@ cleanup_tmp() {
 trap cleanup_tmp EXIT
 
 if ! [ -x /usr/bin/git ]; then
-  pkg_upgrade
   pkg_install git
 fi
 
