@@ -34,20 +34,6 @@
 #include "rpmostree-cxxrs.h"
 #include "rpmostreed-errors.h"
 
-/* Get a currently unique (for this host) identifier for the
- * deployment; TODO - adding the deployment timestamp would make it
- * persistently unique, needs API in libostree.
- */
-char *
-rpmostreed_deployment_generate_id (OstreeDeployment *deployment)
-{
-  g_assert (OSTREE_IS_DEPLOYMENT (deployment));
-  return g_strdup_printf ("%s-%s.%u",
-                          ostree_deployment_get_osname (deployment),
-                          ostree_deployment_get_csum (deployment),
-                          ostree_deployment_get_deployserial (deployment));
-}
-
 OstreeDeployment *
 rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
                                   const gchar *deploy_id)
@@ -55,8 +41,9 @@ rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   for (guint i = 0; i < deployments->len; i++)
     {
-      g_autofree gchar *id = rpmostreed_deployment_generate_id (static_cast<OstreeDeployment*>(deployments->pdata[i]));
-      if (g_strcmp0 (deploy_id, id) == 0)
+      auto deployment = static_cast<OstreeDeployment*>(deployments->pdata[i]);
+      auto id = rpmostreecxx::deployment_generate_id(*deployment);
+      if (g_strcmp0 (deploy_id, id.c_str()) == 0)
         return (OstreeDeployment*)g_object_ref (deployments->pdata[i]);
     }
 
@@ -249,8 +236,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   g_variant_dict_init (&dict, NULL);
 
   /* First, basic values from ostree */
-  g_autofree gchar *id = rpmostreed_deployment_generate_id (deployment);
-  g_variant_dict_insert (&dict, "id", "s", id);
+  auto id = rpmostreecxx::deployment_generate_id (*deployment);
+  g_variant_dict_insert (&dict, "id", "s", id.c_str());
 
   const gchar *osname = ostree_deployment_get_osname (deployment);
   if (osname != NULL)
@@ -261,7 +248,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   g_variant_dict_insert (&dict, "serial", "i", serial);
 
   /* Booted status */
-  const gboolean is_booted = g_strcmp0 (booted_id, id) == 0;
+  const gboolean is_booted = g_strcmp0 (booted_id, id.c_str()) == 0;
   if (booted_id != NULL)
     g_variant_dict_insert (&dict, "booted", "b", is_booted);
   if (is_booted)
@@ -1219,8 +1206,8 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
 
   if (staged_deployment)
     {
-      g_autofree char *id = rpmostreed_deployment_generate_id (staged_deployment);
-      g_variant_dict_insert (&dict, "deployment", "s", id);
+      auto id = rpmostreecxx::deployment_generate_id (*staged_deployment);
+      g_variant_dict_insert (&dict, "deployment", "s", id.c_str());
     }
 
   /* but if there are no updates, then just ditch the whole thing and return NULL */
