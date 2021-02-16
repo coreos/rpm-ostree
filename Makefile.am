@@ -110,7 +110,7 @@ DIST_HOOKS += use-git-not-dist-hook
 GITIGNOREFILES += target/
 
 # From coreos-assembler
-GITIGNOREFILES += "fastbuild*.qcow2" _kola_temp/
+GITIGNOREFILES += .cosa/ "fastbuild*.qcow2" _kola_temp/
 
 include libglnx/Makefile-libglnx.am.inc
 noinst_LTLIBRARIES += libglnx.la
