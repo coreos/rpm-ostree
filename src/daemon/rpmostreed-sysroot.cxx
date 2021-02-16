@@ -28,6 +28,7 @@
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-errors.h"
 #include "rpmostreed-transaction.h"
+#include "rpmostree-cxxrs.h"
 
 #include "rpmostree-output.h"
 
@@ -273,7 +274,8 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
       const gchar *os = ostree_deployment_get_osname (booted);
       g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, os, NULL);
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
-      booted_id = rpmostreed_deployment_generate_id (booted);
+      auto bootedid_v = rpmostreecxx::deployment_generate_id(*booted);
+      booted_id = g_strdup(bootedid_v.c_str());
     }
   else
     {

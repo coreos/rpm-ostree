@@ -77,6 +77,11 @@ pub mod ffi {
         fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()>;
     }
 
+    // daemon.rs
+    extern "Rust" {
+        fn deployment_generate_id(deployment: Pin<&mut OstreeDeployment>) -> String;
+    }
+
     // initramfs.rs
     extern "Rust" {
         fn get_dracut_random_cpio() -> &'static [u8];
@@ -286,7 +291,9 @@ pub mod countme;
 pub(crate) use composepost::*;
 mod core;
 use crate::core::*;
+mod daemon;
 mod dirdiff;
+pub(crate) use daemon::*;
 mod extensions;
 pub(crate) use extensions::*;
 #[cfg(feature = "fedora-integration")]

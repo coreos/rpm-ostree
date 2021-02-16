@@ -1782,7 +1782,8 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
                                                     booted_id, ot_repo, TRUE, error));
       if (!booted_variant)
         return FALSE;
-      booted_id = rpmostreed_deployment_generate_id (booted_deployment);
+      auto bootedid_v = rpmostreecxx::deployment_generate_id(*booted_deployment);
+      booted_id = g_strdup(bootedid_v.c_str());
     }
   else
     booted_variant = g_variant_ref_sink (rpmostreed_deployment_generate_blank_variant ());
