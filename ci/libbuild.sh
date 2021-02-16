@@ -10,35 +10,33 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 pkg_upgrade() {
     echo "Running dnf -y distro-sync... $(date)"
-    dnf -y distro-sync
+    time dnf -y distro-sync
     echo "Done dnf -y distro-sync! $(date)"
 }
 
 make() {
-    /usr/bin/make -j ${MAKE_JOBS:-$(getconf _NPROCESSORS_ONLN)} "$@"
+    time /usr/bin/make -j ${MAKE_JOBS:-$(getconf _NPROCESSORS_ONLN)} "$@"
 }
 
 build() {
     env NOCONFIGURE=1 ./autogen.sh
-    ./configure --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc "$@"
-    make V=1
+    time ./configure --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc "$@"
+    time make V=1
 }
 
 pkg_install() {
     echo "Running dnf -y install... $(date)"
-    dnf -y install "$@"
+    time dnf -y install "$@"
     echo "Done running dnf -y install! $(date)"
 }
 
 pkg_builddep() {
-    echo "Running builddep... $(date)"
     # This is sadly the only case where it's a different command
     if test -x /usr/bin/dnf; then
-        dnf builddep -y "$@"
+        time dnf builddep -y "$@"
     else
-        yum-builddep -y "$@"
+        time yum-builddep -y "$@"
     fi
-    echo "Done running builddep! $(date)"
 }
 
 pkg_install_builddeps() {
@@ -50,6 +48,6 @@ pkg_install_builddeps() {
     if [ $# -ne 0 ]; then
       pkg_builddep "$@"
       pkg_install "$@"
-      rpm -e "$@"
+      time rpm -e "$@"
     fi
 }

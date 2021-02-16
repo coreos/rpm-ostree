@@ -12,7 +12,7 @@ fi
 
 # we have the canonical spec file handy so just builddep from that
 # XXX: use --allowerasing as a temporary hack to ease the migration to libmodulemd2
-dnf builddep --spec -y packaging/rpm-ostree.spec.in --allowerasing
+time dnf builddep --spec -y packaging/rpm-ostree.spec.in --allowerasing
 # Mostly dependencies for tests; TODO move these into the spec file
 # and also put them in the cosa buildroot (or another container)
 pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq python3-pyyaml \
