@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
-
-ci/installdeps.sh
-ci/build.sh
+deps=$(grep -v '^#' "${dn}"/testdeps.txt)
+pkg_install ${deps}

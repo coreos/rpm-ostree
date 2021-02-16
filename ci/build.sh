@@ -6,7 +6,6 @@ set -xeuo pipefail
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
 
-${dn}/install-extra-builddeps.sh
 ${dn}/installdeps.sh
 # make it clear what rustc version we're compiling with (this is grepped in CI)
 rustc --version

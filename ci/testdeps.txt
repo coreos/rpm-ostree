@@ -1,0 +1,8 @@
+# Dependencies for our test suites, i.e. ./tests/compose and
+# ./tests/vmcheck.
+createrepo_c 
+/usr/bin/jq 
+python3-pyyaml
+libubsan libasan libtsan elfutils fuse sudo python3-gobject-base
+selinux-policy-devel selinux-policy-targeted python3-createrepo_c
+rsync python3-rpm parallel distribution-gpg-keys

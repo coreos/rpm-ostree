@@ -5,7 +5,6 @@ set -xeuo pipefail
 
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
-${dn}/install-extra-builddeps.sh
 ${dn}/installdeps.sh
 env NOCONFIGURE=1 ./autogen.sh
 scan-build ./configure --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc
