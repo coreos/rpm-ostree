@@ -8,6 +8,7 @@ ConditionPathExists=/run/ostree-booted
 OnCalendar=weekly UTC
 AccuracySec=1u
 RandomizedDelaySec=1w
+Persistent=yes
 
 [Install]
 WantedBy=timers.target
