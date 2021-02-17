@@ -9,6 +9,7 @@
  */
 
 #![deny(unused_must_use)]
+#![allow(clippy::ptr_arg)]
 
 // pub(crate) utilities
 mod cxxrsutil;
