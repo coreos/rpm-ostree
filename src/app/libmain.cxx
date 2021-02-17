@@ -188,6 +188,8 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
         }
     }
 
+  g_printerr ("%d\n", summary->str);
+
   g_option_context_set_summary (context, summary->str);
   return util::move_nullify (context);
 }
