@@ -57,7 +57,7 @@ envsubst = "0.2.0"
 subprocess = "0.2.6"
 chrono = { version = "0.4.19", features = ["serde"] }
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
-memfd = "0.3.0"
+memfd = "0.4.0"
 rust-ini = "0.16.1"
 os-release = "0.1.0"
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
