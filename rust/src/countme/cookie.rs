@@ -66,11 +66,6 @@ impl CookieV0 {
         }
         Ok(c)
     }
-
-    /// Export a v0 cookie to JSON for persistent storage
-    fn to_json(epoch: i64, window: i64) -> Result<String> {
-        Ok(serde_json::to_string(&CookieV0 { epoch, window })?)
-    }
 }
 
 /// Internal representation of the values loaded from the versioned cookie
@@ -157,11 +152,13 @@ impl Cookie {
 
     /// Update cookie timestamps that are persisted on disk
     pub fn persist(&self) -> Result<()> {
-        openat::Dir::open(STATE_DIR)?.write_file_contents(
-            COUNTME_COOKIE,
-            0o644,
-            CookieV0::to_json(self.epoch, self.now)?,
-        )?;
+        let cookie = CookieV0 {
+            epoch: self.epoch,
+            window: self.now,
+        };
+        openat::Dir::open(STATE_DIR)?.write_file_with(COUNTME_COOKIE, 0o644, |w| -> Result<_> {
+            Ok(serde_json::to_writer(w, &cookie)?)
+        })?;
         Ok(())
     }
 }
