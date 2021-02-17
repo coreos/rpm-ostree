@@ -34,6 +34,7 @@
 #include <sys/vfs.h>
 #include <libglnx.h>
 #include <rpm/rpmmacro.h>
+#include <optional>
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"

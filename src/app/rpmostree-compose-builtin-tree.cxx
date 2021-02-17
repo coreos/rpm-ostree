@@ -35,6 +35,7 @@
 #include <libglnx.h>
 #include <rpm/rpmmacro.h>
 #include <utility>
+#include <optional>
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
