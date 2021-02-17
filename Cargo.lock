@@ -548,7 +548,7 @@ checksum = "41486a26d1366a8032b160b59065a59fb528530a46a49f627e7048fb8c064039"
 dependencies = [
  "anyhow",
  "heck",
- "itertools",
+ "itertools 0.9.0",
  "proc-macro-crate",
  "proc-macro-error",
  "proc-macro2",
@@ -642,6 +642,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37d572918e350e82412fe766d24b15e6682fb2ed2bbe018280caa810397cb319"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -667,7 +676,7 @@ dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
- "system-deps 2.0.3",
+ "system-deps 3.0.0",
 ]
 
 [[package]]
@@ -1244,7 +1253,7 @@ dependencies = [
  "serde_yaml",
  "structopt",
  "subprocess",
- "system-deps 2.0.3",
+ "system-deps 3.0.0",
  "systemd",
  "tempfile",
 ]
@@ -1457,11 +1466,13 @@ dependencies = [
 
 [[package]]
 name = "system-deps"
-version = "2.0.3"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b59b8aafd652f3c1469f16e6c223121e8a8dbe40c71475209c1401cff3a67ef"
+checksum = "14bd4dc3cd87e19c51f550d1b421c628074b3cf4c6daebc7ccbc8a03b237c751"
 dependencies = [
+ "anyhow",
  "heck",
+ "itertools 0.10.0",
  "pkg-config",
  "strum 0.20.0",
  "strum_macros 0.20.1",
