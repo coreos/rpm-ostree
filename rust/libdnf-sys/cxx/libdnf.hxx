@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <gio/gio.h>
 #include <libdnf/libdnf.h>
 
 #include "rust/cxx.h"
