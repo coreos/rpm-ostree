@@ -53,7 +53,7 @@ impl Default for ExtensionKind {
 fn extensions_load_stream(
     stream: &mut impl std::io::Read,
     basearch: &str,
-    base_pkgs: &Vec<StringMapping>,
+    base_pkgs: &[StringMapping],
 ) -> Result<Box<Extensions>> {
     let mut parsed: Extensions = serde_yaml::from_reader(stream)?;
 
@@ -106,7 +106,7 @@ pub(crate) fn extensions_load(
 
 impl Extensions {
     pub(crate) fn get_repos(&self) -> Vec<String> {
-        self.repos.as_ref().map(|v| v.clone()).unwrap_or_default()
+        self.repos.as_ref().cloned().unwrap_or_default()
     }
 
     pub(crate) fn get_os_extension_packages(&self) -> Vec<String> {
