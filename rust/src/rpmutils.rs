@@ -8,8 +8,8 @@
 
 fn hexval(c: char) -> Option<u8> {
     match c {
-        '0'..='9' => Some(c as u8 - ('0' as u8)),
-        'A'..='F' => Some(c as u8 - ('A' as u8) + 10),
+        '0'..='9' => Some(c as u8 - b'0'),
+        'A'..='F' => Some(c as u8 - b'A' + 10),
         _ => None,
     }
 }
@@ -18,42 +18,42 @@ pub(crate) fn cache_branch_to_nevra(nevra: &str) -> String {
     let prefix = "rpmostree/pkg/";
     let cachebranch = nevra
         .strip_prefix(prefix)
-        .expect(&format!("{} prefix", prefix));
-    let mut r = String::new();
-    let mut p = cachebranch.chars();
+        .unwrap_or_else(|| panic!("{} prefix", prefix));
+    let mut ret = String::new();
+    let mut chariter = cachebranch.chars();
     loop {
-        let c = match p.next() {
+        let c = match chariter.next() {
             Some(c) => c,
-            None => return r,
+            None => return ret,
         };
         if c != '_' {
             match c {
-                '/' => r.push('-'),
-                c => r.push(c),
+                '/' => ret.push('-'),
+                c => ret.push(c),
             }
             continue;
         }
 
-        let c = match p.next() {
+        let c = match chariter.next() {
             Some('_') => {
-                r.push('_');
+                ret.push('_');
                 continue;
             }
             Some(c) => c,
-            None => return r,
+            None => return ret,
         };
         let b = if let Some(c) = hexval(c) {
             c
         } else {
-            return r;
+            return ret;
         };
-        let l = if let Some(l) = p.next().map(hexval).flatten() {
+        let l = if let Some(l) = chariter.next().map(hexval).flatten() {
             l
         } else {
-            return r;
+            return ret;
         };
         let unquoted = (b << 4) + l;
-        r.push(unquoted as char);
+        ret.push(unquoted as char);
     }
 }
 
