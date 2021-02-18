@@ -1,4 +1,5 @@
 //! APIs used to talk to Fedora Infrastructure tooling (Koji, Bodhi).
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::CxxResult;
 use anyhow::{Context, Result};

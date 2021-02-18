@@ -21,3 +21,13 @@ for crate in $(find -iname Cargo.toml); do
     fi
 done
 echo "ok"
+
+ident='SPDX-License-Identifier:'
+echo -n "checking \"$ident\"..."
+git ls-files '*.rs' | while read f; do
+    if ! grep -qF "$ident" $f; then
+        echo "error: File $f: Missing $ident" 1>&2
+        exit 1
+    fi
+done
+echo "ok"
