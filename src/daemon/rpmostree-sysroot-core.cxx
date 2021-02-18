@@ -307,30 +307,13 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
                                 cancellable, error))
     return FALSE;
 
-  OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
-  auto live_state = std::unique_ptr<rpmostreecxx::LiveApplyState>();
-  if (booted)
-    live_state = std::make_unique<rpmostreecxx::LiveApplyState>(rpmostreecxx::get_live_apply_state(*sysroot, *booted));
+  /* Refs for the live state */
+  rpmostreecxx::applylive_sync_ref(*sysroot);
 
   /* And do a prune */
   guint64 freed_space;
   gint n_objects_total, n_objects_pruned;
   { g_autoptr(GHashTable) reachable = ostree_repo_traverse_new_reachable ();
-
-    /* We don't currently write refs for these since the content can be
-     * ephemeral; add them to the strong set */
-    if (live_state != nullptr)
-      {
-        if (live_state->inprogress.length() > 0 && 
-            !ostree_repo_traverse_commit_union (repo, live_state->inprogress.c_str(), 0, reachable,
-                                                cancellable, error))
-          return FALSE;
-        if (live_state->commit.length() > 0 && 
-            !ostree_repo_traverse_commit_union (repo, live_state->commit.c_str(), 0, reachable,
-                                                cancellable, error))
-            return FALSE;
-      }
-
     OstreeRepoPruneOptions opts = { OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, reachable };
     if (!ostree_sysroot_cleanup_prune_repo (sysroot, &opts, &n_objects_total,
                                             &n_objects_pruned, &freed_space,

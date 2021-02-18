@@ -14,7 +14,6 @@ use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
 use rayon::prelude::*;
-use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
@@ -25,40 +24,14 @@ use std::process::Command;
 /// This is currently semi-private to ostree; we should add an API to
 /// access it.
 const OSTREE_RUNSTATE_DIR: &str = "/run/ostree/deployment-state";
-/// Filename we use for serialized state, stored in the above directory.
-const LIVE_STATE_NAME: &str = "rpmostree-live-state.json";
-
-/// The model for live state.  This representation is
-/// just used "on disk" right now because
-/// TODO(cxx-rs) doesn't support Option<T>
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
-struct LiveApplyStateSerialized {
-    /// The OSTree commit that the running root filesystem is using,
-    /// as distinct from the one it was booted with.
-    commit: Option<String>,
-    /// Set when an apply-live operation is in progress; if the process
-    /// is interrupted, some files from this commit may exist
-    /// on disk but in an incomplete state.
-    inprogress: Option<String>,
-}
-
-impl From<&LiveApplyStateSerialized> for LiveApplyState {
-    fn from(s: &LiveApplyStateSerialized) -> LiveApplyState {
-        LiveApplyState {
-            inprogress: s.inprogress.clone().unwrap_or_default(),
-            commit: s.commit.clone().unwrap_or_default(),
-        }
-    }
-}
-
-impl From<&LiveApplyState> for LiveApplyStateSerialized {
-    fn from(s: &LiveApplyState) -> LiveApplyStateSerialized {
-        LiveApplyStateSerialized {
-            inprogress: Some(s.inprogress.clone()).filter(|s| !s.is_empty()),
-            commit: Some(s.commit.clone()).filter(|s| !s.is_empty()),
-        }
-    }
-}
+/// Stamp file used to signal deployment was live-applied, stored in the above directory
+const LIVE_STATE_NAME: &str = "rpmostree-is-live.stamp";
+/// OSTree ref that follows the live state
+const LIVE_REF: &str = "rpmostree/live-apply";
+/// OSTree ref that will be set to the commit we are currently
+/// updating to; if the process is interrupted, we can then
+/// more reliably resynchronize.
+const LIVE_REF_INPROGRESS: &str = "rpmostree/live-apply-inprogress";
 
 /// Get the transient state directory for a deployment; TODO
 /// upstream this into libostree.
@@ -73,25 +46,53 @@ fn get_runstate_dir(deploy: &ostree::Deployment) -> PathBuf {
 }
 
 /// Get the live state
-fn get_live_state(deploy: &ostree::Deployment) -> Result<Option<LiveApplyState>> {
+fn get_live_state(
+    repo: &ostree::Repo,
+    deploy: &ostree::Deployment,
+) -> Result<Option<LiveApplyState>> {
     let root = openat::Dir::open("/")?;
-    if let Some(f) = root.open_file_optional(&get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
-        let s: LiveApplyStateSerialized = serde_json::from_reader(std::io::BufReader::new(f))?;
-        let s = &s;
-        Ok(Some(s.into()))
-    } else {
-        Ok(None)
+    if !root.exists(&get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
+        return Ok(None);
     }
+    let live_commit = crate::ostree_utils::repo_resolve_ref_optional(repo, LIVE_REF)?;
+    let inprogress_commit =
+        crate::ostree_utils::repo_resolve_ref_optional(repo, LIVE_REF_INPROGRESS)?;
+    Ok(Some(LiveApplyState {
+        commit: live_commit.map(|s| s.to_string()).unwrap_or_default(),
+        inprogress: inprogress_commit.map(|s| s.to_string()).unwrap_or_default(),
+    }))
 }
 
 /// Write new livefs state
-fn write_live_state(deploy: &ostree::Deployment, state: &LiveApplyState) -> Result<()> {
-    let rundir = get_runstate_dir(deploy);
-    let rundir = openat::Dir::open(&rundir)?;
-    let state: LiveApplyStateSerialized = state.into();
-    rundir.write_file_with(LIVE_STATE_NAME, 0o644, |w| -> Result<_> {
-        Ok(serde_json::to_writer(w, &state)?)
-    })?;
+fn write_live_state(
+    repo: &ostree::Repo,
+    deploy: &ostree::Deployment,
+    state: &LiveApplyState,
+) -> Result<()> {
+    let root = openat::Dir::open("/")?;
+    let rundir = if let Some(d) = root.sub_dir_optional(&get_runstate_dir(deploy))? {
+        d
+    } else {
+        return Ok(());
+    };
+
+    let found_live_stamp = rundir.exists(LIVE_STATE_NAME)?;
+
+    let commit = Some(state.commit.as_str()).filter(|s| !s.is_empty());
+    repo.set_ref_immediate(None, LIVE_REF, commit, gio::NONE_CANCELLABLE)?;
+    let inprogress_commit = Some(state.inprogress.as_str()).filter(|s| !s.is_empty());
+    repo.set_ref_immediate(
+        None,
+        LIVE_REF_INPROGRESS,
+        inprogress_commit,
+        gio::NONE_CANCELLABLE,
+    )?;
+
+    // Ensure the stamp file exists
+    if !found_live_stamp && commit.or(inprogress_commit).is_some() {
+        rundir.write_file_contents(LIVE_STATE_NAME, 0o644, b"")?;
+    }
+
     Ok(())
 }
 
@@ -379,7 +380,7 @@ pub(crate) fn transaction_apply_live(
         }
     };
 
-    let state = get_live_state(&booted)?;
+    let state = get_live_state(repo, &booted)?;
     if state.is_none() {
         match booted.get_unlocked() {
             DeploymentUnlockedState::None => {
@@ -443,7 +444,7 @@ pub(crate) fn transaction_apply_live(
 
     // Record that we're targeting this commit
     state.inprogress = target_commit.to_string();
-    write_live_state(&booted, &state)?;
+    write_live_state(&repo, &booted, &state)?;
 
     // Gather the current diff of /etc - we need to avoid changing
     // any files which are locally modified.
@@ -479,8 +480,31 @@ pub(crate) fn transaction_apply_live(
     // Success! Update the recorded state.
     state.commit = target_commit.to_string();
     state.inprogress = "".to_string();
-    write_live_state(&booted, &state)?;
+    write_live_state(&repo, &booted, &state)?;
 
+    Ok(())
+}
+
+/// Writing a ref for the live-apply state can get out of sync
+/// if we upgrade.  This prunes the ref if the booted deployment
+/// doesn't have a live apply state in /run.
+pub(crate) fn applylive_sync_ref(
+    mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+) -> CxxResult<()> {
+    let sysroot = sysroot.gobj_wrap();
+    let repo = &sysroot.get_repo(gio::NONE_CANCELLABLE)?;
+    let booted = if let Some(b) = sysroot.get_booted_deployment() {
+        b
+    } else {
+        return Ok(());
+    };
+    if get_live_state(&repo, &booted)?.is_some() {
+        return Ok(());
+    }
+
+    // Set the live state to empty
+    let state = Default::default();
+    write_live_state(&repo, &booted, &state).context("apply-live: failed to write state")?;
     Ok(())
 }
 
@@ -493,7 +517,7 @@ pub(crate) fn applylive_client_finish() -> CxxResult<()> {
     let booted_commit = booted.get_csum().expect("csum");
     let booted_commit = booted_commit.as_str();
 
-    let live_state = get_live_state(booted)?
+    let live_state = get_live_state(repo, booted)?
         .ok_or_else(|| anyhow!("Failed to find expected apply-live state"))?;
 
     let pkgdiff = {
@@ -523,33 +547,16 @@ mod test {
         let s = subpath(&d, Path::new("/foo"));
         assert_eq!(s.as_ref().map(|s| s.as_path()), Some(Path::new("/usr/foo")));
     }
-
-    #[test]
-    fn test_repr() {
-        let s: LiveApplyStateSerialized = Default::default();
-        let b: LiveApplyState = (&s).into();
-        assert_eq!(b.commit, "");
-        assert_eq!(b.inprogress, "");
-        let rs: LiveApplyStateSerialized = (&b).into();
-        assert_eq!(rs, s);
-        let s = LiveApplyStateSerialized {
-            commit: Some("42".to_string()),
-            inprogress: None,
-        };
-        let b: LiveApplyState = (&s).into();
-        assert_eq!(b.commit, "42");
-        assert_eq!(b.inprogress, "");
-        let rs: LiveApplyStateSerialized = (&b).into();
-        assert_eq!(rs, s);
-    }
 }
 
 pub(crate) fn get_live_apply_state(
-    mut _sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+    mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
     mut deployment: Pin<&mut crate::ffi::OstreeDeployment>,
 ) -> CxxResult<LiveApplyState> {
+    let sysroot = sysroot.gobj_wrap();
     let deployment = deployment.gobj_wrap();
-    if let Some(state) = get_live_state(&deployment)? {
+    let repo = &sysroot.get_repo(gio::NONE_CANCELLABLE)?;
+    if let Some(state) = get_live_state(&repo, &deployment)? {
         Ok(state)
     } else {
         Ok(Default::default())
