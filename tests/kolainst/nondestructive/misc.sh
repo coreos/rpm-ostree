@@ -5,7 +5,8 @@ set -xeuo pipefail
 cd $(mktemp -d)
 
 # make sure that package-related entries are always present,
-# even when they're empty
+# even when they're empty.
+# Validate there's no live state by default.
 rpm-ostree status --json > status.json
 assert_jq status.json \
   '.deployments[0]["packages"]' \
@@ -13,6 +14,8 @@ assert_jq status.json \
   '.deployments[0]["requested-local-packages"]' \
   '.deployments[0]["base-removals"]' \
   '.deployments[0]["requested-base-removals"]' \
+  '.deployments[0]["live-inprogress"]|not' \
+  '.deployments[0]["live-replaced"]|not' \
   '.deployments[0]["layered-commit-meta"]|not'
 rm status.json
 rpm-ostree testutils validate-parse-status

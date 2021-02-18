@@ -29,13 +29,20 @@ vm_assert_layered_pkg foo absent
 vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) --create vmcheck_tmp/without_foo
 vm_build_rpm foo version 1.2 release 3
 vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.2-3.x86_64.rpm
+vm_assert_status_jq '.deployments[0]["packages"]|length == 0' \
+  '.deployments[0]["requested-packages"]|length == 0' \
+  '.deployments[0]["requested-local-packages"]|length == 1' \
+  '.deployments[0]["live-inprogress"]|not' \
+  '.deployments[0]["live-replaced"]|not'
 echo "ok install foo locally"
 
 vm_reboot
 
-vm_assert_status_jq '.deployments[0]["packages"]|length == 0'
-vm_assert_status_jq '.deployments[0]["requested-packages"]|length == 0'
-vm_assert_status_jq '.deployments[0]["requested-local-packages"]|length == 1'
+vm_assert_status_jq '.deployments[0]["packages"]|length == 0' \
+  '.deployments[0]["requested-packages"]|length == 0' \
+  '.deployments[0]["requested-local-packages"]|length == 1' \
+  '.deployments[0]["live-inprogress"]|not' \
+  '.deployments[0]["live-replaced"]|not'
 vm_has_local_packages foo-1.2-3.x86_64
 vm_assert_layered_pkg foo-1.2-3.x86_64 present
 echo "ok pkg foo added locally"

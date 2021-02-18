@@ -203,6 +203,7 @@ pub mod ffi {
             sysroot: Pin<&mut OstreeSysroot>,
             deployment: Pin<&mut OstreeDeployment>,
         ) -> Result<bool>;
+        fn applylive_sync_ref(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
         // FIXME/cxx make this Option<&str>
         fn transaction_apply_live(sysroot: Pin<&mut OstreeSysroot>, target: &str) -> Result<()>;
         fn applylive_client_finish() -> Result<()>;
