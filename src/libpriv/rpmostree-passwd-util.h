@@ -48,21 +48,6 @@ rpmostree_check_groups (OstreeRepo      *repo,
                         GCancellable    *cancellable,
                         GError         **error);
 
-typedef enum {
-  RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
-  RPM_OSTREE_PASSWD_MIGRATE_GROUP
-} RpmOstreePasswdMigrateKind;
-
-gboolean
-rpmostree_passwd_compose_prep (int              rootfs_dfd,
-                               OstreeRepo      *repo,
-                               gboolean         unified_core,
-                               rpmostreecxx::Treefile &treefile_rs,
-                               JsonObject      *treedata,
-                               const char      *previous_checksum,
-                               GCancellable    *cancellable,
-                               GError         **error);
-
 struct sysuser_ent {
   const char *type; /* type of sysuser entry, can be 1: u (user) 2: g (group) 3: m (mixed) 4: r (ranged ids) */
   char *name;

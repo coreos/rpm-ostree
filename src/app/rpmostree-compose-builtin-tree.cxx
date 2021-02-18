@@ -438,10 +438,10 @@ install_packages (RpmOstreeTreeComposeContext  *self,
     }
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
-  if (!rpmostree_passwd_compose_prep (rootfs_dfd, self->repo, opt_unified_core,
-                                      **self->treefile_rs, self->treefile,
-                                      self->previous_checksum, cancellable, error))
-    return FALSE;
+  g_assert (self->repo);
+  auto previous_ref = self->previous_checksum? : "";
+  rpmostreecxx::passwd_compose_prep_repo(rootfs_dfd, **self->treefile_rs, *self->repo,
+                                         std::string(previous_ref), opt_unified_core);
 
   if (opt_unified_core)
     {

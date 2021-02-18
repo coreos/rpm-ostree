@@ -2,9 +2,10 @@
 //! handling the "nss-altfiles" split into `/usr/lib/{passwd,group}`.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::cxxrsutil::{self, FFIGObjectWrapper};
+use crate::cxxrsutil::*;
 use crate::ffiutil;
 use crate::nameservice;
+use crate::treefile::{CheckPasswdType, Treefile};
 use anyhow::{anyhow, Context, Result};
 use gio::prelude::InputStreamExtManual;
 use gio::FileExt;
@@ -13,7 +14,7 @@ use openat_ext::OpenatDirExt;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -49,7 +50,7 @@ pub fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>> {
 pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> Result<bool> {
     passwd_cleanup(rootfs_dfd)?;
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-    let dir: Option<PathBuf> = cxxrsutil::opt_string(merge_passwd_dir).map(|d| d.into());
+    let dir: Option<PathBuf> = opt_string(merge_passwd_dir).map(|d| d.into());
 
     // Break hardlinks for the shadow files, since shadow-utils currently uses
     // O_RDWR unconditionally.
@@ -174,16 +175,146 @@ pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>
     Ok(())
 }
 
-/// Merge and deduplicate entries from /usr/etc and /usr/lib.
-pub fn concat_fs_content(
+pub fn passwd_compose_prep(rootfs_dfd: i32, treefile: &mut Treefile) -> Result<()> {
+    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    passwd_compose_prep_impl(&rootfs, treefile, None, true)
+}
+
+/// Passwd/group handler for composes/treefiles.
+///
+/// We support various passwd/group handling. This function is primarily
+/// responsible for handling the "previous" and "file" paths; in both
+/// cases we inject data into the tree before even laying
+/// down any files, and notably before running RPM `useradd` etc.
+pub fn passwd_compose_prep_repo(
     rootfs_dfd: i32,
+    treefile: &mut Treefile,
     mut ffi_repo: Pin<&mut crate::ffi::OstreeRepo>,
+    previous_checksum: &str,
+    unified_core: bool,
+) -> Result<()> {
+    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let repo = ffi_repo.gobj_wrap();
+    passwd_compose_prep_impl(
+        &rootfs,
+        treefile,
+        Some((&repo, previous_checksum)),
+        unified_core,
+    )
+}
+
+fn passwd_compose_prep_impl(
+    rootfs: &openat::Dir,
+    treefile: &mut Treefile,
+    repo_previous_rev: Option<(&ostree::Repo, &str)>,
+    unified_core: bool,
+) -> Result<()> {
+    let generate_from_previous = treefile.parsed.preserve_passwd.unwrap_or(true);
+    if !generate_from_previous {
+        // Nothing to do
+        return Ok(());
+    };
+
+    let dest = if unified_core { "usr/etc/" } else { "etc/" };
+
+    // Create /etc in the target root; FIXME - should ensure we're using
+    // the right permissions from the filesystem RPM.  Doing this right
+    // is really hard because filesystem depends on setup which installs
+    // the files...
+    rootfs.ensure_dir_all(dest, 0o0755)?;
+
+    // TODO(lucab): consider reworking these to avoid boolean results.
+    let found_passwd_data = data_from_json(rootfs, treefile, dest, "passwd")?;
+    let found_groups_data = data_from_json(rootfs, treefile, dest, "group")?;
+
+    // We should error if we are getting passwd data from JSON and group from
+    // previous commit, or vice versa, as that'll confuse everyone when it goes
+    // wrong.
+    match (found_passwd_data, found_groups_data) {
+        (true, false) => {
+            anyhow::bail!("configured to migrate passwd data from JSON, and group data from commit")
+        }
+        (false, true) => {
+            anyhow::bail!("configured to migrate passwd data from commit, and group data from JSON")
+        }
+        _ => {}
+    };
+
+    if !found_passwd_data {
+        if let Some((repo, prev_rev)) = repo_previous_rev {
+            concat_fs_content(&rootfs, repo, prev_rev)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn data_from_json(
+    rootfs: &openat::Dir,
+    treefile: &mut Treefile,
+    dest_path: &str,
+    target: &str,
+) -> Result<bool> {
+    anyhow::ensure!(!dest_path.is_empty(), "missing destination path");
+
+    let append_unique_entries = match target {
+        "passwd" => passwd_append_unique,
+        "group" => group_append_unique,
+        x => anyhow::bail!("invalid merge target '{}'", x),
+    };
+
+    let target_etc_filename = format!("{}{}", dest_path, target);
+
+    // Migrate the check data from the specified file to /etc.
+    let mut src_file = if target == "passwd" {
+        let check_passwd = match treefile.parsed.check_passwd {
+            None => return Ok(false),
+            Some(ref p) => p,
+        };
+
+        if check_passwd.variant != CheckPasswdType::File {
+            return Ok(false);
+        };
+
+        treefile.passwd_file_mut().context("missing passwd file")?
+    } else if target == "group" {
+        let check_groups = match treefile.parsed.check_groups {
+            None => return Ok(false),
+            Some(ref p) => p,
+        };
+
+        if check_groups.variant != CheckPasswdType::File {
+            return Ok(false);
+        };
+
+        treefile.group_file_mut().context("missing group file")?
+    } else {
+        unreachable!("impossible merge target '{}'", target);
+    };
+
+    let mut seen_names = HashSet::new();
+    rootfs
+        .write_file_with(&target_etc_filename, 0o664, |dest_bufwr| -> Result<()> {
+            let mut buf_rd = BufReader::new(&mut src_file);
+            append_unique_entries(&mut buf_rd, &mut seen_names, dest_bufwr)
+                .with_context(|| format!("failed to process '{}' content from JSON", &target))?;
+            dest_bufwr.flush()?;
+            dest_bufwr.get_ref().sync_all()?;
+            Ok(())
+        })
+        .with_context(|| format!("failed to write /{}", &target_etc_filename))?;
+
+    Ok(true)
+}
+
+/// Merge and deduplicate entries from /usr/etc and /usr/lib.
+fn concat_fs_content(
+    rootfs: &openat::Dir,
+    repo: &ostree::Repo,
     previous_checksum: &str,
 ) -> Result<()> {
     anyhow::ensure!(!previous_checksum.is_empty(), "missing previous reference");
 
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-    let repo = ffi_repo.gobj_wrap();
     let (prev_root, _name) = repo.read_commit(previous_checksum, gio::NONE_CANCELLABLE)?;
 
     concat_files(&rootfs, &prev_root, "passwd")
@@ -220,11 +351,15 @@ fn concat_files(rootfs: &openat::Dir, prev_root: &gio::File, target: &str) -> Re
         .write_file_with_sync(&etc_target, 0o664, |dest_bufwr| -> Result<()> {
             let mut seen_names = HashSet::new();
             if let Some(ref src_file) = orig_usretc_content {
-                append_unique_fn(src_file, &mut seen_names, dest_bufwr)
+                let src_stream = src_file.read(gio::NONE_CANCELLABLE)?.into_read();
+                let mut buf_rd = BufReader::new(src_stream);
+                append_unique_fn(&mut buf_rd, &mut seen_names, dest_bufwr)
                     .with_context(|| format!("failed to process /usr/etc/{}", &target))?;
             }
             if let Some(ref src_file) = orig_usrlib_content {
-                append_unique_fn(src_file, &mut seen_names, dest_bufwr)
+                let src_stream = src_file.read(gio::NONE_CANCELLABLE)?.into_read();
+                let mut buf_rd = BufReader::new(src_stream);
+                append_unique_fn(&mut buf_rd, &mut seen_names, dest_bufwr)
                     .with_context(|| format!("failed to process /usr/lib/{}", &target))?;
             };
             Ok(())
@@ -235,13 +370,11 @@ fn concat_files(rootfs: &openat::Dir, prev_root: &gio::File, target: &str) -> Re
 }
 
 fn passwd_append_unique(
-    src: &gio::File,
+    src_bufrd: &mut impl BufRead,
     seen: &mut HashSet<String>,
     dest: &mut BufWriter<File>,
 ) -> Result<()> {
-    let src_stream = src.read(gio::NONE_CANCELLABLE)?.into_read();
-    let mut buf_rd = BufReader::new(src_stream);
-    let entries = nameservice::passwd::parse_passwd_content(&mut buf_rd)?;
+    let entries = nameservice::passwd::parse_passwd_content(src_bufrd)?;
     for passwd in entries {
         if seen.contains(&passwd.name) {
             continue;
@@ -253,13 +386,11 @@ fn passwd_append_unique(
 }
 
 fn group_append_unique(
-    src: &gio::File,
+    src_bufrd: &mut impl BufRead,
     seen: &mut HashSet<String>,
     dest: &mut BufWriter<File>,
 ) -> Result<()> {
-    let src_stream = src.read(gio::NONE_CANCELLABLE)?.into_read();
-    let mut buf_rd = BufReader::new(src_stream);
-    let entries = nameservice::group::parse_group_content(&mut buf_rd)?;
+    let entries = nameservice::group::parse_group_content(src_bufrd)?;
     for group in entries {
         if seen.contains(&group.name) {
             continue;

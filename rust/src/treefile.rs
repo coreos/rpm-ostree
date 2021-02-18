@@ -56,7 +56,7 @@ pub struct Treefile {
     _workdir: Option<openat::Dir>,
     primary_dfd: openat::Dir,
     #[allow(dead_code)] // Not used in tests
-    parsed: TreeComposeConfig,
+    pub(crate) parsed: TreeComposeConfig,
     // This is a copy of rojig.name to avoid needing to convert to CStr when reading
     rojig_name: Option<String>,
     rojig_spec: Option<String>,
@@ -481,8 +481,22 @@ impl Treefile {
         )
     }
 
+    pub(crate) fn passwd_file_mut(&mut self) -> Option<&mut fs::File> {
+        self.externals
+            .passwd
+            .as_mut()
+            .and_then(|f| f.seek(io::SeekFrom::Start(0)).ok().map(|_| f))
+    }
+
     pub(crate) fn get_passwd_fd(&mut self) -> i32 {
         self.externals.passwd.as_mut().map_or(-1, raw_seeked_fd)
+    }
+
+    pub(crate) fn group_file_mut(&mut self) -> Option<&mut fs::File> {
+        self.externals
+            .group
+            .as_mut()
+            .and_then(|f| f.seek(io::SeekFrom::Start(0)).ok().map(|_| f))
     }
 
     pub(crate) fn get_group_fd(&mut self) -> i32 {
@@ -788,8 +802,8 @@ impl Default for BootLocation {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-enum CheckPasswdType {
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub(crate) enum CheckPasswdType {
     #[serde(rename = "none")]
     None,
     #[serde(rename = "previous")]
@@ -801,9 +815,9 @@ enum CheckPasswdType {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct CheckPasswd {
+pub(crate) struct CheckPasswd {
     #[serde(rename = "type")]
-    variant: CheckPasswdType,
+    pub(crate) variant: CheckPasswdType,
     filename: Option<String>,
     // Skip this for now, a separate file is easier
     // and anyways we want to switch to sysusers
@@ -839,7 +853,7 @@ enum RpmdbBackend {
 // Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
 // to `true`).
 #[derive(Serialize, Deserialize, Debug)]
-struct TreeComposeConfig {
+pub(crate) struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -938,13 +952,13 @@ struct TreeComposeConfig {
     etc_group_members: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "preserve-passwd")]
-    preserve_passwd: Option<bool>,
+    pub(crate) preserve_passwd: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-passwd")]
-    check_passwd: Option<CheckPasswd>,
+    pub(crate) check_passwd: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-groups")]
-    check_groups: Option<CheckPasswd>,
+    pub(crate) check_groups: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-users")]
     ignore_removed_users: Option<Vec<String>>,
