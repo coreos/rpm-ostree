@@ -1,4 +1,5 @@
 //! Generate an "overlay" initramfs image
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};

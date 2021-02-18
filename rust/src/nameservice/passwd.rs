@@ -1,4 +1,5 @@
 //! Helpers for [user group file](https://man7.org/linux/man-pages/man5/group.5.html).
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{anyhow, Context, Result};
 use std::io::{BufRead, Write};

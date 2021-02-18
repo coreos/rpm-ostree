@@ -7,6 +7,7 @@ strings more efficient).
 NOTICE: The C header definitions are canonical, please update those first
 then synchronize the entries here.
 !*/
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use libdnf_sys::DnfPackage;
 

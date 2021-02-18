@@ -1,5 +1,6 @@
 //! Helpers for the client side binary that will speak DBus
 //! to rpm-ostreed.service.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
 use crate::utils;

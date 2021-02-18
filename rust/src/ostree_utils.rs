@@ -1,4 +1,6 @@
 //! Utility helpers or workarounds for incorrectly bound things in ostree-rs
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 use glib::translate::*;
 use std::ptr;
 

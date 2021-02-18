@@ -1,5 +1,6 @@
 //! APIs for interacting with `/etc/passwd` and `/etc/group`, including
 //! handling the "nss-altfiles" split into `/usr/lib/{passwd,group}`.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::{self, FFIGObjectWrapper};
 use crate::ffiutil;

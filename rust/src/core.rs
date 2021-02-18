@@ -1,6 +1,7 @@
 //! Code mirroring rpmostree-core.cxx which is the shared "core"
 //! binding of rpm and ostree, used by both client-side layering/overrides
 //! and server side composes.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::CxxResult;
 use crate::ffiutil;

@@ -7,6 +7,7 @@
 //! the *_sys type (e.g. ostree_sys::OstreeRepo) but the `ostree::Repo` type.
 //! So for now, we define a `FFIGObjectWrapper` trait that helps with this.
 //! In the future though hopefully cxx.rs improves this situation.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use cxx::{type_id, ExternType};
 use glib::translate::ToGlibPtr;

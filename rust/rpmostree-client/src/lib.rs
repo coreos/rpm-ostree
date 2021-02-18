@@ -1,4 +1,5 @@
 //! APIs for interacting with rpm-ostree client side.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::Context;
 use serde_derive::Deserialize;
