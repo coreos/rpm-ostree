@@ -207,13 +207,16 @@ pub mod ffi {
         fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>>;
         fn prepare_rpm_layering(rootfs: i32, merge_passwd_dir: &str) -> Result<bool>;
         fn complete_rpm_layering(rootfs: i32) -> Result<()>;
-        fn passwd_cleanup(rootfd: i32) -> Result<()>;
-        fn migrate_group_except_root(rootfd: i32, preserved_groups: &Vec<String>) -> Result<()>;
-        fn migrate_passwd_except_root(rootfd: i32) -> Result<()>;
-        fn concat_fs_content(
-            rootfs_dfd: i32,
+        fn passwd_cleanup(rootfs: i32) -> Result<()>;
+        fn migrate_group_except_root(rootfs: i32, preserved_groups: &Vec<String>) -> Result<()>;
+        fn migrate_passwd_except_root(rootfs: i32) -> Result<()>;
+        fn passwd_compose_prep(rootfs: i32, treefile: &mut Treefile) -> Result<()>;
+        fn passwd_compose_prep_repo(
+            rootfs: i32,
+            treefile: &mut Treefile,
             repo: Pin<&mut OstreeRepo>,
             previous_checksum: &str,
+            unified_core: bool,
         ) -> Result<()>;
 
         type PasswdDB;
