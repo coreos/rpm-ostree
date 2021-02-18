@@ -496,16 +496,6 @@ pub(crate) fn applylive_client_finish() -> CxxResult<()> {
     let live_state = get_live_state(booted)?
         .ok_or_else(|| anyhow!("Failed to find expected apply-live state"))?;
 
-    // It might happen that the live target commit was GC'd somehow; we're not writing
-    // an explicit ref for it.  In that case skip the diff.
-    if !repo.has_object(
-        ostree::ObjectType::Commit,
-        live_state.commit.as_str(),
-        cancellable,
-    )? {
-        return Ok(());
-    }
-
     let pkgdiff = {
         cxx::let_cxx_string!(from = booted_commit);
         cxx::let_cxx_string!(to = live_state.commit.as_str());
