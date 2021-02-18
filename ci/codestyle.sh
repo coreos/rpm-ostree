@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests that validate structure of the source code;
+# can be run without building it.
 set -euo pipefail
 
 echo -n "Checking for tabs..."
@@ -8,6 +10,7 @@ if test -s tabdamage.txt; then
     cat tabdamage.txt
     exit 1
 fi
+rm -v tabdamage.txt
 echo "ok"
 
 echo -n "checking rustfmt..."
