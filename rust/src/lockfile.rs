@@ -273,12 +273,21 @@ mod ffi {
             let repo_ref = unsafe { &mut *rpmmd_repo };
             let id = dnf_repo_get_id(repo_ref).unwrap();
             let generated = dnf_repo_get_timestamp_generated(repo_ref).unwrap();
-            lockfile_repos.insert(
-                id,
-                LockfileRepoMetadata {
-                    generated: Utc.timestamp(generated.try_into().unwrap(), 0),
-                },
-            );
+            let generated: i64 = match generated.try_into() {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Invalid rpm-md repo {} timestamp: {}: {}", id, generated, e);
+                    0
+                }
+            };
+            let generated = match Utc.timestamp_opt(generated, 0) {
+                chrono::offset::LocalResult::Single(t) => t,
+                _ => {
+                    eprintln!("Invalid rpm-md repo {} timestamp: {}", id, generated);
+                    Utc.timestamp(0, 0)
+                }
+            };
+            lockfile_repos.insert(id, LockfileRepoMetadata { generated });
         }
 
         int_glib_error(
