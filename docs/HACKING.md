@@ -8,44 +8,53 @@ nav_order: 7
 1. TOC
 {:toc}
 
-## Raw build instructions
+## Building and testing in a container
 
-First, releases are available as GPG signed git tags, and most recent
-versions support extended validation using
-[git-evtag](https://github.com/cgwalters/git-evtag).
+The majority of developers on rpm-ostree build and test it
+from a [toolbox container](https://github.com/containers/toolbox), separate from the host system.
+The instructions below may *also* work when run in a traditional
+login on a virtual machine, but are less frequently tested.
 
-You'll need to get the submodules too: `git submodule update --init`
+### Installing dependencies (cxx)
 
-rpm-ostree has a hard requirement on a bleeding edge version of
-[libhif](https://github.com/rpm-software-management/libhif/) - we now
-consume this as a git submodule automatically.
+Today rpm-ostree uses [cxx.rs](https://cxx.rs/) - the CLI tools for
+that aren't packaged in e.g. Fedora; we ship the pre-generated
+source in the releases.  But to build from git you need to install the
+tools.
 
-We also require a few other libraries like
-[librepo](https://github.com/rpm-software-management/librepo).
-
-On Fedora, you can install those with the command `dnf builddep rpm-ostree`.
-
-So the build process now looks like any other autotools program:
-
-```sh
-env NOCONFIGURE=1 ./autogen.sh
-./configure --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc
-make
+```
+$ ./ci/installdeps.sh
 ```
 
-At this point you can run some of the unit tests with `make check`.
-For more information on this, see `CONTRIBUTING.md`.
+You will also need to rerun this after the dependency changes in our
+`Cargo.lock`.  Eventually we will fix this.
 
-## Doing builds in a container
+### Installing dependencies: packages
 
-First, we recommend building in a container (for example `docker`); you can use
-other container tools obviously.  See `ci/build.sh` for build and test
-dependencies.
+Otherwise, you can use e.g. `sudo dnf builddep rpm-ostree` to get
+the rest of the build dependencies.
 
-## Testing
+### Baseline build
 
-You can use `make check` in a container to run the unit tests.  However,
-if you want to test the daemon in a useful way, you'll need virtualization.
+rpm-ostree uses autotools to build both our C/C++ side as well
+as to invoke `cargo` to build the Rust code.  After you've
+[cloned the repository](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository):
+
+```
+$ git submodule update --init
+$ ./autogen.sh --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc
+$ make
+```
+
+### Unit tests
+
+```
+$ make check
+```
+
+### Virtualized integration testing
+
+The unit tests today don't cover much; rpm-ostree is very oriented to run as a privileged systemd unit managing a host system.
 
 rpm-ostree has some tests that use the [coreos-assembler/kola framework](https://coreos.github.io/coreos-assembler/kola/external-tests/).
 
