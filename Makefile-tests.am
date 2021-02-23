@@ -18,7 +18,7 @@ if BUILDOPT_ASAN
 AM_TESTS_ENVIRONMENT += BUILDOPT_ASAN=yes ASAN_OPTIONS=detect_leaks=false
 endif
 
-GITIGNOREFILES += ssh-config ansible-inventory.yml vmcheck-logs/ test-compose-logs/ tests/vmcheck/image.qcow2
+GITIGNOREFILES += ssh-config vmcheck-logs/ test-compose-logs/ .cosa/
 
 uninstalled_test_scripts = \
 	tests/check/test-lib-introspection.sh \
@@ -32,10 +32,8 @@ dbus_run_session_SOURCES = tests/utils/dbus-run-session.c
 
 check-local:
 	@echo "  *** NOTE ***"
-	@echo "  *** NOTE ***"
-	@echo " \"make check\" only runs a subset of rpm-ostree's tests."
-	@echo " Use \"make vmcheck\" to run remaining tests in a VM."
-	@echo "  *** NOTE ***"
+	@echo " \"make check\" only runs unit tests, which have limited coverage currently."
+	@echo " See HACKING.md for more information about VM-based integration testing."
 	@echo "  *** NOTE ***"
 
 .PHONY: vmsync vmoverlay vmcheck testenv

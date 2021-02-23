@@ -46,7 +46,11 @@ vm_kola_spawn() {
 
   exec 4> info.json
   mkdir kola-ssh
-  test_image="${topsrcdir}/tests/vmcheck/image.qcow2"
+  if test -n "${COSA_DIR:-}"; then
+    test_image=$(cd ${COSA_DIR} && cosa meta --image-path qemu)
+  else
+    test_image=$(echo ${topsrcdir}/.cosa/*.qcow2)
+  fi
   if [ ! -e "$test_image" ]; then
     if  [ -L "$test_image" ]; then
       echo "$test_image is an invalid symlink" >&3

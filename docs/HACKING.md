@@ -60,7 +60,9 @@ rpm-ostree has some tests that use the [coreos-assembler/kola framework](https:/
 
 You will want to [build a custom image](https://coreos.github.io/coreos-assembler/working/#using-overrides), then run `make install` in the `${topsrcdir}/tests/kolainst/` directory, and finally `kola run --qemu-image path/to/custom-rpm-ostree-qemu.qcow2 'ext.rpm-ostree.*'`. See the [kola external tests documentation](https://coreos.github.io/coreos-assembler/kola/external-tests/#using-kola-run-with-externally-defined-tests) for more information and also how to filter tests.
 
-There's also a `vmcheck` test suite. This model always operates on an immutable base image. It takes that image and dynamically launches a separate VM for each test using `kola spawn`. For example, using the [CoreOS Assembler](https://coreos.github.io/coreos-assembler/building-fcos/), you can build a FCOS image that contains the version of rpm-ostree that you would like to test. To run the `vmcheck` test suite on it, symlink the built image to `${topsrcdir}/tests/vmcheck/image.qcow2` and execute `tests/vmcheck.sh`. 
+There's also a `vmcheck` test suite. This model always operates on an immutable base image. It takes that image and dynamically launches a separate VM for each test using `kola spawn`. For example, using the [CoreOS Assembler](https://coreos.github.io/coreos-assembler/building-fcos/), you can build a FCOS image that contains the version of rpm-ostree that you would like to test.
+
+One approach for (somewhat) fast iteration is `cosa build-fast`, then run e.g. `./tests/vmcheck.sh`.
 
 To filter tests, use the `TESTS=` environment variable. For example, to run only `tests/vmcheck/test-misc-2.sh`, you can do:
 
