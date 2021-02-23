@@ -20,3 +20,49 @@ pub(crate) fn deployment_generate_id(
         deployment.get_deployserial()
     )
 }
+
+pub(crate) fn deployment_populate_variant(
+    mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
+    mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
+    mut dict: Pin<&mut crate::FFIGVariantDict>,
+) -> CxxResult<()> {
+    let sysroot = &sysroot.gobj_wrap();
+    let deployment = &deployment.gobj_wrap();
+    let dict = dict.gobj_wrap();
+
+    let id = deployment_generate_id(deployment.gobj_rewrap());
+    // First, basic values from ostree
+    dict.insert("id", &id);
+
+    dict.insert("osname", &deployment.get_osname().expect("osname").as_str());
+    dict.insert("checksum", &deployment.get_csum().expect("csum").as_str());
+    dict.insert_value(
+        "serial",
+        &glib::Variant::from(deployment.get_deployserial() as i32),
+    );
+
+    let booted: bool = sysroot
+        .get_booted_deployment()
+        .map(|b| b.equal(deployment))
+        .unwrap_or_default();
+    dict.insert("booted", &booted);
+
+    let live_state =
+        crate::live::get_live_apply_state(sysroot.gobj_rewrap(), deployment.gobj_rewrap())?;
+    if !live_state.inprogress.is_empty() {
+        dict.insert("live-inprogress", &live_state.inprogress.as_str());
+    }
+    if !live_state.commit.is_empty() {
+        dict.insert("live-replaced", &live_state.commit.as_str());
+    }
+
+    /* Staging status */
+    if deployment.is_staged() {
+        dict.insert("staged", &true);
+        if std::path::Path::new("/run/ostree/staged-deployment-locked").exists() {
+            dict.insert("finalization-locked", &true);
+        }
+    }
+
+    Ok(())
+}

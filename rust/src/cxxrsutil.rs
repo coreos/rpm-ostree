@@ -100,12 +100,19 @@ bind_ostree_obj!(Deployment);
 // try to instead create a bind_gio_obj!() macro or so.
 #[repr(transparent)]
 pub struct FFIGCancellable(gio_sys::GCancellable);
-
 unsafe impl ExternType for FFIGCancellable {
     type Id = type_id!(rpmostreecxx::GCancellable);
     type Kind = cxx::kind::Trivial;
 }
 impl_wrap!(FFIGCancellable, gio::Cancellable, gio_sys::GCancellable);
+
+#[repr(transparent)]
+pub struct FFIGVariantDict(glib_sys::GVariantDict);
+unsafe impl ExternType for FFIGVariantDict {
+    type Id = type_id!(rpmostreecxx::GVariantDict);
+    type Kind = cxx::kind::Trivial;
+}
+impl_wrap!(FFIGVariantDict, glib::VariantDict, glib_sys::GVariantDict);
 
 // An error type helper; separate from the GObject bridging
 mod err {

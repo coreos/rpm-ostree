@@ -235,42 +235,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
 
-  /* First, basic values from ostree */
-  auto id = rpmostreecxx::deployment_generate_id (*deployment);
-  g_variant_dict_insert (&dict, "id", "s", id.c_str());
-
-  const gchar *osname = ostree_deployment_get_osname (deployment);
-  if (osname != NULL)
-    g_variant_dict_insert (&dict, "osname", "s", osname);
+  rpmostreecxx::deployment_populate_variant(*sysroot, *deployment, dict);
   const gchar *csum = ostree_deployment_get_csum (deployment);
-  g_variant_dict_insert (&dict, "checksum", "s", csum);
-  gint serial = ostree_deployment_get_deployserial (deployment);
-  g_variant_dict_insert (&dict, "serial", "i", serial);
-
-  /* Booted status */
-  const gboolean is_booted = g_strcmp0 (booted_id, id.c_str()) == 0;
-  if (booted_id != NULL)
-    g_variant_dict_insert (&dict, "booted", "b", is_booted);
-  if (is_booted)
-    {
-      auto live_state = rpmostreecxx::get_live_apply_state(*sysroot, *deployment);
-
-      if (live_state.inprogress.length() > 0)
-        g_variant_dict_insert (&dict, "live-inprogress", "s", live_state.inprogress.c_str());
-      if (live_state.commit.length() > 0)
-        g_variant_dict_insert (&dict, "live-replaced", "s", live_state.commit.c_str());
-    }
-
-  /* Staging status */
-  if (ostree_deployment_is_staged (deployment))
-    {
-      g_variant_dict_insert (&dict, "staged", "b", TRUE);
-      if (!glnx_fstatat_allow_noent (AT_FDCWD, _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED,
-                                     NULL, 0, error))
-        return FALSE;
-      g_variant_dict_insert (&dict, "finalization-locked", "b", errno == 0);
-    }
-
   /* Load the commit object */
   g_autoptr(GVariant) commit = NULL;
   if (!ostree_repo_load_variant (repo,

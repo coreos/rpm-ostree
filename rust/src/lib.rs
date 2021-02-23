@@ -37,6 +37,7 @@ pub mod ffi {
         type OstreeRepo = crate::FFIOstreeRepo;
         type OstreeDeployment = crate::FFIOstreeDeployment;
         type GCancellable = crate::FFIGCancellable;
+        type GVariantDict = crate::FFIGVariantDict;
     }
 
     /// Currently cxx-rs doesn't support mappings; like probably most projects,
@@ -80,6 +81,11 @@ pub mod ffi {
     // daemon.rs
     extern "Rust" {
         fn deployment_generate_id(deployment: Pin<&mut OstreeDeployment>) -> String;
+        fn deployment_populate_variant(
+            mut sysroot: Pin<&mut OstreeSysroot>,
+            mut deployment: Pin<&mut OstreeDeployment>,
+            mut dict: Pin<&mut GVariantDict>,
+        ) -> Result<()>;
     }
 
     // initramfs.rs
