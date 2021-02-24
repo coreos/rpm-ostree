@@ -301,13 +301,35 @@ vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"TestDriver\"" \
                     ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
 echo "ok deploy --register-driver with empty string revision"
 
+# Ensure that we are prevented from rebasing when an updates driver is registered
+commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+if vm_rpmostree rebase :"${commit}" --skip-purge 2>err.txt;then
+  assert_not_reached "Rebase with updates driver registered unexpectedly succeeded"
+fi
+assert_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
+# Bypass updates driver to force a rebase
+vm_rpmostree rebase :"${commit}" --skip-purge --bypass-driver 2>err.txt
+assert_not_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
+vm_rpmostree cleanup -p
+echo "ok rebase when updates driver is registered"
+
+# Ensure that we are prevented from deploying when an updates driver is registered
+if vm_rpmostree deploy $(vm_get_booted_csum) 2>err.txt;then
+  assert_not_reached "Deploy with updates driver registered unexpectedly succeeded"
+fi
+assert_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
+# Bypass updates driver to force a deploy
+vm_rpmostree deploy $(vm_get_booted_csum) --bypass-driver 2>err.txt
+assert_not_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
+echo "ok deploy when updates driver is registered"
+
 # Ensure that we are prevented from upgrading when an updates driver is registered
 if vm_rpmostree upgrade 2>err.txt; then
-  assert_not_reached "Upgrade with updates driver registered unexpected succeeded"
+  assert_not_reached "Upgrade with updates driver registered unexpectedly succeeded"
 fi
-assert_file_has_content err.txt 'Updates are driven by TestDriver'
+assert_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
 # Bypass updates driver to force an upgrade
 vm_rpmostree upgrade --bypass-driver 2>err.txt
-assert_not_file_has_content err.txt 'Updates are driven by TestDriver'
+assert_not_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
 vm_rpmostree cleanup -p
 echo "ok upgrade when updates driver is registered"

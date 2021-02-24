@@ -43,6 +43,7 @@ static gboolean opt_download_only;
 static gboolean opt_experimental;
 static gboolean opt_disallow_downgrade;
 static gboolean opt_lock_finalization;
+static gboolean opt_bypass_driver;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -57,6 +58,7 @@ static GOptionEntry option_entries[] = {
   { "experimental", 0, 0, G_OPTION_ARG_NONE, &opt_experimental, "Enable experimental features", NULL },
   { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade, "Forbid deployment of chronologically older trees", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
+  { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver, "Force a rebase even if an updates driver is registered", NULL},
   { NULL }
 };
 
@@ -82,6 +84,7 @@ rpmostree_builtin_rebase (int             argc,
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
+  GBusType bus_type;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -90,7 +93,7 @@ rpmostree_builtin_rebase (int             argc,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &peer_pid, NULL,
+                                       &peer_pid, &bus_type,
                                        error))
     return FALSE;
 
@@ -99,6 +102,10 @@ rpmostree_builtin_rebase (int             argc,
       rpmostree_usage_error (context, "Too many arguments", error);
       return FALSE;
     }
+  
+  if (!opt_bypass_driver)
+    if (!error_if_driver_registered (bus_type, sysroot_proxy, cancellable, error))
+      return FALSE;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
