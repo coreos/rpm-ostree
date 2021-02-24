@@ -36,6 +36,7 @@ static gboolean opt_download_only;
 static gboolean opt_lock_finalization;
 static gboolean opt_disallow_downgrade;
 static gboolean opt_unchanged_exit_77;
+static gboolean opt_bypass_driver;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -51,6 +52,7 @@ static GOptionEntry option_entries[] = {
   { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade, "Forbid deployment of chronologically older trees", NULL },
   { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no new deployment made, exit 77", NULL },
   { "register-driver", 0, 0, G_OPTION_ARG_STRING, &opt_register_driver, "Register the calling agent as the driver for updates; if REVISION is an empty string, register driver without deploying", "DRIVERNAME" },
+  { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver, "Force a deploy even if an updates driver is registered", NULL},
   { NULL }
 };
 
@@ -73,6 +75,7 @@ rpmostree_builtin_deploy (int            argc,
 
   context = g_option_context_new ("REVISION");
 
+  GBusType bus_type;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -82,7 +85,7 @@ rpmostree_builtin_deploy (int            argc,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
                                        &peer_pid,
-                                       NULL,
+                                       &bus_type,
                                        error))
     return FALSE;
 
@@ -119,6 +122,12 @@ rpmostree_builtin_deploy (int            argc,
     }
   else
     {
+      if (!opt_bypass_driver)
+        {
+          if (!error_if_driver_registered (bus_type, sysroot_proxy, cancellable, error))
+            return FALSE;
+        }
+
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
       g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
