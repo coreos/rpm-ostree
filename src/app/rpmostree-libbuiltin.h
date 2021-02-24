@@ -75,11 +75,4 @@ rpmostree_print_timestamp_version (const char  *version_string,
                                    const char  *timestamp_string,
                                    guint        max_key_len);
 
-gboolean
-get_sd_unit_objpath (GDBusConnection  *connection,
-                     const char       *update_driver_sd_unit,
-                     const char      **update_driver_objpath,
-                     GCancellable     *cancellable,
-                     GError          **error);
-
 G_END_DECLS
