@@ -24,6 +24,7 @@
 #include <sys/socket.h>
 #include <systemd/sd-login.h>
 #include <utility>
+#include <unistd.h>
 
 #include <glib-unix.h>
 #include <libglnx.h>
@@ -1526,47 +1527,45 @@ rpmostree_print_cached_update (GVariant         *cached_update,
   return TRUE;
 }
 
-/* Query systemd for update driver's systemd unit's object path. */
+/* Query systemd for systemd unit's object path using method_name provided with
+ * parameters. The reply_type of method_name must be G_VARIANT_TYPE_TUPLE. */
 gboolean
 get_sd_unit_objpath (GDBusConnection  *connection,
-                     const char       *update_driver_sd_unit,
-                     const char      **update_driver_objpath,
+                     const char       *method_name,
+                     GVariant         *parameters,
+                     const char      **unit_objpath,
                      GCancellable     *cancellable,
                      GError          **error)
 {
   g_autoptr(GVariant) update_driver_objpath_tuple = 
     g_dbus_connection_call_sync (connection, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-                                 "org.freedesktop.systemd1.Manager", "LoadUnit",
-                                 g_variant_new ("(s)", update_driver_sd_unit), G_VARIANT_TYPE_TUPLE,
+                                 "org.freedesktop.systemd1.Manager", method_name,
+                                 parameters, G_VARIANT_TYPE_TUPLE,
                                  G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
   if (!update_driver_objpath_tuple)
     return FALSE;
   else if (g_variant_n_children (update_driver_objpath_tuple) < 1)
-    return glnx_throw (error, "LoadUnit(%s) returned empty tuple", update_driver_sd_unit);
+    return glnx_throw (error, "%s returned empty tuple", method_name);
 
   g_autoptr(GVariant) update_driver_objpath_val =
     g_variant_get_child_value (update_driver_objpath_tuple, 0);
-  *update_driver_objpath = g_variant_dup_string (update_driver_objpath_val, NULL);
-  g_assert (*update_driver_objpath);
+  *unit_objpath = g_variant_dup_string (update_driver_objpath_val, NULL);
+  g_assert (*unit_objpath);
 
   return TRUE;
 }
 
-/* Get the `Documentation` property of `sd_unit`. Documentation is returned 
- * as a string array GVariant in `unit_doc_array`. */
+/* Get the property_name property of sd_unit. Returns a reference to the GVariant
+ * instance that holds the value for property_name GVariant in cache_val. */
 static gboolean
-get_sd_unit_doc (GDBusConnection *connection,
-                 const char      *sd_unit,
-                 GVariant       **unit_doc_array,
-                 GCancellable    *cancellable,
-                 GError         **error)
+get_sd_unit_property (GDBusConnection *connection,
+                      const char      *objpath,
+                      const char      *property_name,
+                      GVariant       **cache_val,
+                      GCancellable    *cancellable,
+                      GError         **error)
 {
-  const char *objpath = NULL;
-  if (!get_sd_unit_objpath (connection, sd_unit, &objpath,
-                            cancellable, error))
-    return FALSE;
-
-  /* Look up `Documentation` property of systemd unit. */
+  /* Look up property_name property of systemd unit. */
   g_autoptr(GDBusProxy) unit_obj_proxy =
     g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
                            "org.freedesktop.systemd1", objpath,
@@ -1574,11 +1573,11 @@ get_sd_unit_doc (GDBusConnection *connection,
   if (!unit_obj_proxy)
     return FALSE;
 
-  *unit_doc_array =
-    g_dbus_proxy_get_cached_property (unit_obj_proxy, "Documentation");
-  if (!*unit_doc_array)
-    return glnx_throw (error, "Documentation property not found in proxy's cache (%s)",
-                       objpath);
+  *cache_val =
+    g_dbus_proxy_get_cached_property (unit_obj_proxy, property_name);
+  if (!*cache_val)
+    return glnx_throw (error, "%s property not found in proxy's cache (%s)",
+                       property_name, objpath);
 
   return TRUE;
 }
@@ -1587,22 +1586,22 @@ get_sd_unit_doc (GDBusConnection *connection,
  * Prints any errors that occur. */
 static void
 append_docs_to_str (GString          *str,
-                    RPMOSTreeSysroot *sysroot_proxy,
-                    char             *name,
+                    GDBusConnection  *connection,
                     char             *sd_unit,
                     GCancellable     *cancellable)
 {
   g_autoptr(GVariant) docs_array = NULL;
   g_autoptr(GError) local_error = NULL;
-  GDBusConnection *connection =
-    g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
-  if (!get_sd_unit_doc (connection, sd_unit, &docs_array, cancellable, &local_error))
+  const char *objpath = NULL;
+  if (!get_sd_unit_objpath (connection, "LoadUnit", g_variant_new ("(s)", sd_unit),
+                            &objpath, cancellable, &local_error))
+    g_printerr ("%s", local_error->message);
+  if (!get_sd_unit_property (connection, objpath, "Documentation", &docs_array, cancellable, &local_error))
     {
       g_printerr ("%s", local_error->message);
     }
   else if (docs_array)
     {
-      g_string_append_printf (str, "See %s's documentation", name);
       gsize docs_len;
       g_autofree const char **docs =
         g_variant_get_strv (docs_array, &docs_len);
@@ -1618,6 +1617,32 @@ append_docs_to_str (GString          *str,
           g_string_append_printf (str, "\n");
         }
     }
+}
+
+/* Check whether sd_unit contains pid and return the boolean in sd_unit_contains_pid */
+static gboolean
+check_sd_unit_contains_pid (char            *sd_unit,
+                            pid_t            pid,
+                            gboolean        *sd_unit_contains_pid,
+                            GDBusConnection *connection,
+                            GCancellable    *cancellable,
+                            GError         **error)
+{
+  // Get the systemd unit associated with pid.
+  const char *objpath = NULL;
+  g_autoptr(GVariant) process_sd_unit_val = NULL;
+  const char *process_sd_unit = NULL;
+  if (!get_sd_unit_objpath (connection, "GetUnitByPID", g_variant_new ("(u)", (guint32) pid),
+                            &objpath, cancellable, error))
+    return FALSE;
+  if (!get_sd_unit_property (connection, objpath, "Id", &process_sd_unit_val, cancellable, error))
+    return FALSE;
+  process_sd_unit = g_variant_get_string (process_sd_unit_val, NULL);
+  if (g_strcmp0 (process_sd_unit, sd_unit) == 0)
+    *sd_unit_contains_pid = TRUE;
+  else
+    *sd_unit_contains_pid = FALSE;
+  return TRUE;
 }
 
 /* Throw an error if an updates driver is registered. */
@@ -1636,13 +1661,26 @@ error_if_driver_registered (GBusType          bus_type,
    * done through the driver. */
   if (update_driver_sd_unit && update_driver_name)
     {
+      GDBusConnection *connection =
+        g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+
+      // Do not error out if current process' systemd unit is the same as updates driver's.
+      pid_t pid = getpid();
+      gboolean sd_unit_contains_pid = FALSE;
+      if (!check_sd_unit_contains_pid (update_driver_sd_unit, pid, &sd_unit_contains_pid,
+                                       connection, cancellable, error))
+        return FALSE;
+      if (sd_unit_contains_pid)
+        return TRUE;
+
+      // Build and throw error message.
       g_autoptr(GString) error_msg = g_string_new(NULL);
       g_string_printf (error_msg, "Updates and deployments are driven by %s (%s)\n",
                        update_driver_name, update_driver_sd_unit);
+      g_string_append_printf (error_msg, "See %s's documentation", update_driver_name);
       /* only try to get unit's `Documentation` if we're on the system bus */
       if (bus_type == G_BUS_TYPE_SYSTEM)
-        append_docs_to_str (error_msg, sysroot_proxy, update_driver_name,
-                            update_driver_sd_unit, cancellable);
+        append_docs_to_str (error_msg, connection, update_driver_sd_unit, cancellable);
       g_string_append_printf (error_msg,
                               "Use --bypass-driver to bypass %s and perform the operation anyways",
                               update_driver_name);

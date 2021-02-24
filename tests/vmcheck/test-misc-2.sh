@@ -289,16 +289,18 @@ assert_file_has_content status.txt "failed to finalize previous deployment"
 assert_file_has_content status.txt "error: opendir"
 echo "ok previous staged failure in status"
 
-# Test `deploy --register-driver` option.
-vm_cmd rpm-ostree deploy \'\' \
+# Test `deploy --register-driver` option
+# Create and start a transient test-driver.service unit to register our fake driver
+vm_cmd systemd-run --unit=test-driver.service --wait -q \
+       rpm-ostree deploy \'\' \
        --register-driver=TestDriver
 vm_cmd test -f /run/rpm-ostree/update-driver.gv
 vm_cmd rpm-ostree status > status.txt
 assert_file_has_content status.txt 'AutomaticUpdatesDriver: TestDriver'
 vm_cmd rpm-ostree status -v > verbose_status.txt
-assert_file_has_content verbose_status.txt 'AutomaticUpdatesDriver: TestDriver (sshd.service)'
+assert_file_has_content verbose_status.txt 'AutomaticUpdatesDriver: TestDriver (test-driver.service)'
 vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"TestDriver\"" \
-                    ".\"update-driver\"[\"driver-sd-unit\"] == \"sshd.service\""
+                    ".\"update-driver\"[\"driver-sd-unit\"] == \"test-driver.service\""
 echo "ok deploy --register-driver with empty string revision"
 
 # Ensure that we are prevented from rebasing when an updates driver is registered
@@ -333,3 +335,15 @@ vm_rpmostree upgrade --bypass-driver 2>err.txt
 assert_not_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
 vm_rpmostree cleanup -p
 echo "ok upgrade when updates driver is registered"
+
+# Test that we don't need to --bypass-driver if the systemd unit associated with
+# the client's PID is the update driver's systemd unit.
+vm_cmd rpm-ostree deploy \'\' \
+       --register-driver=OtherTestDriver --bypass-driver
+# Make sure OtherTestDriver's systemd unit will be the same as the commandline's
+vm_cmd rpm-ostree status -v > verbose_status.txt
+assert_file_has_content verbose_status.txt 'AutomaticUpdatesDriver: OtherTestDriver (sshd.service)'
+vm_rpmostree upgrade 2>err.txt
+assert_not_file_has_content err.txt 'Updates and deployments are driven by OtherTestDriver'
+vm_rpmostree cleanup -p
+echo "ok upgrade without --bypass-driver when same systemd unit"
