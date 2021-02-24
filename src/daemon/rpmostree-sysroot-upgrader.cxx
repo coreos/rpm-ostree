@@ -428,8 +428,10 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         if (!ostree_parse_refspec (refspec, &origin_remote, &origin_ref, error))
           return FALSE;
 
+        const gboolean is_commit = ostree_validate_checksum_string (origin_ref, NULL);
+
         g_assert (self->origin_merge_deployment);
-        if (origin_remote && !synthetic)
+        if (origin_remote && !synthetic && !is_commit)
           {
             g_autoptr(GVariantBuilder) optbuilder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
             if (dir_to_pull && *dir_to_pull)
