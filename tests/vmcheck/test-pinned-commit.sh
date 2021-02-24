@@ -37,4 +37,9 @@ if vm_rpmostree deploy 42 2>err.txt; then
     fatal "deployed version from commit?"
 fi
 assert_file_has_content err.txt 'Cannot look up version while pinned to commit'
+
+# And test https://github.com/coreos/rpm-ostree/issues/2603
+vm_cmd ostree remote add self --set=gpg-verify=false file:///ostree/repo
+vm_rpmostree rebase self:${checksum}
+vm_rpmostree upgrade
 echo "ok cmds"
