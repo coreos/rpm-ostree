@@ -141,29 +141,3 @@ rpmostree_print_timestamp_version (const char  *version_string,
       rpmostree_print_kv ("Version", max_key_len, version_time);
     }
 }
-
-/* Query systemd for update driver's systemd unit's object path. */
-gboolean
-get_sd_unit_objpath (GDBusConnection  *connection,
-                     const char       *update_driver_sd_unit,
-                     const char      **update_driver_objpath,
-                     GCancellable     *cancellable,
-                     GError          **error)
-{
-  g_autoptr(GVariant) update_driver_objpath_tuple = 
-    g_dbus_connection_call_sync (connection, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-                                 "org.freedesktop.systemd1.Manager", "LoadUnit",
-                                 g_variant_new ("(s)", update_driver_sd_unit), G_VARIANT_TYPE_TUPLE,
-                                 G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
-  if (!update_driver_objpath_tuple)
-    return FALSE;
-  else if (g_variant_n_children (update_driver_objpath_tuple) < 1)
-    return glnx_throw (error, "LoadUnit(%s) returned empty tuple", update_driver_sd_unit);
-
-  g_autoptr(GVariant) update_driver_objpath_val =
-    g_variant_get_child_value (update_driver_objpath_tuple, 0);
-  *update_driver_objpath = g_variant_dup_string (update_driver_objpath_val, NULL);
-  g_assert (*update_driver_objpath);
-
-  return TRUE;
-}

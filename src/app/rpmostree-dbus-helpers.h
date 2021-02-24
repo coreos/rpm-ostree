@@ -131,4 +131,17 @@ rpmostree_print_cached_update (GVariant         *cached_update,
                                GCancellable     *cancellable,
                                GError          **error);
 
+gboolean
+get_sd_unit_objpath (GDBusConnection  *connection,
+                     const char       *update_driver_sd_unit,
+                     const char      **update_driver_objpath,
+                     GCancellable     *cancellable,
+                     GError          **error);
+
+gboolean
+error_if_driver_registered (GBusType          bus_type,
+                            RPMOSTreeSysroot *sysroot_proxy,
+                            GCancellable     *cancellable,
+                            GError          **error);
+
 G_END_DECLS

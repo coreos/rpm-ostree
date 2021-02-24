@@ -28,7 +28,6 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-dbus-helpers.h"
-#include "rpmostreed-transaction-types.h"
 
 #include <libglnx.h>
 
@@ -60,40 +59,9 @@ static GOptionEntry option_entries[] = {
   { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no new deployment made, exit 77", NULL },
   { "trigger-automatic-update-policy", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_automatic, "For automated use only; triggered by automatic timer", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
-  { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver, "Force an upgrade even if an updates driver is registered.", NULL},
+  { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver, "Force an upgrade even if an updates driver is registered", NULL},
   { NULL }
 };
-
-/* Get the `Documentation` property `update_driver_sd_unit`. Documentation is returned 
- * as a string array GVariant in `unit_doc_array`. */
-static gboolean
-get_update_driver_doc (GDBusConnection *connection,
-                       const char      *update_driver_sd_unit,
-                       GVariant       **unit_doc_array,
-                       GCancellable    *cancellable,
-                       GError         **error)
-{
-  const char *update_driver_objpath = NULL;
-  if (!get_sd_unit_objpath (connection, update_driver_sd_unit, &update_driver_objpath,
-                            cancellable, error))
-    return FALSE;
-
-  /* Look up `Documentation` property of update driver's systemd unit. */
-  g_autoptr(GDBusProxy) update_driver_unit_obj_proxy =
-    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
-                           "org.freedesktop.systemd1", update_driver_objpath,
-                           "org.freedesktop.systemd1.Unit", cancellable, error);
-  if (!update_driver_unit_obj_proxy)
-    return FALSE;
-
-  *unit_doc_array =
-    g_dbus_proxy_get_cached_property (update_driver_unit_obj_proxy, "Documentation");
-  if (!*unit_doc_array)
-    return glnx_throw (error, "Documentation property not found in proxy's cache (%s)",
-                       update_driver_objpath);
-
-  return TRUE;
-}
 
 gboolean
 rpmostree_builtin_upgrade (int             argc,
@@ -165,56 +133,8 @@ rpmostree_builtin_upgrade (int             argc,
     }
 
   if (!opt_bypass_driver)
-    {
-      g_autofree char *update_driver_sd_unit = NULL;
-      g_autofree char *update_driver_name = NULL;
-      if (!get_driver_info (&update_driver_name, &update_driver_sd_unit, error))
-        return FALSE;
-
-      /* Notify user that an updates driver is registered and upgrades should be
-       * done through the driver. */
-      if (update_driver_sd_unit && update_driver_name)
-        {
-          g_autoptr(GString) error_msg = g_string_new(NULL);
-          g_string_printf (error_msg, "Updates are driven by %s (%s)\n",
-                           update_driver_name, update_driver_sd_unit);
-          /* only try to get unit's `Documentation` if we're on the system bus */
-          if (bus_type == G_BUS_TYPE_SYSTEM)
-            {
-              g_autoptr(GVariant) update_driver_docs_array = NULL;
-              g_autoptr(GError) local_error = NULL;
-              GDBusConnection *connection =
-                g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
-              if (!get_update_driver_doc (connection, update_driver_sd_unit, &update_driver_docs_array,
-                                          cancellable, &local_error))
-                {
-                  g_printerr ("%s", local_error->message);
-                }
-              else if (update_driver_docs_array)
-                {
-                  g_string_append_printf (error_msg, "See %s's documentation", update_driver_name);
-                  gsize docs_len;
-                  g_autofree const char **update_driver_docs =
-                    g_variant_get_strv (update_driver_docs_array, &docs_len);
-                  if (docs_len > 0)
-                    {
-                      g_string_append_printf (error_msg, " at ");
-                      for (guint i = 0; i < docs_len; i++)
-                        g_string_append_printf (error_msg, "%s%s", update_driver_docs[i],
-                                                i < docs_len - 1 ? ", " : "\n");
-                    }
-                  else
-                    {
-                      g_string_append_printf (error_msg, "\n");
-                    }
-                }
-            }
-
-          g_string_append_printf (error_msg, "Use --bypass-driver to bypass %s and force an upgrade anyway",
-                                  update_driver_name);
-          return glnx_throw (error, "%s", error_msg->str);
-        }
-    }
+    if (!error_if_driver_registered (bus_type, sysroot_proxy, cancellable, error))
+      return FALSE;
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 

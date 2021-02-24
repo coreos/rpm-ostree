@@ -36,6 +36,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
+#include "rpmostreed-transaction-types.h"
 
 #define RPMOSTREE_CLI_ID "cli"
 
@@ -1521,6 +1522,132 @@ rpmostree_print_cached_update (GVariant         *cached_update,
   if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose,
                                         verbose_advisories, max_key_len, error))
     return FALSE;
+
+  return TRUE;
+}
+
+/* Query systemd for update driver's systemd unit's object path. */
+gboolean
+get_sd_unit_objpath (GDBusConnection  *connection,
+                     const char       *update_driver_sd_unit,
+                     const char      **update_driver_objpath,
+                     GCancellable     *cancellable,
+                     GError          **error)
+{
+  g_autoptr(GVariant) update_driver_objpath_tuple = 
+    g_dbus_connection_call_sync (connection, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                                 "org.freedesktop.systemd1.Manager", "LoadUnit",
+                                 g_variant_new ("(s)", update_driver_sd_unit), G_VARIANT_TYPE_TUPLE,
+                                 G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
+  if (!update_driver_objpath_tuple)
+    return FALSE;
+  else if (g_variant_n_children (update_driver_objpath_tuple) < 1)
+    return glnx_throw (error, "LoadUnit(%s) returned empty tuple", update_driver_sd_unit);
+
+  g_autoptr(GVariant) update_driver_objpath_val =
+    g_variant_get_child_value (update_driver_objpath_tuple, 0);
+  *update_driver_objpath = g_variant_dup_string (update_driver_objpath_val, NULL);
+  g_assert (*update_driver_objpath);
+
+  return TRUE;
+}
+
+/* Get the `Documentation` property of `sd_unit`. Documentation is returned 
+ * as a string array GVariant in `unit_doc_array`. */
+static gboolean
+get_sd_unit_doc (GDBusConnection *connection,
+                 const char      *sd_unit,
+                 GVariant       **unit_doc_array,
+                 GCancellable    *cancellable,
+                 GError         **error)
+{
+  const char *objpath = NULL;
+  if (!get_sd_unit_objpath (connection, sd_unit, &objpath,
+                            cancellable, error))
+    return FALSE;
+
+  /* Look up `Documentation` property of systemd unit. */
+  g_autoptr(GDBusProxy) unit_obj_proxy =
+    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
+                           "org.freedesktop.systemd1", objpath,
+                           "org.freedesktop.systemd1.Unit", cancellable, error);
+  if (!unit_obj_proxy)
+    return FALSE;
+
+  *unit_doc_array =
+    g_dbus_proxy_get_cached_property (unit_obj_proxy, "Documentation");
+  if (!*unit_doc_array)
+    return glnx_throw (error, "Documentation property not found in proxy's cache (%s)",
+                       objpath);
+
+  return TRUE;
+}
+
+/* Helper function to append docs information for sd_unit to str.
+ * Prints any errors that occur. */
+static void
+append_docs_to_str (GString          *str,
+                    RPMOSTreeSysroot *sysroot_proxy,
+                    char             *name,
+                    char             *sd_unit,
+                    GCancellable     *cancellable)
+{
+  g_autoptr(GVariant) docs_array = NULL;
+  g_autoptr(GError) local_error = NULL;
+  GDBusConnection *connection =
+    g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+  if (!get_sd_unit_doc (connection, sd_unit, &docs_array, cancellable, &local_error))
+    {
+      g_printerr ("%s", local_error->message);
+    }
+  else if (docs_array)
+    {
+      g_string_append_printf (str, "See %s's documentation", name);
+      gsize docs_len;
+      g_autofree const char **docs =
+        g_variant_get_strv (docs_array, &docs_len);
+      if (docs_len > 0)
+        {
+          g_string_append_printf (str, " at ");
+          for (guint i = 0; i < docs_len; i++)
+            g_string_append_printf (str, "%s%s", docs[i],
+                                    i < docs_len - 1 ? ", " : "\n");
+        }
+      else
+        {
+          g_string_append_printf (str, "\n");
+        }
+    }
+}
+
+/* Throw an error if an updates driver is registered. */
+gboolean
+error_if_driver_registered (GBusType          bus_type,
+                            RPMOSTreeSysroot *sysroot_proxy,
+                            GCancellable     *cancellable,
+                            GError          **error)
+{
+  g_autofree char *update_driver_sd_unit = NULL;
+  g_autofree char *update_driver_name = NULL;
+  if (!get_driver_info (&update_driver_name, &update_driver_sd_unit, error))
+    return FALSE;
+
+  /* Throw an error if an updates driver is registered since deployments should be
+   * done through the driver. */
+  if (update_driver_sd_unit && update_driver_name)
+    {
+      g_autoptr(GString) error_msg = g_string_new(NULL);
+      g_string_printf (error_msg, "Updates and deployments are driven by %s (%s)\n",
+                       update_driver_name, update_driver_sd_unit);
+      /* only try to get unit's `Documentation` if we're on the system bus */
+      if (bus_type == G_BUS_TYPE_SYSTEM)
+        append_docs_to_str (error_msg, sysroot_proxy, update_driver_name,
+                            update_driver_sd_unit, cancellable);
+      g_string_append_printf (error_msg,
+                              "Use --bypass-driver to bypass %s and perform the operation anyways",
+                              update_driver_name);
+      return glnx_throw (error, "%s", error_msg->str);
+    }
 
   return TRUE;
 }
