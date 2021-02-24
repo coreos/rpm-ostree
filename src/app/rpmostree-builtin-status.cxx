@@ -287,8 +287,8 @@ get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy,
     g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
 
   const char *update_driver_objpath = NULL;
-  if (!get_sd_unit_objpath(connection, update_driver_sd_unit, &update_driver_objpath,
-                           cancellable, error))
+  if (!get_sd_unit_objpath (connection, "LoadUnit", g_variant_new ("(s)", update_driver_sd_unit),
+                            &update_driver_objpath, cancellable, error))
     return FALSE;
 
   /* Look up ActiveState property of update driver's systemd unit. */

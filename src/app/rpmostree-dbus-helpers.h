@@ -133,8 +133,9 @@ rpmostree_print_cached_update (GVariant         *cached_update,
 
 gboolean
 get_sd_unit_objpath (GDBusConnection  *connection,
-                     const char       *update_driver_sd_unit,
-                     const char      **update_driver_objpath,
+                     const char       *method_name,
+                     GVariant         *parameters,
+                     const char      **unit_objpath,
                      GCancellable     *cancellable,
                      GError          **error);
 
