@@ -232,10 +232,9 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                         gboolean          filter,
                                         GError          **error)
 {
-  GVariantDict dict;
-  g_variant_dict_init (&dict, NULL);
+  g_autoptr(GVariantDict) dict = g_variant_dict_new (NULL);
 
-  rpmostreecxx::deployment_populate_variant(*sysroot, *deployment, dict);
+  rpmostreecxx::deployment_populate_variant(*sysroot, *deployment, *dict);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   /* Load the commit object */
   g_autoptr(GVariant) commit = NULL;
@@ -272,14 +271,14 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                      base_checksum, &base_commit, error))
         return NULL;
 
-      g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
-      variant_add_commit_details (&dict, "base-", base_commit);
+      g_variant_dict_insert (dict, "base-checksum", "s", base_checksum);
+      variant_add_commit_details (dict, "base-", base_commit);
       /* for layered commits, check if their base commit has end of life attribute */
-      variant_add_metadata_attribute (&dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", base_commit);
+      variant_add_metadata_attribute (dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", base_commit);
 
       /* See below for base commit metadata */
       g_autoptr(GVariant) layered_metadata = g_variant_get_child_value (commit, 0);
-      g_variant_dict_insert (&dict, "layered-commit-meta", "@a{sv}",
+      g_variant_dict_insert (dict, "layered-commit-meta", "@a{sv}",
                              filter ? filter_commit_meta (layered_metadata)
                                     : layered_metadata);
     }
@@ -287,17 +286,17 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
     {
       base_commit = g_variant_ref (commit);
       base_checksum = g_strdup (csum);
-      variant_add_metadata_attribute (&dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", commit);
+      variant_add_metadata_attribute (dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", commit);
     }
 
   /* We used to bridge individual keys, but that was annoying; just pass through all
    * of the commit metadata that are actually relevant.
    */
   { g_autoptr(GVariant) base_meta = g_variant_get_child_value (base_commit, 0);
-    g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}",
+    g_variant_dict_insert (dict, "base-commit-meta", "@a{sv}",
                            filter ? filter_commit_meta (base_meta) : base_meta);
   }
-  variant_add_commit_details (&dict, NULL, commit);
+  variant_add_commit_details (dict, NULL, commit);
 
   switch (refspec_type)
     {
@@ -308,14 +307,14 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
         rpmostree_origin_get_custom_description (origin, &custom_origin_url,
                                                  &custom_origin_description);
         if (custom_origin_url)
-          g_variant_dict_insert (&dict, "custom-origin", "(ss)",
+          g_variant_dict_insert (dict, "custom-origin", "(ss)",
                                  custom_origin_url,
                                  custom_origin_description);
       }
       break;
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
-        if (!variant_add_remote_status (repo, refspec, base_checksum, &dict, error))
+        if (!variant_add_remote_status (repo, refspec, base_checksum, dict, error))
           return NULL;
 
         g_autofree char *pending_base_commitrev = NULL;
@@ -332,51 +331,51 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                            error))
               return NULL;
 
-            g_variant_dict_insert (&dict, "pending-base-checksum", "s", pending_base_commitrev);
-            variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
+            g_variant_dict_insert (dict, "pending-base-checksum", "s", pending_base_commitrev);
+            variant_add_commit_details (dict, "pending-base-", pending_base_commit);
           }
       }
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
       {
-        g_variant_dict_insert (&dict, "rojig-description", "@a{sv}",
+        g_variant_dict_insert (dict, "rojig-description", "@a{sv}",
                                rpmostree_origin_get_rojig_description (origin));
       }
       break;
     }
 
   if (refspec)
-    g_variant_dict_insert (&dict, "origin", "s", refspec);
+    g_variant_dict_insert (dict, "origin", "s", refspec);
 
-  variant_add_from_hash_table (&dict, "requested-packages",
+  variant_add_from_hash_table (dict, "requested-packages",
                                rpmostree_origin_get_packages (origin));
-  variant_add_from_hash_table (&dict, "requested-local-packages",
+  variant_add_from_hash_table (dict, "requested-local-packages",
                                rpmostree_origin_get_local_packages (origin));
-  variant_add_from_hash_table (&dict, "requested-base-removals",
+  variant_add_from_hash_table (dict, "requested-base-removals",
                                rpmostree_origin_get_overrides_remove (origin));
-  variant_add_from_hash_table (&dict, "requested-base-local-replacements",
+  variant_add_from_hash_table (dict, "requested-base-local-replacements",
                                rpmostree_origin_get_overrides_local_replace (origin));
 
-  g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs);
-  g_variant_dict_insert_value (&dict, "base-removals", removed_base_pkgs);
-  g_variant_dict_insert_value (&dict, "base-local-replacements", replaced_base_pkgs);
+  g_variant_dict_insert (dict, "packages", "^as", layered_pkgs);
+  g_variant_dict_insert_value (dict, "base-removals", removed_base_pkgs);
+  g_variant_dict_insert_value (dict, "base-local-replacements", replaced_base_pkgs);
 
-  g_variant_dict_insert (&dict, "pinned", "b",
+  g_variant_dict_insert (dict, "pinned", "b",
                          ostree_deployment_is_pinned (deployment));
-  g_variant_dict_insert (&dict, "unlocked", "s",
+  g_variant_dict_insert (dict, "unlocked", "s",
                          ostree_deployment_unlocked_state_to_string (ostree_deployment_get_unlocked (deployment)));
 
-  g_variant_dict_insert (&dict, "regenerate-initramfs", "b",
+  g_variant_dict_insert (dict, "regenerate-initramfs", "b",
                          rpmostree_origin_get_regenerate_initramfs (origin));
   { const char *const* args = rpmostree_origin_get_initramfs_args (origin);
     if (args && *args)
-      g_variant_dict_insert (&dict, "initramfs-args", "^as", args);
+      g_variant_dict_insert (dict, "initramfs-args", "^as", args);
   }
 
-  variant_add_from_hash_table (&dict, "initramfs-etc",
+  variant_add_from_hash_table (dict, "initramfs-etc",
                                rpmostree_origin_get_initramfs_etc_files (origin));
 
-  return g_variant_dict_end (&dict);
+  return g_variant_dict_end (dict);
 }
 
 /* Adds the following keys to the vardict:
