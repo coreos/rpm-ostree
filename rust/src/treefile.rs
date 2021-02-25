@@ -566,6 +566,22 @@ impl Treefile {
         files_to_remove
     }
 
+    pub(crate) fn get_check_passwd(&self) -> &CheckPasswd {
+        static DEFAULT: CheckPasswd = CheckPasswd {
+            variant: CheckPasswdType::Previous,
+            filename: None,
+        };
+        self.parsed.check_passwd.as_ref().unwrap_or(&DEFAULT)
+    }
+
+    pub(crate) fn get_check_groups(&self) -> &CheckPasswd {
+        static DEFAULT: CheckPasswd = CheckPasswd {
+            variant: CheckPasswdType::Previous,
+            filename: None,
+        };
+        self.parsed.check_groups.as_ref().unwrap_or(&DEFAULT)
+    }
+
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
     fn validate_config(config: &TreeComposeConfig) -> Result<()> {
         // check add-files
@@ -955,10 +971,10 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) preserve_passwd: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-passwd")]
-    pub(crate) check_passwd: Option<CheckPasswd>,
+    check_passwd: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-groups")]
-    pub(crate) check_groups: Option<CheckPasswd>,
+    check_groups: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-users")]
     ignore_removed_users: Option<Vec<String>>,
@@ -1509,6 +1525,54 @@ etc-group-members:
         assert!(split_whitespace_unless_quoted(&stray_quote).is_err());
 
         Ok(())
+    }
+
+    #[test]
+    fn test_check_passwd() {
+        {
+            let workdir = tempfile::tempdir().unwrap();
+            let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
+            let default_cfg = tf.get_check_passwd();
+            assert_eq!(default_cfg.variant, CheckPasswdType::Previous);
+            assert_eq!(default_cfg.filename, None);
+        }
+        {
+            let input = VALID_PRELUDE.to_string()
+                + r#"check-passwd: { "type": "file", "filename": "local-file" }"#;
+            let workdir = tempfile::tempdir().unwrap();
+            let workdir_d = openat::Dir::open(workdir.path()).unwrap();
+            workdir_d
+                .write_file_contents("local-file", 0o755, "")
+                .unwrap();
+            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let custom_cfg = tf.get_check_passwd();
+            assert_eq!(custom_cfg.variant, CheckPasswdType::File);
+            assert_eq!(custom_cfg.filename, Some("local-file".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_check_groups() {
+        {
+            let workdir = tempfile::tempdir().unwrap();
+            let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
+            let default_cfg = tf.get_check_groups();
+            assert_eq!(default_cfg.variant, CheckPasswdType::Previous);
+            assert_eq!(default_cfg.filename, None);
+        }
+        {
+            let input = VALID_PRELUDE.to_string()
+                + r#"check-groups: { "type": "file", "filename": "local-file" }"#;
+            let workdir = tempfile::tempdir().unwrap();
+            let workdir_d = openat::Dir::open(workdir.path()).unwrap();
+            workdir_d
+                .write_file_contents("local-file", 0o755, "")
+                .unwrap();
+            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let custom_cfg = tf.get_check_groups();
+            assert_eq!(custom_cfg.variant, CheckPasswdType::File);
+            assert_eq!(custom_cfg.filename, Some("local-file".to_string()));
+        }
     }
 }
 
