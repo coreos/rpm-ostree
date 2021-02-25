@@ -3,7 +3,7 @@
 # to the kola tests as data/, so we don't need to rpmbuild.
 set -euo pipefail
 dn=$(cd "$(dirname "$0")" && pwd)
-topsrcdir=$(git rev-parse --show-toplevel)
+topsrcdir=$(cd $dn/../.. && pwd)
 commondir=$(cd "$dn/../common" && pwd)
 export topsrcdir commondir
 . "${commondir}/libtest.sh"
