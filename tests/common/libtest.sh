@@ -338,6 +338,14 @@ assert_jq() {
     done
 }
 
+# Takes a list of `jq` expressions, each of which should evaluate to a boolean,
+# and asserts that they are true.
+rpmostree_assert_status() {
+    rpm-ostree status --json > status.json
+    assert_jq status.json "$@"
+    rm -f status.json
+}
+
 # This function below was taken and adapted from coreos-assembler. We
 # should look into sharing this code more easily.
 
