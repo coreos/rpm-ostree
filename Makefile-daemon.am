@@ -59,10 +59,14 @@ systemdunit_service_in_files = \
 	$(srcdir)/src/daemon/rpm-ostreed.service.in \
 	$(srcdir)/src/daemon/rpm-ostreed-automatic.service.in \
 	$(srcdir)/src/daemon/rpm-ostree-bootstatus.service.in \
+	$(srcdir)/src/daemon/rpm-ostree-countme.service.in \
 	$(NULL)
 
 systemdunit_service_files = $(systemdunit_service_in_files:.service.in=.service)
-systemdunit_timer_files = $(srcdir)/src/daemon/rpm-ostreed-automatic.timer
+systemdunit_timer_files = \
+	$(srcdir)/src/daemon/rpm-ostreed-automatic.timer \
+	$(srcdir)/src/daemon/rpm-ostree-countme.timer \
+	$(NULL)
 
 systemdunit_DATA = \
 	$(systemdunit_service_files) \
@@ -77,6 +81,9 @@ daemon_asan_options = -e /@SYSTEMD_ENVIRON\@/d
 endif
 $(systemdunit_service_files): Makefile
 	$(SED_SUBST) $(daemon_asan_options) $@.in > $@
+
+systemdsysusers_DATA = $(srcdir)/src/daemon/rpm-ostree.conf
+systemdsysusersdir   = $(prefix)/lib/sysusers.d
 
 # We keep this stub script around to have SELinux labeling work,
 # plus some backwards compatibility.
@@ -107,6 +114,7 @@ EXTRA_DIST += \
 	$(service_in_files) \
 	$(systemdunit_service_in_files) \
 	$(systemdunit_timer_files) \
+	$(systemdsysusers_conf_files) \
 	$(NULL)
 
 CLEANFILES += \

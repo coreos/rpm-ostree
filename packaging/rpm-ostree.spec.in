@@ -175,6 +175,7 @@ $PYTHON autofiles.py > files \
   '%{_datadir}/dbus-1/system.d/*' \
   '%{_sysconfdir}/rpm-ostreed.conf' \
   '%{_prefix}/lib/systemd/system/*' \
+  '%{_prefix}/lib/sysusers.d*' \
   '%{_libexecdir}/rpm-ostree*' \
   '%{_datadir}/polkit-1/actions/*.policy' \
   '%{_datadir}/dbus-1/system-services' \
