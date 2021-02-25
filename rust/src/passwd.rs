@@ -267,26 +267,16 @@ fn data_from_json(
 
     // Migrate the check data from the specified file to /etc.
     let mut src_file = if target == "passwd" {
-        let check_passwd = match treefile.parsed.check_passwd {
-            None => return Ok(false),
-            Some(ref p) => p,
-        };
-
-        if check_passwd.variant != CheckPasswdType::File {
+        let check_passwd_cfg = treefile.get_check_passwd();
+        if check_passwd_cfg.variant != CheckPasswdType::File {
             return Ok(false);
         };
-
         treefile.passwd_file_mut().context("missing passwd file")?
     } else if target == "group" {
-        let check_groups = match treefile.parsed.check_groups {
-            None => return Ok(false),
-            Some(ref p) => p,
-        };
-
-        if check_groups.variant != CheckPasswdType::File {
+        let check_groups_cfg = treefile.get_check_groups();
+        if check_groups_cfg.variant != CheckPasswdType::File {
             return Ok(false);
         };
-
         treefile.group_file_mut().context("missing group file")?
     } else {
         unreachable!("impossible merge target '{}'", target);
