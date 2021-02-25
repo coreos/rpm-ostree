@@ -175,6 +175,70 @@ pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>
     Ok(())
 }
 
+/// Recursively search a directory for a subpath owned by a UID.
+pub fn dir_contains_uid(dirfd: i32, id: u32) -> Result<bool> {
+    let dir = ffiutil::ffi_view_openat_dir(dirfd);
+    let uid = Uid::from_raw(id);
+    dir_contains_uid_gid(&dir, &Some(uid), &None)
+}
+
+/// Recursively search a directory for a subpath owned by a GID.
+pub fn dir_contains_gid(dirfd: i32, id: u32) -> Result<bool> {
+    let dir = ffiutil::ffi_view_openat_dir(dirfd);
+    let gid = Gid::from_raw(id);
+    dir_contains_uid_gid(&dir, &None, &Some(gid))
+}
+
+/// Recursively search a directory for a subpath owned by a UID or GID.
+fn dir_contains_uid_gid(dir: &openat::Dir, uid: &Option<Uid>, gid: &Option<Gid>) -> Result<bool> {
+    use openat::SimpleType;
+
+    // First check the directory itself.
+    let self_metadata = dir.self_metadata()?;
+    if compare_uid_gid(self_metadata, uid, gid) {
+        return Ok(true);
+    }
+
+    // Then recursively check all entries and subdirectories.
+    for dir_entry in dir.list_self()? {
+        let dir_entry = dir_entry?;
+        let dtype = match dir_entry.simple_type() {
+            Some(t) => t,
+            None => continue,
+        };
+
+        let found_match = if dtype == SimpleType::Dir {
+            let subdir = dir.sub_dir(dir_entry.file_name())?;
+            dir_contains_uid_gid(&subdir, uid, gid)?
+        } else {
+            let metadata = dir.metadata(dir_entry.file_name())?;
+            compare_uid_gid(metadata, uid, gid)
+        };
+
+        if found_match {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+/// Helper for checking UID/GID stat fields.
+fn compare_uid_gid(metadata: openat::Metadata, uid: &Option<Uid>, gid: &Option<Gid>) -> bool {
+    let mut found = false;
+    if let Some(raw_uid) = uid.map(|u| u.as_raw()) {
+        if metadata.stat().st_uid == raw_uid {
+            found |= true;
+        };
+    }
+    if let Some(raw_gid) = gid.map(|u| u.as_raw()) {
+        if metadata.stat().st_gid == raw_gid {
+            found |= true;
+        };
+    }
+    found
+}
+
 pub fn passwd_compose_prep(rootfs_dfd: i32, treefile: &mut Treefile) -> Result<()> {
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
     passwd_compose_prep_impl(&rootfs, treefile, None, true)
