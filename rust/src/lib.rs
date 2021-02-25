@@ -225,6 +225,8 @@ pub mod ffi {
             previous_checksum: &str,
             unified_core: bool,
         ) -> Result<()>;
+        fn dir_contains_uid(dirfd: i32, id: u32) -> Result<bool>;
+        fn dir_contains_gid(dirfd: i32, id: u32) -> Result<bool>;
 
         type PasswdDB;
         fn lookup_user(self: &PasswdDB, uid: u32) -> Result<String>;

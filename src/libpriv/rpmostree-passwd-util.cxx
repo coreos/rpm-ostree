@@ -37,100 +37,6 @@
 
 #include "libglnx.h"
 
-/* Recursively search a directory for a subpath
- * owned by a uid/gid.
- */
-static gboolean
-dir_contains_uid_or_gid (int            rootfs_fd,
-                         const char    *path,
-                         guint32        id,
-                         gboolean       is_uid,
-                         gboolean      *out_found_match,
-                         GCancellable  *cancellable,
-                         GError       **error)
-{
-  gboolean found_match = FALSE;
-
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  if (!glnx_dirfd_iterator_init_at (rootfs_fd, path, FALSE, &dfd_iter, error))
-    return FALSE;
-
-  /* Examine the owner of the directory */
-  struct stat stbuf;
-  if (!glnx_fstat (dfd_iter.fd, &stbuf, error))
-    return FALSE;
-
-  if (is_uid)
-    found_match = (id == stbuf.st_uid);
-  else
-    found_match = (id == stbuf.st_gid);
-
-  /* Early return if we found a match */
-  if (found_match)
-    {
-      *out_found_match = TRUE;
-      return TRUE;
-    }
-
-  /* Loop over the directory contents */
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-      if (dent == NULL)
-        break;
-
-      if (dent->d_type == DT_DIR)
-        {
-          if (!dir_contains_uid_or_gid (dfd_iter.fd, dent->d_name,
-                                        id, is_uid, out_found_match,
-                                        cancellable, error))
-            return FALSE;
-        }
-      else
-        {
-          if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-            return FALSE;
-
-          if (is_uid)
-            found_match = (id == stbuf.st_uid);
-          else
-            found_match = (id == stbuf.st_gid);
-        }
-
-      if (found_match)
-        break;
-    }
-
-  *out_found_match = found_match;
-  return TRUE;
-}
-
-static gboolean
-dir_contains_uid (int              rootfs_fd,
-                  uid_t            uid,
-                  gboolean        *out_found_match,
-                  GCancellable    *cancellable,
-                  GError         **error)
-{
-  *out_found_match = FALSE;
-  return dir_contains_uid_or_gid (rootfs_fd, ".", uid, TRUE,
-                                  out_found_match, cancellable, error);
-}
-
-static gboolean
-dir_contains_gid (int              rootfs_fd,
-                  gid_t            gid,
-                  gboolean        *out_found_match,
-                  GCancellable    *cancellable,
-                  GError         **error)
-{
-  *out_found_match = FALSE;
-  return dir_contains_uid_or_gid (rootfs_fd, ".", gid, FALSE,
-                                  out_found_match, cancellable, error);
-}
-
 static void
 conv_passwd_ent_free (void *vptr)
 {
@@ -426,8 +332,6 @@ rpmostree_check_passwd_groups (gboolean         passwd,
         }
       else if (cmp < 0) /* Missing value from new passwd */
         {
-          gboolean found_matching_uid;
-
           if (ignore_all_removed ||
               rpmostree_str_ptrarray_contains (ignore_removed_ents, odata->name))
             {
@@ -436,10 +340,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             }
           else
             {
-              if (!dir_contains_uid (rootfs_fd, odata->uid, &found_matching_uid,
-                                     cancellable, error))
-                return FALSE;
-
+              auto found_matching_uid = rpmostreecxx::dir_contains_uid(rootfs_fd, odata->uid);
               if (found_matching_uid)
                 return glnx_throw (error, "User missing from new passwd file: %s", odata->name);
               else
@@ -484,13 +385,8 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             }
           else
             {
-              gboolean found_gid;
-
-              if (!dir_contains_gid (rootfs_fd, odata->gid, &found_gid,
-                                     cancellable, error))
-                return FALSE;
-
-              if (found_gid)
+              auto found_matching_gid = rpmostreecxx::dir_contains_gid(rootfs_fd, odata->gid);
+              if (found_matching_gid)
                 return glnx_throw (error, "Group missing from new group file: %s", odata->name);
               else
                 g_print ("Group removed from new passwd file: %s\n",
