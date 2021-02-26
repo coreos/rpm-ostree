@@ -22,6 +22,8 @@
 
 #include <signal.h>
 #include <sys/socket.h>
+#include <sys/prctl.h>
+#include <err.h>
 #include <systemd/sd-login.h>
 #include <utility>
 #include <unistd.h>
@@ -41,17 +43,16 @@
 
 #define RPMOSTREE_CLI_ID "cli"
 
-void
-rpmostree_cleanup_peer (GPid *peer_pid)
+static void
+child_setup_pdeathsig (void *unused)
 {
-  if (*peer_pid > 0)
-    kill (*peer_pid, SIGTERM);
+  if (prctl (PR_SET_PDEATHSIG, SIGTERM) < 0)
+    err (EXIT_FAILURE, "prctl(PR_SET_PDEATHSIG)");
 }
 
 static GDBusConnection*
 get_connection_for_path (const char *sysroot,
                          gboolean force_peer,
-                         GPid *out_peer_pid,
                          GBusType *out_bus_type,
                          GCancellable *cancellable,
                          GError **error)
@@ -112,10 +113,9 @@ get_connection_for_path (const char *sysroot,
       return NULL;
     }
 
-  _cleanup_peer_ GPid peer_pid = 0;
   if (!g_spawn_async (NULL, (gchar **)args, NULL,
-                      static_cast<GSpawnFlags>(G_SPAWN_LEAVE_DESCRIPTORS_OPEN | G_SPAWN_DO_NOT_REAP_CHILD),
-                      NULL, NULL, &peer_pid, error))
+                      static_cast<GSpawnFlags>(G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
+                      child_setup_pdeathsig, NULL, NULL, error))
     {
       close (pair[1]);
       return NULL;
@@ -130,7 +130,6 @@ get_connection_for_path (const char *sysroot,
   if (!connection)
     return NULL;
 
-  *out_peer_pid = peer_pid; peer_pid = 0;
   *out_bus_type = G_BUS_TYPE_NONE;
   return connection;
 }
@@ -173,16 +172,14 @@ rpmostree_load_sysroot (gchar *sysroot,
                         gboolean force_peer,
                         GCancellable *cancellable,
                         RPMOSTreeSysroot **out_sysroot_proxy,
-                        GPid *out_peer_pid,
                         GBusType *out_bus_type,
                         GError **error)
 {
   const char *bus_name = NULL;
   glnx_unref_object GDBusConnection *connection = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
   GBusType bus_type;
-  connection = get_connection_for_path (sysroot, force_peer, &peer_pid, &bus_type,
+  connection = get_connection_for_path (sysroot, force_peer, &bus_type,
                                         cancellable, error);
   if (connection == NULL)
     return FALSE;
@@ -258,7 +255,6 @@ rpmostree_load_sysroot (gchar *sysroot,
   await_reload_sync (sysroot_proxy);
 
   *out_sysroot_proxy = util::move_nullify (sysroot_proxy);
-  *out_peer_pid = peer_pid; peer_pid = 0;
   if (out_bus_type)
     *out_bus_type = bus_type;
   return TRUE;

@@ -57,7 +57,6 @@ rpmostree_builtin_reset (int             argc,
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
@@ -69,7 +68,6 @@ rpmostree_builtin_reset (int             argc,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &peer_pid,
                                        NULL,
                                        error))
     return FALSE;

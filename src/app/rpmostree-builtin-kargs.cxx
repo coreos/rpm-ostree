@@ -165,7 +165,6 @@ rpmostree_builtin_kargs (int            argc,
                          GCancellable  *cancellable,
                          GError       **error)
 {
-  _cleanup_peer_ GPid peer_pid = 0;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   gboolean display_kernel_args = FALSE;
@@ -176,7 +175,6 @@ rpmostree_builtin_kargs (int            argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid,
                                        NULL,
                                        error))
     return FALSE;

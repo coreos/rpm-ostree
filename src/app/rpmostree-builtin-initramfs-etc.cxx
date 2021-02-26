@@ -60,7 +60,6 @@ rpmostree_ex_builtin_initramfs_etc (int             argc,
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("");
 
-  _cleanup_peer_ GPid peer_pid = 0;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -69,7 +68,6 @@ rpmostree_ex_builtin_initramfs_etc (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid,
                                        NULL,
                                        error))
     return FALSE;

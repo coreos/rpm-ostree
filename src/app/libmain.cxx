@@ -202,7 +202,6 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 const char *const* *out_install_pkgs,
                                 const char *const* *out_uninstall_pkgs,
                                 RPMOSTreeSysroot **out_sysroot_proxy,
-                                GPid *out_peer_pid,
                                 GBusType *out_bus_type,
                                 GError **error)
 {
@@ -285,7 +284,6 @@ rpmostree_option_context_parse (GOptionContext *context,
                                    opt_force_peer,
                                    cancellable,
                                    out_sysroot_proxy,
-                                   out_peer_pid,
                                    out_bus_type,
                                    error))
         return FALSE;
@@ -373,7 +371,7 @@ rpmostree_handle_subcommand (int argc, char **argv,
                                              &argc, &argv,
                                              invocation,
                                              cancellable,
-                                             NULL, NULL, NULL, NULL, NULL, NULL);
+                                             NULL, NULL, NULL, NULL, NULL);
       if (subcommand_name == NULL)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -488,7 +486,7 @@ rpmostree_main_inner (const rust::Slice<const rust::Str> args)
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
                                              NULL, NULL, NULL, NULL, NULL,
-                                             NULL, NULL, NULL);
+                                             NULL, NULL);
       g_autofree char *help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
       if (command_name == NULL)

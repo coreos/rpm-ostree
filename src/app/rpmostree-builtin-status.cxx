@@ -1125,7 +1125,6 @@ rpmostree_builtin_status (int             argc,
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
   GBusType bus_type;
   if (!rpmostree_option_context_parse (context,
@@ -1135,7 +1134,7 @@ rpmostree_builtin_status (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid, &bus_type,
+                                       &bus_type,
                                        error))
     return FALSE;
 
@@ -1397,7 +1396,7 @@ rpmostree_ex_builtin_history (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
 

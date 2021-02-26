@@ -155,7 +155,6 @@ rpmostree_builtin_install (int            argc,
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
@@ -168,7 +167,7 @@ rpmostree_builtin_install (int            argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid, NULL,
+                                       NULL,
                                        error))
     return FALSE;
 
@@ -198,7 +197,6 @@ rpmostree_builtin_uninstall (int            argc,
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
@@ -211,7 +209,7 @@ rpmostree_builtin_uninstall (int            argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid, NULL,
+                                       NULL,
                                        error))
     return FALSE;
 

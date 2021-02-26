@@ -33,17 +33,11 @@ G_BEGIN_DECLS
 
 #define BUS_NAME "org.projectatomic.rpmostree1"
 
-#define _cleanup_peer_ __attribute__((cleanup(rpmostree_cleanup_peer)))
-
-void
-rpmostree_cleanup_peer                       (GPid *peer_pid);
-
 gboolean
 rpmostree_load_sysroot                       (gchar *sysroot,
                                               gboolean force_peer,
                                               GCancellable *cancellable,
                                               RPMOSTreeSysroot **out_sysroot_proxy,
-                                              GPid *out_peer_pid,
                                               GBusType *out_bus_type,
                                               GError **error);
 
