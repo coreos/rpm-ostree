@@ -141,7 +141,6 @@ rpmostree_override_builtin_replace (int argc, char **argv,
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
@@ -155,7 +154,7 @@ rpmostree_override_builtin_replace (int argc, char **argv,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &peer_pid, NULL,
+                                       NULL,
                                        error))
     return FALSE;
 
@@ -184,7 +183,6 @@ rpmostree_override_builtin_remove (int argc, char **argv,
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
@@ -198,7 +196,7 @@ rpmostree_override_builtin_remove (int argc, char **argv,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &peer_pid, NULL,
+                                       NULL,
                                        error))
     return FALSE;
 
@@ -227,7 +225,6 @@ rpmostree_override_builtin_reset (int argc, char **argv,
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
@@ -241,7 +238,7 @@ rpmostree_override_builtin_reset (int argc, char **argv,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &peer_pid, NULL,
+                                       NULL,
                                        error))
     return FALSE;
 

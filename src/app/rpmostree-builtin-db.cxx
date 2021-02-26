@@ -61,7 +61,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
                                        argc, argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
 

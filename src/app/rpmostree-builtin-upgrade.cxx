@@ -74,7 +74,6 @@ rpmostree_builtin_upgrade (int             argc,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
@@ -87,7 +86,7 @@ rpmostree_builtin_upgrade (int             argc,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &peer_pid, &bus_type,
+                                       &bus_type,
                                        error))
     return FALSE;
 

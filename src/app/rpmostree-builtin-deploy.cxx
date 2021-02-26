@@ -69,7 +69,6 @@ rpmostree_builtin_deploy (int            argc,
   g_autofree char *transaction_address = NULL;
   const char * const packages[] = { NULL };
   const char *revision;
-  _cleanup_peer_ GPid peer_pid = 0;
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
@@ -84,7 +83,6 @@ rpmostree_builtin_deploy (int            argc,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &peer_pid,
                                        &bus_type,
                                        error))
     return FALSE;

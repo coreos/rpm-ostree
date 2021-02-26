@@ -71,7 +71,6 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 const char *const* *out_install_pkgs,
                                 const char *const* *out_uninstall_pkgs,
                                 RPMOSTreeSysroot **out_sysroot_proxy,
-                                GPid *out_peer_pid,
                                 GBusType *out_bus_type,
                                 GError **error);
 

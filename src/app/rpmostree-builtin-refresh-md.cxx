@@ -57,7 +57,6 @@ rpmostree_builtin_refresh_md (int             argc,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -66,7 +65,6 @@ rpmostree_builtin_refresh_md (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid,
                                        NULL,
                                        error))
     return FALSE;

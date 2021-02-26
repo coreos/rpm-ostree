@@ -73,7 +73,6 @@ rpmostree_ex_builtin_apply_live (int             argc,
                                  GCancellable   *cancellable,
                                  GError        **error)
 {
-  _cleanup_peer_ GPid peer_pid = 0;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   if (!rpmostree_option_context_parse (context,
@@ -83,7 +82,6 @@ rpmostree_ex_builtin_apply_live (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid,
                                        NULL,
                                        error))
     return FALSE;
