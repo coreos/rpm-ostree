@@ -23,10 +23,10 @@
 #include "rpmostree-ex-builtins.h"
 
 static RpmOstreeCommand ex_subcommands[] = {
-  { "livefs", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
+  { "livefs", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_apply_live },
-  { "apply-live", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "apply-live", (RpmOstreeBuiltinFlags)0,
     "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_apply_live },
 #ifdef BUILDOPT_ROJIG
@@ -37,7 +37,7 @@ static RpmOstreeCommand ex_subcommands[] = {
 #endif
   { "history", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
-  { "initramfs-etc", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "initramfs-etc", (RpmOstreeBuiltinFlags)0,
     "Track initramfs configuration files", rpmostree_ex_builtin_initramfs_etc },
   { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
