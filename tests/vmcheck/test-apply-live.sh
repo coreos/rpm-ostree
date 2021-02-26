@@ -160,3 +160,21 @@ vm_rpmostree status > status.txt
 assert_not_file_has_content_literal status.txt 'LiveDiff:'
 
 echo "ok livefs reset"
+
+# Validate that we can generate a local ostree commit
+# that adds content, but doesn't change any packages -
+# i.e. there's no package diff.  This is a bit of a corner
+# case in various bits of the code.
+booted=$(vm_get_booted_csum)
+vm_shell_inline_sysroot_rw <<EOF
+ostree refs --create "localref" ${booted}
+cd \$(mktemp -d)
+mkdir -p usr/share/localdata
+echo mytestdata > usr/share/localdata/mytestfile
+ostree commit --base=localref --selinux-policy-from-base -b localref --tree=dir=.
+rpm-ostree rebase :localref
+rpm-ostree ex apply-live
+EOF
+vm_cmd cat /usr/share/localdata/mytestfile > out.txt
+assert_file_has_content out.txt mytestdata
+echo "ok local ref without package changes"
