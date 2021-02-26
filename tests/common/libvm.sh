@@ -46,10 +46,16 @@ vm_kola_spawn() {
 
   exec 4> info.json
   mkdir kola-ssh
-  if test -n "${COSA_DIR:-}"; then
-    test_image=$(cd ${COSA_DIR} && cosa meta --image-path qemu)
-  else
+  local test_image
+  if test -d ${topsrcdir}/.cosa; then
     test_image=$(echo ${topsrcdir}/.cosa/*.qcow2)
+  else
+    if test -n "${COSA_DIR:-}"; then
+      test_image=$(cd ${COSA_DIR} && cosa meta --image-path qemu)
+    fi
+  fi
+  if test -z "${test_image}"; then
+    fatal "failed to find .cosa/*.qcow2 or COSA_DIR"
   fi
   if [ ! -e "$test_image" ]; then
     if  [ -L "$test_image" ]; then
