@@ -22,7 +22,7 @@
 
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
-#include "rpmostree-dbus-helpers.h"
+#include "rpmostree-clientlib.h"
 #include "rpmostree-editor.h"
 #include "rpmostree-util.h"
 #include <libglnx.h>

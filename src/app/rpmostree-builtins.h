@@ -22,7 +22,7 @@
 
 #include "ostree.h"
 #include "rpmostree-builtin-types.h"
-#include "rpmostree-dbus-helpers.h"
+#include "rpmostree-clientlib.h"
 
 G_BEGIN_DECLS
 
