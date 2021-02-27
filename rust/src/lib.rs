@@ -37,6 +37,7 @@ pub mod ffi {
         type OstreeDeployment = crate::FFIOstreeDeployment;
         type GObject = crate::FFIGObject;
         type GCancellable = crate::FFIGCancellable;
+        type GDBusConnection = crate::FFIGDBusConnection;
         type GVariantDict = crate::FFIGVariantDict;
 
         #[namespace = "dnfcxx"]
@@ -293,6 +294,14 @@ pub mod ffi {
         fn early_main();
         fn rpmostree_main(args: &[&str]) -> Result<()>;
         fn main_print_error(msg: &str);
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-clientlib.h");
+        fn client_require_root() -> Result<()>;
+        type ClientConnection;
+        fn new_client_connection() -> Result<UniquePtr<ClientConnection>>;
+        fn get_connection<'a>(self: Pin<&'a mut ClientConnection>) -> Pin<&'a mut GDBusConnection>;
     }
 
     unsafe extern "C++" {

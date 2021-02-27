@@ -47,6 +47,8 @@ enum Opt {
     GenerateSyntheticUpgrade(SyntheticUpgradeOpts),
     /// Validate that we can parse the output of `rpm-ostree status --json`.
     ValidateParseStatus,
+    /// Test that we can 🐄
+    Moo,
 }
 
 /// Returns `true` if a file is ELF; see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
@@ -226,11 +228,54 @@ fn validate_parse_status() -> Result<()> {
     Ok(())
 }
 
+fn test_moo() -> Result<()> {
+    use glib::translate::*;
+
+    crate::ffi::client_require_root()?;
+
+    let mut client_conn = crate::ffi::new_client_connection()?;
+    let mut bus_conn = client_conn.pin_mut().get_connection();
+    let bus_conn = bus_conn.gobj_wrap();
+
+    // Unfortunately glib bindings don't support tuples, we need
+    // `(b)` i.e. the 1-tuple with a boolean, and not just `b`.
+    let params = unsafe {
+        let truev = glib_sys::g_variant_new_boolean(true.to_glib());
+        let r = glib_sys::g_variant_new_tuple(&truev as *const *mut _, 1);
+        glib_sys::g_variant_ref_sink(r);
+        from_glib_full(r)
+    };
+    let reply = bus_conn.call_sync(
+        Some("org.projectatomic.rpmostree1"),
+        "/org/projectatomic/rpmostree1/fedora_coreos",
+        "org.projectatomic.rpmostree1.OSExperimental",
+        "Moo",
+        Some(&params),
+        Some(glib::VariantTy::new("(s)").unwrap()),
+        gio::DBusCallFlags::NONE,
+        -1,
+        gio::NONE_CANCELLABLE,
+    )?;
+    let reply_child: glib::Variant = unsafe {
+        from_glib_full(glib_sys::g_variant_get_child_value(
+            reply.to_glib_none().0,
+            0,
+        ))
+    };
+    // Unwrap safety: We validated the (s) above.
+    let reply = reply_child.get_str().unwrap();
+    let cow = "🐄\n";
+    assert_eq!(reply, cow);
+    println!("ok {}", cow.trim());
+    Ok(())
+}
+
 pub(crate) fn testutils_entrypoint(args: Vec<String>) -> CxxResult<()> {
     let opt = Opt::from_iter(args.iter());
     match opt {
         Opt::GenerateSyntheticUpgrade(ref opts) => update_os_tree(opts)?,
         Opt::ValidateParseStatus => validate_parse_status()?,
+        Opt::Moo => test_moo()?,
     };
     Ok(())
 }

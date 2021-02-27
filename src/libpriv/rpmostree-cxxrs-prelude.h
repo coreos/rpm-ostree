@@ -28,8 +28,9 @@ namespace rpmostreecxx {
     typedef ::OstreeSysroot OstreeSysroot;
     typedef ::OstreeRepo OstreeRepo;
     typedef ::OstreeDeployment OstreeDeployment;
-    typedef ::GCancellable GCancellable;
     typedef ::GObject GObject;
+    typedef ::GCancellable GCancellable;
+    typedef ::GDBusConnection GDBusConnection;
     typedef ::GVariantDict GVariantDict;
 }
 

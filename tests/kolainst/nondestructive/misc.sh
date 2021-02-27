@@ -60,17 +60,8 @@ fi
 assert_file_has_content err.txt 'Unknown.*command'
 echo "ok error on unknown command"
 
-stateroot=$(dirname $(ls /ostree/deploy/*/var))
-ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
 # related: https://github.com/coreos/fedora-coreos-config/issues/194
-(export LANG=C.utf8
- # And for some reason this one is set in kola runs but not interactive shells
- unset LC_ALL
- gdbus call \
-  --system --dest org.projectatomic.rpmostree1 \
-  --object-path /org/projectatomic/rpmostree1/fedora_coreos \
-  --method org.projectatomic.rpmostree1.OSExperimental.Moo true > moo.txt
- assert_file_has_content moo.txt '🐄')
+rpm-ostree testutils moo
 echo "ok moo"
 
 # Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
