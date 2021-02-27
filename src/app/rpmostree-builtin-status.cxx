@@ -32,7 +32,7 @@
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostreed-transaction-types.h"
-#include "rpmostree-dbus-helpers.h"
+#include "rpmostree-clientlib.h"
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
