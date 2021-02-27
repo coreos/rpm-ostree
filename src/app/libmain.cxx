@@ -192,6 +192,17 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
   return util::move_nullify (context);
 }
 
+namespace rpmostreecxx {
+
+void 
+client_require_root(void)
+{
+  if (getuid () != 0 && getenv ("RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK") == NULL)
+    throw std::runtime_error("This command requires root privileges");
+}
+
+} /* namespace */
+
 gboolean
 rpmostree_option_context_parse (GOptionContext *context,
                                 const GOptionEntry *main_entries,
@@ -256,10 +267,8 @@ rpmostree_option_context_parse (GOptionContext *context,
       exit (EXIT_SUCCESS);
     }
 
-  if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0
-      && getuid () != 0
-      && getenv ("RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK") == NULL)
-    return glnx_throw (error, "This command requires root privileges");
+  if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0)
+    rpmostreecxx::client_require_root();
 
   if (use_daemon)
     {

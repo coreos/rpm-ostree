@@ -240,6 +240,22 @@ app_load_sysroot_impl (const char *sysroot, gboolean force_peer,
   return TRUE;
 }
 
+namespace rpmostreecxx {
+
+std::unique_ptr<ClientConnection>
+new_client_connection()
+{
+  g_autoptr(GError) local_error = NULL;
+  GDBusConnection *conn = NULL;
+  GBusType bus_type;
+
+  if (!app_load_sysroot_impl(NULL, false, NULL, &conn, &bus_type, &local_error))
+    util::throw_gerror(local_error);
+  return std::make_unique<ClientConnection>(conn, bus_type);
+}
+
+} // namespace
+
 /**
 * rpmostree_load_sysroot
 * @sysroot: sysroot path

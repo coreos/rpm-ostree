@@ -95,8 +95,8 @@ macro_rules! cxxrs_bind {
 // When extending this list, also update rpmostree-cxxrs-prelude.h and lib.rs
 // This macro is special to ostree types currently.
 cxxrs_bind!(Ostree, ostree, ostree_sys, [Sysroot, Repo, Deployment]);
-cxxrs_bind!(G, gio, gio_sys, [Cancellable]);
 cxxrs_bind!(G, glib, gobject_sys, [Object]);
+cxxrs_bind!(G, gio, gio_sys, [Cancellable, DBusConnection]);
 cxxrs_bind!(G, glib, glib_sys, [VariantDict]);
 
 // An error type helper; separate from the GObject bridging

@@ -23,6 +23,7 @@
 #include "ostree.h"
 #include "rpmostree-builtin-types.h"
 #include "rpmostree-clientlib.h"
+#include "rpmostree-cxxrs.h"
 
 G_BEGIN_DECLS
 

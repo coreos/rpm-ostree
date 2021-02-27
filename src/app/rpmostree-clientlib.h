@@ -29,6 +29,35 @@
 #include <string.h>
 #include <ostree.h>
 
+#include <memory>
+
+namespace rpmostreecxx {
+
+class ClientConnection final {
+private:
+    GDBusConnection *conn;
+    GBusType bus_type;
+public:
+    ClientConnection(GDBusConnection *connp, GBusType bus_typep) : conn(connp), bus_type(bus_typep) {}
+    ~ClientConnection() {
+        g_clear_object(&conn);
+    }
+
+    GDBusConnection &get_connection() {
+        return *conn;
+    }
+
+    GBusType get_bus_type() const {
+        return bus_type;
+    }
+};
+
+void client_require_root();
+
+std::unique_ptr<ClientConnection> new_client_connection();
+
+} // namespace
+
 G_BEGIN_DECLS
 
 #define BUS_NAME "org.projectatomic.rpmostree1"
