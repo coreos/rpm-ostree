@@ -144,7 +144,6 @@ on_reload_done (GObject      *src,
   (void) rpmostree_sysroot_call_reload_finish ((RPMOSTreeSysroot*)src, res, NULL);
 }
 
-
 /* This is an async call so that gdbus handles signals for changed
  * properties. */
 static void
@@ -156,23 +155,15 @@ await_reload_sync (RPMOSTreeSysroot *sysroot_proxy)
     g_main_context_iteration (NULL, TRUE);
 }
 
-/**
-* rpmostree_load_sysroot
-* @sysroot: sysroot path
-* @force_peer: Force a peer connection
-* @cancellable: A GCancellable
-* @out_sysroot: (out) Return location for sysroot
-* @error: A pointer to a GError pointer.
-*
-* Returns: True on success
-**/
-gboolean
-rpmostree_load_sysroot (gchar *sysroot,
-                        gboolean force_peer,
-                        GCancellable *cancellable,
-                        RPMOSTreeSysroot **out_sysroot_proxy,
-                        GBusType *out_bus_type,
-                        GError **error)
+/* Connect via DBus and register as a client to rpm-ostreed, 
+ * with a retry loop in case the daemon
+ * is in the process of auto-exiting.
+ */
+static gboolean
+app_load_sysroot_impl (const char *sysroot, gboolean force_peer, 
+                       GCancellable *cancellable, 
+                       GDBusConnection **out_conn, GBusType *out_bus_type, 
+                       GError **error)
 {
   const char *bus_name = NULL;
   glnx_unref_object GDBusConnection *connection = NULL;
@@ -242,6 +233,40 @@ rpmostree_load_sysroot (gchar *sysroot,
       g_propagate_error (error, util::move_nullify (local_error));
       return FALSE;
     }
+
+  *out_conn = util::move_nullify(connection);
+  if (out_bus_type)
+    *out_bus_type = bus_type;
+  return TRUE;
+}
+
+/**
+* rpmostree_load_sysroot
+* @sysroot: sysroot path
+* @force_peer: Force a peer connection
+* @cancellable: A GCancellable
+* @out_sysroot: (out) Return location for sysroot
+* @error: A pointer to a GError pointer.
+*
+* Returns: True on success
+**/
+gboolean
+rpmostree_load_sysroot (gchar *sysroot,
+                        gboolean force_peer,
+                        GCancellable *cancellable,
+                        RPMOSTreeSysroot **out_sysroot_proxy,
+                        GBusType *out_bus_type,
+                        GError **error)
+{
+  g_autoptr(GDBusConnection) connection = NULL;
+  GBusType bus_type;
+
+  if (!app_load_sysroot_impl (sysroot, force_peer, cancellable, &connection, &bus_type, error))
+    return FALSE;
+
+  const char *bus_name;
+  if (g_dbus_connection_get_unique_name (connection) != NULL)
+    bus_name = BUS_NAME;
 
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy =
     rpmostree_sysroot_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_NONE,
