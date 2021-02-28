@@ -5,7 +5,7 @@
 use crate::cxxrsutil::*;
 use crate::ffiutil;
 use crate::nameservice;
-use crate::treefile::{CheckPasswdType, Treefile};
+use crate::treefile::{CheckGroups, CheckPasswd, Treefile};
 use anyhow::{anyhow, Context, Result};
 use gio::prelude::InputStreamExtManual;
 use gio::FileExt;
@@ -331,17 +331,17 @@ fn data_from_json(
 
     // Migrate the check data from the specified file to /etc.
     let mut src_file = if target == "passwd" {
-        let check_passwd_cfg = treefile.get_check_passwd();
-        if check_passwd_cfg.variant != CheckPasswdType::File {
-            return Ok(false);
+        let check_passwd_file = match treefile.parsed.get_check_passwd() {
+            CheckPasswd::File(cfg) => cfg,
+            _ => return Ok(false),
         };
-        treefile.passwd_file_mut().context("missing passwd file")?
+        treefile.externals.passwd_file_mut(&check_passwd_file)?
     } else if target == "group" {
-        let check_groups_cfg = treefile.get_check_groups();
-        if check_groups_cfg.variant != CheckPasswdType::File {
-            return Ok(false);
+        let check_groups_file = match treefile.parsed.get_check_groups() {
+            CheckGroups::File(cfg) => cfg,
+            _ => return Ok(false),
         };
-        treefile.group_file_mut().context("missing group file")?
+        treefile.externals.group_file_mut(&check_groups_file)?
     } else {
         unreachable!("impossible merge target '{}'", target);
     };
