@@ -43,7 +43,7 @@ const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Sqlite;
 
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
-struct TreefileExternals {
+pub(crate) struct TreefileExternals {
     postprocess_script: Option<fs::File>,
     add_files: collections::BTreeMap<String, fs::File>,
     passwd: Option<fs::File>,
@@ -61,7 +61,7 @@ pub struct Treefile {
     rojig_name: Option<String>,
     rojig_spec: Option<String>,
     serialized: CUtf8Buf,
-    externals: TreefileExternals,
+    pub(crate) externals: TreefileExternals,
 }
 
 // We only use this while parsing
@@ -178,18 +178,11 @@ fn take_archful_pkgs(
     Ok(archful_pkgs)
 }
 
-// If a passwd/group file is provided explicitly, load it as a fd
-fn load_passwd_file<P: AsRef<Path>>(
-    basedir: P,
-    v: &Option<CheckPasswd>,
-) -> Result<Option<fs::File>> {
-    if let Some(ref v) = *v {
-        let basedir = basedir.as_ref();
-        if let Some(ref path) = v.filename {
-            return Ok(Some(utils::open_file(basedir.join(path))?));
-        }
-    }
-    Ok(None)
+/// If a passwd/group file is provided explicitly, load it as a fd.
+fn load_passwd_file<P: AsRef<Path>>(basedir: P, cfg: &CheckFile) -> Result<Option<fs::File>> {
+    let basedir = basedir.as_ref();
+    let file = utils::open_file(basedir.join(&cfg.filename))?;
+    Ok(Some(file))
 }
 
 type IncludeMap = collections::BTreeMap<(u64, u64), String>;
@@ -237,8 +230,15 @@ fn treefile_parse<P: AsRef<Path>>(
         }
     }
     let parent = utils::parent_dir(filename).unwrap();
-    let passwd = load_passwd_file(&parent, &tf.check_passwd)?;
-    let group = load_passwd_file(&parent, &tf.check_groups)?;
+    let passwd = match tf.get_check_passwd() {
+        CheckPasswd::File(ref f) => load_passwd_file(&parent, f)?,
+        _ => None,
+    };
+    let group = match tf.get_check_groups() {
+        CheckGroups::File(ref f) => load_passwd_file(&parent, f)?,
+        _ => None,
+    };
+
     Ok(ConfigAndExternals {
         config: tf,
         externals: TreefileExternals {
@@ -481,22 +481,8 @@ impl Treefile {
         )
     }
 
-    pub(crate) fn passwd_file_mut(&mut self) -> Option<&mut fs::File> {
-        self.externals
-            .passwd
-            .as_mut()
-            .and_then(|f| f.seek(io::SeekFrom::Start(0)).ok().map(|_| f))
-    }
-
     pub(crate) fn get_passwd_fd(&mut self) -> i32 {
         self.externals.passwd.as_mut().map_or(-1, raw_seeked_fd)
-    }
-
-    pub(crate) fn group_file_mut(&mut self) -> Option<&mut fs::File> {
-        self.externals
-            .group
-            .as_mut()
-            .and_then(|f| f.seek(io::SeekFrom::Start(0)).ok().map(|_| f))
     }
 
     pub(crate) fn get_group_fd(&mut self) -> i32 {
@@ -564,22 +550,6 @@ impl Treefile {
             }
         }
         files_to_remove
-    }
-
-    pub(crate) fn get_check_passwd(&self) -> &CheckPasswd {
-        static DEFAULT: CheckPasswd = CheckPasswd {
-            variant: CheckPasswdType::Previous,
-            filename: None,
-        };
-        self.parsed.check_passwd.as_ref().unwrap_or(&DEFAULT)
-    }
-
-    pub(crate) fn get_check_groups(&self) -> &CheckPasswd {
-        static DEFAULT: CheckPasswd = CheckPasswd {
-            variant: CheckPasswdType::Previous,
-            filename: None,
-        };
-        self.parsed.check_groups.as_ref().unwrap_or(&DEFAULT)
     }
 
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
@@ -747,6 +717,24 @@ fn hash_file(hasher: &mut glib::Checksum, mut f: &fs::File) -> Result<()> {
 }
 
 impl TreefileExternals {
+    pub(crate) fn group_file_mut(&mut self, _sentinel: &CheckFile) -> Result<&mut fs::File> {
+        let group_file = self
+            .group
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("missing passwd file"))?;
+        group_file.seek(io::SeekFrom::Start(0))?;
+        Ok(group_file)
+    }
+
+    pub(crate) fn passwd_file_mut(&mut self, _sentinel: &CheckFile) -> Result<&mut fs::File> {
+        let passwd_file = self
+            .passwd
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("missing passwd file"))?;
+        passwd_file.seek(io::SeekFrom::Start(0))?;
+        Ok(passwd_file)
+    }
+
     fn hasher_update(&self, hasher: &mut glib::Checksum) -> Result<()> {
         if let Some(ref f) = self.postprocess_script {
             hash_file(hasher, f)?;
@@ -819,25 +807,70 @@ impl Default for BootLocation {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub(crate) enum CheckPasswdType {
+#[serde(tag = "type")]
+pub(crate) enum CheckGroups {
     #[serde(rename = "none")]
     None,
     #[serde(rename = "previous")]
     Previous,
     #[serde(rename = "file")]
-    File,
+    File(CheckFile),
     #[serde(rename = "data")]
-    Data,
+    Data(CheckGroupsData),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct CheckPasswd {
-    #[serde(rename = "type")]
-    pub(crate) variant: CheckPasswdType,
-    filename: Option<String>,
-    // Skip this for now, a separate file is easier
-    // and anyways we want to switch to sysusers
-    // entries: Option<Map<>String>,
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub(crate) struct CheckFile {
+    filename: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub(crate) struct CheckGroupsData {
+    entries: HashMap<String, u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(tag = "type")]
+pub(crate) enum CheckPasswd {
+    #[serde(rename = "none")]
+    None,
+    #[serde(rename = "previous")]
+    Previous,
+    #[serde(rename = "file")]
+    File(CheckFile),
+    #[serde(rename = "data")]
+    Data(CheckPasswdData),
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub(crate) struct CheckPasswdData {
+    entries: HashMap<String, CheckPasswdDataEntries>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(untagged)]
+pub(crate) enum CheckPasswdDataEntries {
+    IdValue(u64),
+    IdTuple([u64; 1]),
+    UidGid((u64, u64)),
+}
+
+impl From<u64> for CheckPasswdDataEntries {
+    fn from(item: u64) -> Self {
+        Self::IdValue(item)
+    }
+}
+
+impl From<[u64; 1]> for CheckPasswdDataEntries {
+    fn from(item: [u64; 1]) -> Self {
+        Self::IdTuple(item)
+    }
+}
+
+impl From<(u64, u64)> for CheckPasswdDataEntries {
+    fn from(item: (u64, u64)) -> Self {
+        Self::UidGid(item)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -974,7 +1007,7 @@ pub(crate) struct TreeComposeConfig {
     check_passwd: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-groups")]
-    check_groups: Option<CheckPasswd>,
+    check_groups: Option<CheckGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-users")]
     ignore_removed_users: Option<Vec<String>>,
@@ -1090,6 +1123,16 @@ impl TreeComposeConfig {
         // https://github.com/projectatomic/rpm-ostree/pull/1865
         hasher.update(serde_json::to_vec(self)?.as_slice());
         Ok(())
+    }
+
+    pub(crate) fn get_check_passwd(&self) -> &CheckPasswd {
+        static DEFAULT: CheckPasswd = CheckPasswd::Previous;
+        self.check_passwd.as_ref().unwrap_or(&DEFAULT)
+    }
+
+    pub(crate) fn get_check_groups(&self) -> &CheckGroups {
+        static DEFAULT: CheckGroups = CheckGroups::Previous;
+        self.check_groups.as_ref().unwrap_or(&DEFAULT)
     }
 }
 
@@ -1532,9 +1575,32 @@ etc-group-members:
         {
             let workdir = tempfile::tempdir().unwrap();
             let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
-            let default_cfg = tf.get_check_passwd();
-            assert_eq!(default_cfg.variant, CheckPasswdType::Previous);
-            assert_eq!(default_cfg.filename, None);
+            let default_cfg = tf.parsed.get_check_passwd();
+            assert_eq!(default_cfg, &CheckPasswd::Previous);
+        }
+        {
+            let input = VALID_PRELUDE.to_string() + r#"check-passwd: { "type": "none" }"#;
+            let workdir = tempfile::tempdir().unwrap();
+            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let custom_cfg = tf.parsed.get_check_passwd();
+            assert_eq!(custom_cfg, &CheckPasswd::None);
+        }
+        {
+            let input = VALID_PRELUDE.to_string()
+                + r#"check-passwd: { "type": "data", "entries": { "bin": 1, "adm": [3, 4], "foo" : [2] } }"#;
+            let workdir = tempfile::tempdir().unwrap();
+            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let custom_cfg = tf.parsed.get_check_passwd();
+            assert_eq!(
+                custom_cfg,
+                &CheckPasswd::Data(CheckPasswdData {
+                    entries: maplit::hashmap!(
+                        "bin".into() => 1.into(),
+                        "adm".into() => (3, 4).into(),
+                        "foo".into() => [2].into(),
+                    ),
+                })
+            );
         }
         {
             let input = VALID_PRELUDE.to_string()
@@ -1545,9 +1611,13 @@ etc-group-members:
                 .write_file_contents("local-file", 0o755, "")
                 .unwrap();
             let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
-            let custom_cfg = tf.get_check_passwd();
-            assert_eq!(custom_cfg.variant, CheckPasswdType::File);
-            assert_eq!(custom_cfg.filename, Some("local-file".to_string()));
+            let custom_cfg = tf.parsed.get_check_passwd();
+            assert_eq!(
+                custom_cfg,
+                &CheckPasswd::File(CheckFile {
+                    filename: "local-file".to_string()
+                })
+            );
         }
     }
 
@@ -1556,9 +1626,30 @@ etc-group-members:
         {
             let workdir = tempfile::tempdir().unwrap();
             let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
-            let default_cfg = tf.get_check_groups();
-            assert_eq!(default_cfg.variant, CheckPasswdType::Previous);
-            assert_eq!(default_cfg.filename, None);
+            let default_cfg = tf.parsed.get_check_groups();
+            assert_eq!(default_cfg, &CheckGroups::Previous);
+        }
+        {
+            let input = VALID_PRELUDE.to_string() + r#"check-groups: { "type": "none" }"#;
+            let workdir = tempfile::tempdir().unwrap();
+            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let custom_cfg = tf.parsed.get_check_groups();
+            assert_eq!(custom_cfg, &CheckGroups::None);
+        }
+        {
+            let input = VALID_PRELUDE.to_string()
+                + r#"check-groups: { "type": "data", "entries": { "bin": 1 } }"#;
+            let workdir = tempfile::tempdir().unwrap();
+            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let custom_cfg = tf.parsed.get_check_groups();
+            assert_eq!(
+                custom_cfg,
+                &CheckGroups::Data(CheckGroupsData {
+                    entries: maplit::hashmap!(
+                        "bin".into() => 1,
+                    ),
+                })
+            );
         }
         {
             let input = VALID_PRELUDE.to_string()
@@ -1569,9 +1660,13 @@ etc-group-members:
                 .write_file_contents("local-file", 0o755, "")
                 .unwrap();
             let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
-            let custom_cfg = tf.get_check_groups();
-            assert_eq!(custom_cfg.variant, CheckPasswdType::File);
-            assert_eq!(custom_cfg.filename, Some("local-file".to_string()));
+            let custom_cfg = tf.parsed.get_check_groups();
+            assert_eq!(
+                custom_cfg,
+                &CheckGroups::File(CheckFile {
+                    filename: "local-file".to_string()
+                })
+            );
         }
     }
 }
