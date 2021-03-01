@@ -63,7 +63,7 @@ os-release = "0.1.0"
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 
 [build-dependencies]
-cbindgen = "0.16.0"
+cbindgen = "0.18.0"
 system-deps = "3.0"
 anyhow = "1.0"
 
