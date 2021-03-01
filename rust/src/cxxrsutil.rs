@@ -74,45 +74,29 @@ macro_rules! impl_wrap {
     };
 }
 
-/// Custom macro to bind an OSTree GObject type.
-macro_rules! bind_ostree_obj {
-    ($w:ident) => {
+/// Custom macro to bind gtk-rs bridged types.
+macro_rules! cxxrs_bind {
+    ($ns:ident, $lowerns:ident, $sys:ident, [ $( $i:ident ),* ]) => {
         paste! {
-            #[repr(transparent)]
-            pub struct [<FFIOstree $w>](ostree_sys::[<Ostree $w>]);
+            $(
+                #[repr(transparent)]
+                pub struct [<FFI $ns $i>]($sys::[<$ns $i>]);
 
-            unsafe impl ExternType for [<FFIOstree $w>] {
-                type Id = type_id!(rpmostreecxx::[<Ostree $w>]);
-                type Kind = cxx::kind::Trivial;
-            }
-            impl_wrap!([<FFIOstree $w>], ostree::$w, ostree_sys::[<Ostree $w>]);
+                unsafe impl ExternType for [<FFI $ns $i>] {
+                    type Id = type_id!(rpmostreecxx::[<$ns $i>]);
+                    type Kind = cxx::kind::Trivial;
+                }
+                impl_wrap!([<FFI $ns $i>], $lowerns::$i, $sys::[<$ns $i>]);
+            )*
         }
     };
 }
 
 // When extending this list, also update rpmostree-cxxrs-prelude.h and lib.rs
 // This macro is special to ostree types currently.
-bind_ostree_obj!(Sysroot);
-bind_ostree_obj!(Repo);
-bind_ostree_obj!(Deployment);
-
-// List of non-ostree types we want to bind; if you need to extend this list
-// try to instead create a bind_gio_obj!() macro or so.
-#[repr(transparent)]
-pub struct FFIGCancellable(gio_sys::GCancellable);
-unsafe impl ExternType for FFIGCancellable {
-    type Id = type_id!(rpmostreecxx::GCancellable);
-    type Kind = cxx::kind::Trivial;
-}
-impl_wrap!(FFIGCancellable, gio::Cancellable, gio_sys::GCancellable);
-
-#[repr(transparent)]
-pub struct FFIGVariantDict(glib_sys::GVariantDict);
-unsafe impl ExternType for FFIGVariantDict {
-    type Id = type_id!(rpmostreecxx::GVariantDict);
-    type Kind = cxx::kind::Trivial;
-}
-impl_wrap!(FFIGVariantDict, glib::VariantDict, glib_sys::GVariantDict);
+cxxrs_bind!(Ostree, ostree, ostree_sys, [Sysroot, Repo, Deployment]);
+cxxrs_bind!(G, gio, gio_sys, [Cancellable]);
+cxxrs_bind!(G, glib, glib_sys, [VariantDict]);
 
 // An error type helper; separate from the GObject bridging
 mod err {
