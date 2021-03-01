@@ -18,54 +18,54 @@ links = "rpmostreeinternals"
 # This currently needs to duplicate the libraries in configure.ac
 # until we unify on Cargo as our build system
 [package.metadata.system-deps]
-libarchive = "3.0"
 jsonglib = { name = "json-glib-1.0", version = "1" }
+libarchive = "3.0"
+libcurl = "7"
 polkitgobject = { name = "polkit-gobject-1", version = "0" }
 rpm = "4"
-libcurl = "7"
 
 [dependencies]
 anyhow = "1.0.38"
+c_utf8 = "0.1.0"
+chrono = { version = "0.4.19", features = ["serde"] }
+clap = "2.33.3"
+curl = "0.4.34"
+cxx = "1.0.32"
+envsubst = "0.2.0"
+gio = "0.9.1"
+gio-sys = "0.10.1"
+glib = "0.10.3"
+glib-sys = "0.10.1"
+indicatif = "0.15.0"
+lazy_static = "1.4.0"
+libc = "0.2.86"
+libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
+memfd = "0.4.0"
+nix = "0.20.0"
+openat = "0.1.19"
+openat-ext = "^0.1.12"
+os-release = "0.1.0"
+ostree = { version = "0.9.1", features = ["v2020_4"] }
+ostree-sys = "0.7.1"
 paste = "1.0"
+phf = { version = "0.8", features = ["macros"] }
+rand = "0.8.3"
+rayon = "1.5.0"
+rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
+rust-ini = "0.16.1"
 serde = { version = "1.0.123", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.64"
 serde_yaml = "0.8.17"
-libc = "0.2.86"
-cxx = "1.0.32"
-nix = "0.20.0"
-glib-sys = "0.10.1"
-glib = "0.10.3"
-gio-sys = "0.10.1"
-gio = "0.9.1"
-ostree = { version = "0.9.1", features = ["v2020_4"] }
-ostree-sys = "0.7.1"
-tempfile = "3.2.0"
-clap = "2.33.3"
 structopt = "0.3.21"
-openat = "0.1.19"
-openat-ext = "^0.1.12"
-curl = "0.4.34"
-rayon = "1.5.0"
-c_utf8 = "0.1.0"
-rand = "0.8.3"
-phf = { version = "0.8", features = ["macros"] }
-systemd = "0.8.2"
-indicatif = "0.15.0"
-lazy_static = "1.4.0"
-envsubst = "0.2.0"
 subprocess = "0.2.6"
-chrono = { version = "0.4.19", features = ["serde"] }
-libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
-memfd = "0.4.0"
-rust-ini = "0.16.1"
-os-release = "0.1.0"
-rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
+systemd = "0.8.2"
+tempfile = "3.2.0"
 
 [build-dependencies]
+anyhow = "1.0"
 cbindgen = "0.18.0"
 system-deps = "3.0"
-anyhow = "1.0"
 
 [lib]
 name = "rpmostree_rust"
