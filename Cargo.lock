@@ -676,6 +676,7 @@ dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
+ "glib",
  "system-deps 3.0.0",
 ]
 
@@ -1236,6 +1237,7 @@ dependencies = [
  "gio-sys",
  "glib",
  "glib-sys",
+ "gobject-sys",
  "indicatif",
  "lazy_static",
  "libc",

@@ -1,7 +1,4 @@
-/* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
- *
- * Copyright (C) 2020 Red Hat, Inc.
- *
+/* 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
  * by the Free Software Foundation; either version 2 of the licence or (at
@@ -20,22 +17,37 @@
 
 #pragma once
 
-#include <ostree.h>
+#include <string>
+#include <exception>
+#include <sstream>
+#include <gio/gio.h>
 
+#include "rust/cxx.h"
+
+// Helpers corresponding to cxxrsutil.rs
 namespace rpmostreecxx {
-    // Currently cxx-rs requires that external bindings are in the same namespace as
-    // its own bindings, so we maintain typedefs.  Update cxx_bridge_gobject.rs first.
-    typedef ::OstreeSysroot OstreeSysroot;
-    typedef ::OstreeRepo OstreeRepo;
-    typedef ::OstreeDeployment OstreeDeployment;
-    typedef ::GCancellable GCancellable;
-    typedef ::GObject GObject;
-    typedef ::GVariantDict GVariantDict;
-}
 
-// XXX: really should just include! libdnf.hxx in the bridge
-#include <libdnf/libdnf.h>
-namespace dnfcxx {
-  typedef ::DnfPackage DnfPackage;
-  typedef ::DnfRepo DnfRepo;
-}
+// Wrapper for an array of GObjects.  This is a hack until
+// cxx-rs gains support for either std::vector<> or Vec<T>
+// with nontrivial types.
+class CxxGObjectArray final {
+public:
+    CxxGObjectArray(GPtrArray *arr_p) : arr(arr_p) {
+        g_ptr_array_ref(arr);
+    };
+    ~CxxGObjectArray() {
+        g_ptr_array_unref(arr);
+    }
+
+    unsigned int length() {
+        return (unsigned int)arr->len;
+    }
+
+    ::GObject& get(unsigned int i) {
+        g_assert_cmpuint(i, <, arr->len);
+        return *(::GObject*)arr->pdata[i];
+    }
+    GPtrArray* arr;
+};
+
+} // namespace

@@ -21,6 +21,7 @@ use std::convert::TryInto;
 use std::io;
 use std::iter::Extend;
 use std::path::Path;
+use std::pin::Pin;
 
 /// Given a lockfile filename, parse it
 fn lockfile_parse<P: AsRef<Path>>(filename: P) -> Result<LockfileConfig> {
@@ -208,8 +209,8 @@ pub(crate) fn ror_lockfile_read(filenames: &Vec<String>) -> CxxResult<Vec<String
 
 pub(crate) fn ror_lockfile_write(
     filename: &str,
-    packages: Vec<u64>,
-    rpmmd_repos: Vec<u64>,
+    mut packages: Pin<&mut crate::ffi::CxxGObjectArray>,
+    mut rpmmd_repos: Pin<&mut crate::ffi::CxxGObjectArray>,
 ) -> CxxResult<()> {
     // get current time, but scrub nanoseconds; it's overkill to serialize that
     let now = {
@@ -225,8 +226,9 @@ pub(crate) fn ror_lockfile_write(
         }),
     };
 
-    for pkg in packages {
-        let pkg_ref = unsafe { &mut *(pkg as *mut libdnf_sys::DnfPackage) };
+    for i in 0..(packages.as_mut().length()) {
+        let pkg = packages.as_mut().get(i);
+        let pkg_ref = unsafe { &mut *(&mut pkg.0 as *mut _ as *mut libdnf_sys::DnfPackage) };
         let name = dnf_package_get_name(pkg_ref).unwrap();
         let evr = dnf_package_get_evr(pkg_ref).unwrap();
         let arch = dnf_package_get_arch(pkg_ref).unwrap();
@@ -250,8 +252,9 @@ pub(crate) fn ror_lockfile_write(
         .as_mut()
         .unwrap();
 
-    for rpmmd_repo in rpmmd_repos {
-        let repo_ref = unsafe { &mut *(rpmmd_repo as *mut libdnf_sys::DnfRepo) };
+    for i in 0..rpmmd_repos.as_mut().length() {
+        let repo_ref = rpmmd_repos.as_mut().get(i);
+        let repo_ref = unsafe { &mut *(&mut repo_ref.0 as *mut _ as *mut libdnf_sys::DnfRepo) };
         let id = dnf_repo_get_id(repo_ref).unwrap();
         let generated = dnf_repo_get_timestamp_generated(repo_ref).unwrap();
         let generated: i64 = match generated.try_into() {
