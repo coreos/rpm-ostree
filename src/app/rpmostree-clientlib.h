@@ -30,6 +30,7 @@
 #include <ostree.h>
 
 #include <memory>
+#include "rust/cxx.h"
 
 namespace rpmostreecxx {
 
@@ -50,6 +51,8 @@ public:
     GBusType get_bus_type() const {
         return bus_type;
     }
+
+    void transaction_connect_progress_sync(const rust::Str address) const;
 };
 
 void client_require_root();

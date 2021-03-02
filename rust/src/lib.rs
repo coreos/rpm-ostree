@@ -62,6 +62,11 @@ pub mod ffi {
         fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
     }
 
+    // builtins/apply_live.rs
+    extern "Rust" {
+        fn applylive_entrypoint(args: &Vec<String>) -> Result<()>;
+    }
+
     // cliwrap.rs
     extern "Rust" {
         fn cliwrap_write_wrappers(rootfs: i32) -> Result<()>;
@@ -212,7 +217,6 @@ pub mod ffi {
         fn applylive_sync_ref(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
         // FIXME/cxx make this Option<&str>
         fn transaction_apply_live(sysroot: Pin<&mut OstreeSysroot>, target: &str) -> Result<()>;
-        fn applylive_client_finish() -> Result<()>;
     }
 
     // passwd.rs
@@ -302,6 +306,7 @@ pub mod ffi {
         type ClientConnection;
         fn new_client_connection() -> Result<UniquePtr<ClientConnection>>;
         fn get_connection<'a>(self: Pin<&'a mut ClientConnection>) -> Pin<&'a mut GDBusConnection>;
+        fn transaction_connect_progress_sync(&self, address: &str) -> Result<()>;
     }
 
     unsafe extern "C++" {
@@ -339,6 +344,8 @@ pub mod ffi {
     }
 }
 
+mod builtins;
+pub(crate) use self::builtins::apply_live::*;
 mod client;
 pub(crate) use client::*;
 mod cliwrap;
@@ -386,3 +393,4 @@ mod treefile;
 pub use self::treefile::*;
 mod utils;
 pub use self::utils::*;
+mod variant_utils;

@@ -30,41 +30,6 @@
 
 #include <libglnx.h>
 
-static char *opt_target;
-static gboolean opt_reset;
-
-static GOptionEntry option_entries[] = {
-  { "target", 0, 0, G_OPTION_ARG_STRING, &opt_target, "Target provided commit instead of pending deployment", NULL },
-  { "reset", 0, 0, G_OPTION_ARG_NONE, &opt_reset, "Reset back to booted commit", NULL },
-  { NULL }
-};
-
-static GVariant *
-get_args_variant (GError **error)
-{
-  GVariantDict dict;
-
-  g_variant_dict_init (&dict, NULL);
-  if (opt_target)
-    {
-      if (opt_reset)
-        return (GVariant*)glnx_null_throw (error, "Cannot specify both --target and --reset");
-      g_variant_dict_insert (&dict, "target", "s", opt_target);
-    }
-  else if (opt_reset)
-    {
-      OstreeSysroot *sysroot = ostree_sysroot_new_default ();
-      if (!ostree_sysroot_load (sysroot, NULL, error))
-        return FALSE;
-      OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
-      if (!booted)
-        return (GVariant*)glnx_null_throw (error, "Not in a booted OSTree deployment");
-      g_variant_dict_insert (&dict, "target", "s", ostree_deployment_get_csum (booted));
-    }
-
-  return g_variant_ref_sink (g_variant_dict_end (&dict));
-}
-
 gboolean
 rpmostree_ex_builtin_apply_live (int             argc,
                                  char          **argv,
@@ -72,44 +37,9 @@ rpmostree_ex_builtin_apply_live (int             argc,
                                  GCancellable   *cancellable,
                                  GError        **error)
 {
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       NULL,
-                                       error))
-    return FALSE;
-
-  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  glnx_unref_object RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
-  if (!rpmostree_load_os_proxies (sysroot_proxy, NULL,
-                                  cancellable, &os_proxy,
-                                  &osexperimental_proxy, error))
-    return FALSE;
-
-  g_autofree char *transaction_address = NULL;
-  g_autoptr(GVariant) args = get_args_variant (error);
-  if (!args)
-    return FALSE;
-  if (!rpmostree_osexperimental_call_live_fs_sync (osexperimental_proxy,
-                                                   args,
-                                                   &transaction_address,
-                                                   cancellable,
-                                                   error))
-    return FALSE;
-
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
-                                                error))
-    return FALSE;
-
-  rpmostreecxx::applylive_client_finish();
-
+  rust::Vec<rust::String> rustargv;
+  for (int i = 0; i < argc; i++)
+    rustargv.push_back(std::string(argv[i]));
+  rpmostreecxx::applylive_entrypoint(rustargv);
   return TRUE;
 }

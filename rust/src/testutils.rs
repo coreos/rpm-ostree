@@ -9,8 +9,9 @@
 //! This backs the hidden `rpm-ostree testutils` CLI.  Subject
 //! to change.
 
-use crate::cxxrsutil::*;
+use crate::{cxxrsutil::*, variant_utils};
 use anyhow::{Context, Result};
+use glib::ToVariant;
 use openat_ext::{FileExt, OpenatDirExt};
 use rand::Rng;
 use std::fs;
@@ -229,23 +230,14 @@ fn validate_parse_status() -> Result<()> {
 }
 
 fn test_moo() -> Result<()> {
-    use glib::translate::*;
-
     crate::ffi::client_require_root()?;
 
     let mut client_conn = crate::ffi::new_client_connection()?;
     let mut bus_conn = client_conn.pin_mut().get_connection();
     let bus_conn = bus_conn.gobj_wrap();
 
-    // Unfortunately glib bindings don't support tuples, we need
-    // `(b)` i.e. the 1-tuple with a boolean, and not just `b`.
-    let params = unsafe {
-        let truev = glib_sys::g_variant_new_boolean(true.to_glib());
-        let r = glib_sys::g_variant_new_tuple(&truev as *const *mut _, 1);
-        glib_sys::g_variant_ref_sink(r);
-        from_glib_full(r)
-    };
-    let reply = bus_conn.call_sync(
+    let params = crate::variant_utils::new_variant_tuple(&[true.to_variant()]);
+    let reply = &bus_conn.call_sync(
         Some("org.projectatomic.rpmostree1"),
         "/org/projectatomic/rpmostree1/fedora_coreos",
         "org.projectatomic.rpmostree1.OSExperimental",
@@ -256,14 +248,9 @@ fn test_moo() -> Result<()> {
         -1,
         gio::NONE_CANCELLABLE,
     )?;
-    let reply_child: glib::Variant = unsafe {
-        from_glib_full(glib_sys::g_variant_get_child_value(
-            reply.to_glib_none().0,
-            0,
-        ))
-    };
+    let reply = variant_utils::variant_tuple_get(reply, 0).unwrap();
     // Unwrap safety: We validated the (s) above.
-    let reply = reply_child.get_str().unwrap();
+    let reply = reply.get_str().unwrap();
     let cow = "🐄\n";
     assert_eq!(reply, cow);
     println!("ok {}", cow.trim());
