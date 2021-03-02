@@ -46,7 +46,7 @@ fn get_runstate_dir(deploy: &ostree::Deployment) -> PathBuf {
 }
 
 /// Get the live state
-fn get_live_state(
+pub(crate) fn get_live_state(
     repo: &ostree::Repo,
     deploy: &ostree::Deployment,
 ) -> Result<Option<LiveApplyState>> {
@@ -341,7 +341,7 @@ fn rerun_tmpfiles() -> Result<()> {
     Ok(())
 }
 
-fn require_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::Deployment> {
+fn get_required_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::Deployment> {
     sysroot
         .get_booted_deployment()
         .ok_or_else(|| anyhow!("Not booted into an OSTree system"))
@@ -360,7 +360,7 @@ pub(crate) fn transaction_apply_live(
     };
     let repo = &sysroot.repo().expect("repo");
 
-    let booted = require_booted_deployment(sysroot)?;
+    let booted = get_required_booted_deployment(sysroot)?;
     let osname = booted.get_osname().expect("osname");
     let booted_commit = booted.get_csum().expect("csum");
     let booted_commit = booted_commit.as_str();
@@ -505,32 +505,6 @@ pub(crate) fn applylive_sync_ref(
     // Set the live state to empty
     let state = Default::default();
     write_live_state(&repo, &booted, &state).context("apply-live: failed to write state")?;
-    Ok(())
-}
-
-pub(crate) fn applylive_client_finish() -> CxxResult<()> {
-    let cancellable = gio::NONE_CANCELLABLE;
-    let sysroot = &ostree::Sysroot::new_default();
-    sysroot.load(cancellable)?;
-    let repo = &sysroot.get_repo(cancellable)?;
-    let booted = &require_booted_deployment(sysroot)?;
-    let booted_commit = booted.get_csum().expect("csum");
-    let booted_commit = booted_commit.as_str();
-
-    let live_state = get_live_state(repo, booted)?
-        .ok_or_else(|| anyhow!("Failed to find expected apply-live state"))?;
-
-    let pkgdiff = {
-        cxx::let_cxx_string!(from = booted_commit);
-        cxx::let_cxx_string!(to = live_state.commit.as_str());
-        let repo = repo.gobj_rewrap();
-        crate::ffi::rpmdb_diff(repo, &from, &to).map_err(anyhow::Error::msg)?
-    };
-    pkgdiff.print();
-
-    crate::ffi::output_message(
-        "Successfully updated running filesystem tree; some services may need to be restarted.",
-    );
     Ok(())
 }
 

@@ -40,6 +40,12 @@
 #include "rpmostree-cxxrs.h"
 #include "rpmostreed-transaction-types.h"
 
+static gboolean
+impl_transaction_get_response_sync (GDBusConnection *connection,
+                                    const char *transaction_address,
+                                    GCancellable *cancellable,
+                                    GError **error);
+
 #define RPMOSTREE_CLI_ID "cli"
 
 static void
@@ -252,6 +258,19 @@ new_client_connection()
   if (!app_load_sysroot_impl(NULL, false, NULL, &conn, &bus_type, &local_error))
     util::throw_gerror(local_error);
   return std::make_unique<ClientConnection>(conn, bus_type);
+}
+
+// Connect to a transaction DBus and monitor its progress synchronously,
+// printing output to stdout.  Add a signal handler for SIGINT to cancel
+// the transaction.
+void 
+ClientConnection::transaction_connect_progress_sync(const rust::Str address) const
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new();
+  auto address_c = g_strndup(address.data(), address.length());
+  if (!impl_transaction_get_response_sync (conn, address_c, cancellable, &local_error))
+    util::throw_gerror(local_error);
 }
 
 } // namespace
@@ -751,13 +770,12 @@ rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
  * printing output it sends, and handle Ctrl-C, etc.
  */
 static gboolean
-impl_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
+impl_transaction_get_response_sync (GDBusConnection *connection,
                                     const char *transaction_address,
                                     GCancellable *cancellable,
                                     GError **error)
 {
   guint sigintid = 0;
-  GDBusConnection *connection;
   glnx_unref_object GDBusObjectManager *object_manager = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
 
@@ -769,7 +787,6 @@ impl_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
   gboolean success = FALSE;
   gboolean just_started = FALSE;
 
-  connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
 
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
@@ -861,7 +878,8 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                                          GCancellable *cancellable,
                                          GError **error)
 {
-  if (!impl_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable, error))
+  auto connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+  if (!impl_transaction_get_response_sync (connection, transaction_address, cancellable, error))
     return FALSE;
 
   /* On success, call Reload() as a way to sync with the daemon. Do this in async mode so
