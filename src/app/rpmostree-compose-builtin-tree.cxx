@@ -382,12 +382,8 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       g_autoptr(GPtrArray) rpmmd_repos =
         rpmostree_get_enabled_rpmmd_repos (rpmostree_context_get_dnf (self->corectx),
                                            DNF_REPO_ENABLED_PACKAGES);
-      auto pkgs_v = rust::Vec<guint64>();
-      for (guint i = 0; i < pkgs->len; i++)
-        pkgs_v.push_back((guint64)pkgs->pdata[i]);
-      auto repos_v = rust::Vec<guint64>();
-      for (guint i = 0; i < rpmmd_repos->len; i++)
-        repos_v.push_back((guint64)rpmmd_repos->pdata[i]);
+      auto pkgs_v = rpmostreecxx::CxxGObjectArray(pkgs);
+      auto repos_v = rpmostreecxx::CxxGObjectArray(rpmmd_repos);
       rpmostreecxx::ror_lockfile_write(opt_write_lockfile_to, pkgs_v, repos_v);
     }
 

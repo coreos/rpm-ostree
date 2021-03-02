@@ -7,6 +7,7 @@ links = "dnf"
 
 [dependencies]
 cxx = "1.0.32"
+glib = "0.10.3"
 
 [lib]
 name = "libdnf_sys"

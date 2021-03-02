@@ -35,6 +35,7 @@ pub mod ffi {
         #[allow(dead_code)]
         type OstreeRepo = crate::FFIOstreeRepo;
         type OstreeDeployment = crate::FFIOstreeDeployment;
+        type GObject = crate::FFIGObject;
         type GCancellable = crate::FFIGCancellable;
         type GVariantDict = crate::FFIGVariantDict;
 
@@ -258,14 +259,21 @@ pub mod ffi {
         fn ror_lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMapping>>;
         fn ror_lockfile_write(
             filename: &str,
-            packages: Vec<u64>,
-            rpmmd_repos: Vec<u64>,
+            packages: Pin<&mut CxxGObjectArray>,
+            rpmmd_repos: Pin<&mut CxxGObjectArray>,
         ) -> Result<()>;
     }
 
     // rpmutils.rs
     extern "Rust" {
         fn cache_branch_to_nevra(nevra: &str) -> String;
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-cxxrsutil.hpp");
+        type CxxGObjectArray;
+        fn length(self: Pin<&mut CxxGObjectArray>) -> u32;
+        fn get(self: Pin<&mut CxxGObjectArray>, i: u32) -> &mut GObject;
     }
 
     unsafe extern "C++" {

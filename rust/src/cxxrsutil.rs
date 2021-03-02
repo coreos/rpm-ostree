@@ -80,7 +80,7 @@ macro_rules! cxxrs_bind {
         paste! {
             $(
                 #[repr(transparent)]
-                pub struct [<FFI $ns $i>]($sys::[<$ns $i>]);
+                pub struct [<FFI $ns $i>](pub(crate) $sys::[<$ns $i>]);
 
                 unsafe impl ExternType for [<FFI $ns $i>] {
                     type Id = type_id!(rpmostreecxx::[<$ns $i>]);
@@ -96,6 +96,7 @@ macro_rules! cxxrs_bind {
 // This macro is special to ostree types currently.
 cxxrs_bind!(Ostree, ostree, ostree_sys, [Sysroot, Repo, Deployment]);
 cxxrs_bind!(G, gio, gio_sys, [Cancellable]);
+cxxrs_bind!(G, glib, gobject_sys, [Object]);
 cxxrs_bind!(G, glib, glib_sys, [VariantDict]);
 
 // An error type helper; separate from the GObject bridging
