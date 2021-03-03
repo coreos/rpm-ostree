@@ -37,7 +37,6 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 #include "rpmostreed-transaction-types.h"
 

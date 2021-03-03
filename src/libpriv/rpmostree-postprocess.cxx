@@ -49,7 +49,6 @@
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
-#include "rpmostree-rust.h"
 
 typedef enum {
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW,

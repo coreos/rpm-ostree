@@ -35,7 +35,6 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
-#include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 
 #include "ostree-repo.h"

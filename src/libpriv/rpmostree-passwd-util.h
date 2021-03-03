@@ -26,8 +26,6 @@
 #include <sys/wait.h>
 
 #include "rpmostree-cxxrs.h"
-#include "rpmostree-rust.h"
-
 G_BEGIN_DECLS
 
 gboolean

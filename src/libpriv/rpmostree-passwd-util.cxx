@@ -33,8 +33,6 @@
 #include "rpmostree-util.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-passwd-util.h"
-#include "rpmostree-rust.h"
-
 #include "libglnx.h"
 
 static void

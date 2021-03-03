@@ -31,7 +31,6 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
-#include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree.h"

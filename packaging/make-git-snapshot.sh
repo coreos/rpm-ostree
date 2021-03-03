@@ -63,10 +63,9 @@ open(checksum_file, "w").write(json.dumps(j))' $crate_subdir
 # And finally, vendor generated code.  See installdeps.sh
 # and Makefile-rpm-ostree.am for more.
 (cd ${srcdir}
- cp rpmostree-rust{,-prebuilt}.h
  cp rpmostree-cxxrs{,-prebuilt}.h
  cp rpmostree-cxxrs{,-prebuilt}.cxx
  cp rust/cxx.h rust/cxx-prebuilt.h
- tar --transform "s,^,${PKG_VER}/," -rf ${TARFILE_TMP} rpmostree-{rust,cxxrs}-prebuilt.h rpmostree-cxxrs-prebuilt.cxx rust/cxx-prebuilt.h)
+ tar --transform "s,^,${PKG_VER}/," -rf ${TARFILE_TMP} rpmostree-cxxrs-prebuilt.h rpmostree-cxxrs-prebuilt.cxx rust/cxx-prebuilt.h)
 
 mv ${TARFILE_TMP} ${TARFILE}
