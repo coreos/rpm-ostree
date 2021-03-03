@@ -26,7 +26,6 @@
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
-#include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 
 #include <libglnx.h>

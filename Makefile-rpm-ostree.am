@@ -123,12 +123,10 @@ CLEANFILES += rpm-ostree
 .PHONY: cargo-build
 ALL_LOCAL_HOOKS += cargo-build
 
-# cbindgen + cxx.rs
-binding_generated_sources = rpmostree-rust.h rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
+# cxx.rs
+binding_generated_sources = rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
 if BUILDOPT_PREBUILT_BINDINGS
 # In this case we shipped prebuilt versions in the source tarball
-rpmostree-rust.h:
-	ln -sfr rpmostree-rust-prebuilt.h $@
 rpmostree-cxxrs.h:
 	ln -sfr rpmostree-cxxrs-prebuilt.h $@
 rpmostree-cxxrs.cxx:

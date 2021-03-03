@@ -99,7 +99,7 @@ AC_PATH_PROG([rustc], [rustc])
 AS_IF([test -z "$rustc"], [AC_MSG_ERROR([rustc is required for --enable-rust])])
 
 dnl See comment in installdeps.sh
-AM_CONDITIONAL(BUILDOPT_PREBUILT_BINDINGS, [test -f rpmostree-rust-prebuilt.h])
+AM_CONDITIONAL(BUILDOPT_PREBUILT_BINDINGS, [test -f rpmostree-cxxrs-prebuilt.h])
 
 AC_MSG_CHECKING(whether to build in debug mode)
 debug_release=release
@@ -150,6 +150,5 @@ echo "
     ASAN + UBSAN:                            ${enable_sanitizers:-no}
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release
-    cbindgen:                                ${cbindgen:-external}
     sqlite rpmdb default:                    ${enable_sqlite_rpmdb_default}
 "

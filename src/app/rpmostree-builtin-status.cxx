@@ -36,7 +36,6 @@
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-rust.h"
 #include "libsd-locale-util.h"
 #include "libsd-time-util.h"
 

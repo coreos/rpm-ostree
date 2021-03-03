@@ -25,7 +25,6 @@
 #include <ostree.h>
 #include <memory>
 
-#include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 #include "libglnx.h"
 

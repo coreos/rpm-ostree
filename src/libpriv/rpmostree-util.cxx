@@ -28,7 +28,6 @@
 #include <systemd/sd-journal.h>
 
 #include "rpmostree-util.h"
-#include "rpmostree-rust.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-output.h"
 #include "libsd-locale-util.h"

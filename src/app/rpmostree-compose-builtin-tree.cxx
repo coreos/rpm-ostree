@@ -49,7 +49,6 @@
 #include "rpmostree-package-variants.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-rust.h"
 
 #include "libglnx.h"
 

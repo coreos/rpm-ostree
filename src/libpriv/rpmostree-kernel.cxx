@@ -38,7 +38,6 @@
 #include "rpmostree-core.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-bwrap.h"
-#include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 #include "rpmostree-util.h"
 

@@ -24,7 +24,6 @@
 
 #include "rpmostree-output.h"
 #include "rpmostree-util.h"
-#include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 
 /* These are helper functions that automatically determine whether data should

@@ -42,7 +42,6 @@
 #include "rpmostree-kernel.h"
 #include "rpmostree-importer.h"
 #include "rpmostree-output.h"
-#include "rpmostree-rust.h"
 #include "rpmostree-cxxrs.h"
 
 #define RPMOSTREE_MESSAGE_COMMIT_STATS SD_ID128_MAKE(e6,37,2e,38,41,21,42,a9,bc,13,b6,32,b3,f8,93,44)
