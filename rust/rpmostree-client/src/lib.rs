@@ -3,6 +3,7 @@
 
 use anyhow::Context;
 use serde_derive::Deserialize;
+use std::collections::HashMap;
 use std::process::Command;
 
 /// Our generic catchall fatal error, expected to be converted
@@ -12,24 +13,27 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync 
 /// Representation of the rpm-ostree client-side state; this
 /// can be parsed directly from the output of `rpm-ostree status --json`.
 /// Currently not all fields are here, but that is a bug.
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Status {
     pub deployments: Vec<Deployment>,
 }
 
 /// A single deployment, i.e. a bootable ostree commit
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Deployment {
     pub unlocked: Option<String>,
     pub osname: String,
     pub pinned: bool,
     pub checksum: String,
+    pub base_checksum: Option<String>,
+    pub base_commit_meta: HashMap<String, serde_json::Value>,
     pub staged: Option<bool>,
     pub booted: bool,
     pub serial: u32,
     pub origin: String,
+    pub version: Option<String>,
 }
 
 /// Gather a snapshot of the system status.
