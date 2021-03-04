@@ -656,8 +656,54 @@ Boston, MA 02111-1307, USA.
             This command offers access to experimental features; command line
             stability is not guaranteed.  The available subcommands will be listed
             by invoking <command>rpm-ostree ex</command>.  For example, there is
-            <command>rpm-ostree ex livefs</command> which is an experimental
+            <command>rpm-ostree ex apply-live</command> which is an experimental
             interface for applying changes to the booted deployment.
+          </para>
+        </listitem>
+      </varlistentry>
+
+
+      <varlistentry>
+        <term><command>ex apply-live</command></term>
+
+        <listitem>
+          <para>
+            Experimental feature; subject to change.
+          </para>
+
+          <para>
+            Given a target OSTree commit (defaults to the pending deployment), create a transient
+            <literal>overlayfs</literal> filesystem for <literal>/usr</literal>, and synchronize
+            the changes to the booted filesystem tree.
+          </para>
+
+          <para>
+            <option>--reset</option> to reset the filesystem tree to the booted commit.
+          </para>
+
+          <para>
+            <option>--target</option> may be used to target an arbitrary OSTree commit.  This is an advanced feature, exposed mainly for testing.
+          </para>
+
+          <example>
+            <title>Install postgresql live</title>
+
+            <programlisting>$ rpm-ostree install postgresql-server
+$ rpm-ostree ex apply-live
+$ systemctl start postgresql  # Some setup required
+            </programlisting>
+          </example>
+
+          <para>
+            Currently, this just synchronizes the filesystem; no systemd units are restarted
+            for example.
+          </para>
+
+          <para>
+            A major implicit benefit of the <literal>overlayfs</literal> approach is that
+            if something goes wrong in the middle of a <literal>apply-live</literal> operation,
+            a system reboot will implicitly remove the overlay, restoring the system to 
+            the pristine deployment state.
           </para>
         </listitem>
       </varlistentry>
