@@ -137,7 +137,7 @@ echo "ok extensions"
 
 rm extensions-changed
 runasroot rpm-ostree compose extensions --repo=${repo} \
-  --cachedir=${test_tmpdir}/cache --base-rev ${treeref} \
+  --cachedir=${test_tmpdir}/cache \
   --output-dir extensions ${treefile} extensions.yaml \
   --touch-if-changed extensions-changed
 if test -f extensions-changed; then

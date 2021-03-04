@@ -186,6 +186,7 @@ pub mod ffi {
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
+        fn get_ostree_ref(&self) -> String;
     }
 
     // utils.rs

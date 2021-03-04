@@ -481,6 +481,11 @@ impl Treefile {
         )
     }
 
+    /// Returns the "ref" entry in treefile, or the empty string if unset.
+    pub(crate) fn get_ostree_ref(&self) -> String {
+        self.parsed.treeref.clone().unwrap_or_default()
+    }
+
     pub(crate) fn get_passwd_fd(&mut self) -> i32 {
         self.externals.passwd.as_mut().map_or(-1, raw_seeked_fd)
     }

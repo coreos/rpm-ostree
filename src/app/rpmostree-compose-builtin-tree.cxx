@@ -1468,6 +1468,14 @@ rpmostree_compose_builtin_extensions (int             argc,
   if (!repo)
     return FALSE;
 
+  if (!opt_extensions_base_rev)
+    {
+      auto treeref = treefile->get_ostree_ref();
+      if (treeref.length() == 0)
+        return glnx_throw (error, "--base-rev not specified and treefile doesn't have a ref");
+      opt_extensions_base_rev = g_strdup(treeref.c_str());
+    }
+
   /* this is a similar construction to what's in rpm_ostree_compose_context_new() */
   g_auto(GLnxTmpDir) cachedir_tmp = { 0, };
   glnx_autofd int cachedir_dfd = -1;
