@@ -12,6 +12,7 @@ use structopt::StructOpt;
 #[structopt(rename_all = "kebab-case")]
 struct Opts {
     /// Target provided commit instead of pending deployment
+    #[structopt(long)]
     target: Option<String>,
     /// Reset back to booted commit
     #[structopt(long)]
