@@ -76,6 +76,10 @@ fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Result<LockfileCo
 ///             "evra": "EVRA2",
 ///             "digest": "<digest-algo>:<digest>"
 ///        },
+///        "name3": {
+///             "evr": "EVR3",
+///             "digest": "<digest-algo>:<digest>"
+///        },
 ///        ...
 ///    }
 /// }
@@ -104,10 +108,31 @@ struct LockfileRepoMetadata {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct LockedPackage {
-    evra: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    digest: Option<String>,
+#[serde(untagged)]
+enum LockedPackage {
+    Evr {
+        evr: String,
+        digest: Option<String>,
+    },
+    Evra {
+        evra: String,
+        digest: Option<String>,
+    },
+}
+
+impl LockedPackage {
+    fn evra_glob(&self) -> String {
+        match self {
+            LockedPackage::Evr { evr, digest: _ } => format!("{}.*", evr),
+            LockedPackage::Evra { evra, digest: _ } => evra.into(),
+        }
+    }
+    fn digest(&self) -> String {
+        match self {
+            LockedPackage::Evr { evr: _, digest } => digest.clone().unwrap_or_default(),
+            LockedPackage::Evra { evra: _, digest } => digest.clone().unwrap_or_default(),
+        }
+    }
 }
 
 impl LockfileConfig {
@@ -130,24 +155,37 @@ mod tests {
         "bar": {
             "evra": "0.8-15.x86_64",
             "digest": "sha256:cafedead"
+        },
+        "baz": {
+            "evr": "2.1.1-1"
         }
     }
 }
 "###;
 
-    static INVALID_PRELUDE_JS: &str = r###"
-{
-    "packages": {},
-    "unknown-field": "true"
-}
-"###;
+    fn assert_evra(locked_package: &LockedPackage, expected_evra: &str) {
+        match locked_package {
+            LockedPackage::Evra { evra, digest: _ } => assert_eq!(evra, expected_evra),
+            _ => panic!("Expected LockedPackage::Evra variant"),
+        }
+    }
+
+    fn assert_evr(locked_package: &LockedPackage, expected_evr: &str) {
+        match locked_package {
+            LockedPackage::Evr { evr, digest: _ } => assert_eq!(evr, expected_evr),
+            _ => panic!("Expected LockedPackage::Evr variant"),
+        }
+    }
 
     #[test]
     fn basic_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
         let lockfile: LockfileConfig =
             utils::parse_stream(&utils::InputFormat::JSON, &mut input).unwrap();
-        assert!(lockfile.packages.len() == 2);
+        assert!(lockfile.packages.len() == 3);
+        assert_evra(lockfile.packages.get("foo").unwrap(), "1.0-1.noarch");
+        assert_evra(lockfile.packages.get("bar").unwrap(), "0.8-15.x86_64");
+        assert_evr(lockfile.packages.get("baz").unwrap(), "2.1.1-1");
     }
 
     static OVERRIDE_JS: &str = r###"
@@ -166,7 +204,7 @@ mod tests {
         let mut base_input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
         let mut base_lockfile: LockfileConfig =
             utils::parse_stream(&utils::InputFormat::JSON, &mut base_input).unwrap();
-        assert!(base_lockfile.packages.len() == 2);
+        assert!(base_lockfile.packages.len() == 3);
 
         let mut override_input = io::BufReader::new(OVERRIDE_JS.as_bytes());
         let override_lockfile: LockfileConfig =
@@ -174,10 +212,18 @@ mod tests {
         assert!(override_lockfile.packages.len() == 1);
 
         base_lockfile.merge(override_lockfile);
-        assert!(base_lockfile.packages.len() == 2);
-        assert!(base_lockfile.packages.get("foo").unwrap().evra == "2.0-2.noarch");
-        assert!(base_lockfile.packages.get("bar").unwrap().evra == "0.8-15.x86_64");
+        assert!(base_lockfile.packages.len() == 3);
+        assert_evra(base_lockfile.packages.get("foo").unwrap(), "2.0-2.noarch");
+        assert_evra(base_lockfile.packages.get("bar").unwrap(), "0.8-15.x86_64");
+        assert_evr(base_lockfile.packages.get("baz").unwrap(), "2.1.1-1");
     }
+
+    static INVALID_PRELUDE_JS: &str = r###"
+{
+    "packages": {},
+    "unknown-field": "true"
+}
+"###;
 
     #[test]
     fn test_invalid() {
@@ -201,8 +247,8 @@ pub(crate) fn ror_lockfile_read(filenames: &Vec<String>) -> CxxResult<Vec<String
         .packages
         .into_iter()
         .map(|(k, v)| StringMapping {
-            k: format!("{}-{}", k, v.evra),
-            v: v.digest.unwrap_or_else(|| "".into()),
+            k: format!("{}-{}", k, v.evra_glob()),
+            v: v.digest(),
         })
         .collect())
 }
@@ -236,7 +282,7 @@ pub(crate) fn ror_lockfile_write(
         let chksum = crate::ffi::get_repodata_chksum_repr(pkg_ref).unwrap();
         lockfile.packages.insert(
             name.as_str().to_string(),
-            LockedPackage {
+            LockedPackage::Evra {
                 evra: format!("{}.{}", evr.as_str(), arch.as_str()),
                 digest: Some(chksum),
             },
