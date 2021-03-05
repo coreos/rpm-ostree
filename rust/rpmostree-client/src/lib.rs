@@ -10,6 +10,26 @@ use std::process::Command;
 /// to a string to output to a terminal or logs.
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
 
+/// Used for methods that invoke the `/usr/bin/rpm-ostree` binary directly.
+/// This acts as a carrier for the `RPMOSTREE_AGENT_ID` variable which
+/// is used to textually identify the caller.
+pub struct CliClient {
+    agent_id: String,
+}
+
+impl CliClient {
+    /// Create a CliClient structure which just holds an agent identifier.
+    /// Choose an agent identifer that e.g. matches a systemd unit name
+    /// or a binary name, not a full textual English string for example.
+    ///
+    /// For example, `zincati` or `mco`, not `Machine Config Operator`.
+    pub fn new<S: AsRef<str>>(agent_id: S) -> Self {
+        Self {
+            agent_id: agent_id.as_ref().to_string(),
+        }
+    }
+}
+
 /// Representation of the rpm-ostree client-side state; this
 /// can be parsed directly from the output of `rpm-ostree status --json`.
 /// Currently not all fields are here, but that is a bug.
@@ -36,8 +56,14 @@ pub struct Deployment {
     pub version: Option<String>,
 }
 
+fn cli_cmd(c: &CliClient) -> Command {
+    let mut cmd = Command::new("rpm-ostree");
+    cmd.env("RPMOSTREE_CLIENT_ID", c.agent_id.as_str());
+    cmd
+}
+
 /// Gather a snapshot of the system status.
-pub fn query_status() -> Result<Status> {
+pub fn query_status(c: &CliClient) -> Result<Status> {
     // Retry on temporary activation failures, see
     // https://github.com/coreos/rpm-ostree/issues/2531
     let pause = std::time::Duration::from_secs(1);
@@ -45,7 +71,7 @@ pub fn query_status() -> Result<Status> {
     let mut retries = 0;
     let cmd_res = loop {
         retries += 1;
-        let res = Command::new("rpm-ostree")
+        let res = cli_cmd(c)
             .args(&["status", "--json"])
             .output()
             .context("failed to spawn 'rpm-ostree status'")?;
