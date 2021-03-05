@@ -1922,7 +1922,7 @@ find_locked_packages (RpmOstreeContext *self,
     {
       g_assert (chksum);
       hy_autoquery HyQuery query = hy_query_create (sack);
-      hy_query_filter (query, HY_PKG_NEVRA_STRICT, HY_EQ, nevra);
+      hy_query_filter (query, HY_PKG_NEVRA, HY_GLOB, nevra);
       g_autoptr(GPtrArray) matches = hy_query_run (query);
 
       gboolean at_least_one = FALSE;
