@@ -127,6 +127,9 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
             RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable, error))
         return FALSE;
 
+      if (override_replace || override_remove)
+        g_print ("Use \"rpm-ostree override reset\" to undo overrides\n");
+
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
