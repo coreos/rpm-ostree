@@ -9,5 +9,9 @@ fn parse_workstation() -> Result<()> {
     assert_eq!(state.deployments.len(), 2);
     let booted = state.require_booted().unwrap();
     assert_eq!(booted.version.as_ref().unwrap().as_str(), "33.21");
+    assert_eq!(
+        booted.get_base_commit(),
+        "229387d3c0bb8ad698228ca5702eca72aed8b298a7c800be1dc72bab160a9f7f"
+    );
     Ok(())
 }

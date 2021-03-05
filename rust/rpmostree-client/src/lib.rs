@@ -69,6 +69,15 @@ impl Status {
     }
 }
 
+impl Deployment {
+    /// Find the base OSTree commit
+    pub fn get_base_commit(&self) -> &str {
+        self.base_checksum
+            .as_deref()
+            .unwrap_or(self.checksum.as_str())
+    }
+}
+
 fn cli_cmd(c: &CliClient) -> Command {
     let mut cmd = Command::new("rpm-ostree");
     cmd.env("RPMOSTREE_CLIENT_ID", c.agent_id.as_str());
