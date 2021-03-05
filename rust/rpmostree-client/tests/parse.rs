@@ -13,5 +13,12 @@ fn parse_workstation() -> Result<()> {
         booted.get_base_commit(),
         "229387d3c0bb8ad698228ca5702eca72aed8b298a7c800be1dc72bab160a9f7f"
     );
+    assert!(booted.find_base_commitmeta_string("foo").is_err());
+    assert_eq!(
+        booted
+            .find_base_commitmeta_string("coreos-assembler.config-gitrev")
+            .unwrap(),
+        "80966f951c766846da070b4c168b9170c61513e2"
+    );
     Ok(())
 }
