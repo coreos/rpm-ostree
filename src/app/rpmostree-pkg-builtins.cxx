@@ -32,6 +32,7 @@
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_dry_run;
+static gboolean opt_apply_live;
 static gboolean opt_idempotent;
 static gchar **opt_install;
 static gchar **opt_uninstall;
@@ -63,6 +64,7 @@ static GOptionEntry install_option_entry[] = {
   { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Remove overlayed additional package", "PKG" },
   { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
+  { "apply-live", 'A', 0, G_OPTION_ARG_NONE, &opt_apply_live, "Apply changes to both pending deployment and running filesystem tree", NULL },
   { NULL }
 };
 
@@ -182,10 +184,19 @@ rpmostree_builtin_install (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
-  return pkg_change (invocation, sysroot_proxy,
+  if (!pkg_change (invocation, sysroot_proxy,
                      (const char *const*)argv,
                      (const char *const*)opt_uninstall,
-                     cancellable, error);
+                     cancellable, error))
+    return FALSE;
+
+  if (opt_apply_live)
+    {
+      rust::Vec<rust::String> rustargv;
+      rpmostreecxx::applylive_entrypoint(rustargv);
+    }
+
+  return TRUE;
 }
 
 gboolean

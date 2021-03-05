@@ -230,6 +230,15 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
+            If this is the first time a machine-local change is made,
+            note that this will change rpm-ostree to operate in full
+            hybrid mode.  Concretely, rpm-ostree will also start
+            fetching all enabled rpm-md (yum) repositories and use
+            those for package updates every time
+            <command>rpm-ostree upgrade</command> is invoked.
+          </para>
+
+          <para>
             rpm-ostree remembers these requests even if a later host
             update includes those packages already: if the packages are
             subsequently dropped out again, rpm-ostree will go back to
@@ -272,6 +281,11 @@ Boston, MA 02111-1307, USA.
             This can be used with a subsequent
             <option>--cache-only</option> invocation to perform the
             operation completely offline.
+          </para>
+
+          <para>
+            <option>--apply-live</option> will perform a subsequent <command>apply-live</command>
+            operation to apply changes to the booted deployment.
           </para>
         </listitem>
       </varlistentry>
