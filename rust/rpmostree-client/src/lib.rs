@@ -56,6 +56,19 @@ pub struct Deployment {
     pub version: Option<String>,
 }
 
+impl Status {
+    /// Find the booted deployment, if any.
+    pub fn find_booted(&self) -> Option<&Deployment> {
+        self.deployments.iter().find(|d| d.booted)
+    }
+
+    /// Find the booted deployment.
+    pub fn require_booted(&self) -> Result<&Deployment> {
+        self.find_booted()
+            .ok_or_else(|| format!("No booted deployment").into())
+    }
+}
+
 fn cli_cmd(c: &CliClient) -> Command {
     let mut cmd = Command::new("rpm-ostree");
     cmd.env("RPMOSTREE_CLIENT_ID", c.agent_id.as_str());
