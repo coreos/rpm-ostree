@@ -76,6 +76,25 @@ impl Deployment {
             .as_deref()
             .unwrap_or(self.checksum.as_str())
     }
+
+    /// Find a given metadata key in the base commit, which must hold a non-empty string.
+    pub fn find_base_commitmeta_string<'a>(&'a self, k: &str) -> Result<&'a str> {
+        let v = self.base_commit_meta.get(k);
+        if let Some(v) = v {
+            match v {
+                serde_json::Value::String(v) => {
+                    if v.is_empty() {
+                        Err(format!("Invalid empty {} metadata key", k).into())
+                    } else {
+                        Ok(v)
+                    }
+                }
+                _ => Err(format!("Invalid non-string {} metadata key", k).into()),
+            }
+        } else {
+            Err(format!("No {} metadata key", k).into())
+        }
+    }
 }
 
 fn cli_cmd(c: &CliClient) -> Command {
