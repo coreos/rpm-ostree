@@ -69,14 +69,9 @@ livefs_transaction_execute (RpmostreedTransaction *transaction,
   LiveFsTransaction *self = (LiveFsTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  g_auto(GVariantDict) options_dict;
-  g_variant_dict_init (&options_dict, self->options);
-  const char *target = NULL;
-  (void) g_variant_dict_lookup (&options_dict, "target", "&s", &target);
-
   /* Run the transaction */
   try {
-    rpmostreecxx::transaction_apply_live(*sysroot, target ?: "");
+    rpmostreecxx::transaction_apply_live(*sysroot, *self->options);
   } catch (std::exception& e) {
     (void) rpmostree_syscore_bump_mtime (sysroot, NULL);
     throw;
