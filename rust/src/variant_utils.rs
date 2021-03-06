@@ -4,6 +4,16 @@
 use glib;
 use glib::translate::*;
 
+// These constants should really be in gtk-rs
+lazy_static::lazy_static! {
+    pub(crate) static ref TY_S: &'static glib::VariantTy = {
+        glib::VariantTy::new("s").unwrap()
+    };
+    pub(crate) static ref TY_B: &'static glib::VariantTy = {
+        glib::VariantTy::new("b").unwrap()
+    };
+}
+
 pub(crate) fn new_variant_tuple<'a>(
     items: impl IntoIterator<Item = &'a glib::Variant>,
 ) -> glib::Variant {
@@ -23,6 +33,19 @@ pub(crate) fn variant_tuple_get(v: &glib::Variant, n: usize) -> Option<glib::Var
     } else {
         unsafe { from_glib_full(glib_sys::g_variant_get_child_value(v.0, n)) }
     }
+}
+
+/// Find a string value in a GVariantDict
+pub(crate) fn variant_dict_lookup_str(v: &glib::VariantDict, k: &str) -> Option<String> {
+    // Unwrap safety: Passing the GVariant type string gives us the right value type
+    v.lookup_value(k, Some(*TY_S))
+        .map(|v| v.get_str().unwrap().to_string())
+}
+
+/// Find a boolean value in a GVariantDict
+pub(crate) fn variant_dict_lookup_bool(v: &glib::VariantDict, k: &str) -> Option<bool> {
+    // Unwrap safety: Passing the GVariant type string gives us the right value type
+    v.lookup_value(k, Some(*TY_B)).map(|v| v.get().unwrap())
 }
 
 #[cfg(test)]

@@ -7,8 +7,8 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use crate::cxxrsutil::*;
 use crate::ffi::LiveApplyState;
+use crate::{cxxrsutil::*, variant_utils};
 use anyhow::{anyhow, bail, Context, Result};
 use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
@@ -19,9 +19,12 @@ use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::Command;
+use variant_utils::{variant_dict_lookup_bool, variant_dict_lookup_str};
 
 /// GVariant `s`: Choose a specific commit
 pub(crate) const OPT_TARGET: &str = "target";
+/// GVariant `b`: Enable changing or removing packages(+files).
+pub(crate) const OPT_REPLACE: &str = "replace";
 
 /// The directory where ostree stores transient per-deployment state.
 /// This is currently semi-private to ostree; we should add an API to
@@ -357,9 +360,9 @@ pub(crate) fn transaction_apply_live(
 ) -> CxxResult<()> {
     let sysroot = &sysroot.gobj_wrap();
     let options = &options.gobj_wrap();
-    let options = glib::VariantDict::new(Some(options));
-    let target = options.lookup_value(OPT_TARGET, Some(glib::VariantTy::new("s").unwrap()));
-    let target = target.as_ref().map(|v| v.get_str()).flatten();
+    let options = &glib::VariantDict::new(Some(options));
+    let target = &variant_dict_lookup_str(options, OPT_TARGET);
+    let allow_replacement = variant_dict_lookup_bool(options, OPT_REPLACE).unwrap_or_default();
     let repo = &sysroot.repo().expect("repo");
 
     let booted = get_required_booted_deployment(sysroot)?;
@@ -420,7 +423,7 @@ pub(crate) fn transaction_apply_live(
     }
 
     if let Some(ref state) = state {
-        if !state.inprogress.is_empty() && state.inprogress.as_str() != target_commit {
+        if !state.inprogress.is_empty() && state.inprogress.as_str() != target_commit.as_str() {
             return Err(anyhow::anyhow!(
                 "Previously interrupted while targeting commit {}, cannot change target to {}",
                 state.inprogress,
@@ -435,9 +438,40 @@ pub(crate) fn transaction_apply_live(
         .map(|s| s.commit.as_str())
         .filter(|s| !s.is_empty())
         .unwrap_or(booted_commit);
+    // Compute the filesystem-level diff
     let diff = crate::ostree_diff::diff(repo, source_commit, &target_commit, Some("/usr"))
         .context("Failed computing diff")?;
+    // And then the package-level diff
+    let pkgdiff = {
+        cxx::let_cxx_string!(from = source_commit);
+        cxx::let_cxx_string!(to = &*target_commit);
+        let repo = repo.gobj_rewrap();
+        crate::ffi::rpmdb_diff(repo, &from, &to).map_err(anyhow::Error::msg)?
+    };
+    if !allow_replacement {
+        if pkgdiff.n_removed() > 0 {
+            return Err(anyhow!(
+                "packages would be removed: {}, enable replacement to override",
+                pkgdiff.n_removed()
+            )
+            .into());
+        }
+        if pkgdiff.n_modified() > 0 {
+            return Err(anyhow!(
+                "packages would be changed: {}, enable replacement to override",
+                pkgdiff.n_modified()
+            )
+            .into());
+        }
+    }
+
     println!("Computed /usr diff: {}", &diff);
+    println!(
+        "Computed pkg diff: {} added, {} changed, {} removed",
+        pkgdiff.n_added(),
+        pkgdiff.n_modified(),
+        pkgdiff.n_removed()
+    );
 
     let mut state = state.unwrap_or_default();
 
