@@ -25,7 +25,7 @@ fn get_required_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::D
         .ok_or_else(|| anyhow!("Not booted into an OSTree system"))
 }
 
-fn get_args_variant(opts: &Opts) -> Result<glib::Variant> {
+fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Variant> {
     let r = glib::VariantDict::new(None);
 
     if let Some(target) = opts.target.as_ref() {
@@ -34,8 +34,6 @@ fn get_args_variant(opts: &Opts) -> Result<glib::Variant> {
         }
         r.insert(live::OPT_TARGET, &target.as_str());
     } else if opts.reset {
-        let sysroot = &ostree::Sysroot::new_default();
-        sysroot.load(gio::NONE_CANCELLABLE)?;
         let booted = get_required_booted_deployment(sysroot)?;
         // Unwrap safety: This can't return NULL
         let csum = booted.get_csum().expect("csum");
@@ -48,7 +46,10 @@ fn get_args_variant(opts: &Opts) -> Result<glib::Variant> {
 pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> Result<()> {
     let opts = Opts::from_iter(args.iter());
     let client = &mut crate::client::ClientConnection::new()?;
-    let args = get_args_variant(&opts)?;
+    let sysroot = &ostree::Sysroot::new_default();
+    sysroot.load(gio::NONE_CANCELLABLE)?;
+
+    let args = get_args_variant(sysroot, &opts)?;
 
     let params = crate::variant_utils::new_variant_tuple(&[args]);
     let reply = &client.get_os_ex_proxy().call_sync(
@@ -64,15 +65,14 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> Result<()> {
         .get_str()
         .ok_or_else(|| anyhow!("Expected string transaction address"))?;
     client.transaction_connect_progress_sync(txn_address)?;
-    finish()?;
+    finish(sysroot)?;
     Ok(())
 }
 
 // Postprocessing after the daemon has reported completion; print an rpmdb diff.
-fn finish() -> Result<()> {
+fn finish(sysroot: &ostree::Sysroot) -> Result<()> {
     let cancellable = gio::NONE_CANCELLABLE;
-    let sysroot = &ostree::Sysroot::new_default();
-    sysroot.load(cancellable)?;
+    sysroot.load_if_changed(cancellable)?;
     let repo = &sysroot.get_repo(cancellable)?;
     let booted = &get_required_booted_deployment(sysroot)?;
     let booted_commit = booted.get_csum().expect("csum");
