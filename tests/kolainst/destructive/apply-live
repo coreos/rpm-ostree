@@ -1,0 +1,151 @@
+#!/bin/bash
+#
+# Copyright (C) 2017 Red Hat Inc.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+set -x
+
+libtest_prepare_offline
+libtest_enable_repover 0
+cd $(mktemp -d)
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+"")
+
+if rpm -q foo 2>/dev/null; then
+  fatal "found foo"
+fi
+
+rpm -qa | sort > original-rpmdb.txt
+
+rpm-ostree install foo
+rpmostree_assert_status '.deployments|length == 2'
+echo "ok install foo locally"
+
+if rpm -q foo; then
+    fatal "shouldn't have foo yet"
+fi
+
+rpm-ostree status > status.txt
+assert_not_file_has_content_literal status.txt 'LiveDiff'
+rpmostree_assert_status '.deployments|length == 2' \
+                    '.deployments[0]["live-replaced"]|not' \
+                    '.deployments[1]["live-replaced"]|not'
+rpm-ostree ex livefs
+rpm -q foo > rpmq.txt
+assert_file_has_content rpmq.txt foo-1.2-3
+ls -al /usr/bin/foo
+rpmostree_assert_status '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
+                    '.deployments[1]["live-replaced"]'
+if test -w /usr; then
+    fatal "Found writable /usr"
+fi
+rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt 'LiveDiff: 1 added'
+rpm-ostree status -v > status.txt
+assert_file_has_content_literal status.txt 'LiveAdded:'
+echo "ok livefs basic"
+
+rpm-ostree cleanup -p
+rpm-ostree install bar
+rpmostree_assert_status '.deployments|length == 2' \
+                    '.deployments[0]["live-replaced"]|not' \
+                    '.deployments[1]["live-replaced"]'
+rpm-ostree ex livefs | tee out.txt
+assert_file_has_content out.txt 'Added:'
+assert_file_has_content out.txt '  bar-1.0'
+rpm -qa > rpmq.txt
+assert_file_has_content rpmq.txt bar-1.0-1
+assert_not_file_has_content rpmq.txt foo-1.0-1
+ls -al /usr/bin/bar
+if test -f /usr/bin/foo; then
+    fatal "Still have /usr/bin/foo"
+fi
+rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt 'LiveDiff: 1 added'
+
+echo "ok livefs again"
+
+# make sure there are no config files already present
+rm -rf /etc/testpkg-etc \
+              /etc/testpkg-etc.conf \
+              /etc/opt/testpkg-etc-opt.conf
+# But test with a modified config file
+echo myconfig > /etc/testpkg-etc-other.conf
+grep myconfig /etc/testpkg-etc-other.conf
+
+rpm-ostree install testpkg-etc testdaemon
+rpm-ostree ex apply-live
+rpm -q bar test{pkg-etc,daemon} > rpmq.txt
+assert_file_has_content rpmq.txt bar-1.0-1 test{pkg-etc,daemon}-1.0-1
+cat /etc/testpkg-etc.conf > testpkg-etc.conf
+assert_file_has_content testpkg-etc.conf "A config file for testpkg-etc"
+cat /etc/testpkg-etc-other.conf > conf
+assert_file_has_content conf myconfig
+for v in subconfig-one subconfig-two subdir/subsubdir/subconfig-three; do
+    cat /etc/testpkg-etc/${v}.conf > testpkg-etc.conf
+    assert_file_has_content_literal testpkg-etc.conf $(basename $v)
+done
+cat /etc/opt/testpkg-etc-opt.conf > testpkg-etc.conf
+assert_file_has_content testpkg-etc.conf "file-in-opt-subdir"
+# Test /usr/lib/{passwd,group} bits
+getent passwd testdaemon-user > out.txt
+assert_file_has_content out.txt testdaemon-user
+getent group testdaemon-group > out.txt
+assert_file_has_content out.txt testdaemon-group
+# Test systemd-tmpfiles
+test -d /var/lib/testdaemon
+
+rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt 'LiveDiff: 3 added'
+
+echo "ok apply-live stage2"
+
+# Now undo it all
+rpm-ostree ex apply-live --reset
+rpm -qa | sort > current-rpmdb.txt
+diff -u original-rpmdb.txt current-rpmdb.txt
+if test -f /usr/bin/bar; then
+    fatal "Still have /usr/bin/bar"
+fi
+rpm-ostree status > status.txt
+assert_not_file_has_content_literal status.txt 'LiveDiff:'
+
+echo "ok livefs reset"
+
+# Validate that we can generate a local ostree commit
+# that adds content, but doesn't change any packages -
+# i.e. there's no package diff.  This is a bit of a corner
+# case in various bits of the code.
+booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+ostree refs --create "localref" ${booted_commit}
+td=$(mktemp -d)
+mkdir -p ${td}/usr/share/localdata
+echo mytestdata > ${td}/usr/share/localdata/mytestfile
+ostree commit --base=localref --selinux-policy-from-base -b localref --tree=dir=${td} --consume
+rpm-ostree rebase :localref
+rpm-ostree ex apply-live
+cat /usr/share/localdata/mytestfile > out.txt
+assert_file_has_content out.txt mytestdata
+echo "ok local ref without package changes"
+;;
+*) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac

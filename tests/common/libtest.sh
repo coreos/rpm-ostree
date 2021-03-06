@@ -368,3 +368,25 @@ has_compose_privileges() {
     fi
     [ ${_privileged} == 1 ]
 }
+
+# Given a version, enable the local rpm-md repo at that version.
+# Currently the only supported version is `0`.
+libtest_enable_repover() {
+    local v=$1
+    shift
+    cat >/etc/yum.repos.d/libtest.repo <<EOF
+[libtest]
+name=libtest repo
+baseurl=file://${KOLA_EXT_DATA}/rpm-repos/${v}
+gpgcheck=0
+enabled=1
+EOF
+}
+
+# Use this at the top of installed tests which should
+# run fully offline.  We also canonicalize to a single
+# deployment.
+libtest_prepare_offline() {
+    rpm-ostree cleanup -pr
+    rm -vrf /etc/yum.repos.d/*
+}
