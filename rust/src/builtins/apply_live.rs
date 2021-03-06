@@ -17,6 +17,10 @@ struct Opts {
     /// Reset back to booted commit
     #[structopt(long)]
     reset: bool,
+
+    /// Allow replacement of packages/files (default is pure additive)
+    #[structopt(long)]
+    allow_replacement: bool,
 }
 
 fn get_required_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::Deployment> {
@@ -38,6 +42,10 @@ fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Vari
         // Unwrap safety: This can't return NULL
         let csum = booted.get_csum().expect("csum");
         r.insert(live::OPT_TARGET, &csum.as_str());
+    }
+
+    if opts.allow_replacement {
+        r.insert(live::OPT_REPLACE, &true);
     }
 
     Ok(r.end())

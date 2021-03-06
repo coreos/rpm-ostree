@@ -108,7 +108,7 @@ vm_build_rpm scriptpkg2 \
 vm_build_rpm scriptpkg3 \
              post 'echo %%{_prefix} > /usr/lib/noprefixtest.txt'
 vm_rpmostree pkg-add scriptpkg{2,3}
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs --allow-replacement
 vm_cmd cat /usr/lib/noprefixtest.txt > noprefixtest.txt
 assert_file_has_content noprefixtest.txt '%{_prefix}'
 vm_cmd cat /usr/lib/prefixtest.txt > prefixtest.txt
@@ -123,7 +123,7 @@ vm_build_rpm rpmostree-lua-override-test-expand \
              post_args "-e -p <lua>" \
              post 'posix.stat("/")'
 vm_rpmostree install rpmostree-lua-override-test{,-expand}
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs --allow-replacement
 vm_cmd cat /usr/share/rpmostree-lua-override-test > lua-override.txt
 assert_file_has_content lua-override.txt _install_langs
 vm_cmd rpm --eval '%{_install_langs}' > install-langs.txt
@@ -147,7 +147,7 @@ vm_build_rpm scriptpkg5 \
              transfiletriggerun "/usr/share/licenses/systemd /usr/share/licenses/rpm" 'sort >/usr/share/transfiletriggerun-license-systemd-rpm.txt' \
              transfiletriggerin2 "/usr/share/licenses/sed /usr/share/licenses/tzdata" 'sort >/usr/share/transfiletriggerin-license-sed-tzdata.txt'
 vm_rpmostree pkg-add scriptpkg{4,5}
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs --allow-replacement
 for combo in ${license_combos}; do
     vm_cmd cat /usr/share/transfiletriggerin-license-${combo}.txt > transfiletriggerin-license-${combo}.txt
     rm -f transfiletriggerin-fs-${combo}.txt.tmp
@@ -237,7 +237,7 @@ echo "ok post that calls rpm -q"
 # capabilities
 vm_build_rpm test-cap-drop post "capsh --print > /usr/share/rpmostree-capsh.txt"
 vm_rpmostree install test-cap-drop
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs --allow-replacement
 vm_cmd cat /usr/share/rpmostree-capsh.txt > caps.txt
 assert_not_file_has_content caps.test '^Current: =.*cap_sys_admin'
 

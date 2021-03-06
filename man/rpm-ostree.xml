@@ -674,7 +674,8 @@ Boston, MA 02111-1307, USA.
           <para>
             Given a target OSTree commit (defaults to the pending deployment), create a transient
             <literal>overlayfs</literal> filesystem for <literal>/usr</literal>, and synchronize
-            the changes to the booted filesystem tree.
+            the changes to the booted filesystem tree.  By default, to ensure safety, only package additions
+            are allowed.
           </para>
 
           <para>
@@ -683,6 +684,10 @@ Boston, MA 02111-1307, USA.
 
           <para>
             <option>--target</option> may be used to target an arbitrary OSTree commit.  This is an advanced feature, exposed mainly for testing.
+          </para>
+
+          <para>
+            <option>--allow-replacement</option> enables live updates and removals for existing packages.
           </para>
 
           <example>
