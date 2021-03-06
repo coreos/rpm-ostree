@@ -20,6 +20,9 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::Command;
 
+/// GVariant `s`: Choose a specific commit
+pub(crate) const OPT_TARGET: &str = "target";
+
 /// The directory where ostree stores transient per-deployment state.
 /// This is currently semi-private to ostree; we should add an API to
 /// access it.
@@ -355,7 +358,7 @@ pub(crate) fn transaction_apply_live(
     let sysroot = &sysroot.gobj_wrap();
     let options = &options.gobj_wrap();
     let options = glib::VariantDict::new(Some(options));
-    let target = options.lookup_value("target", Some(glib::VariantTy::new("s").unwrap()));
+    let target = options.lookup_value(OPT_TARGET, Some(glib::VariantTy::new("s").unwrap()));
     let target = target.as_ref().map(|v| v.get_str()).flatten();
     let repo = &sysroot.repo().expect("repo");
 

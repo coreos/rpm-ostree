@@ -32,14 +32,14 @@ fn get_args_variant(opts: &Opts) -> Result<glib::Variant> {
         if opts.reset {
             return Err(anyhow!("Cannot specify both --target and --reset"));
         }
-        r.insert("target", &target.as_str());
+        r.insert(live::OPT_TARGET, &target.as_str());
     } else if opts.reset {
         let sysroot = &ostree::Sysroot::new_default();
         sysroot.load(gio::NONE_CANCELLABLE)?;
         let booted = get_required_booted_deployment(sysroot)?;
         // Unwrap safety: This can't return NULL
         let csum = booted.get_csum().expect("csum");
-        r.insert("target", &csum.as_str());
+        r.insert(live::OPT_TARGET, &csum.as_str());
     }
 
     Ok(r.end())
