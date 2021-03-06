@@ -350,14 +350,13 @@ fn get_required_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::D
 /// Implementation of `rpm-ostree ex apply-live`.
 pub(crate) fn transaction_apply_live(
     mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
-    target: &str,
+    mut options: Pin<&mut crate::ffi::GVariant>,
 ) -> CxxResult<()> {
     let sysroot = &sysroot.gobj_wrap();
-    let target = if !target.is_empty() {
-        Some(target)
-    } else {
-        None
-    };
+    let options = &options.gobj_wrap();
+    let options = glib::VariantDict::new(Some(options));
+    let target = options.lookup_value("target", Some(glib::VariantTy::new("s").unwrap()));
+    let target = target.as_ref().map(|v| v.get_str()).flatten();
     let repo = &sysroot.repo().expect("repo");
 
     let booted = get_required_booted_deployment(sysroot)?;

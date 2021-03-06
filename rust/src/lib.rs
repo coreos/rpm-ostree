@@ -38,6 +38,7 @@ pub mod ffi {
         type GObject = crate::FFIGObject;
         type GCancellable = crate::FFIGCancellable;
         type GDBusConnection = crate::FFIGDBusConnection;
+        type GVariant = crate::FFIGVariant;
         type GVariantDict = crate::FFIGVariantDict;
 
         #[namespace = "dnfcxx"]
@@ -216,8 +217,10 @@ pub mod ffi {
             deployment: Pin<&mut OstreeDeployment>,
         ) -> Result<bool>;
         fn applylive_sync_ref(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
-        // FIXME/cxx make this Option<&str>
-        fn transaction_apply_live(sysroot: Pin<&mut OstreeSysroot>, target: &str) -> Result<()>;
+        fn transaction_apply_live(
+            sysroot: Pin<&mut OstreeSysroot>,
+            target: Pin<&mut GVariant>,
+        ) -> Result<()>;
     }
 
     // passwd.rs

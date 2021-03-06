@@ -31,6 +31,7 @@ namespace rpmostreecxx {
     typedef ::GObject GObject;
     typedef ::GCancellable GCancellable;
     typedef ::GDBusConnection GDBusConnection;
+    typedef ::GVariant GVariant;
     typedef ::GVariantDict GVariantDict;
 }
 

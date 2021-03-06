@@ -97,7 +97,7 @@ macro_rules! cxxrs_bind {
 cxxrs_bind!(Ostree, ostree, ostree_sys, [Sysroot, Repo, Deployment]);
 cxxrs_bind!(G, glib, gobject_sys, [Object]);
 cxxrs_bind!(G, gio, gio_sys, [Cancellable, DBusConnection]);
-cxxrs_bind!(G, glib, glib_sys, [VariantDict]);
+cxxrs_bind!(G, glib, glib_sys, [Variant, VariantDict]);
 
 // An error type helper; separate from the GObject bridging
 mod err {
