@@ -13,6 +13,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync 
 /// Used for methods that invoke the `/usr/bin/rpm-ostree` binary directly.
 /// This acts as a carrier for the `RPMOSTREE_AGENT_ID` variable which
 /// is used to textually identify the caller.
+#[derive(Debug, Clone)]
 pub struct CliClient {
     agent_id: String,
 }
