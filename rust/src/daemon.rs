@@ -1,4 +1,6 @@
 //! Rust portion of rpmostreed-deployment-utils.cxx
+//! The code here is mainly involved in converting on-disk state (i.e. ostree commits/deployments)
+//! into GVariant which will be serialized via DBus.
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
@@ -21,6 +23,8 @@ pub(crate) fn deployment_generate_id(
     )
 }
 
+/// Serialize information about the given deployment into the `dict`;
+/// this will be exposed via DBus and is hence public API.
 pub(crate) fn deployment_populate_variant(
     mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
     mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
@@ -63,6 +67,10 @@ pub(crate) fn deployment_populate_variant(
             dict.insert("finalization-locked", &true);
         }
     }
+
+    dict.insert("pinned", &deployment.is_pinned());
+    let unlocked = deployment.get_unlocked();
+    dict.insert("unlocked", &unlocked.to_string());
 
     Ok(())
 }
