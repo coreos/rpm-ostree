@@ -12,6 +12,9 @@ lazy_static::lazy_static! {
     pub(crate) static ref TY_B: &'static glib::VariantTy = {
         glib::VariantTy::new("b").unwrap()
     };
+    pub(crate) static ref TY_U: &'static glib::VariantTy = {
+        glib::VariantTy::new("u").unwrap()
+    };
 }
 
 pub(crate) fn new_variant_tuple<'a>(

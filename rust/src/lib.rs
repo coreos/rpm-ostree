@@ -90,6 +90,15 @@ pub mod ffi {
         fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()>;
     }
 
+    // A grab-bag of metadata from the deployment's ostree commit
+    // around layering/derivation
+    #[derive(Default)]
+    struct DeploymentLayeredMeta {
+        is_layered: bool,
+        base_commit: String,
+        clientlayer_version: u32,
+    }
+
     // daemon.rs
     extern "Rust" {
         fn deployment_generate_id(deployment: Pin<&mut OstreeDeployment>) -> String;
@@ -98,6 +107,14 @@ pub mod ffi {
             mut deployment: Pin<&mut OstreeDeployment>,
             mut dict: Pin<&mut GVariantDict>,
         ) -> Result<()>;
+        fn deployment_layeredmeta_from_commit(
+            mut deployment: Pin<&mut OstreeDeployment>,
+            mut commit: Pin<&mut GVariant>,
+        ) -> Result<DeploymentLayeredMeta>;
+        fn deployment_layeredmeta_load(
+            mut repo: Pin<&mut OstreeRepo>,
+            mut deployment: Pin<&mut OstreeDeployment>,
+        ) -> Result<DeploymentLayeredMeta>;
     }
 
     // initramfs.rs

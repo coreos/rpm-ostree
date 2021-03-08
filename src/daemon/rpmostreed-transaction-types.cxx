@@ -2583,12 +2583,8 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   if (!g_str_equal (ostree_deployment_get_osname (default_deployment), self->osname))
     return glnx_throw (error, "Staged deployment is not for osname '%s'", self->osname);
 
-  gboolean is_layered = FALSE;
-  g_autofree char *base_checksum = NULL;
-  if (!rpmostree_deployment_get_layered_info (repo, default_deployment, &is_layered, NULL,
-                                              &base_checksum, NULL, NULL, NULL, error))
-    return FALSE;
-  const char *checksum = base_checksum ?: ostree_deployment_get_csum (default_deployment);
+  auto layeredmeta = rpmostreecxx::deployment_layeredmeta_load(*repo, *default_deployment);
+  const char *checksum = layeredmeta.base_commit.c_str();
 
   auto expected_checksum =
     (char*)vardict_lookup_ptr (self->options, "checksum", "&s");
