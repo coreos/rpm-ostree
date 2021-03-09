@@ -263,14 +263,25 @@ pub mod ffi {
         fn serialize_to_dir(&self, output_dir: &str) -> Result<()>;
     }
 
+    struct LockedPackage {
+        name: String,
+        evr: String,
+        arch: String,
+        digest: String,
+    }
+
     // lockfile.rs
     extern "Rust" {
-        fn lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMapping>>;
+        type LockfileConfig;
+
+        fn lockfile_read(filenames: &Vec<String>) -> Result<Box<LockfileConfig>>;
         fn lockfile_write(
             filename: &str,
             packages: Pin<&mut CxxGObjectArray>,
             rpmmd_repos: Pin<&mut CxxGObjectArray>,
         ) -> Result<()>;
+
+        fn get_locked_packages(&self) -> Result<Vec<LockedPackage>>;
     }
 
     // rpmutils.rs

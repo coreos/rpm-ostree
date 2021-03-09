@@ -12,7 +12,7 @@
 
 pub use self::ffi::*;
 use crate::utils;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use chrono::prelude::*;
 use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
@@ -22,6 +22,9 @@ use std::io;
 use std::iter::Extend;
 use std::path::Path;
 use std::pin::Pin;
+
+use crate::cxxrsutil::CxxResult;
+use libdnf_sys::*;
 
 /// Given a lockfile filename, parse it
 fn lockfile_parse<P: AsRef<Path>>(filename: P) -> Result<LockfileConfig> {
@@ -90,7 +93,7 @@ fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Result<LockfileCo
 ///
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-struct LockfileConfig {
+pub(crate) struct LockfileConfig {
     packages: BTreeMap<String, LockedPackage>,
     metadata: Option<LockfileConfigMetadata>,
 }
@@ -120,24 +123,36 @@ enum LockedPackage {
     },
 }
 
-impl LockedPackage {
-    fn evra_glob(&self) -> String {
-        match self {
-            LockedPackage::Evr { evr, digest: _ } => format!("{}.*", evr),
-            LockedPackage::Evra { evra, digest: _ } => evra.into(),
-        }
-    }
-    fn digest(&self) -> String {
-        match self {
-            LockedPackage::Evr { evr: _, digest } => digest.clone().unwrap_or_default(),
-            LockedPackage::Evra { evra: _, digest } => digest.clone().unwrap_or_default(),
-        }
-    }
-}
-
 impl LockfileConfig {
     fn merge(&mut self, other: LockfileConfig) {
         self.packages.extend(other.packages);
+    }
+
+    pub(crate) fn get_locked_packages(&self) -> CxxResult<Vec<crate::ffi::LockedPackage>> {
+        self.packages
+            .iter()
+            .map(|(k, v)| match v {
+                LockedPackage::Evr { evr, digest } => Ok(crate::ffi::LockedPackage {
+                    name: k.clone(),
+                    evr: evr.clone(),
+                    arch: "".into(),
+                    digest: digest.clone().unwrap_or_default(),
+                }),
+                LockedPackage::Evra { evra, digest } => {
+                    let evr_arch: Vec<&str> = evra.rsplitn(2, '.').collect();
+                    if evr_arch.len() != 2 {
+                        Err(anyhow!("package {} has malformed evra: {}", k, evra).into())
+                    } else {
+                        Ok(crate::ffi::LockedPackage {
+                            name: k.clone(),
+                            evr: evr_arch[1].into(),
+                            arch: evr_arch[0].into(),
+                            digest: digest.clone().unwrap_or_default(),
+                        })
+                    }
+                }
+            })
+            .collect()
     }
 }
 
@@ -238,19 +253,8 @@ mod tests {
     }
 }
 
-use crate::cxxrsutil::CxxResult;
-use crate::ffi::*;
-use libdnf_sys::*;
-
-pub(crate) fn lockfile_read(filenames: &Vec<String>) -> CxxResult<Vec<StringMapping>> {
-    Ok(lockfile_parse_multiple(&filenames)?
-        .packages
-        .into_iter()
-        .map(|(k, v)| StringMapping {
-            k: format!("{}-{}", k, v.evra_glob()),
-            v: v.digest(),
-        })
-        .collect())
+pub(crate) fn lockfile_read(filenames: &Vec<String>) -> CxxResult<Box<LockfileConfig>> {
+    Ok(Box::new(lockfile_parse_multiple(&filenames)?))
 }
 
 pub(crate) fn lockfile_write(

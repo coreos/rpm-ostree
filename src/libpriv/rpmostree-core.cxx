@@ -355,8 +355,6 @@ rpmostree_context_finalize (GObject *object)
   g_clear_pointer (&rctx->pkgs_to_remove, g_hash_table_unref);
   g_clear_pointer (&rctx->pkgs_to_replace, g_hash_table_unref);
 
-  g_clear_pointer (&rctx->vlockmap, g_hash_table_unref);
-
   (void)glnx_tmpdir_delete (&rctx->tmpdir, NULL, NULL);
   (void)glnx_tmpdir_delete (&rctx->repo_tmpdir, NULL, NULL);
 
@@ -796,7 +794,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
       /* only enable lockfile-repos if we actually have a lockfile so we don't even waste
        * time fetching metadata */
-      if (self->vlockmap)
+      if (self->lockfile)
         {
           g_autofree char **enabled_lockfile_repos = NULL;
           if (g_variant_dict_lookup (self->spec->dict, "lockfile-repos", "^a&s", &enabled_lockfile_repos))
@@ -1912,17 +1910,20 @@ static GPtrArray*
 find_locked_packages (RpmOstreeContext *self,
                       GError          **error)
 {
-  g_assert (self->vlockmap);
+  g_assert (self->lockfile);
   DnfContext *dnfctx = self->dnfctx;
   DnfSack *sack = dnf_context_get_sack (dnfctx);
 
   g_autoptr(GPtrArray) pkgs =
     g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-  GLNX_HASH_TABLE_FOREACH_KV (self->vlockmap, const char*, nevra, const char*, chksum)
+  auto locked_pkgs = (*self->lockfile)->get_locked_packages();
+  for (auto & pkg : locked_pkgs)
     {
-      g_assert (chksum);
       hy_autoquery HyQuery query = hy_query_create (sack);
-      hy_query_filter (query, HY_PKG_NEVRA, HY_GLOB, nevra);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg.name.c_str());
+      hy_query_filter (query, HY_PKG_EVR, HY_EQ, pkg.evr.c_str());
+      if (pkg.arch.length() > 0)
+        hy_query_filter (query, HY_PKG_ARCH, HY_EQ, pkg.arch.c_str());
       g_autoptr(GPtrArray) matches = hy_query_run (query);
 
       gboolean at_least_one = FALSE;
@@ -1930,7 +1931,7 @@ find_locked_packages (RpmOstreeContext *self,
       for (guint i = 0; i < matches->len; i++)
         {
           auto match = static_cast<DnfPackage *>(matches->pdata[i]);
-          if (!*chksum)
+          if (pkg.digest.length() == 0)
             {
               /* we could optimize this path outside the loop in the future using the
                * g_ptr_array_extend_and_steal API, though that's still too new for e.g. el8 */
@@ -1940,7 +1941,7 @@ find_locked_packages (RpmOstreeContext *self,
           else
             {
               auto repodata_chksum = rpmostreecxx::get_repodata_chksum_repr(*match);
-              if (!g_str_equal (chksum, repodata_chksum.c_str()))
+              if (pkg.digest != repodata_chksum) /* we're comparing two rust::String here */
                 n_checksum_mismatches++;
               else
                 {
@@ -1950,10 +1951,17 @@ find_locked_packages (RpmOstreeContext *self,
             }
         }
       if (!at_least_one)
-        return (GPtrArray*)glnx_null_throw (error, "Couldn't find locked package '%s'%s%s "
-                                       "(pkgs matching NEVRA: %d; mismatched checksums: %d)",
-                                nevra, *chksum ? " with checksum " : "",
-                                *chksum ? chksum : "", matches->len, n_checksum_mismatches);
+        {
+          g_autofree char *spec =
+            g_strdup_printf ("%s-%s%s%s", pkg.name.c_str(), pkg.evr.c_str(),
+                             pkg.arch.length() > 0 ? "." : "",
+                             pkg.arch.length() > 0 ? pkg.arch.c_str() : "");
+          return (GPtrArray*)glnx_null_throw (error, "Couldn't find locked package '%s'%s%s "
+                                                     "(pkgs matching NEVRA: %d; mismatched checksums: %d)",
+                                              spec, pkg.digest.length() > 0 ? " with checksum " : "",
+                                              pkg.digest.length() > 0 ? pkg.digest.c_str() : "",
+                                              matches->len, n_checksum_mismatches);
+        }
     }
 
   return util::move_nullify (pkgs);
@@ -2015,7 +2023,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_assert_cmpint (g_strv_length (removed_base_pkgnames), ==, 0);
     }
 
-  if (self->vlockmap)
+  if (self->lockfile)
     {
       /* we only support pure installs for now (compose case) */
       g_assert (!self->rojig_pure);
@@ -2085,7 +2093,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
    * uninstall. We don't want to mix those two steps, otherwise we might confuse libdnf,
    * see: https://github.com/rpm-software-management/libdnf/issues/700 */
 
-  if (self->vlockmap != NULL)
+  if (self->lockfile)
     {
       /* first, find our locked pkgs in the rpmmd */
       g_autoptr(GPtrArray) locked_pkgs = find_locked_packages (self, error);
@@ -2097,7 +2105,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       for (guint i = 0; i < locked_pkgs->len; i++)
         dnf_packageset_add (locked_pset, static_cast<DnfPackage*>(locked_pkgs->pdata[i]));
 
-      if (self->vlockmap_strict)
+      if (self->lockfile_strict)
         {
           /* In strict mode, we basically *only* want locked packages to be considered, so
            * exclude everything else. Note we still don't directly do `hy_goal_install`
@@ -2135,13 +2143,11 @@ rpmostree_context_prepare (RpmOstreeContext *self,
           /* map of all packages with names found in the lockfile */
           DnfPackageSet *named_pkgs = dnf_packageset_new (sack);
           Map *named_pkgs_map = dnf_packageset_get_map (named_pkgs);
-          GLNX_HASH_TABLE_FOREACH (self->vlockmap, const char*, nevra)
+          auto locked_pkgs = (*self->lockfile)->get_locked_packages();
+          for (auto & pkg : locked_pkgs)
             {
-              g_autofree char *name = NULL;
-              if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
-                return FALSE;
               hy_autoquery HyQuery query = hy_query_create (sack);
-              hy_query_filter (query, HY_PKG_NAME, HY_EQ, name);
+              hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg.name.c_str());
               DnfPackageSet *pset = hy_query_run_set (query);
               map_or (named_pkgs_map, dnf_packageset_get_map (pset));
               dnf_packageset_free (pset);
@@ -2315,13 +2321,16 @@ rpmostree_context_get_packages_to_import (RpmOstreeContext *self)
 
 /* Note this must be called *before* rpmostree_context_setup(). */
 void
-rpmostree_context_set_vlockmap (RpmOstreeContext *self,
-                                GHashTable       *map,
+rpmostree_context_set_lockfile (RpmOstreeContext *self,
+                                char            **lockfiles,
                                 gboolean          strict)
 {
-  g_clear_pointer (&self->vlockmap, (GDestroyNotify)g_hash_table_unref);
-  self->vlockmap = g_hash_table_ref (map);
-  self->vlockmap_strict = strict;
+  g_assert (!self->lockfile);
+  rust::Vec<rust::String> rs_lockfiles;
+  for (char **it = lockfiles; it && *it; it++)
+    rs_lockfiles.push_back(std::string(*it));
+  self->lockfile = rpmostreecxx::lockfile_read(rs_lockfiles);
+  self->lockfile_strict = strict;
 }
 
 /* XXX: push this into libdnf */
