@@ -161,18 +161,21 @@ mod err {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use fn_error_context::context;
+
         #[test]
         fn throwchain() {
             use anyhow::Context;
             fn outer() -> CxxResult<()> {
+                #[context("inner")]
                 fn inner() -> anyhow::Result<()> {
-                    anyhow::bail!("inner")
+                    anyhow::bail!("oops")
                 }
                 Ok(inner().context("Failed in outer")?)
             }
             assert_eq!(
                 format!("{}", outer().err().unwrap()),
-                "Failed in outer: inner"
+                "Failed in outer: inner: oops"
             )
         }
     }

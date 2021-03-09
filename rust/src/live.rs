@@ -439,8 +439,7 @@ pub(crate) fn transaction_apply_live(
         .filter(|s| !s.is_empty())
         .unwrap_or(booted_commit);
     // Compute the filesystem-level diff
-    let diff = crate::ostree_diff::diff(repo, source_commit, &target_commit, Some("/usr"))
-        .context("Failed computing diff")?;
+    let diff = crate::ostree_diff::diff(repo, source_commit, &target_commit, Some("/usr"))?;
     // And then the package-level diff
     let pkgdiff = {
         cxx::let_cxx_string!(from = source_commit);
