@@ -182,8 +182,8 @@ gboolean rpmostree_context_set_packages (RpmOstreeContext *self,
 GPtrArray *rpmostree_context_get_packages_to_import (RpmOstreeContext *self);
 
 void
-rpmostree_context_set_vlockmap (RpmOstreeContext *self,
-                                GHashTable       *map,
+rpmostree_context_set_lockfile (RpmOstreeContext *self,
+                                char            **lockfiles,
                                 gboolean          strict);
 
 gboolean rpmostree_download_packages (GPtrArray      *packages,

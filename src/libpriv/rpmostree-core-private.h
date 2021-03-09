@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "libglnx.h"
 #include "rpmostree-rojig-core.h"
 #include "rpmostree-core.h"
@@ -77,8 +79,8 @@ struct _RpmOstreeContext {
   GHashTable *pkgs_to_remove;  /* pkgname --> gv_nevra */
   GHashTable *pkgs_to_replace; /* new gv_nevra --> old gv_nevra */
 
-  GHashTable *vlockmap; /* nevra --> repochecksum */
-  gboolean vlockmap_strict;
+  std::optional<rust::Box<rpmostreecxx::LockfileConfig>> lockfile;
+  gboolean lockfile_strict;
 
   GLnxTmpDir tmpdir;
 
