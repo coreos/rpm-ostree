@@ -7,6 +7,7 @@
  */
 
 use anyhow::{Context, Result};
+use fn_error_context::context;
 use gio::prelude::*;
 use ostree::RepoFileExt;
 use serde_derive::{Deserialize, Serialize};
@@ -149,6 +150,7 @@ fn diff_recurse(
 }
 
 /// Given two ostree commits, compute the diff between them.
+#[context("Computing ostree diff")]
 pub(crate) fn diff<P: AsRef<str>>(
     repo: &ostree::Repo,
     from: &str,

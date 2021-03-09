@@ -35,7 +35,8 @@
 // (FIXME: Convert to Apache-2.0 OR MIT for consistency?)
 use crate::cxxrsutil::*;
 use crate::ffi::HistoryEntry;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
+use fn_error_context::context;
 use openat::{self, Dir, SimpleType};
 use std::collections::VecDeque;
 use std::fs;
@@ -176,6 +177,7 @@ fn history_get_oldest_deployment_msg_timestamp() -> Result<Option<u64>> {
 /// Gets the oldest deployment message in the journal, and nuke all the GVariant data files
 /// that correspond to deployments older than that one. Essentially, this binds pruning to
 /// journal pruning.
+#[context("Failed to prune history")]
 fn history_prune_inner() -> Result<()> {
     if !Path::new(RPMOSTREE_HISTORY_DIR).exists() {
         return Ok(());
@@ -211,7 +213,7 @@ fn history_prune_inner() -> Result<()> {
 }
 
 pub(crate) fn history_prune() -> CxxResult<()> {
-    Ok(history_prune_inner().context("Failed to prune history")?)
+    Ok(history_prune_inner()?)
 }
 
 pub(crate) fn history_ctx_new() -> CxxResult<Box<HistoryCtx>> {

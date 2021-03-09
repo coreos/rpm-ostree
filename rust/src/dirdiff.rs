@@ -6,7 +6,8 @@
 
 //! Compute difference between two filesystem trees.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
+use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -204,11 +205,12 @@ fn diff_recurse(
 }
 
 /// Given two directories, compute the diff between them.
+#[context("Computing filesystem diff")]
 pub(crate) fn diff(src: &openat::Dir, dest: &openat::Dir) -> Result<Diff> {
     let mut diff = Diff {
         ..Default::default()
     };
-    diff_recurse(None, src, dest, &mut diff).context("Failed to compute fsdiff")?;
+    diff_recurse(None, src, dest, &mut diff)?;
     Ok(diff)
 }
 
