@@ -242,7 +242,7 @@ use crate::cxxrsutil::CxxResult;
 use crate::ffi::*;
 use libdnf_sys::*;
 
-pub(crate) fn ror_lockfile_read(filenames: &Vec<String>) -> CxxResult<Vec<StringMapping>> {
+pub(crate) fn lockfile_read(filenames: &Vec<String>) -> CxxResult<Vec<StringMapping>> {
     Ok(lockfile_parse_multiple(&filenames)?
         .packages
         .into_iter()
@@ -253,7 +253,7 @@ pub(crate) fn ror_lockfile_read(filenames: &Vec<String>) -> CxxResult<Vec<String
         .collect())
 }
 
-pub(crate) fn ror_lockfile_write(
+pub(crate) fn lockfile_write(
     filename: &str,
     mut packages: Pin<&mut crate::ffi::CxxGObjectArray>,
     mut rpmmd_repos: Pin<&mut crate::ffi::CxxGObjectArray>,
