@@ -383,7 +383,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
                                            DNF_REPO_ENABLED_PACKAGES);
       auto pkgs_v = rpmostreecxx::CxxGObjectArray(pkgs);
       auto repos_v = rpmostreecxx::CxxGObjectArray(rpmmd_repos);
-      rpmostreecxx::ror_lockfile_write(opt_write_lockfile_to, pkgs_v, repos_v);
+      rpmostreecxx::lockfile_write(opt_write_lockfile_to, pkgs_v, repos_v);
     }
 
   /* FIXME - just do a depsolve here before we compute download requirements */
@@ -707,7 +707,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       rust::Vec<rust::String> lockfiles;
       for (char **it = opt_lockfiles; it && *it; it++)
         lockfiles.push_back(std::string(*it));
-      auto mappings = rpmostreecxx::ror_lockfile_read (lockfiles);
+      auto mappings = rpmostreecxx::lockfile_read (lockfiles);
       g_autoptr(GHashTable) map = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
       for (auto & mapping : mappings)
         g_hash_table_insert (map, g_strdup (mapping.k.c_str()), g_strdup (mapping.v.c_str()));

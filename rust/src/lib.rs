@@ -261,8 +261,8 @@ pub mod ffi {
 
     // lockfile.rs
     extern "Rust" {
-        fn ror_lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMapping>>;
-        fn ror_lockfile_write(
+        fn lockfile_read(filenames: &Vec<String>) -> Result<Vec<StringMapping>>;
+        fn lockfile_write(
             filename: &str,
             packages: Pin<&mut CxxGObjectArray>,
             rpmmd_repos: Pin<&mut CxxGObjectArray>,
