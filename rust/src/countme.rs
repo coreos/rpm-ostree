@@ -1,6 +1,7 @@
 //! Implementation of the "DNF Count Me" system.
-// SPDX-License-Identifier: GPL-2.0-or-later
-// (FIXME: Convert to Apache-2.0 OR MIT for consistency?)
+
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 use anyhow::{bail, Context, Result};
 use curl::easy::Easy;
 use os_release::OsRelease;

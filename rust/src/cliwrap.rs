@@ -1,8 +1,8 @@
 //! Implements the `cliwrap` treefile option which intercepts/proxies
 //! other binaries like `/usr/bin/rpm`.
 
-// SPDX-License-Identifier: GPL-2.0-or-later
-// (FIXME: I think I really meant this to be Apache-2.0 OR MIT)
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 use anyhow::{anyhow, Result};
 use std::io::prelude::*;
 use std::path;
