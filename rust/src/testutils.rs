@@ -11,6 +11,7 @@
 
 use crate::{cxxrsutil::*, variant_utils};
 use anyhow::{Context, Result};
+use fn_error_context::context;
 use glib::ToVariant;
 use openat_ext::{FileExt, OpenatDirExt};
 use rand::Rng;
@@ -144,6 +145,7 @@ pub(crate) fn mutate_executables_to(
 // The ostree version may later use this one.
 /// Given an ostree ref, use the running root filesystem as a source, update
 /// `percentage` percent of binary (ELF) files
+#[context("Generating synthetic ostree update")]
 fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     // A new mount namespace should have been created for us
     let r = Command::new("mount")

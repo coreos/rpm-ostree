@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{Context, Result};
+use fn_error_context::context;
 use std::fs;
 use std::path::PathBuf;
 
@@ -48,8 +49,9 @@ pub fn all() -> Result<Vec<Repo>> {
 }
 
 /// Read repository configuration from a file
+#[context("Parsing repo file {:?}", path)]
 fn parse_repo_file(path: &PathBuf) -> Result<Vec<Repo>> {
-    let i = Ini::load_from_file(path).with_context(|| "Could not parse as INI".to_string())?;
+    let i = Ini::load_from_file(path)?;
     let mut repos = Vec::new();
     for (sec, prop) in i.iter() {
         let mut repo = match sec {
