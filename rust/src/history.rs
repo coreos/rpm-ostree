@@ -31,8 +31,8 @@
 //! than scanning the whole journal upfront. This can then be e.g. piped through
 //! a pager, stopped after N entries, etc...
 
-// SPDX-License-Identifier: GPL-2.0-or-later
-// (FIXME: Convert to Apache-2.0 OR MIT for consistency?)
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 use crate::cxxrsutil::*;
 use crate::ffi::HistoryEntry;
 use anyhow::{anyhow, Context, Result};

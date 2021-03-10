@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-// (FIXME: Convert to Apache-2.0 OR MIT for consistency?)
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 use anyhow::{bail, Result};
 use chrono::prelude::*;
 use openat_ext::OpenatDirExt;
