@@ -6,8 +6,9 @@ ConditionPathExists=/run/ostree-booted
 [Timer]
 # Trigger weekly with a random delay
 OnCalendar=weekly UTC
-AccuracySec=1u
+AccuracySec=1s
 RandomizedDelaySec=1w
+OnBootSec=5m
 Persistent=yes
 
 [Install]
