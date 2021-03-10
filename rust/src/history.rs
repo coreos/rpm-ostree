@@ -178,7 +178,7 @@ fn history_get_oldest_deployment_msg_timestamp() -> Result<Option<u64>> {
 /// that correspond to deployments older than that one. Essentially, this binds pruning to
 /// journal pruning.
 #[context("Failed to prune history")]
-fn history_prune_inner() -> Result<()> {
+pub(crate) fn history_prune() -> CxxResult<()> {
     if !Path::new(RPMOSTREE_HISTORY_DIR).exists() {
         return Ok(());
     }
@@ -210,10 +210,6 @@ fn history_prune_inner() -> Result<()> {
     }
 
     Ok(())
-}
-
-pub(crate) fn history_prune() -> CxxResult<()> {
-    Ok(history_prune_inner()?)
 }
 
 pub(crate) fn history_ctx_new() -> CxxResult<Box<HistoryCtx>> {

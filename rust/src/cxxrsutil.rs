@@ -153,6 +153,18 @@ mod err {
         }
     }
 
+    impl CxxError {
+        /// Prefix an error message with `<context>: `.  See
+        /// https://docs.rs/anyhow/1.0.38/anyhow/struct.Error.html#method.context
+        /// This is necessary for use with the `fn-error-context` crate.
+        pub(crate) fn context<C>(self, context: C) -> Self
+        where
+            C: Display + Send + Sync + 'static,
+        {
+            Self(format!("{}: {}", context.to_string(), self))
+        }
+    }
+
     // Use this on exit from Rust functions that return to C++ (bridged via cxx-rs).
     // This is a workaround for https://github.com/dtolnay/cxx/issues/290#issuecomment-756432907
     // which is that cxx-rs only shows the first entry in the cause chain.
@@ -165,18 +177,16 @@ mod err {
 
         #[test]
         fn throwchain() {
-            use anyhow::Context;
+            #[context("outer")]
             fn outer() -> CxxResult<()> {
                 #[context("inner")]
                 fn inner() -> anyhow::Result<()> {
                     anyhow::bail!("oops")
                 }
-                Ok(inner().context("Failed in outer")?)
+                Ok(inner()?)
             }
-            assert_eq!(
-                format!("{}", outer().err().unwrap()),
-                "Failed in outer: inner: oops"
-            )
+
+            assert_eq!(format!("{}", outer().err().unwrap()), "outer: inner: oops")
         }
     }
 }
