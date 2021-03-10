@@ -82,9 +82,6 @@ endif
 $(systemdunit_service_files): Makefile
 	$(SED_SUBST) $(daemon_asan_options) $@.in > $@
 
-systemdsysusers_DATA = $(srcdir)/src/daemon/rpm-ostree.conf
-systemdsysusersdir   = $(prefix)/lib/sysusers.d
-
 # We keep this stub script around to have SELinux labeling work,
 # plus some backwards compatibility.
 libexec_SCRIPTS = rpm-ostreed
@@ -114,7 +111,6 @@ EXTRA_DIST += \
 	$(service_in_files) \
 	$(systemdunit_service_in_files) \
 	$(systemdunit_timer_files) \
-	$(systemdsysusers_conf_files) \
 	$(NULL)
 
 CLEANFILES += \
