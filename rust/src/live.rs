@@ -8,8 +8,10 @@
  */
 
 use crate::ffi::LiveApplyState;
+use crate::isolation;
 use crate::{cxxrsutil::*, variant_utils};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
+use fn_error_context::context;
 use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
@@ -18,7 +20,6 @@ use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::process::Command;
 use variant_utils::{variant_dict_lookup_bool, variant_dict_lookup_str};
 
 /// GVariant `s`: Choose a specific commit
@@ -301,50 +302,34 @@ fn update_etc(
 // we actually need to escape our mount namespace and affect
 // the "main" mount namespace so that other processes will
 // see the overlayfs.
+#[context("Creating overlayfs")]
 fn unlock_transient(sysroot: &ostree::Sysroot) -> Result<()> {
     // Temporarily drop the lock
     sysroot.unlock();
-    let status = Command::new("systemd-run")
-        .args(&[
-            "-u",
-            "rpm-ostree-unlock",
-            "--wait",
-            "--",
-            "ostree",
-            "admin",
-            "unlock",
-            "--transient",
-        ])
-        .status();
-    sysroot.lock()?;
-    let status = status?;
-    if !status.success() {
-        bail!("Failed to unlock --transient");
-    }
+    isolation::run_systemd_worker_sync(&isolation::UnitConfig {
+        name: Some("rpm-ostree-unlock"),
+        properties: &[],
+        exec_args: &["ostree", "admin", "unlock", "--transient"],
+    })?;
     Ok(())
 }
 
-/// Run `systemd-tmpfiles` via `systemd-run` so we escape our mount namespace.
-/// This allows our `ProtectHome=` in the unit file to work.
+/// Run `systemd-tmpfiles` as a separate systemd unit to escape
+/// our mount namespace.
+/// This allows our `ProtectHome=` in the unit file to work
+/// for example.  Longer term I'd like to protect even more of `/var`.
+#[context("Running tmpfiles for /run and /var")]
 fn rerun_tmpfiles() -> Result<()> {
-    for prefix in &["/run", "/var"] {
-        let status = Command::new("systemd-run")
-            .args(&[
-                "-u",
-                "rpm-ostree-tmpfiles",
-                "--wait",
-                "--",
-                "systemd-tmpfiles",
-                "--create",
-                "--prefix",
-                prefix,
-            ])
-            .status()?;
-        if !status.success() {
-            bail!("Failed to invoke systemd-tmpfiles");
-        }
-    }
-    Ok(())
+    isolation::run_systemd_worker_sync(&isolation::UnitConfig {
+        name: Some("rpm-ostree-tmpfiles"),
+        properties: &[],
+        exec_args: &[
+            "systemd-tmpfiles",
+            "--create",
+            "--prefix=/run",
+            "--prefix=/var",
+        ],
+    })
 }
 
 fn get_required_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::Deployment> {
@@ -508,7 +493,7 @@ pub(crate) fn transaction_apply_live(
         &openat::Dir::open("/etc")?,
     )?;
     std::mem::drop(task);
-    let task = crate::ffi::progress_begin_task("Running systemd-tmpfiles for /var");
+    let task = crate::ffi::progress_begin_task("Running systemd-tmpfiles for /run and /var");
     rerun_tmpfiles()?;
     std::mem::drop(task);
 
