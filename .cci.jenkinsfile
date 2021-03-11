@@ -47,6 +47,7 @@ parallel insttests: {
           (cd overrides/rpm && curl -LO https://kojipkgs.fedoraproject.org//packages/libsolv/0.7.17/1.fc33/x86_64/libsolv-0.7.17-1.fc33.x86_64.rpm)
           coreos-assembler fetch
           coreos-assembler build
+           ${env.WORKSPACE}/ci/composepost-checks.sh
         """)
       }
       stage("Install Deps") {
