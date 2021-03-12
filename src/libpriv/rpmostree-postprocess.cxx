@@ -753,103 +753,6 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
   return TRUE;
 }
 
-static char *
-replace_nsswitch_string (const char *buf,
-                         GError    **error)
-{
-  gboolean is_passwd;
-  gboolean is_group;
-
-  is_passwd = g_str_has_prefix (buf, "passwd:");
-  is_group = g_str_has_prefix (buf, "group:");
-
-  if (!(is_passwd || is_group))
-    return g_strdup (buf);
-
-  const char *colon = strchr (buf, ':');
-  g_assert (colon);
-
-  g_autoptr(GString) retbuf = g_string_new ("");
-  /* Insert the prefix */
-  g_string_append_len (retbuf, buf, (colon - buf) + 1);
-
-  /* Now parse the elements and try to insert `altfiles`
-   * after `files`.
-   */
-  g_auto(GStrv) elts = g_strsplit_set (colon + 1, " \t", -1);
-  gboolean inserted = FALSE;
-  for (char **iter = elts; iter && *iter; iter++)
-    {
-      const char *v = *iter;
-      if (!*v)
-        continue;
-      /* Already have altfiles?  We're done */
-      if (strcmp (v, "altfiles") == 0)
-        return g_strdup (buf);
-      /* We prefer `files altfiles` */
-      else if (!inserted && strcmp (v, "files") == 0)
-        {
-          g_string_append (retbuf, " files altfiles");
-          inserted = TRUE;
-        }
-      else
-        {
-          g_string_append_c (retbuf, ' ');
-          g_string_append (retbuf, v);
-        }
-    }
-  /* Last ditch effort if we didn't find `files` */
-  if (!inserted)
-    g_string_append (retbuf, " altfiles");
-  return g_string_free (util::move_nullify (retbuf), FALSE);
-}
-
-char *
-rpmostree_postprocess_replace_nsswitch (const char *buf,
-                                        GError    **error)
-{
-  g_autoptr(GString) new_buf = g_string_new ("");
-
-  g_auto(GStrv) lines = g_strsplit (buf, "\n", -1);
-  for (char **iter = lines; iter && *iter; iter++)
-    {
-      const char *line = *iter;
-      g_autofree char *replaced_line = replace_nsswitch_string (line, error);
-      if (!replaced_line)
-        return NULL;
-      g_string_append (new_buf, replaced_line);
-      if (*(iter+1))
-        g_string_append_c (new_buf, '\n');
-    }
-  return g_string_free (util::move_nullify (new_buf), FALSE);
-}
-
-
-static gboolean
-replace_nsswitch (int            dfd,
-                  GCancellable  *cancellable,
-                  GError       **error)
-{
-  g_autofree char *nsswitch_contents =
-    glnx_file_get_contents_utf8_at (dfd, "usr/etc/nsswitch.conf", NULL,
-                                    cancellable, error);
-  if (!nsswitch_contents)
-    return FALSE;
-
-  g_autofree char *new_nsswitch_contents =
-    rpmostree_postprocess_replace_nsswitch (nsswitch_contents, error);
-  if (!new_nsswitch_contents)
-    return FALSE;
-
-  if (!glnx_file_replace_contents_at (dfd, "usr/etc/nsswitch.conf",
-                                      (guint8*)new_nsswitch_contents, -1,
-                                      GLNX_FILE_REPLACE_NODATASYNC,
-                                      cancellable, error))
-    return FALSE;
-
-  return TRUE;
-}
-
 /* Change the policy store location.
  * Part of SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659
  */
@@ -1028,8 +931,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
   }
 
   /* NSS configuration to look at the new files */
-  if (!replace_nsswitch (rootfs_dfd, cancellable, error))
-    return glnx_prefix_error (error, "nsswitch replacement");
+  rpmostreecxx::composepost_nsswitch_altfiles(rootfs_dfd);
 
   if (selinux)
     {
