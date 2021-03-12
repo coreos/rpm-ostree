@@ -69,9 +69,11 @@ else
     echo "Missing ${wrapdir}; cliwrap not enabled"
 fi
 
-# StateRoot is only in --verbose
+# StateRoot is only in --verbose, also verify we're not showing
+# unlocked.
 rpm-ostree status > status.txt
 assert_not_file_has_content status.txt StateRoot:
+assert_not_file_has_content status.txt Unlocked:
 rpm-ostree status -v > status.txt
 assert_file_has_content status.txt StateRoot:
 echo "ok status text"

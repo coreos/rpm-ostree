@@ -70,7 +70,13 @@ pub(crate) fn deployment_populate_variant(
 
     dict.insert("pinned", &deployment.is_pinned());
     let unlocked = deployment.get_unlocked();
-    dict.insert("unlocked", &unlocked.to_string());
+    // Unwrap safety: This always returns a value
+    dict.insert(
+        "unlocked",
+        &ostree::Deployment::unlocked_state_to_string(unlocked)
+            .unwrap()
+            .as_str(),
+    );
 
     Ok(())
 }
