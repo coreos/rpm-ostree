@@ -52,12 +52,12 @@ fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Vari
 }
 
 pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> Result<()> {
-    let opts = Opts::from_iter(args.iter());
+    let opts = &Opts::from_iter(args.iter());
     let client = &mut crate::client::ClientConnection::new()?;
     let sysroot = &ostree::Sysroot::new_default();
     sysroot.load(gio::NONE_CANCELLABLE)?;
 
-    let args = get_args_variant(sysroot, &opts)?;
+    let args = get_args_variant(sysroot, opts)?;
 
     let params = crate::variant_utils::new_variant_tuple(&[args]);
     let reply = &client.get_os_ex_proxy().call_sync(
@@ -97,8 +97,12 @@ fn finish(sysroot: &ostree::Sysroot) -> Result<()> {
     };
     pkgdiff.print();
 
-    crate::ffi::output_message(
-        "Successfully updated running filesystem tree; some services may need to be restarted.",
-    );
+    if pkgdiff.n_removed() == 0 && pkgdiff.n_modified() == 0 {
+        crate::ffi::output_message("Successfully updated running filesystem tree.");
+    } else {
+        crate::ffi::output_message(
+            "Successfully updated running filesystem tree; some services may need to be restarted.",
+        );
+    }
     Ok(())
 }

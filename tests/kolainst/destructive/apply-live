@@ -96,7 +96,8 @@ rm -rf /etc/testpkg-etc \
 echo myconfig > /etc/testpkg-etc-other.conf
 grep myconfig /etc/testpkg-etc-other.conf
 
-rpm-ostree install -A testpkg-etc testdaemon
+rpm-ostree install -A testpkg-etc testdaemon | tee out.txt
+assert_file_has_content_literal out.txt 'Successfully updated running filesystem tree.'
 rpm -q bar test{pkg-etc,daemon} > rpmq.txt
 assert_file_has_content rpmq.txt bar-1.0-1 test{pkg-etc,daemon}-1.0-1
 cat /etc/testpkg-etc.conf > testpkg-etc.conf
