@@ -9,6 +9,7 @@
 
 use crate::ffi::LiveApplyState;
 use crate::isolation;
+use crate::progress::progress_task;
 use crate::{cxxrsutil::*, variant_utils};
 use anyhow::{anyhow, Context, Result};
 use fn_error_context::context;
@@ -468,34 +469,30 @@ pub(crate) fn transaction_apply_live(
 
     // Gather the current diff of /etc - we need to avoid changing
     // any files which are locally modified.
-    let task = crate::ffi::progress_begin_task("Computing /etc diff to preserve");
-    let config_diff = {
+    let config_diff = progress_task("Computing /etc diff to preserve", || -> Result<_> {
         let usretc = &rootfs_dfd.sub_dir("usr/etc")?;
         let etc = &rootfs_dfd.sub_dir("etc")?;
-        crate::dirdiff::diff(usretc, etc)?
-    };
+        crate::dirdiff::diff(usretc, etc)
+    })?;
     println!("Computed /etc diff: {}", &config_diff);
-    std::mem::drop(task);
 
     // The heart of things: updating the overlayfs on /usr
-    let task = crate::ffi::progress_begin_task("Updating /usr");
-    apply_diff(repo, &diff, &target_commit, &openat::Dir::open("/usr")?)?;
-    std::mem::drop(task);
+    progress_task("Updating /usr", || -> Result<_> {
+        apply_diff(repo, &diff, &target_commit, &openat::Dir::open("/usr")?)
+    })?;
 
     // The other important bits are /etc and /var
-    let task = crate::ffi::progress_begin_task("Updating /etc");
-    update_etc(
-        repo,
-        &diff,
-        &config_diff,
-        &sepolicy,
-        &target_commit,
-        &openat::Dir::open("/etc")?,
-    )?;
-    std::mem::drop(task);
-    let task = crate::ffi::progress_begin_task("Running systemd-tmpfiles for /run and /var");
-    rerun_tmpfiles()?;
-    std::mem::drop(task);
+    progress_task("Updating /etc", || -> Result<_> {
+        update_etc(
+            repo,
+            &diff,
+            &config_diff,
+            &sepolicy,
+            &target_commit,
+            &openat::Dir::open("/etc")?,
+        )
+    })?;
+    progress_task("Running systemd-tmpfiles for /run and /var", rerun_tmpfiles)?;
 
     // Success! Update the recorded state.
     state.commit = target_commit.to_string();
