@@ -1027,7 +1027,7 @@ pub(crate) struct TreeComposeConfig {
     postprocess_script: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     // This one is inline, and supports multiple (hence is useful for inheritance)
-    postprocess: Option<Vec<String>>,
+    pub(crate) postprocess: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-files")]
     add_files: Option<Vec<(String, String)>>,

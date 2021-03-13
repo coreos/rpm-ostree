@@ -88,6 +88,11 @@ pub mod ffi {
     // composepost.rs
     extern "Rust" {
         fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> Result<()>;
+        fn compose_postprocess_scripts(
+            rootfs_dfd: i32,
+            treefile: &mut Treefile,
+            unified_core: bool,
+        ) -> Result<()>;
         fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()>;
     }
 

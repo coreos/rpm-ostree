@@ -135,6 +135,12 @@ mod err {
         }
     }
 
+    impl From<cxx::Exception> for CxxError {
+        fn from(v: cxx::Exception) -> Self {
+            Self(format!("{:#}", v))
+        }
+    }
+
     impl From<IoError> for CxxError {
         fn from(v: IoError) -> Self {
             Self(format!("{}", v))

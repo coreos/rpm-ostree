@@ -1518,73 +1518,8 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!copy_additional_files (rootfs_fd, treefile_rs, treefile, cancellable, error))
     return FALSE;
 
-  if (json_object_has_member (treefile, "postprocess"))
-    {
-      JsonArray *postprocess_inlines = json_object_get_array_member (treefile, "postprocess");
-      guint len = json_array_get_length (postprocess_inlines);
+  rpmostreecxx::compose_postprocess_scripts(rootfs_fd, treefile_rs, (bool)unified_core_mode);
 
-      for (guint i = 0; i < len; i++)
-        {
-          const char *script = _rpmostree_jsonutil_array_require_string_element (postprocess_inlines, i, error);
-          if (!script)
-            return FALSE;
-
-          g_autofree char* binpath = g_strdup_printf ("/usr/bin/rpmostree-postprocess-inline-%u", i);
-          const char *target_binpath = binpath + 1;
-
-          if (!glnx_file_replace_contents_with_perms_at (rootfs_fd, target_binpath,
-                                                         (guint8*)script, -1,
-                                                         0755, (uid_t)-1, (gid_t)-1,
-                                                         GLNX_FILE_REPLACE_NODATASYNC,
-                                                         cancellable, error))
-            return FALSE;
-          g_print ("Executing `postprocess` inline script '%u'\n", i);
-          rust::Vec child_argv = { rust::String(binpath)};
-          try {
-            rpmostreecxx::bwrap_run_mutable (rootfs_fd, binpath, child_argv, (bool)unified_core_mode);
-          } catch (std::exception& e) {
-            g_autofree char* msg = g_strdup_printf ("While executing inline postprocessing script '%i'", i);
-            util::rethrow_prefixed(e, msg);
-          }
-
-          if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
-            return FALSE;
-        }
-    }
-
-  int postprocess_script_fd = treefile_rs.get_postprocess_script_fd();
-  if (postprocess_script_fd != -1)
-    {
-      const char *binpath = "/usr/bin/rpmostree-treefile-postprocess-script";
-      const char *target_binpath = binpath + 1;
-      g_auto(GLnxTmpfile) tmpf = { 0, };
-      if (!glnx_open_tmpfile_linkable_at (rootfs_fd, ".", O_CLOEXEC | O_WRONLY, &tmpf, error))
-        return FALSE;
-      if (glnx_regfile_copy_bytes (postprocess_script_fd, tmpf.fd, (off_t)-1) < 0)
-        return glnx_throw_errno_prefix (error, "regfile copy");
-      if (!glnx_fchmod (tmpf.fd, 0755, error))
-        return FALSE;
-      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                                 rootfs_fd, target_binpath,
-                                 error))
-        return FALSE;
-
-      /* Can't have a writable fd open when we go to exec */
-      glnx_tmpfile_clear (&tmpf);
-
-      g_print ("Executing postprocessing script\n");
-
-      rust::Vec child_argv = { rust::String(binpath) };
-      try {
-        rpmostreecxx::bwrap_run_mutable (rootfs_fd, binpath, child_argv, (bool)unified_core_mode);
-      } catch (std::exception& e) {
-        util::rethrow_prefixed(e, "Executing postprocessing script");
-      }
-      if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
-        return FALSE;
-
-      g_print ("Finished postprocessing script\n");
-    }
 
   return TRUE;
 }

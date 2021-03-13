@@ -10,12 +10,13 @@
 //! order to prepare it as an OSTree commit.
 
 use crate::cxxrsutil::CxxResult;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
 use std::io::{self, Read};
 use std::io::{BufRead, Write};
+use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
 /* See rpmostree-core.h */
@@ -117,6 +118,49 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
         postprocess_rpm_macro,
     ];
     Ok(tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))?)
+}
+
+/// The treefile format has two kinds of postprocessing scripts;
+/// there's a single `postprocess-script` as well as inline (anonymous)
+/// scripts.  This function executes both kinds in bwrap containers.
+pub(crate) fn compose_postprocess_scripts(
+    rootfs_dfd: i32,
+    treefile: &mut crate::treefile::Treefile,
+    unified_core: bool,
+) -> CxxResult<()> {
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    // Execute the anonymous (inline) scripts.
+    for (i, script) in treefile.parsed.postprocess.iter().flatten().enumerate() {
+        let binpath = format!("/usr/bin/rpmostree-postprocess-inline-{}", i);
+        let target_binpath = &binpath[1..];
+
+        rootfs_dfd.write_file_contents(target_binpath, 0o755, script)?;
+        println!("Executing `postprocess` inline script '{}'", i);
+        let child_argv = vec![binpath.clone()];
+        crate::ffi::bwrap_run_mutable(rootfs_dfd.as_raw_fd(), &binpath, &child_argv, unified_core)?;
+
+        rootfs_dfd.remove_file(target_binpath)?;
+    }
+
+    // And the single postprocess script.
+    let postprocess_script_fd = treefile.get_postprocess_script_fd();
+    if postprocess_script_fd != -1 {
+        let binpath = "/usr/bin/rpmostree-treefile-postprocess-script";
+        let target_binpath = &binpath[1..];
+        let fdpath = format!("/proc/self/fd/{}", postprocess_script_fd);
+        let mut reader = std::io::BufReader::new(std::fs::File::open(&fdpath)?);
+        rootfs_dfd.write_file_with(target_binpath, 0o755, |w| std::io::copy(&mut reader, w))?;
+        println!("Executing postprocessing script");
+
+        let child_argv = vec![binpath.to_string()];
+        crate::ffi::bwrap_run_mutable(rootfs_dfd.as_raw_fd(), binpath, &child_argv, unified_core)
+            .context("Executing postprocessing script")?;
+
+        rootfs_dfd.remove_file(target_binpath)?;
+        println!("Finished postprocessing script");
+    }
+    Ok(())
 }
 
 /// Given a string and a set of possible prefixes, return the split
