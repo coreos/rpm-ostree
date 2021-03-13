@@ -528,3 +528,75 @@ rpmostree_bwrap_selftest (GError **error)
 
   return TRUE;
 }
+
+namespace rpmostreecxx {
+
+// High level interface to bwrap, currently used by the postprocess code.
+// This deals with renaming `/etc` to `/usr/etc` for example.
+void 
+bwrap_run_mutable(int32_t rootfs_fd, rust::Str binpath,
+                  const rust::Vec<rust::String> &child_argv,
+                  bool unified_core_mode)
+{
+  g_autoptr(GError) local_error = NULL;
+  /* For scripts, it's /etc, not /usr/etc */
+  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", NULL, 0, &local_error))
+    util::throw_gerror(local_error);
+  const bool renamed_usretc = (errno == ENOENT);
+  if (renamed_usretc)
+    {
+      if (!glnx_renameat (rootfs_fd, "usr/etc", rootfs_fd, "etc", &local_error))
+        util::throw_gerror(local_error);
+      /* But leave a compat symlink, as we used to bind mount, so scripts
+       * could still use that too.
+       */
+      if (symlinkat ("../etc", rootfs_fd, "usr/etc") < 0)
+        {
+          (void)glnx_throw_errno_prefix (&local_error, "symlinkat");
+          util::throw_gerror(local_error);
+        }
+    }
+
+  RpmOstreeBwrapMutability mut =
+    unified_core_mode ? RPMOSTREE_BWRAP_MUTATE_ROFILES : RPMOSTREE_BWRAP_MUTATE_FREELY;
+  g_autoptr(RpmOstreeBwrap) bwrap = rpmostree_bwrap_new (rootfs_fd, mut, &local_error);
+  if (!bwrap)
+    util::throw_gerror(local_error);
+
+  if (unified_core_mode)
+    rpmostree_bwrap_bind_read (bwrap, "var", "/var");
+  else
+    rpmostree_bwrap_bind_readwrite (bwrap, "var", "/var");
+
+  { auto binpath_s = std::string(binpath);
+    rpmostree_bwrap_append_child_argv (bwrap, binpath_s.c_str(), NULL);
+  }
+
+  /* https://github.com/projectatomic/bubblewrap/issues/91 */
+  { bool first = true;
+    for (auto &elt : child_argv)
+      {
+        if (first)
+          first = false;
+        else
+          {
+            auto s = std::string(elt);  // NUL terminate
+            rpmostree_bwrap_append_child_argv (bwrap, s.c_str(), NULL);
+          }
+      }
+  }
+
+  if (!rpmostree_bwrap_run (bwrap, NULL, &local_error))
+    util::throw_gerror(local_error);
+
+  /* Remove the symlink and swap back */
+  if (renamed_usretc)
+    {
+      if (!glnx_unlinkat (rootfs_fd, "usr/etc", 0, &local_error))
+        util::throw_gerror(local_error);
+      if (!glnx_renameat (rootfs_fd, "etc", rootfs_fd, "usr/etc", &local_error))
+        util::throw_gerror(local_error);
+    }
+}
+
+} /* namespace */

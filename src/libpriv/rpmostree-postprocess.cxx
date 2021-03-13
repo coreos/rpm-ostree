@@ -55,71 +55,6 @@ typedef enum {
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES,
 } RpmOstreePostprocessBootLocation;
 
-/* The "unified_core_mode" flag controls whether or not we use rofiles-fuse,
- * just like pkg layering.
- */
-static gboolean
-run_bwrap_mutably (int           rootfs_fd,
-                   const char   *binpath,
-                   char        **child_argv,
-                   gboolean      unified_core_mode,
-                   GCancellable *cancellable,
-                   GError      **error)
-{
-  /* For scripts, it's /etc, not /usr/etc */
-  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", NULL, 0, error))
-    return FALSE;
-  gboolean renamed_usretc = (errno == ENOENT);
-  if (renamed_usretc)
-    {
-      if (!glnx_renameat (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
-        return FALSE;
-      /* But leave a compat symlink, as we used to bind mount, so scripts
-       * could still use that too.
-       */
-      if (symlinkat ("../etc", rootfs_fd, "usr/etc") < 0)
-        return glnx_throw_errno_prefix (error, "symlinkat");
-    }
-
-  RpmOstreeBwrapMutability mut =
-    unified_core_mode ? RPMOSTREE_BWRAP_MUTATE_ROFILES : RPMOSTREE_BWRAP_MUTATE_FREELY;
-  g_autoptr(RpmOstreeBwrap) bwrap = rpmostree_bwrap_new (rootfs_fd, mut, error);
-  if (!bwrap)
-    return FALSE;
-
-  if (unified_core_mode)
-    rpmostree_bwrap_bind_read (bwrap, "var", "/var");
-  else
-    rpmostree_bwrap_bind_readwrite (bwrap, "var", "/var");
-
-  rpmostree_bwrap_append_child_argv (bwrap, binpath, NULL);
-
-  /* https://github.com/projectatomic/bubblewrap/issues/91 */
-  { gboolean first = TRUE;
-    for (char **iter = child_argv; iter && *iter; iter++)
-      {
-        if (first)
-          first = FALSE;
-        else
-          rpmostree_bwrap_append_child_argv (bwrap, *iter, NULL);
-      }
-  }
-
-  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
-    return FALSE;
-
-  /* Remove the symlink and swap back */
-  if (renamed_usretc)
-    {
-      if (!glnx_unlinkat (rootfs_fd, "usr/etc", 0, error))
-        return FALSE;
-      if (!glnx_renameat (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-        return FALSE;
-    }
-
-  return TRUE;
-}
-
 static gboolean
 rename_if_exists (int         src_dfd,
                   const char *from,
@@ -278,9 +213,8 @@ rpmostree_postprocess_run_depmod (int           rootfs_dfd,
                                   GCancellable *cancellable,
                                   GError      **error)
 {
-  const char *child_argv[] = { "depmod", "-a", kver, NULL };
-  if (!run_bwrap_mutably (rootfs_dfd, "depmod", (char**)child_argv, unified_core_mode, cancellable, error))
-    return FALSE;
+  rust::Vec child_argv = { rust::String("depmod"), rust::String("-a"), rust::String(kver) };
+  rpmostreecxx::bwrap_run_mutable (rootfs_dfd, "depmod", child_argv, (bool)unified_core_mode);
   return TRUE;
 }
 
@@ -888,10 +822,8 @@ rpmostree_postprocess_final (int            rootfs_dfd,
 
       /* Now regenerate SELinux policy so that postprocess scripts from users and from us
        * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
-      const char *child_argv[] = { "semodule", "-nB", NULL };
-      if (!run_bwrap_mutably (rootfs_dfd, "semodule", (char**)child_argv, unified_core_mode,
-                              cancellable, error))
-        return FALSE;
+      rust::Vec child_argv = { rust::String("semodule"), rust::String("-nB") };
+      rpmostreecxx::bwrap_run_mutable (rootfs_dfd, "semodule", child_argv, (bool)unified_core_mode);
     }
 
   gboolean container = FALSE;
@@ -1607,9 +1539,13 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                                          cancellable, error))
             return FALSE;
           g_print ("Executing `postprocess` inline script '%u'\n", i);
-          char *child_argv[] = { binpath, NULL };
-          if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, unified_core_mode, cancellable, error))
-            return glnx_prefix_error (error, "While executing inline postprocessing script '%i'", i);
+          rust::Vec child_argv = { rust::String(binpath)};
+          try {
+            rpmostreecxx::bwrap_run_mutable (rootfs_fd, binpath, child_argv, (bool)unified_core_mode);
+          } catch (std::exception& e) {
+            g_autofree char* msg = g_strdup_printf ("While executing inline postprocessing script '%i'", i);
+            util::rethrow_prefixed(e, msg);
+          }
 
           if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
             return FALSE;
@@ -1638,12 +1574,12 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
       g_print ("Executing postprocessing script\n");
 
-      {
-        char *child_argv[] = { (char*)binpath, NULL };
-        if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, unified_core_mode, cancellable, error))
-          return glnx_prefix_error (error, "While executing postprocessing script");
+      rust::Vec child_argv = { rust::String(binpath) };
+      try {
+        rpmostreecxx::bwrap_run_mutable (rootfs_fd, binpath, child_argv, (bool)unified_core_mode);
+      } catch (std::exception& e) {
+        util::rethrow_prefixed(e, "Executing postprocessing script");
       }
-
       if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
         return FALSE;
 

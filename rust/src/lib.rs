@@ -317,6 +317,16 @@ pub mod ffi {
     }
 
     unsafe extern "C++" {
+        include!("rpmostree-bwrap.h");
+        fn bwrap_run_mutable(
+            rootfs_dfd: i32,
+            binpath: &str,
+            child_argv: &Vec<String>,
+            unified_core_mode: bool,
+        ) -> Result<()>;
+    }
+
+    unsafe extern "C++" {
         include!("rpmostree-clientlib.h");
         fn client_require_root() -> Result<()>;
         type ClientConnection;
