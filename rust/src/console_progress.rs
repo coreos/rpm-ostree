@@ -172,6 +172,8 @@ fn optional_str(s: &str) -> Option<&str> {
     Some(s).filter(|s| !s.is_empty())
 }
 
+// NOTE!  These APIs are essentially just a *backend* of the rpmostree-output.h
+// API.
 pub(crate) fn console_progress_begin_task(msg: &str) {
     let mut lock = PROGRESS.lock().unwrap();
     assert_empty(&lock);
