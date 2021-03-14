@@ -22,6 +22,7 @@
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Result};
 use c_utf8::CUtf8Buf;
+use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
@@ -41,6 +42,11 @@ const INCLUDE_MAXDEPTH: u32 = 50;
 const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::BDB;
 #[cfg(feature = "sqlite-rpmdb-default")]
 const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Sqlite;
+
+/// Path to the flattened JSON serialization of the treefile, installed on the target (client)
+/// filesystem.  Nothing actually parses this by default client side today,
+/// it's intended to be informative.
+const COMPOSE_JSON_PATH: &str = "usr/share/rpm-ostree/treefile.json";
 
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
@@ -718,6 +724,15 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
             ));
         }
 
+        Ok(())
+    }
+
+    /// Write the serialized treefile into /usr/share on the target filesystem.
+    pub(crate) fn write_compose_json(&self, rootfs_dfd: i32) -> CxxResult<()> {
+        let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+        let target = Path::new(COMPOSE_JSON_PATH);
+        rootfs_dfd.ensure_dir_all(target.parent().unwrap(), 0o755)?;
+        rootfs_dfd.write_file_contents(target, 0o644, self.serialized.as_bytes())?;
         Ok(())
     }
 }
@@ -1591,6 +1606,21 @@ etc-group-members:
         let stray_quote = "'foobar >= 1.0' quuz' corge";
         assert!(split_whitespace_unless_quoted(&stray_quote).is_err());
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_json() -> Result<()> {
+        let rootdir = tempfile::tempdir()?;
+        let rootdir = &openat::Dir::open(rootdir.path())?;
+        {
+            let workdir = tempfile::tempdir()?;
+            let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
+            tf.write_compose_json(rootdir.as_raw_fd())?;
+        }
+        let mut src = std::io::BufReader::new(rootdir.open_file(COMPOSE_JSON_PATH)?);
+        let cfg = treefile_parse_stream(utils::InputFormat::JSON, &mut src, None)?;
+        assert_eq!(cfg.treeref.unwrap(), "exampleos/x86_64/blah");
         Ok(())
     }
 

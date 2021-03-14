@@ -1208,6 +1208,8 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 {
   g_assert (treefile);
 
+  treefile_rs.write_compose_json(rootfs_fd);
+
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
@@ -1256,16 +1258,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
           return glnx_throw_errno_prefix (error, "symlinkat(%s)", unitname);
       }
   }
-
-  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/share/rpm-ostree", 0755, cancellable, error))
-    return FALSE;
-
-  auto json = treefile_rs.get_json_string();
-  if (!glnx_file_replace_contents_at (rootfs_fd, "usr/share/rpm-ostree/treefile.json",
-                                      (guint8*)json.data(), json.length(),
-                                      GLNX_FILE_REPLACE_NODATASYNC,
-                                      cancellable, error))
-    return FALSE;
 
   const char *default_target = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default-target",

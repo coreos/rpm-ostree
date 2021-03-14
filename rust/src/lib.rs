@@ -191,6 +191,7 @@ pub mod ffi {
         fn get_rpmdb(&self) -> String;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);
+        fn write_compose_json(&self, rootfs_dfd: i32) -> Result<()>;
         fn sanitycheck_externals(&self) -> Result<()>;
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
         fn get_ostree_ref(&self) -> String;
