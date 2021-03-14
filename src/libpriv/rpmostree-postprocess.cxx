@@ -1211,11 +1211,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  gboolean machineid_compat = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "machineid-compat",
-                                                               &machineid_compat, error))
-    return FALSE;
-
   JsonArray *units = NULL;
   if (json_object_has_member (treefile, "units"))
     units = json_object_get_array_member (treefile, "units");
@@ -1225,9 +1220,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     len = json_array_get_length (units);
   else
     len = 0;
-
-  if (len > 0 && !machineid_compat)
-    return glnx_throw (error, "'units' directive is incompatible with machineid-compat = false");
 
   {
     glnx_autofd int multiuser_wants_dfd = -1;

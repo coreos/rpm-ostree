@@ -708,6 +708,16 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
                 return Err(anyhow!("postprocess-script must be executable"));
             }
         }
+
+        let parsed = &self.parsed;
+        let machineid_compat = parsed.machineid_compat.unwrap_or(true);
+        let n_units = parsed.units.as_ref().map(|v| v.len()).unwrap_or_default();
+        if !machineid_compat && n_units > 0 {
+            return Err(anyhow!(
+                "'units' directive is incompatible with machineid-compat = false"
+            ));
+        }
+
         Ok(())
     }
 }
