@@ -124,11 +124,6 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
     Ok(tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))?)
 }
 
-fn read_self_fd(fd: i32) -> std::io::Result<std::io::BufReader<std::fs::File>> {
-    let path = format!("/proc/self/fd/{}", fd);
-    Ok(std::io::BufReader::new(std::fs::File::open(&path)?))
-}
-
 /// The treefile format has two kinds of postprocessing scripts;
 /// there's a single `postprocess-script` as well as inline (anonymous)
 /// scripts.  This function executes both kinds in bwrap containers.
@@ -153,11 +148,11 @@ pub(crate) fn compose_postprocess_scripts(
     }
 
     // And the single postprocess script.
-    let postprocess_script_fd = treefile.get_postprocess_script_fd();
-    if postprocess_script_fd != -1 {
+    if let Some(postprocess_script) = treefile.get_postprocess_script() {
         let binpath = "/usr/bin/rpmostree-treefile-postprocess-script";
         let target_binpath = &binpath[1..];
-        let mut reader = read_self_fd(postprocess_script_fd)?;
+        postprocess_script.seek(std::io::SeekFrom::Start(0))?;
+        let mut reader = std::io::BufReader::new(postprocess_script);
         rootfs_dfd.write_file_with(target_binpath, 0o755, |w| std::io::copy(&mut reader, w))?;
         println!("Executing postprocessing script");
 

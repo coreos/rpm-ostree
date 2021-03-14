@@ -177,7 +177,6 @@ pub mod ffi {
         fn treefile_new(filename: &str, basearch: &str, workdir: i32) -> Result<Box<Treefile>>;
 
         fn get_workdir(&self) -> i32;
-        fn get_postprocess_script_fd(&mut self) -> i32;
         fn get_passwd_fd(&mut self) -> i32;
         fn get_group_fd(&mut self) -> i32;
         fn get_json_string(&self) -> String;
@@ -192,6 +191,7 @@ pub mod ffi {
         fn get_rpmdb(&self) -> String;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);
+        fn sanitycheck_externals(&self) -> Result<()>;
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
         fn get_ostree_ref(&self) -> String;
     }

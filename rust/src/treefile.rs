@@ -27,7 +27,7 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::prelude::*;
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::Path;
 use std::pin::Pin;
@@ -466,11 +466,8 @@ impl Treefile {
     }
 
     /// Return the raw file descriptor for the postprocess script
-    pub(crate) fn get_postprocess_script_fd(&mut self) -> i32 {
-        self.externals
-            .postprocess_script
-            .as_mut()
-            .map_or(-1, raw_seeked_fd)
+    pub(crate) fn get_postprocess_script(&mut self) -> Option<&mut File> {
+        self.externals.postprocess_script.as_mut()
     }
 
     /// Access the opened file object for the injected file
@@ -700,6 +697,18 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
             )?;
         }
         Ok(name)
+    }
+
+    /// Perform sanity checks on externally provided input, such
+    /// as the executability of `postprocess-script`.
+    pub(crate) fn sanitycheck_externals(&self) -> Result<()> {
+        if let Some(script) = self.externals.postprocess_script.as_ref() {
+            let mode = script.metadata()?.permissions().mode();
+            if !(mode & 0o111 > 0) {
+                return Err(anyhow!("postprocess-script must be executable"));
+            }
+        }
+        Ok(())
     }
 }
 

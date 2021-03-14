@@ -39,11 +39,6 @@ gboolean
 rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
                                        GError    **error);
 
-gboolean
-rpmostree_composeutil_sanity_checks (rpmostreecxx::Treefile &tf,
-                                     JsonObject   *treefile,
-                                     GCancellable *cancellable,
-                                     GError      **error);
 RpmOstreeTreespec *
 rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     rpmostreecxx::Treefile &treefile_rs,
