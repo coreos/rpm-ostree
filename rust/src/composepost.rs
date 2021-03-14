@@ -10,14 +10,18 @@
 //! order to prepare it as an OSTree commit.
 
 use crate::cxxrsutil::CxxResult;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
-use std::io::{self, Read};
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Seek, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
+use std::{
+    borrow::Cow,
+    io::{self, Read},
+};
 
 /* See rpmostree-core.h */
 const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
@@ -120,6 +124,11 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
     Ok(tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))?)
 }
 
+fn read_self_fd(fd: i32) -> std::io::Result<std::io::BufReader<std::fs::File>> {
+    let path = format!("/proc/self/fd/{}", fd);
+    Ok(std::io::BufReader::new(std::fs::File::open(&path)?))
+}
+
 /// The treefile format has two kinds of postprocessing scripts;
 /// there's a single `postprocess-script` as well as inline (anonymous)
 /// scripts.  This function executes both kinds in bwrap containers.
@@ -148,8 +157,7 @@ pub(crate) fn compose_postprocess_scripts(
     if postprocess_script_fd != -1 {
         let binpath = "/usr/bin/rpmostree-treefile-postprocess-script";
         let target_binpath = &binpath[1..];
-        let fdpath = format!("/proc/self/fd/{}", postprocess_script_fd);
-        let mut reader = std::io::BufReader::new(std::fs::File::open(&fdpath)?);
+        let mut reader = read_self_fd(postprocess_script_fd)?;
         rootfs_dfd.write_file_with(target_binpath, 0o755, |w| std::io::copy(&mut reader, w))?;
         println!("Executing postprocessing script");
 
@@ -159,6 +167,48 @@ pub(crate) fn compose_postprocess_scripts(
 
         rootfs_dfd.remove_file(target_binpath)?;
         println!("Finished postprocessing script");
+    }
+    Ok(())
+}
+
+/// Copy additional files
+pub(crate) fn compose_postprocess_add_files(
+    rootfs_dfd: i32,
+    treefile: &mut crate::treefile::Treefile,
+) -> CxxResult<()> {
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    // Make a deep copy here because get_add_file_fd() also wants an &mut
+    // reference.
+    let add_files: Vec<_> = treefile
+        .parsed
+        .add_files
+        .iter()
+        .flatten()
+        .cloned()
+        .collect();
+    for (src, dest) in add_files {
+        let reldest = dest.trim_start_matches('/');
+        if reldest.is_empty() {
+            return Err(anyhow!("Invalid add-files destination: {}", dest).into());
+        }
+        let dest = if reldest.starts_with("etc/") {
+            Cow::Owned(format!("usr/{}", reldest))
+        } else {
+            Cow::Borrowed(reldest)
+        };
+
+        println!("Adding file {}", dest);
+        let dest = Path::new(&*dest);
+        if let Some(parent) = dest.parent() {
+            rootfs_dfd.ensure_dir_all(parent, 0o755)?;
+        }
+
+        let src = treefile.get_add_file(&src);
+        src.seek(std::io::SeekFrom::Start(0))?;
+        let mut reader = std::io::BufReader::new(src);
+        let mode = reader.get_mut().metadata()?.permissions().mode();
+        rootfs_dfd.write_file_with(dest, mode, |w| std::io::copy(&mut reader, w))?;
     }
     Ok(())
 }

@@ -25,6 +25,7 @@ use c_utf8::CUtf8Buf;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
+use std::fs::File;
 use std::io::prelude::*;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -472,13 +473,12 @@ impl Treefile {
             .map_or(-1, raw_seeked_fd)
     }
 
-    pub(crate) fn get_add_file_fd(&mut self, filename: &str) -> i32 {
-        raw_seeked_fd(
-            self.externals
-                .add_files
-                .get_mut(filename)
-                .expect("add-file"),
-        )
+    /// Access the opened file object for the injected file
+    pub(crate) fn get_add_file(&mut self, filename: &str) -> &mut File {
+        self.externals
+            .add_files
+            .get_mut(filename)
+            .expect("add-file")
     }
 
     /// Returns the "ref" entry in treefile, or the empty string if unset.
@@ -1030,7 +1030,7 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) postprocess: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-files")]
-    add_files: Option<Vec<(String, String)>>,
+    pub(crate) add_files: Option<Vec<(String, String)>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-files")]
     remove_files: Option<Vec<String>>,

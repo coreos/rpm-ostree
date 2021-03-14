@@ -1148,94 +1148,6 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   return TRUE;
 }
 
-/* Copy external files, if specified in the configuration file, from
- * the context directory to the rootfs.
- */
-static gboolean
-copy_additional_files (int            rootfs_dfd,
-                       rpmostreecxx::Treefile &treefile_rs,
-                       JsonObject    *treefile,
-                       GCancellable  *cancellable,
-                       GError       **error)
-{
-  guint len;
-  JsonArray *add = NULL;
-  if (json_object_has_member (treefile, "add-files"))
-    {
-      add = json_object_get_array_member (treefile, "add-files");
-      len = json_array_get_length (add);
-    }
-  else
-    return TRUE; /* Early return */
-
-  /* Reusable dirname buffer */
-  g_autoptr(GString) dnbuf = g_string_new ("");
-  for (guint i = 0; i < len; i++)
-    {
-      const char *src, *dest;
-      JsonArray *add_el = json_array_get_array_element (add, i);
-
-      if (!add_el)
-        return glnx_throw (error, "Element in add-files is not an array");
-
-      src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
-      if (!src)
-        return FALSE;
-
-      dest = _rpmostree_jsonutil_array_require_string_element (add_el, 1, error);
-      if (!dest)
-        return FALSE;
-      dest += strspn (dest, "/");
-      if (!*dest)
-        return glnx_throw (error, "Invalid destination in add-files");
-      /* At this point on the filesystem level, the /etc content is already in
-       * /usr/etc. But let's be nice and allow people to use add-files into /etc
-       * and have it appear in /usr/etc; in most cases we want /usr/etc to just
-       * be a libostree implementation detail.
-       */
-      g_autofree char *dest_owned = NULL;
-      if (g_str_has_prefix (dest, "etc/"))
-        {
-          dest_owned = g_strconcat ("usr/", dest, NULL);
-          dest = dest_owned;
-        }
-
-      g_assert (rpmostree_relative_path_is_ostree_compliant (dest));
-      g_print ("Adding file '%s'\n", dest);
-
-      g_string_truncate (dnbuf, 0);
-      g_string_append (dnbuf, dest);
-      const char *dn = dirname (dnbuf->str);
-      g_assert_cmpint (*dn, !=, '/');
-
-      if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dn, 0755, cancellable, error))
-        return FALSE;
-
-      int src_fd = treefile_rs.get_add_file_fd(src);
-      g_assert_cmpint (src_fd, !=, -1);
-
-      g_auto(GLnxTmpfile) tmpf = { 0, };
-      if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".", O_CLOEXEC | O_WRONLY, &tmpf, error))
-        return FALSE;
-      if (glnx_regfile_copy_bytes (src_fd, tmpf.fd, (off_t)-1) < 0)
-        return glnx_throw_errno_prefix (error, "regfile copy");
-      struct stat src_stbuf;
-      if (!glnx_fstat (src_fd, &src_stbuf, error))
-        return FALSE;
-      if (!glnx_fchmod (tmpf.fd, src_stbuf.st_mode, error))
-        return FALSE;
-      /* Note we used to copy xattrs here, we no longer do.  Hopefully
-       * no one breaks.
-       */
-      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                                 rootfs_dfd, dest,
-                                 error))
-        return FALSE;
-    }
-
-  return TRUE;
-}
-
 static char *
 mutate_os_release (const char    *contents,
                    const char    *base_version,
@@ -1514,12 +1426,8 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  /* Copy in additional files before postprocessing */
-  if (!copy_additional_files (rootfs_fd, treefile_rs, treefile, cancellable, error))
-    return FALSE;
-
+  rpmostreecxx::compose_postprocess_add_files(rootfs_fd, treefile_rs);
   rpmostreecxx::compose_postprocess_scripts(rootfs_fd, treefile_rs, (bool)unified_core_mode);
-
 
   return TRUE;
 }
