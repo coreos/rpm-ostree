@@ -14,14 +14,12 @@ use anyhow::{anyhow, Context, Result};
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
+use std::borrow::Cow;
 use std::io::{BufRead, Seek, Write};
+use std::io::{BufReader, Read};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-use std::{
-    borrow::Cow,
-    io::{self, Read},
-};
 
 /* See rpmostree-core.h */
 const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
@@ -39,7 +37,7 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Result<()> {
     let path = Path::new("usr/etc/default/useradd");
     if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         rootfs_dfd.write_file_with(&path, 0o644, |bufw| -> Result<_> {
-            let f = io::BufReader::new(&f);
+            let f = BufReader::new(&f);
             for line in f.lines() {
                 let line = line?;
                 if !line.starts_with("HOME=") {
@@ -92,7 +90,7 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
     let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
     if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         rootfs_dfd.write_file_with(&path, 0o644, |w| -> Result<()> {
-            let f = io::BufReader::new(&f);
+            let f = BufReader::new(&f);
             for line in f.lines() {
                 let line = line?;
                 if line.starts_with("/var/home ") {
@@ -199,9 +197,9 @@ pub(crate) fn compose_postprocess_add_files(
             rootfs_dfd.ensure_dir_all(parent, 0o755)?;
         }
 
-        let src = treefile.get_add_file(&src);
-        src.seek(std::io::SeekFrom::Start(0))?;
-        let mut reader = std::io::BufReader::new(src);
+        let fd = treefile.get_add_file(&src);
+        fd.seek(std::io::SeekFrom::Start(0))?;
+        let mut reader = std::io::BufReader::new(fd);
         let mode = reader.get_mut().metadata()?.permissions().mode();
         rootfs_dfd.write_file_with(dest, mode, |w| std::io::copy(&mut reader, w))?;
     }
