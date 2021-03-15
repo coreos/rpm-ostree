@@ -520,36 +520,19 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
   if (!ostree_repo_load_commit (repo, csum, &commit, NULL, error))
     return FALSE;
 
+  auto layeredmeta = rpmostreecxx::deployment_layeredmeta_from_commit(*deployment, *commit);
+
   g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
   g_autoptr(GVariantDict) dict = g_variant_dict_new (metadata);
-
-  /* More recent versions have an explicit clientlayer attribute (which
-   * realistically will always be TRUE). For older versions, we just
-   * rely on the treespec being present. */
-  gboolean is_layered = FALSE;
-  if (!g_variant_dict_lookup (dict, "rpmostree.clientlayer", "b", &is_layered))
-    is_layered = g_variant_dict_contains (dict, "rpmostree.spec");
-
-  guint clientlayer_version = 0;
-  g_variant_dict_lookup (dict, "rpmostree.clientlayer_version", "u",
-                         &clientlayer_version);
-
-  /* only fetch base if we have to */
-  g_autofree char *base_layer = NULL;
-  if (is_layered && out_base_layer != NULL)
-    {
-      base_layer = ostree_commit_get_parent (commit);
-      g_assert (base_layer);
-    }
 
   /* only fetch pkgs if we have to */
   g_auto(GStrv) layered_pkgs = NULL;
   g_autoptr(GVariant) removed_base_pkgs = NULL;
   g_autoptr(GVariant) replaced_base_pkgs = NULL;
-  if (is_layered && (out_layered_pkgs != NULL || out_removed_base_pkgs != NULL))
+  if (layeredmeta.is_layered && (out_layered_pkgs != NULL || out_removed_base_pkgs != NULL))
     {
       /* starting from v1, we no longer embed a treespec in client layers */
-      if (clientlayer_version >= 1)
+      if (layeredmeta.clientlayer_version >= 1)
         {
           g_assert (g_variant_dict_lookup (dict, "rpmostree.packages", "^as",
                                            &layered_pkgs));
@@ -572,7 +555,7 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                            &layered_pkgs));
         }
 
-      if (clientlayer_version >= 2)
+      if (layeredmeta.clientlayer_version >= 2)
         {
           removed_base_pkgs =
             g_variant_dict_lookup_value (dict, "rpmostree.removed-base-packages",
@@ -589,11 +572,11 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
   /* canonicalize outputs to empty array */
 
   if (out_is_layered != NULL)
-    *out_is_layered = is_layered;
+    *out_is_layered = layeredmeta.is_layered;
   if (out_layer_version != NULL)
-    *out_layer_version = clientlayer_version;
-  if (out_base_layer != NULL)
-    *out_base_layer = util::move_nullify (base_layer);
+    *out_layer_version = layeredmeta.clientlayer_version;
+  if (out_base_layer != NULL && layeredmeta.is_layered)
+    *out_base_layer = util::ruststr_dup_c_optempty(layeredmeta.base_commit);
   if (out_layered_pkgs != NULL)
     {
       if (!layered_pkgs)

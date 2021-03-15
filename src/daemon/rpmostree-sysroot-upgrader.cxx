@@ -618,21 +618,14 @@ try_load_base_rsack_from_pending (RpmOstreeSysrootUpgrader *self,
   if (is_live)
     return TRUE;
 
-  guint layer_version;
-  g_autofree char *base_rev_owned = NULL;
-  if (!rpmostree_deployment_get_layered_info (self->repo, self->origin_merge_deployment,
-                                              NULL, &layer_version, &base_rev_owned, NULL,
-                                              NULL, NULL, error))
-    return FALSE;
-
+  auto repo = ostree_sysroot_repo(self->sysroot);
+  auto layeredmeta = rpmostreecxx::deployment_layeredmeta_load(*repo, *self->origin_merge_deployment);
   /* older client layers have a bug blocking us from using their base rpmdb:
    * https://github.com/projectatomic/rpm-ostree/pull/1560 */
-  if (base_rev_owned && layer_version < 4)
+  if (layeredmeta.is_layered && layeredmeta.clientlayer_version < 4)
     return TRUE;
 
-  const char *base_rev =
-    base_rev_owned ?: ostree_deployment_get_csum (self->origin_merge_deployment);
-
+  const char *base_rev = layeredmeta.base_commit.c_str();
   /* it's no longer the base layer we're looking for (e.g. likely pulled a fresh one) */
   if (!g_str_equal (self->base_revision, base_rev))
     return TRUE;

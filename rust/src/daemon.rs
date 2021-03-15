@@ -4,7 +4,7 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::cxxrsutil::*;
+use crate::{cxxrsutil::*, variant_utils};
 use std::pin::Pin;
 
 /// Get a currently unique (for this host) identifier for the
@@ -79,4 +79,55 @@ pub(crate) fn deployment_populate_variant(
     );
 
     Ok(())
+}
+
+/// Load basic layering metadata about a deployment commit.
+pub(crate) fn deployment_layeredmeta_from_commit(
+    mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
+    mut commit: Pin<&mut crate::FFIGVariant>,
+) -> CxxResult<crate::ffi::DeploymentLayeredMeta> {
+    let deployment = deployment.gobj_wrap();
+    let commit = &commit.gobj_wrap();
+    let metadata = &variant_utils::variant_tuple_get(commit, 0).expect("commit metadata");
+    let dict = &glib::VariantDict::new(Some(metadata));
+
+    // More recent versions have an explicit clientlayer attribute (which
+    // realistically will always be TRUE). For older versions, we just
+    // rely on the treespec being present. */
+    let is_layered = variant_utils::variant_dict_lookup_bool(dict, "rpmostree.clientlayer")
+        .unwrap_or_else(|| dict.contains("rpmostree.spec"));
+    if !is_layered {
+        Ok(crate::ffi::DeploymentLayeredMeta {
+            is_layered,
+            base_commit: deployment.get_csum().unwrap().into(),
+            clientlayer_version: 0,
+        })
+    } else {
+        let base_commit = ostree::commit_get_parent(commit)
+            .expect("commit parent")
+            .into();
+        let clientlayer_version = dict
+            .lookup_value("rpmostree.clientlayer_version", Some(&*variant_utils::TY_U))
+            .map(|u| u.get().unwrap())
+            .unwrap_or_default();
+        Ok(crate::ffi::DeploymentLayeredMeta {
+            is_layered,
+            base_commit,
+            clientlayer_version,
+        })
+    }
+}
+
+/// Load basic layering metadata about a deployment
+pub(crate) fn deployment_layeredmeta_load(
+    mut repo: Pin<&mut crate::FFIOstreeRepo>,
+    mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
+) -> CxxResult<crate::ffi::DeploymentLayeredMeta> {
+    let repo = repo.gobj_wrap();
+    let deployment = deployment.gobj_wrap();
+    let commit = &repo.load_variant(
+        ostree::ObjectType::Commit,
+        deployment.get_csum().unwrap().as_str(),
+    )?;
+    deployment_layeredmeta_from_commit(deployment.gobj_rewrap(), commit.gobj_rewrap())
 }
