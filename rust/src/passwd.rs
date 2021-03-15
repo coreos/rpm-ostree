@@ -348,12 +348,10 @@ fn data_from_json(
 
     let mut seen_names = HashSet::new();
     rootfs
-        .write_file_with(&target_etc_filename, 0o664, |dest_bufwr| -> Result<()> {
+        .write_file_with_sync(&target_etc_filename, 0o664, |dest_bufwr| -> Result<()> {
             let mut buf_rd = BufReader::new(&mut src_file);
             append_unique_entries(&mut buf_rd, &mut seen_names, dest_bufwr)
                 .with_context(|| format!("failed to process '{}' content from JSON", &target))?;
-            dest_bufwr.flush()?;
-            dest_bufwr.get_ref().sync_all()?;
             Ok(())
         })
         .with_context(|| format!("failed to write /{}", &target_etc_filename))?;

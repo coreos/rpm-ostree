@@ -439,7 +439,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
   g_assert (self->repo);
-  auto previous_ref = self->previous_checksum? : "";
+  auto previous_ref = self->previous_checksum?: "";
   rpmostreecxx::passwd_compose_prep_repo(rootfs_dfd, **self->treefile_rs, *self->repo,
                                          std::string(previous_ref), opt_unified_core);
 
