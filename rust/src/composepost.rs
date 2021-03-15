@@ -11,9 +11,10 @@
 
 use crate::cxxrsutil::CxxResult;
 use anyhow::Result;
+use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
-use std::io;
+use std::io::{self, Read};
 use std::io::{BufRead, Write};
 use std::path::Path;
 
@@ -116,4 +117,114 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
         postprocess_rpm_macro,
     ];
     Ok(tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))?)
+}
+
+/// Given a string and a set of possible prefixes, return the split
+/// prefix and remaining string, or `None` if no matches.
+fn strip_any_prefix<'a, 'b>(s: &'a str, prefixes: &[&'b str]) -> Option<(&'b str, &'a str)> {
+    prefixes
+        .iter()
+        .find_map(|&p| s.strip_prefix(p).map(|r| (p, r)))
+}
+
+/// Inject `altfiles` after `files` for `passwd:` and `group:` entries.
+fn add_altfiles(buf: &str) -> Result<String> {
+    let mut r = String::with_capacity(buf.len());
+    for line in buf.lines() {
+        let parts = if let Some(p) = strip_any_prefix(line, &["passwd:", "group:"]) {
+            p
+        } else {
+            r.push_str(line);
+            r.push('\n');
+            continue;
+        };
+        let (prefix, rest) = parts;
+        r.push_str(prefix);
+
+        let mut inserted = false;
+        for elt in rest.split_whitespace() {
+            // Already have altfiles?  We're done
+            if elt == "altfiles" {
+                return Ok(buf.to_string());
+            }
+            // We prefer `files altfiles`
+            if !inserted && elt == "files" {
+                r.push_str(" files altfiles");
+                inserted = true;
+            } else {
+                r.push(' ');
+                r.push_str(elt);
+            }
+        }
+        if !inserted {
+            r.push_str(" altfiles");
+        }
+        r.push('\n');
+    }
+    Ok(r)
+}
+
+/// rpm-ostree currently depends on `altfiles`
+#[context("Adding altfiles to /etc/nsswitch.conf")]
+pub(crate) fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
+    let path = "usr/etc/nsswitch.conf";
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let nsswitch = {
+        let mut nsswitch = rootfs_dfd.open_file(path)?;
+        let mut buf = String::new();
+        nsswitch.read_to_string(&mut buf)?;
+        buf
+    };
+    let nsswitch = add_altfiles(&nsswitch)?;
+    rootfs_dfd.write_file_contents(path, 0o644, nsswitch.as_bytes())?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stripany() {
+        let s = "foo: bar";
+        assert!(strip_any_prefix(s, &[]).is_none());
+        assert_eq!(
+            strip_any_prefix(s, &["baz:", "foo:", "bar:"]).unwrap(),
+            ("foo:", " bar")
+        );
+    }
+
+    #[test]
+    fn altfiles_replaced() {
+        let orig = r##"# blah blah nss stuff
+# more blah blah
+
+# passwd: db files
+# shadow: db files
+# shadow: db files
+
+passwd:     sss files systemd
+shadow:     files
+group:      sss files systemd
+hosts:      files resolve [!UNAVAIL=return] myhostname dns
+automount:  files sss
+"##;
+        let expected = r##"# blah blah nss stuff
+# more blah blah
+
+# passwd: db files
+# shadow: db files
+# shadow: db files
+
+passwd: sss files altfiles systemd
+shadow:     files
+group: sss files altfiles systemd
+hosts:      files resolve [!UNAVAIL=return] myhostname dns
+automount:  files sss
+"##;
+        let replaced = add_altfiles(orig).unwrap();
+        assert_eq!(replaced.as_str(), expected);
+        let replaced2 = add_altfiles(replaced.as_str()).unwrap();
+        assert_eq!(replaced2.as_str(), expected);
+    }
 }
