@@ -22,11 +22,13 @@
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Result};
 use c_utf8::CUtf8Buf;
+use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
+use std::fs::File;
 use std::io::prelude::*;
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::Path;
 use std::pin::Pin;
@@ -40,6 +42,11 @@ const INCLUDE_MAXDEPTH: u32 = 50;
 const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::BDB;
 #[cfg(feature = "sqlite-rpmdb-default")]
 const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Sqlite;
+
+/// Path to the flattened JSON serialization of the treefile, installed on the target (client)
+/// filesystem.  Nothing actually parses this by default client side today,
+/// it's intended to be informative.
+const COMPOSE_JSON_PATH: &str = "usr/share/rpm-ostree/treefile.json";
 
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
@@ -465,20 +472,16 @@ impl Treefile {
     }
 
     /// Return the raw file descriptor for the postprocess script
-    pub(crate) fn get_postprocess_script_fd(&mut self) -> i32 {
-        self.externals
-            .postprocess_script
-            .as_mut()
-            .map_or(-1, raw_seeked_fd)
+    pub(crate) fn get_postprocess_script(&mut self) -> Option<&mut File> {
+        self.externals.postprocess_script.as_mut()
     }
 
-    pub(crate) fn get_add_file_fd(&mut self, filename: &str) -> i32 {
-        raw_seeked_fd(
-            self.externals
-                .add_files
-                .get_mut(filename)
-                .expect("add-file"),
-        )
+    /// Access the opened file object for the injected file
+    pub(crate) fn get_add_file(&mut self, filename: &str) -> &mut File {
+        self.externals
+            .add_files
+            .get_mut(filename)
+            .expect("add-file")
     }
 
     /// Returns the "ref" entry in treefile, or the empty string if unset.
@@ -700,6 +703,37 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
             )?;
         }
         Ok(name)
+    }
+
+    /// Perform sanity checks on externally provided input, such
+    /// as the executability of `postprocess-script`.
+    pub(crate) fn sanitycheck_externals(&self) -> Result<()> {
+        if let Some(script) = self.externals.postprocess_script.as_ref() {
+            let mode = script.metadata()?.permissions().mode();
+            if !(mode & 0o111 > 0) {
+                return Err(anyhow!("postprocess-script must be executable"));
+            }
+        }
+
+        let parsed = &self.parsed;
+        let machineid_compat = parsed.machineid_compat.unwrap_or(true);
+        let n_units = parsed.units.as_ref().map(|v| v.len()).unwrap_or_default();
+        if !machineid_compat && n_units > 0 {
+            return Err(anyhow!(
+                "'units' directive is incompatible with machineid-compat = false"
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Write the serialized treefile into /usr/share on the target filesystem.
+    pub(crate) fn write_compose_json(&self, rootfs_dfd: i32) -> CxxResult<()> {
+        let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+        let target = Path::new(COMPOSE_JSON_PATH);
+        rootfs_dfd.ensure_dir_all(target.parent().unwrap(), 0o755)?;
+        rootfs_dfd.write_file_contents(target, 0o644, self.serialized.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -1027,10 +1061,10 @@ pub(crate) struct TreeComposeConfig {
     postprocess_script: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     // This one is inline, and supports multiple (hence is useful for inheritance)
-    postprocess: Option<Vec<String>>,
+    pub(crate) postprocess: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-files")]
-    add_files: Option<Vec<(String, String)>>,
+    pub(crate) add_files: Option<Vec<(String, String)>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-files")]
     remove_files: Option<Vec<String>>,
@@ -1572,6 +1606,21 @@ etc-group-members:
         let stray_quote = "'foobar >= 1.0' quuz' corge";
         assert!(split_whitespace_unless_quoted(&stray_quote).is_err());
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_json() -> Result<()> {
+        let rootdir = tempfile::tempdir()?;
+        let rootdir = &openat::Dir::open(rootdir.path())?;
+        {
+            let workdir = tempfile::tempdir()?;
+            let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
+            tf.write_compose_json(rootdir.as_raw_fd())?;
+        }
+        let mut src = std::io::BufReader::new(rootdir.open_file(COMPOSE_JSON_PATH)?);
+        let cfg = treefile_parse_stream(utils::InputFormat::JSON, &mut src, None)?;
+        assert_eq!(cfg.treeref.unwrap(), "exampleos/x86_64/blah");
         Ok(())
     }
 

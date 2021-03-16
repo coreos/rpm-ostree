@@ -418,10 +418,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   if (opt_dry_run)
     return TRUE; /* NB: early return */
 
-  if (!rpmostree_composeutil_sanity_checks (**self->treefile_rs,
-                                            self->treefile,
-                                            cancellable, error))
-    return FALSE;
+  (*self->treefile_rs)->sanitycheck_externals();
 
   /* --- Downloading packages --- */
   if (!rpmostree_context_download (self->corectx, cancellable, error))

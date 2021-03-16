@@ -24,6 +24,16 @@
 
 #include "libglnx.h"
 
+#include "rust/cxx.h"
+
+namespace rpmostreecxx {
+
+void bwrap_run_mutable(int32_t rootfs_dfd, rust::Str binpath,
+                       const rust::Vec<rust::String> &child_argv,
+                       bool unified_core_mode);
+
+}
+
 G_BEGIN_DECLS
 
 typedef enum {

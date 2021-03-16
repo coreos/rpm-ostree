@@ -55,71 +55,6 @@ typedef enum {
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES,
 } RpmOstreePostprocessBootLocation;
 
-/* The "unified_core_mode" flag controls whether or not we use rofiles-fuse,
- * just like pkg layering.
- */
-static gboolean
-run_bwrap_mutably (int           rootfs_fd,
-                   const char   *binpath,
-                   char        **child_argv,
-                   gboolean      unified_core_mode,
-                   GCancellable *cancellable,
-                   GError      **error)
-{
-  /* For scripts, it's /etc, not /usr/etc */
-  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", NULL, 0, error))
-    return FALSE;
-  gboolean renamed_usretc = (errno == ENOENT);
-  if (renamed_usretc)
-    {
-      if (!glnx_renameat (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
-        return FALSE;
-      /* But leave a compat symlink, as we used to bind mount, so scripts
-       * could still use that too.
-       */
-      if (symlinkat ("../etc", rootfs_fd, "usr/etc") < 0)
-        return glnx_throw_errno_prefix (error, "symlinkat");
-    }
-
-  RpmOstreeBwrapMutability mut =
-    unified_core_mode ? RPMOSTREE_BWRAP_MUTATE_ROFILES : RPMOSTREE_BWRAP_MUTATE_FREELY;
-  g_autoptr(RpmOstreeBwrap) bwrap = rpmostree_bwrap_new (rootfs_fd, mut, error);
-  if (!bwrap)
-    return FALSE;
-
-  if (unified_core_mode)
-    rpmostree_bwrap_bind_read (bwrap, "var", "/var");
-  else
-    rpmostree_bwrap_bind_readwrite (bwrap, "var", "/var");
-
-  rpmostree_bwrap_append_child_argv (bwrap, binpath, NULL);
-
-  /* https://github.com/projectatomic/bubblewrap/issues/91 */
-  { gboolean first = TRUE;
-    for (char **iter = child_argv; iter && *iter; iter++)
-      {
-        if (first)
-          first = FALSE;
-        else
-          rpmostree_bwrap_append_child_argv (bwrap, *iter, NULL);
-      }
-  }
-
-  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
-    return FALSE;
-
-  /* Remove the symlink and swap back */
-  if (renamed_usretc)
-    {
-      if (!glnx_unlinkat (rootfs_fd, "usr/etc", 0, error))
-        return FALSE;
-      if (!glnx_renameat (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-        return FALSE;
-    }
-
-  return TRUE;
-}
-
 static gboolean
 rename_if_exists (int         src_dfd,
                   const char *from,
@@ -278,9 +213,8 @@ rpmostree_postprocess_run_depmod (int           rootfs_dfd,
                                   GCancellable *cancellable,
                                   GError      **error)
 {
-  const char *child_argv[] = { "depmod", "-a", kver, NULL };
-  if (!run_bwrap_mutably (rootfs_dfd, "depmod", (char**)child_argv, unified_core_mode, cancellable, error))
-    return FALSE;
+  rust::Vec child_argv = { rust::String("depmod"), rust::String("-a"), rust::String(kver) };
+  rpmostreecxx::bwrap_run_mutable (rootfs_dfd, "depmod", child_argv, (bool)unified_core_mode);
   return TRUE;
 }
 
@@ -888,10 +822,8 @@ rpmostree_postprocess_final (int            rootfs_dfd,
 
       /* Now regenerate SELinux policy so that postprocess scripts from users and from us
        * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
-      const char *child_argv[] = { "semodule", "-nB", NULL };
-      if (!run_bwrap_mutably (rootfs_dfd, "semodule", (char**)child_argv, unified_core_mode,
-                              cancellable, error))
-        return FALSE;
+      rust::Vec child_argv = { rust::String("semodule"), rust::String("-nB") };
+      rpmostreecxx::bwrap_run_mutable (rootfs_dfd, "semodule", child_argv, (bool)unified_core_mode);
     }
 
   gboolean container = FALSE;
@@ -1216,94 +1148,6 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   return TRUE;
 }
 
-/* Copy external files, if specified in the configuration file, from
- * the context directory to the rootfs.
- */
-static gboolean
-copy_additional_files (int            rootfs_dfd,
-                       rpmostreecxx::Treefile &treefile_rs,
-                       JsonObject    *treefile,
-                       GCancellable  *cancellable,
-                       GError       **error)
-{
-  guint len;
-  JsonArray *add = NULL;
-  if (json_object_has_member (treefile, "add-files"))
-    {
-      add = json_object_get_array_member (treefile, "add-files");
-      len = json_array_get_length (add);
-    }
-  else
-    return TRUE; /* Early return */
-
-  /* Reusable dirname buffer */
-  g_autoptr(GString) dnbuf = g_string_new ("");
-  for (guint i = 0; i < len; i++)
-    {
-      const char *src, *dest;
-      JsonArray *add_el = json_array_get_array_element (add, i);
-
-      if (!add_el)
-        return glnx_throw (error, "Element in add-files is not an array");
-
-      src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
-      if (!src)
-        return FALSE;
-
-      dest = _rpmostree_jsonutil_array_require_string_element (add_el, 1, error);
-      if (!dest)
-        return FALSE;
-      dest += strspn (dest, "/");
-      if (!*dest)
-        return glnx_throw (error, "Invalid destination in add-files");
-      /* At this point on the filesystem level, the /etc content is already in
-       * /usr/etc. But let's be nice and allow people to use add-files into /etc
-       * and have it appear in /usr/etc; in most cases we want /usr/etc to just
-       * be a libostree implementation detail.
-       */
-      g_autofree char *dest_owned = NULL;
-      if (g_str_has_prefix (dest, "etc/"))
-        {
-          dest_owned = g_strconcat ("usr/", dest, NULL);
-          dest = dest_owned;
-        }
-
-      g_assert (rpmostree_relative_path_is_ostree_compliant (dest));
-      g_print ("Adding file '%s'\n", dest);
-
-      g_string_truncate (dnbuf, 0);
-      g_string_append (dnbuf, dest);
-      const char *dn = dirname (dnbuf->str);
-      g_assert_cmpint (*dn, !=, '/');
-
-      if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dn, 0755, cancellable, error))
-        return FALSE;
-
-      int src_fd = treefile_rs.get_add_file_fd(src);
-      g_assert_cmpint (src_fd, !=, -1);
-
-      g_auto(GLnxTmpfile) tmpf = { 0, };
-      if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".", O_CLOEXEC | O_WRONLY, &tmpf, error))
-        return FALSE;
-      if (glnx_regfile_copy_bytes (src_fd, tmpf.fd, (off_t)-1) < 0)
-        return glnx_throw_errno_prefix (error, "regfile copy");
-      struct stat src_stbuf;
-      if (!glnx_fstat (src_fd, &src_stbuf, error))
-        return FALSE;
-      if (!glnx_fchmod (tmpf.fd, src_stbuf.st_mode, error))
-        return FALSE;
-      /* Note we used to copy xattrs here, we no longer do.  Hopefully
-       * no one breaks.
-       */
-      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                                 rootfs_dfd, dest,
-                                 error))
-        return FALSE;
-    }
-
-  return TRUE;
-}
-
 static char *
 mutate_os_release (const char    *contents,
                    const char    *base_version,
@@ -1364,12 +1208,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 {
   g_assert (treefile);
 
-  if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-    return FALSE;
+  treefile_rs.write_compose_json(rootfs_fd);
 
-  gboolean machineid_compat = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "machineid-compat",
-                                                               &machineid_compat, error))
+  if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
   JsonArray *units = NULL;
@@ -1381,9 +1222,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     len = json_array_get_length (units);
   else
     len = 0;
-
-  if (len > 0 && !machineid_compat)
-    return glnx_throw (error, "'units' directive is incompatible with machineid-compat = false");
 
   {
     glnx_autofd int multiuser_wants_dfd = -1;
@@ -1420,16 +1258,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
           return glnx_throw_errno_prefix (error, "symlinkat(%s)", unitname);
       }
   }
-
-  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/share/rpm-ostree", 0755, cancellable, error))
-    return FALSE;
-
-  auto json = treefile_rs.get_json_string();
-  if (!glnx_file_replace_contents_at (rootfs_fd, "usr/share/rpm-ostree/treefile.json",
-                                      (guint8*)json.data(), json.length(),
-                                      GLNX_FILE_REPLACE_NODATASYNC,
-                                      cancellable, error))
-    return FALSE;
 
   const char *default_target = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default-target",
@@ -1582,73 +1410,8 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  /* Copy in additional files before postprocessing */
-  if (!copy_additional_files (rootfs_fd, treefile_rs, treefile, cancellable, error))
-    return FALSE;
-
-  if (json_object_has_member (treefile, "postprocess"))
-    {
-      JsonArray *postprocess_inlines = json_object_get_array_member (treefile, "postprocess");
-      guint len = json_array_get_length (postprocess_inlines);
-
-      for (guint i = 0; i < len; i++)
-        {
-          const char *script = _rpmostree_jsonutil_array_require_string_element (postprocess_inlines, i, error);
-          if (!script)
-            return FALSE;
-
-          g_autofree char* binpath = g_strdup_printf ("/usr/bin/rpmostree-postprocess-inline-%u", i);
-          const char *target_binpath = binpath + 1;
-
-          if (!glnx_file_replace_contents_with_perms_at (rootfs_fd, target_binpath,
-                                                         (guint8*)script, -1,
-                                                         0755, (uid_t)-1, (gid_t)-1,
-                                                         GLNX_FILE_REPLACE_NODATASYNC,
-                                                         cancellable, error))
-            return FALSE;
-          g_print ("Executing `postprocess` inline script '%u'\n", i);
-          char *child_argv[] = { binpath, NULL };
-          if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, unified_core_mode, cancellable, error))
-            return glnx_prefix_error (error, "While executing inline postprocessing script '%i'", i);
-
-          if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
-            return FALSE;
-        }
-    }
-
-  int postprocess_script_fd = treefile_rs.get_postprocess_script_fd();
-  if (postprocess_script_fd != -1)
-    {
-      const char *binpath = "/usr/bin/rpmostree-treefile-postprocess-script";
-      const char *target_binpath = binpath + 1;
-      g_auto(GLnxTmpfile) tmpf = { 0, };
-      if (!glnx_open_tmpfile_linkable_at (rootfs_fd, ".", O_CLOEXEC | O_WRONLY, &tmpf, error))
-        return FALSE;
-      if (glnx_regfile_copy_bytes (postprocess_script_fd, tmpf.fd, (off_t)-1) < 0)
-        return glnx_throw_errno_prefix (error, "regfile copy");
-      if (!glnx_fchmod (tmpf.fd, 0755, error))
-        return FALSE;
-      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                                 rootfs_fd, target_binpath,
-                                 error))
-        return FALSE;
-
-      /* Can't have a writable fd open when we go to exec */
-      glnx_tmpfile_clear (&tmpf);
-
-      g_print ("Executing postprocessing script\n");
-
-      {
-        char *child_argv[] = { (char*)binpath, NULL };
-        if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, unified_core_mode, cancellable, error))
-          return glnx_prefix_error (error, "While executing postprocessing script");
-      }
-
-      if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
-        return FALSE;
-
-      g_print ("Finished postprocessing script\n");
-    }
+  rpmostreecxx::compose_postprocess_add_files(rootfs_fd, treefile_rs);
+  rpmostreecxx::compose_postprocess_scripts(rootfs_fd, treefile_rs, (bool)unified_core_mode);
 
   return TRUE;
 }

@@ -88,6 +88,12 @@ pub mod ffi {
     // composepost.rs
     extern "Rust" {
         fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> Result<()>;
+        fn compose_postprocess_scripts(
+            rootfs_dfd: i32,
+            treefile: &mut Treefile,
+            unified_core: bool,
+        ) -> Result<()>;
+        fn compose_postprocess_add_files(rootfs_dfd: i32, treefile: &mut Treefile) -> Result<()>;
         fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()>;
     }
 
@@ -188,8 +194,6 @@ pub mod ffi {
         fn treefile_new(filename: &str, basearch: &str, workdir: i32) -> Result<Box<Treefile>>;
 
         fn get_workdir(&self) -> i32;
-        fn get_postprocess_script_fd(&mut self) -> i32;
-        fn get_add_file_fd(&mut self, filename: &str) -> i32;
         fn get_passwd_fd(&mut self) -> i32;
         fn get_group_fd(&mut self) -> i32;
         fn get_json_string(&self) -> String;
@@ -204,6 +208,8 @@ pub mod ffi {
         fn get_rpmdb(&self) -> String;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);
+        fn write_compose_json(&self, rootfs_dfd: i32) -> Result<()>;
+        fn sanitycheck_externals(&self) -> Result<()>;
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
         fn get_ostree_ref(&self) -> String;
     }
@@ -331,6 +337,16 @@ pub mod ffi {
         fn early_main();
         fn rpmostree_main(args: &[&str]) -> Result<()>;
         fn main_print_error(msg: &str);
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-bwrap.h");
+        fn bwrap_run_mutable(
+            rootfs_dfd: i32,
+            binpath: &str,
+            child_argv: &Vec<String>,
+            unified_core_mode: bool,
+        ) -> Result<()>;
     }
 
     unsafe extern "C++" {

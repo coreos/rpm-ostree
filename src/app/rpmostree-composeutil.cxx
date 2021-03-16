@@ -122,30 +122,6 @@ rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
   return TRUE;
 }
 
-
-gboolean
-rpmostree_composeutil_sanity_checks (rpmostreecxx::Treefile &tf,
-                                     JsonObject   *treefile,
-                                     GCancellable *cancellable,
-                                     GError      **error)
-{
-  int fd = tf.get_postprocess_script_fd();
-  if (fd != -1)
-    {
-      /* Check that postprocess-script is executable; https://github.com/projectatomic/rpm-ostree/issues/817 */
-      struct stat stbuf;
-      if (!glnx_fstat (fd, &stbuf, error))
-        return glnx_prefix_error (error, "postprocess-script");
-
-      if ((stbuf.st_mode & S_IXUSR) == 0)
-        return glnx_throw (error, "postprocess-script must be executable");
-    }
-
-  /* Insert other sanity checks here */
-
-  return TRUE;
-}
-
 static gboolean
 set_keyfile_string_array_from_json (GKeyFile    *keyfile,
                                     const char  *keyfile_group,

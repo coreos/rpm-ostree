@@ -10,12 +10,15 @@
 //! order to prepare it as an OSTree commit.
 
 use crate::cxxrsutil::CxxResult;
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
-use std::io::{self, Read};
-use std::io::{BufRead, Write};
+use std::borrow::Cow;
+use std::io::{BufRead, Seek, Write};
+use std::io::{BufReader, Read};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
 /* See rpmostree-core.h */
@@ -34,7 +37,7 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Result<()> {
     let path = Path::new("usr/etc/default/useradd");
     if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         rootfs_dfd.write_file_with(&path, 0o644, |bufw| -> Result<_> {
-            let f = io::BufReader::new(&f);
+            let f = BufReader::new(&f);
             for line in f.lines() {
                 let line = line?;
                 if !line.starts_with("HOME=") {
@@ -87,7 +90,7 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
     let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
     if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         rootfs_dfd.write_file_with(&path, 0o644, |w| -> Result<()> {
-            let f = io::BufReader::new(&f);
+            let f = BufReader::new(&f);
             for line in f.lines() {
                 let line = line?;
                 if line.starts_with("/var/home ") {
@@ -117,6 +120,90 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
         postprocess_rpm_macro,
     ];
     Ok(tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))?)
+}
+
+/// The treefile format has two kinds of postprocessing scripts;
+/// there's a single `postprocess-script` as well as inline (anonymous)
+/// scripts.  This function executes both kinds in bwrap containers.
+pub(crate) fn compose_postprocess_scripts(
+    rootfs_dfd: i32,
+    treefile: &mut crate::treefile::Treefile,
+    unified_core: bool,
+) -> CxxResult<()> {
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    // Execute the anonymous (inline) scripts.
+    for (i, script) in treefile.parsed.postprocess.iter().flatten().enumerate() {
+        let binpath = format!("/usr/bin/rpmostree-postprocess-inline-{}", i);
+        let target_binpath = &binpath[1..];
+
+        rootfs_dfd.write_file_contents(target_binpath, 0o755, script)?;
+        println!("Executing `postprocess` inline script '{}'", i);
+        let child_argv = vec![binpath.clone()];
+        crate::ffi::bwrap_run_mutable(rootfs_dfd.as_raw_fd(), &binpath, &child_argv, unified_core)?;
+
+        rootfs_dfd.remove_file(target_binpath)?;
+    }
+
+    // And the single postprocess script.
+    if let Some(postprocess_script) = treefile.get_postprocess_script() {
+        let binpath = "/usr/bin/rpmostree-treefile-postprocess-script";
+        let target_binpath = &binpath[1..];
+        postprocess_script.seek(std::io::SeekFrom::Start(0))?;
+        let mut reader = std::io::BufReader::new(postprocess_script);
+        rootfs_dfd.write_file_with(target_binpath, 0o755, |w| std::io::copy(&mut reader, w))?;
+        println!("Executing postprocessing script");
+
+        let child_argv = vec![binpath.to_string()];
+        crate::ffi::bwrap_run_mutable(rootfs_dfd.as_raw_fd(), binpath, &child_argv, unified_core)
+            .context("Executing postprocessing script")?;
+
+        rootfs_dfd.remove_file(target_binpath)?;
+        println!("Finished postprocessing script");
+    }
+    Ok(())
+}
+
+/// Copy additional files
+pub(crate) fn compose_postprocess_add_files(
+    rootfs_dfd: i32,
+    treefile: &mut crate::treefile::Treefile,
+) -> CxxResult<()> {
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    // Make a deep copy here because get_add_file_fd() also wants an &mut
+    // reference.
+    let add_files: Vec<_> = treefile
+        .parsed
+        .add_files
+        .iter()
+        .flatten()
+        .cloned()
+        .collect();
+    for (src, dest) in add_files {
+        let reldest = dest.trim_start_matches('/');
+        if reldest.is_empty() {
+            return Err(anyhow!("Invalid add-files destination: {}", dest).into());
+        }
+        let dest = if reldest.starts_with("etc/") {
+            Cow::Owned(format!("usr/{}", reldest))
+        } else {
+            Cow::Borrowed(reldest)
+        };
+
+        println!("Adding file {}", dest);
+        let dest = Path::new(&*dest);
+        if let Some(parent) = dest.parent() {
+            rootfs_dfd.ensure_dir_all(parent, 0o755)?;
+        }
+
+        let fd = treefile.get_add_file(&src);
+        fd.seek(std::io::SeekFrom::Start(0))?;
+        let mut reader = std::io::BufReader::new(fd);
+        let mode = reader.get_mut().metadata()?.permissions().mode();
+        rootfs_dfd.write_file_with(dest, mode, |w| std::io::copy(&mut reader, w))?;
+    }
+    Ok(())
 }
 
 /// Given a string and a set of possible prefixes, return the split
