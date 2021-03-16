@@ -4,6 +4,7 @@
 
 use anyhow::{bail, Context, Result};
 use curl::easy::Easy;
+use nix::unistd::geteuid;
 use os_release::OsRelease;
 use std::path;
 
@@ -35,9 +36,14 @@ fn send_countme(url: &str, ua: &str) -> Result<()> {
 
 /// Main entrypoint for countme
 pub fn entrypoint() -> Result<()> {
-    // Silently skip if we are not run on an ostree booted system
+    // Skip if we are not run on an ostree booted system
     if !path::Path::new("/run/ostree-booted").exists() {
         bail!("Not running on an ostree based system");
+    }
+
+    // Skip if we are not running with an unprivileged user
+    if geteuid().is_root() {
+        bail!("Must run under an unprivileged user");
     }
 
     // Load repo configs and keep only those enabled, with a metalink and countme=1
