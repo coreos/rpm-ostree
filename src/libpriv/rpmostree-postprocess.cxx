@@ -1213,74 +1213,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  JsonArray *units = NULL;
-  if (json_object_has_member (treefile, "units"))
-    units = json_object_get_array_member (treefile, "units");
+  rpmostreecxx::compose_postprocess_targets(rootfs_fd, treefile_rs);
 
   guint len;
-  if (units)
-    len = json_array_get_length (units);
-  else
-    len = 0;
-
-  {
-    glnx_autofd int multiuser_wants_dfd = -1;
-
-    if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/etc/systemd/system/multi-user.target.wants", 0755,
-                                 cancellable, error))
-      return FALSE;
-    if (!glnx_opendirat (rootfs_fd, "usr/etc/systemd/system/multi-user.target.wants", TRUE,
-                         &multiuser_wants_dfd, error))
-      return FALSE;
-
-    for (guint i = 0; i < len; i++)
-      {
-        const char *unitname = _rpmostree_jsonutil_array_require_string_element (units, i, error);
-        g_autofree char *symlink_target = NULL;
-        struct stat stbuf;
-
-        if (!unitname)
-          return FALSE;
-
-        symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
-
-        if (fstatat (multiuser_wants_dfd, unitname, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
-          {
-            if (errno != ENOENT)
-              return glnx_throw_errno_prefix (error, "fstatat(%s)", unitname);
-          }
-        else
-          continue;
-
-        g_print ("Adding %s to multi-user.target.wants\n", unitname);
-
-        if (symlinkat (symlink_target, multiuser_wants_dfd, unitname) < 0)
-          return glnx_throw_errno_prefix (error, "symlinkat(%s)", unitname);
-      }
-  }
-
-  const char *default_target = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default-target",
-                                                              &default_target, error))
-    return FALSE;
-
-  if (default_target != NULL)
-    {
-      g_autofree char *dest_default_target_path =
-        g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
-
-      /* This used to be in /etc, but doing it in /usr makes more sense, as it's
-       * part of the OS defaults. This was changed in particular to work with
-       * ConditionFirstBoot= which runs `systemctl preset-all`:
-       * https://github.com/projectatomic/rpm-ostree/pull/1425
-       */
-      static const char default_target_path[] = "usr/lib/systemd/system/default.target";
-      (void) unlinkat (rootfs_fd, default_target_path, 0);
-
-      if (symlinkat (dest_default_target_path, rootfs_fd, default_target_path) < 0)
-        return glnx_throw_errno_prefix (error, "symlinkat(%s)", default_target_path);
-    }
-
   JsonArray *remove = NULL;
   if (json_object_has_member (treefile, "remove-files"))
     {

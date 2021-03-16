@@ -125,6 +125,60 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
     Ok(tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))?)
 }
 
+#[context("Handling treefile 'units'")]
+fn compose_postprocess_units(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
+    let multiuser_wants = Path::new("usr/etc/systemd/system/multi-user.target.wants");
+
+    let mut created = false;
+    for unit in treefile.parsed.units.iter().flatten() {
+        if !created {
+            rootfs_dfd.ensure_dir_all(multiuser_wants, 0o755)?;
+            created = true;
+        }
+
+        let dest = multiuser_wants.join(unit);
+        if rootfs_dfd.exists(&dest)? {
+            continue;
+        }
+
+        println!("Adding {} to multi-user.target.wants", unit);
+
+        let target = format!("/usr/lib/systemd/system/{}", unit);
+        rootfs_dfd.symlink(&dest, &target)?;
+    }
+    Ok(())
+}
+
+#[context("Handling treefile 'default-target'")]
+fn compose_postprocess_default_target(rootfs_dfd: &openat::Dir, target: &str) -> Result<()> {
+    /* This used to be in /etc, but doing it in /usr makes more sense, as it's
+     * part of the OS defaults. This was changed in particular to work with
+     * ConditionFirstBoot= which runs `systemctl preset-all`:
+     * https://github.com/projectatomic/rpm-ostree/pull/1425
+     */
+    let default_target_path = "usr/lib/systemd/system/default.target";
+    rootfs_dfd.remove_file_optional(default_target_path)?;
+    let dest = format!("/usr/lib/systemd/system/{}", target);
+    rootfs_dfd.symlink(default_target_path, dest)?;
+
+    Ok(())
+}
+
+#[context("Handling targets")]
+pub(crate) fn compose_postprocess_targets(
+    rootfs_dfd: i32,
+    treefile: &mut Treefile,
+) -> CxxResult<()> {
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    compose_postprocess_units(&rootfs_dfd, treefile)?;
+    if let Some(t) = treefile.parsed.default_target.as_deref() {
+        compose_postprocess_default_target(&rootfs_dfd, t)?;
+    }
+
+    Ok(())
+}
+
 /// The treefile format has two kinds of postprocessing scripts;
 /// there's a single `postprocess-script` as well as inline (anonymous)
 /// scripts.  This function executes both kinds in bwrap containers.
