@@ -21,6 +21,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
+use crate::treefile::Treefile;
+
 /* See rpmostree-core.h */
 const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
 const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
@@ -128,7 +130,7 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
 /// scripts.  This function executes both kinds in bwrap containers.
 fn compose_postprocess_scripts(
     rootfs_dfd: &openat::Dir,
-    treefile: &mut crate::treefile::Treefile,
+    treefile: &mut Treefile,
     unified_core: bool,
 ) -> CxxResult<()> {
     // Execute the anonymous (inline) scripts.
@@ -163,10 +165,7 @@ fn compose_postprocess_scripts(
     Ok(())
 }
 
-fn compose_postprocess_add_files(
-    rootfs_dfd: &openat::Dir,
-    treefile: &mut crate::treefile::Treefile,
-) -> Result<()> {
+fn compose_postprocess_add_files(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
     // Make a deep copy here because get_add_file_fd() also wants an &mut
     // reference.
     let add_files: Vec<_> = treefile
@@ -226,7 +225,7 @@ fn compose_postprocess_rpmdb(rootfs_dfd: &openat::Dir) -> Result<()> {
 /// Rust portion of rpmostree_treefile_postprocessing()
 pub(crate) fn compose_postprocess(
     rootfs_dfd: i32,
-    treefile: &mut crate::treefile::Treefile,
+    treefile: &mut Treefile,
     unified_core: bool,
 ) -> CxxResult<()> {
     let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
