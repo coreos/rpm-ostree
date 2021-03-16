@@ -1291,11 +1291,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     len = 0;
 
   /* Put /etc back for backwards compatibility */
-  if (len > 0)
-    {
-      if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
-        return FALSE;
-    }
+  if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
+    return FALSE;
+
   /* Process the remove-files element */
   for (guint i = 0; i < len; i++)
     {
@@ -1312,16 +1310,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       if (!glnx_shutil_rm_rf_at (rootfs_fd, val, cancellable, error))
         return FALSE;
     }
-  if (len > 0)
-    {
-      /* And put /etc back to /usr/etc */
-      if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-        return FALSE;
-    }
-
-  /* Take care of /etc for these bits */
-  if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
-    return FALSE;
 
   {
     const char *base_version = NULL;
