@@ -1319,22 +1319,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
         return FALSE;
     }
 
-  /* This works around a potential issue with libsolv if we go down the
-   * rpmostree_get_pkglist_for_root() path. Though rpm has been using the
-   * /usr/share/rpm location (since the RpmOstreeContext set the _dbpath macro),
-   * the /var/lib/rpm directory will still exist, but be empty. libsolv gets
-   * confused because it sees the /var/lib/rpm dir and doesn't even try the
-   * /usr/share/rpm location, and eventually dies when it tries to load the
-   * data. XXX: should probably send a patch upstream to libsolv.
-   *
-   * So we set the symlink now. This is also what we do on boot anyway for
-   * compatibility reasons using tmpfiles.
-   * */
-  if (!glnx_shutil_rm_rf_at (rootfs_fd, "var/lib/rpm", cancellable, error))
-    return FALSE;
-  if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
-    return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
-
   /* Take care of /etc for these bits */
   if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
     return FALSE;
