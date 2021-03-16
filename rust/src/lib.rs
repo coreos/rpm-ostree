@@ -413,6 +413,7 @@ pub(crate) use extensions::*;
 mod fedora_integration;
 mod history;
 pub use self::history::*;
+mod isolation;
 mod journal;
 pub(crate) use self::journal::*;
 mod initramfs;
