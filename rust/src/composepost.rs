@@ -125,13 +125,11 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
 /// The treefile format has two kinds of postprocessing scripts;
 /// there's a single `postprocess-script` as well as inline (anonymous)
 /// scripts.  This function executes both kinds in bwrap containers.
-pub(crate) fn compose_postprocess_scripts(
-    rootfs_dfd: i32,
+fn compose_postprocess_scripts(
+    rootfs_dfd: &openat::Dir,
     treefile: &mut crate::treefile::Treefile,
     unified_core: bool,
 ) -> CxxResult<()> {
-    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
-
     // Execute the anonymous (inline) scripts.
     for (i, script) in treefile.parsed.postprocess.iter().flatten().enumerate() {
         let binpath = format!("/usr/bin/rpmostree-postprocess-inline-{}", i);
@@ -164,13 +162,10 @@ pub(crate) fn compose_postprocess_scripts(
     Ok(())
 }
 
-/// Copy additional files
-pub(crate) fn compose_postprocess_add_files(
-    rootfs_dfd: i32,
+fn compose_postprocess_add_files(
+    rootfs_dfd: &openat::Dir,
     treefile: &mut crate::treefile::Treefile,
-) -> CxxResult<()> {
-    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
-
+) -> Result<()> {
     // Make a deep copy here because get_add_file_fd() also wants an &mut
     // reference.
     let add_files: Vec<_> = treefile
@@ -203,6 +198,20 @@ pub(crate) fn compose_postprocess_add_files(
         let mode = reader.get_mut().metadata()?.permissions().mode();
         rootfs_dfd.write_file_with(dest, mode, |w| std::io::copy(&mut reader, w))?;
     }
+    Ok(())
+}
+
+/// Rust portion of rpmostree_treefile_postprocessing()
+pub(crate) fn compose_postprocess(
+    rootfs_dfd: i32,
+    treefile: &mut crate::treefile::Treefile,
+    unified_core: bool,
+) -> CxxResult<()> {
+    let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    compose_postprocess_add_files(rootfs_dfd, treefile)?;
+    compose_postprocess_scripts(rootfs_dfd, treefile, unified_core)?;
+
     Ok(())
 }
 

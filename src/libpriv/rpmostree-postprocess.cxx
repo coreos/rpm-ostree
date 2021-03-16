@@ -1410,8 +1410,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  rpmostreecxx::compose_postprocess_add_files(rootfs_fd, treefile_rs);
-  rpmostreecxx::compose_postprocess_scripts(rootfs_fd, treefile_rs, (bool)unified_core_mode);
+  rpmostreecxx::compose_postprocess(rootfs_fd, treefile_rs, (bool)unified_core_mode);
 
   return TRUE;
 }
