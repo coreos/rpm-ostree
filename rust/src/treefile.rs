@@ -22,6 +22,7 @@
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Result};
 use c_utf8::CUtf8Buf;
+use nix::unistd::{Gid, Uid};
 use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
@@ -760,7 +761,7 @@ impl TreefileExternals {
         let group_file = self
             .group
             .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("missing passwd file"))?;
+            .ok_or_else(|| anyhow::anyhow!("missing group file"))?;
         group_file.seek(io::SeekFrom::Start(0))?;
         Ok(group_file)
     }
@@ -865,7 +866,7 @@ pub(crate) struct CheckFile {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub(crate) struct CheckGroupsData {
-    entries: HashMap<String, u64>,
+    pub(crate) entries: BTreeMap<String, u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -883,31 +884,43 @@ pub(crate) enum CheckPasswd {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub(crate) struct CheckPasswdData {
-    entries: HashMap<String, CheckPasswdDataEntries>,
+    pub(crate) entries: BTreeMap<String, CheckPasswdDataEntries>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(untagged)]
 pub(crate) enum CheckPasswdDataEntries {
-    IdValue(u64),
-    IdTuple([u64; 1]),
-    UidGid((u64, u64)),
+    IdValue(u32),
+    IdTuple([u32; 1]),
+    UidGid((u32, u32)),
 }
 
-impl From<u64> for CheckPasswdDataEntries {
-    fn from(item: u64) -> Self {
+impl CheckPasswdDataEntries {
+    /// Return IDs for user and group.
+    pub fn ids(&self) -> (Uid, Gid) {
+        let (user, group) = match self {
+            CheckPasswdDataEntries::IdValue(v) => (*v, *v),
+            CheckPasswdDataEntries::IdTuple([v]) => (*v, *v),
+            CheckPasswdDataEntries::UidGid(v) => *v,
+        };
+        (Uid::from_raw(user), Gid::from_raw(group))
+    }
+}
+
+impl From<u32> for CheckPasswdDataEntries {
+    fn from(item: u32) -> Self {
         Self::IdValue(item)
     }
 }
 
-impl From<[u64; 1]> for CheckPasswdDataEntries {
-    fn from(item: [u64; 1]) -> Self {
+impl From<[u32; 1]> for CheckPasswdDataEntries {
+    fn from(item: [u32; 1]) -> Self {
         Self::IdTuple(item)
     }
 }
 
-impl From<(u64, u64)> for CheckPasswdDataEntries {
-    fn from(item: (u64, u64)) -> Self {
+impl From<(u32, u32)> for CheckPasswdDataEntries {
+    fn from(item: (u32, u32)) -> Self {
         Self::UidGid(item)
     }
 }
@@ -1645,16 +1658,27 @@ etc-group-members:
             let workdir = tempfile::tempdir().unwrap();
             let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_passwd();
+            let data = match custom_cfg {
+                CheckPasswd::Data(ref v) => v,
+                x => panic!("unexpected variant {:?}", x),
+            };
             assert_eq!(
-                custom_cfg,
-                &CheckPasswd::Data(CheckPasswdData {
-                    entries: maplit::hashmap!(
-                        "bin".into() => 1.into(),
+                data,
+                &CheckPasswdData {
+                    entries: maplit::btreemap!(
                         "adm".into() => (3, 4).into(),
+                        "bin".into() => 1.into(),
                         "foo".into() => [2].into(),
                     ),
-                })
+                }
             );
+            let ids: Vec<_> = data.entries.iter().map(|(_k, v)| v.ids()).collect();
+            let expected = vec![
+                (Uid::from_raw(3), Gid::from_raw(4)),
+                (Uid::from_raw(1), Gid::from_raw(1)),
+                (Uid::from_raw(2), Gid::from_raw(2)),
+            ];
+            assert_eq!(ids, expected);
         }
         {
             let input = VALID_PRELUDE.to_string()
@@ -1699,7 +1723,7 @@ etc-group-members:
             assert_eq!(
                 custom_cfg,
                 &CheckGroups::Data(CheckGroupsData {
-                    entries: maplit::hashmap!(
+                    entries: maplit::btreemap!(
                         "bin".into() => 1,
                     ),
                 })
