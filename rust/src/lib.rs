@@ -89,6 +89,7 @@ pub mod ffi {
     extern "Rust" {
         fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> Result<()>;
         fn compose_postprocess_targets(rootfs_dfd: i32, treefile: &mut Treefile) -> Result<()>;
+        fn mutate_os_release(contents: &str, base_version: &str, next_version: &str) -> String;
         fn compose_postprocess(
             rootfs_dfd: i32,
             treefile: &mut Treefile,

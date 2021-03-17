@@ -41,6 +41,7 @@ ostree --repo=${repo} cat ${treeref} \
 assert_file_has_content os-release.prop VERSION_ID=${releasever}
 assert_file_has_content os-release.prop OSTREE_VERSION=\'${releasever}.444\'
 assert_file_has_content os-release.prop 'VERSION="'${releasever}'\.444 (CoreOS'
+assert_file_has_content os-release.prop 'PRETTY_NAME=.*'${releasever}'\.444'
 echo "ok mutate-os-release-cli"
 
 # make sure automatic_version_prefix works
