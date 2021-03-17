@@ -1012,10 +1012,10 @@ pub(crate) struct TreeComposeConfig {
 
     // systemd
     #[serde(skip_serializing_if = "Option::is_none")]
-    units: Option<Vec<String>>,
+    pub(crate) units: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "default-target")]
-    default_target: Option<String>,
+    pub(crate) default_target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "machineid-compat")]
     // Defaults to `true`

@@ -1213,74 +1213,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  JsonArray *units = NULL;
-  if (json_object_has_member (treefile, "units"))
-    units = json_object_get_array_member (treefile, "units");
+  rpmostreecxx::compose_postprocess_targets(rootfs_fd, treefile_rs);
 
   guint len;
-  if (units)
-    len = json_array_get_length (units);
-  else
-    len = 0;
-
-  {
-    glnx_autofd int multiuser_wants_dfd = -1;
-
-    if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/etc/systemd/system/multi-user.target.wants", 0755,
-                                 cancellable, error))
-      return FALSE;
-    if (!glnx_opendirat (rootfs_fd, "usr/etc/systemd/system/multi-user.target.wants", TRUE,
-                         &multiuser_wants_dfd, error))
-      return FALSE;
-
-    for (guint i = 0; i < len; i++)
-      {
-        const char *unitname = _rpmostree_jsonutil_array_require_string_element (units, i, error);
-        g_autofree char *symlink_target = NULL;
-        struct stat stbuf;
-
-        if (!unitname)
-          return FALSE;
-
-        symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
-
-        if (fstatat (multiuser_wants_dfd, unitname, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
-          {
-            if (errno != ENOENT)
-              return glnx_throw_errno_prefix (error, "fstatat(%s)", unitname);
-          }
-        else
-          continue;
-
-        g_print ("Adding %s to multi-user.target.wants\n", unitname);
-
-        if (symlinkat (symlink_target, multiuser_wants_dfd, unitname) < 0)
-          return glnx_throw_errno_prefix (error, "symlinkat(%s)", unitname);
-      }
-  }
-
-  const char *default_target = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default-target",
-                                                              &default_target, error))
-    return FALSE;
-
-  if (default_target != NULL)
-    {
-      g_autofree char *dest_default_target_path =
-        g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
-
-      /* This used to be in /etc, but doing it in /usr makes more sense, as it's
-       * part of the OS defaults. This was changed in particular to work with
-       * ConditionFirstBoot= which runs `systemctl preset-all`:
-       * https://github.com/projectatomic/rpm-ostree/pull/1425
-       */
-      static const char default_target_path[] = "usr/lib/systemd/system/default.target";
-      (void) unlinkat (rootfs_fd, default_target_path, 0);
-
-      if (symlinkat (dest_default_target_path, rootfs_fd, default_target_path) < 0)
-        return glnx_throw_errno_prefix (error, "symlinkat(%s)", default_target_path);
-    }
-
   JsonArray *remove = NULL;
   if (json_object_has_member (treefile, "remove-files"))
     {
@@ -1291,11 +1226,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     len = 0;
 
   /* Put /etc back for backwards compatibility */
-  if (len > 0)
-    {
-      if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
-        return FALSE;
-    }
+  if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
+    return FALSE;
+
   /* Process the remove-files element */
   for (guint i = 0; i < len; i++)
     {
@@ -1312,32 +1245,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       if (!glnx_shutil_rm_rf_at (rootfs_fd, val, cancellable, error))
         return FALSE;
     }
-  if (len > 0)
-    {
-      /* And put /etc back to /usr/etc */
-      if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-        return FALSE;
-    }
-
-  /* This works around a potential issue with libsolv if we go down the
-   * rpmostree_get_pkglist_for_root() path. Though rpm has been using the
-   * /usr/share/rpm location (since the RpmOstreeContext set the _dbpath macro),
-   * the /var/lib/rpm directory will still exist, but be empty. libsolv gets
-   * confused because it sees the /var/lib/rpm dir and doesn't even try the
-   * /usr/share/rpm location, and eventually dies when it tries to load the
-   * data. XXX: should probably send a patch upstream to libsolv.
-   *
-   * So we set the symlink now. This is also what we do on boot anyway for
-   * compatibility reasons using tmpfiles.
-   * */
-  if (!glnx_shutil_rm_rf_at (rootfs_fd, "var/lib/rpm", cancellable, error))
-    return FALSE;
-  if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
-    return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
-
-  /* Take care of /etc for these bits */
-  if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
-    return FALSE;
 
   {
     const char *base_version = NULL;
@@ -1410,8 +1317,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  rpmostreecxx::compose_postprocess_add_files(rootfs_fd, treefile_rs);
-  rpmostreecxx::compose_postprocess_scripts(rootfs_fd, treefile_rs, (bool)unified_core_mode);
+  rpmostreecxx::compose_postprocess(rootfs_fd, treefile_rs, (bool)unified_core_mode);
 
   return TRUE;
 }
