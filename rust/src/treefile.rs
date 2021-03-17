@@ -897,6 +897,7 @@ pub(crate) enum CheckPasswdDataEntries {
 
 impl CheckPasswdDataEntries {
     /// Return IDs for user and group.
+    #[allow(dead_code)]
     pub fn ids(&self) -> (Uid, Gid) {
         let (user, group) = match self {
             CheckPasswdDataEntries::IdValue(v) => (*v, *v),
