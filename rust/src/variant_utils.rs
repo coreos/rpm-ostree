@@ -1,7 +1,6 @@
 //! Helpers for GVariant until we can use a newer glib crate with https://github.com/gtk-rs/glib/pull/651
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use glib;
 use glib::translate::*;
 
 // These constants should really be in gtk-rs
