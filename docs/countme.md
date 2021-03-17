@@ -25,17 +25,26 @@ standalone way.
 
 ## Disabling DNF Count Me on a system
 
-To disable this feature, you need to update the Count Me option in all RPM
-repository configuration files:
+To disable this feature, you need to stop the `rpm-ostree-countme.timer` and
+mask the corresponding unit as a precaution:
 
 ```
-sed -i 's/countme=1/countme=0/g' /etc/yum.repos.d/*.repo
+$ systemctl mask --now rpm-ostree-countme.timer
 ```
 
-You should also stop and disable the `rpm-ostree-countme.timer`:
+If you have packages layered on top of the base image from an RPM repository,
+then you will have to make sure that the `countme` option is disabled there
+until we fix [this issue in libdnf][libdnfissue]:
 
 ```
-$ systemctl disable --now rpm-ostree-countme.timer
+$ sed -i 's/countme=1/countme=0/g' /etc/yum.repos.d/*.repo
 ```
+
+Note that once you do that, those repository configuration files will be
+considered as locally modified by ostree which will hence ignore any other
+changes to the defaults that may happen via a future update. You can always
+restore the original configuration or propagate updates from the default
+configuration available in `/usr/etc/yum.repos.d/*.repo`.
 
 [countme]: https://fedoraproject.org/wiki/Changes/DNF_Better_Counting
+[libdnfissue]: https://github.com/rpm-software-management/libdnf/issues/1174
