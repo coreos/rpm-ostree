@@ -1169,36 +1169,11 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
   rpmostreecxx::compose_postprocess_targets(rootfs_fd, treefile_rs);
 
-  guint len;
-  JsonArray *remove = NULL;
-  if (json_object_has_member (treefile, "remove-files"))
-    {
-      remove = json_object_get_array_member (treefile, "remove-files");
-      len = json_array_get_length (remove);
-    }
-  else
-    len = 0;
-
   /* Put /etc back for backwards compatibility */
   if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
     return FALSE;
 
-  /* Process the remove-files element */
-  for (guint i = 0; i < len; i++)
-    {
-      const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
-
-      if (!val)
-        return FALSE;
-      if (g_path_is_absolute (val))
-        return glnx_throw (error, "'remove' elements must be relative");
-      g_assert_cmpint (val[0], !=, '/');
-      g_assert (strstr (val, "..") == NULL);
-
-      g_print ("Deleting: %s\n", val);
-      if (!glnx_shutil_rm_rf_at (rootfs_fd, val, cancellable, error))
-        return FALSE;
-    }
+  rpmostreecxx::compose_postprocess_remove_files(rootfs_fd, treefile_rs);
 
   {
     const char *base_version = NULL;

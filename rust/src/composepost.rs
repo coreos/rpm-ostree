@@ -220,6 +220,27 @@ fn compose_postprocess_scripts(
     Ok(())
 }
 
+#[context("Handling `remove-files`")]
+pub(crate) fn compose_postprocess_remove_files(
+    rootfs_dfd: i32,
+    treefile: &mut Treefile,
+) -> CxxResult<()> {
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    for name in treefile.parsed.remove_files.iter().flatten() {
+        let p = Path::new(name);
+        if p.is_absolute() {
+            return Err(anyhow!("Invalid absolute path: {}", name).into());
+        }
+        if name.contains("..") {
+            return Err(anyhow!("Invalid .. in path: {}", name).into());
+        }
+        println!("Deleting: {}", name);
+        rootfs_dfd.remove_all(name)?;
+    }
+    Ok(())
+}
+
 fn compose_postprocess_add_files(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
     // Make a deep copy here because get_add_file_fd() also wants an &mut
     // reference.
