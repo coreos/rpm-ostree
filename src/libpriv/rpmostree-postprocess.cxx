@@ -1148,52 +1148,6 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   return TRUE;
 }
 
-static char *
-mutate_os_release (const char    *contents,
-                   const char    *base_version,
-                   const char    *next_version,
-                   GError       **error)
-{
-  g_auto(GStrv) lines = NULL;
-  GString *new_contents = g_string_sized_new (strlen (contents));
-
-  lines = g_strsplit (contents, "\n", -1);
-  for (char **it = lines; it && *it; it++)
-    {
-      const char *line = *it;
-
-      if (strlen (line) == 0)
-        continue;
-
-      /* NB: we don't mutate VERSION_ID because some libraries expect well-known
-       * values there */
-      if (g_str_has_prefix (line, "VERSION=") || \
-          g_str_has_prefix (line, "PRETTY_NAME="))
-        {
-          g_autofree char *new_line = NULL;
-          const char *equal = strchr (line, '=');
-
-          g_string_append_len (new_contents, line, equal - line + 1);
-
-          new_line = rpmostree_str_replace (equal + 1, base_version,
-                                            next_version, error);
-          if (new_line == NULL)
-              return NULL;
-
-          g_string_append_printf (new_contents, "%s\n", new_line);
-          continue;
-        }
-
-      g_string_append_printf (new_contents, "%s\n", line);
-    }
-
-  /* Add a bona fide ostree entry. Quote it as a precaution */
-  g_autofree char *quoted_version = g_shell_quote (next_version);
-  g_string_append_printf (new_contents, "OSTREE_VERSION=%s\n", quoted_version);
-
-  return g_string_free (new_contents, FALSE);
-}
-
 /* Move etc -> usr/etc in the rootfs, and run through treefile
  * postprocessing.
  */
@@ -1215,36 +1169,11 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
   rpmostreecxx::compose_postprocess_targets(rootfs_fd, treefile_rs);
 
-  guint len;
-  JsonArray *remove = NULL;
-  if (json_object_has_member (treefile, "remove-files"))
-    {
-      remove = json_object_get_array_member (treefile, "remove-files");
-      len = json_array_get_length (remove);
-    }
-  else
-    len = 0;
-
   /* Put /etc back for backwards compatibility */
   if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
     return FALSE;
 
-  /* Process the remove-files element */
-  for (guint i = 0; i < len; i++)
-    {
-      const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
-
-      if (!val)
-        return FALSE;
-      if (g_path_is_absolute (val))
-        return glnx_throw (error, "'remove' elements must be relative");
-      g_assert_cmpint (val[0], !=, '/');
-      g_assert (strstr (val, "..") == NULL);
-
-      g_print ("Deleting: %s\n", val);
-      if (!glnx_shutil_rm_rf_at (rootfs_fd, val, cancellable, error))
-        return FALSE;
-    }
+  rpmostreecxx::compose_postprocess_remove_files(rootfs_fd, treefile_rs);
 
   {
     const char *base_version = NULL;
@@ -1301,13 +1230,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
         if (contents == NULL)
           return FALSE;
 
-        g_autofree char *new_contents = mutate_os_release (contents, base_version,
-                                                           next_version, error);
-        if (new_contents == NULL)
-          return FALSE;
-
+        auto new_contents = rpmostreecxx::mutate_os_release (contents, base_version, next_version);
         if (!glnx_file_replace_contents_at (rootfs_fd, path,
-                                            (guint8*)new_contents, -1, static_cast<GLnxFileReplaceFlags>(0),
+                                            (guint8*)new_contents.data(), new_contents.length(), static_cast<GLnxFileReplaceFlags>(0),
                                             cancellable, error))
           return FALSE;
       }

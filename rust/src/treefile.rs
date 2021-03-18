@@ -897,6 +897,7 @@ pub(crate) enum CheckPasswdDataEntries {
 
 impl CheckPasswdDataEntries {
     /// Return IDs for user and group.
+    #[allow(dead_code)]
     pub fn ids(&self) -> (Uid, Gid) {
         let (user, group) = match self {
             CheckPasswdDataEntries::IdValue(v) => (*v, *v),
@@ -1080,7 +1081,7 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) add_files: Option<Vec<(String, String)>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-files")]
-    remove_files: Option<Vec<String>>,
+    pub(crate) remove_files: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-from-packages")]
     remove_from_packages: Option<Vec<Vec<String>>>,

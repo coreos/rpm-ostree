@@ -15,6 +15,7 @@ use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
 use std::borrow::Cow;
+use std::fmt::Write as FmtWrite;
 use std::io::{BufRead, Seek, Write};
 use std::io::{BufReader, Read};
 use std::os::unix::fs::PermissionsExt;
@@ -219,6 +220,27 @@ fn compose_postprocess_scripts(
     Ok(())
 }
 
+#[context("Handling `remove-files`")]
+pub(crate) fn compose_postprocess_remove_files(
+    rootfs_dfd: i32,
+    treefile: &mut Treefile,
+) -> CxxResult<()> {
+    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    for name in treefile.parsed.remove_files.iter().flatten() {
+        let p = Path::new(name);
+        if p.is_absolute() {
+            return Err(anyhow!("Invalid absolute path: {}", name).into());
+        }
+        if name.contains("..") {
+            return Err(anyhow!("Invalid .. in path: {}", name).into());
+        }
+        println!("Deleting: {}", name);
+        rootfs_dfd.remove_all(name)?;
+    }
+    Ok(())
+}
+
 fn compose_postprocess_add_files(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
     // Make a deep copy here because get_add_file_fd() also wants an &mut
     // reference.
@@ -289,6 +311,34 @@ pub(crate) fn compose_postprocess(
     compose_postprocess_rpmdb(rootfs_dfd)?;
 
     Ok(())
+}
+
+/// Given the contents of a /usr/lib/os-release file,
+/// update the `VERSION` and `PRETTY_NAME` fields.
+pub(crate) fn mutate_os_release(contents: &str, base_version: &str, next_version: &str) -> String {
+    let mut buf = String::new();
+    for line in contents.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let prefixes = &["VERSION=", "PRETTY_NAME="];
+        if let Some((prefix, rest)) = strip_any_prefix(line, prefixes) {
+            buf.push_str(prefix);
+            let replaced = rest.replace(base_version, next_version);
+            buf.push_str(&replaced);
+        } else {
+            buf.push_str(line);
+        }
+        buf.push('\n');
+    }
+
+    // Unwrap safety; we provided it UTF-8
+    let quoted_version = glib::shell_quote(next_version).unwrap();
+    let quoted_version = quoted_version.to_str().unwrap();
+    // Unwrap safety: write! to a String can't fail
+    writeln!(buf, "OSTREE_VERSION={}", quoted_version).unwrap();
+
+    buf
 }
 
 /// Given a string and a set of possible prefixes, return the split
@@ -398,5 +448,28 @@ automount:  files sss
         assert_eq!(replaced.as_str(), expected);
         let replaced2 = add_altfiles(replaced.as_str()).unwrap();
         assert_eq!(replaced2.as_str(), expected);
+    }
+
+    #[test]
+    fn test_mutate_os_release() {
+        let orig = r##"NAME=Fedora
+VERSION="33 (Container Image)"
+ID=fedora
+VERSION_ID=33
+VERSION_CODENAME=""
+PRETTY_NAME="Fedora 33 (Container Image)"
+CPE_NAME="cpe:/o:fedoraproject:fedora:33"
+"##;
+        let expected = r##"NAME=Fedora
+VERSION="33.4 (Container Image)"
+ID=fedora
+VERSION_ID=33
+VERSION_CODENAME=""
+PRETTY_NAME="Fedora 33.4 (Container Image)"
+CPE_NAME="cpe:/o:fedoraproject:fedora:33"
+OSTREE_VERSION='33.4'
+"##;
+        let replaced = mutate_os_release(orig, "33", "33.4");
+        assert_eq!(replaced.as_str(), expected);
     }
 }
