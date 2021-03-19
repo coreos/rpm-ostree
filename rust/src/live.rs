@@ -333,12 +333,6 @@ fn rerun_tmpfiles() -> Result<()> {
     })
 }
 
-fn get_required_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::Deployment> {
-    sysroot
-        .get_booted_deployment()
-        .ok_or_else(|| anyhow!("Not booted into an OSTree system"))
-}
-
 /// Implementation of `rpm-ostree ex apply-live`.
 pub(crate) fn transaction_apply_live(
     mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
@@ -351,7 +345,7 @@ pub(crate) fn transaction_apply_live(
     let allow_replacement = variant_dict_lookup_bool(options, OPT_REPLACE).unwrap_or_default();
     let repo = &sysroot.repo().expect("repo");
 
-    let booted = get_required_booted_deployment(sysroot)?;
+    let booted = sysroot.require_booted_deployment()?;
     let osname = booted.get_osname().expect("osname");
     let booted_commit = booted.get_csum().expect("csum");
     let booted_commit = booted_commit.as_str();

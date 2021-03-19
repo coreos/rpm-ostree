@@ -1,7 +1,7 @@
 [package]
 name = "ostree-host"
 version = "0.1.0"
-authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
+authors = ["Colin Walters <walters@verbum.org>"]
 edition = "2018"
 #rust = "1.48"
 
