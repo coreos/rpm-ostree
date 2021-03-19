@@ -309,6 +309,7 @@ pub mod ffi {
         ) -> Result<()>;
 
         fn get_locked_packages(&self) -> Result<Vec<LockedPackage>>;
+        fn get_locked_src_packages(&self) -> Result<Vec<LockedPackage>>;
     }
 
     // rpmutils.rs

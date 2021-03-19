@@ -32,6 +32,7 @@
 #include <libdnf/libdnf.h>
 #include <librepo/librepo.h>
 #include <utility>
+#include <set>
 
 #include "rpmostree-core-private.h"
 #include "rpmostree-rojig-core.h"
@@ -1916,9 +1917,42 @@ find_locked_packages (RpmOstreeContext *self,
 
   g_autoptr(GPtrArray) pkgs =
     g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+
+  auto locked_src_pkgs = (*self->lockfile)->get_locked_src_packages();
+  std::set<rust::String> locked_src_pkgnames;
+  for (auto & pkg : locked_src_pkgs)
+    {
+      g_autofree char *srpm = g_strdup_printf ("%s-%s.src.rpm", pkg.name.c_str(), pkg.evr.c_str());
+      hy_autoquery HyQuery query = hy_query_create (sack);
+      hy_query_filter (query, HY_PKG_SOURCERPM, HY_EQ, srpm);
+      g_autoptr(GPtrArray) matches = hy_query_run (query);
+      if (matches->len == 0)
+        {
+          return (GPtrArray*)glnx_null_throw (error, "Couldn't find locked source package '%s-%s'",
+                                              pkg.name.c_str(), pkg.evr.c_str());
+        }
+      for (guint i = 0; i < matches->len; i++)
+        {
+          auto match = static_cast<DnfPackage *>(matches->pdata[i]);
+          /* we could optimize this path outside the loop in the future using the
+           * g_ptr_array_extend_and_steal API, though that's still too new for e.g. el8 */
+          g_ptr_array_add (pkgs, g_object_ref (match));
+        }
+      locked_src_pkgnames.insert(pkg.name);
+    }
+
   auto locked_pkgs = (*self->lockfile)->get_locked_packages();
   for (auto & pkg : locked_pkgs)
     {
+      /* This essentially makes `source-packages` have higher priority than `packages`. This
+       * isn't technically correct: what we should do in lockfile.rs is to convert
+       * `source-packages` to `packages` *before* merging all the lockfiles, so that e.g. a
+       * `packages` in a higher-level lockfile can override a `source-packages` in a lower
+       * level. For now this is fine because the primary use case is humans typing source
+       * packages where we want it to have the highest precedence. */
+      if (locked_src_pkgnames.count(pkg.name))
+        continue;
+
       hy_autoquery HyQuery query = hy_query_create (sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg.name.c_str());
       hy_query_filter (query, HY_PKG_EVR, HY_EQ, pkg.evr.c_str());
@@ -2140,14 +2174,16 @@ rpmostree_context_prepare (RpmOstreeContext *self,
            * installed which is in the lockfile, it can only pick that NEVRA. To do this, we
            * filter out from the sack all pkgs which don't match. */
 
-          /* map of all packages with names found in the lockfile */
+          /* map of all packages with names found in the lockfile (note here we derive this
+           * from `locked_pkgs` instead of from the lockfile again to account for
+           * source-packages too (which have been resolved to packages in `locked_pkgs`) */
           DnfPackageSet *named_pkgs = dnf_packageset_new (sack);
           Map *named_pkgs_map = dnf_packageset_get_map (named_pkgs);
-          auto locked_pkgs = (*self->lockfile)->get_locked_packages();
-          for (auto & pkg : locked_pkgs)
+          for (guint i = 0; i < locked_pkgs->len; i++)
             {
+              DnfPackage *pkg = (DnfPackage*)locked_pkgs->pdata[i];
               hy_autoquery HyQuery query = hy_query_create (sack);
-              hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg.name.c_str());
+              hy_query_filter (query, HY_PKG_NAME, HY_EQ, dnf_package_get_name (pkg));
               DnfPackageSet *pset = hy_query_run_set (query);
               map_or (named_pkgs_map, dnf_packageset_get_map (pset));
               dnf_packageset_free (pset);
