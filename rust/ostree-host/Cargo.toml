@@ -3,6 +3,7 @@ name = "ostree-host"
 version = "0.1.0"
 authors = ["Colin Walters <walters@verbum.org>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
 #rust = "1.48"
 
 [dependencies]
