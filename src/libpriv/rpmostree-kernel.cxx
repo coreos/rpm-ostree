@@ -34,7 +34,6 @@
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
 
-#include "rpmostree-passwd-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-bwrap.h"

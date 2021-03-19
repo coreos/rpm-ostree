@@ -252,7 +252,6 @@ pub mod ffi {
 
     // passwd.rs
     extern "Rust" {
-        fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>>;
         fn prepare_rpm_layering(rootfs: i32, merge_passwd_dir: &str) -> Result<bool>;
         fn complete_rpm_layering(rootfs: i32) -> Result<()>;
         fn passwd_cleanup(rootfs: i32) -> Result<()>;
@@ -268,10 +267,26 @@ pub mod ffi {
         ) -> Result<()>;
         fn dir_contains_uid(dirfd: i32, id: u32) -> Result<bool>;
         fn dir_contains_gid(dirfd: i32, id: u32) -> Result<bool>;
+        fn check_passwd_group_entries(
+            mut ffi_repo: Pin<&mut OstreeRepo>,
+            rootfs_dfd: i32,
+            treefile: &mut Treefile,
+            previous_rev: &str,
+        ) -> Result<()>;
 
+        fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>>;
         type PasswdDB;
         fn lookup_user(self: &PasswdDB, uid: u32) -> Result<String>;
         fn lookup_group(self: &PasswdDB, gid: u32) -> Result<String>;
+
+        fn new_passwd_entries() -> Box<PasswdEntries>;
+        type PasswdEntries;
+        fn add_group_content(self: &mut PasswdEntries, rootfs: i32, path: &str) -> Result<()>;
+        fn add_passwd_content(self: &mut PasswdEntries, rootfs: i32, path: &str) -> Result<()>;
+        fn contains_group(self: &PasswdEntries, user: &str) -> bool;
+        fn contains_user(self: &PasswdEntries, user: &str) -> bool;
+        fn lookup_user_id(self: &PasswdEntries, user: &str) -> Result<u32>;
+        fn lookup_group_id(self: &PasswdEntries, group: &str) -> Result<u32>;
     }
 
     // extensions.rs
