@@ -1,0 +1,20 @@
+[package]
+name = "ostree-host"
+version = "0.1.0"
+authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
+edition = "2018"
+#rust = "1.48"
+
+[dependencies]
+gio = "0.9.1"
+glib = "0.10.3"
+ostree = { version = "0.9.1", features = ["v2020_4"] }
+ostree-sys = "0.7.1"
+
+[dev-dependencies]
+anyhow = "1.0"
+tempfile = "3.2.0"
+
+[lib]
+name = "ostree_host"
+path = "src/lib.rs"

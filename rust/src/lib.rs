@@ -431,7 +431,6 @@ mod nameservice;
 #[cfg(test)]
 mod origin;
 mod ostree_diff;
-mod ostree_utils;
 mod passwd;
 use passwd::*;
 mod console_progress;
