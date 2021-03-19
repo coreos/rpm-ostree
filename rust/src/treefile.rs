@@ -897,7 +897,6 @@ pub(crate) enum CheckPasswdDataEntries {
 
 impl CheckPasswdDataEntries {
     /// Return IDs for user and group.
-    #[allow(dead_code)]
     pub fn ids(&self) -> (Uid, Gid) {
         let (user, group) = match self {
             CheckPasswdDataEntries::IdValue(v) => (*v, *v),
@@ -1063,10 +1062,10 @@ pub(crate) struct TreeComposeConfig {
     check_groups: Option<CheckGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-users")]
-    ignore_removed_users: Option<Vec<String>>,
+    pub(crate) ignore_removed_users: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-groups")]
-    ignore_removed_groups: Option<Vec<String>>,
+    pub(crate) ignore_removed_groups: Option<Vec<String>>,
 
     // Content manipulation
     #[serde(skip_serializing_if = "Option::is_none")]

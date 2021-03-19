@@ -44,7 +44,6 @@
 #include "rpmostree-kernel.h"
 #include "rpmostree-bwrap.h"
 #include "rpmostree-output.h"
-#include "rpmostree-passwd-util.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"

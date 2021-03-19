@@ -37,7 +37,6 @@
 #include "rpmostree-rojig-core.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-passwd-util.h"
 #include "rpmostree-scripts.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-importer.h"
@@ -3689,8 +3688,7 @@ static gboolean
 apply_rpmfi_overrides (RpmOstreeContext *self,
                        int            tmprootfs_dfd,
                        DnfPackage    *pkg,
-                       GHashTable    *passwdents,
-                       GHashTable    *groupents,
+                       rpmostreecxx::PasswdEntries &passwd_entries,
                        GCancellable  *cancellable,
                        GError       **error)
 {
@@ -3803,35 +3801,22 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
             return FALSE;
         }
 
-      if ((!g_str_equal (user, "root") && !passwdents) ||
-          (!g_str_equal (group, "root") && !groupents))
-        {
-          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Missing passwd/group files for chown");
-          return FALSE;
-        }
-
       uid_t uid = 0;
       if (!g_str_equal (user, "root"))
         {
-          auto passwdent = static_cast<struct conv_passwd_ent *>(g_hash_table_lookup (passwdents, user));
-
-          if (!passwdent)
+          if (!passwd_entries.contains_user(user))
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Could not find user '%s' in passwd file", user);
               return FALSE;
             }
-
-          uid = passwdent->uid;
+          uid = passwd_entries.lookup_user_id(user);
         }
 
       gid_t gid = 0;
       if (!g_str_equal (group, "root"))
         {
-          auto groupent = static_cast<struct conv_group_ent *>(g_hash_table_lookup (groupents, group));
-
-          if (!groupent)
+          if (!passwd_entries.contains_group(group))
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Could not find group '%s' in group file",
@@ -3839,7 +3824,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
               return FALSE;
             }
 
-          gid = groupent->gid;
+          gid = passwd_entries.lookup_group_id(group);
         }
 
       if (fchownat (tmprootfs_dfd, fn, uid, gid, AT_SYMLINK_NOFOLLOW) != 0)
@@ -4343,16 +4328,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     {
       gboolean have_passwd;
       gboolean have_systemctl;
-      g_autoptr(GPtrArray) passwdents_ptr = NULL;
-      g_autoptr(GPtrArray) groupents_ptr = NULL;
 
-      /* since here a hash table is more appropriate than a ptr array, we'll
-       * just populate the table from the ptrarray, rather than making
-       * data2passwdents support both outputs */
-      g_autoptr(GHashTable) passwdents = g_hash_table_new (g_str_hash,
-                                                           g_str_equal);
-      g_autoptr(GHashTable) groupents = g_hash_table_new (g_str_hash,
-                                                          g_str_equal);
+      auto passwd_entries = rpmostreecxx::new_passwd_entries();
 
       std::string passwd_dir(self->passwd_dir ?: "");
       have_passwd = rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dir);
@@ -4452,34 +4429,12 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       if (faccessat (tmprootfs_dfd, "etc/passwd", F_OK, 0) == 0)
         {
-          g_autofree char *contents =
-            glnx_file_get_contents_utf8_at (tmprootfs_dfd, "etc/passwd",
-                                            NULL, cancellable, error);
-          if (!contents)
-            return FALSE;
-
-          passwdents_ptr = rpmostree_passwd_data2passwdents (contents);
-          for (guint i = 0; i < passwdents_ptr->len; i++)
-            {
-              auto ent = static_cast<struct conv_passwd_ent *>(passwdents_ptr->pdata[i]);
-              g_hash_table_insert (passwdents, ent->name, ent);
-            }
+          passwd_entries->add_passwd_content(tmprootfs_dfd, "etc/passwd");
         }
 
       if (faccessat (tmprootfs_dfd, "etc/group", F_OK, 0) == 0)
         {
-          g_autofree char *contents =
-            glnx_file_get_contents_utf8_at (tmprootfs_dfd, "etc/group",
-                                            NULL, cancellable, error);
-          if (!contents)
-            return FALSE;
-
-          groupents_ptr = rpmostree_passwd_data2groupents (contents);
-          for (guint i = 0; i < groupents_ptr->len; i++)
-            {
-              auto ent = static_cast<struct conv_group_ent *>(groupents_ptr->pdata[i]);
-              g_hash_table_insert (groupents, ent->name, ent);
-            }
+          passwd_entries->add_group_content(tmprootfs_dfd, "etc/group");
         }
 
       {
@@ -4497,7 +4452,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           g_assert (pkg);
 
           task->set_sub_message(dnf_package_get_name(pkg));
-          if (!apply_rpmfi_overrides (self, tmprootfs_dfd, pkg, passwdents, groupents,
+          if (!apply_rpmfi_overrides (self, tmprootfs_dfd, pkg, *passwd_entries,
                                       cancellable, error))
             return glnx_prefix_error (error, "While applying overrides for pkg %s",
                                       dnf_package_get_name (pkg));

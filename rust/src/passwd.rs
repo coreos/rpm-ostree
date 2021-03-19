@@ -7,12 +7,12 @@ use crate::ffiutil;
 use crate::nameservice;
 use crate::treefile::{CheckGroups, CheckPasswd, Treefile};
 use anyhow::{anyhow, Context, Result};
+use fn_error_context::context;
 use gio::prelude::InputStreamExtManual;
 use gio::FileExt;
 use nix::unistd::{Gid, Uid};
 use openat_ext::OpenatDirExt;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::unix::io::AsRawFd;
@@ -505,7 +505,74 @@ fn complete_pwgrp(rootfs: &openat::Dir) -> Result<()> {
     Ok(())
 }
 
+/// Validate users/groups according to treefile check-passwd/check-groups configuration.
+///
+/// This is a pre-commit validation hook which ensures that the upcoming
+/// users/groups entries are somehow sane. See treefile `check-passwd` and
+/// `check-groups` fields for a description of available validation knobs.
+pub(crate) fn check_passwd_group_entries(
+    mut ffi_repo: Pin<&mut crate::ffi::OstreeRepo>,
+    rootfs_dfd: i32,
+    treefile: &mut Treefile,
+    previous_rev: &str,
+) -> CxxResult<()> {
+    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let repo = ffi_repo.gobj_wrap();
+
+    let mut repo_previous_rev = None;
+    if !previous_rev.is_empty() {
+        repo_previous_rev = Some((&repo, previous_rev));
+    }
+
+    // Parse entries in the upcoming commit content.
+    let mut new_entities = PasswdEntries::default();
+    new_entities.add_passwd_content(rootfs.as_raw_fd(), "usr/lib/passwd")?;
+    new_entities.add_group_content(rootfs.as_raw_fd(), "usr/lib/group")?;
+
+    // Fetch entries from treefile and previous commit, according to config.
+    // These are used as ground-truth by the validation steps below.
+    let mut old_entities = PasswdEntries::default();
+    old_entities.populate_users_from_treefile(treefile, &repo_previous_rev)?;
+    old_entities.populate_groups_from_treefile(treefile, &repo_previous_rev)?;
+
+    {
+        // See "man 5 passwd". We just make sure the name and uid/gid match,
+        // and that none are missing. Don't care about GECOS/dir/shell.
+        let empty = vec![];
+        let ignored_users = treefile
+            .parsed
+            .ignore_removed_users
+            .as_ref()
+            .unwrap_or(&empty);
+
+        new_entities.validate_treefile_check_passwd(
+            &old_entities,
+            rootfs.as_raw_fd(),
+            &ignored_users,
+        )?;
+    }
+
+    {
+        // See "man 5 group". We just need to make sure the name and gid match,
+        // and that none are missing. Don't care about users.
+        let empty = vec![];
+        let ignored_groups = treefile
+            .parsed
+            .ignore_removed_groups
+            .as_ref()
+            .unwrap_or(&empty);
+        new_entities.validate_treefile_check_groups(
+            &old_entities,
+            rootfs.as_raw_fd(),
+            &&ignored_groups,
+        )?;
+    }
+
+    Ok(())
+}
+
 /// Database holding users and groups.
+// TODO(lucab): consider folding this into `PasswdEntries`.
 #[derive(Debug, Default)]
 pub struct PasswdDB {
     users: HashMap<Uid, String>,
@@ -564,6 +631,302 @@ impl PasswdDB {
             let id = Uid::from_raw(user.uid);
             self.users.insert(id, user.name);
         }
+        Ok(())
+    }
+}
+
+/// Database holding users and groups (keyed by entry name).
+#[derive(Debug, Default)]
+pub struct PasswdEntries {
+    users: BTreeMap<String, (Uid, Gid)>,
+    groups: BTreeMap<String, Gid>,
+}
+
+/// Create a new empty DB.
+pub fn new_passwd_entries() -> Box<PasswdEntries> {
+    Box::new(PasswdEntries::default())
+}
+
+impl PasswdEntries {
+    /// Add all groups from a given `group` file.
+    pub fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> Result<()> {
+        let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+        let db = rootfs.open_file(group_path)?;
+        let entries = nameservice::group::parse_group_content(BufReader::new(db))?;
+
+        for group in entries {
+            let id = Gid::from_raw(group.gid);
+            self.groups.insert(group.name, id);
+        }
+        Ok(())
+    }
+
+    /// Add all users from a given `passwd` file.
+    pub fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> Result<()> {
+        let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+        let db = rootfs.open_file(passwd_path)?;
+        let entries = nameservice::passwd::parse_passwd_content(BufReader::new(db))?;
+
+        for user in entries {
+            let uid = Uid::from_raw(user.uid);
+            let gid = Gid::from_raw(user.gid);
+            self.users.insert(user.name, (uid, gid));
+        }
+        Ok(())
+    }
+
+    /// Check whether the given username exists among user entries.
+    pub fn contains_user(&self, username: &str) -> bool {
+        self.users.contains_key(username)
+    }
+
+    /// Check whether the given groupname exists among group entries.
+    pub fn contains_group(&self, groupname: &str) -> bool {
+        self.groups.contains_key(groupname)
+    }
+
+    /// Lookup user ID by name.
+    pub fn lookup_user_id(&self, username: &str) -> Result<u32> {
+        self.users
+            .get(username)
+            .map(|user| user.0.as_raw())
+            .ok_or_else(|| anyhow!("failed to find user '{}'", username))
+    }
+
+    /// Lookup group ID by name.
+    pub fn lookup_group_id(&self, groupname: &str) -> Result<u32> {
+        self.groups
+            .get(groupname)
+            .map(|gid| gid.as_raw())
+            .ok_or_else(|| anyhow!("failed to find group '{}'", groupname))
+    }
+
+    #[context("Rendering user entries from treefile check-passwd")]
+    fn populate_users_from_treefile(
+        &mut self,
+        treefile: &mut Treefile,
+        repo_previous_rev: &Option<(&ostree::Repo, &str)>,
+    ) -> Result<()> {
+        let config = treefile.parsed.get_check_passwd();
+
+        match config {
+            CheckPasswd::None => {}
+            CheckPasswd::File(f) => {
+                let fp = treefile.externals.passwd_file_mut(f)?;
+                let buf_rd = BufReader::new(fp);
+                let entries = nameservice::passwd::parse_passwd_content(buf_rd)?;
+                for user in entries {
+                    self.users.insert(
+                        user.name,
+                        (Uid::from_raw(user.uid), Gid::from_raw(user.gid)),
+                    );
+                }
+            }
+            CheckPasswd::Previous => {
+                // This logic short-circuits if there is no previous commit, or if
+                // it doesn't contain a passwd file. Nothing to validate in that case.
+                let (repo, previous_rev) = match repo_previous_rev {
+                    Some(v) => v,
+                    None => return Ok(()),
+                };
+                let (prev_root, _name) = repo.read_commit(previous_rev, gio::NONE_CANCELLABLE)?;
+                let old_path = match prev_root.resolve_relative_path("usr/lib/passwd") {
+                    Some(v) => v,
+                    None => return Ok(()),
+                };
+                let old_passwd_stream = old_path.read(gio::NONE_CANCELLABLE)?.into_read();
+                let buf_rd = BufReader::new(old_passwd_stream);
+                let entries = nameservice::passwd::parse_passwd_content(buf_rd)?;
+                for user in entries {
+                    self.users.insert(
+                        user.name,
+                        (Uid::from_raw(user.uid), Gid::from_raw(user.gid)),
+                    );
+                }
+            }
+            CheckPasswd::Data(data) => {
+                for user in &data.entries {
+                    self.users.insert(user.0.clone(), user.1.ids());
+                }
+            }
+        };
+
+        Ok(())
+    }
+
+    #[context("Rendering group entries from treefile check-groups")]
+    fn populate_groups_from_treefile(
+        &mut self,
+        treefile: &mut Treefile,
+        repo_previous_rev: &Option<(&ostree::Repo, &str)>,
+    ) -> Result<()> {
+        let config = treefile.parsed.get_check_groups();
+
+        match config {
+            CheckGroups::None => {}
+            CheckGroups::File(f) => {
+                let fp = treefile.externals.group_file_mut(f)?;
+                let buf_rd = BufReader::new(fp);
+                let entries = nameservice::group::parse_group_content(buf_rd)?;
+                for group in entries {
+                    self.groups.insert(group.name, Gid::from_raw(group.gid));
+                }
+            }
+            CheckGroups::Previous => {
+                // This logic short-circuits if there is no previous commit, or if
+                // it doesn't contain a group file. Nothing to validate in that case.
+                let (repo, previous_rev) = match repo_previous_rev {
+                    Some(v) => v,
+                    None => return Ok(()),
+                };
+                let (prev_root, _name) = repo.read_commit(previous_rev, gio::NONE_CANCELLABLE)?;
+                let old_path = match prev_root.resolve_relative_path("usr/lib/group") {
+                    Some(v) => v,
+                    None => return Ok(()),
+                };
+                let old_passwd_stream = old_path.read(gio::NONE_CANCELLABLE)?.into_read();
+                let buf_rd = BufReader::new(old_passwd_stream);
+                let entries = nameservice::group::parse_group_content(buf_rd)?;
+                for group in entries {
+                    self.groups.insert(group.name, Gid::from_raw(group.gid));
+                }
+            }
+            CheckGroups::Data(data) => {
+                for (groupname, gid) in &data.entries {
+                    let id = Gid::from_raw(*gid);
+                    self.groups.insert(groupname.clone(), id);
+                }
+            }
+        };
+
+        Ok(())
+    }
+
+    #[context("Validating user entries according to treefile check-passwd")]
+    fn validate_treefile_check_passwd(
+        &self,
+        old_subset: &PasswdEntries,
+        rootfs: i32,
+        ignored_users: &[String],
+    ) -> Result<()> {
+        let old_keys: BTreeSet<&String> = old_subset.users.keys().collect();
+        let new_keys: BTreeSet<&String> = self.users.keys().collect();
+
+        let ignore_all_removed = ignored_users.contains(&"*".to_string());
+
+        // Check for users missing in the new passwd DB.
+        for missing_user in old_keys.difference(&new_keys) {
+            if ignore_all_removed || ignored_users.contains(missing_user) {
+                println!(
+                    "Ignored user missing from new passwd file: {}",
+                    missing_user
+                );
+                continue;
+            }
+            // SAFETY: `missing_user` comes from `old_subset.users.keys().difference()`,
+            //  thus it's always present in `old_subset`.
+            let old_user_entry = old_subset
+                .users
+                .get(*missing_user)
+                .expect("invalid old passwd entry");
+            let found_matching = dir_contains_uid(rootfs, old_user_entry.0.as_raw())?;
+            if found_matching {
+                anyhow::bail!("User missing from new passwd file: {}", missing_user);
+            }
+
+            println!("Unused user removed from new passwd file: {}", missing_user);
+        }
+
+        // Validate all users in the new passwd DB.
+        for (username, user_entry) in &self.users {
+            let old_entry = match old_subset.users.get(username) {
+                None => {
+                    println!("New passwd entry: {}", &username);
+                    continue;
+                }
+                Some(u) => u,
+            };
+
+            if user_entry.0 != old_entry.0 {
+                anyhow::bail!(
+                    "passwd UID changed: {} ({} to {})",
+                    username,
+                    old_entry.0,
+                    user_entry.0,
+                );
+            }
+
+            if user_entry.1 != old_entry.1 {
+                anyhow::bail!(
+                    "passwd GID changed: {} ({} to {})",
+                    username,
+                    old_entry.1,
+                    user_entry.1,
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    #[context("Validating group entries according to treefile check-groups")]
+    fn validate_treefile_check_groups(
+        &self,
+        old_subset: &PasswdEntries,
+        rootfs: i32,
+        ignored_groups: &[String],
+    ) -> Result<()> {
+        let old_group_names: BTreeSet<&String> = old_subset.groups.keys().collect();
+        let new_keys: BTreeSet<&String> = self.groups.keys().collect();
+
+        let ignore_all_removed = ignored_groups.contains(&"*".to_string());
+
+        // Check for groups missing in the new group DB.
+        for missing_group in old_group_names.difference(&new_keys) {
+            if ignore_all_removed || ignored_groups.contains(missing_group) {
+                println!(
+                    "Ignored group missing from new group file: {}",
+                    missing_group
+                );
+                continue;
+            }
+            // SAFETY: `missing_group` comes from `old_subset.groups.keys().difference()`,
+            //  thus it's always present in `old_subset`.
+            let old_gid = old_subset
+                .groups
+                .get(*missing_group)
+                .expect("invalid old group entry");
+            let found_matching = dir_contains_gid(rootfs, old_gid.as_raw())?;
+            if found_matching {
+                anyhow::bail!("Group missing from new group file: {}", missing_group);
+            }
+
+            println!(
+                "Unused group removed from new group file: {}",
+                missing_group
+            );
+        }
+
+        // Validate all groups in the new group DB.
+        for (groupname, group_entry) in &self.groups {
+            let old_entry = match old_subset.groups.get(groupname) {
+                None => {
+                    println!("New passwd entry: {}", &groupname);
+                    continue;
+                }
+                Some(g) => g,
+            };
+
+            if group_entry != old_entry {
+                anyhow::bail!(
+                    "group GID changed: {} ({} to {})",
+                    groupname,
+                    group_entry,
+                    old_entry
+                );
+            }
+        }
+
         Ok(())
     }
 }

@@ -45,7 +45,6 @@
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-rojig-build.h"
 #include "rpmostree-postprocess.h"
-#include "rpmostree-passwd-util.h"
 #include "rpmostree-package-variants.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
@@ -1064,15 +1063,9 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   if (self->treefile_rs)
     {
-      if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, **self->treefile_rs,
-                                   self->treefile, self->previous_checksum,
-                                   cancellable, error))
-        return glnx_prefix_error (error, "Handling passwd db");
-
-      if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, **self->treefile_rs,
-                                   self->treefile, self->previous_checksum,
-                                   cancellable, error))
-        return glnx_prefix_error (error, "Handling group db");
+      auto previous_rev = self->previous_checksum?: "";
+      rpmostreecxx::check_passwd_group_entries (*self->repo, self->rootfs_dfd,
+                                                **self->treefile_rs, previous_rev);
     }
 
   /* See comment above */
