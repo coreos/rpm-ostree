@@ -16,6 +16,7 @@ use fn_error_context::context;
 use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
+use ostree_host::prelude::*;
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
@@ -62,9 +63,8 @@ pub(crate) fn get_live_state(
     if !root.exists(&get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
         return Ok(None);
     }
-    let live_commit = crate::ostree_utils::repo_resolve_ref_optional(repo, LIVE_REF)?;
-    let inprogress_commit =
-        crate::ostree_utils::repo_resolve_ref_optional(repo, LIVE_REF_INPROGRESS)?;
+    let live_commit = repo.x_resolve_ref_optional(LIVE_REF)?;
+    let inprogress_commit = repo.x_resolve_ref_optional(LIVE_REF_INPROGRESS)?;
     Ok(Some(LiveApplyState {
         commit: live_commit.map(|s| s.to_string()).unwrap_or_default(),
         inprogress: inprogress_commit.map(|s| s.to_string()).unwrap_or_default(),
@@ -359,7 +359,7 @@ pub(crate) fn transaction_apply_live(
     let target_commit = if let Some(t) = target {
         Cow::Borrowed(t)
     } else {
-        match crate::ostree_utils::sysroot_query_deployments_for(sysroot, osname.as_str()) {
+        match sysroot.x_query_deployments_for(osname.as_str()) {
             (Some(pending), _) => {
                 let pending_commit = pending.get_csum().expect("csum");
                 let pending_commit = pending_commit.as_str();

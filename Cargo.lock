@@ -885,6 +885,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ostree-host"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gio",
+ "glib",
+ "ostree",
+ "ostree-sys",
+ "tempfile",
+]
+
+[[package]]
 name = "ostree-sys"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1231,6 +1243,7 @@ dependencies = [
  "openat-ext",
  "os-release",
  "ostree",
+ "ostree-host",
  "ostree-sys",
  "paste",
  "phf",
