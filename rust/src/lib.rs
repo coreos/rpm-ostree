@@ -63,6 +63,15 @@ pub mod ffi {
         fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
     }
 
+    // bubblewrap.rs
+    extern "Rust" {
+        type Bubblewrap;
+
+        fn bubblewrap_new(rootfs_fd: i32) -> Result<Box<Bubblewrap>>;
+        fn get_rootfs_fd(&self) -> i32;
+    }
+
+
     // builtins/apply_live.rs
     extern "Rust" {
         fn applylive_entrypoint(args: &Vec<String>) -> Result<()>;
@@ -420,6 +429,8 @@ pub mod ffi {
 
 mod builtins;
 pub(crate) use self::builtins::apply_live::*;
+mod bwrap;
+pub(crate) use bwrap::*;
 mod client;
 pub(crate) use client::*;
 mod cliwrap;

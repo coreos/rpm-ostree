@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <systemd/sd-journal.h>
 #include "rpmostree-util.h"
+#include "rpmostree-cxxrs.h"
 #include <utility>
 
 static void
@@ -47,8 +48,7 @@ struct RpmOstreeBwrap {
 
   gboolean executed;
 
-  int rootfs_fd;
-
+  rust::Box<rpmostreecxx::Bubblewrap> bwrap_rs;
   GSubprocessLauncher *launcher; /* 🚀 */
   GPtrArray *argv;
   const char *child_argv0;
@@ -76,6 +76,7 @@ rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
   teardown_rofiles (&bwrap->rofiles_mnt_usr);
   teardown_rofiles (&bwrap->rofiles_mnt_etc);
 
+  bwrap->bwrap_rs.~Box();
   g_clear_object (&bwrap->launcher);
   g_ptr_array_unref (bwrap->argv);
   g_free (bwrap);
@@ -184,7 +185,7 @@ setup_rofiles (RpmOstreeBwrap *bwrap,
 
   int estatus;
   if (!g_spawn_sync (NULL, (char**)rofiles_argv, NULL, G_SPAWN_SEARCH_PATH,
-                     child_setup_fchdir, GINT_TO_POINTER (bwrap->rootfs_fd),
+                     child_setup_fchdir, GINT_TO_POINTER (bwrap->bwrap_rs->get_rootfs_fd()),
                      NULL, NULL, &estatus, error))
     return FALSE;
   if (!g_spawn_check_exit_status (estatus, error))
@@ -264,7 +265,7 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
   static const char *usr_links[] = {"lib", "lib32", "lib64", "bin", "sbin"};
 
   ret->refcount = 1;
-  ret->rootfs_fd = rootfs_fd;
+  ret->bwrap_rs = rpmostreecxx::bubblewrap_new(rootfs_fd);
   ret->argv = g_ptr_array_new_with_free_func (g_free);
   ret->launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_NONE);
 
@@ -395,7 +396,7 @@ bwrap_child_setup (gpointer data)
 {
   RpmOstreeBwrap *bwrap = (RpmOstreeBwrap*)data;
 
-  if (fchdir (bwrap->rootfs_fd) < 0)
+  if (fchdir (bwrap->bwrap_rs->get_rootfs_fd()) < 0)
     err (1, "fchdir");
 
   if (bwrap->child_setup_func)
