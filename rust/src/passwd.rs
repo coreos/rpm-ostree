@@ -535,38 +535,21 @@ pub(crate) fn check_passwd_group_entries(
     old_entities.populate_users_from_treefile(treefile, &repo_previous_rev)?;
     old_entities.populate_groups_from_treefile(treefile, &repo_previous_rev)?;
 
-    {
-        // See "man 5 passwd". We just make sure the name and uid/gid match,
-        // and that none are missing. Don't care about GECOS/dir/shell.
-        let empty = vec![];
-        let ignored_users = treefile
-            .parsed
-            .ignore_removed_users
-            .as_ref()
-            .unwrap_or(&empty);
+    // See "man 5 passwd". We just make sure the name and uid/gid match,
+    // and that none are missing. Don't care about GECOS/dir/shell.
+    new_entities.validate_treefile_check_passwd(
+        &old_entities,
+        rootfs.as_raw_fd(),
+        &treefile.parsed.ignore_removed_users,
+    )?;
 
-        new_entities.validate_treefile_check_passwd(
-            &old_entities,
-            rootfs.as_raw_fd(),
-            &ignored_users,
-        )?;
-    }
-
-    {
-        // See "man 5 group". We just need to make sure the name and gid match,
-        // and that none are missing. Don't care about users.
-        let empty = vec![];
-        let ignored_groups = treefile
-            .parsed
-            .ignore_removed_groups
-            .as_ref()
-            .unwrap_or(&empty);
-        new_entities.validate_treefile_check_groups(
-            &old_entities,
-            rootfs.as_raw_fd(),
-            &&ignored_groups,
-        )?;
-    }
+    // See "man 5 group". We just need to make sure the name and gid match,
+    // and that none are missing. Don't care about users.
+    new_entities.validate_treefile_check_groups(
+        &old_entities,
+        rootfs.as_raw_fd(),
+        &treefile.parsed.ignore_removed_groups,
+    )?;
 
     Ok(())
 }
@@ -807,16 +790,23 @@ impl PasswdEntries {
         &self,
         old_subset: &PasswdEntries,
         rootfs: i32,
-        ignored_users: &[String],
+        ignored_users: &Option<HashSet<String>>,
     ) -> Result<()> {
-        let old_keys: BTreeSet<&String> = old_subset.users.keys().collect();
-        let new_keys: BTreeSet<&String> = self.users.keys().collect();
+        let old_user_names: BTreeSet<&str> = old_subset.users.keys().map(|s| s.as_str()).collect();
+        let new_keys: BTreeSet<&str> = self.users.keys().map(|s| s.as_str()).collect();
 
-        let ignore_all_removed = ignored_users.contains(&"*".to_string());
+        let ignore_all_removed = ignored_users
+            .as_ref()
+            .map(|s| s.contains("*"))
+            .unwrap_or(false);
 
         // Check for users missing in the new passwd DB.
-        for missing_user in old_keys.difference(&new_keys) {
-            if ignore_all_removed || ignored_users.contains(missing_user) {
+        for missing_user in old_user_names.difference(&new_keys) {
+            let is_user_ignored = ignored_users
+                .as_ref()
+                .map(|s| s.contains(*missing_user))
+                .unwrap_or(false);
+            if ignore_all_removed || is_user_ignored {
                 println!(
                     "Ignored user missing from new passwd file: {}",
                     missing_user
@@ -874,16 +864,24 @@ impl PasswdEntries {
         &self,
         old_subset: &PasswdEntries,
         rootfs: i32,
-        ignored_groups: &[String],
+        ignored_groups: &Option<HashSet<String>>,
     ) -> Result<()> {
-        let old_group_names: BTreeSet<&String> = old_subset.groups.keys().collect();
-        let new_keys: BTreeSet<&String> = self.groups.keys().collect();
+        let old_group_names: BTreeSet<&str> =
+            old_subset.groups.keys().map(|s| s.as_str()).collect();
+        let new_keys: BTreeSet<&str> = self.groups.keys().map(|s| s.as_str()).collect();
 
-        let ignore_all_removed = ignored_groups.contains(&"*".to_string());
+        let ignore_all_removed = ignored_groups
+            .as_ref()
+            .map(|s| s.contains("*"))
+            .unwrap_or(false);
 
         // Check for groups missing in the new group DB.
         for missing_group in old_group_names.difference(&new_keys) {
-            if ignore_all_removed || ignored_groups.contains(missing_group) {
+            let is_group_ignored = ignored_groups
+                .as_ref()
+                .map(|s| s.contains(*missing_group))
+                .unwrap_or(false);
+            if ignore_all_removed || is_group_ignored {
                 println!(
                     "Ignored group missing from new group file: {}",
                     missing_group

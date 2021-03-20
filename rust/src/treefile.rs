@@ -26,7 +26,7 @@ use nix::unistd::{Gid, Uid};
 use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -292,6 +292,19 @@ fn merge_map_field<T>(
     }
 }
 
+/// Merge an hashet field by extending.
+fn merge_hashset_field<T: Eq + std::hash::Hash>(
+    dest: &mut Option<HashSet<T>>,
+    src: &mut Option<HashSet<T>>,
+) {
+    if let Some(mut srcv) = src.take() {
+        if let Some(destv) = dest.take() {
+            srcv.extend(destv);
+        }
+        *dest = Some(srcv);
+    }
+}
+
 /// Given two configs, merge them.
 fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     macro_rules! merge_basics {
@@ -299,14 +312,19 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
             $( merge_basic_field(&mut dest.$field, &mut src.$field); )*
         }};
     };
-    macro_rules! merge_vecs {
+    macro_rules! merge_hashsets {
         ( $($field:ident),* ) => {{
-            $( merge_vec_field(&mut dest.$field, &mut src.$field); )*
+            $( merge_hashset_field(&mut dest.$field, &mut src.$field); )*
         }};
     };
     macro_rules! merge_maps {
         ( $($field:ident),* ) => {{
             $( merge_map_field(&mut dest.$field, &mut src.$field); )*
+        }};
+    };
+    macro_rules! merge_vecs {
+        ( $($field:ident),* ) => {{
+            $( merge_vec_field(&mut dest.$field, &mut src.$field); )*
         }};
     };
 
@@ -336,6 +354,8 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         check_groups,
         postprocess_script
     );
+    merge_hashsets!(ignore_removed_groups, ignore_removed_users);
+    merge_maps!(add_commit_metadata);
     merge_vecs!(
         repos,
         lockfile_repos,
@@ -348,14 +368,11 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         initramfs_args,
         units,
         etc_group_members,
-        ignore_removed_users,
-        ignore_removed_groups,
         postprocess,
         add_files,
         remove_files,
         remove_from_packages
     );
-    merge_maps!(add_commit_metadata);
 }
 
 /// Merge the treefile externals. There are currently only two keys that
@@ -1062,10 +1079,10 @@ pub(crate) struct TreeComposeConfig {
     check_groups: Option<CheckGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-users")]
-    pub(crate) ignore_removed_users: Option<Vec<String>>,
+    pub(crate) ignore_removed_users: Option<HashSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-groups")]
-    pub(crate) ignore_removed_groups: Option<Vec<String>>,
+    pub(crate) ignore_removed_groups: Option<HashSet<String>>,
 
     // Content manipulation
     #[serde(skip_serializing_if = "Option::is_none")]
