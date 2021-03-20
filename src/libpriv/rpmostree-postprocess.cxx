@@ -1173,69 +1173,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     return FALSE;
 
   rpmostreecxx::compose_postprocess_remove_files(rootfs_fd, treefile_rs);
-
-  {
-    const char *base_version = NULL;
-
-    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
-                                                                "mutate-os-release",
-                                                                &base_version,
-                                                                error))
-      return FALSE;
-
-    if (base_version != NULL && next_version == NULL)
-      {
-        g_print ("Ignoring mutate-os-release: no commit version specified.\n");
-      }
-    else if (base_version != NULL)
-      {
-        /* find the real path to os-release using bwrap; this is an overkill but safer way
-         * of resolving a symlink relative to a rootfs (see discussions in
-         * https://github.com/projectatomic/rpm-ostree/pull/410/) */
-        g_autofree char *pathbuf = NULL;
-        const char *path = NULL;
-        {
-          g_autoptr(RpmOstreeBwrap) bwrap =
-            rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error);
-          if (!bwrap)
-            return FALSE;
-
-          /* map back to /etc so relative symlinks work */
-          rpmostree_bwrap_append_child_argv (bwrap, "realpath", "-z", "/etc/os-release", NULL);
-
-          g_autoptr(GBytes) out = NULL;
-          if (!rpmostree_bwrap_run_captured (bwrap, &out, NULL, cancellable, error))
-            return FALSE;
-
-          gsize len;
-          pathbuf = (char*)g_bytes_unref_to_data (util::move_nullify (out), &len);
-
-          /* if realpath returned successfully, it must've printed something */
-          g_assert_cmpuint (len, >, 0);
-          g_assert_cmpuint (pathbuf[0], ==, '/');
-          pathbuf[len-1] = '\0';
-
-          path = pathbuf+1; /* skip initial '/' */
-        }
-
-        /* fallback on just overwriting etc/os-release */
-        if (!path)
-          path = "etc/os-release";
-
-        g_print ("Mutating /%s\n", path);
-
-        g_autofree char *contents = glnx_file_get_contents_utf8_at (rootfs_fd, path, NULL,
-                                                                    cancellable, error);
-        if (contents == NULL)
-          return FALSE;
-
-        auto new_contents = rpmostreecxx::mutate_os_release (contents, base_version, next_version);
-        if (!glnx_file_replace_contents_at (rootfs_fd, path,
-                                            (guint8*)new_contents.data(), new_contents.length(), static_cast<GLnxFileReplaceFlags>(0),
-                                            cancellable, error))
-          return FALSE;
-      }
-  }
+  rpmostreecxx::compose_postprocess_mutate_os_release(rootfs_fd, treefile_rs, next_version ?: "");
 
   /* Undo etc move again */
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))

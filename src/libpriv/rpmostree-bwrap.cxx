@@ -599,4 +599,32 @@ bwrap_run_mutable(int32_t rootfs_fd, rust::Str binpath,
     }
 }
 
+rust::Vec<uint8_t> 
+bwrap_run_captured(int32_t rootfs_dfd,
+                   const rust::Vec<rust::String> &child_argv)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(RpmOstreeBwrap) bwrap =
+    rpmostree_bwrap_new (rootfs_dfd, RPMOSTREE_BWRAP_IMMUTABLE, &local_error);
+  if (!bwrap)
+    util::throw_gerror(local_error);
+
+  for (const auto & arg : child_argv)
+    {
+      auto arg_c = std::string(arg);
+      rpmostree_bwrap_append_child_argv (bwrap, arg_c.c_str(), NULL);
+    }
+
+  g_autoptr(GBytes) out = NULL;
+  if (!rpmostree_bwrap_run_captured (bwrap, &out, NULL, NULL, &local_error))
+    util::throw_gerror(local_error);
+  gsize len;
+  auto cbuf = (const guint8*)g_bytes_get_data(out, &len);
+  rust::Vec<uint8_t> r;
+  r.reserve(len);
+  for (auto i = 0; i < len; i++)
+    r.push_back(cbuf[i]);
+  return r;
+}
+
 } /* namespace */

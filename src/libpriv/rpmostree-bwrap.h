@@ -28,6 +28,10 @@
 
 namespace rpmostreecxx {
 
+rust::Vec<uint8_t> 
+bwrap_run_captured(int32_t rootfs_dfd,
+                   const rust::Vec<rust::String> &child_argv);
+
 void bwrap_run_mutable(int32_t rootfs_dfd, rust::Str binpath,
                        const rust::Vec<rust::String> &child_argv,
                        bool unified_core_mode);

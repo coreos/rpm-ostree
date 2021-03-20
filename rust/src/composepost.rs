@@ -16,8 +16,7 @@ use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::fmt::Write as FmtWrite;
-use std::io::{BufRead, Seek, Write};
-use std::io::{BufReader, Read};
+use std::io::{BufRead, BufReader, Seek, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -313,9 +312,58 @@ pub(crate) fn compose_postprocess(
     Ok(())
 }
 
+/// Implementation of the treefile `mutate-os-release` field.
+#[context("Updating os-release with commit version")]
+pub(crate) fn compose_postprocess_mutate_os_release(
+    rootfs_dfd: i32,
+    treefile: &mut Treefile,
+    next_version: &str,
+) -> Result<()> {
+    let base_version = if let Some(base_version) = treefile.parsed.mutate_os_release.as_deref() {
+        base_version
+    } else {
+        return Ok(());
+    };
+    if next_version.is_empty() {
+        println!("Ignoring mutate-os-release: no commit version specified.");
+        return Ok(());
+    }
+    let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    // find the real path to os-release using bwrap; this is an overkill but safer way
+    // of resolving a symlink relative to a rootfs (see discussions in
+    // https://github.com/projectatomic/rpm-ostree/pull/410/)
+    let argv: Vec<String> = ["realpath", "/etc/os-release"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let path = crate::ffi::bwrap_run_captured(rootfs_dfd.as_raw_fd(), &argv)
+        .context("Running realpath")?;
+    let path = String::from_utf8(path).context("Parsing realpath")?;
+    let path = path.trim_start_matches("/").trim_end();
+    let path = if path.is_empty() {
+        // fallback on just overwriting etc/os-release
+        "etc/os-release"
+    } else {
+        path
+    };
+    println!("Updating {}", path);
+    let contents = rootfs_dfd
+        .read_to_string(path)
+        .with_context(|| format!("Reading {}", path))?;
+    let new_contents = mutate_os_release_contents(&contents, base_version, next_version);
+    rootfs_dfd
+        .write_file_contents(path, 0o644, new_contents.as_bytes())
+        .with_context(|| format!("Writing {}", path))?;
+    Ok(())
+}
+
 /// Given the contents of a /usr/lib/os-release file,
 /// update the `VERSION` and `PRETTY_NAME` fields.
-pub(crate) fn mutate_os_release(contents: &str, base_version: &str, next_version: &str) -> String {
+pub(crate) fn mutate_os_release_contents(
+    contents: &str,
+    base_version: &str,
+    next_version: &str,
+) -> String {
     let mut buf = String::new();
     for line in contents.lines() {
         if line.is_empty() {
@@ -390,13 +438,8 @@ fn add_altfiles(buf: &str) -> Result<String> {
 #[context("Adding altfiles to /etc/nsswitch.conf")]
 pub(crate) fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
     let path = "usr/etc/nsswitch.conf";
-    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
-    let nsswitch = {
-        let mut nsswitch = rootfs_dfd.open_file(path)?;
-        let mut buf = String::new();
-        nsswitch.read_to_string(&mut buf)?;
-        buf
-    };
+    let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let nsswitch = rootfs_dfd.read_to_string(path)?;
     let nsswitch = add_altfiles(&nsswitch)?;
     rootfs_dfd.write_file_contents(path, 0o644, nsswitch.as_bytes())?;
     Ok(())
@@ -469,7 +512,7 @@ PRETTY_NAME="Fedora 33.4 (Container Image)"
 CPE_NAME="cpe:/o:fedoraproject:fedora:33"
 OSTREE_VERSION='33.4'
 "##;
-        let replaced = mutate_os_release(orig, "33", "33.4");
+        let replaced = mutate_os_release_contents(orig, "33", "33.4");
         assert_eq!(replaced.as_str(), expected);
     }
 }
