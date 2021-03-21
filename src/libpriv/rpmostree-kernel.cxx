@@ -36,7 +36,6 @@
 
 #include "rpmostree-core.h"
 #include "rpmostree-kernel.h"
-#include "rpmostree-bwrap.h"
 #include "rpmostree-cxxrs.h"
 #include "rpmostree-util.h"
 
@@ -510,7 +509,6 @@ rpmostree_run_dracut (int     rootfs_dfd,
     "mkdir -p /tmp/dracut && dracut $extra_argv -v --add ostree --tmpdir=/tmp/dracut -f /tmp/initramfs.img \"$@\"\n"
     "cat /tmp/initramfs.img >/proc/self/fd/3\n",
     destdir.c_str());
-  g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   g_autoptr(GPtrArray) rebuild_argv = NULL;
   g_auto(GLnxTmpfile) tmpf = { 0, };
 
@@ -567,42 +565,39 @@ rpmostree_run_dracut (int     rootfs_dfd,
                                       &tmpf, error))
     return FALSE;
 
+  auto bwrap = rpmostreecxx::bubblewrap_new(rootfs_dfd);
   if (use_root_etc)
     {
-      bwrap = rpmostree_bwrap_new_base (rootfs_dfd, error);
-      if (!bwrap)
-        return FALSE;
-      rpmostree_bwrap_bind_read (bwrap, "/etc", "/etc");
-      rpmostree_bwrap_bind_read (bwrap, "usr", "/usr");
+      bwrap->bind_read("/etc", "/etc");
+      bwrap->bind_read("usr", "/usr");
     }
   else
     {
-      bwrap = rpmostree_bwrap_new_base (rootfs_dfd, error);
-      if (!bwrap)
-        return FALSE;
-      rpmostree_bwrap_bind_read (bwrap, "usr/etc", "/etc");
-      rpmostree_bwrap_bind_read (bwrap, "usr", "/usr");
+      bwrap->bind_read("usr/etc", "/etc");
+      bwrap->bind_read("usr", "/usr");
     }
 
   if (dracut_host_tmpdir)
-    rpmostree_bwrap_bind_readwrite (bwrap, dracut_host_tmpdir->path, "/tmp/dracut");
+    bwrap->bind_readwrite(dracut_host_tmpdir->path, "/tmp/dracut");
 
   /* Set up argv and run */
-  rpmostree_bwrap_append_child_argv (bwrap, (char*)glnx_basename (rpmostree_dracut_wrapper_path), NULL);
+  bwrap->append_child_arg((const char*)glnx_basename (rpmostree_dracut_wrapper_path));
   for (char **iter = (char**)argv; iter && *iter; iter++)
-    rpmostree_bwrap_append_child_argv (bwrap, *iter, NULL);
+    bwrap->append_child_arg(*iter);
 
   if (kver)
-    rpmostree_bwrap_append_child_argv (bwrap, "--kver", kver, NULL);
+    {
+      bwrap->append_child_arg("--kver");
+      bwrap->append_child_arg(kver);
+    }
 
   // Pass the tempfile to the child as fd 3
   glnx_autofd int tmpf_child = fcntl (tmpf.fd, F_DUPFD_CLOEXEC, 3);
   if (tmpf_child < 0)
     return glnx_throw_errno_prefix (error, "fnctl");
-  rpmostree_bwrap_take_fd (bwrap, glnx_steal_fd (&tmpf_child), 3);
+  bwrap->take_fd (glnx_steal_fd (&tmpf_child), 3);
 
-  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
-    return FALSE;
+  bwrap->run(*cancellable);
 
   /* For FIPS mode we need /dev/urandom pre-created because the FIPS
    * standards authors require that randomness is tested in a

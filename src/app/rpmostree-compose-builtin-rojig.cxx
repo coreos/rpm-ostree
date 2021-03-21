@@ -38,7 +38,6 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
-#include "rpmostree-bwrap.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-rojig-build.h"
@@ -236,8 +235,7 @@ rpm_ostree_rojig_compose_new (const char    *treefile_path,
   /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
    * container without --privileged or userns exposed.
    */
-  if (!rpmostree_bwrap_selftest (error))
-    return FALSE;
+  rpmostreecxx::bubblewrap_selftest();
 
   if (opt_cachedir)
     {

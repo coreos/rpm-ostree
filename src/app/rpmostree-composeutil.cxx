@@ -37,7 +37,6 @@
 
 #include "rpmostree-composeutil.h"
 #include "rpmostree-util.h"
-#include "rpmostree-bwrap.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-rojig-build.h"

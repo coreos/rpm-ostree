@@ -223,7 +223,7 @@ if vm_rpmostree install rmrf 2>err.txt; then
 fi
 vm_cmd test -f /home/core/somedata -a -f /etc/passwd -a -f /tmp/sometmpfile -a -f /var/tmp/sometmpfile
 # This is the error today, we may improve it later
-assert_file_has_content err.txt 'error: Sanity-checking final rootfs: Executing bwrap(/usr/bin/true)'
+assert_file_has_content err.txt 'error: Sanity-checking final rootfs:.*bwrap(/usr/bin/true)'
 echo "ok impervious to rm -rf post"
 
 cursor=$(vm_get_journal_cursor)

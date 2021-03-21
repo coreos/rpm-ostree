@@ -9,6 +9,7 @@
 //! a filesystem tree (usually containing mostly RPMs) in
 //! order to prepare it as an OSTree commit.
 
+use crate::bwrap;
 use crate::cxxrsutil::CxxResult;
 use anyhow::{anyhow, Context, Result};
 use fn_error_context::context;
@@ -194,9 +195,9 @@ fn compose_postprocess_scripts(
 
         rootfs_dfd.write_file_contents(target_binpath, 0o755, script)?;
         println!("Executing `postprocess` inline script '{}'", i);
-        let child_argv = vec![binpath.clone()];
-        crate::ffi::bwrap_run_mutable(rootfs_dfd.as_raw_fd(), &binpath, &child_argv, unified_core)?;
-
+        let child_argv = vec![binpath.to_string()];
+        let _ =
+            bwrap::bubblewrap_run_sync(rootfs_dfd.as_raw_fd(), &child_argv, false, unified_core)?;
         rootfs_dfd.remove_file(target_binpath)?;
     }
 
@@ -209,9 +210,14 @@ fn compose_postprocess_scripts(
         rootfs_dfd.write_file_with(target_binpath, 0o755, |w| std::io::copy(&mut reader, w))?;
         println!("Executing postprocessing script");
 
-        let child_argv = vec![binpath.to_string()];
-        crate::ffi::bwrap_run_mutable(rootfs_dfd.as_raw_fd(), binpath, &child_argv, unified_core)
-            .context("Executing postprocessing script")?;
+        let child_argv = &vec![binpath.to_string()];
+        let _ = crate::bwrap::bubblewrap_run_sync(
+            rootfs_dfd.as_raw_fd(),
+            child_argv,
+            false,
+            unified_core,
+        )
+        .context("Executing postprocessing script")?;
 
         rootfs_dfd.remove_file(target_binpath)?;
         println!("Finished postprocessing script");
@@ -332,11 +338,8 @@ pub(crate) fn compose_postprocess_mutate_os_release(
     // find the real path to os-release using bwrap; this is an overkill but safer way
     // of resolving a symlink relative to a rootfs (see discussions in
     // https://github.com/projectatomic/rpm-ostree/pull/410/)
-    let argv: Vec<String> = ["realpath", "/etc/os-release"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let path = crate::ffi::bwrap_run_captured(rootfs_dfd.as_raw_fd(), &argv)
+    let argv = &vec!["realpath".to_string(), "/etc/os-release".to_string()];
+    let path = crate::bwrap::bubblewrap_run_sync(rootfs_dfd.as_raw_fd(), argv, true, true)
         .context("Running realpath")?;
     let path = String::from_utf8(path).context("Parsing realpath")?;
     let path = path.trim_start_matches("/").trim_end();
