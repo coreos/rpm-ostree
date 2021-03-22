@@ -5,6 +5,7 @@ use crate::live;
 use crate::{cxxrsutil::*, variant_utils};
 use anyhow::{anyhow, Result};
 use gio::DBusProxyExt;
+use ostree_host::prelude::*;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -23,12 +24,6 @@ struct Opts {
     allow_replacement: bool,
 }
 
-fn get_required_booted_deployment(sysroot: &ostree::Sysroot) -> Result<ostree::Deployment> {
-    sysroot
-        .get_booted_deployment()
-        .ok_or_else(|| anyhow!("Not booted into an OSTree system"))
-}
-
 fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Variant> {
     let r = glib::VariantDict::new(None);
 
@@ -38,7 +33,7 @@ fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Vari
         }
         r.insert(live::OPT_TARGET, &target.as_str());
     } else if opts.reset {
-        let booted = get_required_booted_deployment(sysroot)?;
+        let booted = sysroot.require_booted_deployment()?;
         // Unwrap safety: This can't return NULL
         let csum = booted.get_csum().expect("csum");
         r.insert(live::OPT_TARGET, &csum.as_str());
@@ -82,7 +77,7 @@ fn finish(sysroot: &ostree::Sysroot) -> Result<()> {
     let cancellable = gio::NONE_CANCELLABLE;
     sysroot.load_if_changed(cancellable)?;
     let repo = &sysroot.get_repo(cancellable)?;
-    let booted = &get_required_booted_deployment(sysroot)?;
+    let booted = &sysroot.require_booted_deployment()?;
     let booted_commit = booted.get_csum().expect("csum");
     let booted_commit = booted_commit.as_str();
 

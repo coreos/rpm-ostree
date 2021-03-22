@@ -6,7 +6,7 @@
 use glib::translate::*;
 use std::ptr;
 
-/// Extension functions which fix incorectly bound APIs
+/// Extension functions which fix incorrectly bound APIs.
 pub trait RepoBindingExt {
     fn x_resolve_ref_optional(&self, refspec: &str) -> Result<Option<glib::GString>, glib::Error>;
 }
