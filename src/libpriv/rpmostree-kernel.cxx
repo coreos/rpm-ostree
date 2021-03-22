@@ -475,16 +475,6 @@ rpmostree_finalize_kernel (int rootfs_dfd,
   return TRUE;
 }
 
-static void
-dracut_child_setup (gpointer data)
-{
-  int fd = GPOINTER_TO_INT (data);
-
-  /* Move the tempfile fd to 3 (and without the cloexec flag) */
-  if (dup2 (fd, 3) < 0)
-    err (1, "dup2");
-}
-
 struct Unlinker {
   int rootfs_dfd;
   const char *path;
@@ -606,7 +596,11 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (kver)
     rpmostree_bwrap_append_child_argv (bwrap, "--kver", kver, NULL);
 
-  rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmpf.fd));
+  // Pass the tempfile to the child as fd 3
+  glnx_autofd int tmpf_child = fcntl (tmpf.fd, F_DUPFD_CLOEXEC, 3);
+  if (tmpf_child < 0)
+    return glnx_throw_errno_prefix (error, "fnctl");
+  rpmostree_bwrap_take_fd (bwrap, glnx_steal_fd (&tmpf_child), 3);
 
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     return FALSE;
