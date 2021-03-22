@@ -255,31 +255,6 @@ rpmostree_script_txn_validate (DnfPackage    *package,
   return TRUE;
 }
 
-struct ChildSetupData {
-  /* note fds are *not* owned */
-  gboolean all_fds_initialized;
-  int stdin_fd;
-  int stdout_fd;
-  int stderr_fd;
-};
-
-static void
-script_child_setup (gpointer opaque)
-{
-  auto data = static_cast<struct ChildSetupData *>(opaque);
-
-  /* make it really obvious for new users that we expect all fds to be initialized or -1 */
-  if (!data || !data->all_fds_initialized)
-    return;
-
-  if (data->stdin_fd >= 0 && dup2 (data->stdin_fd, STDIN_FILENO) < 0)
-    err (1, "dup2(stdin)");
-  if (data->stdout_fd >= 0 && dup2 (data->stdout_fd, STDOUT_FILENO) < 0)
-    err (1, "dup2(stdout)");
-  if (data->stderr_fd >= 0 && dup2 (data->stderr_fd, STDERR_FILENO) < 0)
-    err (1, "dup2(stderr)");
-}
-
 /* Print the output of a script, with each line prefixed with
  * the script identifier (e.g. foo.post: bla bla bla).
  */
@@ -343,7 +318,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
                                const char *interp,
                                const char *script,
                                const char *script_arg,
-                               int         stdin_fd,
+                               int         provided_stdin_fd,
                                GCancellable  *cancellable,
                                GError       **error)
 {
@@ -402,11 +377,22 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
    */
   rpmostree_bwrap_setenv (bwrap, "SYSTEMD_OFFLINE", "1");
 
-  glnx_autofd int stdout_fd = -1;
-  glnx_autofd int stderr_fd = -1;
-  struct ChildSetupData data = { .stdin_fd = stdin_fd,
-                                 .stdout_fd = -1,
-                                 .stderr_fd = -1, };
+  /* FDs that need to be held open until we exec; they're
+   * owned by the GSubprocessLauncher instance.
+   */
+  int stdin_fd = -1;
+  int stdout_fd = -1;
+  int stderr_fd = -1;
+  int buffered_output_fd_child = -1;
+
+  if (provided_stdin_fd != -1)
+    {
+      stdin_fd = fcntl (provided_stdin_fd, F_DUPFD_CLOEXEC, 3);
+      if (stdin_fd == -1)
+        return glnx_throw_errno_prefix (error, "fcntl");
+      rpmostree_bwrap_take_stdin_fd (bwrap, stdin_fd);
+    }
+
   GLnxTmpfile buffered_output = { 0, };
   const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
   if (debugging_script || stdin_fd == STDIN_FILENO)
@@ -416,7 +402,6 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
     }
   else
     {
-
       rust::Slice<const uint8_t> scriptslice{(guint8*)script, strlen (script)};
       glnx_fd_close int script_memfd = rpmostreecxx::sealed_memfd (pkg_script, scriptslice);
 
@@ -428,24 +413,26 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
        */
       if (rpmostree_stdout_is_journal ())
         {
-          data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
+          stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
           if (stdout_fd < 0)
             return glnx_prefix_error (error, "While creating stdout stream fd");
+          rpmostree_bwrap_take_stdout_fd (bwrap, stdout_fd);
 
-          data.stderr_fd = stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
+          stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
           if (stderr_fd < 0)
             return glnx_prefix_error (error, "While creating stderr stream fd");
+          rpmostree_bwrap_take_stderr_fd (bwrap, stderr_fd);
         }
       else
         {
           /* In the non-journal case we buffer so we can prefix output */
           if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &buffered_output, error))
             return FALSE;
-          data.stdout_fd = data.stderr_fd = buffered_output.fd;
+          buffered_output_fd_child = fcntl (buffered_output.fd, F_DUPFD_CLOEXEC, 3);
+          if (buffered_output_fd_child < 0)
+            return glnx_throw_errno_prefix (error, "fcntl");
+          rpmostree_bwrap_take_stdout_and_stderr_fd (bwrap, buffered_output_fd_child);
         }
-
-      data.all_fds_initialized = TRUE;
-      rpmostree_bwrap_set_child_setup (bwrap, script_child_setup, &data);
 
       const char *script_trace = g_getenv ("RPMOSTREE_SCRIPT_TRACE");
       if (script_trace)

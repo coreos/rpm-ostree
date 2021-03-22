@@ -70,6 +70,16 @@ void rpmostree_bwrap_take_fd (RpmOstreeBwrap *bwrap,
                               int             source_fd,
                               int             target_fd);
 
+void rpmostree_bwrap_take_stdin_fd (RpmOstreeBwrap *bwrap,
+                                    int             source_fd);
+void rpmostree_bwrap_take_stdout_fd (RpmOstreeBwrap *bwrap,
+                                    int             source_fd);
+void rpmostree_bwrap_take_stderr_fd (RpmOstreeBwrap *bwrap,
+                                    int             source_fd);
+
+void rpmostree_bwrap_take_stdout_and_stderr_fd (RpmOstreeBwrap *bwrap,
+                                                int             source_fd);
+
 void rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
                                       GSpawnChildSetupFunc func,
                                       gpointer             data);

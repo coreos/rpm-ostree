@@ -429,6 +429,35 @@ rpmostree_bwrap_take_fd (RpmOstreeBwrap *bwrap,
   g_subprocess_launcher_take_fd (bwrap->launcher, source_fd, target_fd);
 }
 
+void 
+rpmostree_bwrap_take_stdin_fd (RpmOstreeBwrap *bwrap,
+                              int             source_fd)
+{
+  g_subprocess_launcher_take_stdin_fd (bwrap->launcher, source_fd);
+}
+
+void 
+rpmostree_bwrap_take_stdout_fd (RpmOstreeBwrap *bwrap,
+                             int             source_fd)
+{
+  g_subprocess_launcher_take_stdout_fd (bwrap->launcher, source_fd);
+}
+
+void 
+rpmostree_bwrap_take_stderr_fd (RpmOstreeBwrap *bwrap,
+                             int             source_fd)
+{
+  g_subprocess_launcher_take_stderr_fd (bwrap->launcher, source_fd);
+}
+
+void 
+rpmostree_bwrap_take_stdout_and_stderr_fd (RpmOstreeBwrap *bwrap,
+                                           int             source_fd)
+{
+  g_subprocess_launcher_take_stdout_fd (bwrap->launcher, source_fd);
+  g_subprocess_launcher_set_flags (bwrap->launcher, G_SUBPROCESS_FLAGS_STDERR_MERGE);
+}
+
 /* Execute @bwrap, optionally capturing stdout or stderr. Must have been configured. After
  * executing this method, the @bwrap instance cannot be run again.
  */
