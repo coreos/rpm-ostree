@@ -53,5 +53,8 @@ build_rpm testdaemon \
                   useradd -r testdaemon-user -g testdaemon-group -s /sbin/nologin" \
              files "/usr/bin/%{name}
                     /var/lib/%{name}"
+# Will be useful for testing cancellation
+build_rpm testpkg-post-infinite-loop \
+             post "echo entering testpkg-post-infinite-loop 1>&2; while true; do sleep 1h; done"
 
 mv ${test_tmpdir}/yumrepo/* rpm-repos/${repover}
