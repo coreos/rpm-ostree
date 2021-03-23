@@ -73,6 +73,8 @@ if rpm-ostree ex apply-live 2>err.txt; then
     fatal "live-removed foo"
 fi
 assert_file_has_content_literal err.txt 'packages would be removed: 1, enable replacement to override'
+# Ensure remote error is stripped
+assert_not_file_has_content_literal err.txt 'GDBus.Error'
 rpm-ostree ex livefs --allow-replacement | tee out.txt
 assert_file_has_content out.txt 'Added:'
 assert_file_has_content out.txt '  bar-1.0'

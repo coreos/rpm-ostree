@@ -270,7 +270,12 @@ ClientConnection::transaction_connect_progress_sync(const rust::Str address) con
   g_autoptr(GCancellable) cancellable = g_cancellable_new();
   auto address_c = g_strndup(address.data(), address.length());
   if (!impl_transaction_get_response_sync (conn, address_c, cancellable, &local_error))
-    util::throw_gerror(local_error);
+    {
+      // In this case the caller doesn't care about the remote exception; we never
+      // try to match on it.
+      g_dbus_error_strip_remote_error (local_error);
+      util::throw_gerror(local_error);
+    }
 }
 
 } // namespace
