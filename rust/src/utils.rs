@@ -194,6 +194,20 @@ fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
     Ok(s)
 }
 
+lazy_static::lazy_static! {
+    static ref RUNNING_IN_SYSTEMD: bool = {
+        // See https://www.freedesktop.org/software/systemd/man/systemd.exec.html#%24INVOCATION_ID
+        std::env::var_os("INVOCATION_ID").filter(|s| !s.is_empty()).is_some()
+    };
+}
+
+/// Checks if the current process is (apparently at least)
+/// running under systemd.  We use this in various places
+/// to e.g. log to the journal instead of printing to stdout.
+pub(crate) fn running_in_systemd() -> bool {
+    *RUNNING_IN_SYSTEMD
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

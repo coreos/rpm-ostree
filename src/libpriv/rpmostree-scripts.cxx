@@ -411,7 +411,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
        * via `ex container`, and in these cases we want to output to stdout, which
        * is where other output will go.
        */
-      if (rpmostree_stdout_is_journal ())
+      if (rpmostreecxx::running_in_systemd())
         {
           stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
           if (stdout_fd < 0)
@@ -460,7 +460,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
     {
       dump_buffered_output_noerr (pkg_script, &buffered_output);
       /* If errors go to the journal, help the user/admin find them there */
-      if (error && rpmostree_stdout_is_journal ())
+      if (error && rpmostreecxx::running_in_systemd())
         {
           g_assert (*error);
           g_autofree char *errmsg = (*error)->message;
