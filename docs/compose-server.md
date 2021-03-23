@@ -8,6 +8,21 @@ nav_order: 4
 1. TOC
 {:toc}
 
+## Managing RPM based OSTree commits
+
+With `rpm-ostree compose` you get a tool to compose your own ostree commits based on a
+[treefile](https://coreos.github.io/rpm-ostree/treefile/) configuration, a couple of RPMs,
+some post-processing and possibly some custom modifications directly in the resulting tree.
+
+The tool allows to either build a tree commit in one go with a single command: `rpm-ostree compose tree`.
+Or to split that process up into smaller chunks with the usage of `rpm-ostree compose install`,
+followed by `rpm-ostree compose postprocess` and finally `rpm-ostree compose commit`. While
+the former approach is pretty complete and allows most use-cases the latter is useful if you need
+some more customization on the resulting filesystem. More customization than the sandboxed
+post-process functionality of the treefile allows.
+
+In most scenarios you'll want to consider using a more "high level" tool, than `rpm-ostree compose`.
+
 ## Using higher level build tooling
 
 Originally `rpm-ostree compose tree` was intended to be a "high level" tool,
