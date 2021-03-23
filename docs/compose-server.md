@@ -85,6 +85,44 @@ Once we have that commit, let's export it:
 You can tell client systems to rebase to it by combining `ostree remote add`,
 and `rpm-ostree rebase` on the client side.
 
+## Granular tree compose with `install|postprocess|commit`
+
+In order to get even more control we split `rpm-ostree compose tree` into
+`rpm-ostree compose install`, followed by `rpm-ostree compose postprocess`
+and finally `rpm-ostree compose commit`.
+
+Similar to `rpm-ostree compose tree` we'll use a "treefile". We'll also specify a target directory
+serving as our work-in-progress rootfs:
+
+```
+# rpm-ostree compose install --unified-core --cachedir=cache --repo=/srv/repo /path/to/manifest.yaml /var/sysroot
+```
+
+This will download RPMs from the referenced repos and execute any specified post-process scripts.
+
+We now can alter anything found under `/var/sysroot/rootfs`.
+
+Next we can run more postprocessing:
+
+```
+# rpm-ostree compose postprocess postprocess /var/sysroot/rootfs /path/to/manifest.yaml
+```
+
+When we are finished with our manual changes we can now create the commit:
+
+```
+# rpm-ostree compose tree --repo=/srv/repo /path/to/manifest.yaml /var/sysroot
+```
+
+Once we have that commit, let's export it:
+
+```
+# ostree --repo=repo pull-local build-repo exampleos/8/x86_64/stable
+```
+
+You can tell client systems to rebase to it by combining `ostree remote add`,
+and `rpm-ostree rebase` on the client side.
+
 ## Generating OSTree commits in a container
 
 `rpm-ostree compose tree` runs well in an unprivileged (or "run as root")
