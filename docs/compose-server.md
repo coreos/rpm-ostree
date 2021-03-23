@@ -33,16 +33,6 @@ of the OSTree manual:
  - [buildsystem-and-repos](https://ostreedev.github.io/ostree/buildsystem-and-repos/)
  - [repository-management](https://ostreedev.github.io/ostree/repository-management/)
 
-## Generating OSTree commits in a container
-
-`rpm-ostree compose tree` runs well in an unprivileged (or "run as root")
-podman container.  You can also use other container tools, they are just less
-frequently tested.
-
-You can also directly install `rpm-ostree` on a traditional `yum/rpm` based
-virtual (or physical) machine - it won't affect your host.  However, containers
-are encouraged.
-
 ## Choosing a base config
 
 Currently, rpm-ostree is fairly coupled to the Fedora project.  We are open to supporting
@@ -79,6 +69,16 @@ Once we have that commit, let's export it:
 
 You can tell client systems to rebase to it by combining `ostree remote add`,
 and `rpm-ostree rebase` on the client side.
+
+## Generating OSTree commits in a container
+
+`rpm-ostree compose tree` runs well in an unprivileged (or "run as root")
+podman container.  You can also use other container tools, they are just less
+frequently tested.
+
+You can also directly install `rpm-ostree` on a traditional `yum/rpm` based
+virtual (or physical) machine - it won't affect your host.  However, containers
+are encouraged.
 
 ## More information
 
