@@ -125,6 +125,8 @@ pub mod ffi {
         fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>>;
         fn undo(self: &TempEtcGuard) -> Result<()>;
 
+        fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Result<()>;
+
         fn get_systemctl_wrapper() -> &'static [u8];
     }
 
