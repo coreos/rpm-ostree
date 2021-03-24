@@ -70,7 +70,7 @@ If you're doing this multiple times, it's strongly recommended to create a cache
 directory:
 
 ```
-# rpm-ostree compose tree --unified-core --cachedir=cache --repo=/srv/repo /path/to/manifest.yaml
+# rpm-ostree compose tree --unified-core --cachedir=cache --repo=./build-repo /path/to/manifest.yaml
 ```
 
 This will download RPMs from the referenced repos, and commit the result to the
@@ -79,7 +79,7 @@ OSTree repository, using the ref named by `ref`.
 Once we have that commit, let's export it:
 
 ```
-# ostree --repo=repo pull-local build-repo exampleos/8/x86_64/stable
+# ostree --repo=/srv/deploy-repo pull-local ./build-repo exampleos/8/x86_64/stable
 ```
 
 You can tell client systems to rebase to it by combining `ostree remote add`,
@@ -95,29 +95,29 @@ Similar to `rpm-ostree compose tree` we'll use a "treefile". We'll also specify 
 serving as our work-in-progress rootfs:
 
 ```
-# rpm-ostree compose install --unified-core --cachedir=cache --repo=/srv/repo /path/to/manifest.yaml /var/sysroot
+# rpm-ostree compose install --unified-core --cachedir=cache --repo=./build-repo /path/to/manifest.yaml ./sysroot
 ```
 
 This will download RPMs from the referenced repos and execute any specified post-process scripts.
 
-We now can alter anything found under `/var/sysroot/rootfs`.
+We now can alter anything found under `./sysroot/rootfs`.
 
 Next we can run more postprocessing:
 
 ```
-# rpm-ostree compose postprocess postprocess /var/sysroot/rootfs /path/to/manifest.yaml
+# rpm-ostree compose postprocess ./sysroot/rootfs /path/to/manifest.yaml
 ```
 
 When we are finished with our manual changes we can now create the commit:
 
 ```
-# rpm-ostree compose tree --repo=/srv/repo /path/to/manifest.yaml /var/sysroot
+# rpm-ostree compose commit --repo=./build-repo /path/to/manifest.yaml ./sysroot/rootfs
 ```
 
 Once we have that commit, let's export it:
 
 ```
-# ostree --repo=repo pull-local build-repo exampleos/8/x86_64/stable
+# ostree --repo=/srv/deploy-repo pull-local ./build-repo exampleos/8/x86_64/stable
 ```
 
 You can tell client systems to rebase to it by combining `ostree remote add`,
