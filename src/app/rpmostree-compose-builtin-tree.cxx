@@ -1242,7 +1242,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
                                        GCancellable   *cancellable,
                                        GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("postprocess ROOTFS [TREEFILE]");
+  g_autoptr(GOptionContext) context = g_option_context_new ("ROOTFS [TREEFILE]");
   if (!rpmostree_option_context_parse (context,
                                        postprocess_option_entries,
                                        &argc, &argv,
