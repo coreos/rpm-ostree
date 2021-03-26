@@ -33,6 +33,16 @@ static ADDED_CAPABILITIES: &[&str] = &[
     "cap_setfcap",
 ];
 
+/// Filesystems explicitly mounted readonly; these were cargo culted from
+/// docker/podman I think at some point.
+static RO_BINDS: &[&str] = &[
+    "/sys/block",
+    "/sys/bus",
+    "/sys/class",
+    "/sys/dev",
+    "/sys/devices",
+];
+
 pub(crate) struct Bubblewrap {
     pub(crate) rootfs_fd: openat::Dir,
 
@@ -170,21 +180,6 @@ impl Bubblewrap {
             "/tmp",
             "--chdir",
             "/",
-            "--ro-bind",
-            "/sys/block",
-            "/sys/block",
-            "--ro-bind",
-            "/sys/bus",
-            "/sys/bus",
-            "--ro-bind",
-            "/sys/class",
-            "/sys/class",
-            "--ro-bind",
-            "/sys/dev",
-            "/sys/dev",
-            "--ro-bind",
-            "/sys/devices",
-            "/sys/devices",
             "--die-with-parent", /* Since 0.1.8 */
             /* Here we do all namespaces except the user one.
              * Down the line we want to do a userns too I think,
@@ -195,6 +190,12 @@ impl Bubblewrap {
             "--unshare-ipc",
             "--unshare-cgroup-try",
         ];
+
+        for d in RO_BINDS {
+            argv.push("--ro-bind");
+            argv.push(d);
+            argv.push(d);
+        }
 
         if !running_in_nspawn() {
             argv.push("--unshare-net");
@@ -359,12 +360,13 @@ impl Bubblewrap {
         self.append_bwrap_argv(&["--bind", src, dest]);
     }
 
-    // Set /var to be read-only, but with a transient writable /var/tmp
+    /// Set /var to be read-only, but with a transient writable /var/tmp
     pub(crate) fn var_tmp_tmpfs(&mut self) {
         self.bind_read("./var", "/var");
         self.append_bwrap_argv(&["--tmpfs", "/var/tmp"]);
     }
 
+    /// Launch the process, returning a handle as well as a description for argv0
     fn spawn(&mut self) -> Result<(gio::Subprocess, String)> {
         assert!(!self.executed);
         self.executed = true;
