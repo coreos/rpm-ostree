@@ -168,8 +168,6 @@ gs_file_get_path_cached (GFile *file)
   return rpmostree_file_get_path_cached (file);
 }
 
-gboolean rpmostree_stdout_is_journal (void);
-
 char*
 rpmostree_generate_diff_summary (guint upgraded,
                                  guint downgraded,

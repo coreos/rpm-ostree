@@ -26,7 +26,7 @@ pub(crate) struct UnitConfig<'a> {
 /// isolation like `ProtectHome=true`.
 #[context("Running systemd worker")]
 pub(crate) fn run_systemd_worker_sync(cfg: &UnitConfig) -> Result<()> {
-    if !systemd::daemon::booted()? {
+    if !crate::utils::running_in_systemd() {
         return Err(anyhow!("Not running under systemd"));
     }
     let mut cmd = Command::new("systemd-run");

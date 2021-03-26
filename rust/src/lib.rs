@@ -226,6 +226,7 @@ pub mod ffi {
         fn varsubstitute(s: &str, vars: &Vec<StringMapping>) -> Result<String>;
         fn get_features() -> Vec<String>;
         fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32>;
+        fn running_in_systemd() -> bool;
     }
 
     #[derive(Default)]

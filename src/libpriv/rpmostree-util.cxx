@@ -762,34 +762,6 @@ rpmostree_commit_content_checksum (GVariant *commit)
   return g_strdup (g_checksum_get_string (hasher));
 }
 
-/* Implementation taken from https://git.gnome.org/browse/libgsystem/tree/src/gsystem-log.c */
-gboolean
-rpmostree_stdout_is_journal (void)
-{
-  static gsize initialized;
-  static gboolean stdout_is_socket;
-
-  if (g_once_init_enter (&initialized))
-    {
-      guint64 pid = (guint64) getpid ();
-      g_autofree char *fdpath = g_strdup_printf ("/proc/%" G_GUINT64_FORMAT "/fd/1", pid);
-      char buf[1024];
-      ssize_t bytes_read;
-
-      if ((bytes_read = readlink (fdpath, buf, sizeof(buf) - 1)) != -1)
-        {
-          buf[bytes_read] = '\0';
-          stdout_is_socket = g_str_has_prefix (buf, "socket:");
-        }
-      else
-        stdout_is_socket = FALSE;
-
-      g_once_init_leave (&initialized, TRUE);
-    }
-
-  return stdout_is_socket;
-}
-
 char*
 rpmostree_generate_diff_summary (guint upgraded,
                                  guint downgraded,
