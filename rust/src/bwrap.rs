@@ -70,6 +70,8 @@ fn running_in_nspawn() -> bool {
 /// hardlinked files from mutation.  The mount point is a temporary
 /// directory.
 struct RoFilesMount {
+    /// Our inner tempdir; this is only an Option<T> so we can take ownership
+    /// of it in drop().
     tempdir: Option<tempfile::TempDir>,
 }
 
@@ -94,7 +96,10 @@ impl RoFilesMount {
         })
     }
 
+    /// Return the mount point path
     fn path(&self) -> &Path {
+        // Safety: We only use the Option<T> here around drop handling, it should always
+        // be `Some` until `drop()` is called.
         self.tempdir.as_ref().unwrap().path()
     }
 }
@@ -131,6 +136,8 @@ impl Drop for RoFilesMount {
     }
 }
 
+/// Helper wrapper that waits for a child and checks its exit status.
+/// Further if the wait is cancelled then the child is force killed.
 fn child_wait_check(
     child: gio::Subprocess,
     cancellable: Option<&gio::Cancellable>,
@@ -248,14 +255,7 @@ impl Bubblewrap {
         })
     }
 
-    fn setup_rofiles(&mut self, path: &str) -> Result<()> {
-        let mnt = RoFilesMount::new(&self.rootfs_fd, path)?;
-        let tmpdir_path = mnt.path().to_str().expect("tempdir str");
-        self.bind_readwrite(tmpdir_path, path);
-        self.rofiles_mounts.push(mnt);
-        Ok(())
-    }
-
+    /// Create a new bwrap instance with the provided level of mutability.
     pub(crate) fn new_with_mutability(
         rootfs_fd: &openat::Dir,
         mutability: BubblewrapMutability,
@@ -294,18 +294,22 @@ impl Bubblewrap {
         self.rootfs_fd.as_raw_fd()
     }
 
+    /// Add an argument to the bubblewrap invocation.
     pub(crate) fn append_bwrap_arg(&mut self, arg: &str) {
         self.append_bwrap_argv(&[arg])
     }
 
+    /// Add multiple arguments to the bubblewrap invocation.
     pub(crate) fn append_bwrap_argv(&mut self, args: &[&str]) {
         self.argv.extend(args.iter().map(|s| s.to_string()));
     }
 
+    /// Add an argument for the child process.
     pub(crate) fn append_child_arg(&mut self, arg: &str) {
         self.append_child_argv(&[arg])
     }
 
+    /// Add multiple arguments for the child process.
     pub(crate) fn append_child_argv(&mut self, args: &[&str]) {
         // Record the binary name for later error messages
         if self.child_argv0.is_none() {
@@ -417,6 +421,8 @@ pub(crate) fn bubblewrap_new(rootfs_fd: i32) -> CxxResult<Box<Bubblewrap>> {
     Ok(Box::new(Bubblewrap::new(&rootfs_fd)?))
 }
 
+#[context("Creating bwrap instance")]
+/// Create a new Bubblewrap instance with provided mutability
 pub(crate) fn bubblewrap_new_with_mutability(
     rootfs_fd: i32,
     mutability: crate::ffi::BubblewrapMutability,
@@ -466,7 +472,8 @@ pub(crate) fn bubblewrap_run_sync(
 }
 
 #[context("bwrap test failed, see <https://github.com/coreos/rpm-ostree/pull/429>")]
-/// Create a new Bubblewrap instance
+/// Validate that bubblewrap works at all.  This will flush out any incorrect
+/// setups such being inside an outer container that disallows `CLONE_NEWUSER` etc.
 pub(crate) fn bubblewrap_selftest() -> CxxResult<()> {
     let fd = openat::Dir::open("/")?;
     let _ = bubblewrap_run_sync(fd.as_raw_fd(), &vec!["true".to_string()], false, true)?;
