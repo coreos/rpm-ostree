@@ -27,37 +27,7 @@ pub(crate) struct Bubblewrap {
     child_argv0: Option<NonZeroUsize>,
     launcher: gio::SubprocessLauncher, // 🚀
 
-    tempdirs: Vec<tempfile::TempDir>,
-}
-
-impl Drop for Bubblewrap {
-    fn drop(&mut self) {
-        for d in self.tempdirs.drain(..) {
-            // We need to unmount the tempdirs, before letting
-            // the drop handler recursively remove them.
-            let success = Command::new("fusermount")
-                .arg("-u")
-                .arg(d.path())
-                .status()
-                .map_err(anyhow::Error::new)
-                .and_then(|status| -> Result<()> {
-                    if !status.success() {
-                        Err(anyhow::anyhow!("{}", status))
-                    } else {
-                        Ok(())
-                    }
-                })
-                .err()
-                .map(|e| {
-                    systemd::journal::print(4, &format!("{}", e));
-                })
-                .is_none();
-            if !success {
-                // If fusermount fails, then we cannot remove it; just leak it.
-                let _ = d.into_path();
-            }
-        }
-    }
+    rofiles_mounts: Vec<RoFilesMount>,
 }
 
 // nspawn by default doesn't give us CAP_NET_ADMIN; see
@@ -72,21 +42,69 @@ fn running_in_nspawn() -> bool {
     std::env::var_os("container").as_deref() == Some(std::ffi::OsStr::new("systemd-nspawn"))
 }
 
-fn setup_rofiles_in(rootfs: &openat::Dir, path: &str) -> Result<tempfile::TempDir> {
-    let path = path.trim_start_matches('/');
-    let tempdir = tempfile::Builder::new()
-        .prefix("rpmostree-rofiles-fuse")
-        .tempdir()?;
-    let status = std::process::Command::new("rofiles-fuse")
-        .arg("--copyup")
-        .arg(path)
-        .arg(tempdir.path())
-        .current_dir(format!("/proc/self/fd/{}", rootfs.as_raw_fd()))
-        .status()?;
-    if !status.success() {
-        return Err(anyhow::anyhow!("{}", status));
+/// A wrapper for rofiles-fuse from ostree.  This protects the underlying
+/// hardlinked files from mutation.  The mount point is a temporary
+/// directory.
+struct RoFilesMount {
+    tempdir: Option<tempfile::TempDir>,
+}
+
+impl RoFilesMount {
+    /// Create a new rofiles-fuse mount point
+    fn new(rootfs: &openat::Dir, path: &str) -> Result<Self> {
+        let path = path.trim_start_matches('/');
+        let tempdir = tempfile::Builder::new()
+            .prefix("rpmostree-rofiles-fuse")
+            .tempdir()?;
+        let status = std::process::Command::new("rofiles-fuse")
+            .arg("--copyup")
+            .arg(path)
+            .arg(tempdir.path())
+            .current_dir(format!("/proc/self/fd/{}", rootfs.as_raw_fd()))
+            .status()?;
+        if !status.success() {
+            return Err(anyhow::anyhow!("{}", status));
+        }
+        Ok(Self {
+            tempdir: Some(tempdir),
+        })
     }
-    Ok(tempdir)
+
+    fn path(&self) -> &Path {
+        self.tempdir.as_ref().unwrap().path()
+    }
+}
+
+impl Drop for RoFilesMount {
+    fn drop(&mut self) {
+        let tempdir = if let Some(d) = self.tempdir.take() {
+            d
+        } else {
+            return;
+        };
+        // We need to unmount before letting the tempdir cleanup run.
+        let success = Command::new("fusermount")
+            .arg("-u")
+            .arg(tempdir.path())
+            .status()
+            .map_err(anyhow::Error::new)
+            .and_then(|status| -> Result<()> {
+                if !status.success() {
+                    Err(anyhow::anyhow!("{}", status))
+                } else {
+                    Ok(())
+                }
+            })
+            .err()
+            .map(|e| {
+                systemd::journal::print(4, &format!("{}", e));
+            })
+            .is_none();
+        if !success {
+            // If fusermount fails, then we cannot remove it; just leak it.
+            let _ = tempdir.into_path();
+        }
+    }
 }
 
 fn child_wait_check(
@@ -230,15 +248,15 @@ impl Bubblewrap {
             argv,
             launcher,
             child_argv0: None,
-            tempdirs: Vec::new(),
+            rofiles_mounts: Vec::new(),
         })
     }
 
     fn setup_rofiles(&mut self, path: &str) -> Result<()> {
-        let tmpdir = setup_rofiles_in(&self.rootfs_fd, path)?;
-        let tmpdir_path = tmpdir.path().to_str().expect("tempdir str");
+        let mnt = RoFilesMount::new(&self.rootfs_fd, path)?;
+        let tmpdir_path = mnt.path().to_str().expect("tempdir str");
         self.bind_readwrite(tmpdir_path, path);
-        self.tempdirs.push(tmpdir);
+        self.rofiles_mounts.push(mnt);
         Ok(())
     }
 
