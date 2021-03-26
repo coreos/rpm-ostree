@@ -18,6 +18,20 @@ use std::process::Command;
 static USR_LINKS: &[&str] = &["lib", "lib32", "lib64", "bin", "sbin"];
 // This is similar to what systemd does, except we drop /usr/local, since scripts shouldn't see it.
 static PATH_VAR: &str = "PATH=/usr/sbin:/usr/bin";
+/// Explicitly added capabilities.  See the bits that call --cap-drop below for more
+/// information.
+static ADDED_CAPABILITIES: &[&str] = &[
+    "cap_chown",
+    "cap_dac_override",
+    "cap_fowner",
+    "cap_fsetid",
+    "cap_kill",
+    "cap_setgid",
+    "cap_setuid",
+    "cap_setpcap",
+    "cap_sys_chroot",
+    "cap_setfcap",
+];
 
 pub(crate) struct Bubblewrap {
     pub(crate) rootfs_fd: openat::Dir,
@@ -202,30 +216,11 @@ impl Bubblewrap {
          * Also this way we drop out any new capabilities that appear.
          */
         if nix::unistd::getuid() == nix::unistd::Uid::from_raw(0) {
-            argv.extend(&[
-                "--cap-drop",
-                "ALL",
-                "--cap-add",
-                "cap_chown",
-                "--cap-add",
-                "cap_dac_override",
-                "--cap-add",
-                "cap_fowner",
-                "--cap-add",
-                "cap_fsetid",
-                "--cap-add",
-                "cap_kill",
-                "--cap-add",
-                "cap_setgid",
-                "--cap-add",
-                "cap_setuid",
-                "--cap-add",
-                "cap_setpcap",
-                "--cap-add",
-                "cap_sys_chroot",
-                "--cap-add",
-                "cap_setfcap",
-            ]);
+            argv.extend(&["--cap-drop", "ALL"]);
+            for cap in ADDED_CAPABILITIES {
+                argv.push("--cap-add");
+                argv.push(cap);
+            }
         }
 
         let mut argv: Vec<_> = argv.into_iter().map(|s| s.to_string()).collect();
