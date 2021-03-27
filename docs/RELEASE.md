@@ -6,7 +6,9 @@ nav_order: 8
 
 1. Increment the `year_version` and `release_version` macros in `configure.ac`.
 2. Increment the `Version` field in `rpm-ostree.spec.in`.
-3. Submit as a PR and wait until reviewed *and* CI is green.
+3. Verify the libdnf deps in `rpm-ostree.spec.in` are up to date by comparing to
+   the spec of the bundled version (`libdnf/libdnf.spec`).
+4. Submit as a PR and wait until reviewed *and* CI is green.
 5. Once merged, do `git pull $upstream && git reset --hard $upstream/master` on
    your local `master` branch to make sure you're on the right commit.
 6. Draft release notes by seeding a HackMD.io with `git shortlog $last_tag..`
