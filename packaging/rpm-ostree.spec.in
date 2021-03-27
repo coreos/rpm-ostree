@@ -58,7 +58,8 @@ BuildRequires: pkgconfig(libsystemd)
 BuildRequires: libcap-devel
 BuildRequires: libattr-devel
 
-# We currently interact directly with librepo
+# We currently interact directly with librepo (libdnf below also pulls it in,
+# but duplicating to be clear)
 BuildRequires: pkgconfig(librepo)
 
 # Needed by curl-rust
@@ -67,6 +68,9 @@ BuildRequires: pkgconfig(libcurl)
 BuildRequires: cmake
 BuildRequires: pkgconfig(expat)
 BuildRequires: pkgconfig(check)
+
+# We use some libsolv types directly too (libdnf below also pulls it in,
+# but duplicating to be clear)
 BuildRequires: pkgconfig(libsolv)
 
 # We need g++ for libdnf
@@ -75,9 +79,13 @@ BuildRequires: gcc-c++
 
 # more libdnf build deps (see libdnf's spec for versions)
 %global swig_version 3.0.12
-%global libmodulemd_version 2.5.0
+%global libmodulemd_version 2.11.2-2
+%global librepo_version 1.13.0
+%global libsolv_version 0.7.17
 BuildRequires:  swig >= %{swig_version}
 BuildRequires:  pkgconfig(modulemd-2.0) >= %{libmodulemd_version}
+BuildRequires:  pkgconfig(librepo) >= %{librepo_version}
+BuildRequires:  libsolv-devel >= %{libsolv_version}
 BuildRequires:  pkgconfig(json-c)
 BuildRequires:  pkgconfig(cppunit)
 BuildRequires:  pkgconfig(sqlite3)
@@ -87,7 +95,10 @@ BuildRequires:  pkgconfig(zck) >= 0.9.11
 %endif
 BuildRequires:  gpgme-devel
 
+# Runtime libdnf deps
 Requires:       libmodulemd%{?_isa} >= %{libmodulemd_version}
+Requires:       libsolv%{?_isa} >= %{libsolv_version}
+Requires:       librepo%{?_isa} >= %{librepo_version}
 
 # For now...see https://github.com/projectatomic/rpm-ostree/pull/637
 # and https://github.com/fedora-infra/fedmsg-atomic-composer/pull/17
