@@ -1208,22 +1208,23 @@ impl TreeComposeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
     use openat_ext::OpenatDirExt;
     use tempfile;
 
     static ARCH_X86_64: &str = "x86_64";
 
-    static VALID_PRELUDE: &str = r###"
-ref: "exampleos/x86_64/blah"
-packages:
- - foo bar
- - baz
- - corge 'quuz >= 1.0'
-packages-x86_64:
- - grub2 grub2-tools
-packages-s390x:
- - zipl
-"###;
+    static VALID_PRELUDE: &str = indoc! {r#"
+       ref: "exampleos/x86_64/blah"
+       packages:
+        - foo bar
+        - baz
+        - corge 'quuz >= 1.0'
+       packages-x86_64:
+        - grub2 grub2-tools
+       packages-s390x:
+        - zipl
+    "#};
 
     // This one has "comments" (hence unknown keys)
     static VALID_PRELUDE_JS: &str = r###"
