@@ -6,7 +6,7 @@ edition = "2018"
 links = "dnf"
 
 [dependencies]
-cxx = "1.0.40"
+cxx = "1.0.41"
 glib = "0.10.3"
 
 [lib]
@@ -17,7 +17,7 @@ path = "lib.rs"
 cmake = "0.1.45"
 system-deps = "3.1"
 anyhow = "1.0"
-cxx-build = "1.0.33"
+cxx-build = "1.0.41"
 
 # This currently needs to duplicate the libraries from libdnf
 [package.metadata.system-deps]
