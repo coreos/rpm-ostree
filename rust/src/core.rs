@@ -53,6 +53,16 @@ pub(crate) fn get_systemctl_wrapper() -> &'static [u8] {
     include_bytes!("../../src/libpriv/systemctl-wrapper.sh")
 }
 
+/// Run the standard `depmod` utility.
+pub(crate) fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> CxxResult<()> {
+    let args: Vec<_> = vec!["depmod", "-a", kver]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
+    let _ = crate::bwrap::bubblewrap_run_sync(rootfs_dfd, &args, false, unified_core)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

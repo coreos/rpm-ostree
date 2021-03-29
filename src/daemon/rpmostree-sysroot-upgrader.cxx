@@ -1148,8 +1148,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (rpmostree_context_get_kernel_changed (self->ctx))
     {
       g_assert (kernel_state && kver);
-      if (!rpmostree_postprocess_run_depmod (self->tmprootfs_dfd, kver, TRUE, cancellable, error))
-        return FALSE;
+      rpmostreecxx::run_depmod(self->tmprootfs_dfd, kver, true);
     }
 
   if (kernel_or_initramfs_changed)

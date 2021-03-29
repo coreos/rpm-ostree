@@ -204,18 +204,6 @@ hardlink_recurse (int                src_dfd,
   return TRUE;
 }
 
-gboolean
-rpmostree_postprocess_run_depmod (int           rootfs_dfd,
-                                  const char   *kver,
-                                  gboolean      unified_core_mode,
-                                  GCancellable *cancellable,
-                                  GError      **error)
-{
-  rust::Vec child_argv = { rust::String("depmod"), rust::String("-a"), rust::String(kver) };
-  rpmostreecxx::bubblewrap_run_sync(rootfs_dfd, child_argv, false, (bool)unified_core_mode);
-  return TRUE;
-}
-
 /* Handle the kernel/initramfs, which can be in at least 2 different places:
  *  - /boot (CentOS, Fedora treecompose before we suppressed kernel.spec's %posttrans)
  *  - /usr/lib/modules (Fedora treecompose without kernel.spec's %posttrans)
@@ -301,9 +289,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   /* Ensure depmod (kernel modules index) is up to date; because on Fedora we
    * suppress the kernel %posttrans we need to take care of this.
    */
-  if (!rpmostree_postprocess_run_depmod (rootfs_dfd, kver, unified_core_mode,
-                                         cancellable, error))
-    return FALSE;
+  rpmostreecxx::run_depmod(rootfs_dfd, kver, unified_core_mode);
 
   RpmOstreePostprocessBootLocation boot_location =
     RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
