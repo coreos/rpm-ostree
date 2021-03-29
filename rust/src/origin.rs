@@ -10,6 +10,7 @@ use anyhow::{bail, Result};
 use glib::translate::*;
 use glib::GString;
 use glib::KeyFile;
+use indoc::indoc;
 use std::result::Result as StdResult;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -355,15 +356,13 @@ refspec=foo:bar/x86_64/baz
         o.remove_transient_state();
         o.set_rojig_version(Some("42"));
 
-        let mut o = Origin::new_from_str(
-            r#"
-[origin]
-baserefspec=fedora/33/x86_64/silverblue
+        let mut o = Origin::new_from_str(indoc! {"
+            [origin]
+            baserefspec=fedora/33/x86_64/silverblue
 
-[packages]
-requested=virt-manager;libvirt;pcsc-lite-ccid
-"#,
-        )?;
+            [packages]
+            requested=virt-manager;libvirt;pcsc-lite-ccid
+        "})?;
         assert_eq!(o.cache.refspec.kind, RefspecType::Ostree);
         assert_eq!(o.cache.refspec.value, "fedora/33/x86_64/silverblue");
         assert!(o.may_require_local_assembly());

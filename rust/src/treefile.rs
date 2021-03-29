@@ -1215,28 +1215,28 @@ mod tests {
     static ARCH_X86_64: &str = "x86_64";
 
     static VALID_PRELUDE: &str = indoc! {r#"
-       ref: "exampleos/x86_64/blah"
-       packages:
-        - foo bar
-        - baz
-        - corge 'quuz >= 1.0'
-       packages-x86_64:
-        - grub2 grub2-tools
-       packages-s390x:
-        - zipl
+        ref: "exampleos/x86_64/blah"
+        packages:
+         - foo bar
+         - baz
+         - corge 'quuz >= 1.0'
+        packages-x86_64:
+         - grub2 grub2-tools
+        packages-s390x:
+         - zipl
     "#};
 
     // This one has "comments" (hence unknown keys)
-    static VALID_PRELUDE_JS: &str = r###"
-{
- "ref": "exampleos/${basearch}/blah",
- "comment-packages": "We want baz to enable frobnication",
- "packages": ["foo", "bar", "baz"],
- "packages-x86_64": ["grub2", "grub2-tools"],
- "comment-packages-s390x": "Note that s390x uses its own bootloader",
- "packages-s390x": ["zipl"]
-}
-"###;
+    static VALID_PRELUDE_JS: &str = indoc! {r#"
+        {
+         "ref": "exampleos/${basearch}/blah",
+         "comment-packages": "We want baz to enable frobnication",
+         "packages": ["foo", "bar", "baz"],
+         "packages-x86_64": ["grub2", "grub2-tools"],
+         "comment-packages-s390x": "Note that s390x uses its own bootloader",
+         "packages-s390x": ["zipl"]
+        }
+    "#};
 
     #[test]
     fn basic_valid() {
@@ -1251,18 +1251,16 @@ mod tests {
     #[test]
     fn basic_valid_add_remove_files() {
         let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str(
-            r###"
-add-files:
-  - - foo
-    - /usr/bin/foo
-  - - baz
-    - /usr/bin/blah
-remove-files:
- - foo
- - bar
-"###,
-        );
+        buf.push_str(indoc! {r#"
+            add-files:
+              - - foo
+                - /usr/bin/foo
+              - - baz
+                - /usr/bin/blah
+            remove-files:
+             - foo
+             - bar
+        "#});
         let buf = buf.as_bytes();
         let mut input = io::BufReader::new(buf);
         let treefile =
@@ -1313,12 +1311,12 @@ remove-files:
 
     #[test]
     fn basic_valid_releasever() {
-        let buf = r###"
-ref: "exampleos/${basearch}/${releasever}"
-releasever: 30
-automatic-version-prefix: ${releasever}
-mutate-os-release: ${releasever}
-"###;
+        let buf = indoc! {r#"
+            ref: "exampleos/${basearch}/${releasever}"
+            releasever: 30
+            automatic-version-prefix: ${releasever}
+            mutate-os-release: ${releasever}
+        "#};
         let mut input = io::BufReader::new(buf.as_bytes());
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
@@ -1339,15 +1337,13 @@ mutate-os-release: ${releasever}
 
     #[test]
     fn basic_valid_legacy() {
-        let treefile = append_and_parse(
-            "
-gpg_key: foo
-boot_location: new
-default_target: bar
-automatic_version_prefix: baz
-rpmdb: sqlite
-        ",
-        );
+        let treefile = append_and_parse(indoc! {"
+            gpg_key: foo
+            boot_location: new
+            default_target: bar
+            automatic_version_prefix: baz
+            rpmdb: sqlite
+        "});
         assert!(treefile.gpg_key.unwrap() == "foo");
         assert!(treefile.boot_location.unwrap() == BootLocation::New);
         assert!(treefile.default_target.unwrap() == "bar");
@@ -1357,14 +1353,12 @@ rpmdb: sqlite
 
     #[test]
     fn basic_valid_legacy_new() {
-        let treefile = append_and_parse(
-            "
-gpg-key: foo
-boot-location: new
-default-target: bar
-automatic-version-prefix: baz
-        ",
-        );
+        let treefile = append_and_parse(indoc! {"
+            gpg-key: foo
+            boot-location: new
+            default-target: bar
+            automatic-version-prefix: baz
+        "});
         assert!(treefile.gpg_key.unwrap() == "foo");
         assert!(treefile.boot_location.unwrap() == BootLocation::New);
         assert!(treefile.default_target.unwrap() == "bar");
@@ -1373,58 +1367,47 @@ automatic-version-prefix: baz
 
     #[test]
     fn basic_invalid_legacy_both() {
-        test_invalid(
-            "
-gpg-key: foo
-gpg_key: bar
-        ",
-        );
-        test_invalid(
-            "
-boot-location: new
-boot_location: both
-        ",
-        );
-        test_invalid(
-            "
-default-target: foo
-default_target: bar
-        ",
-        );
-        test_invalid(
-            "
-automatic-version-prefix: foo
-automatic_version_prefix: bar
-        ",
-        );
+        test_invalid(indoc! {"
+            gpg-key: foo
+            gpg_key: bar
+        "});
+        test_invalid(indoc! {"
+            boot-location: new
+            boot_location: both
+        "});
+        test_invalid(indoc! {"
+            default-target: foo
+            default_target: bar
+        "});
+        test_invalid(indoc! {"
+            automatic-version-prefix: foo
+            automatic_version_prefix: bar
+        "});
     }
 
     #[test]
     fn test_invalid_install_langs() {
-        test_invalid(
-            r###"install_langs:
-  - "klingon"
-  - "esperanto"
-"###,
-        );
+        test_invalid(indoc! {r#"
+            install_langs:
+                - "klingon"
+                - "esperanto"
+        "#});
     }
 
     #[test]
     fn test_invalid_arch_packages_type() {
-        test_invalid(
-            r###"packages-hal9000: true
-"###,
-        );
+        test_invalid(indoc! {"
+            packages-hal9000: true
+        "});
     }
 
     #[test]
     fn test_invalid_arch_packages_array_type() {
-        test_invalid(
-            r###"packages-hal9000:
-  - 12
-  - 34
-"###,
-        );
+        test_invalid(indoc! {"
+            packages-hal9000:
+                - 12
+                - 34
+        "});
     }
 
     fn new_test_treefile<'a, 'b>(
@@ -1450,12 +1433,12 @@ automatic_version_prefix: bar
         assert!(tf.parsed.machineid_compat.is_none());
     }
 
-    const ROJIG_YAML: &'static str = r###"
-rojig:
-  name: "exampleos"
-  license: "MIT"
-  summary: "ExampleOS rojig base image"
-"###;
+    const ROJIG_YAML: &'static str = indoc! {r#"
+        rojig:
+            name: "exampleos"
+            license: "MIT"
+            summary: "ExampleOS rojig base image"
+    "#};
 
     #[test]
     fn test_treefile_new_rojig() {
@@ -1477,17 +1460,15 @@ rojig:
         workdir_d.write_file_contents(
             "foo.yaml",
             0o644,
-            r#"
-        packages:
-          - fooinclude
-        "#,
+            indoc! {"
+                packages:
+                    - fooinclude
+            "},
         )?;
         let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str(
-            r#"
-include: foo.yaml
-"#,
-        );
+        buf.push_str(indoc! {"
+            include: foo.yaml
+        "});
         let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
         assert!(tf.parsed.packages.unwrap().len() == 6);
         Ok(())
@@ -1528,27 +1509,25 @@ arch-include:
     #[test]
     fn test_treefile_merge() {
         let basearch = Some(ARCH_X86_64);
-        let mut base = append_and_parse(
-            r###"
-add-commit-metadata:
-  my-first-key: "please don't override me"
-  my-second-key: "override me"
-etc-group-members:
-  - sudo
-        "###,
-        );
+        let mut base = append_and_parse(indoc! {r#"
+            add-commit-metadata:
+                my-first-key: "please don't override me"
+                my-second-key: "override me"
+            etc-group-members:
+                - sudo
+        "#});
         let mut mid_input = io::BufReader::new(
-            r###"
-packages:
-  - some layered packages
-add-commit-metadata:
-  my-second-key: "something better"
-  my-third-key: 1000
-  my-fourth-key:
-    nested: table
-etc-group-members:
-  - docker
-"###
+            indoc! {r#"
+            packages:
+              - some layered packages
+            add-commit-metadata:
+              my-second-key: "something better"
+              my-third-key: 1000
+              my-fourth-key:
+                nested: table
+            etc-group-members:
+              - docker
+        "#}
             .as_bytes(),
         );
         let mut mid =
