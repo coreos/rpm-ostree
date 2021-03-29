@@ -165,6 +165,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile_path);
   g_clear_pointer (&ctx->metadata, g_hash_table_unref);
+  ctx->treefile_rs.~optional();
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized)
     glnx_close_fd (&ctx->workdir_dfd);
