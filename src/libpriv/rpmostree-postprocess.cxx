@@ -42,7 +42,6 @@
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-kernel.h"
-#include "rpmostree-bwrap.h"
 #include "rpmostree-output.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-core.h"
@@ -213,7 +212,7 @@ rpmostree_postprocess_run_depmod (int           rootfs_dfd,
                                   GError      **error)
 {
   rust::Vec child_argv = { rust::String("depmod"), rust::String("-a"), rust::String(kver) };
-  rpmostreecxx::bwrap_run_mutable (rootfs_dfd, "depmod", child_argv, (bool)unified_core_mode);
+  rpmostreecxx::bubblewrap_run_sync(rootfs_dfd, child_argv, false, (bool)unified_core_mode);
   return TRUE;
 }
 
@@ -822,7 +821,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
       /* Now regenerate SELinux policy so that postprocess scripts from users and from us
        * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
       rust::Vec child_argv = { rust::String("semodule"), rust::String("-nB") };
-      rpmostreecxx::bwrap_run_mutable (rootfs_dfd, "semodule", child_argv, (bool)unified_core_mode);
+      rpmostreecxx::bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode);
     }
 
   gboolean container = FALSE;

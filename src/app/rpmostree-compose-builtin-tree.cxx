@@ -40,7 +40,6 @@
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-composeutil.h"
-#include "rpmostree-bwrap.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-rojig-build.h"
@@ -584,8 +583,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
    * container without --privileged or userns exposed.
    */
-  if (!(opt_download_only || opt_download_only_rpms) && !rpmostree_bwrap_selftest (error))
-    return FALSE;
+  if (!(opt_download_only || opt_download_only_rpms))
+    rpmostreecxx::bubblewrap_selftest();
 
   self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!self->repo)

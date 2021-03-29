@@ -25,7 +25,6 @@
 #include "rpmostree-output.h"
 #include "rpmostree-util.h"
 #include "rpmostree-cxxrs.h"
-#include "rpmostree-bwrap.h"
 #include <err.h>
 #include <systemd/sd-journal.h>
 #include "libglnx.h"
@@ -341,33 +340,37 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
    */
   gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0 ||
     strcmp (pkg_script, "glibc-common.post") == 0;
-  RpmOstreeBwrapMutability mutability =
-    (is_glibc_locales || !enable_fuse) ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES;
-  g_autoptr(RpmOstreeBwrap) bwrap = rpmostree_bwrap_new (rootfs_fd, mutability, error);
-  if (!bwrap)
-    return FALSE;
+  rpmostreecxx::BubblewrapMutability mutability =
+    (is_glibc_locales || !enable_fuse) ? rpmostreecxx::BubblewrapMutability::MutateFreely : rpmostreecxx::BubblewrapMutability::RoFiles;
+  auto bwrap = rpmostreecxx::bubblewrap_new_with_mutability (rootfs_fd, mutability);
   /* Scripts can see a /var with compat links like alternatives */
-  rpmostree_bwrap_var_tmp_tmpfs (bwrap);
+  bwrap->var_tmp_tmpfs();
 
   struct stat stbuf;
   if (glnx_fstatat (rootfs_fd, "usr/lib/opt", &stbuf, AT_SYMLINK_NOFOLLOW, NULL) && S_ISDIR(stbuf.st_mode))
-    rpmostree_bwrap_append_bwrap_argv (bwrap, "--symlink", "usr/lib/opt", "/opt", NULL);
+    {
+      bwrap->append_bwrap_arg("--symlink");
+      bwrap->append_bwrap_arg("usr/lib/opt");
+      bwrap->append_bwrap_arg("/opt");
+    }
 
   /* Don't let scripts see the base rpm database by default */
-  rpmostree_bwrap_bind_read (bwrap, "usr/share/empty", "usr/share/rpm");
+  bwrap->bind_read("usr/share/empty", "usr/share/rpm");
 
   /* Add ostree-booted API; some scriptlets may work differently on OSTree systems; e.g.
    * akmods. Just create it manually; /run is usually tmpfs, but scriptlets shouldn't be
    * adding stuff there anyway. */
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "run", 0755, cancellable, error))
     return FALSE;
-  rpmostree_bwrap_bind_readwrite (bwrap, "./run", "/run");
+  bwrap->bind_readwrite("./run", "/run");
 
-  rpmostree_bwrap_take_fd (bwrap, glnx_steal_fd (&devnull_fd), devnull_target_fd);
-  rpmostree_bwrap_append_bwrap_argv (bwrap, "--ro-bind-data", bwrap_devnull_fd, "/run/ostree-booted", NULL);
+  bwrap->take_fd(glnx_steal_fd (&devnull_fd), devnull_target_fd);
+  bwrap->append_bwrap_arg("--ro-bind-data");
+  bwrap->append_bwrap_arg(bwrap_devnull_fd);
+  bwrap->append_bwrap_arg("/run/ostree-booted");
 
   if (var_lib_rpm_statedir)
-    rpmostree_bwrap_bind_readwrite (bwrap, var_lib_rpm_statedir->path, "/var/lib/rpm-state");
+    bwrap->bind_readwrite(var_lib_rpm_statedir->path, "/var/lib/rpm-state");
 
   gboolean debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
 
@@ -375,7 +378,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
    * "systemctl,verbs: Introduce SYSTEMD_OFFLINE environment variable"
    * https://github.com/systemd/systemd/commit/f38951a62837a00a0b1ff42d007e9396b347742d
    */
-  rpmostree_bwrap_setenv (bwrap, "SYSTEMD_OFFLINE", "1");
+  bwrap->setenv("SYSTEMD_OFFLINE", "1");
 
   /* FDs that need to be held open until we exec; they're
    * owned by the GSubprocessLauncher instance.
@@ -390,15 +393,15 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
       stdin_fd = fcntl (provided_stdin_fd, F_DUPFD_CLOEXEC, 3);
       if (stdin_fd == -1)
         return glnx_throw_errno_prefix (error, "fcntl");
-      rpmostree_bwrap_take_stdin_fd (bwrap, stdin_fd);
+      bwrap->take_stdin_fd(stdin_fd);
     }
 
-  GLnxTmpfile buffered_output = { 0, };
+  g_auto(GLnxTmpfile) buffered_output = { 0, };
   const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
   if (debugging_script || stdin_fd == STDIN_FILENO)
     {
-      rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/bash", NULL);
-      rpmostree_bwrap_set_inherit_stdin (bwrap);
+      bwrap->append_child_arg ("/usr/bin/bash");
+      bwrap->set_inherit_stdin();
     }
   else
     {
@@ -416,12 +419,12 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
           stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
           if (stdout_fd < 0)
             return glnx_prefix_error (error, "While creating stdout stream fd");
-          rpmostree_bwrap_take_stdout_fd (bwrap, stdout_fd);
+          bwrap->take_stdout_fd(stdout_fd);
 
           stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
           if (stderr_fd < 0)
             return glnx_prefix_error (error, "While creating stderr stream fd");
-          rpmostree_bwrap_take_stderr_fd (bwrap, stderr_fd);
+          bwrap->take_stderr_fd(stderr_fd);
         }
       else
         {
@@ -431,46 +434,31 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
           buffered_output_fd_child = fcntl (buffered_output.fd, F_DUPFD_CLOEXEC, 3);
           if (buffered_output_fd_child < 0)
             return glnx_throw_errno_prefix (error, "fcntl");
-          rpmostree_bwrap_take_stdout_and_stderr_fd (bwrap, buffered_output_fd_child);
-        }
-
-      const char *script_trace = g_getenv ("RPMOSTREE_SCRIPT_TRACE");
-      if (script_trace)
-        {
-          int trace_argc = 0;
-          char **trace_argv = NULL;
-          if (!g_shell_parse_argv (script_trace, &trace_argc, &trace_argv, error))
-            return glnx_prefix_error (error, "Parsing '%s'", script_trace);
-          rpmostree_bwrap_append_child_argva (bwrap, trace_argc, trace_argv);
-          g_strfreev (trace_argv);
+          bwrap->take_stdout_and_stderr_fd(buffered_output_fd_child);
         }
 
       const int script_child_fd = 5;
-      rpmostree_bwrap_take_fd (bwrap, glnx_steal_fd (&script_memfd), script_child_fd);
+      bwrap->take_fd(glnx_steal_fd (&script_memfd), script_child_fd);
       g_autofree char *procpath = g_strdup_printf ("/proc/self/fd/%d", script_child_fd);
-      rpmostree_bwrap_append_child_argv (bwrap,
-                                         interp,
-                                         procpath,
-                                         script_arg,
-                                         NULL);
+      bwrap->append_child_arg(interp);
+      bwrap->append_child_arg(procpath);
+      if (script_arg != nullptr)
+        bwrap->append_child_arg(script_arg);
     }
 
-
-  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
-    {
-      dump_buffered_output_noerr (pkg_script, &buffered_output);
+  try {
+    g_assert(cancellable);
+    bwrap->run(*cancellable);
+  } catch (std::exception&e) {
+      dump_buffered_output_noerr(pkg_script, &buffered_output);
+      auto msg = e.what();
       /* If errors go to the journal, help the user/admin find them there */
-      if (error && rpmostreecxx::running_in_systemd())
-        {
-          g_assert (*error);
-          g_autofree char *errmsg = (*error)->message;
-          (*error)->message =
-            g_strdup_printf ("%s; run `journalctl -t '%s'` for more information", errmsg, id);
-        }
-      return FALSE;
-    }
-  else
-    dump_buffered_output_noerr (pkg_script, &buffered_output);
+      if (rpmostreecxx::running_in_systemd())
+        return glnx_throw (error, "%s; run `journalctl -t '%s'` for more information", msg, id);
+      else
+        return glnx_throw (error, "%s", msg);
+  }
+  dump_buffered_output_noerr(pkg_script, &buffered_output);
 
   return TRUE;
 }
@@ -971,16 +959,14 @@ rpmostree_deployment_sanitycheck_true (int           rootfs_fd,
   if (getenv ("RPMOSTREE_SKIP_SANITYCHECK"))
     return TRUE;
 
-  GLNX_AUTO_PREFIX_ERROR ("Sanity-checking final rootfs", error);
-  g_autoptr(RpmOstreeBwrap) bwrap =
-    rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error);
-
-  if (!bwrap)
-    return FALSE;
-  rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
-  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
-    return FALSE;
-
+  g_assert(cancellable);
+  auto bwrap = rpmostreecxx::bubblewrap_new_with_mutability(rootfs_fd, rpmostreecxx::BubblewrapMutability::Immutable);
+  bwrap->append_child_arg("/usr/bin/true");
+  try {
+    bwrap->run(*cancellable);
+  } catch (std::exception& e) {
+    util::rethrow_prefixed(e, "Sanity-checking final rootfs");
+  }
   sd_journal_print (LOG_INFO, "sanitycheck(/usr/bin/true) successful");
   return TRUE;
 }

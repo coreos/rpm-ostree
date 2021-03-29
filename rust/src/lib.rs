@@ -63,6 +63,49 @@ pub mod ffi {
         fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
     }
 
+    #[derive(Debug)]
+    enum BubblewrapMutability {
+        Immutable,
+        RoFiles,
+        MutateFreely,
+    }
+
+    // bubblewrap.rs
+    extern "Rust" {
+        type Bubblewrap;
+
+        fn bubblewrap_selftest() -> Result<()>;
+        fn bubblewrap_run_sync(
+            rootfs_dfd: i32,
+            args: &Vec<String>,
+            capture_stdout: bool,
+            unified_core: bool,
+        ) -> Result<Vec<u8>>;
+
+        fn bubblewrap_new(rootfs_fd: i32) -> Result<Box<Bubblewrap>>;
+        fn bubblewrap_new_with_mutability(
+            rootfs_fd: i32,
+            mutability: BubblewrapMutability,
+        ) -> Result<Box<Bubblewrap>>;
+        fn get_rootfs_fd(&self) -> i32;
+
+        fn append_bwrap_arg(&mut self, arg: &str);
+        fn append_child_arg(&mut self, arg: &str);
+        fn setenv(&mut self, k: &str, v: &str);
+        fn take_fd(&mut self, source_fd: i32, target_fd: i32);
+        fn set_inherit_stdin(&mut self);
+        fn take_stdin_fd(&mut self, source_fd: i32);
+        fn take_stdout_fd(&mut self, source_fd: i32);
+        fn take_stderr_fd(&mut self, source_fd: i32);
+        fn take_stdout_and_stderr_fd(&mut self, source_fd: i32);
+
+        fn bind_read(&mut self, src: &str, dest: &str);
+        fn bind_readwrite(&mut self, src: &str, dest: &str);
+        fn var_tmp_tmpfs(&mut self);
+
+        fn run(&mut self, cancellable: Pin<&mut GCancellable>) -> Result<()>;
+    }
+
     // builtins/apply_live.rs
     extern "Rust" {
         fn applylive_entrypoint(args: &Vec<String>) -> Result<()>;
@@ -364,17 +407,6 @@ pub mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("rpmostree-bwrap.h");
-        fn bwrap_run_mutable(
-            rootfs_dfd: i32,
-            binpath: &str,
-            child_argv: &Vec<String>,
-            unified_core_mode: bool,
-        ) -> Result<()>;
-        fn bwrap_run_captured(rootfs_dfd: i32, child_argv: &Vec<String>) -> Result<Vec<u8>>;
-    }
-
-    unsafe extern "C++" {
         include!("rpmostree-clientlib.h");
         fn client_require_root() -> Result<()>;
         type ClientConnection;
@@ -420,6 +452,8 @@ pub mod ffi {
 
 mod builtins;
 pub(crate) use self::builtins::apply_live::*;
+mod bwrap;
+pub(crate) use bwrap::*;
 mod client;
 pub(crate) use client::*;
 mod cliwrap;

@@ -28,8 +28,6 @@ librpmostreepriv_sources = \
 	src/libpriv/rpmostree-core.cxx \
 	src/libpriv/rpmostree-core.h \
 	src/libpriv/rpmostree-core-private.h \
-	src/libpriv/rpmostree-bwrap.cxx \
-	src/libpriv/rpmostree-bwrap.h \
 	src/libpriv/rpmostree-kernel.cxx \
 	src/libpriv/rpmostree-kernel.h \
 	src/libpriv/rpmostree-origin.cxx \
