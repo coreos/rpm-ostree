@@ -826,7 +826,7 @@ rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot     *self,
           return TRUE;
         }
       const char *title = rpmostree_transaction_get_title ((RPMOSTreeTransaction*)(self->transaction));
-      return glnx_throw (error, "Transaction in progress: %s", title);
+      return glnx_throw (error, "Transaction in progress: %s\n You can cancel the current transaction with `rpm-ostree cancel`", title);
     }
   *out_compat_txn = NULL;
   return TRUE;
