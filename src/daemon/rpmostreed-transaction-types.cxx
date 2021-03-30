@@ -2704,6 +2704,8 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   int upgrader_flags = 0;
   auto command_line = static_cast<const char *>(vardict_lookup_ptr (self->options, "initiating-command-line", "&s"));
+  g_autofree char **append_if_missing = static_cast<char **>(vardict_lookup_strv_canonical (self->options, "append-if-missing"));
+  g_autofree char **delete_if_present = static_cast<char **>(vardict_lookup_strv_canonical (self->options, "delete-if-present"));
 
   /* don't want to pull new content for this */
   upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
@@ -2721,6 +2723,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
                                               rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
                                               rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
+  g_auto(GStrv) existing_kargs = g_strsplit (self->existing_kernel_args, " ", -1);
 
   /* We need the upgrader to perform the deployment */
   if (upgrader == NULL)
@@ -2751,6 +2754,31 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
     {
       ostree_kernel_args_append_argv (kargs, self->kernel_args_added);
     }
+
+  if (append_if_missing)
+    {
+      for (char **iter = append_if_missing; iter && *iter; iter++)
+        {
+          const char *arg = *iter;
+          if (!g_strv_contains (existing_kargs, arg))
+            {
+              ostree_kernel_args_append (kargs, arg);
+            }
+
+        }
+    }
+  if (delete_if_present)
+    {
+      for (char **iter = delete_if_present; iter && *iter; iter++)
+        {
+          const char *arg = *iter;
+          if (g_strv_contains (existing_kargs, arg))
+            {
+              if (!ostree_kernel_args_delete (kargs, arg, error))
+                return FALSE;
+            }
+        }
+     }
 
   /* After all the arguments are processed earlier, we convert it to a string list*/
   g_auto(GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);

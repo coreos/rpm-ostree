@@ -32,6 +32,8 @@ static gboolean opt_import_proc_cmdline;
 static gboolean opt_reboot;
 static char **opt_kernel_delete_strings;
 static char **opt_kernel_append_strings;
+static char **opt_kernel_delete_if_present_strings;
+static char **opt_kernel_append_if_missing_strings;
 static char **opt_kernel_replace_strings;
 static char  *opt_osname;
 static char  *opt_deploy_index;
@@ -44,6 +46,8 @@ static GOptionEntry option_entries[] = {
   { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings, "Append kernel argument; useful with e.g. console= that can be used multiple times. empty value for an argument is allowed", "KEY=VALUE" },
   { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE if only one value exist for that argument ", "KEY=VALUE=NEWVALUE" },
   { "delete", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_strings, "Delete a specific kernel argument key/val pair or an entire argument with a single key/value pair", "KEY=VALUE"},
+  { "append-if-missing", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_if_missing_strings, "Like --append, but does nothing if the key is already present", "KEY=VALUE" },
+  { "delete-if-present", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_if_present_strings, "Like --delete, but does nothing if the key is already missing", "KEY=VALUE" },
   { "import-proc-cmdline", 0, 0, G_OPTION_ARG_NONE, &opt_import_proc_cmdline, "Instead of modifying old kernel arguments, we modify args from current /proc/cmdline (the booted deployment)", NULL },
   { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Use an editor to modify the kernel arguments", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
@@ -180,13 +184,14 @@ rpmostree_builtin_kargs (int            argc,
     return FALSE;
 
    if (opt_editor && (opt_kernel_delete_strings ||
-       opt_kernel_replace_strings ||  opt_kernel_append_strings))
+       opt_kernel_replace_strings ||  opt_kernel_append_strings ||
+       opt_kernel_delete_if_present_strings || opt_kernel_append_if_missing_strings))
      {
       /* We want editor command to achieve all these functionalities
        * Thus erroring out ahead of time when these strings exist
        */
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify --editor with --replace, --delete, or --append");
+                   "Cannot specify --editor with --replace, --delete, --append, --delete-if-present or --append-if-missing");
       return FALSE;
     }
 
@@ -209,7 +214,8 @@ rpmostree_builtin_kargs (int            argc,
       return FALSE;
     }
   if (!(opt_kernel_delete_strings) && !(opt_kernel_append_strings)
-      && !(opt_kernel_replace_strings) && !(opt_editor))
+      && !(opt_kernel_replace_strings) && !(opt_editor) &&
+      !(opt_kernel_delete_if_present_strings) && !(opt_kernel_append_if_missing_strings))
     display_kernel_args = TRUE;
 
   if (opt_reboot && display_kernel_args)
@@ -266,6 +272,10 @@ rpmostree_builtin_kargs (int            argc,
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
+  if (opt_kernel_append_if_missing_strings && *opt_kernel_append_if_missing_strings)
+    g_variant_dict_insert (&dict, "append-if-missing", "^as", opt_kernel_append_if_missing_strings);
+  if (opt_kernel_delete_if_present_strings && *opt_kernel_delete_if_present_strings)
+    g_variant_dict_insert (&dict, "delete-if-present", "^as", opt_kernel_delete_if_present_strings);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   if (opt_editor)
