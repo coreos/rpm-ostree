@@ -1,6 +1,8 @@
 //! Helpers for GVariant until we can use a newer glib crate with https://github.com/gtk-rs/glib/pull/651
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use std::borrow::Cow;
+
 use glib::translate::*;
 
 // These constants should really be in gtk-rs
@@ -37,6 +39,27 @@ pub(crate) fn variant_tuple_get(v: &glib::Variant, n: usize) -> Option<glib::Var
     }
 }
 
+pub(crate) fn new_variant_array(ty: &glib::VariantTy, children: &[glib::Variant]) -> glib::Variant {
+    unsafe {
+        let r = glib_sys::g_variant_new_array(
+            ty.as_ptr() as *const _,
+            children.to_glib_none().0,
+            children.len(),
+        );
+        glib_sys::g_variant_ref_sink(r);
+        from_glib_full(r)
+    }
+}
+
+pub(crate) fn is_container(v: &glib::Variant) -> bool {
+    unsafe { glib_sys::g_variant_is_container(v.to_glib_none().0) != glib_sys::GFALSE }
+}
+
+pub(crate) fn n_children(v: &glib::Variant) -> usize {
+    assert!(is_container(v));
+    unsafe { glib_sys::g_variant_n_children(v.to_glib_none().0) }
+}
+
 /// Find a string value in a GVariantDict
 pub(crate) fn variant_dict_lookup_str(v: &glib::VariantDict, k: &str) -> Option<String> {
     // Unwrap safety: Passing the GVariant type string gives us the right value type
@@ -48,6 +71,17 @@ pub(crate) fn variant_dict_lookup_str(v: &glib::VariantDict, k: &str) -> Option<
 pub(crate) fn variant_dict_lookup_bool(v: &glib::VariantDict, k: &str) -> Option<bool> {
     // Unwrap safety: Passing the GVariant type string gives us the right value type
     v.lookup_value(k, Some(*TY_B)).map(|v| v.get().unwrap())
+}
+
+pub(crate) fn byteswap_be_to_native(v: &glib::Variant) -> Cow<glib::Variant> {
+    if cfg!(target_endian = "big") {
+        Cow::Borrowed(v)
+    } else {
+        unsafe {
+            let r = glib_sys::g_variant_byteswap(v.to_glib_none().0);
+            Cow::Owned(from_glib_full(r))
+        }
+    }
 }
 
 #[cfg(test)]

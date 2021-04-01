@@ -8,11 +8,14 @@
  */
 
 use crate::cxxrsutil::*;
+use crate::variant_utils;
 use anyhow::{bail, Context, Result};
-use std::collections::HashMap;
+use glib::translate::ToGlibPtr;
+use std::collections::{HashMap, HashSet};
 use std::io::prelude::*;
 use std::os::unix::io::IntoRawFd;
 use std::path::Path;
+use std::pin::Pin;
 use std::{fs, io};
 
 use curl::easy::Easy;
@@ -452,4 +455,60 @@ pub(crate) fn get_rpm_basearch() -> String {
         "x86" => "i386".to_string(),
         s => s.to_string(),
     }
+}
+
+// also defined in rpmostree-rpm-util.h
+const GV_ADVISORY_TYPE_STR: &str = "(suuasa{sv})";
+// oddly, AFAICT there isn't an easy way to use GV_ADVISORIES_TYPE_STR in this definition
+const GV_ADVISORIES_TYPE_STR: &str = "a(suuasa{sv})";
+
+lazy_static::lazy_static! {
+    static ref GV_ADVISORY_TYPE: &'static glib::VariantTy = {
+        glib::VariantTy::new(GV_ADVISORY_TYPE_STR).unwrap()
+    };
+    static ref GV_ADVISORIES_TYPE: &'static glib::VariantTy = {
+        glib::VariantTy::new(GV_ADVISORIES_TYPE_STR).unwrap()
+    };
+}
+
+fn get_commit_advisories(repo: &mut ostree::Repo, checksum: &str) -> Result<Option<glib::Variant>> {
+    let (commit, _) = repo.load_commit(checksum)?;
+    let metadata = &variant_utils::variant_tuple_get(&commit, 0).expect("commit metadata");
+    let metadata = variant_utils::byteswap_be_to_native(metadata);
+    let dict = &glib::VariantDict::new(Some(&metadata));
+    Ok(dict.lookup_value("rpmostree.advisories", Some(&GV_ADVISORIES_TYPE)))
+}
+
+/// Compares advisories between two checksums and returns new ones in checksum_to ("diff" is a bit
+/// misleading here; we don't actually say which advisories were removed because normally we only
+/// really care about *new* advisories).
+pub(crate) fn calculate_advisories_diff(
+    mut repo: Pin<&mut crate::FFIOstreeRepo>,
+    checksum_from: &str,
+    checksum_to: &str,
+) -> Result<*mut crate::FFIGVariant> {
+    let mut repo = repo.gobj_wrap();
+    let mut new_advisories: Vec<glib::Variant> = Vec::new();
+    if let Some(ref advisories_to) = get_commit_advisories(&mut repo, checksum_to)? {
+        let mut previous_advisories: HashSet<String> = HashSet::new();
+        if let Some(ref advisories_from) = get_commit_advisories(&mut repo, checksum_from)? {
+            for i in 0..variant_utils::n_children(advisories_from) {
+                let child = variant_utils::variant_tuple_get(advisories_from, i).unwrap();
+                let advisory_id_v = variant_utils::variant_tuple_get(&child, 0).unwrap();
+                let advisory_id = advisory_id_v.get_str().unwrap().to_string();
+                previous_advisories.insert(advisory_id);
+            }
+        }
+
+        for i in 0..variant_utils::n_children(advisories_to) {
+            let child = variant_utils::variant_tuple_get(advisories_to, i).unwrap();
+            let advisory_id_v = variant_utils::variant_tuple_get(&child, 0).unwrap();
+            if !previous_advisories.contains(advisory_id_v.get_str().unwrap()) {
+                new_advisories.push(child);
+            }
+        }
+    }
+
+    let r = variant_utils::new_variant_array(&GV_ADVISORY_TYPE, new_advisories.as_slice());
+    Ok(r.to_glib_full() as *mut _)
 }
