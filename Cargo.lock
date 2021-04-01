@@ -677,7 +677,7 @@ dependencies = [
  "cxx",
  "cxx-build",
  "glib",
- "system-deps 3.1.0",
+ "system-deps 3.1.1",
 ]
 
 [[package]]
@@ -1276,7 +1276,7 @@ dependencies = [
  "serde_yaml",
  "structopt",
  "subprocess",
- "system-deps 3.1.0",
+ "system-deps 3.1.1",
  "systemd",
  "tempfile",
 ]
@@ -1495,9 +1495,9 @@ dependencies = [
 
 [[package]]
 name = "system-deps"
-version = "3.1.0"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fbb68eac6404c4c357c4a9a0d6395b82c753815d4bc0c4e3114a97b035c6459"
+checksum = "c248107ad7bc1ac07066a4d003cae9e9a7bc2e27d3418f7a9cdcdc8699dbea70"
 dependencies = [
  "anyhow",
  "cfg-expr",
