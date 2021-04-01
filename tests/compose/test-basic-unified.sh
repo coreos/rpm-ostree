@@ -11,9 +11,13 @@ treefile_append "repos" '["test-repo"]'
 build_rpm foobar recommends foobar-rec
 build_rpm foobar-rec
 
+uinfo_cmd add TEST-SEC-LOW security low
+build_rpm vuln-pkg uinfo TEST-SEC-LOW
+uinfo_cmd add-ref TEST-SEC-LOW 1 http://example.com/vuln1 "CVE-12-34 vuln1"
+
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
-treefile_append "packages" '["foobar"]'
+treefile_append "packages" '["foobar", "vuln-pkg"]'
 
 # Test --print-only.  We also
 # just in this test (for now) use ${basearch} to test substitution.
@@ -71,6 +75,14 @@ ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/pkg-pam.conf > auto
 assert_file_has_content_literal autovar.txt 'd /run/console'
 echo "ok autovar"
 
+rpm-ostree db list --repo="${repo}" "${treeref}" --advisories > db-list-adv.txt
+assert_file_has_content_literal db-list-adv.txt TEST-SEC-LOW
+
+uinfo_cmd add TEST-SEC-CRIT security critical
+build_rpm vuln-pkg version 2.0 uinfo TEST-SEC-CRIT
+uinfo_cmd add-ref TEST-SEC-CRIT 2 http://example.com/vuln2 "CVE-56-78 vuln2"
+echo "ok db list --advisories"
+
 # And redo it to trigger relabeling. Also test --no-parent at the same time.
 origrev=$(ostree --repo="${repo}" rev-parse "${treeref}")
 runcompose --force-nocache --no-parent
@@ -84,6 +96,10 @@ if ostree rev-parse --repo "${repo}" "${newrev}"^ 2>error.txt; then
 fi
 assert_file_has_content_literal error.txt 'has no parent'
 echo "ok --no-parent"
+
+rpm-ostree db list --repo="${repo}" "${treeref}" --advisories > db-list-adv.txt
+assert_not_file_has_content_literal db-list-adv.txt TEST-SEC-LOW
+assert_file_has_content_literal db-list-adv.txt TEST-SEC-CRIT
 
 build_rpm dodo-base
 build_rpm dodo requires dodo-base
