@@ -318,13 +318,7 @@ rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
    * we place in the metadata will be unreadable since clients won't know
    * their endianness.
    */
-  if (G_BYTE_ORDER != G_BIG_ENDIAN)
-    {
-      GVariant *swapped = g_variant_byteswap (ret);
-      GVariant *orig = ret;
-      ret = swapped;
-      g_variant_unref (orig);
-    }
+  rpmostree_variant_native_to_be (&ret);
 
   return util::move_nullify (ret);
 }
