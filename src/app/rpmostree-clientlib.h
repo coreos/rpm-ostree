@@ -157,6 +157,11 @@ rpmostree_print_cached_update (GVariant         *cached_update,
                                GCancellable     *cancellable,
                                GError          **error);
 
+void
+rpmostree_print_advisories (GVariant *advisories,
+                            gboolean  verbose,
+                            guint     max_key_len);
+
 gboolean
 get_sd_unit_objpath (GDBusConnection  *connection,
                      const char       *method_name,
