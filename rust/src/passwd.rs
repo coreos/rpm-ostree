@@ -33,12 +33,6 @@ static PWGRP_LOCK_AND_BACKUP_FILES: &[&str] = &[
     "subgid-",
 ];
 
-/// Populate a new DB with content from `passwd` and `group` files.
-pub fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>> {
-    let fd = ffiutil::ffi_view_openat_dir(rootfs);
-    PasswdDB::populate_new(&fd).map(Box::new)
-}
-
 /// Prepare passwd content before layering RPMs.
 ///
 /// We actually want RPM to inject to /usr/lib/passwd - we
@@ -47,7 +41,7 @@ pub fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>> {
 /// script runner). We also copy the merge deployment's /etc/passwd to
 /// /usr/lib/passwd, so that %pre scripts are aware of newly added system users
 /// not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
-pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> Result<bool> {
+pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResult<bool> {
     passwd_cleanup(rootfs_dfd)?;
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
     let dir: Option<PathBuf> = opt_string(merge_passwd_dir).map(|d| d.into());
@@ -69,7 +63,7 @@ pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> Result<b
     Ok(has_usrlib_passwd)
 }
 
-pub fn complete_rpm_layering(rootfs_dfd: i32) -> Result<()> {
+pub fn complete_rpm_layering(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
     complete_pwgrp(&rootfs)?;
 
@@ -97,7 +91,7 @@ pub fn passwd_cleanup(rootfs_dfd: i32) -> Result<()> {
 /// in /usr/etc at this point), and splitting it into two streams: a new
 /// /etc/passwd that just contains the root entry, and /usr/lib/passwd which
 /// contains everything else.
-pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> Result<()> {
+pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> CxxResult<()> {
     static ETCSRC_PATH: &str = "usr/etc/passwd";
     static USRDEST_PATH: &str = "usr/lib/passwd";
 
@@ -136,7 +130,7 @@ pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> Result<()> {
 /// in /usr/etc at this point), and splitting it into two streams: a new
 /// /etc/group that just contains roots and preserved entries, and /usr/lib/group
 /// which contains everything else.
-pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>) -> Result<()> {
+pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>) -> CxxResult<()> {
     static ETCSRC_PATH: &str = "usr/etc/group";
     static USRDEST_PATH: &str = "usr/lib/group";
 
@@ -176,17 +170,19 @@ pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>
 }
 
 /// Recursively search a directory for a subpath owned by a UID.
-pub fn dir_contains_uid(dirfd: i32, id: u32) -> Result<bool> {
+pub fn dir_contains_uid(dirfd: i32, id: u32) -> CxxResult<bool> {
     let dir = ffiutil::ffi_view_openat_dir(dirfd);
     let uid = Uid::from_raw(id);
-    dir_contains_uid_gid(&dir, &Some(uid), &None)
+    let found = dir_contains_uid_gid(&dir, &Some(uid), &None)?;
+    Ok(found)
 }
 
 /// Recursively search a directory for a subpath owned by a GID.
-pub fn dir_contains_gid(dirfd: i32, id: u32) -> Result<bool> {
+pub fn dir_contains_gid(dirfd: i32, id: u32) -> CxxResult<bool> {
     let dir = ffiutil::ffi_view_openat_dir(dirfd);
     let gid = Gid::from_raw(id);
-    dir_contains_uid_gid(&dir, &None, &Some(gid))
+    let found = dir_contains_uid_gid(&dir, &None, &Some(gid))?;
+    Ok(found)
 }
 
 /// Recursively search a directory for a subpath owned by a UID or GID.
@@ -239,9 +235,10 @@ fn compare_uid_gid(metadata: openat::Metadata, uid: &Option<Uid>, gid: &Option<G
     found
 }
 
-pub fn passwd_compose_prep(rootfs_dfd: i32, treefile: &mut Treefile) -> Result<()> {
+pub fn passwd_compose_prep(rootfs_dfd: i32, treefile: &mut Treefile) -> CxxResult<()> {
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-    passwd_compose_prep_impl(&rootfs, treefile, None, true)
+    passwd_compose_prep_impl(&rootfs, treefile, None, true)?;
+    Ok(())
 }
 
 /// Passwd/group handler for composes/treefiles.
@@ -510,7 +507,7 @@ fn complete_pwgrp(rootfs: &openat::Dir) -> Result<()> {
 /// This is a pre-commit validation hook which ensures that the upcoming
 /// users/groups entries are somehow sane. See treefile `check-passwd` and
 /// `check-groups` fields for a description of available validation knobs.
-pub(crate) fn check_passwd_group_entries(
+pub fn check_passwd_group_entries(
     mut ffi_repo: Pin<&mut crate::ffi::OstreeRepo>,
     rootfs_dfd: i32,
     treefile: &mut Treefile,
@@ -562,9 +559,16 @@ pub struct PasswdDB {
     groups: HashMap<Gid, String>,
 }
 
+/// Populate a new DB with content from `passwd` and `group` files.
+pub fn passwddb_open(rootfs: i32) -> CxxResult<Box<PasswdDB>> {
+    let fd = ffiutil::ffi_view_openat_dir(rootfs);
+    let db = PasswdDB::populate_new(&fd)?;
+    Ok(Box::new(db))
+}
+
 impl PasswdDB {
     /// Populate a new DB with content from `passwd` and `group` files.
-    pub fn populate_new(rootfs: &openat::Dir) -> anyhow::Result<Self> {
+    fn populate_new(rootfs: &openat::Dir) -> Result<Self> {
         let mut db = Self::default();
         db.add_passwd_content(rootfs.as_raw_fd(), "usr/etc/passwd")?;
         db.add_passwd_content(rootfs.as_raw_fd(), "usr/lib/passwd")?;
@@ -574,25 +578,29 @@ impl PasswdDB {
     }
 
     /// Lookup user name by ID.
-    pub fn lookup_user(&self, uid: u32) -> anyhow::Result<String> {
+    pub fn lookup_user(&self, uid: u32) -> CxxResult<String> {
         let key = Uid::from_raw(uid);
-        self.users
+        let username = self
+            .users
             .get(&key)
             .cloned()
-            .ok_or_else(|| anyhow!("failed to find user ID '{}'", uid))
+            .ok_or_else(|| anyhow!("failed to find user ID '{}'", uid))?;
+        Ok(username)
     }
 
     /// Lookup group name by ID.
-    pub fn lookup_group(&self, gid: u32) -> anyhow::Result<String> {
+    pub fn lookup_group(&self, gid: u32) -> CxxResult<String> {
         let key = Gid::from_raw(gid);
-        self.groups
+        let groupname = self
+            .groups
             .get(&key)
             .cloned()
-            .ok_or_else(|| anyhow!("failed to find group ID '{}'", gid))
+            .ok_or_else(|| anyhow!("failed to find group ID '{}'", gid))?;
+        Ok(groupname)
     }
 
     /// Add content from a `group` file.
-    fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> anyhow::Result<()> {
+    fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> Result<()> {
         let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
         let db = rootfs.open_file(group_path)?;
         let entries = nameservice::group::parse_group_content(BufReader::new(db))?;
@@ -605,7 +613,7 @@ impl PasswdDB {
     }
 
     /// Add content from a `passwd` file.
-    fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> anyhow::Result<()> {
+    fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> Result<()> {
         let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
         let db = rootfs.open_file(passwd_path)?;
         let entries = nameservice::passwd::parse_passwd_content(BufReader::new(db))?;
@@ -632,7 +640,7 @@ pub fn new_passwd_entries() -> Box<PasswdEntries> {
 
 impl PasswdEntries {
     /// Add all groups from a given `group` file.
-    pub fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> Result<()> {
+    pub fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> CxxResult<()> {
         let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
         let db = rootfs.open_file(group_path)?;
         let entries = nameservice::group::parse_group_content(BufReader::new(db))?;
@@ -645,7 +653,7 @@ impl PasswdEntries {
     }
 
     /// Add all users from a given `passwd` file.
-    pub fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> Result<()> {
+    pub fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> CxxResult<()> {
         let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
         let db = rootfs.open_file(passwd_path)?;
         let entries = nameservice::passwd::parse_passwd_content(BufReader::new(db))?;
@@ -669,19 +677,23 @@ impl PasswdEntries {
     }
 
     /// Lookup user ID by name.
-    pub fn lookup_user_id(&self, username: &str) -> Result<u32> {
-        self.users
+    pub fn lookup_user_id(&self, username: &str) -> CxxResult<u32> {
+        let username = self
+            .users
             .get(username)
             .map(|user| user.0.as_raw())
-            .ok_or_else(|| anyhow!("failed to find user '{}'", username))
+            .ok_or_else(|| anyhow!("failed to find user '{}'", username))?;
+        Ok(username)
     }
 
     /// Lookup group ID by name.
-    pub fn lookup_group_id(&self, groupname: &str) -> Result<u32> {
-        self.groups
+    pub fn lookup_group_id(&self, groupname: &str) -> CxxResult<u32> {
+        let groupname = self
+            .groups
             .get(groupname)
             .map(|gid| gid.as_raw())
-            .ok_or_else(|| anyhow!("failed to find group '{}'", groupname))
+            .ok_or_else(|| anyhow!("failed to find group '{}'", groupname))?;
+        Ok(groupname)
     }
 
     #[context("Rendering user entries from treefile check-passwd")]

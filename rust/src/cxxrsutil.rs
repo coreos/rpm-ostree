@@ -107,7 +107,7 @@ mod err {
 
     // See the documentation for CxxResult
     #[derive(Debug)]
-    pub(crate) struct CxxError(String);
+    pub struct CxxError(String);
 
     impl Display for CxxError {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
