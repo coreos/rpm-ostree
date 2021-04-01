@@ -1172,3 +1172,23 @@ rpmostree_journal_error (GError *error)
 {
   sd_journal_print (LOG_WARNING, "%s", error->message);
 }
+
+void
+rpmostree_variant_be_to_native (GVariant **v)
+{
+  g_assert (v);
+  g_assert (*v);
+  if (G_BYTE_ORDER != G_BIG_ENDIAN)
+    {
+      GVariant *swapped = g_variant_byteswap (*v);
+      GVariant *orig = *v;
+      *v = swapped;
+      g_variant_unref (orig);
+    }
+}
+
+void
+rpmostree_variant_native_to_be (GVariant **v)
+{
+  rpmostree_variant_be_to_native (v);
+}

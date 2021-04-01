@@ -324,4 +324,10 @@ rpmostree_maybe_shell_quote (const char *s);
 void
 rpmostree_journal_error (GError *error);
 
+void
+rpmostree_variant_be_to_native (GVariant **v);
+
+void
+rpmostree_variant_native_to_be (GVariant **v);
+
 G_END_DECLS
