@@ -23,7 +23,10 @@
 #include "rpmostree-db-builtins.h"
 #include "rpmostree-rpm-util.h"
 
+static gboolean opt_advisories;
+
 static GOptionEntry option_entries[] = {
+  { "advisories", 'a', 0, G_OPTION_ARG_NONE, &opt_advisories, "Also list advisories", NULL },
   { NULL }
 };
 
@@ -69,6 +72,25 @@ _builtin_db_list (OstreeRepo      *repo,
             return FALSE;
 
           rpmhdrs_list (rpmrev_get_headers (rpmrev));
+        }
+
+      if (opt_advisories)
+        {
+          g_autoptr(GVariant) commit = NULL;
+          if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
+            return FALSE;
+
+          g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
+          rpmostree_variant_be_to_native (&meta);
+          g_autoptr(GVariantDict) dict = g_variant_dict_new (meta);
+
+          g_autoptr(GVariant) advisories =
+            g_variant_dict_lookup_value (dict, "rpmostree.advisories", RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT);
+          if (advisories)
+            {
+              g_print ("\n");
+              rpmostree_print_advisories (advisories, TRUE, 0);
+            }
         }
     }
 
