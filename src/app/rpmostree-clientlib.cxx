@@ -1332,10 +1332,10 @@ severity_to_str (RpmOstreeAdvisorySeverity severity)
     }
 }
 
-static void
-print_advisories (GVariant *advisories,
-                  gboolean  verbose,
-                  guint     max_key_len)
+void
+rpmostree_print_advisories (GVariant *advisories,
+                            gboolean  verbose,
+                            guint     max_key_len)
 {
   /* counters for none/unknown, low, moderate, important, critical advisories */
   guint n_sev[RPM_OSTREE_ADVISORY_SEVERITY_LAST] = {0,};
@@ -1467,7 +1467,7 @@ rpmostree_print_diff_advisories (GVariant         *rpm_diff,
     return TRUE; /* Nothing to 🖨️ */
 
   if (advisories)
-    print_advisories (advisories, verbose || verbose_advisories, max_key_len);
+    rpmostree_print_advisories (advisories, verbose || verbose_advisories, max_key_len);
 
   g_auto(GVariantDict) rpm_diff_dict;
   g_variant_dict_init (&rpm_diff_dict, rpm_diff);
