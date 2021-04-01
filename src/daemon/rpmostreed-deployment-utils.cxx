@@ -220,6 +220,7 @@ filter_commit_meta (GVariant *commit_meta)
   g_variant_dict_init (&dict, commit_meta);
   /* for now we just blacklist, but we may want to whitelist in the future */
   g_variant_dict_remove (&dict, "rpmostree.rpmdb.pkglist");
+  g_variant_dict_remove (&dict, "rpmostree.advisories");
   return g_variant_dict_end (&dict);
 }
 
