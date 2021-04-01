@@ -61,59 +61,6 @@ _rpmostree_jsonutil_object_require_string_member (JsonObject     *object,
   return ret;
 }
 
-static gboolean
-_jsonutil_node_check_int (JsonNode *node)
-{
-  if (!node)
-    return FALSE;
-
-  if (json_node_get_value_type (node) != G_TYPE_INT64)
-    return FALSE;
-
-  return TRUE;
-}
-
-gboolean
-_rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
-                                                    const char     *member_name,
-                                                    gint64         *out_value,
-                                                    gboolean       *found,
-                                                    GError        **error)
-{
-  if (found)
-    *found = FALSE;
-  *out_value = 0;
-
-  if (!object)
-    return TRUE;
-
-  JsonNode *node = json_object_get_member (object, member_name);
-  if (node != NULL)
-    {
-      if (!_jsonutil_node_check_int (node))
-        return glnx_throw (error, "Member '%s' is not an integer", member_name);
-      if (found)
-        *found = TRUE;
-      *out_value = json_node_get_int (node);
-    }
-
-  return TRUE;
-}
-
-gboolean
-_rpmostree_jsonutil_object_require_int_member (JsonObject     *object,
-                                               const char     *member_name,
-                                               gint64         *out_val,
-                                               GError        **error)
-{
-  gboolean found;
-  if (!_rpmostree_jsonutil_object_get_optional_int_member (object, member_name, out_val, &found, error))
-    return FALSE;
-  if (!found)
-    return glnx_throw (error, "Member '%s' not found", member_name);
-  return TRUE;
-}
-
 gboolean
 _rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject     *object,
                                                        const char     *member_name,
@@ -142,58 +89,5 @@ _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
   const char *ret = json_array_get_string_element (array, i);
   if (!ret)
     return (char*)glnx_null_throw (error, "Element at index %u is not a string", i);
-  return ret;
-}
-
-gboolean
-_rpmostree_jsonutil_array_require_int_element (JsonArray      *array,
-                                               guint           i,
-                                               gint64         *out_val,
-                                               GError        **error)
-{
-  JsonNode *node = json_array_get_element (array, i);
-
-  if (!_jsonutil_node_check_int (node))
-    return glnx_throw (error, "Element at index %u is not an integer", i);
-
-  *out_val = json_array_get_int_element (array, i);
-  return TRUE;
-}
-
-gboolean
-_rpmostree_jsonutil_append_string_array_to (JsonObject   *object,
-                                            const char   *member_name,
-                                            GPtrArray    *array,
-                                            GError      **error)
-{
-  JsonArray *jarray = json_object_get_array_member (object, member_name);
-
-  if (!jarray)
-    return glnx_throw (error, "No member '%s' found", member_name);
-
-  guint len = json_array_get_length (jarray);
-  for (guint i = 0; i < len; i++)
-    {
-      const char *v = _rpmostree_jsonutil_array_require_string_element (jarray, i, error);
-      if (!v)
-        return FALSE;
-      g_ptr_array_add (array, g_strdup (v));
-    }
-
-  return TRUE;
-}
-
-GHashTable *
-_rpmostree_jsonutil_jsarray_strings_to_set (JsonArray  *array)
-{
-  GHashTable *ret = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-  const guint len = json_array_get_length (array);
-
-  for (guint i = 0; i < len; i++)
-    {
-      const char *elt = json_array_get_string_element (array, i);
-      g_hash_table_add (ret, g_strdup (elt));
-    }
-
   return ret;
 }
