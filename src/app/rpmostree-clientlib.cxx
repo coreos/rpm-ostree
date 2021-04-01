@@ -1380,7 +1380,12 @@ rpmostree_print_advisories (GVariant *advisories,
     return;
 
   g_print ("%s%s", get_red_start (), get_bold_start ());
-  rpmostree_print_kv_no_newline ("SecAdvisories", max_key_len, "");
+
+  /* this signals to just print leftmost */
+  if (max_key_len == 0)
+    g_print ("SecAdvisories:\n");
+  else
+    rpmostree_print_kv_no_newline ("SecAdvisories", max_key_len, "");
 
   if (!verbose)
     {
@@ -1425,7 +1430,7 @@ rpmostree_print_advisories (GVariant *advisories,
           const char *nevra;
           g_variant_get_child (pkgs, j, "&s", &nevra);
 
-          if (i == 0 && j == 0) /* we're on the same line as SecAdvisories */
+          if (i == 0 && j == 0 && max_key_len > 0) /* we're on the same line as SecAdvisories */
             g_print ("%-*s  %-*s  %s\n", max_id_len, id, max_sev_len, severity_str, nevra);
           else
             g_print ("  %*s  %-*s  %-*s  %s\n", max_key_len, "", max_id_len, id,
