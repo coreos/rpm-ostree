@@ -311,22 +311,22 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         ( $($field:ident),* ) => {{
             $( merge_basic_field(&mut dest.$field, &mut src.$field); )*
         }};
-    };
+    }
     macro_rules! merge_hashsets {
         ( $($field:ident),* ) => {{
             $( merge_hashset_field(&mut dest.$field, &mut src.$field); )*
         }};
-    };
+    }
     macro_rules! merge_maps {
         ( $($field:ident),* ) => {{
             $( merge_map_field(&mut dest.$field, &mut src.$field); )*
         }};
-    };
+    }
     macro_rules! merge_vecs {
         ( $($field:ident),* ) => {{
             $( merge_vec_field(&mut dest.$field, &mut src.$field); )*
         }};
-    };
+    }
 
     merge_basics!(
         treeref,
@@ -1144,7 +1144,7 @@ impl TreeComposeConfig {
                 }
                 self.$field = self.$field.or(self.legacy_fields.$field.take());
             }};
-        };
+        }
 
         migrate_field!(gpg_key);
         migrate_field!(boot_location);
@@ -1179,7 +1179,7 @@ impl TreeComposeConfig {
                     }
                 }
             }};
-        };
+        }
         substitute_field!(treeref);
         substitute_field!(automatic_version_prefix);
         substitute_field!(mutate_os_release);
