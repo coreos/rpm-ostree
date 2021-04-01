@@ -34,12 +34,14 @@ static char *opt_format;
 static gboolean opt_changelogs;
 static char *opt_sysroot;
 static gboolean opt_base;
+static gboolean opt_advisories;
 
 static GOptionEntry option_entries[] = {
   { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or \"json\" or (default) \"block\"", "FORMAT" },
   { "changelogs", 'c', 0, G_OPTION_ARG_NONE, &opt_changelogs, "Also output RPM changelogs", NULL },
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "base", 0, 0, G_OPTION_ARG_NONE, &opt_base, "Diff against deployments' base, not layered commits", NULL },
+  { "advisories", 'a', 0, G_OPTION_ARG_NONE, &opt_advisories, "Also output new advisories", NULL },
   { NULL }
 };
 
@@ -96,6 +98,13 @@ print_diff (OstreeRepo   *repo,
       else
         rpmostree_diff_print_formatted (RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, NULL, 0,
                                         removed, added, modified_from, modified_to);
+    }
+
+  if (opt_advisories)
+    {
+      auto diff = rpmostreecxx::calculate_advisories_diff(*repo, from_checksum, to_checksum);
+      g_print ("\n");
+      rpmostree_print_advisories (diff, TRUE, 0);
     }
 
   return TRUE;
@@ -168,6 +177,12 @@ rpmostree_db_builtin_diff (int argc, char **argv,
   if (g_str_equal (opt_format, "json") && opt_changelogs)
     {
       rpmostree_usage_error (context, "json format and --changelogs not supported", error);
+      return FALSE;
+    }
+
+  if (g_str_equal (opt_format, "diff") && opt_advisories)
+    {
+      rpmostree_usage_error (context, "diff format and --advisories not supported", error);
       return FALSE;
     }
 
@@ -257,6 +272,8 @@ rpmostree_db_builtin_diff (int argc, char **argv,
                                        FALSE, &diffv, cancellable, error))
         return FALSE;
       g_variant_builder_add (&builder, "{sv}", "pkgdiff", diffv);
+      auto adv_diff = rpmostreecxx::calculate_advisories_diff(*repo, from_checksum, to_checksum);
+      g_variant_builder_add (&builder, "{sv}", "advisories", adv_diff);
       g_autoptr(GVariant) metadata = g_variant_builder_end (&builder);
 
       JsonNode *node = json_gvariant_serialize (metadata);

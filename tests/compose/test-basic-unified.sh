@@ -100,6 +100,10 @@ echo "ok --no-parent"
 rpm-ostree db list --repo="${repo}" "${treeref}" --advisories > db-list-adv.txt
 assert_not_file_has_content_literal db-list-adv.txt TEST-SEC-LOW
 assert_file_has_content_literal db-list-adv.txt TEST-SEC-CRIT
+rpm-ostree db diff --repo="${repo}" "${origrev}" "${newrev}" --advisories > db-diff-adv.txt
+assert_not_file_has_content_literal db-diff-adv.txt TEST-SEC-LOW
+assert_file_has_content_literal db-diff-adv.txt TEST-SEC-CRIT
+echo "ok db diff --advisories"
 
 build_rpm dodo-base
 build_rpm dodo requires dodo-base

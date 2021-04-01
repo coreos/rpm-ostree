@@ -272,6 +272,11 @@ pub mod ffi {
         fn get_features() -> Vec<String>;
         fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32>;
         fn running_in_systemd() -> bool;
+        fn calculate_advisories_diff(
+            repo: Pin<&mut OstreeRepo>,
+            checksum_from: &str,
+            checksum_to: &str,
+        ) -> Result<*mut GVariant>;
     }
 
     #[derive(Default)]
