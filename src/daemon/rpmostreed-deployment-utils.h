@@ -50,18 +50,6 @@ GVariant *      rpmostreed_commit_generate_cached_details_variant (OstreeDeploym
                                                                    const char       *checksum,
                                                                    GError          **error);
 
-/*  s     advisory id (e.g. FEDORA-2018-a1b2c3d4e5f6)
-    u     advisory kind (enum DnfAdvisoryKind)
-    u     advisory severity (enum RpmOstreeAdvisorySeverity)
-    as    list of packages (NEVRAs) contained in the advisory
-    a{sv} additional info about advisory
-      "cve_references" -> 'a(ss)'
-        s   title
-        s   URL
-*/
-#define RPMOSTREE_UPDATE_ADVISORY_GVARIANT_STRING "a(suuasa{sv})"
-#define RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT G_VARIANT_TYPE (RPMOSTREE_UPDATE_ADVISORY_GVARIANT_STRING)
-
 gboolean        rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
                                                     OstreeDeployment  *staged_deployment,
                                                     OstreeRepo        *repo,

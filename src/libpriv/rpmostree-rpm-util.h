@@ -240,4 +240,20 @@ rpmostree_nevra_to_cache_branch (const char *nevra,
 GPtrArray *
 rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement);
 
+/*  s     advisory id (e.g. FEDORA-2018-a1b2c3d4e5f6)
+    u     advisory kind (enum DnfAdvisoryKind)
+    u     advisory severity (enum RpmOstreeAdvisorySeverity)
+    as    list of packages (NEVRAs) contained in the advisory
+    a{sv} additional info about advisory
+      "cve_references" -> 'a(ss)'
+        s   title
+        s   URL
+
+    This is also defined in utils.rs.
+*/
+#define RPMOSTREE_UPDATE_ADVISORY_GVARIANT_STRING "a(suuasa{sv})"
+#define RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT G_VARIANT_TYPE (RPMOSTREE_UPDATE_ADVISORY_GVARIANT_STRING)
+
+GVariant*       rpmostree_advisories_variant (DnfSack    *sack, GPtrArray  *pkgs);
+
 G_END_DECLS
