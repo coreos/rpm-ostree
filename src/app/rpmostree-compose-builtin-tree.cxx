@@ -780,6 +780,22 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 }
 
 static gboolean
+inject_advisories (RpmOstreeTreeComposeContext *self,
+                   GCancellable    *cancellable,
+                   GError         **error)
+{
+  g_autoptr(GPtrArray) pkgs = rpmostree_context_get_packages (self->corectx);
+  DnfContext *dnfctx = rpmostree_context_get_dnf (self->corectx);
+  DnfSack *yum_sack = dnf_context_get_sack (dnfctx);
+  g_autoptr(GVariant) advisories = rpmostree_advisories_variant (yum_sack, pkgs);
+
+  if (advisories && g_variant_n_children (advisories) > 0)
+    g_hash_table_insert (self->metadata, g_strdup ("rpmostree.advisories"), g_steal_pointer (&advisories));
+
+  return TRUE;
+}
+
+static gboolean
 impl_install_tree (RpmOstreeTreeComposeContext *self,
                    gboolean        *out_changed,
                    GCancellable    *cancellable,
@@ -925,6 +941,9 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       g_hash_table_insert (self->metadata, g_strdup ("rpmostree.rpmmd-repos"),
                            rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
     }
+
+  if (!inject_advisories (self, cancellable, error))
+    return FALSE;
 
   /* Destroy this now so the libdnf stack won't have any references
    * into the filesystem before we manipulate it.
