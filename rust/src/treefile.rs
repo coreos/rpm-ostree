@@ -710,7 +710,7 @@ impl Treefile {
         );
 
         for v in it {
-            let rev = repo.resolve_rev(v, false)?;
+            let rev = repo.resolve_rev(v, false)?.unwrap();
             let rev = rev.as_str();
             let (commit, _) = repo.load_commit(rev)?;
             let content_checksum =

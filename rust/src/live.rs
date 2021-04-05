@@ -16,7 +16,7 @@ use fn_error_context::context;
 use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
-use ostree_host::prelude::*;
+use ostree_ext::diff::FileTreeDiff;
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
@@ -63,8 +63,8 @@ pub(crate) fn get_live_state(
     if !root.exists(&get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
         return Ok(None);
     }
-    let live_commit = repo.x_resolve_ref_optional(LIVE_REF)?;
-    let inprogress_commit = repo.x_resolve_ref_optional(LIVE_REF_INPROGRESS)?;
+    let live_commit = repo.resolve_rev(LIVE_REF, true)?;
+    let inprogress_commit = repo.resolve_rev(LIVE_REF_INPROGRESS, true)?;
     Ok(Some(LiveApplyState {
         commit: live_commit.map(|s| s.to_string()).unwrap_or_default(),
         inprogress: inprogress_commit.map(|s| s.to_string()).unwrap_or_default(),
@@ -110,7 +110,7 @@ fn relpath_dir(p: &Path) -> Result<&Path> {
 }
 
 /// Return a path buffer we can provide to libostree for checkout
-fn subpath(diff: &crate::ostree_diff::FileTreeDiff, p: &Path) -> Option<PathBuf> {
+fn subpath(diff: &FileTreeDiff, p: &Path) -> Option<PathBuf> {
     if let Some(ref d) = diff.subdir {
         let p = p.strip_prefix("/").expect("prefix");
         Some(Path::new(d).join(p))
@@ -122,7 +122,7 @@ fn subpath(diff: &crate::ostree_diff::FileTreeDiff, p: &Path) -> Option<PathBuf>
 /// Given a diff, apply it to the target directory, which should be a checkout of the source commit.
 fn apply_diff(
     repo: &ostree::Repo,
-    diff: &crate::ostree_diff::FileTreeDiff,
+    diff: &FileTreeDiff,
     commit: &str,
     destdir: &openat::Dir,
 ) -> Result<()> {
@@ -192,7 +192,7 @@ fn apply_diff(
 /// push apply-live down into libostree, this logic could be shared.
 fn update_etc(
     repo: &ostree::Repo,
-    diff: &crate::ostree_diff::FileTreeDiff,
+    diff: &FileTreeDiff,
     config_diff: &crate::dirdiff::Diff,
     sepolicy: &ostree::SePolicy,
     commit: &str,
@@ -353,7 +353,7 @@ pub(crate) fn transaction_apply_live(
     let target_commit = if let Some(t) = target {
         Cow::Borrowed(t)
     } else {
-        match sysroot.x_query_deployments_for(osname.as_str()) {
+        match sysroot.query_deployments_for(Some(osname.as_str())) {
             (Some(pending), _) => {
                 let pending_commit = pending.get_csum().expect("csum");
                 let pending_commit = pending_commit.as_str();
@@ -419,7 +419,7 @@ pub(crate) fn transaction_apply_live(
         .filter(|s| !s.is_empty())
         .unwrap_or(booted_commit);
     // Compute the filesystem-level diff
-    let diff = crate::ostree_diff::diff(repo, source_commit, &target_commit, Some("/usr"))?;
+    let diff = ostree_ext::diff::diff(repo, source_commit, &target_commit, Some("/usr"))?;
     // And then the package-level diff
     let pkgdiff = {
         cxx::let_cxx_string!(from = source_commit);
@@ -525,7 +525,7 @@ mod test {
 
     #[test]
     fn test_subpath() {
-        let d = crate::ostree_diff::FileTreeDiff {
+        let d = FileTreeDiff {
             subdir: Some("/usr".to_string()),
             ..Default::default()
         };

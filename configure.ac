@@ -45,7 +45,7 @@ PKG_PROG_PKG_CONFIG
 dnl Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 dnl These are the dependencies of the public librpmostree-1.0.0 shared library
-PKG_CHECK_MODULES(PKGDEP_LIBRPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0 ostree-1 >= 2020.7 rpm])
+PKG_CHECK_MODULES(PKGDEP_LIBRPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0 ostree-1 >= 2021.2 rpm])
 dnl And these additional ones are used by for the rpmostreeinternals C/C++ library
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [polkit-gobject-1 libarchive])
 

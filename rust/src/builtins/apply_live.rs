@@ -5,7 +5,6 @@ use crate::live;
 use crate::{cxxrsutil::*, variant_utils};
 use anyhow::{anyhow, Result};
 use gio::DBusProxyExt;
-use ostree_host::prelude::*;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
