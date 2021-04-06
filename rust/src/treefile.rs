@@ -746,8 +746,7 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
     }
 
     /// Write the serialized treefile into /usr/share on the target filesystem.
-    pub(crate) fn write_compose_json(&self, rootfs_dfd: i32) -> CxxResult<()> {
-        let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    pub(crate) fn write_compose_json(&self, rootfs_dfd: &openat::Dir) -> Result<()> {
         let target = Path::new(COMPOSE_JSON_PATH);
         rootfs_dfd.ensure_dir_all(target.parent().unwrap(), 0o755)?;
         rootfs_dfd.write_file_contents(target, 0o644, self.serialized.as_bytes())?;
@@ -1626,7 +1625,7 @@ arch-include:
         {
             let workdir = tempfile::tempdir()?;
             let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
-            tf.write_compose_json(rootdir.as_raw_fd())?;
+            tf.write_compose_json(rootdir)?;
         }
         let mut src = std::io::BufReader::new(rootdir.open_file(COMPOSE_JSON_PATH)?);
         let cfg = treefile_parse_stream(utils::InputFormat::JSON, &mut src, None)?;

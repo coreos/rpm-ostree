@@ -1132,43 +1132,6 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   return TRUE;
 }
 
-/* Move etc -> usr/etc in the rootfs, and run through treefile
- * postprocessing.
- */
-gboolean
-rpmostree_treefile_postprocessing (int            rootfs_fd,
-                                   rpmostreecxx::Treefile &treefile_rs,
-                                   JsonObject    *treefile,
-                                   const char    *next_version,
-                                   gboolean       unified_core_mode,
-                                   GCancellable  *cancellable,
-                                   GError       **error)
-{
-  g_assert (treefile);
-
-  treefile_rs.write_compose_json(rootfs_fd);
-
-  if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-    return FALSE;
-
-  rpmostreecxx::compose_postprocess_targets(rootfs_fd, treefile_rs);
-
-  /* Put /etc back for backwards compatibility */
-  if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
-    return FALSE;
-
-  rpmostreecxx::compose_postprocess_remove_files(rootfs_fd, treefile_rs);
-  rpmostreecxx::compose_postprocess_mutate_os_release(rootfs_fd, treefile_rs, next_version ?: "");
-
-  /* Undo etc move again */
-  if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-    return FALSE;
-
-  rpmostreecxx::compose_postprocess(rootfs_fd, treefile_rs, (bool)unified_core_mode);
-
-  return TRUE;
-}
-
 /**
  * rpmostree_prepare_rootfs_for_commit:
  *

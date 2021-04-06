@@ -128,22 +128,25 @@ pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
 
 #[context("Handling treefile 'units'")]
 fn compose_postprocess_units(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
+    let units = if let Some(u) = treefile.parsed.units.as_ref() {
+        u
+    } else {
+        return Ok(());
+    };
     let multiuser_wants = Path::new("usr/etc/systemd/system/multi-user.target.wants");
+    // Sanity check
+    if !rootfs_dfd.exists("usr/etc")? {
+        return Err(anyhow!("Missing usr/etc in rootfs"));
+    }
+    rootfs_dfd.ensure_dir_all(multiuser_wants, 0o755)?;
 
-    let mut created = false;
-    for unit in treefile.parsed.units.iter().flatten() {
-        if !created {
-            rootfs_dfd.ensure_dir_all(multiuser_wants, 0o755)?;
-            created = true;
-        }
-
+    for unit in units {
         let dest = multiuser_wants.join(unit);
         if rootfs_dfd.exists(&dest)? {
             continue;
         }
 
         println!("Adding {} to multi-user.target.wants", unit);
-
         let target = format!("/usr/lib/systemd/system/{}", unit);
         rootfs_dfd.symlink(&dest, &target)?;
     }
@@ -161,21 +164,6 @@ fn compose_postprocess_default_target(rootfs_dfd: &openat::Dir, target: &str) ->
     rootfs_dfd.remove_file_optional(default_target_path)?;
     let dest = format!("/usr/lib/systemd/system/{}", target);
     rootfs_dfd.symlink(default_target_path, dest)?;
-
-    Ok(())
-}
-
-#[context("Handling targets")]
-pub(crate) fn compose_postprocess_targets(
-    rootfs_dfd: i32,
-    treefile: &mut Treefile,
-) -> CxxResult<()> {
-    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
-
-    compose_postprocess_units(&rootfs_dfd, treefile)?;
-    if let Some(t) = treefile.parsed.default_target.as_deref() {
-        compose_postprocess_default_target(&rootfs_dfd, t)?;
-    }
 
     Ok(())
 }
@@ -227,11 +215,9 @@ fn compose_postprocess_scripts(
 
 #[context("Handling `remove-files`")]
 pub(crate) fn compose_postprocess_remove_files(
-    rootfs_dfd: i32,
+    rootfs_dfd: &openat::Dir,
     treefile: &mut Treefile,
-) -> CxxResult<()> {
-    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
-
+) -> Result<()> {
     for name in treefile.parsed.remove_files.iter().flatten() {
         let p = Path::new(name);
         if p.is_absolute() {
@@ -307,13 +293,33 @@ fn compose_postprocess_rpmdb(rootfs_dfd: &openat::Dir) -> Result<()> {
 pub(crate) fn compose_postprocess(
     rootfs_dfd: i32,
     treefile: &mut Treefile,
+    next_version: &str,
     unified_core: bool,
 ) -> CxxResult<()> {
     let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
 
-    compose_postprocess_add_files(rootfs_dfd, treefile)?;
-    compose_postprocess_scripts(rootfs_dfd, treefile, unified_core)?;
+    // One of several dances we do around this that really needs to be completely
+    // reworked.
+    if rootfs_dfd.exists("etc")? {
+        rootfs_dfd.local_rename("etc", "usr/etc")?;
+    }
+
     compose_postprocess_rpmdb(rootfs_dfd)?;
+    compose_postprocess_units(&rootfs_dfd, treefile)?;
+    if let Some(t) = treefile.parsed.default_target.as_deref() {
+        compose_postprocess_default_target(&rootfs_dfd, t)?;
+    }
+
+    compose_postprocess_mutate_os_release(rootfs_dfd, treefile, next_version)?;
+    treefile.write_compose_json(rootfs_dfd)?;
+
+    let etc_guard = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
+    // These ones depend on the /etc path
+    compose_postprocess_remove_files(rootfs_dfd, treefile)?;
+    compose_postprocess_add_files(rootfs_dfd, treefile)?;
+    etc_guard.undo()?;
+
+    compose_postprocess_scripts(rootfs_dfd, treefile, unified_core)?;
 
     Ok(())
 }
@@ -321,7 +327,7 @@ pub(crate) fn compose_postprocess(
 /// Implementation of the treefile `mutate-os-release` field.
 #[context("Updating os-release with commit version")]
 pub(crate) fn compose_postprocess_mutate_os_release(
-    rootfs_dfd: i32,
+    rootfs_dfd: &openat::Dir,
     treefile: &mut Treefile,
     next_version: &str,
 ) -> Result<()> {
@@ -334,7 +340,6 @@ pub(crate) fn compose_postprocess_mutate_os_release(
         println!("Ignoring mutate-os-release: no commit version specified.");
         return Ok(());
     }
-    let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
     // find the real path to os-release using bwrap; this is an overkill but safer way
     // of resolving a symlink relative to a rootfs (see discussions in
     // https://github.com/projectatomic/rpm-ostree/pull/410/)
