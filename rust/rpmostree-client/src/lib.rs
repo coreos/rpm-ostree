@@ -98,40 +98,44 @@ impl Deployment {
     }
 }
 
-fn cli_cmd(c: &CliClient) -> Command {
-    let mut cmd = Command::new("rpm-ostree");
-    cmd.env("RPMOSTREE_CLIENT_ID", c.agent_id.as_str());
-    cmd
-}
-
-/// Gather a snapshot of the system status.
-pub fn query_status(c: &CliClient) -> Result<Status> {
-    // Retry on temporary activation failures, see
-    // https://github.com/coreos/rpm-ostree/issues/2531
-    let pause = std::time::Duration::from_secs(1);
-    let max_retries = 10;
-    let mut retries = 0;
-    let cmd_res = loop {
-        retries += 1;
-        let res = cli_cmd(c)
-            .args(&["status", "--json"])
-            .output()
-            .context("failed to spawn 'rpm-ostree status'")?;
-
-        if res.status.success() || retries >= max_retries {
-            break res;
-        }
-        std::thread::sleep(pause);
-    };
-
-    if !cmd_res.status.success() {
-        return Err(format!(
-            "running 'rpm-ostree status' failed: {}",
-            String::from_utf8_lossy(&cmd_res.stderr)
-        )
-        .into());
+impl CliClient {
+    /// Create an invocation of the client binary
+    fn cli_cmd(&self) -> Command {
+        let mut cmd = Command::new("rpm-ostree");
+        cmd.env("RPMOSTREE_CLIENT_ID", self.agent_id.as_str());
+        cmd
     }
 
-    Ok(serde_json::from_slice(&cmd_res.stdout)
-        .context("failed to parse 'rpm-ostree status' output")?)
+    /// Gather a snapshot of the system status.
+    pub fn query_status(&self) -> Result<Status> {
+        // Retry on temporary activation failures, see
+        // https://github.com/coreos/rpm-ostree/issues/2531
+        let pause = std::time::Duration::from_secs(1);
+        let max_retries = 10;
+        let mut retries = 0;
+        let cmd_res = loop {
+            retries += 1;
+            let res = self
+                .cli_cmd()
+                .args(&["status", "--json"])
+                .output()
+                .context("failed to spawn 'rpm-ostree status'")?;
+
+            if res.status.success() || retries >= max_retries {
+                break res;
+            }
+            std::thread::sleep(pause);
+        };
+
+        if !cmd_res.status.success() {
+            return Err(format!(
+                "running 'rpm-ostree status' failed: {}",
+                String::from_utf8_lossy(&cmd_res.stderr)
+            )
+            .into());
+        }
+
+        Ok(serde_json::from_slice(&cmd_res.stdout)
+            .context("failed to parse 'rpm-ostree status' output")?)
+    }
 }
