@@ -133,17 +133,10 @@ pub mod ffi {
     // composepost.rs
     extern "Rust" {
         fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> Result<()>;
-        fn compose_postprocess_targets(rootfs_dfd: i32, treefile: &mut Treefile) -> Result<()>;
-        fn compose_postprocess_mutate_os_release(
-            rootfs_dfd: i32,
-            treefile: &mut Treefile,
-            next_version: &str,
-        ) -> Result<()>;
-        fn compose_postprocess_remove_files(rootfs_dfd: i32, treefile: &mut Treefile)
-            -> Result<()>;
         fn compose_postprocess(
             rootfs_dfd: i32,
             treefile: &mut Treefile,
+            next_version: &str,
             unified_core: bool,
         ) -> Result<()>;
         fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()>;
@@ -260,7 +253,6 @@ pub mod ffi {
         fn get_rpmdb(&self) -> String;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);
-        fn write_compose_json(&self, rootfs_dfd: i32) -> Result<()>;
         fn sanitycheck_externals(&self) -> Result<()>;
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
         fn get_ostree_ref(&self) -> String;

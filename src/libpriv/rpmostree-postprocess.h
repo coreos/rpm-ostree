@@ -26,16 +26,6 @@
 
 G_BEGIN_DECLS
 
-
-gboolean
-rpmostree_treefile_postprocessing (int            rootfs_fd,
-                                   rpmostreecxx::Treefile &treefile_rs,
-                                   JsonObject    *treefile,
-                                   const char    *next_version,
-                                   gboolean       unified_core_mode,
-                                   GCancellable  *cancellable,
-                                   GError       **error);
-
 gboolean
 rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
                                       const char *dest,

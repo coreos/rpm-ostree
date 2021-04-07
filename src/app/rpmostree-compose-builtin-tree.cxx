@@ -954,10 +954,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   /* Start postprocessing */
-  if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, **self->treefile_rs, self->treefile,
-                                          next_version.length() > 0 ? next_version.c_str() : NULL, self->unified_core_and_fuse,
-                                          cancellable, error))
-    return glnx_prefix_error (error, "Postprocessing");
+  rpmostreecxx::compose_postprocess(self->rootfs_dfd, **self->treefile_rs, next_version, self->unified_core_and_fuse);
 
   /* Until here, we targeted "rootfs.tmp" in the working directory. Most
    * user-configured postprocessing has run. Now, we need to perform required
