@@ -3,7 +3,7 @@
 stage("Build") {
 parallel rpms: {
   def n = 5
-  buildPod(memory: "2Gi", cpu: "${n}") {
+  buildPod(image: "quay.io/cgwalters/fcos-buildroot", memory: "2Gi", cpu: "${n}") {
       checkout scm
       // 2:1 job to CPU at most should keep us from getting kicked out
       shwrap("""RPM_BUILD_NCPUS=${n} CARGO_BUILD_JOBS=${n} ./ci/coreosci-rpmbuild.sh
