@@ -1,5 +1,9 @@
 #!/bin/bash
 #
+# NOTE: This is presently disabled by default because
+# we don't want to drag pygobject3 into our build container
+# and anyways the shared library should be considered deprecated.
+#
 # Copyright (C) 2014 Colin Walters <walters@verbum.org>
 #
 # This library is free software; you can redistribute it and/or

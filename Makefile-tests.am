@@ -21,7 +21,6 @@ endif
 GITIGNOREFILES += ssh-config vmcheck-logs/ test-compose-logs/ .cosa/
 
 uninstalled_test_scripts = \
-	tests/check/test-lib-introspection.sh \
 	$(NULL)
 
 uninstalled_test_extra_programs = \
