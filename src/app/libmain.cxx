@@ -281,7 +281,13 @@ rpmostree_option_context_parse (GOptionContext *context,
           if (!glnx_fstatat_allow_noent (AT_FDCWD, "/run/ostree-booted", NULL, 0, error))
             return FALSE;
           if (errno == ENOENT)
-            return glnx_throw (error, "This system was not booted via libostree; cannot operate");
+            {
+              const char *containerenv = getenv ("container");
+              if (containerenv != NULL)
+                return glnx_throw (error, "This system was not booted via libostree; found $container=%s environment variable.\nrpm-ostree is designed to manage host systems, not containers.\n", containerenv);
+              else
+                return glnx_throw (error, "This system was not booted via libostree; cannot operate");
+            }
         }
 
       /* root never needs to auth */
