@@ -227,7 +227,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
 // to update the client bindings when adding new fields.
 fn validate_parse_status() -> Result<()> {
     let c = rpmostree_client::CliClient::new("tests");
-    let s = rpmostree_client::query_status(&c).map_err(anyhow::Error::msg)?;
+    let s = c.query_status().map_err(anyhow::Error::msg)?;
     assert_ne!(s.deployments.len(), 0);
     Ok(())
 }
