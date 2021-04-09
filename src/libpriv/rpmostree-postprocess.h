@@ -59,13 +59,6 @@ rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
                                            GError       **error);
 
 gboolean
-rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
-                                     int            target_rootfs_dfd,
-                                     JsonObject    *treefile,
-                                     GCancellable  *cancellable,
-                                     GError       **error);
-
-gboolean
 rpmostree_postprocess_final (int            rootfs_dfd,
                              JsonObject    *treefile,
                              gboolean       unified_core_mode,

@@ -973,10 +973,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                          &target_rootfs_dfd, error))
       return FALSE;
 
-    if (!rpmostree_prepare_rootfs_for_commit (self->rootfs_dfd, target_rootfs_dfd,
-                                              self->treefile,
-                                              cancellable, error))
-      return glnx_prefix_error (error, "Preparing rootfs for commit");
+    rpmostreecxx::compose_prepare_rootfs(self->rootfs_dfd, target_rootfs_dfd, **self->treefile_rs);
 
     glnx_close_fd (&self->rootfs_dfd);
 

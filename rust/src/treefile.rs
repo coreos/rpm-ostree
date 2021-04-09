@@ -1037,7 +1037,7 @@ pub(crate) struct TreeComposeConfig {
     boot_location: Option<BootLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "tmp-is-dir")]
-    tmp_is_dir: Option<bool>,
+    pub(crate) tmp_is_dir: Option<bool>,
 
     // systemd
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1205,15 +1205,15 @@ impl TreeComposeConfig {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use indoc::indoc;
     use openat_ext::OpenatDirExt;
     use tempfile;
 
-    static ARCH_X86_64: &str = "x86_64";
+    pub(crate) static ARCH_X86_64: &str = "x86_64";
 
-    static VALID_PRELUDE: &str = indoc! {r#"
+    pub(crate) static VALID_PRELUDE: &str = indoc! {r#"
         ref: "exampleos/x86_64/blah"
         packages:
          - foo bar
@@ -1409,7 +1409,7 @@ mod tests {
         "});
     }
 
-    fn new_test_treefile<'a, 'b>(
+    pub(crate) fn new_test_treefile<'a, 'b>(
         workdir: &std::path::Path,
         contents: &'a str,
         basearch: Option<&'b str>,
