@@ -1153,13 +1153,9 @@ filter_xattrs_cb (OstreeRepo     *repo,
 {
   g_assert (relpath);
 
-  GVariantBuilder builder;
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
-
   try {
     return filter_xattrs_impl(repo, relpath, file_info, user_data);
   } catch (std::exception& e) {
-      g_variant_builder_clear (&builder);
       /* Unfortunately we have no way to throw from this callback */
       g_printerr ("Failed to read xattrs of '%s': %s\n", relpath, e.what());
       exit (1);
