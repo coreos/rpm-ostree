@@ -37,6 +37,17 @@ jq -r .ref < treefile.json > ref.txt
 # Test substitution of ${basearch}
 assert_file_has_content_literal ref.txt "${treeref}"
 
+treefile_pyedit "tf['from'] = 'somebaseref'"
+rpm-ostree compose tree --print-only "${treefile}" > treefile.json
+if runcompose --dry-run &>err.txt; then
+  fatal "ran a compose with derivation"
+fi
+assert_file_has_content_literal err.txt 'Cannot currently use derivation field'
+rm -f err.txt
+treefile_pyedit "del tf['from']"
+echo "ok cannot use derivation for composes yet"
+
+
 treefile_pyedit "tf['add-commit-metadata']['foobar'] = 'bazboo'"
 treefile_pyedit "tf['add-commit-metadata']['overrideme'] = 'old var'"
 

@@ -33,6 +33,7 @@ namespace rpmostreecxx {
     typedef ::GDBusConnection GDBusConnection;
     typedef ::GVariant GVariant;
     typedef ::GVariantDict GVariantDict;
+    typedef ::GKeyFile GKeyFile;
 }
 
 // XXX: really should just include! libdnf.hxx in the bridge
