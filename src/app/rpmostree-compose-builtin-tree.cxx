@@ -696,7 +696,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       arch = dnf_context_get_base_arch (ctx);
   }
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
-  self->treefile_rs = rpmostreecxx::treefile_new(gs_file_get_path_cached (self->treefile_path), arch, self->workdir_dfd);
+  self->treefile_rs = rpmostreecxx::treefile_new_compose(gs_file_get_path_cached (self->treefile_path), arch, self->workdir_dfd);
   self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo,
                                                  **self->treefile_rs);
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
@@ -1289,7 +1289,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
     {
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
         return FALSE;
-      auto treefile_rs = rpmostreecxx::treefile_new(treefile_path, "", workdir_tmp.fd);
+      auto treefile_rs = rpmostreecxx::treefile_new_compose(treefile_path, "", workdir_tmp.fd);
       auto serialized = treefile_rs->get_json_string();
       treefile_parser = json_parser_new ();
       if (!json_parser_load_from_data (treefile_parser, serialized.c_str(), -1, error))
@@ -1461,7 +1461,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   const char *extensions_path = argv[2];
 
   g_autofree char *basearch = rpm_ostree_get_basearch ();
-  auto treefile = rpmostreecxx::treefile_new (treefile_path, basearch, -1);
+  auto treefile = rpmostreecxx::treefile_new_compose(treefile_path, basearch, -1);
 
   /* We don't want the core to handle repo packages from the treefile. Normally,
    * if repo packages worked like other knobs and went via the treespec, this

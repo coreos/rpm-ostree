@@ -52,6 +52,7 @@ const COMPOSE_JSON_PATH: &str = "usr/share/rpm-ostree/treefile.json";
 
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
+#[derive(Default)]
 pub(crate) struct TreefileExternals {
     postprocess_script: Option<fs::File>,
     add_files: collections::BTreeMap<String, fs::File>,
@@ -386,6 +387,8 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         remove_from_packages,
         repo_packages
     );
+
+    merge_basic_field(&mut dest.derive.from, &mut src.derive.from);
 }
 
 /// Merge the treefile externals. There are currently only two keys that
@@ -489,6 +492,29 @@ impl Treefile {
             serialized,
             externals: parsed.externals,
         }))
+    }
+
+    pub(crate) fn new_from_config(
+        parsed: TreeComposeConfig,
+        cfgdir: Option<&openat::Dir>,
+    ) -> Result<Self> {
+        let serialized = Treefile::serialize_json_string(&parsed)?;
+        let primary_dfd = if let Some(d) = cfgdir {
+            d.sub_dir(".")?
+        } else {
+            // If we weren't passed a configdir, for now we just make a tempdir
+            // then delete it, holding open a useless fd to it.  This is to
+            // avoid changing all of the treefile code to use an Option<> for the dfd right now.
+            let td = tempfile::tempdir()?;
+            openat::Dir::open(td.path())?
+        };
+        Ok(Treefile {
+            primary_dfd,
+            parsed,
+            _workdir: None,
+            serialized,
+            externals: Default::default(),
+        })
     }
 
     /// Return the raw file descriptor for the workdir
@@ -668,6 +694,11 @@ impl Treefile {
     fn serialize_json_string(config: &TreeComposeConfig) -> Result<CUtf8Buf> {
         let output = serde_json::to_string_pretty(config)?;
         Ok(CUtf8Buf::from_string(output))
+    }
+
+    /// Throw an error if any derive fields are set.
+    pub(crate) fn error_if_deriving(&self) -> Result<()> {
+        self.parsed.derive.error_if_nonempty()
     }
 
     /// Given a treefile, print warnings about items which are deprecated.
@@ -1132,6 +1163,9 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) legacy_fields: LegacyTreeComposeConfigFields,
 
     #[serde(flatten)]
+    pub(crate) derive: DeriveConfigFields,
+
+    #[serde(flatten)]
     pub(crate) extra: HashMap<String, serde_json::Value>,
 }
 
@@ -1151,6 +1185,75 @@ pub(crate) struct LegacyTreeComposeConfigFields {
     pub(crate) default_target: Option<String>,
     #[serde(skip_serializing)]
     pub(crate) automatic_version_prefix: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct DeriveCustom {
+    pub(crate) url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) description: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct DeriveInitramfs {
+    pub(crate) regenerate: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) etc: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) args: Option<Vec<String>>,
+}
+
+/// These fields are only useful when deriving from a prior ostree commit;
+/// at the moment we only use them when translating an origin file
+/// to a treefile for client side assembly.
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct DeriveConfigFields {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) from: Option<String>,
+
+    // Packages
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) packages_local: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) override_remove: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) override_replace_local: Option<BTreeMap<String, String>>,
+
+    // Initramfs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) initramfs: Option<DeriveInitramfs>,
+
+    // Custom origin
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) custom: Option<DeriveCustom>,
+
+    // Misc
+    pub(crate) override_commit: Option<String>,
+}
+
+impl DeriveConfigFields {
+    pub(crate) fn error_if_nonempty(&self) -> Result<()> {
+        macro_rules! check {
+            ( $field:ident ) => {{
+                if self.$field.is_some() {
+                    return Err(anyhow!(
+                        "Cannot currently use derivation field '{}' for composes",
+                        stringify!($field)
+                    ));
+                }
+            }};
+        }
+        check!(from);
+        check!(packages_local);
+        check!(override_remove);
+        check!(override_replace_local);
+        check!(initramfs);
+        check!(custom);
+        Ok(())
+    }
 }
 
 impl TreeComposeConfig {
@@ -1859,4 +1962,15 @@ pub(crate) fn treefile_new(
         basearch.as_deref(),
         workdir,
     )?)
+}
+
+/// Create a new treefile, returning an error if any (currently) client-side options are set.
+pub(crate) fn treefile_new_compose(
+    filename: &str,
+    basearch: &str,
+    workdir: i32,
+) -> CxxResult<Box<Treefile>> {
+    let r = treefile_new(filename, basearch, workdir)?;
+    r.error_if_deriving()?;
+    Ok(r)
 }

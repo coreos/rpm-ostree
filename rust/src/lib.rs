@@ -40,6 +40,7 @@ pub mod ffi {
         type GDBusConnection = crate::FFIGDBusConnection;
         type GVariant = crate::FFIGVariant;
         type GVariantDict = crate::FFIGVariantDict;
+        type GKeyFile = crate::FFIGKeyFile;
 
         #[namespace = "dnfcxx"]
         type DnfPackage = libdnf_sys::DnfPackage;
@@ -270,6 +271,11 @@ pub mod ffi {
         type Treefile;
 
         fn treefile_new(filename: &str, basearch: &str, workdir: i32) -> Result<Box<Treefile>>;
+        fn treefile_new_compose(
+            filename: &str,
+            basearch: &str,
+            workdir: i32,
+        ) -> Result<Box<Treefile>>;
 
         fn get_workdir(&self) -> i32;
         fn get_passwd_fd(&mut self) -> i32;
@@ -425,6 +431,12 @@ pub mod ffi {
         fn get_locked_src_packages(&self) -> Result<Vec<LockedPackage>>;
     }
 
+    // origin.rs
+    extern "Rust" {
+        fn origin_to_treefile(kf: Pin<&mut GKeyFile>) -> Result<Box<Treefile>>;
+        fn origin_validate_roundtrip(mut kf: Pin<&mut GKeyFile>) -> Result<()>;
+    }
+
     // rpmutils.rs
     extern "Rust" {
         fn cache_branch_to_nevra(nevra: &str) -> String;
@@ -555,10 +567,8 @@ pub(crate) use self::lockfile::*;
 mod live;
 pub(crate) use self::live::*;
 mod nameservice;
-// An origin parser in Rust but only built when testing until
-// we're ready to try porting the C++ code.
-#[cfg(test)]
 mod origin;
+pub(crate) use self::origin::*;
 mod passwd;
 use passwd::*;
 mod console_progress;

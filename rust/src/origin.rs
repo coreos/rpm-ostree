@@ -6,56 +6,236 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
-use anyhow::{bail, Result};
-use glib::translate::*;
-use glib::GString;
+use crate::cxxrsutil::*;
+use crate::treefile::Treefile;
+use anyhow::Context;
+use anyhow::Result;
+use fn_error_context::context;
 use glib::KeyFile;
-use indoc::indoc;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::pin::Pin;
 use std::result::Result as StdResult;
 
-use std::collections::{BTreeMap, BTreeSet};
-
 const ORIGIN: &str = "origin";
-const OVERRIDE_COMMIT: &str = "override-commit";
+const RPMOSTREE: &str = "rpmostree";
+const PACKAGES: &str = "packages";
+const OVERRIDES: &str = "overrides";
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RefspecType {
-    Checksum,
-    Ostree,
+/// The set of keys that we parse as BTreeMap and need to ignore ordering changes.
+static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
+    "packages/local",
+    "overrides/replace-local"
+};
+
+#[context("Parsing origin")]
+fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
+    // First thing here, we remove libostree-transient bits, as those should
+    // never carry over into new origins, and we don't actually operate on those
+    // fields.
+    ostree::Deployment::origin_remove_transient_state(kf);
+
+    let mut cfg: crate::treefile::TreeComposeConfig = Default::default();
+    let refspec_str = if let Some(r) = keyfile_get_optional_string(&kf, ORIGIN, "refspec")? {
+        Some(r)
+    } else {
+        keyfile_get_optional_string(&kf, ORIGIN, "baserefspec")?
+    };
+    cfg.derive.from = refspec_str;
+    cfg.packages = parse_stringlist(&kf, PACKAGES, "requested")?;
+    cfg.derive.packages_local = parse_localpkglist(&kf, PACKAGES, "requested-local")?;
+    cfg.derive.override_remove = parse_stringlist(&kf, OVERRIDES, "remove")?;
+    cfg.derive.override_replace_local = parse_localpkglist(&kf, OVERRIDES, "replace-local")?;
+
+    let regenerate_initramfs = kf
+        .get_boolean(RPMOSTREE, "regenerate-initramfs")
+        .unwrap_or_default();
+    let initramfs_etc = parse_stringlist(kf, RPMOSTREE, "initramfs-etc")?;
+    let initramfs_args = parse_stringlist(kf, RPMOSTREE, "initramfs-args")?;
+    if regenerate_initramfs || initramfs_etc.is_some() || initramfs_args.is_some() {
+        let initramfs = crate::treefile::DeriveInitramfs {
+            regenerate: regenerate_initramfs,
+            etc: initramfs_etc,
+            args: initramfs_args,
+        };
+        cfg.derive.initramfs = Some(initramfs);
+    }
+
+    if let Some(url) = keyfile_get_optional_string(&kf, ORIGIN, "custom-url")? {
+        let description = keyfile_get_optional_string(&kf, ORIGIN, "custom-description")?;
+        cfg.derive.custom = Some(crate::treefile::DeriveCustom { url, description })
+    }
+
+    if map_keyfile_optional(kf.get_boolean(RPMOSTREE, "ex-cliwrap"))?.unwrap_or_default() {
+        cfg.cliwrap = Some(true)
+    }
+
+    cfg.derive.override_commit = keyfile_get_optional_string(kf, ORIGIN, "override-commit")?;
+
+    Ok(Box::new(Treefile::new_from_config(cfg, None)?))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Refspec {
-    kind: RefspecType,
-    value: String,
+/// Convert an origin keyfile to a treefile config.
+///
+/// For historical reasons, rpm-ostree has two file formats to represent
+/// state.  This bridges parts of an origin file to a treefile that
+/// is understood by the core.
+pub(crate) fn origin_to_treefile(
+    mut kf: Pin<&mut crate::ffi::GKeyFile>,
+) -> CxxResult<Box<Treefile>> {
+    let kf = kf.gobj_wrap();
+    Ok(origin_to_treefile_inner(&kf)?)
 }
 
-struct Cache {
-    refspec: Refspec,
-    override_commit: Option<String>,
-    #[allow(dead_code)]
-    unconfigured_state: Option<String>,
-
-    packages: BTreeSet<String>,
-    packages_local: BTreeMap<String, String>,
-    override_remove: BTreeSet<String>,
-    override_replace_local: BTreeMap<String, String>,
-
-    initramfs_etc: BTreeSet<String>,
-    #[allow(dead_code)]
-    initramfs_args: Vec<String>,
+/// Set a keyfile value to a string list.
+fn kf_set_string_list<'a>(
+    kf: &glib::KeyFile,
+    group: impl AsRef<str>,
+    k: impl AsRef<str>,
+    vals: impl IntoIterator<Item = &'a str>,
+) {
+    let mut v = String::new();
+    for elt in vals {
+        v.push_str(elt);
+        v.push(';');
+    }
+    kf.set_value(group.as_ref(), k.as_ref(), v.as_str())
 }
 
-pub struct Origin {
-    kf: KeyFile,
-    cache: Cache,
+fn set_sha256_nevra_pkgs(
+    kf: &glib::KeyFile,
+    group: &str,
+    k: &str,
+    pkgs: &BTreeMap<String, String>,
+) {
+    let pkgs: Vec<_> = pkgs
+        .iter()
+        .map(|(nevra, sha256)| format!("{}:{}", sha256, nevra))
+        .collect();
+    let pkgs = pkgs.iter().map(|s| s.as_str());
+    kf_set_string_list(&kf, group, k, pkgs)
 }
 
-fn keyfile_dup(kf: &KeyFile) -> KeyFile {
-    let r = KeyFile::new();
-    r.load_from_data(&kf.to_data(), glib::KeyFileFlags::KEEP_COMMENTS)
-        .expect("keyfile parse");
-    r
+/// Convert a treefile to an origin file.
+#[context("Parsing treefile origin")]
+fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
+    let tf = &tf.parsed;
+    let kf = glib::KeyFile::new();
+
+    // refspec (note special handling right now for layering)
+    let deriving = tf.packages.is_some() || tf.derive.packages_local.is_some();
+    if let Some(r) = tf.derive.from.as_deref() {
+        let k = if deriving { "baserefspec" } else { "refspec" };
+        kf.set_string(ORIGIN, k, r)
+    };
+
+    // Packages
+    if let Some(pkgs) = tf.packages.as_deref() {
+        let pkgs = pkgs.iter().map(|s| s.as_str());
+        kf_set_string_list(&kf, PACKAGES, "requested", pkgs)
+    }
+    if let Some(pkgs) = tf.derive.packages_local.as_ref() {
+        set_sha256_nevra_pkgs(&kf, PACKAGES, "requested-local", pkgs)
+    }
+    if let Some(pkgs) = tf.derive.override_remove.as_deref() {
+        let pkgs = pkgs.iter().map(|s| s.as_str());
+        kf_set_string_list(&kf, OVERRIDES, "remove", pkgs)
+    }
+    if let Some(pkgs) = tf.derive.override_replace_local.as_ref() {
+        set_sha256_nevra_pkgs(&kf, OVERRIDES, "replace-local", pkgs)
+    }
+
+    // Initramfs bits
+    if let Some(initramfs) = tf.derive.initramfs.as_ref() {
+        if initramfs.regenerate {
+            kf.set_boolean(RPMOSTREE, "regenerate-initramfs", true);
+        }
+        if let Some(etc) = initramfs.etc.as_deref() {
+            let etc = etc.iter().map(|s| s.as_str());
+            kf_set_string_list(&kf, RPMOSTREE, "initramfs-etc", etc)
+        }
+        if let Some(args) = initramfs.args.as_deref() {
+            let args = args.iter().map(|s| s.as_str());
+            kf_set_string_list(&kf, RPMOSTREE, "initramfs-args", args)
+        }
+    }
+
+    // Custom origin
+    if let Some(custom) = tf.derive.custom.as_ref() {
+        kf.set_string(ORIGIN, "custom-url", custom.url.as_str());
+        if let Some(desc) = custom.description.as_deref() {
+            kf.set_string(ORIGIN, "custom-description", desc);
+        }
+    }
+
+    if tf.cliwrap.unwrap_or_default() {
+        kf.set_boolean(RPMOSTREE, "ex-cliwrap", true)
+    }
+
+    if let Some(c) = tf.derive.override_commit.as_deref() {
+        kf.set_string(ORIGIN, "override-commit", c);
+    }
+
+    Ok(kf)
+}
+
+fn kf_diff_value(group: &str, key: &str, a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let path = format!("{}/{}", group, key);
+    if !UNORDERED_LIST_KEYS.contains(path.as_str()) {
+        return false;
+    }
+    let a: BTreeSet<_> = a.split(';').collect();
+    let b: BTreeSet<_> = b.split(';').collect();
+    a == b
+}
+
+/// Diff two key files.
+fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
+    let mut errs = Vec::new();
+    for grp in kf.get_groups().0.iter().map(|g| g.as_str()) {
+        for k in kf.get_keys(grp)?.0.iter().map(|g| g.as_str()) {
+            let origv = kf.get_value(grp, k)?;
+            match newkf.get_value(grp, k) {
+                Ok(newv) => {
+                    if !kf_diff_value(grp, k, origv.as_str(), newv.as_str()) {
+                        errs.push(format!("Mismatched value for {}/{}: {}", grp, k, newv));
+                    }
+                }
+                Err(e) => errs.push(format!("Fetching {}/{}: {}", grp, k, e)),
+            }
+        }
+    }
+    for grp in newkf.get_groups().0.iter().map(|g| g.as_str()) {
+        for k in newkf.get_keys(grp)?.0.iter().map(|g| g.as_str()) {
+            if !kf.has_key(grp, k)? {
+                errs.push(format!("Unexpected new key: {}/{}", grp, k));
+            }
+        }
+    }
+    if !errs.is_empty() {
+        return Err(anyhow::anyhow!(errs.join("; ")));
+    }
+    Ok(())
+}
+
+fn origin_validate_roundtrip_inner(kf: &glib::KeyFile) -> Result<()> {
+    let tf = origin_to_treefile_inner(&kf)?;
+    let newkf = treefile_to_origin_inner(&tf)?;
+    kf_diff(&kf, &newkf)
+}
+
+/// Convert an origin keyfile to a treefile config.
+///
+/// For historical reasons, rpm-ostree has two file formats to represent
+/// state.  This bridges parts of an origin file to a treefile that
+/// is understood by the core.
+pub(crate) fn origin_validate_roundtrip(mut kf: Pin<&mut crate::ffi::GKeyFile>) -> CxxResult<()> {
+    let kf = kf.gobj_wrap();
+    Ok(origin_validate_roundtrip_inner(&kf)
+        .with_context(|| format!("Failed to roundtrip origin:\n{}", kf.to_data()))?)
 }
 
 fn map_keyfile_optional<T>(res: StdResult<T, glib::Error>) -> StdResult<Option<T>, glib::Error> {
@@ -74,262 +254,127 @@ fn map_keyfile_optional<T>(res: StdResult<T, glib::Error>) -> StdResult<Option<T
     }
 }
 
-fn parse_stringlist(kf: &KeyFile, group: &str, key: &str) -> Result<BTreeSet<String>> {
-    let l = if let Some(l) = map_keyfile_optional(kf.get_string_list(group, key))? {
-        l
-    } else {
-        return Ok(Default::default());
-    };
-    let mut r = BTreeSet::new();
-    for it in l {
-        r.insert(it.to_string());
-    }
+fn parse_stringlist(kf: &KeyFile, group: &str, key: &str) -> Result<Option<Vec<String>>> {
+    let r = map_keyfile_optional(kf.get_string_list(group, key))?
+        .map(|o| o.into_iter().map(|s| s.to_string()).collect());
     Ok(r)
 }
 
-fn parse_localpkglist(kf: &KeyFile, group: &str, key: &str) -> Result<BTreeMap<String, String>> {
-    let l = if let Some(l) = map_keyfile_optional(kf.get_string_list(group, key))? {
-        l
-    } else {
-        return Ok(Default::default());
-    };
-    let mut r = BTreeMap::new();
-    for it in l {
-        let (nevra, sha256) = crate::utils::decompose_sha256_nevra(it.as_str())?;
-        r.insert(nevra.to_string(), sha256.to_string());
-    }
-    Ok(r)
-}
-
-fn keyfile_get_optional_string(kf: &KeyFile, group: &str, key: &str) -> Result<Option<String>> {
-    Ok(map_keyfile_optional(kf.get_value(group, key))?.map(|v| v.to_string()))
-}
-
-#[allow(dead_code)]
-fn keyfile_get_nonempty_optional_string(
+fn parse_localpkglist(
     kf: &KeyFile,
     group: &str,
     key: &str,
-) -> Result<Option<String>> {
-    if let Some(v) = keyfile_get_optional_string(&kf, group, key)? {
-        if v.len() > 0 {
-            return Ok(Some(v));
+) -> Result<Option<BTreeMap<String, String>>> {
+    if let Some(v) = map_keyfile_optional(kf.get_string_list(group, key))? {
+        let mut r = BTreeMap::new();
+        for s in v {
+            let (nevra, sha256) = crate::utils::decompose_sha256_nevra(s.as_str())?;
+            r.insert(nevra.to_string(), sha256.to_string());
         }
-    }
-    Ok(None)
-}
-
-impl Origin {
-    #[cfg(test)]
-    fn new_from_str<S: AsRef<str>>(s: S) -> Result<Box<Self>> {
-        let s = s.as_ref();
-        let kf = glib::KeyFile::new();
-        kf.load_from_data(s, glib::KeyFileFlags::KEEP_COMMENTS)?;
-        Ok(Self::new_parse(&kf)?)
-    }
-
-    fn new_parse(kf: &KeyFile) -> Result<Box<Self>> {
-        let kf = keyfile_dup(kf);
-        let refspec_str = if let Some(r) = keyfile_get_optional_string(&kf, "origin", "refspec")? {
-            Some(r)
-        } else {
-            keyfile_get_optional_string(&kf, "origin", "baserefspec")?
-        };
-        let refspec = match refspec_str {
-            Some(refspec) => {
-                if ostree::validate_checksum_string(&refspec).is_ok() {
-                    Refspec {
-                        kind: RefspecType::Checksum,
-                        value: refspec.clone(),
-                    }
-                } else {
-                    Refspec {
-                        kind: RefspecType::Ostree,
-                        value: refspec.clone(),
-                    }
-                }
-            },
-            None => bail!("No origin/refspec, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree"),
-        };
-        let override_commit = keyfile_get_optional_string(&kf, "origin", "override-commit")?;
-        let unconfigured_state = keyfile_get_optional_string(&kf, "origin", "unconfigured-state")?;
-        let packages = parse_stringlist(&kf, "packages", "requested")?;
-        let packages_local = parse_localpkglist(&kf, "packages", "requested-local")?;
-        let override_remove = parse_stringlist(&kf, "overrides", "remove")?;
-        let override_replace_local = parse_localpkglist(&kf, "overrides", "replace-local")?;
-        let initramfs_etc = parse_stringlist(&kf, "rpmostree", "initramfs-etc")?;
-        let initramfs_args =
-            map_keyfile_optional(kf.get_string_list("rpmostree", "initramfs-args"))?
-                .map(|v| {
-                    let r: Vec<String> = v.into_iter().map(|s| s.to_string()).collect();
-                    r
-                })
-                .unwrap_or_default();
-        Ok(Box::new(Self {
-            kf,
-            cache: Cache {
-                refspec: refspec,
-                override_commit,
-                unconfigured_state,
-                packages,
-                packages_local,
-                override_remove,
-                override_replace_local,
-                initramfs_etc,
-                initramfs_args,
-            },
-        }))
-    }
-
-    /// Like clone() except returns a boxed value
-    fn duplicate(&self) -> Box<Self> {
-        // Unwrap safety - we know the internal keyfile is valid
-        Self::new_parse(&self.kf).expect("valid keyfile internally")
+        Ok(Some(r))
+    } else {
+        Ok(None)
     }
 }
 
-impl Origin {
-    pub(crate) fn remove_transient_state(&mut self) {
-        unsafe {
-            ostree_sys::ostree_deployment_origin_remove_transient_state(self.kf.to_glib_none().0)
-        }
-        self.set_override_commit(None)
-    }
-
-    pub(crate) fn set_override_commit(&mut self, checksum: Option<(&str, Option<&str>)>) {
-        match checksum {
-            Some((checksum, ver)) => {
-                self.kf.set_string(ORIGIN, OVERRIDE_COMMIT, checksum);
-                self.cache.override_commit = Some(checksum.to_string());
-                if let Some(ver) = ver {
-                    let comment = format!("Version {}", ver);
-                    // Ignore errors here, shouldn't happen
-                    let _ =
-                        self.kf
-                            .set_comment(Some(ORIGIN), Some(OVERRIDE_COMMIT), comment.as_str());
-                }
-            }
-            None => {
-                // Ignore errors here, should only be failure to remove a nonexistent key.
-                let _ = self.kf.remove_key(ORIGIN, OVERRIDE_COMMIT);
-                self.cache.override_commit = None;
-            }
-        }
-    }
-
-    pub(crate) fn get_refspec_type(&self) -> RefspecType {
-        self.cache.refspec.kind
-    }
-
-    pub(crate) fn get_prefixed_refspec(&self) -> String {
-        self.cache.refspec.value.as_str().to_string()
-    }
-
-    pub(crate) fn get_custom_url(&self) -> Result<String> {
-        // FIXME(cxx-rs) propagate Option once supported
-        Ok(
-            keyfile_get_nonempty_optional_string(&self.kf, "origin", "custom-url")?
-                .unwrap_or_default(),
-        )
-    }
-
-    pub(crate) fn get_custom_description(&self) -> Result<String> {
-        // FIXME(cxx-rs) propagate Option once supported
-        Ok(
-            keyfile_get_nonempty_optional_string(&self.kf, "origin", "custom-description")?
-                .unwrap_or_default(),
-        )
-    }
-
-    pub(crate) fn get_regenerate_initramfs(&self) -> bool {
-        match map_keyfile_optional(self.kf.get_boolean("rpmostree", "regenerate-initramfs")) {
-            Ok(Some(v)) => v,
-            Ok(None) => false,
-            Err(_) => false, // FIXME Should propagate errors here in the future
-        }
-    }
-
-    pub(crate) fn get_initramfs_etc_files(&self) -> Vec<GString> {
-        self.cache
-            .initramfs_etc
-            .iter()
-            .map(|s| GString::from(s.as_str()))
-            .collect()
-    }
-
-    pub(crate) fn may_require_local_assembly(&self) -> bool {
-        self.get_regenerate_initramfs()
-            || !self.cache.initramfs_etc.is_empty()
-            || !self.cache.packages.is_empty()
-            || !self.cache.packages_local.is_empty()
-            || !self.cache.override_replace_local.is_empty()
-            || !self.cache.override_remove.is_empty()
-    }
-
-    // Binding for cxx
-    pub(crate) fn get_override_local_pkgs(&self) -> Vec<String> {
-        let mut r = Vec::new();
-        for v in self.cache.override_replace_local.values() {
-            r.push(v.clone())
-        }
-        r
-    }
+fn keyfile_get_optional_string(kf: &KeyFile, group: &str, key: &str) -> Result<Option<String>> {
+    Ok(map_keyfile_optional(kf.get_string(group, key))?.map(|v| v.to_string()))
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use indoc::indoc;
+
+    macro_rules! assert_err_containing {
+        ( $e:expr, $expected_msg:expr ) => {{
+            let msg = $e.unwrap_err().to_string();
+            let expected = $expected_msg;
+            if !msg.contains(expected) {
+                panic!("Expected error to contain {}\nfound: {}", expected, msg)
+            }
+        }};
+    }
+
+    const BASE: &str = indoc! {"
+    [origin]
+    refspec=foo:bar/x86_64/baz
+    "};
+
+    const COMPLEX: &str = indoc! {"
+    [origin]
+    baserefspec=fedora:fedora/34/x86_64/silverblue
+    override-commit=41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3
+
+    [rpmostree]
+    regenerate-initramfs=true
+    initramfs-args=-I;/etc/foobar.conf;
+    initramfs-etc=/etc/cmdline.d/foobar.conf;
+
+    [packages]
+    requested=libvirt;fish;
+    requested-local=4ed748ba060fce4571e7ef19f3f5ed6209f67dbac8327af0d38ea70b96d2f723:foo-1.2-3.x86_64;
+
+    [overrides]
+    remove=docker;
+    replace-local=0c7072500af2758e7dc7d7700fed82c3c5f4da7453b4d416e79f75384eee96b0:rpm-ostree-devel-2021.1-2.fc33.x86_64;648ab3ff4d4b708ea180269297de5fa3e972f4481d47b7879c6329272e474d68:rpm-ostree-2021.1-2.fc33.x86_64;8b29b78d0ade6ec3aedb8e3846f036f6f28afe64635d83cb6a034f1004607678:rpm-ostree-libs-2021.1-2.fc33.x86_64;
+
+    [libostree-transient]
+    pinned=true
+    "};
+
+    fn kf_from_str(s: &str) -> Result<glib::KeyFile> {
+        let kf = glib::KeyFile::new();
+        kf.load_from_data(s, glib::KeyFileFlags::KEEP_COMMENTS)?;
+        Ok(kf)
+    }
 
     #[test]
-    fn test_basic() -> Result<()> {
-        let o = Origin::new_from_str(
-            "[origin]
-refspec=foo:bar/x86_64/baz
-",
-        )?;
-        assert_eq!(o.cache.refspec.kind, RefspecType::Ostree);
-        assert_eq!(o.cache.refspec.value, "foo:bar/x86_64/baz");
-        assert_eq!(o.cache.packages.len(), 0);
-        // Call various methods so we have test coverage, but also
-        // to suppress dead code until we actually start using this
-        // instead of the C++ code.
-        assert_eq!(o.get_refspec_type(), RefspecType::Ostree);
-        assert!(!o.may_require_local_assembly());
-        assert!(!o.get_regenerate_initramfs());
-        assert!(o.get_initramfs_etc_files().is_empty());
-        assert_eq!(o.get_custom_url()?, "");
-        assert_eq!(o.get_custom_description()?, "");
-        assert!(o.get_override_local_pkgs().is_empty());
-        assert_eq!(o.get_prefixed_refspec(), "foo:bar/x86_64/baz");
-        // Mutation methods
-        let mut o = o.duplicate();
-        assert_eq!(o.get_refspec_type(), RefspecType::Ostree);
-        o.remove_transient_state();
+    fn test_kf_diff() -> Result<()> {
+        let kf = kf_from_str(BASE)?;
+        let kf2 = kf_from_str(BASE)?;
+        kf_diff(&kf, &kf2).expect("No difference");
+        kf2.set_string(ORIGIN, "refspec", "foo:bar/x86_64/whee");
+        assert_err_containing!(kf_diff(&kf, &kf2), "Mismatched value");
+        let kf2 = kf_from_str(BASE)?;
+        kf2.set_string(ORIGIN, "foospec", "foo:bar/x86_64/whee");
+        assert_err_containing!(kf_diff(&kf, &kf2), "Unexpected new key: origin/foospec");
+        Ok(())
+    }
 
-        let mut o = Origin::new_from_str(indoc! {"
+    #[test]
+    fn test_origin_parse() -> Result<()> {
+        let kf = kf_from_str(BASE)?;
+        let tf = origin_to_treefile_inner(&kf)?;
+        assert_eq!(
+            tf.parsed.derive.from.as_ref().unwrap(),
+            "foo:bar/x86_64/baz"
+        );
+
+        let kf = kf_from_str(indoc! {"
             [origin]
             baserefspec=fedora/33/x86_64/silverblue
 
             [packages]
             requested=virt-manager;libvirt;pcsc-lite-ccid
         "})?;
-        assert_eq!(o.cache.refspec.kind, RefspecType::Ostree);
-        assert_eq!(o.cache.refspec.value, "fedora/33/x86_64/silverblue");
-        assert!(o.may_require_local_assembly());
-        assert!(!o.get_regenerate_initramfs());
-        assert_eq!(o.cache.packages.len(), 3);
-        assert!(o.cache.packages.contains("libvirt"));
-
-        let override_commit = (
-            "126539c731acf376359aced177dc5dff598dd6714a0a8faf753c727559adc8b5",
-            Some("42.3"),
-        );
-        assert!(o.cache.override_commit.is_none());
-        o.set_override_commit(Some(override_commit));
+        let tf = origin_to_treefile_inner(&kf)?;
         assert_eq!(
-            o.cache.override_commit.as_ref().expect("override"),
-            override_commit.0
+            tf.parsed.derive.from.as_ref().unwrap(),
+            "fedora/33/x86_64/silverblue"
         );
+        let pkgs = tf.parsed.packages.as_ref().unwrap();
+        assert_eq!(pkgs.len(), 3);
+        assert_eq!(pkgs[1], "libvirt");
+        Ok(())
+    }
+
+    #[test]
+    fn test_origin_roundtrip() -> Result<()> {
+        let kf = kf_from_str(BASE)?;
+        origin_validate_roundtrip_inner(&kf).expect("validating BASE");
+        let kf = kf_from_str(COMPLEX)?;
+        origin_validate_roundtrip_inner(&kf).expect("validating COMPLEX");
         Ok(())
     }
 }
