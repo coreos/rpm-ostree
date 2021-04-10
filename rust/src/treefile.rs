@@ -969,7 +969,7 @@ pub(crate) enum RpmdbBackend {
 // Because of how we handle includes, *everything* here has to be
 // Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
 // to `true`).
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub(crate) struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
@@ -1117,7 +1117,7 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) extra: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub(crate) struct LegacyTreeComposeConfigFields {
     #[serde(skip_serializing)]
     pub(crate) gpg_key: Option<String>,
@@ -1266,6 +1266,11 @@ pub(crate) mod tests {
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.add_files.unwrap().len() == 2);
         assert!(treefile.remove_files.unwrap().len() == 2);
+    }
+
+    #[test]
+    fn test_default() {
+        let _cfg: TreeComposeConfig = Default::default();
     }
 
     #[test]
