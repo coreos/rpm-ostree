@@ -849,7 +849,7 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Copy, Clone)]
-enum BootLocation {
+pub(crate) enum BootLocation {
     #[serde(rename = "new")]
     New,
     #[serde(rename = "modules")]
@@ -942,16 +942,16 @@ impl From<(u32, u32)> for CheckPasswdDataEntries {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Rojig {
-    name: String,
-    summary: String,
-    license: String,
-    description: Option<String>,
+pub(crate) struct Rojig {
+    pub(crate) name: String,
+    pub(crate) summary: String,
+    pub(crate) license: String,
+    pub(crate) description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
-enum Include {
+pub(crate) enum Include {
     Single(String),
     Multiple(Vec<String>),
 }
@@ -960,7 +960,7 @@ enum Include {
 #[serde(rename_all = "kebab-case")]
 /// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
 /// and https://fedoraproject.org/wiki/Changes/Sqlite_Rpmdb
-enum RpmdbBackend {
+pub(crate) enum RpmdbBackend {
     BDB,
     Sqlite,
     NDB,
@@ -974,67 +974,67 @@ pub(crate) struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    treeref: Option<String>,
+    pub(crate) treeref: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    basearch: Option<String>,
+    pub(crate) basearch: Option<String>,
     // Optional rojig data
     #[serde(skip_serializing_if = "Option::is_none")]
-    rojig: Option<Rojig>,
+    pub(crate) rojig: Option<Rojig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    repos: Option<Vec<String>>,
+    pub(crate) repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "lockfile-repos")]
-    lockfile_repos: Option<Vec<String>>,
+    pub(crate) lockfile_repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    selinux: Option<bool>,
+    pub(crate) selinux: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "gpg-key")]
-    gpg_key: Option<String>,
+    pub(crate) gpg_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    include: Option<Include>,
+    pub(crate) include: Option<Include>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "arch-include")]
-    arch_include: Option<BTreeMap<String, Include>>,
+    pub(crate) arch_include: Option<BTreeMap<String, Include>>,
 
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]
-    packages: Option<Vec<String>>,
+    pub(crate) packages: Option<Vec<String>>,
     // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
-    bootstrap_packages: Option<Vec<String>>,
+    pub(crate) bootstrap_packages: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ostree-layers")]
-    ostree_layers: Option<Vec<String>>,
+    pub(crate) ostree_layers: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ostree-override-layers")]
-    ostree_override_layers: Option<Vec<String>>,
+    pub(crate) ostree_override_layers: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "exclude-packages")]
-    exclude_packages: Option<Vec<String>>,
+    pub(crate) exclude_packages: Option<Vec<String>>,
 
     // Content installation opts
     #[serde(skip_serializing_if = "Option::is_none")]
-    container: Option<bool>,
+    pub(crate) container: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    recommends: Option<bool>,
+    pub(crate) recommends: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    documentation: Option<bool>,
+    pub(crate) documentation: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "install-langs")]
-    install_langs: Option<Vec<String>>,
+    pub(crate) install_langs: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "initramfs-args")]
-    initramfs_args: Option<Vec<String>>,
+    pub(crate) initramfs_args: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    cliwrap: Option<bool>,
+    pub(crate) cliwrap: Option<bool>,
     #[serde(rename = "readonly-executables")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    readonly_executables: Option<bool>,
+    pub(crate) readonly_executables: Option<bool>,
 
     // Tree layout options
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "boot-location")]
-    boot_location: Option<BootLocation>,
+    pub(crate) boot_location: Option<BootLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "tmp-is-dir")]
     pub(crate) tmp_is_dir: Option<bool>,
@@ -1048,17 +1048,17 @@ pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "machineid-compat")]
     // Defaults to `true`
-    machineid_compat: Option<bool>,
+    pub(crate) machineid_compat: Option<bool>,
 
     // versioning
     #[serde(skip_serializing_if = "Option::is_none")]
-    releasever: Option<String>,
+    pub(crate) releasever: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "automatic-version-prefix")]
-    automatic_version_prefix: Option<String>,
+    pub(crate) automatic_version_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "automatic-version-suffix")]
-    automatic_version_suffix: Option<String>,
+    pub(crate) automatic_version_suffix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "mutate-os-release")]
     pub(crate) mutate_os_release: Option<String>,
@@ -1066,16 +1066,16 @@ pub(crate) struct TreeComposeConfig {
     // passwd-related bits
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "etc-group-members")]
-    etc_group_members: Option<Vec<String>>,
+    pub(crate) etc_group_members: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "preserve-passwd")]
     pub(crate) preserve_passwd: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-passwd")]
-    check_passwd: Option<CheckPasswd>,
+    pub(crate) check_passwd: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-groups")]
-    check_groups: Option<CheckGroups>,
+    pub(crate) check_groups: Option<CheckGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-users")]
     pub(crate) ignore_removed_users: Option<HashSet<String>>,
@@ -1087,7 +1087,7 @@ pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "postprocess-script")]
     // This one references an external filename
-    postprocess_script: Option<String>,
+    pub(crate) postprocess_script: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     // This one is inline, and supports multiple (hence is useful for inheritance)
     pub(crate) postprocess: Option<Vec<String>>,
@@ -1099,34 +1099,34 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) remove_files: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-from-packages")]
-    remove_from_packages: Option<Vec<Vec<String>>>,
+    pub(crate) remove_from_packages: Option<Vec<Vec<String>>>,
     // The BTreeMap here is on purpose; it ensures we always re-serialize in sorted order so that
     // checksumming is deterministic across runs. (And serde itself uses BTreeMap for child objects
     // as well).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-commit-metadata")]
-    add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
+    pub(crate) add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
     // The database backend
     #[serde(skip_serializing_if = "Option::is_none")]
-    rpmdb: Option<RpmdbBackend>,
+    pub(crate) rpmdb: Option<RpmdbBackend>,
 
     #[serde(flatten)]
-    legacy_fields: LegacyTreeComposeConfigFields,
+    pub(crate) legacy_fields: LegacyTreeComposeConfigFields,
 
     #[serde(flatten)]
-    extra: HashMap<String, serde_json::Value>,
+    pub(crate) extra: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct LegacyTreeComposeConfigFields {
+pub(crate) struct LegacyTreeComposeConfigFields {
     #[serde(skip_serializing)]
-    gpg_key: Option<String>,
+    pub(crate) gpg_key: Option<String>,
     #[serde(skip_serializing)]
-    boot_location: Option<BootLocation>,
+    pub(crate) boot_location: Option<BootLocation>,
     #[serde(skip_serializing)]
-    default_target: Option<String>,
+    pub(crate) default_target: Option<String>,
     #[serde(skip_serializing)]
-    automatic_version_prefix: Option<String>,
+    pub(crate) automatic_version_prefix: Option<String>,
 }
 
 impl TreeComposeConfig {
