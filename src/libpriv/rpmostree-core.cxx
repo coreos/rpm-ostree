@@ -279,7 +279,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   if (g_key_file_get_boolean (keyfile, "tree", "skip-sanity-check", NULL))
     g_variant_builder_add (&builder, "{sv}", "skip-sanity-check", g_variant_new_boolean (TRUE));
 
-  tf_bind_boolean (keyfile, &builder, "documentation", TRUE);
   tf_bind_boolean (keyfile, &builder, "recommends", TRUE);
   tf_bind_boolean (keyfile, &builder, "selinux", TRUE);
 
@@ -824,14 +823,11 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   for (guint i = 0; i < repos->len; i++)
     dnf_repo_set_required (static_cast<DnfRepo*>(repos->pdata[i]), TRUE);
 
-  { gboolean docs;
-
-    g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
-
-    if (!docs)
-        dnf_transaction_set_flags (dnf_context_get_transaction (self->dnfctx),
-                                   DNF_TRANSACTION_FLAG_NODOCS);
-  }
+  if (self->treefile_rs && !self->treefile_rs->get_documentation())
+    { 
+      dnf_transaction_set_flags (dnf_context_get_transaction (self->dnfctx),
+                                 DNF_TRANSACTION_FLAG_NODOCS);
+    }
 
   /* We could likely delete this, but I'm keeping a log message just in case */
   if (g_variant_dict_contains (self->spec->dict, "ignore-scripts"))
@@ -1413,9 +1409,7 @@ find_pkg_in_ostree (RpmOstreeContext *self,
       /* We need to handle things like the nodocs flag changing; in that case we
        * have to redownload.
        */
-      gboolean global_docs;
-      g_variant_dict_lookup (self->spec->dict, "documentation", "b", &global_docs);
-      const gboolean global_nodocs = !global_docs;
+      const bool global_nodocs = (self->treefile_rs && !self->treefile_rs->get_documentation());
 
       gboolean pkgcache_commit_is_nodocs;
       if (!g_variant_dict_lookup (metadata_dict, "rpmostree.nodocs", "b", &pkgcache_commit_is_nodocs))
@@ -1424,7 +1418,7 @@ find_pkg_in_ostree (RpmOstreeContext *self,
       /* We treat a mismatch of documentation state as simply not being
        * imported at all.
        */
-      if (global_nodocs != pkgcache_commit_is_nodocs)
+      if (global_nodocs != (bool)pkgcache_commit_is_nodocs)
         return TRUE;
     }
 
@@ -2629,11 +2623,8 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
       g_str_equal (pkg_name, "rootfiles"))
     flags |= RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS;
 
-  { gboolean docs;
-    g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
-    if (!docs)
-      flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
-  }
+  if (self->treefile_rs && !self->treefile_rs->get_documentation())
+    flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
 
   if (self->treefile_rs && self->treefile_rs->get_readonly_executables())
     flags |= RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES;

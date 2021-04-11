@@ -557,6 +557,10 @@ impl Treefile {
         self.parsed.readonly_executables.unwrap_or(false)
     }
 
+    pub(crate) fn get_documentation(&self) -> bool {
+        self.parsed.documentation.unwrap_or(true)
+    }
+
     pub(crate) fn get_rpmdb(&self) -> String {
         let s: &str = match self.parsed.rpmdb.as_ref().unwrap_or(&DEFAULT_RPMDB_BACKEND) {
             RpmdbBackend::BDB => "bdb",
