@@ -241,7 +241,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   BIND_STRING("rojig");
   BIND_STRING("rojig-version");
-  BIND_STRING("releasever");
 #undef BIND_STRING
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
@@ -677,7 +676,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                          GCancellable  *cancellable,
                          GError       **error)
 {
-  const char *releasever = NULL;
+  std::string releasever;
   g_autofree char **instlangs = NULL;
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
@@ -691,7 +690,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   else
     self->spec = (RpmOstreeTreespec*)g_object_ref (spec);
 
-  g_variant_dict_lookup (self->spec->dict, "releasever", "&s", &releasever);
+  if (self->treefile_rs)
+    releasever = std::string(self->treefile_rs->get_releasever());
 
   if (!install_root)
     install_root = emptydir_path;
@@ -702,10 +702,12 @@ rpmostree_context_setup (RpmOstreeContext    *self,
        * treecompose/container, we currently require using .repo files which
        * don't reference $releasever.
        */
-      dnf_context_set_release_ver (self->dnfctx, releasever ?: "rpmostree-unset-releasever");
+      if (releasever.length() == 0)
+        releasever = "rpmostree-unset-releasever";
+      dnf_context_set_release_ver (self->dnfctx, releasever.c_str());
     }
-  else if (releasever)
-    dnf_context_set_release_ver (self->dnfctx, releasever);
+  else if (releasever.length() > 0)
+    dnf_context_set_release_ver (self->dnfctx, releasever.c_str());
 
   dnf_context_set_install_root (self->dnfctx, install_root);
   dnf_context_set_source_root (self->dnfctx, source_root);

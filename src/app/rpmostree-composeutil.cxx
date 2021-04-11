@@ -194,13 +194,6 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
 
   if (!treespec_bind_array (treedata, treespec, "install-langs", "instlangs", FALSE, error))
     return NULL;
-  { const char *releasever;
-    if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "releasever",
-                                                                &releasever, error))
-      return NULL;
-    if (releasever)
-      g_key_file_set_string (treespec, "tree", "releasever", releasever);
-  }
 
   const char *input_ref = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "ref", &input_ref, error))
