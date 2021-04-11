@@ -166,26 +166,6 @@ treespec_bind_array (JsonObject *treedata,
   return set_keyfile_string_array_from_json (ts, "tree", dest_name ?: src_name, a, error);
 }
 
-/* Given a boolean value in JSON, add it to treespec
- * if it's not the default.
- */
-static gboolean
-treespec_bind_bool (JsonObject *treedata,
-                    GKeyFile   *ts,
-                    const char *name,
-                    gboolean    default_value,
-                    GError    **error)
-{
-  gboolean v = default_value;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata, name, &v, error))
-    return FALSE;
-
-  if (v != default_value)
-    g_key_file_set_boolean (ts, "tree", name, v);
-
-  return TRUE;
-}
-
 /* Convert a treefile into a "treespec" understood by the core.
  */
 RpmOstreeTreespec *

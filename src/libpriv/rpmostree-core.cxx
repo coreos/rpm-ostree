@@ -217,20 +217,6 @@ add_canonicalized_string_array (GVariantBuilder *builder,
                          g_variant_new_strv ((const char*const*)sorted, count));
 }
 
-/* Get a bool from @keyfile, adding it to @builder */
-static void
-tf_bind_boolean (GKeyFile *keyfile,
-                 GVariantBuilder *builder,
-                 const char *name,
-                 gboolean default_value)
-{
-  gboolean v = default_value;
-  if (g_key_file_has_key (keyfile, "tree", name, NULL))
-    v = g_key_file_get_boolean (keyfile, "tree", name, NULL);
-
-  g_variant_builder_add (builder, "{sv}", name, g_variant_new_boolean (v));
-}
-
 RpmOstreeTreespec *
 rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
                                      GError    **error)
