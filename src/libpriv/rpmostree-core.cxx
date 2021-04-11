@@ -442,6 +442,7 @@ rpmostree_context_new_system (OstreeRepo   *repo,
 RpmOstreeContext *
 rpmostree_context_new_tree (int               userroot_dfd,
                             OstreeRepo       *repo,
+                            rpmostreecxx::Treefile &treefile_rs,
                             GCancellable     *cancellable,
                             GError          **error)
 {
@@ -449,6 +450,7 @@ rpmostree_context_new_tree (int               userroot_dfd,
   if (!ret)
     return NULL;
   ret->is_system = FALSE;
+  ret->treefile_rs = &treefile_rs;
 
   { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
     dnf_context_set_repo_dir (ret->dnfctx, reposdir);
@@ -520,17 +522,6 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
   /* point the core to the passwd & group of the merge deployment */
   g_assert (!self->passwd_dir);
   self->passwd_dir = g_build_filename (cfg_deployment_root, "etc", NULL);
-}
-
-
-/* By default, we use a "treespec" however, reflecting everything from
- * treefile -> treespec is annoying.  Long term we want to unify those.  This
- * is a temporary escape hatch.
- */
-void
-rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile *treefile_rs)
-{
-  self->treefile_rs = treefile_rs;
 }
 
 /* Use this if no packages will be installed, and we just want a "dummy" run.

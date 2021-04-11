@@ -691,9 +691,16 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       self->build_repo = static_cast<OstreeRepo*>(g_object_ref (self->repo));
     }
 
+  /* FIXME refactor things to break the dependency of DnfContext -> arch -> treefile */
+  std::string arch;
+  {
+      g_autoptr(DnfContext) ctx = dnf_context_new ();
+      arch = dnf_context_get_base_arch (ctx);
+  }
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
-
+  self->treefile_rs = rpmostreecxx::treefile_new(gs_file_get_path_cached (self->treefile_path), arch, self->workdir_dfd);
   self->corectx = rpmostree_context_new_tree (self->cachedir_dfd, self->build_repo,
+                                              **self->treefile_rs,
                                               cancellable, error);
   if (!self->corectx)
     return FALSE;
@@ -704,9 +711,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       g_print ("Loaded lockfiles:\n  %s\n", g_strjoinv ("\n  ", opt_lockfiles));
     }
 
-  const char *arch = dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx));
 
-  self->treefile_rs = rpmostreecxx::treefile_new(gs_file_get_path_cached (self->treefile_path), arch, self->workdir_dfd);
   auto serialized = (*self->treefile_rs)->get_json_string();
   self->treefile_parser = json_parser_new ();
   if (!json_parser_load_from_data (self->treefile_parser, serialized.c_str(), -1, error))
@@ -1522,7 +1527,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   // they're not in the base tree)
 
   g_autoptr(RpmOstreeContext) ctx =
-      rpmostree_context_new_tree (cachedir_dfd, repo, cancellable, error);
+      rpmostree_context_new_tree (cachedir_dfd, repo, *treefile, cancellable, error);
   if (!ctx)
       return FALSE;
 

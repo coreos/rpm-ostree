@@ -88,6 +88,7 @@ RpmOstreeContext *rpmostree_context_new_system (OstreeRepo   *repo,
 
 RpmOstreeContext *rpmostree_context_new_tree (int basedir_dfd,
                                               OstreeRepo  *repo,
+                                              rpmostreecxx::Treefile &treefile_rs,
                                               GCancellable *cancellable,
                                               GError **error);
 
@@ -125,8 +126,6 @@ void
 rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
                                              OstreeSysroot    *sysroot,
                                              OstreeDeployment *cfg_deployment);
-
-void rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile *treefile_rs);
 
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
 
