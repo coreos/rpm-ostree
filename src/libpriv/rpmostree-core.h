@@ -128,6 +128,7 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
                                              OstreeDeployment *cfg_deployment);
 
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
+void rpmostree_context_disable_selinux (RpmOstreeContext *self);
 
 void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *base_repo,

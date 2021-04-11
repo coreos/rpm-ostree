@@ -43,7 +43,6 @@ RpmOstreeTreespec *
 rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     rpmostreecxx::Treefile &treefile_rs,
                                     JsonObject  *treedata,
-                                    gboolean     bind_selinux,
                                     GError     **error);
 gboolean
 rpmostree_composeutil_read_json_metadata (JsonNode    *root,

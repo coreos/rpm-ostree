@@ -704,6 +704,11 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                                               cancellable, error);
   if (!self->corectx)
     return FALSE;
+  /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
+   * e.g. importing, relabeling, etc... so just disable it. We do still set the policy
+   * to the final one right before commit as usual. */
+  if (!opt_unified_core)
+    rpmostree_context_disable_selinux (self->corectx);
 
   if (opt_lockfiles)
     {
@@ -774,7 +779,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   self->treespec = rpmostree_composeutil_get_treespec (self->corectx,
                                                        **self->treefile_rs,
                                                        self->treefile,
-                                                       opt_unified_core,
                                                        error);
   if (!self->treespec)
     return FALSE;

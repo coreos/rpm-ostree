@@ -256,6 +256,8 @@ pub mod ffi {
         fn get_cliwrap(&self) -> bool;
         fn get_readonly_executables(&self) -> bool;
         fn get_documentation(&self) -> bool;
+        fn get_recommends(&self) -> bool;
+        fn get_selinux(&self) -> bool;
         fn get_rpmdb(&self) -> String;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);

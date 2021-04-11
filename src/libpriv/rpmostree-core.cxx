@@ -279,8 +279,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   if (g_key_file_get_boolean (keyfile, "tree", "skip-sanity-check", NULL))
     g_variant_builder_add (&builder, "{sv}", "skip-sanity-check", g_variant_new_boolean (TRUE));
 
-  tf_bind_boolean (keyfile, &builder, "recommends", TRUE);
-  tf_bind_boolean (keyfile, &builder, "selinux", TRUE);
 
   ret->spec = g_variant_builder_end (&builder);
   ret->dict = g_variant_dict_new (ret->spec);
@@ -529,6 +527,12 @@ void
 rpmostree_context_set_is_empty (RpmOstreeContext *self)
 {
   self->empty = TRUE;
+}
+
+void 
+rpmostree_context_disable_selinux (RpmOstreeContext *self)
+{
+  self->disable_selinux = TRUE;
 }
 
 /* XXX: or put this in new_system() instead? */
@@ -833,8 +837,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   if (g_variant_dict_contains (self->spec->dict, "ignore-scripts"))
     sd_journal_print (LOG_INFO, "ignore-scripts is no longer supported");
 
-  gboolean selinux;
-  g_assert (g_variant_dict_lookup (self->spec->dict, "selinux", "b", &selinux));
+  bool selinux = !self->disable_selinux && (!self->treefile_rs || self->treefile_rs->get_selinux());
   /* Load policy from / if SELinux is enabled, and we haven't already loaded
    * a policy.  This is mostly for the "compose tree" case.
    */
@@ -2263,9 +2266,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     {
       auto actions = static_cast<DnfGoalActions>(DNF_INSTALL | DNF_ALLOW_UNINSTALL);
 
-      gboolean recommends;
-      g_assert (g_variant_dict_lookup (self->spec->dict, "recommends", "b", &recommends));
-      if (!recommends)
+      if (self->treefile_rs && !self->treefile_rs->get_recommends())
         actions = static_cast<DnfGoalActions>(static_cast<int>(actions) | DNF_IGNORE_WEAK_DEPS);
 
       auto task = rpmostreecxx::progress_begin_task("Resolving dependencies");

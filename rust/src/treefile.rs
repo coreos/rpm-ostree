@@ -561,6 +561,14 @@ impl Treefile {
         self.parsed.documentation.unwrap_or(true)
     }
 
+    pub(crate) fn get_recommends(&self) -> bool {
+        self.parsed.recommends.unwrap_or(true)
+    }
+
+    pub(crate) fn get_selinux(&self) -> bool {
+        self.parsed.selinux.unwrap_or(true)
+    }
+
     pub(crate) fn get_rpmdb(&self) -> String {
         let s: &str = match self.parsed.rpmdb.as_ref().unwrap_or(&DEFAULT_RPMDB_BACKEND) {
             RpmdbBackend::BDB => "bdb",

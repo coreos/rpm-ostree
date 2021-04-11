@@ -38,6 +38,7 @@ struct _RpmOstreeContext {
   RpmOstreeTreespec *spec;
   rpmostreecxx::Treefile *treefile_rs; /* For composes for now */
   gboolean empty;
+  gboolean disable_selinux;
 
   /* rojig-mode data */
   const char *rojig_spec; /* The rojig spec like: repoid:package */
