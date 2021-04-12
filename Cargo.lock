@@ -301,12 +301,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "drop_bomb"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bda8e21c04aca2ae33ffc2fd8c23134f3cac46db123ba97bd9d3f3b8a4a85e1"
-
-[[package]]
 name = "dtoa"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -833,11 +827,10 @@ dependencies = [
 
 [[package]]
 name = "openat-ext"
-version = "0.1.13"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c55e17c28995df7ff51cc9b2a9a4e548dde9ffa46efdd2750d22fe4ac64499"
+checksum = "ab08d5ca444c9e2c23b9169da11ad09d697a7d4310844af710d00f48a10a88fe"
 dependencies = [
- "drop_bomb",
  "libc",
  "nix 0.18.0",
  "openat",
