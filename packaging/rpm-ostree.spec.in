@@ -3,7 +3,7 @@
 
 Summary: Hybrid image/package system
 Name: rpm-ostree
-Version: 2021.3
+Version: 2021.4
 Release: 1%{?dist}
 License: LGPLv2+
 URL: https://github.com/coreos/rpm-ostree
@@ -77,11 +77,11 @@ BuildRequires: pkgconfig(libsolv)
 BuildRequires: gcc-c++
 
 
-# more libdnf build deps (see libdnf's spec for versions)
-%global swig_version 3.0.12
+# more libdnf build deps (see libdnf's spec for versions; maintain ordering)
+%global libsolv_version 0.7.17
 %global libmodulemd_version 2.11.2-2
 %global librepo_version 1.13.0
-%global libsolv_version 0.7.17
+%global swig_version 3.0.12
 BuildRequires:  swig >= %{swig_version}
 BuildRequires:  pkgconfig(modulemd-2.0) >= %{libmodulemd_version}
 BuildRequires:  pkgconfig(librepo) >= %{librepo_version}
