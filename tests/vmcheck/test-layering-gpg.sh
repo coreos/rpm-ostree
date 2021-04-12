@@ -33,5 +33,5 @@ vm_build_rpm_repo_mode gpgcheck foo version 4.5 release 6
 if vm_rpmostree pkg-add foo-4.5 2>err.txt; then
     assert_not_reached "Installed unsigned package"
 fi
-assert_file_has_content err.txt 'package not signed: foo'
+assert_file_has_content err.txt 'cannot be verified'
 echo "ok failed to install unsigned package"
