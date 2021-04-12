@@ -448,6 +448,7 @@ rpmostree_context_new_tree (int               userroot_dfd,
   g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (repo, cancellable, error);
   if (!ret)
     return NULL;
+  ret->is_system = FALSE;
 
   { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
     dnf_context_set_repo_dir (ret->dnfctx, reposdir);
@@ -757,7 +758,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* Set the database backend only in the compose path.  It then becomes the default
    * for any client side layering.
    */
-  if (self->treefile_rs)
+  if (!self->is_system && self->treefile_rs)
     {
       auto rpmdb_backend = self->treefile_rs->get_rpmdb();
       dnf_context_set_rpm_macro (self->dnfctx, "_db_backend", rpmdb_backend.c_str());
