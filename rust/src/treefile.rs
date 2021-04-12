@@ -541,6 +541,10 @@ impl Treefile {
         self.parsed.repos.clone().unwrap_or_default()
     }
 
+    pub(crate) fn get_ref(&self) -> &str {
+        self.parsed.treeref.as_deref().unwrap_or_default()
+    }
+
     pub(crate) fn get_rojig_spec_path(&self) -> String {
         self.rojig_spec.clone().unwrap_or_default()
     }

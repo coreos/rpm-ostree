@@ -251,6 +251,7 @@ pub mod ffi {
         fn get_ostree_override_layers(&self) -> Vec<String>;
         fn get_all_ostree_layers(&self) -> Vec<String>;
         fn get_repos(&self) -> Vec<String>;
+        fn get_ref(&self) -> &str;
         fn get_rojig_spec_path(&self) -> String;
         fn get_rojig_name(&self) -> String;
         fn get_cliwrap(&self) -> bool;

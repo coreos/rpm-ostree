@@ -113,7 +113,6 @@ RpmOstreeTreespec *rpmostree_treespec_new (GVariant   *variant);
 GVariant *rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self);
 
 GVariant *rpmostree_treespec_to_variant (RpmOstreeTreespec *spec);
-const char *rpmostree_treespec_get_ref (RpmOstreeTreespec *spec);
 
 gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   const char    *install_root,
@@ -129,6 +128,7 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
 
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
 void rpmostree_context_disable_selinux (RpmOstreeContext *self);
+const char *rpmostree_context_get_ref (RpmOstreeContext *self);
 
 void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *base_repo,

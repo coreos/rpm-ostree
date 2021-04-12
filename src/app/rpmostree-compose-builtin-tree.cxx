@@ -710,6 +710,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!opt_unified_core)
     rpmostree_context_disable_selinux (self->corectx);
 
+  self->ref = g_strdup (rpmostree_context_get_ref (self->corectx));
+
   if (opt_lockfiles)
     {
       rpmostree_context_set_lockfile (self->corectx, opt_lockfiles, opt_lockfile_strict);
@@ -782,7 +784,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                                                        error);
   if (!self->treespec)
     return FALSE;
-  self->ref = rpmostree_treespec_get_ref (self->treespec);
 
   *out_context = util::move_nullify (self);
   return TRUE;

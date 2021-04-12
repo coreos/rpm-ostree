@@ -175,7 +175,6 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     GError     **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Parsing treefile", error);
-  auto varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (ctx));
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
 
   if (!treespec_bind_array (treedata, treespec, "packages", NULL, TRUE, error))
@@ -194,15 +193,6 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
 
   if (!treespec_bind_array (treedata, treespec, "install-langs", "instlangs", FALSE, error))
     return NULL;
-
-  const char *input_ref = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "ref", &input_ref, error))
-    return NULL;
-  if (input_ref)
-    {
-      auto ref = rpmostreecxx::varsubstitute (input_ref, *varsubsts);
-      g_key_file_set_string (treespec, "tree", "ref", ref.c_str());
-    }
 
   return rpmostree_treespec_new_from_keyfile (treespec, error);
 }

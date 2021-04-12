@@ -226,13 +226,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
 
-  /* We allow the "ref" key to be missing for cases where we don't need one.
-   * This is abusing the Treespec a bit, but oh well... */
-  { g_autofree char *ref = g_key_file_get_string (keyfile, "tree", "ref", NULL);
-    if (ref)
-      g_variant_builder_add (&builder, "{sv}", "ref", g_variant_new_string (ref));
-  }
-
 #define BIND_STRING(k)                                                  \
   { g_autofree char *v = g_key_file_get_string (keyfile, "tree", k, NULL); \
     if (v)                                                              \
@@ -289,14 +282,6 @@ rpmostree_treespec_new (GVariant   *variant)
   return util::move_nullify (ret);
 }
 
-const char *
-rpmostree_treespec_get_ref (RpmOstreeTreespec    *spec)
-{
-  const char *r = NULL;
-  g_variant_dict_lookup (spec->dict, "ref", "&s", &r);
-  return r;
-}
-
 GVariant *
 rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
 {
@@ -316,6 +301,8 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_object (&rctx->spec);
   g_clear_object (&rctx->dnfctx);
+
+  g_clear_pointer (&rctx->ref, g_free);
 
   g_clear_object (&rctx->rojig_pkg);
   g_free (rctx->rojig_checksum);
@@ -450,6 +437,15 @@ rpmostree_context_new_tree (int               userroot_dfd,
     dnf_context_set_lock_dir (ret->dnfctx, lockdir);
   }
 
+  // The ref needs special handling as it gets variable-substituted.
+  auto ref = ret->treefile_rs->get_ref();
+  if (ref.length() > 0)
+    {
+      auto varsubsts = rpmostree_dnfcontext_get_varsubsts(ret->dnfctx);
+      auto subst_ref = rpmostreecxx::varsubstitute(ref, *varsubsts);
+      ret->ref = g_strdup(subst_ref.c_str());
+    }
+
   return util::move_nullify (ret);
 }
 
@@ -518,6 +514,12 @@ void
 rpmostree_context_disable_selinux (RpmOstreeContext *self)
 {
   self->disable_selinux = TRUE;
+}
+
+const char *
+rpmostree_context_get_ref (RpmOstreeContext *self)
+{
+  return self->ref;
 }
 
 /* XXX: or put this in new_system() instead? */
@@ -4829,11 +4831,9 @@ rpmostree_context_commit (RpmOstreeContext      *self,
       return FALSE;
     }
 
-    { const char * ref = rpmostree_treespec_get_ref (self->spec);
-      if (ref != NULL)
-        ostree_repo_transaction_set_ref (self->ostreerepo, NULL, ref,
-                                         ret_commit_checksum);
-    }
+    if (self->ref != NULL)
+      ostree_repo_transaction_set_ref (self->ostreerepo, NULL, self->ref,
+                                       ret_commit_checksum);
 
     { OstreeRepoTransactionStats stats;
       g_autofree char *bytes_written_formatted = NULL;
