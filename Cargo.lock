@@ -573,6 +573,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "gvariant"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f7a982b6b38ff2380ea1b1b480cb7f5b51dac917aceff2e16af0c207781e13a"
+dependencies = [
+ "gvariant-macro",
+ "memchr",
+ "ref-cast",
+]
+
+[[package]]
+name = "gvariant-macro"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9915719ccd7435a28103eea8dba78bcf35a25d5637c70273b47dbb49c6d2eb6d"
+dependencies = [
+ "syn",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -601,9 +621,9 @@ dependencies = [
 
 [[package]]
 name = "hex"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "indicatif"
@@ -1193,6 +1213,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ref-cast"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300f2a835d808734ee295d45007adacb9ebb29dd3ae2424acfa17930cae541da"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c38e3aecd2b21cb3959637b883bb3714bc7e43f0268b9a29d3743ee3e55cdd2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "regex"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1243,6 +1283,8 @@ dependencies = [
  "glib",
  "glib-sys",
  "gobject-sys",
+ "gvariant",
+ "hex",
  "indicatif",
  "indoc",
  "lazy_static",

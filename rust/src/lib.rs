@@ -494,6 +494,7 @@ pub use self::history::*;
 mod isolation;
 mod journal;
 pub(crate) use self::journal::*;
+pub mod ima;
 mod initramfs;
 pub(crate) use self::initramfs::*;
 mod lockfile;

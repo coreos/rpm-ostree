@@ -66,6 +66,8 @@ structopt = "0.3.21"
 subprocess = "0.2.6"
 systemd = "0.8.2"
 tempfile = "3.2.0"
+gvariant = "0.4.0"
+hex = "0.4.3"
 
 [build-dependencies]
 anyhow = "1.0"
