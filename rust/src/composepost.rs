@@ -1,13 +1,9 @@
-/*
- * Copyright (C) 2018 Red Hat, Inc.
- *
- * SPDX-License-Identifier: Apache-2.0 OR MIT
- *
- */
+//! Logic for post-processing a filesystem tree, server-side.
+//!
+//! This code runs server side to "postprocess" a filesystem tree (usually
+//! containing mostly RPMs) in order to prepare it as an OSTree commit.
 
-//! Code run server side to "postprocess"
-//! a filesystem tree (usually containing mostly RPMs) in
-//! order to prepare it as an OSTree commit.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::bwrap;
 use crate::cxxrsutil::CxxResult;
@@ -42,10 +38,7 @@ fn dir_move_if_exists(src: &openat::Dir, dest: &openat::Dir, name: &str) -> Resu
 /// This is hardcoded; in the future we may make more things configurable,
 /// but the goal is for all state to be in `/etc` and `/var`.
 #[context("Init rootfs")]
-pub(crate) fn compose_init_rootfs(
-    rootfs_dfd: &openat::Dir,
-    treefile: &mut Treefile,
-) -> CxxResult<()> {
+fn compose_init_rootfs(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
     use nix::fcntl::OFlag;
     println!("Initializing rootfs");
 
@@ -91,12 +84,14 @@ pub(crate) fn compose_init_rootfs(
     Ok(())
 }
 
+/// Prepare rootfs for commit.
+///
 /// Initialize a basic root filesystem in @target_root_dfd, then walk over the
 /// root filesystem in @src_rootfs_fd and take the basic content (/usr, /boot, /var)
 /// and cherry pick only specific bits of the rest of the toplevel like compatibility
 /// symlinks (e.g. /lib64 -> /usr/lib64) if they exist.
 #[context("Preparing rootfs for commit")]
-pub(crate) fn compose_prepare_rootfs(
+pub fn compose_prepare_rootfs(
     src_rootfs_dfd: i32,
     target_rootfs_dfd: i32,
     treefile: &mut Treefile,
@@ -211,9 +206,13 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
     Ok(())
 }
 
-// This function is called from rpmostree_postprocess_final(); think of
-// it as the bits of that function that we've chosen to implement in Rust.
-pub(crate) fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
+/// Final processing steps.
+///
+/// This function is called from rpmostree_postprocess_final(); think of
+/// it as the bits of that function that we've chosen to implement in Rust.
+/// It takes care of all things that are really required to use rpm-ostree
+/// on the target host.
+pub fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
     let tasks = [
         postprocess_useradd,
@@ -273,7 +272,7 @@ fn compose_postprocess_scripts(
     rootfs_dfd: &openat::Dir,
     treefile: &mut Treefile,
     unified_core: bool,
-) -> CxxResult<()> {
+) -> Result<()> {
     // Execute the anonymous (inline) scripts.
     for (i, script) in treefile.parsed.postprocess.iter().flatten().enumerate() {
         let binpath = format!("/usr/bin/rpmostree-postprocess-inline-{}", i);
@@ -311,18 +310,19 @@ fn compose_postprocess_scripts(
     Ok(())
 }
 
+/// Logic for handling treefile `remove-files`.
 #[context("Handling `remove-files`")]
-pub(crate) fn compose_postprocess_remove_files(
+pub fn compose_postprocess_remove_files(
     rootfs_dfd: &openat::Dir,
     treefile: &mut Treefile,
-) -> Result<()> {
+) -> CxxResult<()> {
     for name in treefile.parsed.remove_files.iter().flatten() {
         let p = Path::new(name);
         if p.is_absolute() {
             return Err(anyhow!("Invalid absolute path: {}", name).into());
         }
         if name.contains("..") {
-            return Err(anyhow!("Invalid .. in path: {}", name).into());
+            return Err(anyhow!("Invalid '..' in path: {}", name).into());
         }
         println!("Deleting: {}", name);
         rootfs_dfd.remove_all(name)?;
@@ -388,7 +388,7 @@ fn compose_postprocess_rpmdb(rootfs_dfd: &openat::Dir) -> Result<()> {
 }
 
 /// Rust portion of rpmostree_treefile_postprocessing()
-pub(crate) fn compose_postprocess(
+pub fn compose_postprocess(
     rootfs_dfd: i32,
     treefile: &mut Treefile,
     next_version: &str,
@@ -424,7 +424,7 @@ pub(crate) fn compose_postprocess(
 
 /// Implementation of the treefile `mutate-os-release` field.
 #[context("Updating os-release with commit version")]
-pub(crate) fn compose_postprocess_mutate_os_release(
+fn compose_postprocess_mutate_os_release(
     rootfs_dfd: &openat::Dir,
     treefile: &mut Treefile,
     next_version: &str,
@@ -465,11 +465,7 @@ pub(crate) fn compose_postprocess_mutate_os_release(
 
 /// Given the contents of a /usr/lib/os-release file,
 /// update the `VERSION` and `PRETTY_NAME` fields.
-pub(crate) fn mutate_os_release_contents(
-    contents: &str,
-    base_version: &str,
-    next_version: &str,
-) -> String {
+fn mutate_os_release_contents(contents: &str, base_version: &str, next_version: &str) -> String {
     let mut buf = String::new();
     for line in contents.lines() {
         if line.is_empty() {
@@ -540,11 +536,13 @@ fn add_altfiles(buf: &str) -> Result<String> {
     Ok(r)
 }
 
+/// Add `altfiles` entries to `nsswitch.conf`.
+///
 /// rpm-ostree currently depends on `altfiles`
 #[context("Adding altfiles to /etc/nsswitch.conf")]
-pub(crate) fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
-    let path = "usr/etc/nsswitch.conf";
+pub fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let path = "usr/etc/nsswitch.conf";
     let nsswitch = rootfs_dfd.read_to_string(path)?;
     let nsswitch = add_altfiles(&nsswitch)?;
     rootfs_dfd.write_file_contents(path, 0o644, nsswitch.as_bytes())?;
