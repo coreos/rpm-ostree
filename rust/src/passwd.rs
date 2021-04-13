@@ -568,7 +568,8 @@ pub fn passwddb_open(rootfs: i32) -> CxxResult<Box<PasswdDB>> {
 
 impl PasswdDB {
     /// Populate a new DB with content from `passwd` and `group` files.
-    fn populate_new(rootfs: &openat::Dir) -> Result<Self> {
+    #[context("Populating users and groups DB")]
+    pub(crate) fn populate_new(rootfs: &openat::Dir) -> Result<Self> {
         let mut db = Self::default();
         db.add_passwd_content(rootfs.as_raw_fd(), "usr/etc/passwd")?;
         db.add_passwd_content(rootfs.as_raw_fd(), "usr/lib/passwd")?;
@@ -600,6 +601,7 @@ impl PasswdDB {
     }
 
     /// Add content from a `group` file.
+    #[context("Parsing groups from /{}", group_path)]
     fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> Result<()> {
         let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
         let db = rootfs.open_file(group_path)?;
@@ -613,6 +615,7 @@ impl PasswdDB {
     }
 
     /// Add content from a `passwd` file.
+    #[context("Parsing users from /{}", passwd_path)]
     fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> Result<()> {
         let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
         let db = rootfs.open_file(passwd_path)?;

@@ -6,20 +6,23 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::bwrap;
-use crate::cxxrsutil::CxxResult;
-use anyhow::{anyhow, Context, Result};
+use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
+use crate::passwd::PasswdDB;
+use crate::treefile::Treefile;
+use anyhow::{anyhow, bail, Context, Result};
 use fn_error_context::context;
+use gio::CancellableExt;
 use nix::sys::stat::Mode;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::fmt::Write as FmtWrite;
-use std::io::{BufRead, BufReader, Seek, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader, BufWriter, Seek, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-
-use crate::treefile::Treefile;
+use std::pin::Pin;
 
 /* See rpmostree-core.h */
 const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
@@ -549,10 +552,156 @@ pub fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
     Ok(())
 }
 
+pub fn convert_var_to_tmpfiles_d(
+    rootfs_dfd: i32,
+    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+) -> CxxResult<()> {
+    let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let cancellable = &cancellable.gobj_wrap();
+
+    // TODO(lucab): unify this logic with the one in rpmostree-importer.cxx.
+    var_to_tmpfiles(&rootfs, Some(cancellable))?;
+    Ok(())
+}
+
+#[context("Converting /var to tmpfiles.d")]
+fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>) -> Result<()> {
+    /* List of files that are known to possibly exist, but in practice
+     * things work fine if we simply ignore them.  Don't add something
+     * to this list unless you've verified it's handled correctly at
+     * runtime.  (And really both in CentOS and Fedora)
+     */
+    static KNOWN_STATE_FILES: &[&str] = &[
+        // https://bugzilla.redhat.com/show_bug.cgi?id=789407
+        "var/lib/systemd/random-seed",
+        "var/lib/systemd/catalog/database",
+        "var/lib/plymouth/boot-duration",
+        // These two are part of systemd's var.tmp
+        "var/log/wtmp",
+        "var/log/btmp",
+    ];
+
+    let pwdb = PasswdDB::populate_new(rootfs)?;
+
+    // We never want to traverse into /run when making tmpfiles since it's a tmpfs
+    // Note that in a Fedora root, /var/run is a symlink, though on el7, it can be a dir.
+    // See: https://github.com/projectatomic/rpm-ostree/pull/831
+    rootfs
+        .remove_all("var/run")
+        .context("Failed to remove /var/run")?;
+
+    // Here, delete some files ahead of time to avoid emitting warnings
+    // for things that are known to be harmless.
+    for path in KNOWN_STATE_FILES {
+        rootfs
+            .remove_file_optional(*path)
+            .with_context(|| format!("unlinkat({})", path))?;
+    }
+
+    // Convert /var wholesale to tmpfiles.d. Note that with unified core, this
+    // code should no longer be necessary as we convert packages on import.
+    // Make output file world-readable, no reason why not to
+    // https://bugzilla.redhat.com/show_bug.cgi?id=1631794
+    rootfs.ensure_dir_all("usr/lib/tmpfiles.d", 0o755)?;
+    rootfs.write_file_with_sync(
+        "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
+        0o644,
+        |bufwr| -> Result<()> {
+            let mut prefix = "var".to_string();
+            convert_path_to_tmpfiles_d_recurse(bufwr, &pwdb, &rootfs, &mut prefix, &cancellable)
+                .with_context(|| format!("Analyzing /{} content", prefix))?;
+            Ok(())
+        },
+    )?;
+
+    Ok(())
+}
+
+/// Recursively explore target directory and translate content to tmpfiles.d entries.
+///
+/// This proceeds depth-first and progressively deletes translated subpaths as it goes.
+/// `prefix` is updated at each recursive step, so that in case of errors it can be
+/// used to pinpoint the faulty path.
+fn convert_path_to_tmpfiles_d_recurse(
+    tmpfiles_bufwr: &mut BufWriter<File>,
+    pwdb: &PasswdDB,
+    rootfs: &openat::Dir,
+    prefix: &mut String,
+    cancellable: &Option<&gio::Cancellable>,
+) -> Result<()> {
+    use openat::SimpleType;
+
+    let current_prefix = prefix.clone();
+    for subpath in rootfs.list_dir(&current_prefix)? {
+        if cancellable.map(|c| c.is_cancelled()).unwrap_or_default() {
+            bail!("Cancelled");
+        };
+
+        let subpath = subpath?;
+        let full_path = {
+            let fname = subpath.file_name();
+            let path_name = fname
+                .to_str()
+                .ok_or_else(|| anyhow!("invalid non-UTF-8 path: {:?}", fname))?;
+            format!("{}/{}", &current_prefix, &path_name)
+        };
+        let path_type = subpath.simple_type().unwrap_or(SimpleType::Other);
+
+        // Workaround for nfs-utils in RHEL7:
+        // https://bugzilla.redhat.com/show_bug.cgi?id=1427537
+        let mut retain_entry = false;
+        if path_type == SimpleType::File && full_path.starts_with("var/lib/nfs") {
+            retain_entry = true;
+        }
+
+        if !retain_entry && !matches!(path_type, SimpleType::Dir | SimpleType::Symlink) {
+            rootfs.remove_file_optional(&full_path)?;
+            println!("Ignoring non-directory/non-symlink '{}'", &full_path);
+            continue;
+        }
+
+        let filetype_char = match path_type {
+            SimpleType::Dir => 'd',
+            SimpleType::Symlink => 'L',
+            SimpleType::File => 'f',
+            x => unreachable!("invalid path type: {:?}", x),
+        };
+        write!(tmpfiles_bufwr, "{} ", filetype_char)?;
+        write!(tmpfiles_bufwr, "/{} ", full_path)?;
+
+        if path_type == SimpleType::Symlink {
+            let link_target = rootfs.read_link(&full_path)?;
+            write!(tmpfiles_bufwr, "- - - - ")?;
+            write!(tmpfiles_bufwr, "{}", link_target.display())?;
+        } else {
+            let meta = rootfs.metadata(&full_path)?;
+            let perm = meta.stat().st_mode & !libc::S_IFMT;
+            write!(tmpfiles_bufwr, "{:04o} ", perm)?;
+            let username = pwdb.lookup_user(meta.stat().st_uid)?;
+            write!(tmpfiles_bufwr, "{} ", username)?;
+            let groupname = pwdb.lookup_group(meta.stat().st_gid)?;
+            write!(tmpfiles_bufwr, "{} ", groupname)?;
+            write!(tmpfiles_bufwr, "- -")?;
+        };
+        write!(tmpfiles_bufwr, "\n")?;
+
+        if path_type == SimpleType::Dir {
+            // New subdirectory discovered, recurse into it.
+            *prefix = full_path.clone();
+            convert_path_to_tmpfiles_d_recurse(tmpfiles_bufwr, pwdb, rootfs, prefix, cancellable)?;
+        }
+
+        rootfs.remove_all(&full_path)?;
+    }
+    tmpfiles_bufwr.flush()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::treefile::tests as tf_tests;
+    use std::collections::HashSet;
 
     #[test]
     fn stripany() {
@@ -633,5 +782,76 @@ OSTREE_VERSION='33.4'
         compose_init_rootfs(d, &mut tf)?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_tmpfiles_d_translation() {
+        use nix::sys::stat::{umask, Mode};
+        use nix::unistd::{getegid, geteuid};
+
+        // Prepare a minimal rootfs as playground.
+        umask(Mode::empty());
+        let temp_rootfs = tempfile::tempdir().unwrap();
+        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+        {
+            for dirpath in &["usr/lib", "usr/etc", "var"] {
+                rootfs.ensure_dir_all(*dirpath, 0o755).unwrap();
+            }
+            for filepath in &["usr/lib/passwd", "usr/lib/group"] {
+                rootfs.new_file(*filepath, 0o755).unwrap();
+            }
+            rootfs
+                .write_file_contents(
+                    "usr/etc/passwd",
+                    0o755,
+                    format!("test-user:x:{}:{}:::", geteuid(), getegid()),
+                )
+                .unwrap();
+            rootfs
+                .write_file_contents(
+                    "usr/etc/group",
+                    0o755,
+                    format!("test-group:x:{}:", getegid()),
+                )
+                .unwrap();
+        }
+
+        // Add test content.
+        rootfs.ensure_dir_all("var/lib/systemd", 0o755).unwrap();
+        rootfs
+            .new_file("var/lib/systemd/random-seed", 0o755)
+            .unwrap();
+        rootfs.ensure_dir_all("var/lib/nfs", 0o755).unwrap();
+        rootfs.new_file("var/lib/nfs/etab", 0o770).unwrap();
+        rootfs.ensure_dir_all("var/lib/test/nested", 0o777).unwrap();
+        rootfs.new_file("var/lib/test/nested/file", 0o755).unwrap();
+        rootfs
+            .symlink("var/lib/test/nested/symlink", "../")
+            .unwrap();
+
+        var_to_tmpfiles(&rootfs, gio::NONE_CANCELLABLE).unwrap();
+
+        let autovar_path = "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf";
+        assert!(!rootfs.exists("var/lib").unwrap());
+        assert!(rootfs.exists(autovar_path).unwrap());
+        let entries: HashSet<String> = rootfs
+            .read_to_string(autovar_path)
+            .unwrap()
+            .lines()
+            .map(|s| s.to_owned())
+            .collect();
+        let expected = &[
+            "d /var/lib 0755 test-user test-group - -",
+            "d /var/lib/nfs 0755 test-user test-group - -",
+            "d /var/lib/systemd 0755 test-user test-group - -",
+            "d /var/lib/test 0777 test-user test-group - -",
+            "d /var/lib/test/nested 0777 test-user test-group - -",
+            "f /var/lib/nfs/etab 0770 test-user test-group - -",
+            "L /var/lib/test/nested/symlink - - - - ../",
+        ];
+        for line in expected {
+            assert!(entries.contains(*line), "{:#?}", entries);
+        }
+        assert_eq!(entries.len(), expected.len(), "{:#?}", entries);
     }
 }

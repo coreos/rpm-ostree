@@ -145,6 +145,10 @@ pub mod ffi {
             unified_core: bool,
         ) -> Result<()>;
         fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()>;
+        fn convert_var_to_tmpfiles_d(
+            rootfs_dfd: i32,
+            cancellable: Pin<&mut GCancellable>,
+        ) -> Result<()>;
     }
 
     // A grab-bag of metadata from the deployment's ostree commit
