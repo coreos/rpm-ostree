@@ -142,7 +142,6 @@ librpmostreecxxrs_la_SOURCES = rpmostree-cxxrs.h rpmostree-cxxrs.cxx
 # Suppress missing-declarations because https://github.com/dtolnay/cxx/issues/590
 librpmostreecxxrs_la_CXXFLAGS = $(AM_CXXFLAGS) $(SANITIZER_FLAGS) $(rpmostree_common_cflags) -Wno-missing-declarations
 librpmostreecxxrs_la_LIBADD = -lstdc++
-GITIGNOREFILES += $(binding_generated_sources)
 BUILT_SOURCES += $(binding_generated_sources)
 
 # And install our binary

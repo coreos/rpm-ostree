@@ -18,8 +18,6 @@ if BUILDOPT_ASAN
 AM_TESTS_ENVIRONMENT += BUILDOPT_ASAN=yes ASAN_OPTIONS=detect_leaks=false
 endif
 
-GITIGNOREFILES += ssh-config vmcheck-logs/ test-compose-logs/ .cosa/
-
 uninstalled_test_scripts = \
 	$(NULL)
 
