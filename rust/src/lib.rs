@@ -251,10 +251,15 @@ pub mod ffi {
         fn get_ostree_override_layers(&self) -> Vec<String>;
         fn get_all_ostree_layers(&self) -> Vec<String>;
         fn get_repos(&self) -> Vec<String>;
+        fn get_ref(&self) -> &str;
         fn get_rojig_spec_path(&self) -> String;
         fn get_rojig_name(&self) -> String;
         fn get_cliwrap(&self) -> bool;
         fn get_readonly_executables(&self) -> bool;
+        fn get_documentation(&self) -> bool;
+        fn get_recommends(&self) -> bool;
+        fn get_selinux(&self) -> bool;
+        fn get_releasever(&self) -> &str;
         fn get_rpmdb(&self) -> String;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);

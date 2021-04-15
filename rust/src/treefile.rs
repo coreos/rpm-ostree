@@ -541,6 +541,10 @@ impl Treefile {
         self.parsed.repos.clone().unwrap_or_default()
     }
 
+    pub(crate) fn get_ref(&self) -> &str {
+        self.parsed.treeref.as_deref().unwrap_or_default()
+    }
+
     pub(crate) fn get_rojig_spec_path(&self) -> String {
         self.rojig_spec.clone().unwrap_or_default()
     }
@@ -555,6 +559,22 @@ impl Treefile {
 
     pub(crate) fn get_readonly_executables(&self) -> bool {
         self.parsed.readonly_executables.unwrap_or(false)
+    }
+
+    pub(crate) fn get_documentation(&self) -> bool {
+        self.parsed.documentation.unwrap_or(true)
+    }
+
+    pub(crate) fn get_recommends(&self) -> bool {
+        self.parsed.recommends.unwrap_or(true)
+    }
+
+    pub(crate) fn get_selinux(&self) -> bool {
+        self.parsed.selinux.unwrap_or(true)
+    }
+
+    pub(crate) fn get_releasever(&self) -> &str {
+        self.parsed.releasever.as_deref().unwrap_or_default()
     }
 
     pub(crate) fn get_rpmdb(&self) -> String {

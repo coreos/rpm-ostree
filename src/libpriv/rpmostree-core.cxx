@@ -217,20 +217,6 @@ add_canonicalized_string_array (GVariantBuilder *builder,
                          g_variant_new_strv ((const char*const*)sorted, count));
 }
 
-/* Get a bool from @keyfile, adding it to @builder */
-static void
-tf_bind_boolean (GKeyFile *keyfile,
-                 GVariantBuilder *builder,
-                 const char *name,
-                 gboolean default_value)
-{
-  gboolean v = default_value;
-  if (g_key_file_has_key (keyfile, "tree", name, NULL))
-    v = g_key_file_get_boolean (keyfile, "tree", name, NULL);
-
-  g_variant_builder_add (builder, "{sv}", name, g_variant_new_boolean (v));
-}
-
 RpmOstreeTreespec *
 rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
                                      GError    **error)
@@ -240,13 +226,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
 
-  /* We allow the "ref" key to be missing for cases where we don't need one.
-   * This is abusing the Treespec a bit, but oh well... */
-  { g_autofree char *ref = g_key_file_get_string (keyfile, "tree", "ref", NULL);
-    if (ref)
-      g_variant_builder_add (&builder, "{sv}", "ref", g_variant_new_string (ref));
-  }
-
 #define BIND_STRING(k)                                                  \
   { g_autofree char *v = g_key_file_get_string (keyfile, "tree", k, NULL); \
     if (v)                                                              \
@@ -255,7 +234,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   BIND_STRING("rojig");
   BIND_STRING("rojig-version");
-  BIND_STRING("releasever");
 #undef BIND_STRING
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
@@ -279,9 +257,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   if (g_key_file_get_boolean (keyfile, "tree", "skip-sanity-check", NULL))
     g_variant_builder_add (&builder, "{sv}", "skip-sanity-check", g_variant_new_boolean (TRUE));
 
-  tf_bind_boolean (keyfile, &builder, "documentation", TRUE);
-  tf_bind_boolean (keyfile, &builder, "recommends", TRUE);
-  tf_bind_boolean (keyfile, &builder, "selinux", TRUE);
 
   ret->spec = g_variant_builder_end (&builder);
   ret->dict = g_variant_dict_new (ret->spec);
@@ -307,14 +282,6 @@ rpmostree_treespec_new (GVariant   *variant)
   return util::move_nullify (ret);
 }
 
-const char *
-rpmostree_treespec_get_ref (RpmOstreeTreespec    *spec)
-{
-  const char *r = NULL;
-  g_variant_dict_lookup (spec->dict, "ref", "&s", &r);
-  return r;
-}
-
 GVariant *
 rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
 {
@@ -334,6 +301,8 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_object (&rctx->spec);
   g_clear_object (&rctx->dnfctx);
+
+  g_clear_pointer (&rctx->ref, g_free);
 
   g_clear_object (&rctx->rojig_pkg);
   g_free (rctx->rojig_checksum);
@@ -442,6 +411,7 @@ rpmostree_context_new_system (OstreeRepo   *repo,
 RpmOstreeContext *
 rpmostree_context_new_tree (int               userroot_dfd,
                             OstreeRepo       *repo,
+                            rpmostreecxx::Treefile &treefile_rs,
                             GCancellable     *cancellable,
                             GError          **error)
 {
@@ -449,6 +419,7 @@ rpmostree_context_new_tree (int               userroot_dfd,
   if (!ret)
     return NULL;
   ret->is_system = FALSE;
+  ret->treefile_rs = &treefile_rs;
 
   { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
     dnf_context_set_repo_dir (ret->dnfctx, reposdir);
@@ -465,6 +436,15 @@ rpmostree_context_new_tree (int               userroot_dfd,
     g_autofree char *lockdir = glnx_fdrel_abspath (userroot_dfd, lock);
     dnf_context_set_lock_dir (ret->dnfctx, lockdir);
   }
+
+  // The ref needs special handling as it gets variable-substituted.
+  auto ref = ret->treefile_rs->get_ref();
+  if (ref.length() > 0)
+    {
+      auto varsubsts = rpmostree_dnfcontext_get_varsubsts(ret->dnfctx);
+      auto subst_ref = rpmostreecxx::varsubstitute(ref, *varsubsts);
+      ret->ref = g_strdup(subst_ref.c_str());
+    }
 
   return util::move_nullify (ret);
 }
@@ -522,23 +502,24 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
   self->passwd_dir = g_build_filename (cfg_deployment_root, "etc", NULL);
 }
 
-
-/* By default, we use a "treespec" however, reflecting everything from
- * treefile -> treespec is annoying.  Long term we want to unify those.  This
- * is a temporary escape hatch.
- */
-void
-rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile *treefile_rs)
-{
-  self->treefile_rs = treefile_rs;
-}
-
 /* Use this if no packages will be installed, and we just want a "dummy" run.
  */
 void
 rpmostree_context_set_is_empty (RpmOstreeContext *self)
 {
   self->empty = TRUE;
+}
+
+void 
+rpmostree_context_disable_selinux (RpmOstreeContext *self)
+{
+  self->disable_selinux = TRUE;
+}
+
+const char *
+rpmostree_context_get_ref (RpmOstreeContext *self)
+{
+  return self->ref;
 }
 
 /* XXX: or put this in new_system() instead? */
@@ -697,7 +678,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                          GCancellable  *cancellable,
                          GError       **error)
 {
-  const char *releasever = NULL;
+  std::string releasever;
   g_autofree char **instlangs = NULL;
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
@@ -711,7 +692,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   else
     self->spec = (RpmOstreeTreespec*)g_object_ref (spec);
 
-  g_variant_dict_lookup (self->spec->dict, "releasever", "&s", &releasever);
+  if (self->treefile_rs)
+    releasever = std::string(self->treefile_rs->get_releasever());
 
   if (!install_root)
     install_root = emptydir_path;
@@ -722,10 +704,12 @@ rpmostree_context_setup (RpmOstreeContext    *self,
        * treecompose/container, we currently require using .repo files which
        * don't reference $releasever.
        */
-      dnf_context_set_release_ver (self->dnfctx, releasever ?: "rpmostree-unset-releasever");
+      if (releasever.length() == 0)
+        releasever = "rpmostree-unset-releasever";
+      dnf_context_set_release_ver (self->dnfctx, releasever.c_str());
     }
-  else if (releasever)
-    dnf_context_set_release_ver (self->dnfctx, releasever);
+  else if (releasever.length() > 0)
+    dnf_context_set_release_ver (self->dnfctx, releasever.c_str());
 
   dnf_context_set_install_root (self->dnfctx, install_root);
   dnf_context_set_source_root (self->dnfctx, source_root);
@@ -833,21 +817,17 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   for (guint i = 0; i < repos->len; i++)
     dnf_repo_set_required (static_cast<DnfRepo*>(repos->pdata[i]), TRUE);
 
-  { gboolean docs;
-
-    g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
-
-    if (!docs)
-        dnf_transaction_set_flags (dnf_context_get_transaction (self->dnfctx),
-                                   DNF_TRANSACTION_FLAG_NODOCS);
-  }
+  if (self->treefile_rs && !self->treefile_rs->get_documentation())
+    { 
+      dnf_transaction_set_flags (dnf_context_get_transaction (self->dnfctx),
+                                 DNF_TRANSACTION_FLAG_NODOCS);
+    }
 
   /* We could likely delete this, but I'm keeping a log message just in case */
   if (g_variant_dict_contains (self->spec->dict, "ignore-scripts"))
     sd_journal_print (LOG_INFO, "ignore-scripts is no longer supported");
 
-  gboolean selinux;
-  g_assert (g_variant_dict_lookup (self->spec->dict, "selinux", "b", &selinux));
+  bool selinux = !self->disable_selinux && (!self->treefile_rs || self->treefile_rs->get_selinux());
   /* Load policy from / if SELinux is enabled, and we haven't already loaded
    * a policy.  This is mostly for the "compose tree" case.
    */
@@ -1422,9 +1402,7 @@ find_pkg_in_ostree (RpmOstreeContext *self,
       /* We need to handle things like the nodocs flag changing; in that case we
        * have to redownload.
        */
-      gboolean global_docs;
-      g_variant_dict_lookup (self->spec->dict, "documentation", "b", &global_docs);
-      const gboolean global_nodocs = !global_docs;
+      const bool global_nodocs = (self->treefile_rs && !self->treefile_rs->get_documentation());
 
       gboolean pkgcache_commit_is_nodocs;
       if (!g_variant_dict_lookup (metadata_dict, "rpmostree.nodocs", "b", &pkgcache_commit_is_nodocs))
@@ -1433,7 +1411,7 @@ find_pkg_in_ostree (RpmOstreeContext *self,
       /* We treat a mismatch of documentation state as simply not being
        * imported at all.
        */
-      if (global_nodocs != pkgcache_commit_is_nodocs)
+      if (global_nodocs != (bool)pkgcache_commit_is_nodocs)
         return TRUE;
     }
 
@@ -2278,9 +2256,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     {
       auto actions = static_cast<DnfGoalActions>(DNF_INSTALL | DNF_ALLOW_UNINSTALL);
 
-      gboolean recommends;
-      g_assert (g_variant_dict_lookup (self->spec->dict, "recommends", "b", &recommends));
-      if (!recommends)
+      if (self->treefile_rs && !self->treefile_rs->get_recommends())
         actions = static_cast<DnfGoalActions>(static_cast<int>(actions) | DNF_IGNORE_WEAK_DEPS);
 
       auto task = rpmostreecxx::progress_begin_task("Resolving dependencies");
@@ -2638,11 +2614,8 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
       g_str_equal (pkg_name, "rootfiles"))
     flags |= RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS;
 
-  { gboolean docs;
-    g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
-    if (!docs)
-      flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
-  }
+  if (self->treefile_rs && !self->treefile_rs->get_documentation())
+    flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
 
   if (self->treefile_rs && self->treefile_rs->get_readonly_executables())
     flags |= RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES;
@@ -4858,11 +4831,9 @@ rpmostree_context_commit (RpmOstreeContext      *self,
       return FALSE;
     }
 
-    { const char * ref = rpmostree_treespec_get_ref (self->spec);
-      if (ref != NULL)
-        ostree_repo_transaction_set_ref (self->ostreerepo, NULL, ref,
-                                         ret_commit_checksum);
-    }
+    if (self->ref != NULL)
+      ostree_repo_transaction_set_ref (self->ostreerepo, NULL, self->ref,
+                                       ret_commit_checksum);
 
     { OstreeRepoTransactionStats stats;
       g_autofree char *bytes_written_formatted = NULL;
