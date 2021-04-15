@@ -65,8 +65,6 @@ AM_CXXFLAGS += -std=c++17 -fno-strict-aliasing $(warning_flags) $(sanitizer_flag
 
 EXTRA_DIST += autogen.sh COPYING
 
-GITIGNOREFILES += build-aux/ gtk-doc.make config.h.in aclocal.m4 insttree/ rpm-ostreed
-
 SED_SUBST = sed \
         -e 's,[@]libexecdir[@],$(libexecdir),g' \
         -e 's,[@]primaryname[@],$(primaryname),g' \
@@ -107,10 +105,6 @@ use-git-not-dist-hook:
 	@exit 1
 
 DIST_HOOKS += use-git-not-dist-hook
-GITIGNOREFILES += target/
-
-# From coreos-assembler
-GITIGNOREFILES += .cosa/ "fastbuild*.qcow2" _kola_temp/
 
 include libglnx/Makefile-libglnx.am.inc
 noinst_LTLIBRARIES += libglnx.la
