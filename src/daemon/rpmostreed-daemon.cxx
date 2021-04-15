@@ -583,7 +583,7 @@ update_status (RpmostreedDaemon *self)
       /* This source ensures we update the systemd status to show admins
        * when we may auto-exit.
        */
-      self->rerender_status_id = g_timeout_add_seconds (1, idle_update_status, self);
+      self->rerender_status_id = g_timeout_add_seconds (10, idle_update_status, self);
       sd_journal_print (LOG_INFO, "In idle state; will auto-exit in %u seconds", idle_exit_secs);
     }
   else if (!currently_idle && self->idle_exit_source)
