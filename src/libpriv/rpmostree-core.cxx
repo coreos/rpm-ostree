@@ -362,9 +362,7 @@ set_rpm_macro_define (const char *key, const char *value)
  * operations.
  */
 RpmOstreeContext *
-rpmostree_context_new_client (OstreeRepo   *repo,
-                              GCancellable *cancellable,
-                              GError      **error)
+rpmostree_context_new_client (OstreeRepo   *repo)
 {
   g_assert (repo != NULL);
 
@@ -417,14 +415,10 @@ rpmostree_context_new_client (OstreeRepo   *repo,
 RpmOstreeContext *
 rpmostree_context_new_compose (int               userroot_dfd,
                                OstreeRepo       *repo,
-                               rpmostreecxx::Treefile &treefile_rs,
-                               GCancellable     *cancellable,
-                               GError          **error)
+                               rpmostreecxx::Treefile &treefile_rs)
 {
   /* Inherit the client baseline, but flip it back to be a "compose" context */
-  g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_client (repo, cancellable, error);
-  if (!ret)
-    return NULL;
+  auto ret = rpmostree_context_new_client (repo);
   ret->is_system = FALSE;
   ret->treefile_rs = &treefile_rs;
 

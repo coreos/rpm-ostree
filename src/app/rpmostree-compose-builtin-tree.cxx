@@ -700,10 +700,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
   self->treefile_rs = rpmostreecxx::treefile_new(gs_file_get_path_cached (self->treefile_path), arch, self->workdir_dfd);
   self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo,
-                                                 **self->treefile_rs,
-                                                 cancellable, error);
-  if (!self->corectx)
-    return FALSE;
+                                                 **self->treefile_rs);
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
    * e.g. importing, relabeling, etc... so just disable it. We do still set the policy
    * to the final one right before commit as usual. */
@@ -1530,10 +1527,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   // want RPMs, so having them already imported isn't useful to us (and anyway,
   // for OS extensions by definition they're not expected to be cached since
   // they're not in the base tree)
-  g_autoptr(RpmOstreeContext) ctx =
-      rpmostree_context_new_compose (cachedir_dfd, repo, *treefile, cancellable, error);
-  if (!ctx)
-      return FALSE;
+  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_compose (cachedir_dfd, repo, *treefile);
 
   { int tf_dfd = treefile->get_workdir();
     g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");

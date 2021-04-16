@@ -82,15 +82,11 @@ char* rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
 char* rpmostree_refspec_canonicalize (const char           *orig_refspec,
                                       GError              **error);
 
-RpmOstreeContext *rpmostree_context_new_client (OstreeRepo   *repo,
-                                                GCancellable *cancellable,
-                                                GError      **error);
+RpmOstreeContext *rpmostree_context_new_client (OstreeRepo   *repo);
 
 RpmOstreeContext *rpmostree_context_new_compose (int basedir_dfd,
                                                  OstreeRepo  *repo,
-                                                 rpmostreecxx::Treefile &treefile_rs,
-                                                 GCancellable *cancellable,
-                                                 GError **error);
+                                                 rpmostreecxx::Treefile &treefile_rs);
 
 void rpmostree_context_set_pkgcache_only (RpmOstreeContext *self,
                                           gboolean          pkgcache_only);
