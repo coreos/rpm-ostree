@@ -412,11 +412,11 @@ rpmostree_context_new_client (OstreeRepo   *repo,
  * is assumed to be for unprivileged containers/buildroots.
  */
 RpmOstreeContext *
-rpmostree_context_new_tree (int               userroot_dfd,
-                            OstreeRepo       *repo,
-                            rpmostreecxx::Treefile &treefile_rs,
-                            GCancellable     *cancellable,
-                            GError          **error)
+rpmostree_context_new_compose (int               userroot_dfd,
+                               OstreeRepo       *repo,
+                               rpmostreecxx::Treefile &treefile_rs,
+                               GCancellable     *cancellable,
+                               GError          **error)
 {
   /* Inherit the client baseline, but flip it back to be a "compose" context */
   g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_client (repo, cancellable, error);
