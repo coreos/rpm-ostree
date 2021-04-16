@@ -16,7 +16,8 @@ assert_jq status.json \
   '.deployments[0]["requested-base-removals"]' \
   '.deployments[0]["live-inprogress"]|not' \
   '.deployments[0]["live-replaced"]|not' \
-  '.deployments[0]["layered-commit-meta"]|not'
+  '.deployments[0]["layered-commit-meta"]|not' \
+  '.deployments[0]["staged"]|not'
 rm status.json
 rpm-ostree testutils validate-parse-status
 echo "ok empty pkg arrays, and commit meta correct in status json"
