@@ -9,4 +9,4 @@ User=rpm-ostree
 DynamicUser=yes
 StateDirectory=rpm-ostree-countme
 StateDirectoryMode=750
-ExecStart=@libexecdir@/rpm-ostree-unpriv countme
+ExecStart=@bindir@/rpm-ostree countme
