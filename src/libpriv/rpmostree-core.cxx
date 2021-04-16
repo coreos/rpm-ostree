@@ -693,7 +693,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                          GError       **error)
 {
   std::string releasever;
-  g_autofree char **instlangs = NULL;
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
 
@@ -726,22 +725,11 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* Set the RPM _install_langs macro, which gets processed by librpm; this is
    * currently only referenced in the traditional or non-"unified core" code.
    */
-  if (g_variant_dict_lookup (self->spec->dict, "instlangs", "^a&s", &instlangs))
+  if (!self->is_system && self->treefile_rs)
     {
-      g_autoptr(GString) opt = g_string_new ("");
-
-      gboolean first = TRUE;
-      for (char **iter = instlangs; iter && *iter; iter++)
-        {
-          const char *v = *iter;
-          if (!first)
-            g_string_append_c (opt, ':');
-          else
-            first = FALSE;
-          g_string_append (opt, v);
-        }
-
-      dnf_context_set_rpm_macro (self->dnfctx, "_install_langs", opt->str);
+      auto instlangs = self->treefile_rs->format_install_langs_macro();
+      if (instlangs.length() > 0)
+        dnf_context_set_rpm_macro (self->dnfctx, "_install_langs", instlangs.c_str());
     }
 
   /* This is what we use as default. Note we should be able to drop this in the
