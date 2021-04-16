@@ -503,7 +503,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
          * rojig == ostree pull.
          */
         g_autoptr(RpmOstreeContext) ctx =
-          rpmostree_context_new_system (self->repo, cancellable, error);
+          rpmostree_context_new_client (self->repo, cancellable, error);
         if (!ctx)
           return FALSE;
 
@@ -971,7 +971,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!checkout_base_tree (self, cancellable, error))
     return FALSE;
 
-  self->ctx = rpmostree_context_new_system (self->repo, cancellable, error);
+  self->ctx = rpmostree_context_new_client (self->repo, cancellable, error);
   if (!self->ctx)
     return FALSE;
 
