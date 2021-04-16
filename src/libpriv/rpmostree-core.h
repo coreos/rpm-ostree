@@ -82,7 +82,7 @@ char* rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
 char* rpmostree_refspec_canonicalize (const char           *orig_refspec,
                                       GError              **error);
 
-RpmOstreeContext *rpmostree_context_new_system (OstreeRepo   *repo,
+RpmOstreeContext *rpmostree_context_new_client (OstreeRepo   *repo,
                                                 GCancellable *cancellable,
                                                 GError      **error);
 

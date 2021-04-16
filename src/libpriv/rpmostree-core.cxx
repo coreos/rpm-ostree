@@ -358,8 +358,11 @@ set_rpm_macro_define (const char *key, const char *value)
   free (rpmExpand (buf, NULL));
 }
 
+/* Create a context intended for use "client side", e.g. for package layering
+ * operations.
+ */
 RpmOstreeContext *
-rpmostree_context_new_system (OstreeRepo   *repo,
+rpmostree_context_new_client (OstreeRepo   *repo,
                               GCancellable *cancellable,
                               GError      **error)
 {
@@ -415,7 +418,8 @@ rpmostree_context_new_tree (int               userroot_dfd,
                             GCancellable     *cancellable,
                             GError          **error)
 {
-  g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (repo, cancellable, error);
+  /* Inherit the client baseline, but flip it back to be a "compose" context */
+  g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_client (repo, cancellable, error);
   if (!ret)
     return NULL;
   ret->is_system = FALSE;
