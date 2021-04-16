@@ -612,6 +612,11 @@ impl Treefile {
                 }
             }
         }
+        if config.repos.is_none() && config.lockfile_repos.is_none() {
+            return Err(anyhow!(
+                r#"Treefile has neither "repos" nor "lockfile-repos""#
+            ));
+        }
         if let Some(version_suffix) = config.automatic_version_suffix.as_ref() {
             if !(version_suffix.len() == 1 && version_suffix.is_ascii()) {
                 return Err(io::Error::new(
@@ -1235,6 +1240,8 @@ pub(crate) mod tests {
 
     pub(crate) static VALID_PRELUDE: &str = indoc! {r#"
         ref: "exampleos/x86_64/blah"
+        repos:
+         - baserepo
         packages:
          - foo bar
          - baz
@@ -1485,6 +1492,8 @@ pub(crate) mod tests {
             "foo.yaml",
             0o644,
             indoc! {"
+                repos:
+                    - foo
                 packages:
                     - fooinclude
             "},
@@ -1506,6 +1515,8 @@ pub(crate) mod tests {
             "foo-x86_64.yaml",
             0o644,
             r#"
+repos:
+  - foo
 packages:
   - foo-x86_64-include
 "#,

@@ -185,12 +185,6 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
     return NULL;
   if (!treespec_bind_array (treedata, treespec, "lockfile-repos", NULL, FALSE, error))
     return NULL;
-
-  /* at least one of `repos` and `lockfile-repos` should be defined */
-  if (!json_object_has_member (treedata, "repos") &&
-      !json_object_has_member (treedata, "lockfile-repos"))
-    return (RpmOstreeTreespec*)glnx_null_throw (error, "Treefile has neither \"repos\" nor \"lockfile-repos\" members");
-
   if (!treespec_bind_array (treedata, treespec, "install-langs", "instlangs", FALSE, error))
     return NULL;
 
