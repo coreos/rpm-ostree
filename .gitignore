@@ -16,6 +16,15 @@
 /.cosa/
 /_kola_temp/
 
+# From compose tests
+/compose-cache/
+/compose-logs/
+
+# From vmcheck tests
+/vmcheck-logs/
+/ssh-config
+
+# From build system itself
 /.dirstamp
 /GPATH
 /GRTAGS
@@ -72,11 +81,9 @@
 /src/daemon/rpm-ostreed.service
 /src/lib/rpm-ostree-1.pc
 /src/lib/rpmostree-version.h
-/ssh-config
 /stamp-h1
 /tags
 /target/
-/test-compose-logs/
 /test-libglnx-errors
 /test-libglnx-errors.log
 /test-libglnx-errors.test
@@ -101,5 +108,4 @@
 /tests/check/test-lib-introspection.sh.log
 /tests/check/test-lib-introspection.sh.test
 /tests/check/test-lib-introspection.sh.trs
-/vmcheck-logs/
 _libs
