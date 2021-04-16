@@ -14,7 +14,13 @@ rpmostree-cxxrs.h: $(binding_rust_sources)
 	  echo cxxbridge failed; exit 1; \
 	fi
 rpmostree-cxxrs.cxx: $(binding_rust_sources) rpmostree-cxxrs.h
-	$(AM_V_GEN) cxxbridge --include rpmostree-cxxrs.h rust/src/lib.rs > $@
+	$(AM_V_GEN) if cxxbridge --include rpmostree-cxxrs.h rust/src/lib.rs > $@.tmp; then \
+	  if test -f $@ && cmp $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else \
+	    mv $@.tmp $@; \
+	  fi; \
+	else \
+	  echo cxxbridge failed; exit 1; \
+	fi
 
 # Invoked in CI
 bindings: rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
