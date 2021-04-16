@@ -661,6 +661,20 @@ enable_repos (RpmOstreeContext  *context,
   return TRUE;
 }
 
+void 
+rpmostree_context_set_treespec (RpmOstreeContext *self, RpmOstreeTreespec *treespec)
+{
+  g_assert (!self->spec);
+  /* allow NULL for treespec, but canonicalize to an empty keyfile for cleaner queries */
+  if (!treespec)
+    {
+      g_autoptr(GKeyFile) kf = g_key_file_new ();
+      self->spec = rpmostree_treespec_new_from_keyfile (kf, NULL);
+    }
+  else
+    self->spec = (RpmOstreeTreespec*)g_object_ref (treespec);
+}
+
 /* Wraps `dnf_context_setup()`, and initializes state based on the treespec
  * @spec. Another way to say it is we pair `DnfContext` with an
  * `RpmOstreeTreespec`. For example, we handle "instlangs", set the rpmdb root
@@ -675,7 +689,6 @@ gboolean
 rpmostree_context_setup (RpmOstreeContext    *self,
                          const char    *install_root,
                          const char    *source_root,
-                         RpmOstreeTreespec *spec,
                          GCancellable  *cancellable,
                          GError       **error)
 {
@@ -684,14 +697,9 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
 
-  /* allow NULL for treespec, but canonicalize to an empty keyfile for cleaner queries */
-  if (!spec)
-    {
-      g_autoptr(GKeyFile) kf = g_key_file_new ();
-      self->spec = rpmostree_treespec_new_from_keyfile (kf, NULL);
-    }
-  else
-    self->spec = (RpmOstreeTreespec*)g_object_ref (spec);
+  /* Auto-synthesize a spec for now; this will be removed */
+  if (!self->spec)
+    rpmostree_context_set_treespec (self, NULL);
 
   if (self->treefile_rs)
     releasever = std::string(self->treefile_rs->get_releasever());

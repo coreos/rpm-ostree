@@ -139,8 +139,10 @@ install_packages (RpmOstreeRojigCompose  *self,
   else
     dnf_context_set_cache_age (dnfctx, G_MAXUINT);
 
+  rpmostree_context_set_treespec (self->corectx, self->treespec);
+
   { g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->rootfs_dfd, ".");
-    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, self->treespec,
+    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL,
                                   cancellable, error))
       return FALSE;
   }
@@ -349,7 +351,8 @@ impl_rojig_build (RpmOstreeRojigCompose *self,
 
   g_autofree char *reposdir_abspath = glnx_fdrel_abspath (self->workdir_dfd, "rojig-repos");
   dnf_context_set_repo_dir (dnfctx, reposdir_abspath);
-  if (!rpmostree_context_setup (corectx, NULL, NULL, treespec, cancellable, error))
+  rpmostree_context_set_treespec (corectx, treespec);
+  if (!rpmostree_context_setup (corectx, NULL, NULL, cancellable, error))
     return FALSE;
   if (!rpmostree_context_prepare_rojig (corectx, TRUE, cancellable, error))
     return FALSE;

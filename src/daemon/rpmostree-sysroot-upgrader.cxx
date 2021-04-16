@@ -510,7 +510,8 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
          * really need a way for users to configure a different releasever when
          * e.g. rebasing across majors.
          */
-        if (!rpmostree_context_setup (ctx, NULL, "/", treespec, cancellable, error))
+        rpmostree_context_set_treespec (ctx, treespec);
+        if (!rpmostree_context_setup (ctx, NULL, "/", cancellable, error))
           return FALSE;
         /* We're also "pure" rojig - this adds assertions that we don't depsolve for example */
         if (!rpmostree_context_prepare_rojig (ctx, FALSE, cancellable, error))
@@ -985,7 +986,8 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (treespec == NULL)
     return FALSE;
 
-  if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath, treespec,
+  rpmostree_context_set_treespec (self->ctx, treespec);
+  if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath,
                                 cancellable, error))
     return FALSE;
 

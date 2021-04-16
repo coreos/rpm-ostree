@@ -120,7 +120,8 @@ impl_rojig2commit (RpmOstreeRojig2CommitContext *self,
     return FALSE;
 
   /* We're also "pure" rojig - this adds assertions that we don't depsolve for example */
-  if (!rpmostree_context_setup (self->ctx, NULL, NULL, treespec, cancellable, error))
+  rpmostree_context_set_treespec (self->ctx, treespec);
+  if (!rpmostree_context_setup (self->ctx, NULL, NULL, cancellable, error))
     return FALSE;
   if (!rpmostree_context_prepare_rojig (self->ctx, FALSE, cancellable, error))
     return FALSE;

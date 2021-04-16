@@ -310,8 +310,9 @@ install_packages (RpmOstreeTreeComposeContext  *self,
                                      opt_cache_only ? RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER :
                                      RPMOSTREE_CONTEXT_DNF_CACHE_NEVER);
 
+  rpmostree_context_set_treespec (self->corectx, self->treespec);
   { g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
-    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, self->treespec,
+    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL,
                                   cancellable, error))
       return FALSE;
   }
@@ -1567,7 +1568,8 @@ rpmostree_compose_builtin_extensions (int             argc,
   }
 
   g_autofree char *checkout_path = glnx_fdrel_abspath (cachedir_dfd, TMP_EXTENSIONS_ROOTFS);
-  if (!rpmostree_context_setup (ctx, checkout_path, checkout_path, spec, cancellable, error))
+  rpmostree_context_set_treespec (ctx, spec);
+  if (!rpmostree_context_setup (ctx, checkout_path, checkout_path, cancellable, error))
     return FALSE;
 
 #undef TMP_EXTENSIONS_ROOTFS
