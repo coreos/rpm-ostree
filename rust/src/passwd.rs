@@ -256,12 +256,13 @@ pub fn passwd_compose_prep_repo(
 ) -> Result<()> {
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
     let repo = ffi_repo.gobj_wrap();
-    passwd_compose_prep_impl(
-        &rootfs,
-        treefile,
-        Some((&repo, previous_checksum)),
-        unified_core,
-    )
+    // C side uses "" for None
+    let repo_previous_rev = if previous_checksum == "" {
+        None
+    } else {
+        Some((&repo, previous_checksum))
+    };
+    passwd_compose_prep_impl(&rootfs, treefile, repo_previous_rev, unified_core)
 }
 
 fn passwd_compose_prep_impl(
