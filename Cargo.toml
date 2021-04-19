@@ -46,7 +46,7 @@ libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 memfd = "0.4.0"
 nix = "0.20.0"
-openat = "0.1.19"
+openat = "0.1.21"
 openat-ext = "^0.2.0"
 os-release = "0.1.0"
 ostree = { version = "0.9.1", features = ["v2020_4"] }
