@@ -87,9 +87,7 @@ rpm_ostree_rojig2commit_context_new (RpmOstreeRojig2CommitContext **out_context,
                        "tmp/rpmostree-rojig-XXXXXX", 0700, &self->tmpd, error))
     return FALSE;
 
-  self->ctx = rpmostree_context_new_compose (self->tmpd.fd, self->repo, cancellable, error);
-  if (!self->ctx)
-    return FALSE;
+  self->ctx = rpmostree_context_new_compose (self->tmpd.fd, self->repo);
 
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->ctx);
 

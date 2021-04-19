@@ -278,9 +278,7 @@ rpm_ostree_rojig_compose_new (const char    *treefile_path,
         return FALSE;
     }
 
-  self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->repo, cancellable, error);
-  if (!self->corectx)
-    return FALSE;
+  self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->repo);
 
   const char *arch = dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx));
   self->treefile_rs = rpmostreecxx::treefile_new (treefile_path, arch, self->workdir_dfd);
@@ -333,9 +331,7 @@ impl_rojig_build (RpmOstreeRojigCompose *self,
   g_autoptr(RpmOstreeTreespec) treespec = rpmostree_treespec_new_from_keyfile (tsk, error);
   if (!treespec)
     return FALSE;
-  g_autoptr(RpmOstreeContext) corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->repo, cancellable, error);
-  if (!corectx)
-    return FALSE;
+  g_autoptr(RpmOstreeContext) corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->repo);
   DnfContext *dnfctx = rpmostree_context_get_dnf (corectx);
   if (!glnx_shutil_mkdir_p_at (self->workdir_dfd, "rojig-repos", 0755, cancellable, error))
     return FALSE;

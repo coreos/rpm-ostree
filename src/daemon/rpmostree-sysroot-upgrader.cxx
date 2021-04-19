@@ -503,9 +503,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
          * rojig == ostree pull.
          */
         g_autoptr(RpmOstreeContext) ctx =
-          rpmostree_context_new_client (self->repo, cancellable, error);
-        if (!ctx)
-          return FALSE;
+          rpmostree_context_new_client (self->repo);
 
         /* We use / as a source root mostly so we get $releasever from it so
          * things work out of the box. That said this is kind of wrong and we'll
@@ -971,9 +969,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!checkout_base_tree (self, cancellable, error))
     return FALSE;
 
-  self->ctx = rpmostree_context_new_client (self->repo, cancellable, error);
-  if (!self->ctx)
-    return FALSE;
+  self->ctx = rpmostree_context_new_client (self->repo);
 
   g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
 
