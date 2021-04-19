@@ -30,7 +30,7 @@ c_utf8 = "0.1.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "2.33.3"
 curl = "0.4.35"
-cxx = "1.0.43"
+cxx = "1.0.45"
 envsubst = "0.2.0"
 fn-error-context = "0.1.1"
 gio = "0.9.1"
@@ -46,7 +46,7 @@ libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 memfd = "0.4.0"
 nix = "0.20.0"
-openat = "0.1.19"
+openat = "0.1.21"
 openat-ext = "^0.2.0"
 os-release = "0.1.0"
 ostree = { version = "0.9.1", features = ["v2020_4"] }
