@@ -50,7 +50,7 @@ openat = "0.1.21"
 openat-ext = "^0.2.0"
 os-release = "0.1.0"
 ostree = { version = "0.9.1", features = ["v2020_4"] }
-ostree-sys = "0.7.2"
+ostree-sys = "0.7.3"
 ostree-host = { path = "rust/ostree-host" }
 paste = "1.0"
 phf = { version = "0.8", features = ["macros"] }
