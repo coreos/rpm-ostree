@@ -45,13 +45,15 @@ runcompose --add-metadata-from-json metadata.json \
 . "${dn}/libbasic-test.sh"
 basic_test
 
-# This one is done by postprocessing /var
+# Check tmpfiles.d entries created by postprocessing /var.
+# Testcases picked at random to cover translation logic. They are unlikely to change upstream,
+# but if that happens we will need to adapt the entries.
 ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf > autovar.txt
-# Picked this one at random as an example of something that won't likely be
-# converted to tmpfiles.d upstream.  But if it is, we can change this test.
 assert_file_has_content_literal autovar.txt 'd /var/cache 0755 root root - -'
-# And this one has a non-root uid
 assert_file_has_content_literal autovar.txt 'd /var/log/chrony 0755 chrony chrony - -'
+assert_file_has_content_literal autovar.txt 'L /var/mail - - - - spool/mail'
+assert_file_has_content_literal autovar.txt 'd /var/tmp 1777 root root - -'
+assert_file_has_content_literal autovar.txt 'd /var/lib/polkit-1 0750 root polkitd - -'
 echo "ok autovar"
 
 # Validate this exists
