@@ -611,8 +611,8 @@ rpmostree_postprocess_final (int            rootfs_dfd,
 
   rpmostreecxx::convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable);
 
-  if (!rpmostree_rootfs_prepare_links (rootfs_dfd, cancellable, error))
-    return FALSE;
+  rpmostreecxx::rootfs_prepare_links(rootfs_dfd);
+
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
 
@@ -668,80 +668,6 @@ rpmostree_postprocess_final (int            rootfs_dfd,
      if (symlinkat ("../../share/rpm", rootfs_dfd, RPMOSTREE_SYSIMAGE_RPMDB) < 0)
         return glnx_throw_errno_prefix (error, "symlinking %s", RPMOSTREE_SYSIMAGE_RPMDB);
     }
-
-  return TRUE;
-}
-
-gboolean
-rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
-                                      const char *dest,
-                                      const char *src,
-                                      GError **error)
-{
-  const char *parent = dirname (strdupa (src));
-  struct stat stbuf;
-  gboolean make_symlink = TRUE;
-
-  /* For maximum compatibility, create parent directories too.  This
-   * is necessary when we're doing layering on top of a base commit,
-   * and the /var will be empty.  We should probably consider running
-   * systemd-tmpfiles to setup the temporary /var.
-   */
-  if (parent && strcmp (parent, ".") != 0)
-    {
-      if (!glnx_shutil_mkdir_p_at (rootfs_fd, parent, 0755, NULL, error))
-        return FALSE;
-    }
-
-  if (!glnx_fstatat_allow_noent (rootfs_fd, src, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-    return FALSE;
-  if (errno == 0)
-    {
-      if (S_ISLNK (stbuf.st_mode))
-        make_symlink = FALSE;
-      else if (S_ISDIR (stbuf.st_mode))
-        {
-          if (!glnx_unlinkat (rootfs_fd, src, AT_REMOVEDIR, error))
-            return FALSE;
-        }
-    }
-
-  if (make_symlink)
-    {
-      if (symlinkat (dest, rootfs_fd, src) < 0)
-        return glnx_throw_errno_prefix (error, "Symlinking %s", src);
-    }
-  return TRUE;
-}
-
-/**
- * rpmostree_rootfs_prepare_links:
- *
- * Walk over the root filesystem and perform some core conversions
- * from RPM conventions to OSTree conventions.  For example:
- *
- *  - Symlink /usr/local -> /var/usrlocal
- *  - Symlink /var/lib/alternatives -> /usr/lib/alternatives
- *  - Symlink /var/lib/vagrant -> /usr/lib/vagrant
- */
-gboolean
-rpmostree_rootfs_prepare_links (int           rootfs_fd,
-                                GCancellable *cancellable,
-                                GError       **error)
-{
-  if (!glnx_shutil_rm_rf_at (rootfs_fd, "usr/local", cancellable, error))
-    return FALSE;
-  if (!rpmostree_rootfs_symlink_emptydir_at (rootfs_fd, "../var/usrlocal", "usr/local", error))
-    return FALSE;
-
-  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/lib/alternatives", 0755, cancellable, error))
-    return FALSE;
-  if (!rpmostree_rootfs_symlink_emptydir_at (rootfs_fd, "../../usr/lib/alternatives", "var/lib/alternatives", error))
-    return FALSE;
-  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/lib/vagrant", 0755, cancellable, error))
-    return FALSE;
-  if (!rpmostree_rootfs_symlink_emptydir_at (rootfs_fd, "../../usr/lib/vagrant", "var/lib/vagrant", error))
-    return FALSE;
 
   return TRUE;
 }

@@ -149,6 +149,7 @@ pub mod ffi {
             rootfs_dfd: i32,
             cancellable: Pin<&mut GCancellable>,
         ) -> Result<()>;
+        fn rootfs_prepare_links(rootfs_dfd: i32) -> Result<()>;
     }
 
     // A grab-bag of metadata from the deployment's ostree commit

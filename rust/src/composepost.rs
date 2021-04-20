@@ -697,6 +697,70 @@ fn convert_path_to_tmpfiles_d_recurse(
     Ok(())
 }
 
+/// Walk over the root filesystem and perform some core conversions
+/// from RPM conventions to OSTree conventions.
+///
+/// For example:
+///  - Symlink /usr/local -> /var/usrlocal
+///  - Symlink /var/lib/alternatives -> /usr/lib/alternatives
+///  - Symlink /var/lib/vagrant -> /usr/lib/vagrant
+#[context("Preparing symlinks in rootfs")]
+pub fn rootfs_prepare_links(rootfs_dfd: i32) -> CxxResult<()> {
+    let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+
+    rootfs
+        .remove_all("usr/local")
+        .context("Removing /usr/local")?;
+    let state_paths = &["usr/lib/alternatives", "usr/lib/vagrant"];
+    for entry in state_paths {
+        rootfs
+            .ensure_dir_all(*entry, 0o0755)
+            .with_context(|| format!("Creating '/{}'", entry))?;
+    }
+
+    let symlinks = &[
+        ("../var/usrlocal", "usr/local"),
+        ("../../usr/lib/alternatives", "var/lib/alternatives"),
+        ("../../usr/lib/vagrant", "var/lib/vagrant"),
+    ];
+    for (target, linkpath) in symlinks {
+        ensure_symlink(&rootfs, target, linkpath)?;
+    }
+
+    Ok(())
+}
+
+/// Create a symlink at `linkpath` if it does not exist, pointing to `target`.
+///
+/// This is idempotent and does not alter any content already existing at `linkpath`.
+/// It returns `true` if the symlink has been created, `false` otherwise.
+#[context("Symlinking '/{}' to empty directory '/{}'", linkpath, target)]
+fn ensure_symlink(rootfs: &openat::Dir, target: &str, linkpath: &str) -> Result<bool> {
+    use openat::SimpleType;
+
+    if let Some(meta) = rootfs.metadata_optional(linkpath)? {
+        match meta.simple_type() {
+            SimpleType::Symlink => {
+                // We assume linkpath already points to the correct target,
+                // thus this short-circuits in an idempotent way.
+                return Ok(false);
+            }
+            SimpleType::Dir => rootfs.remove_dir(linkpath)?,
+            _ => bail!("Content already exists at link path"),
+        };
+    } else {
+        // For maximum compatibility, create parent directories too.  This
+        // is necessary when we're doing layering on top of a base commit,
+        // and the /var will be empty.  We should probably consider running
+        // systemd-tmpfiles to setup the temporary /var.
+        rootfs.ensure_dir_all(linkpath, 0o755)?;
+        rootfs.remove_dir(linkpath)?;
+    }
+
+    rootfs.symlink(linkpath, target)?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -853,5 +917,31 @@ OSTREE_VERSION='33.4'
             assert!(entries.contains(*line), "{:#?}", entries);
         }
         assert_eq!(entries.len(), expected.len(), "{:#?}", entries);
+    }
+
+    #[test]
+    fn test_prepare_symlinks() {
+        let temp_rootfs = tempfile::tempdir().unwrap();
+        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+        rootfs.ensure_dir_all("usr/local", 0o755).unwrap();
+
+        rootfs_prepare_links(rootfs.as_raw_fd()).unwrap();
+        {
+            let usr_dir = rootfs.sub_dir("usr").unwrap();
+            let local_target = usr_dir.read_link("local").unwrap();
+            assert_eq!(local_target.to_str(), Some("../var/usrlocal"));
+        }
+        {
+            let varlib_dir = rootfs.sub_dir("var/lib").unwrap();
+            let varcases = &[
+                ("alternatives", "../../usr/lib/alternatives"),
+                ("vagrant", "../../usr/lib/vagrant"),
+            ];
+            for (linkpath, content) in varcases {
+                let target = varlib_dir.read_link(*linkpath);
+                assert!(target.is_ok(), "/var/lib/{}", linkpath);
+                assert_eq!(target.unwrap().to_str(), Some(*content));
+            }
+        }
     }
 }

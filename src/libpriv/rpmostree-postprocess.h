@@ -27,17 +27,6 @@
 G_BEGIN_DECLS
 
 gboolean
-rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
-                                      const char *dest,
-                                      const char *src,
-                                      GError **error);
-
-gboolean
-rpmostree_rootfs_prepare_links (int           rootfs_fd,
-                                GCancellable *cancellable,
-                                GError       **error);
-
-gboolean
 rpmostree_cleanup_leftover_rpmdb_files (int            rootfs_fd,
                                         GCancellable  *cancellable,
                                         GError       **error);
