@@ -4321,8 +4321,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
    */
   if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "var/tmp", 0755, cancellable, error))
     return FALSE;
-  if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
-    return FALSE;
+  rpmostreecxx::rootfs_prepare_links(tmprootfs_dfd);
 
   gboolean skip_sanity_check = FALSE;
   g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
