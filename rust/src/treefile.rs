@@ -537,8 +537,34 @@ impl Treefile {
             .collect()
     }
 
+    pub(crate) fn get_packages(&self) -> Vec<String> {
+        self.parsed.packages.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_exclude_packages(&self) -> Vec<String> {
+        self.parsed.exclude_packages.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_install_langs(&self) -> Vec<String> {
+        self.parsed.install_langs.clone().unwrap_or_default()
+    }
+
+    /// If install_langs is set, generate a value suitable for the RPM macro `_install_langs`;
+    /// otherwise return the empty string.
+    pub(crate) fn format_install_langs_macro(&self) -> String {
+        if let Some(langs) = self.parsed.install_langs.as_ref() {
+            langs.join(":")
+        } else {
+            "".to_string()
+        }
+    }
+
     pub(crate) fn get_repos(&self) -> Vec<String> {
         self.parsed.repos.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_lockfile_repos(&self) -> Vec<String> {
+        self.parsed.lockfile_repos.clone().unwrap_or_default()
     }
 
     pub(crate) fn get_ref(&self) -> &str {

@@ -255,6 +255,11 @@ pub mod ffi {
         fn get_ostree_override_layers(&self) -> Vec<String>;
         fn get_all_ostree_layers(&self) -> Vec<String>;
         fn get_repos(&self) -> Vec<String>;
+        fn get_packages(&self) -> Vec<String>;
+        fn get_exclude_packages(&self) -> Vec<String>;
+        fn get_install_langs(&self) -> Vec<String>;
+        fn format_install_langs_macro(&self) -> String;
+        fn get_lockfile_repos(&self) -> Vec<String>;
         fn get_ref(&self) -> &str;
         fn get_rojig_spec_path(&self) -> String;
         fn get_rojig_name(&self) -> String;

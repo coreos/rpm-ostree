@@ -760,7 +760,7 @@ get_sack_for_booted (OstreeSysroot    *sysroot,
 
   g_autofree char *source_root =
     rpmostree_get_deployment_root (sysroot, booted_deployment);
-  if (!rpmostree_context_setup (ctx, NULL, source_root, NULL, cancellable, error))
+  if (!rpmostree_context_setup (ctx, NULL, source_root, cancellable, error))
     return FALSE;
 
   DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
@@ -2320,7 +2320,7 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us
    * with the right semantics for install/source_root. */
-  if (!rpmostree_context_setup (ctx, NULL, origin_deployment_root, NULL, cancellable, error))
+  if (!rpmostree_context_setup (ctx, NULL, origin_deployment_root, cancellable, error))
     return FALSE;
 
   if (force)
@@ -2446,7 +2446,7 @@ modify_yum_repo_transaction_execute (RpmostreedTransaction *transaction,
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us
    * with the right semantics for install/source_root. */
-  if (!rpmostree_context_setup (ctx, NULL, NULL, NULL, cancellable, error))
+  if (!rpmostree_context_setup (ctx, NULL, NULL, cancellable, error))
     return FALSE;
 
   /* point libdnf to our repos dir */
