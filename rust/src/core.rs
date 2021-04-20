@@ -19,11 +19,12 @@ pub struct TempEtcGuard {
     renamed_etc: bool,
 }
 
+/// Detect if we have /usr/etc and no /etc, and rename if so.
 pub(crate) fn prepare_tempetc_guard(rootfs: i32) -> CxxResult<Box<TempEtcGuard>> {
     let rootfs = ffi_view_openat_dir(rootfs);
-    let has_usretc = rootfs.exists("usr/etc")?;
+    let has_etc = rootfs.exists("etc")?;
     let mut renamed_etc = false;
-    if has_usretc {
+    if !has_etc && rootfs.exists("usr/etc")? {
         // In general now, we place contents in /etc when running scripts
         rootfs.local_rename("usr/etc", "etc")?;
         // But leave a compat symlink, as we used to bind mount, so scripts

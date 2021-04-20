@@ -475,7 +475,11 @@ pub(crate) fn bubblewrap_run_sync(
 /// Validate that bubblewrap works at all.  This will flush out any incorrect
 /// setups such being inside an outer container that disallows `CLONE_NEWUSER` etc.
 pub(crate) fn bubblewrap_selftest() -> CxxResult<()> {
-    let fd = openat::Dir::open("/")?;
-    let _ = bubblewrap_run_sync(fd.as_raw_fd(), &vec!["true".to_string()], false, true)?;
+    let fd = &openat::Dir::open("/")?;
+    let mut bwrap = Bubblewrap::new_with_mutability(fd, BubblewrapMutability::Immutable)?;
+    bwrap.append_child_argv(&["true"]);
+    let cancellable = &gio::Cancellable::new();
+    let cancellable = Some(cancellable);
+    bwrap.run_inner(cancellable)?;
     Ok(())
 }
