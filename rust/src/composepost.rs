@@ -753,8 +753,9 @@ fn ensure_symlink(rootfs: &openat::Dir, target: &str, linkpath: &str) -> Result<
         // is necessary when we're doing layering on top of a base commit,
         // and the /var will be empty.  We should probably consider running
         // systemd-tmpfiles to setup the temporary /var.
-        rootfs.ensure_dir_all(linkpath, 0o755)?;
-        rootfs.remove_dir(linkpath)?;
+        if let Some(parent) = Path::new(linkpath).parent() {
+            rootfs.ensure_dir_all(parent, 0o755)?;
+        }
     }
 
     rootfs.symlink(linkpath, target)?;
