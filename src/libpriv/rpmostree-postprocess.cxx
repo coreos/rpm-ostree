@@ -333,89 +333,13 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   return TRUE;
 }
 
-/* SELinux uses PCRE pre-compiled regexps for binary caches, which can
- * fail if the version of PCRE on the host differs from the version
- * which generated the cache (in the target root).
- *
- * Note also this function is probably already broken in Fedora
- * 23+ from https://bugzilla.redhat.com/show_bug.cgi?id=1265406
- */
-static gboolean
-workaround_selinux_cross_labeling_recurse (int            dfd,
-                                           const char    *path,
-                                           GCancellable  *cancellable,
-                                           GError       **error)
-{
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  if (!glnx_dirfd_iterator_init_at (dfd, path, TRUE, &dfd_iter, error))
-    return FALSE;
-
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-      const char *name;
-
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-
-      if (!dent)
-        break;
-
-      name = dent->d_name;
-
-      if (dent->d_type == DT_DIR)
-        {
-          if (!workaround_selinux_cross_labeling_recurse (dfd_iter.fd, name, cancellable, error))
-            return FALSE;
-        }
-      else if (g_str_has_suffix (name, ".bin"))
-        {
-          struct stat stbuf;
-          const char *lastdot;
-          g_autofree char *nonbin_name = NULL;
-
-          if (!glnx_fstatat (dfd_iter.fd, name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-            return FALSE;
-
-          lastdot = strrchr (name, '.');
-          g_assert (lastdot);
-
-          nonbin_name = g_strndup (name, lastdot - name);
-
-          if (TEMP_FAILURE_RETRY (utimensat (dfd_iter.fd, nonbin_name, NULL, 0)) == -1)
-            return glnx_throw_errno_prefix (error, "utimensat");
-        }
-    }
-
-  return TRUE;
-}
-
 gboolean
 rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
                                        OstreeSePolicy **out_sepolicy,
                                        GCancellable  *cancellable,
                                        GError       **error)
 {
-  const char *policy_path;
-
-  /* Handle the policy being in both /usr/etc and /etc since
-   * this function can be called at different points.
-   */
-  if (!glnx_fstatat_allow_noent (dfd, "usr/etc", NULL, 0, error))
-    return FALSE;
-  if (errno == ENOENT)
-    policy_path = "etc/selinux";
-  else
-    policy_path = "usr/etc/selinux";
-
-  if (!glnx_fstatat_allow_noent (dfd, policy_path, NULL, AT_SYMLINK_NOFOLLOW, error))
-    return FALSE;
-  if (errno == 0)
-    {
-      if (!workaround_selinux_cross_labeling_recurse (dfd, policy_path,
-                                                      cancellable, error))
-        return FALSE;
-    }
+  rpmostreecxx::workaround_selinux_cross_labeling(dfd, *cancellable);
 
   g_autoptr(OstreeSePolicy) ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
   if (ret_sepolicy == NULL)

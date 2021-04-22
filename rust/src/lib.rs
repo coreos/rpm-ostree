@@ -150,6 +150,10 @@ pub mod ffi {
             cancellable: Pin<&mut GCancellable>,
         ) -> Result<()>;
         fn rootfs_prepare_links(rootfs_dfd: i32) -> Result<()>;
+        fn workaround_selinux_cross_labeling(
+            rootfs_dfd: i32,
+            cancellable: Pin<&mut GCancellable>,
+        ) -> Result<()>;
     }
 
     // A grab-bag of metadata from the deployment's ostree commit
