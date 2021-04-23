@@ -151,6 +151,22 @@ assert_file_has_content_literal kargs.txt 'PACKAGE=TEST'
 assert_file_has_content_literal kargs.txt 'PACKAGE2=TEST2'
 echo "ok kargs display with multiple operations"
 
+# Test for rpm-ostree kargs append-if-missing and delete-if-present
+vm_rpmostree kargs --append-if-missing=PACKAGE3=TEST3
+vm_rpmostree kargs > kargs.txt
+assert_file_has_content_literal kargs.txt 'PACKAGE3=TEST3'
+vm_rpmostree kargs --append-if-missing=PACKAGE3=TEST3
+vm_rpmostree kargs > if_not_missing.txt
+diff kargs.txt if_not_missing.txt
+echo "ok kargs appended with append-if-missing only if missing"
+vm_rpmostree kargs --delete-if-present=PACKAGE3=TEST3
+vm_rpmostree kargs > kargs.txt
+assert_not_file_has_content_literal kargs.txt 'PACKAGE3=TEST3'
+vm_rpmostree kargs --delete-if-present=PACKAGE3=TEST3
+vm_rpmostree kargs > if_not_present.txt
+diff kargs.txt if_not_present.txt
+echo "ok kargs deleted with delete-if-present only if present"
+
 # XXX: uncomment this when we migrate CI to FCOS
 # # And reset this bit
 # vm_cmd ostree config --repo /sysroot/ostree/repo set sysroot.readonly false
