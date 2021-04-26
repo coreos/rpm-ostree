@@ -38,6 +38,7 @@ static char **opt_kernel_replace_strings;
 static char  *opt_osname;
 static char  *opt_deploy_index;
 static gboolean opt_lock_finalization;
+static gboolean opt_unchanged_exit_77;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operation on provided OSNAME", "OSNAME" },
@@ -48,6 +49,7 @@ static GOptionEntry option_entries[] = {
   { "delete", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_strings, "Delete a specific kernel argument key/val pair or an entire argument with a single key/value pair", "KEY=VALUE"},
   { "append-if-missing", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_if_missing_strings, "Like --append, but does nothing if the key is already present", "KEY=VALUE" },
   { "delete-if-present", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_if_present_strings, "Like --delete, but does nothing if the key is already missing", "KEY=VALUE" },
+  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no kernel args changed, exit 77", NULL },
   { "import-proc-cmdline", 0, 0, G_OPTION_ARG_NONE, &opt_import_proc_cmdline, "Instead of modifying old kernel arguments, we modify args from current /proc/cmdline (the booted deployment)", NULL },
   { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Use an editor to modify the kernel arguments", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
@@ -277,6 +279,7 @@ rpmostree_builtin_kargs (int            argc,
   if (opt_kernel_delete_if_present_strings && *opt_kernel_delete_if_present_strings)
     g_variant_dict_insert (&dict, "delete-if-present", "^as", opt_kernel_delete_if_present_strings);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   if (opt_editor)
     {
@@ -355,7 +358,17 @@ rpmostree_builtin_kargs (int            argc,
                                                 error))
     return FALSE;
 
-  g_print("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
+  if (opt_unchanged_exit_77)
+    {
+      if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
+        {
+          invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+          return TRUE;
+        }
+    }
+
+  if (rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
+    g_print("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
 
   return TRUE;
 }

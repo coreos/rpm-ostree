@@ -167,6 +167,20 @@ vm_rpmostree kargs > if_not_present.txt
 diff kargs.txt if_not_present.txt
 echo "ok kargs deleted with delete-if-present only if present"
 
+#Test for rpm-ostree kargs unchanged-exit-77
+rc=0
+vm_rpmostree kargs --append-if-missing=PACKAGE3=TEST3 --unchanged-exit-77 || rc=$?
+assert_streq $rc 0
+vm_rpmostree kargs --append-if-missing=PACKAGE3=TEST3 --unchanged-exit-77 || rc=$?
+assert_streq $rc 77
+rc=0
+vm_rpmostree kargs --delete-if-present=PACKAGE3=TEST3 --unchanged-exit-77 || rc=$?
+assert_streq $rc 0
+vm_rpmostree kargs --delete-if-present=PACKAGE3=TEST3 --unchanged-exit-77 || rc=$?
+assert_streq $rc 77
+echo "ok exit 77 when unchanged kargs with unchanged-exit-77"
+
+
 # XXX: uncomment this when we migrate CI to FCOS
 # # And reset this bit
 # vm_cmd ostree config --repo /sysroot/ostree/repo set sysroot.readonly false
