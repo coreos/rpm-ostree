@@ -30,7 +30,7 @@ c_utf8 = "0.1.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "2.33.3"
 curl = "0.4.36"
-cxx = "1.0.45"
+cxx = "1.0.46"
 envsubst = "0.2.0"
 fn-error-context = "0.1.2"
 gio = "0.9.1"
