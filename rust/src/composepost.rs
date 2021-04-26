@@ -25,7 +25,9 @@ use std::path::Path;
 use std::pin::Pin;
 
 /* See rpmostree-core.h */
+const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
 const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
+const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
 const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
 
 #[context("Moving {}", name)]
@@ -853,6 +855,119 @@ fn workaround_selinux_cross_labeling_recurse(
     Ok(())
 }
 
+pub fn prepare_rpmdb_base_location(
+    rootfs_dfd: i32,
+    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+) -> CxxResult<()> {
+    let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let cancellable = &cancellable.gobj_wrap();
+
+    hardlink_rpmdb_base_location(&rootfs, Some(cancellable))?;
+    Ok(())
+}
+
+#[context("Hardlinking rpmdb to base location")]
+fn hardlink_rpmdb_base_location(
+    rootfs: &openat::Dir,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<bool> {
+    if !rootfs.exists(RPMOSTREE_RPMDB_LOCATION)? {
+        return Ok(false);
+    }
+
+    // Hardlink our own `/usr/lib/sysimage/rpm-ostree-base-db/` hierarchy
+    // to the well-known `/usr/share/rpm/`.
+    rootfs.ensure_dir_all(RPMOSTREE_BASE_RPMDB, 0o755)?;
+    rootfs.set_mode(RPMOSTREE_BASE_RPMDB, 0o755)?;
+    hardlink_hierarchy(
+        rootfs,
+        RPMOSTREE_RPMDB_LOCATION,
+        RPMOSTREE_BASE_RPMDB,
+        cancellable,
+    )?;
+
+    // And write a symlink from the proposed standard /usr/lib/sysimage/rpm
+    // to our /usr/share/rpm - eventually we will invert this.
+    rootfs.symlink(RPMOSTREE_SYSIMAGE_RPMDB, "../../share/rpm")?;
+
+    Ok(true)
+}
+
+/// Recursively hard-link `source` hierarchy to `target` directory.
+///
+/// Both directories must exist beforehand.
+#[context("Hardlinking /{} to /{}", source, target)]
+fn hardlink_hierarchy(
+    rootfs: &openat::Dir,
+    source: &str,
+    target: &str,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<()> {
+    let mut prefix = "".to_string();
+    hardlink_recurse(rootfs, source, target, &mut prefix, &cancellable)
+        .with_context(|| format!("Analyzing /{}/{} content", source, prefix))?;
+
+    Ok(())
+}
+
+/// Recursively hard-link `source_prefix` to `dest_prefix.`
+///
+/// `relative_path` is updated at each recursive step, so that in case of errors
+/// it can be used to pinpoint the faulty path.
+fn hardlink_recurse(
+    rootfs: &openat::Dir,
+    source_prefix: &str,
+    dest_prefix: &str,
+    relative_path: &mut String,
+    cancellable: &Option<&gio::Cancellable>,
+) -> Result<()> {
+    use openat::SimpleType;
+
+    let current_dir = relative_path.clone();
+    let current_source_dir = format!("{}/{}", source_prefix, relative_path);
+    for subpath in rootfs.list_dir(&current_source_dir)? {
+        if cancellable.map(|c| c.is_cancelled()).unwrap_or_default() {
+            bail!("Cancelled");
+        };
+
+        let subpath = subpath?;
+        let full_path = {
+            let fname = subpath.file_name();
+            let path_name = fname
+                .to_str()
+                .ok_or_else(|| anyhow!("invalid non-UTF-8 path: {:?}", fname))?;
+            if !current_dir.is_empty() {
+                format!("{}/{}", current_dir, path_name)
+            } else {
+                path_name.to_string()
+            }
+        };
+        let source_path = format!("{}/{}", source_prefix, full_path);
+        let dest_path = format!("{}/{}", dest_prefix, full_path);
+        let path_type = subpath.simple_type().unwrap_or(SimpleType::Other);
+
+        if path_type == SimpleType::Dir {
+            // New subdirectory discovered, create it at the target.
+            let perms = rootfs.metadata(&source_path)?.stat().st_mode & !libc::S_IFMT;
+            rootfs.ensure_dir(&dest_path, perms)?;
+            rootfs.set_mode(&dest_path, perms)?;
+
+            // Recurse into the subdirectory.
+            *relative_path = full_path.clone();
+            hardlink_recurse(
+                rootfs,
+                source_prefix,
+                dest_prefix,
+                relative_path,
+                cancellable,
+            )?;
+        } else {
+            openat::hardlink(rootfs, source_path, rootfs, dest_path)?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1079,5 +1194,43 @@ OSTREE_VERSION='33.4'
                     || before_meta.stat().st_mtime_nsec != after.stat().st_mtime_nsec
             );
         }
+    }
+
+    #[test]
+    fn test_hardlink_rpmdb_base_location() {
+        let temp_rootfs = tempfile::tempdir().unwrap();
+        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+
+        {
+            let done = hardlink_rpmdb_base_location(&rootfs, gio::NONE_CANCELLABLE).unwrap();
+            assert_eq!(done, false);
+        }
+
+        let dirs = &[RPMOSTREE_RPMDB_LOCATION, "usr/share/rpm/foo/bar"];
+        for entry in dirs {
+            rootfs.ensure_dir_all(*entry, 0o755).unwrap();
+        }
+        let files = &[
+            "usr/share/rpm/rpmdb.sqlite",
+            "usr/share/rpm/foo/bar/placeholder",
+        ];
+        for entry in files {
+            rootfs.write_file(*entry, 0o755).unwrap();
+        }
+
+        let done = hardlink_rpmdb_base_location(&rootfs, gio::NONE_CANCELLABLE).unwrap();
+        assert_eq!(done, true);
+
+        assert_eq!(rootfs.exists(RPMOSTREE_BASE_RPMDB).unwrap(), true);
+        let placeholder = rootfs
+            .metadata(format!("{}/foo/bar/placeholder", RPMOSTREE_BASE_RPMDB))
+            .unwrap();
+        assert_eq!(placeholder.is_file(), true);
+        let rpmdb = rootfs
+            .metadata(format!("{}/rpmdb.sqlite", RPMOSTREE_BASE_RPMDB))
+            .unwrap();
+        assert_eq!(rpmdb.is_file(), true);
+        let sysimage_link = rootfs.read_link(RPMOSTREE_SYSIMAGE_RPMDB).unwrap();
+        assert_eq!(&sysimage_link, Path::new("../../share/rpm"));
     }
 }

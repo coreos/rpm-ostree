@@ -83,64 +83,6 @@ rename_if_exists (int         src_dfd,
   return TRUE;
 }
 
-/* Given a directory referenced by @src_dfd+@src_path, as well as a target
- * directory @dest_dfd+@dest_path (which must already exist), hardlink all
- * content recursively.
- */
-static gboolean
-hardlink_recurse (int                src_dfd,
-                  const char        *src_path,
-                  int                dest_dfd,
-                  const char        *dest_path,
-                  GCancellable      *cancellable,
-                  GError            **error)
-{
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  glnx_autofd int dest_target_dfd = -1;
-
-  if (!glnx_dirfd_iterator_init_at (src_dfd, src_path, TRUE, &dfd_iter, error))
-    return FALSE;
-
-  if (!glnx_opendirat (dest_dfd, dest_path, TRUE, &dest_target_dfd, error))
-    return FALSE;
-
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-      struct stat stbuf;
-
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-      if (!dent)
-        break;
-
-      if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-        return FALSE;
-
-      if (dent->d_type == DT_DIR)
-        {
-          mode_t perms = stbuf.st_mode & ~S_IFMT;
-
-          if (!glnx_ensure_dir (dest_target_dfd, dent->d_name, perms, error))
-            return FALSE;
-          if (fchmodat (dest_target_dfd, dent->d_name, perms, 0) < 0)
-            return glnx_throw_errno_prefix (error, "fchmodat");
-          if (!hardlink_recurse (dfd_iter.fd, dent->d_name,
-                                 dest_target_dfd, dent->d_name,
-                                 cancellable, error))
-            return FALSE;
-        }
-      else
-        {
-          if (linkat (dfd_iter.fd, dent->d_name,
-                      dest_target_dfd, dent->d_name, 0) < 0)
-            return glnx_throw_errno_prefix (error, "linkat");
-        }
-    }
-
-  return TRUE;
-}
-
 /* Handle the kernel/initramfs, which can be in at least 2 different places:
  *  - /boot (CentOS, Fedora treecompose before we suppressed kernel.spec's %posttrans)
  *  - /usr/lib/modules (Fedora treecompose without kernel.spec's %posttrans)
@@ -574,24 +516,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
     }
 
   /* we're composing a new tree; copy the rpmdb to the base location */
-  if (!glnx_fstatat_allow_noent (rootfs_dfd, RPMOSTREE_RPMDB_LOCATION, NULL,
-                                 AT_SYMLINK_NOFOLLOW, error))
-    return FALSE;
-  if (errno == 0)
-    {
-      if (!glnx_shutil_mkdir_p_at (rootfs_dfd, RPMOSTREE_BASE_RPMDB, 0755,
-                                   cancellable, error))
-        return FALSE;
-      if (!hardlink_recurse (rootfs_dfd, RPMOSTREE_RPMDB_LOCATION,
-                             rootfs_dfd, RPMOSTREE_BASE_RPMDB,
-                             cancellable, error))
-        return glnx_prefix_error (error, "Hardlinking %s", RPMOSTREE_BASE_RPMDB);
-      /* And write a symlink from the proposed standard /usr/lib/sysimage/rpm
-       * to our /usr/share/rpm - eventually we will invert this.
-       */
-     if (symlinkat ("../../share/rpm", rootfs_dfd, RPMOSTREE_SYSIMAGE_RPMDB) < 0)
-        return glnx_throw_errno_prefix (error, "symlinking %s", RPMOSTREE_SYSIMAGE_RPMDB);
-    }
+  rpmostreecxx::prepare_rpmdb_base_location(rootfs_dfd, *cancellable);
 
   return TRUE;
 }
