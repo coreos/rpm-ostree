@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 gio = "0.9.1"
 glib = "0.10.3"
-ostree = { version = "0.9.1", features = ["v2020_4"] }
+ostree = { version = "0.11.0", features = ["v2020_4"] }
 ostree-sys = "0.7.3"
 
 [dev-dependencies]
