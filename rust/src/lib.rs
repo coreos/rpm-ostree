@@ -154,6 +154,10 @@ pub mod ffi {
             rootfs_dfd: i32,
             cancellable: Pin<&mut GCancellable>,
         ) -> Result<()>;
+        fn prepare_rpmdb_base_location(
+            rootfs_dfd: i32,
+            cancellable: Pin<&mut GCancellable>,
+        ) -> Result<()>;
     }
 
     // A grab-bag of metadata from the deployment's ostree commit
