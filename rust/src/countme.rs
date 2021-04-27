@@ -35,7 +35,7 @@ fn send_countme(url: &str, ua: &str) -> Result<()> {
 }
 
 /// Main entrypoint for countme
-pub fn entrypoint() -> Result<()> {
+pub fn entrypoint(_args: &[&str]) -> Result<()> {
     // Skip if we are not run on an ostree booted system
     if !path::Path::new("/run/ostree-booted").exists() {
         bail!("Not running on an ostree based system");
