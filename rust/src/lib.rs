@@ -449,6 +449,25 @@ pub mod ffi {
         fn print(&self);
     }
 
+    // https://cxx.rs/shared.html#extern-enums
+    enum RpmOstreeDiffPrintFormat {
+        RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY,
+        RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED,
+        RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE,
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-libbuiltin.h");
+        include!("rpmostree-util.h");
+        type RpmOstreeDiffPrintFormat;
+        unsafe fn print_treepkg_diff_from_sysroot_path(
+            sysroot_path: &str,
+            format: RpmOstreeDiffPrintFormat,
+            max_key_len: u32,
+            cancellable: *mut GCancellable,
+        );
+    }
+
     unsafe extern "C++" {
         include!("rpmostree-output.h");
         type Progress;

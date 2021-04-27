@@ -63,12 +63,14 @@ gboolean
 rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
                                       GVariant    *previous_deployment);
 
-gboolean
-rpmostree_print_treepkg_diff_from_sysroot_path (const gchar   *sysroot_path,
-                                                RpmOstreeDiffPrintFormat format,
-                                                guint          max_key_len,
-                                                GCancellable  *cancellable,
-                                                GError       **error);
+namespace rpmostreecxx {
+
+void
+print_treepkg_diff_from_sysroot_path (rust::Str      sysroot_path,
+                                      RpmOstreeDiffPrintFormat format,
+                                      guint32        max_key_len,
+                                      GCancellable  *cancellable);
+}
 
 void
 rpmostree_print_timestamp_version (const char  *version_string,
