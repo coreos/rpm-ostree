@@ -824,9 +824,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
     {
       /* No cached update, but we can still print a diff summary */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path, diff_format,
-                                                           max_key_len, NULL, error))
-        return FALSE;
+      rpmostreecxx::print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path), diff_format,
+                                                          max_key_len, NULL);
     }
 
   /* print base overrides before overlays */

@@ -83,18 +83,21 @@ rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
   return !g_str_equal (previous_id, new_id);
 }
 
+namespace rpmostreecxx {
+
 /* Print the diff between the booted and pending deployments */
-gboolean
-rpmostree_print_treepkg_diff_from_sysroot_path (const gchar   *sysroot_path,
-                                                RpmOstreeDiffPrintFormat format,
-                                                guint          max_key_len,
-                                                GCancellable  *cancellable,
-                                                GError       **error)
+void
+print_treepkg_diff_from_sysroot_path (rust::Str      sysroot_path,
+                                      RpmOstreeDiffPrintFormat format,
+                                      guint32        max_key_len,
+                                      GCancellable  *cancellable)
 {
-  g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+  g_autoptr(GError) local_error = NULL;
+  g_autofree char *sysroot_cpath = g_strndup (sysroot_path.data(), sysroot_path.length());
+  g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_cpath);
   g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
-  if (!ostree_sysroot_load (sysroot, cancellable, error))
-    return FALSE;
+  if (!ostree_sysroot_load (sysroot, cancellable, &local_error))
+    util::throw_gerror(local_error);
 
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   g_assert_cmpuint (deployments->len, >, 1);
@@ -103,11 +106,11 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar   *sysroot_path,
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
 
   if (!booted_deployment || ostree_deployment_equal (booted_deployment, new_deployment))
-    return TRUE;
+    return;
 
   g_autoptr(OstreeRepo) repo = NULL;
-  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    return FALSE;
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, &local_error))
+    util::throw_gerror(local_error);
 
   const char *from_rev = ostree_deployment_get_csum (booted_deployment);
   const char *to_rev = ostree_deployment_get_csum (new_deployment);
@@ -118,13 +121,14 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar   *sysroot_path,
   g_autoptr(GPtrArray) modified_new = NULL;
   if (!rpm_ostree_db_diff (repo, from_rev, to_rev,
                            &removed, &added, &modified_old, &modified_new,
-                           cancellable, error))
-    return FALSE;
+                           cancellable, &local_error))
+    util::throw_gerror(local_error);
 
   rpmostree_diff_print_formatted (format, NULL, max_key_len,
                                   removed, added, modified_old, modified_new);
-  return TRUE;
 }
+
+} /* namespace */
 
 void
 rpmostree_print_timestamp_version (const char  *version_string,
