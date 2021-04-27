@@ -15,7 +15,12 @@ build_rpm foobar-rec
 
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
-treefile_append "packages" '["foobar"]'
+treefile_pyedit "
+tf['repo-packages'] = [{
+  'repo': 'test-repo',
+  'packages': ['foobar'],
+}]
+"
 
 treefile_pyedit "tf['add-commit-metadata']['foobar'] = 'bazboo'"
 treefile_pyedit "tf['add-commit-metadata']['overrideme'] = 'old var'"

@@ -17,7 +17,14 @@ uinfo_cmd add-ref TEST-SEC-LOW 1 http://example.com/vuln1 "CVE-12-34 vuln1"
 
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
-treefile_append "packages" '["foobar", "vuln-pkg"]'
+treefile_append "packages" '["vuln-pkg"]'
+
+treefile_pyedit "
+tf['repo-packages'] = [{
+  'repo': 'test-repo',
+  'packages': ['foobar'],
+}]
+"
 
 # Test --print-only.  We also
 # just in this test (for now) use ${basearch} to test substitution.

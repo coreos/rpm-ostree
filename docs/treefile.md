@@ -73,6 +73,11 @@ It supports the following parameters:
    An example use case for this is for Fedora CoreOS, which will blacklist the `python` and `python3`
    packages to ensure that nothing included in the OS starts depending on it in the future.
 
+ * `repo-packages`: Array of objects, optional: Set of packages to install from
+   specific repos. Each object in the array supports the following keys:
+   * `packages`: Array of strings, required: List of packages to install.
+   * `repo`: String, required: Name of the repo from which to fetch packages.
+
  * `ostree-layers`: Array of strings, optional: After all packages are unpacked,
     check out these OSTree refs, which must already be in the destination repository.
     Any conflicts with packages will be an error.
