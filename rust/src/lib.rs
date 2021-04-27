@@ -276,6 +276,16 @@ pub mod ffi {
         fn sanitycheck_externals(&self) -> Result<()>;
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
         fn get_ostree_ref(&self) -> String;
+        fn get_repo_packages(&self) -> &[RepoPackage];
+        fn clear_repo_packages(&mut self);
+    }
+
+    // treefile.rs (split out from above to make &self nice to use)
+    extern "Rust" {
+        type RepoPackage;
+
+        fn get_repo(&self) -> &str;
+        fn get_packages(&self) -> &[String];
     }
 
     // utils.rs

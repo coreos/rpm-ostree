@@ -1468,6 +1468,14 @@ rpmostree_compose_builtin_extensions (int             argc,
   g_autofree char *basearch = rpm_ostree_get_basearch ();
   auto treefile = rpmostreecxx::treefile_new (treefile_path, basearch, -1);
 
+  /* We don't want the core to handle repo packages from the treefile. Normally,
+   * if repo packages worked like other knobs and went via the treespec, this
+   * would naturally be handled because we create our own treespec below. But
+   * we're trying to move away from that. We'll eventually want repo packages on
+   * the client-side too though, which means it won't be a treefile thing
+   * anymore, so we can rejig this then. */
+  treefile->clear_repo_packages();
+
   g_autoptr(OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!repo)
     return FALSE;

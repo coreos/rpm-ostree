@@ -136,6 +136,20 @@ fn treefile_parse_stream<R: io::Read>(
         }
     }
 
+    if let Some(repo_packages) = treefile.repo_packages.take() {
+        treefile.repo_packages = Some(
+            repo_packages
+                .into_iter()
+                .map(|rp| -> Result<RepoPackage> {
+                    Ok(RepoPackage {
+                        repo: rp.repo,
+                        packages: whitespace_split_packages(&rp.packages)?,
+                    })
+                })
+                .collect::<Result<Vec<RepoPackage>>>()?,
+        );
+    }
+
     treefile.packages = Some(pkgs);
     treefile = treefile.migrate_legacy_fields()?;
     Ok(treefile)
@@ -372,7 +386,8 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         postprocess,
         add_files,
         remove_files,
-        remove_from_packages
+        remove_from_packages,
+        repo_packages
     );
 }
 
@@ -465,6 +480,7 @@ impl Treefile {
         let mut seen_includes = collections::BTreeMap::new();
         let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
         event!(Level::DEBUG, "parsed successfully");
+        parsed.config.handle_repo_packages_overrides();
         parsed.config = parsed.config.substitute_vars()?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
@@ -625,6 +641,18 @@ impl Treefile {
             }
         }
         files_to_remove
+    }
+
+    pub(crate) fn get_repo_packages(&self) -> &[RepoPackage] {
+        self.parsed
+            .repo_packages
+            .as_ref()
+            .map(|v| v.as_slice())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn clear_repo_packages(&mut self) {
+        self.parsed.repo_packages.take();
     }
 
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
@@ -805,6 +833,16 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
         rootfs_dfd.ensure_dir_all(target.parent().unwrap(), 0o755)?;
         rootfs_dfd.write_file_contents(target, 0o644, self.serialized.as_bytes())?;
         Ok(())
+    }
+}
+
+impl RepoPackage {
+    pub(crate) fn get_repo(&self) -> &str {
+        self.repo.as_str()
+    }
+
+    pub(crate) fn get_packages(&self) -> &[String] {
+        self.packages.as_slice()
     }
 }
 
@@ -1053,6 +1091,9 @@ pub(crate) struct TreeComposeConfig {
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) packages: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "repo-packages")]
+    pub(crate) repo_packages: Option<Vec<RepoPackage>>,
     // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bootstrap_packages: Option<Vec<String>>,
@@ -1171,6 +1212,12 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) extra: HashMap<String, serde_json::Value>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+pub(crate) struct RepoPackage {
+    pub(crate) repo: String,
+    pub(crate) packages: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub(crate) struct LegacyTreeComposeConfigFields {
     #[serde(skip_serializing)]
@@ -1256,6 +1303,28 @@ impl TreeComposeConfig {
         static DEFAULT: CheckGroups = CheckGroups::Previous;
         self.check_groups.as_ref().unwrap_or(&DEFAULT)
     }
+
+    // we need to ensure that appended repo packages override earlier ones
+    fn handle_repo_packages_overrides(&mut self) {
+        if let Some(repo_packages) = self.repo_packages.take() {
+            let mut seen_pkgs: HashSet<String> = HashSet::new();
+            self.repo_packages = Some({
+                let mut v: Vec<RepoPackage> = repo_packages
+                    .into_iter()
+                    .rev()
+                    .map(|mut rp| {
+                        rp.packages.retain(|p| seen_pkgs.insert(p.into()));
+                        rp
+                    })
+                    .filter(|rp| !rp.packages.is_empty())
+                    .collect();
+                // can't inline this in the iterator chain above:
+                // https://doc.rust-lang.org/std/iter/struct.Map.html#notes-about-side-effects
+                v.reverse();
+                v
+            });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1279,6 +1348,10 @@ pub(crate) mod tests {
          - grub2 grub2-tools
         packages-s390x:
          - zipl
+        repo-packages:
+            - repo: baserepo
+              packages:
+                - blah bloo
     "#};
 
     // This one has "comments" (hence unknown keys)
@@ -1301,6 +1374,13 @@ pub(crate) mod tests {
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 7);
+        assert_eq!(
+            treefile.repo_packages,
+            Some(vec![RepoPackage {
+                repo: "baserepo".into(),
+                packages: vec!["blah".into(), "bloo".into()],
+            }])
+        );
     }
 
     #[test]
@@ -1525,6 +1605,18 @@ pub(crate) mod tests {
                     - foo
                 packages:
                     - fooinclude
+                repo-packages:
+                    # this entry is overridden by the last entry; so will disappear
+                    - repo: foo
+                      packages:
+                        - qwert
+                    # this entry is overridden by the prelude treefile; so will disappear
+                    - repo: foob
+                      packages:
+                        - blah
+                    - repo: foo2
+                      packages:
+                        - qwert
             "},
         )?;
         let mut buf = VALID_PRELUDE.to_string();
@@ -1533,6 +1625,19 @@ pub(crate) mod tests {
         "});
         let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
         assert!(tf.parsed.packages.unwrap().len() == 6);
+        assert_eq!(
+            tf.parsed.repo_packages,
+            Some(vec![
+                RepoPackage {
+                    repo: "foo2".into(),
+                    packages: vec!["qwert".into()],
+                },
+                RepoPackage {
+                    repo: "baserepo".into(),
+                    packages: vec!["blah".into(), "bloo".into()],
+                }
+            ])
+        );
         Ok(())
     }
 
