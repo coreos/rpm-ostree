@@ -4752,6 +4752,8 @@ rpmostree_context_commit (RpmOstreeContext      *self,
       }
     else if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE)
       {
+        /* Note this branch isn't actually used today; the compose side commit
+         * code is in impl_commit_tree(). */
         g_autoptr(GVariant) spec_v =
           g_variant_ref_sink (rpmostree_treespec_to_variant (self->spec));
 
