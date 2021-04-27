@@ -364,7 +364,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
           g_printerr ("\nNOTICE: Running rpm-ostree compose tree without --unified-core is deprecated.\n"
                       " Please add --unified-core to the command line and ensure your content\n"
                       " works with it.  For more information, see https://github.com/coreos/rpm-ostree/issues/729\n\n");
-          g_usleep (G_USEC_PER_SEC * 5);
+          g_usleep (G_USEC_PER_SEC * 10);
         }
     }
 
