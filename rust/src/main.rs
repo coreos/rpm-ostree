@@ -23,6 +23,13 @@ fn main() {
     // Call this early on; it invokes e.g. setenv() so must be done
     // before we create threads.
     rpmostree_rust::ffi::early_main();
+    // We need to write to stderr, because some of our commands write to stdout
+    // like `rpm-ostree compose tree --print-json`.
+    tracing_subscriber::fmt::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .init();
+    tracing::trace!("starting");
     // Gather our arguments.
     let args: Vec<String> = std::env::args().collect();
     let args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
