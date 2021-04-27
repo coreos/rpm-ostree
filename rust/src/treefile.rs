@@ -292,7 +292,7 @@ fn merge_map_field<T>(
     }
 }
 
-/// Merge an hashet field by extending.
+/// Merge an hashset field by extending.
 fn merge_hashset_field<T: Eq + std::hash::Hash>(
     dest: &mut Option<HashSet<T>>,
     src: &mut Option<HashSet<T>>,
