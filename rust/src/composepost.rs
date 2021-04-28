@@ -78,7 +78,7 @@ fn compose_init_rootfs(rootfs_dfd: &openat::Dir, tmp_is_dir: bool) -> Result<()>
             Some(nix_rootfs.as_raw_fd()),
             "tmp",
             Mode::from_bits(tmp_mode).unwrap(),
-            nix::sys::stat::FchmodatFlags::NoFollowSymlink,
+            nix::sys::stat::FchmodatFlags::FollowSymlink,
         )?;
     } else {
         rootfs_dfd.symlink("tmp", "sysroot/tmp")?;
