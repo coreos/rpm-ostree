@@ -267,9 +267,9 @@ dependencies = [
 
 [[package]]
 name = "cxx-build"
-version = "1.0.46"
+version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773012f0cc8a0d4fa96c884664eea2589b78bb53adfd566df80715335fb0c9fa"
+checksum = "f71eebccc091f362a95d89a9182e16a8b325947299d460493ba7a13d98d12803"
 dependencies = [
  "cc",
  "codespan-reporting",
@@ -1570,9 +1570,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.68"
+version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ce15dd3ed8aa2f8eeac4716d6ef5ab58b6b9256db41d7e1a0224c2788e8fd87"
+checksum = "ad184cc9470f9117b2ac6817bfe297307418819ba40552f9b3846f05c33d5373"
 dependencies = [
  "proc-macro2",
  "quote",
