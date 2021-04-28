@@ -383,7 +383,10 @@ impl Bubblewrap {
     }
 
     /// Execute the container, capturing stdout.
-    fn run_captured(&mut self, cancellable: Option<&gio::Cancellable>) -> Result<glib::Bytes> {
+    pub(crate) fn run_captured(
+        &mut self,
+        cancellable: Option<&gio::Cancellable>,
+    ) -> Result<glib::Bytes> {
         self.launcher.set_flags(gio::SubprocessFlags::STDOUT_PIPE);
         let (child, argv0) = self.spawn()?;
         let (stdout, stderr) = child.communicate(None, cancellable)?;

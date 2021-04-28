@@ -411,11 +411,11 @@ pub fn compose_postprocess(
         compose_postprocess_default_target(&rootfs_dfd, t)?;
     }
 
-    compose_postprocess_mutate_os_release(rootfs_dfd, treefile, next_version)?;
     treefile.write_compose_json(rootfs_dfd)?;
 
     let etc_guard = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
     // These ones depend on the /etc path
+    compose_postprocess_mutate_os_release(rootfs_dfd, treefile, next_version)?;
     compose_postprocess_remove_files(rootfs_dfd, treefile)?;
     compose_postprocess_add_files(rootfs_dfd, treefile)?;
     etc_guard.undo()?;
@@ -444,11 +444,18 @@ fn compose_postprocess_mutate_os_release(
     // find the real path to os-release using bwrap; this is an overkill but safer way
     // of resolving a symlink relative to a rootfs (see discussions in
     // https://github.com/projectatomic/rpm-ostree/pull/410/)
-    let argv = &vec!["realpath".to_string(), "/etc/os-release".to_string()];
-    let path = crate::bwrap::bubblewrap_run_sync(rootfs_dfd.as_raw_fd(), argv, true, true)
-        .context("Running realpath")?;
-    let path = String::from_utf8(path).context("Parsing realpath")?;
-    let path = path.trim_start_matches("/").trim_end();
+    let mut bwrap = crate::bwrap::Bubblewrap::new_with_mutability(
+        rootfs_dfd,
+        crate::ffi::BubblewrapMutability::Immutable,
+    )?;
+    bwrap.append_child_argv(&["realpath", "/etc/os-release"]);
+    let cancellable = &gio::Cancellable::new();
+    let cancellable = Some(cancellable);
+    let path = bwrap.run_captured(cancellable)?;
+    let path = std::str::from_utf8(&path)
+        .context("Parsing realpath")?
+        .trim_start_matches("/")
+        .trim_end();
     let path = if path.is_empty() {
         // fallback on just overwriting etc/os-release
         "etc/os-release"
