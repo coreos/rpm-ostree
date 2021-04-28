@@ -133,6 +133,28 @@ rpm_ostree_package_get_arch (RpmOstreePackage *p)
 }
 
 /**
+ * evr_cmp:
+ * @a: String representation of EVR
+ * @b: String representation of EVR
+ *
+ * Compares two string representations of EVR by calling rpmverCmp
+ *
+ * Returns: 1: a is newer than b
+ *          0: a and b are the same version
+ *         -1: b is newer than a
+ */
+static int
+evr_cmp (const char *a, const char *b)
+{
+  rpmver v1 = rpmverParse (a);
+  rpmver v2 = rpmverParse (b);
+  int rc = rpmverCmp (v1, v2);
+  rpmverFree (v1);
+  rpmverFree (v2);
+  return rc;
+}
+
+/**
  * rpm_ostree_package_cmp:
  * @p1: Package
  * @p2: Package
@@ -154,7 +176,7 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
    * when we read it out of the commit metadata and we also sort
    * the diff in_rpm_ostree_diff_package_lists().
    **/
-  ret = rpmvercmp (p1->evr, p2->evr);
+  ret = evr_cmp (p1->evr, p2->evr);
   if (ret)
     return ret;
 
@@ -314,7 +336,7 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
           cmp = strcmp (pkg_a->arch, pkg_b->arch);
           if (cmp == 0)
             {
-              cmp = rpmvercmp (pkg_a->evr, pkg_b->evr);
+              cmp = evr_cmp (pkg_a->evr, pkg_b->evr);
               if (cmp == 0)
                 {
                   g_ptr_array_add (common, g_object_ref (pkg_a));

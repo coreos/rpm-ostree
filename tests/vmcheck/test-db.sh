@@ -53,7 +53,7 @@ check_not_diff() {
 # make the package name start with zzz so it's last to be processed
 vm_build_rpm zzz-pkg-to-downgrade version 2.0
 vm_build_rpm pkg-to-remove
-vm_build_rpm pkg-to-replace
+vm_build_rpm pkg-to-replace version 15 release 8
 vm_build_rpm pkg-to-replace-archtrans arch noarch
 vm_rpmostree install pkg-to-remove pkg-to-replace pkg-to-replace-archtrans zzz-pkg-to-downgrade
 
@@ -118,11 +118,11 @@ echo "ok setup"
 
 vm_rpmostree override remove pkg-to-remove
 vm_build_rpm zzz-pkg-to-downgrade version 1.0
-vm_build_rpm pkg-to-replace version 2.0
+vm_build_rpm pkg-to-replace version 15.4 release 4
 vm_build_rpm pkg-to-replace-archtrans version 2.0
 vm_rpmostree override replace \
   $YUMREPO/zzz-pkg-to-downgrade-1.0-1.x86_64.rpm \
-  $YUMREPO/pkg-to-replace-2.0-1.x86_64.rpm \
+  $YUMREPO/pkg-to-replace-15.4-4.x86_64.rpm \
   $YUMREPO/pkg-to-replace-archtrans-2.0-1.x86_64.rpm
 vm_build_rpm pkg-to-overlay build 'echo same > pkg-to-overlay'
 # some multilib handling tests (override default /bin script to skip conflicts)
@@ -134,7 +134,7 @@ check_diff $booted_csum $pending_layered_csum \
   +pkg-to-overlay-1.0-1.x86_64 \
   +pkg-to-overlay-1.0-1.i686 \
   +glibc-1.0-1.i686 \
-  +pkg-to-replace-2.0 \
+  +pkg-to-replace-15.4-4 \
   +zzz-pkg-to-downgrade-1.0 \
   +pkg-to-replace-archtrans-2.0
 # check that regular glibc is *not* in the list of modified/dropped packages
@@ -152,8 +152,8 @@ check_diff $pending_csum $pending_layered_csum \
   -pkg-to-remove \
   !zzz-pkg-to-downgrade-2.0 \
   =zzz-pkg-to-downgrade-1.0 \
-  !pkg-to-replace-1.0 \
-  =pkg-to-replace-2.0 \
+  !pkg-to-replace-15-8 \
+  =pkg-to-replace-15.4-4 \
   !pkg-to-replace-archtrans-1.0 \
   =pkg-to-replace-archtrans-2.0
 # also do a human diff check
@@ -162,6 +162,7 @@ assert_file_has_content diff.txt 'Upgraded'
 assert_file_has_content diff.txt 'Downgraded'
 assert_file_has_content diff.txt 'Removed'
 assert_file_has_content diff.txt 'Added'
+grep -A1 '^Upgraded:' diff.txt | grep 'pkg-to-replace 15-8 -> 15.4-4'
 grep -A1 '^Downgraded:' diff.txt | grep zzz-pkg-to-downgrade
 echo "ok db diff"
 
@@ -181,8 +182,8 @@ check_diff $pending_csum $pending_layered_csum \
   +pkg-to-overlay-1.0-1.i686 \
   +glibc-1.0-1.i686 \
   -pkg-to-remove \
-  !pkg-to-replace-1.0 \
-  =pkg-to-replace-2.0 \
+  !pkg-to-replace-15-8 \
+  =pkg-to-replace-15.4-4 \
   !pkg-to-replace-archtrans-1.0 \
   =pkg-to-replace-archtrans-2.0
 echo "ok db from pkglist.metadata"
@@ -191,12 +192,12 @@ echo "ok db from pkglist.metadata"
 vm_rpmostree db list $pending_layered_csum > out.txt
 assert_not_file_has_content out.txt \
   pkg-to-remove \
-  pkg-to-replace-1.0 \
+  pkg-to-replace-15-8 \
   pkg-to-replace-archtrans-1.0
 assert_file_has_content out.txt \
   pkg-to-overlay-1.0-1.x86_64 \
   pkg-to-overlay-1.0-1.i686 \
   glibc-1.0-1.i686 \
-  pkg-to-replace-2.0 \
+  pkg-to-replace-15.4-4 \
   pkg-to-replace-archtrans-2.0
 echo "ok list from pkglist.metadata"
