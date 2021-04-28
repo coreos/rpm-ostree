@@ -34,7 +34,7 @@ echo "ok etc/default/useradd"
 
 for path in /usr/share/rpm /usr/lib/sysimage/rpm-ostree-base-db; do
     ostree --repo=${repo} ls -R ${treeref} ${path} > db.txt
-    assert_file_has_content_literal db.txt /Packages
+    assert_file_has_content_literal db.txt rpmdb.sqlite
 done
 ostree --repo=${repo} ls ${treeref} /usr/lib/sysimage/rpm >/dev/null
 echo "ok db"
@@ -99,10 +99,11 @@ ostree --repo=${repo} ls -R ${treeref} /usr/etc/selinux > ls.txt
 assert_not_file_has_content ls.txt 'LOCK'
 echo "ok no leftover files"
 
+# compile upstream default is bdb, but FCOS sets to sqlite
 ostree --repo=${repo} ls ${treeref} /usr/share/rpm > ls.txt
-assert_file_has_content ls.txt /usr/share/rpm/Packages
-assert_not_file_has_content ls.txt rpmdb.sqlite
-echo "ok rpmdb is bdb"
+assert_file_has_content ls.txt rpmdb.sqlite
+assert_not_file_has_content ls.txt /usr/share/rpm/Packages
+echo "ok rpmdb is sqlite"
 
 ostree --repo=${repo} show ${treeref} \
   --print-metadata-key rpmostree.rpmdb.pkglist > pkglist.txt

@@ -505,7 +505,6 @@ mod nameservice;
 // we're ready to try porting the C++ code.
 #[cfg(test)]
 mod origin;
-mod ostree_diff;
 mod passwd;
 use passwd::*;
 mod console_progress;

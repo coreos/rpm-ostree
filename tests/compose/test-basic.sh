@@ -50,7 +50,7 @@ basic_test
 # but if that happens we will need to adapt the entries.
 ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf > autovar.txt
 assert_file_has_content_literal autovar.txt 'd /var/cache 0755 root root - -'
-assert_file_has_content_literal autovar.txt 'd /var/log/chrony 0755 chrony chrony - -'
+assert_file_has_content_literal autovar.txt 'd /var/lib/chrony 0750 chrony chrony - -'
 assert_file_has_content_literal autovar.txt 'L /var/mail - - - - spool/mail'
 assert_file_has_content_literal autovar.txt 'd /var/tmp 1777 root root - -'
 assert_file_has_content_literal autovar.txt 'd /var/lib/polkit-1 0750 root polkitd - -'

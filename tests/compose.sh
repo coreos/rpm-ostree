@@ -3,7 +3,7 @@ set -euo pipefail
 
 # freeze on a specific commit for tests for reproducibility and since it should
 # always work to target older treefiles
-FEDORA_COREOS_CONFIG_COMMIT=501c4edc0c3d2bfea7d8fcf857eeb0add765d11d
+FEDORA_COREOS_CONFIG_COMMIT=2763cb1662e304aef0aae6156aafe8b5ed43973a
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
@@ -54,7 +54,7 @@ if [ ! -d compose-cache ]; then
   rpm-ostree compose tree --unified-core --download-only-rpms --repo=repo \
     config/manifest.json --cachedir cachedir \
     --ex-lockfile config/manifest-lock.x86_64.json \
-    --ex-lockfile config/manifest-lock.overrides.x86_64.yaml
+    --ex-lockfile config/manifest-lock.overrides.yaml
   rm -rf repo
   (cd cachedir && createrepo_c .)
   echo -e "[cache]\nbaseurl=$(pwd)/cachedir\ngpgcheck=0" > config/cache.repo

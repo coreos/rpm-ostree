@@ -66,6 +66,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "camino"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4648c6d00a709aa069a236adcaae4f605a6241c72bf5bee79331a4b625921a9"
+
+[[package]]
 name = "cc"
 version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -328,6 +334,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "filetime"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d34cfa13a63ae058bfa601fe9e313bbdb3746427c1459185464ce0fcf62e1e8"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "redox_syscall",
+ "winapi",
+]
+
+[[package]]
 name = "fn-error-context"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -340,12 +358,21 @@ dependencies = [
 
 [[package]]
 name = "foreign-types"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
+dependencies = [
+ "foreign-types-shared 0.1.1",
+]
+
+[[package]]
+name = "foreign-types"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d737d9aa519fb7b749cbc3b962edcf310a8dd1f4b67c91c4f83975dbdd17d965"
 dependencies = [
  "foreign-types-macros",
- "foreign-types-shared",
+ "foreign-types-shared 0.3.0",
 ]
 
 [[package]]
@@ -358,6 +385,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "foreign-types-shared"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "foreign-types-shared"
@@ -573,6 +606,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "gvariant"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f7a982b6b38ff2380ea1b1b480cb7f5b51dac917aceff2e16af0c207781e13a"
+dependencies = [
+ "gvariant-macro",
+ "memchr",
+ "ref-cast",
+]
+
+[[package]]
+name = "gvariant-macro"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9915719ccd7435a28103eea8dba78bcf35a25d5637c70273b47dbb49c6d2eb6d"
+dependencies = [
+ "syn",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -601,9 +654,9 @@ dependencies = [
 
 [[package]]
 name = "hex"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "indicatif"
@@ -838,6 +891,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "openssl"
+version = "0.10.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a61075b62a23fef5a29815de7536d940aa35ce96d18ce0cc5076272db678a577"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "foreign-types 0.3.2",
+ "libc",
+ "once_cell",
+ "openssl-sys",
+]
+
+[[package]]
 name = "openssl-probe"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -845,9 +912,9 @@ checksum = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.60"
+version = "0.9.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "921fc71883267538946025deffb622905ecad223c28efbfdef9bb59a0175f3e6"
+checksum = "313752393519e876837e09e1fa183ddef0be7735868dced3196f4472d536277f"
 dependencies = [
  "autocfg",
  "cc",
@@ -876,10 +943,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "ostree"
-version = "0.9.1"
+name = "os_pipe"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5d5597fdcbd16285ef7ce0eaa91eb7c0f51514846f107fd5f68164f28006dc7"
+checksum = "fb233f06c2307e1f5ce2ecad9f8121cffbbee2c95428f44ea85222e460d0d213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
+name = "ostree"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84c424e3b6d40b39383b07e39b4e7972738a9250080e0cb416967023e565ebb1"
 dependencies = [
  "bitflags",
  "gio",
@@ -896,15 +973,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "ostree-host"
+name = "ostree-ext"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d725db675a186b805818e8475171a17bc7ee7731ef55bdde19d0193481b09dc"
 dependencies = [
  "anyhow",
+ "camino",
+ "fn-error-context",
  "gio",
  "glib",
+ "glib-sys",
+ "gvariant",
+ "hex",
+ "libc",
+ "openat",
+ "openat-ext",
+ "openssl",
+ "os_pipe",
  "ostree",
  "ostree-sys",
- "tempfile",
+ "tar",
 ]
 
 [[package]]
@@ -1193,6 +1282,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ref-cast"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300f2a835d808734ee295d45007adacb9ebb29dd3ae2424acfa17930cae541da"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c38e3aecd2b21cb3959637b883bb3714bc7e43f0268b9a29d3743ee3e55cdd2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "regex"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1255,7 +1364,7 @@ dependencies = [
  "openat-ext",
  "os-release",
  "ostree",
- "ostree-host",
+ "ostree-ext",
  "ostree-sys",
  "paste",
  "phf",
@@ -1510,12 +1619,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f722cabda922e471742300045f56dbaa53fafbb4520fca304e51258019bfe91d"
 dependencies = [
  "cstr-argument",
- "foreign-types",
+ "foreign-types 0.5.0",
  "libc",
  "libsystemd-sys",
  "log",
  "memchr",
  "utf8-cstr",
+]
+
+[[package]]
+name = "tar"
+version = "0.4.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0bcfbd6a598361fda270d82469fff3d65089dc33e175c9a131f7b4cd395f228"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
 ]
 
 [[package]]
@@ -1708,6 +1828,15 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "xattr"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "244c3741f4240ef46274860397c7c74e50eb23624996930e484c16679633a54c"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "yaml-rust"
