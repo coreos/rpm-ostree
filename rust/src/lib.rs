@@ -64,7 +64,7 @@ pub mod ffi {
     }
 
     #[derive(Debug)]
-    enum BubblewrapMutability {
+    pub(crate) enum BubblewrapMutability {
         Immutable,
         RoFiles,
         MutateFreely,
