@@ -40,8 +40,8 @@ fn dir_move_if_exists(src: &openat::Dir, dest: &openat::Dir, name: &str) -> Resu
 ///
 /// This is hardcoded; in the future we may make more things configurable,
 /// but the goal is for all state to be in `/etc` and `/var`.
-#[context("Init rootfs")]
-fn compose_init_rootfs(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
+#[context("Initializing rootfs")]
+fn compose_init_rootfs(rootfs_dfd: &openat::Dir, tmp_is_dir: bool) -> Result<()> {
     use nix::fcntl::OFlag;
     println!("Initializing rootfs");
 
@@ -62,7 +62,7 @@ fn compose_init_rootfs(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Res
         ("sysroot/ostree", "ostree"),
     ];
 
-    nix::sys::stat::fchmod(nix_rootfs.as_raw_fd(), default_dirmode).context("rootfs chown")?;
+    nix::sys::stat::fchmod(nix_rootfs.as_raw_fd(), default_dirmode).context("rootfs chmod")?;
 
     TOPLEVEL_DIRS
         .par_iter()
@@ -71,14 +71,14 @@ fn compose_init_rootfs(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Res
         .par_iter()
         .try_for_each(|&(dest, src)| rootfs_dfd.symlink(src, dest))?;
 
-    if treefile.parsed.tmp_is_dir.unwrap_or_default() {
+    if tmp_is_dir {
         let tmp_mode = 0o1777;
         rootfs_dfd.ensure_dir("tmp", tmp_mode)?;
         nix::sys::stat::fchmodat(
             Some(nix_rootfs.as_raw_fd()),
             "tmp",
             Mode::from_bits(tmp_mode).unwrap(),
-            nix::sys::stat::FchmodatFlags::NoFollowSymlink,
+            nix::sys::stat::FchmodatFlags::FollowSymlink,
         )?;
     } else {
         rootfs_dfd.symlink("tmp", "sysroot/tmp")?;
@@ -102,7 +102,8 @@ pub fn compose_prepare_rootfs(
     let src_rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(src_rootfs_dfd);
     let target_rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(target_rootfs_dfd);
 
-    compose_init_rootfs(target_rootfs_dfd, treefile)?;
+    let tmp_is_dir = treefile.parsed.tmp_is_dir.unwrap_or_default();
+    compose_init_rootfs(target_rootfs_dfd, tmp_is_dir)?;
 
     println!("Moving /usr to target");
     openat::rename(src_rootfs_dfd, "usr", target_rootfs_dfd, "usr")?;
@@ -772,7 +773,6 @@ fn ensure_symlink(rootfs: &openat::Dir, target: &str, linkpath: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::treefile::tests as tf_tests;
     use std::collections::HashSet;
 
     #[test]
@@ -844,15 +844,21 @@ OSTREE_VERSION='33.4'
 
     #[test]
     fn test_init_rootfs() -> Result<()> {
-        let t = tempfile::tempdir()?;
-        let d = &openat::Dir::open(t.path())?;
-        let mut tf = tf_tests::new_test_treefile(
-            t.path(),
-            tf_tests::VALID_PRELUDE,
-            Some(tf_tests::ARCH_X86_64),
-        )?;
-        compose_init_rootfs(d, &mut tf)?;
-
+        {
+            let t = tempfile::tempdir()?;
+            let rootfs = &openat::Dir::open(t.path())?;
+            compose_init_rootfs(rootfs, false)?;
+            let target = rootfs.read_link("tmp").unwrap();
+            assert_eq!(target, Path::new("sysroot/tmp"));
+        }
+        {
+            let t = tempfile::tempdir()?;
+            let rootfs = &openat::Dir::open(t.path())?;
+            compose_init_rootfs(rootfs, true)?;
+            let tmpdir_meta = rootfs.metadata("tmp").unwrap();
+            assert!(tmpdir_meta.is_dir());
+            assert_eq!(tmpdir_meta.stat().st_mode & 0o7777, 0o1777);
+        }
         Ok(())
     }
 
