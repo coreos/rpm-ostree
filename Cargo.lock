@@ -806,18 +806,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83450fe6a6142ddd95fb064b746083fc4ef1705fe81f64a64e1d4b39f54a1055"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 0.1.10",
- "libc",
-]
-
-[[package]]
-name = "nix"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa9b4819da1bc61c0ea48b63b7bc8604064dd43013e7cc325df098d49cd7c18a"
@@ -880,14 +868,14 @@ dependencies = [
 
 [[package]]
 name = "openat-ext"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab08d5ca444c9e2c23b9169da11ad09d697a7d4310844af710d00f48a10a88fe"
+checksum = "64d8c39f87cebbf893a221d307e578da316157c6c65aa1c1518c573be0cd8c11"
 dependencies = [
  "libc",
- "nix 0.18.0",
+ "nix",
  "openat",
- "rand 0.7.3",
+ "rand 0.8.3",
 ]
 
 [[package]]
@@ -1359,7 +1347,7 @@ dependencies = [
  "libdnf-sys",
  "maplit",
  "memfd",
- "nix 0.20.0",
+ "nix",
  "openat",
  "openat-ext",
  "os-release",
