@@ -34,6 +34,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::Path;
 use std::pin::Pin;
 use std::{collections, fs, io};
+use tracing::{event, instrument, Level};
 
 use crate::utils;
 
@@ -455,6 +456,7 @@ fn add_files_path_is_valid(path: &str) -> bool {
 
 impl Treefile {
     /// The main treefile creation entrypoint.
+    #[instrument(skip(workdir))]
     fn new_boxed(
         filename: &Path,
         basearch: Option<&str>,
@@ -462,6 +464,7 @@ impl Treefile {
     ) -> Result<Box<Treefile>> {
         let mut seen_includes = collections::BTreeMap::new();
         let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
+        event!(Level::DEBUG, "parsed successfully");
         parsed.config = parsed.config.substitute_vars()?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
