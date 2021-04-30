@@ -539,74 +539,47 @@ compose_filter_cb (OstreeRepo         *repo,
                    GFileInfo          *file_info,
                    gpointer            user_data)
 {
-  RpmOstreeImporter *self = ((cb_data*)user_data)->self;
-  GError **error = ((cb_data*)user_data)->error;
-
-  const char *user = NULL;
-  const char *group = NULL;
-
-  gboolean error_was_set = (error && *error != NULL);
-
-  /* Sanity check that path is absolute */
+  /* Sanity checks: path is absolute, file info is present, data pointer is ok */
   g_assert (path != NULL);
   g_assert (*path == '/');
+  g_assert (file_info != NULL);
+  g_assert (user_data != NULL);
+
+  RpmOstreeImporter *self = ((cb_data*)user_data)->self;
+  GError **error = ((cb_data*)user_data)->error;
 
   /* Are we filtering out docs?  Let's check that first */
   if (self->doc_files && g_hash_table_contains (self->doc_files, path))
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
-  /* HACK: special-case rpm's `/var/lib/rpm`, otherwise libsolv can get confused.
-   * See https://github.com/projectatomic/rpm-ostree/pull/290
-   */
-  if (g_str_has_prefix (path, "/var/lib/rpm"))
+  /* Directly convert /run and /var entries to tmpfiles.d.
+   * /var/lib/rpm is omitted as a special case, otherwise libsolv can get
+   * confused. */
+  if (g_str_has_prefix (path, "/run/") || g_str_has_prefix (path, "/var/"))
+    {
+      if (g_str_has_prefix (path, "/var/lib/rpm"))
+        return OSTREE_REPO_COMMIT_FILTER_SKIP;
+
+      /* Lookup any rpmfi overrides (was parsed from the header) */
+      const char *user = NULL;
+      const char *group = NULL;
+      get_rpmfi_override (self, path, &user, &group, NULL);
+
+      append_tmpfiles_d (self, path, file_info, user ?: "root", group ?: "root");
+
+      return OSTREE_REPO_COMMIT_FILTER_SKIP;
+    }
+
+  bool skip_extraneous = (self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) != 0;
+  bool is_ignored = false;
+  try {
+    is_ignored = rpmostreecxx::importer_compose_filter (path, *file_info, skip_extraneous);
+  } catch (std::exception& e) {
+    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
+    is_ignored = true;
+  }
+  if (is_ignored)
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
-
-  /* Lookup any rpmfi overrides (was parsed from the header) */
-  get_rpmfi_override (self, path, &user, &group, NULL);
-
-  /* sanity check that RPM isn't using CPIO id fields */
-  const guint32 uid = g_file_info_get_attribute_uint32 (file_info, "unix::uid");
-  const guint32 gid = g_file_info_get_attribute_uint32 (file_info, "unix::gid");
-  if (uid != 0 || gid != 0)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                    "RPM had unexpected non-root owned path \"%s\", marked as %u:%u)", path, uid, gid);
-      return OSTREE_REPO_COMMIT_FILTER_SKIP;
-    }
-
-  /* Special case exemptions */
-  if (g_str_has_prefix (path, "/usr/etc/selinux") &&
-      g_str_has_suffix (path, ".LOCK"))
-    {
-      /* These empty lock files cause problems;
-       * https://github.com/projectatomic/rpm-ostree/pull/1002
-       */
-      return OSTREE_REPO_COMMIT_FILTER_SKIP;
-    }
-  /* convert /run and /var entries to tmpfiles.d */
-  else if (g_str_has_prefix (path, "/run/") ||
-           g_str_has_prefix (path, "/var/"))
-    {
-      append_tmpfiles_d (self, path, file_info,
-                         user ?: "root", group ?: "root");
-      return OSTREE_REPO_COMMIT_FILTER_SKIP;
-    }
-  else if (!error_was_set)
-    {
-      /* And ensure the RPM installs into supported paths.
-       * Note that we rewrite /opt in handle_translate_pathname, but
-       * this gets called with the old path, so handle it here too. */
-      bool is_supported = rpmostreecxx::path_is_ostree_compliant (path) ||
-                          rpmostreecxx::path_is_in_opt (path);
-      if (!is_supported)
-        {
-          if ((self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) == 0)
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         "Unsupported path: %s; See %s",
-                         path, "https://github.com/projectatomic/rpm-ostree/issues/233");
-          return OSTREE_REPO_COMMIT_FILTER_SKIP;
-        }
-    }
 
   bool ro_executables = (self->flags & RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES) != 0;
   rpmostreecxx::tweak_imported_file_info (*file_info, ro_executables);

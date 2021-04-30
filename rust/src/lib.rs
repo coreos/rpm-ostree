@@ -201,8 +201,11 @@ pub mod ffi {
 
     // importer.rs
     extern "Rust" {
-        fn path_is_in_opt(path: &str) -> bool;
-        fn path_is_ostree_compliant(path: &str) -> bool;
+        fn importer_compose_filter(
+            path: &str,
+            mut file_info: Pin<&mut GFileInfo>,
+            skip_extraneous: bool,
+        ) -> Result<bool>;
         fn tweak_imported_file_info(mut file_info: Pin<&mut GFileInfo>, ro_executables: bool);
     }
 
