@@ -10,12 +10,14 @@ use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::passwd::PasswdDB;
 use crate::treefile::Treefile;
 use anyhow::{anyhow, bail, Context, Result};
+use camino::Utf8Path;
 use fn_error_context::context;
 use gio::CancellableExt;
 use nix::sys::stat::Mode;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
 use std::borrow::Cow;
+use std::convert::TryInto;
 use std::fmt::Write as FmtWrite;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Seek, Write};
@@ -648,13 +650,8 @@ fn convert_path_to_tmpfiles_d_recurse(
         };
 
         let subpath = subpath?;
-        let full_path = {
-            let fname = subpath.file_name();
-            let path_name = fname
-                .to_str()
-                .ok_or_else(|| anyhow!("invalid non-UTF-8 path: {:?}", fname))?;
-            format!("{}/{}", &current_prefix, &path_name)
-        };
+        let fname: &Utf8Path = Path::new(subpath.file_name()).try_into()?;
+        let full_path = format!("{}/{}", &current_prefix, fname);
         let path_type = subpath.simple_type().unwrap_or(SimpleType::Other);
 
         // Workaround for nfs-utils in RHEL7:

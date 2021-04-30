@@ -3,15 +3,18 @@
 
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
+use camino::Utf8Path;
 use gio::prelude::*;
 use openat::SimpleType;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::convert::TryInto;
 use std::fs;
 use std::io;
 use std::io::prelude::*;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::IntoRawFd;
+use std::path::Path;
 use std::pin::Pin;
 use std::rc;
 use subprocess::Exec;
@@ -33,11 +36,7 @@ fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
         SimpleType::Dir => {
             for e in d.list_dir(path).context("readdir")? {
                 let e = e.context("readdir")?;
-                let name = e.file_name();
-                let name = match name.to_str() {
-                    Some(n) => n,
-                    None => anyhow::bail!("Invalid UTF-8 name {}", name.to_string_lossy()),
-                };
+                let name: &Utf8Path = Path::new(e.file_name()).try_into()?;
                 let subpath = format!("{}/{}", path, name);
                 list_files_recurse(&d, &subpath, filelist, cancellable)?;
             }
