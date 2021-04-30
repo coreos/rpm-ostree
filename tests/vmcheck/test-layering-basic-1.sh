@@ -75,7 +75,7 @@ vm_build_rpm test-usrlocal \
 if vm_rpmostree install test-usrlocal-1.0 2>err.txt; then
     assert_not_reached "Was able to install a package in /usr/local/"
 fi
-assert_file_has_content err.txt "See https://github.com/projectatomic/rpm-ostree/issues/233"
+assert_file_has_content err.txt "Unsupported path; see https://github.com/projectatomic/rpm-ostree/issues/233"
 
 echo "ok failed to install in /usr/local"
 
