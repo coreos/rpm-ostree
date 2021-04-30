@@ -1174,25 +1174,21 @@ OSTREE_VERSION='33.4'
             rootfs.new_file(&binpath, 0o755).unwrap();
             let fpath = format!("{}/{}", PREFIX, fname);
             rootfs.new_file(&fpath, 0o755).unwrap();
-            rootfs.syncfs().unwrap();
             let before_meta = rootfs.metadata(fpath).unwrap();
             metas.push(before_meta);
         }
 
+        // File timestamps may not increment faster than e.g. 10ms.  Really
+        // what we should be doing is using inode versions.
+        std::thread::sleep(std::time::Duration::from_millis(100));
         tweak_selinux_timestamps(&rootfs, gio::NONE_CANCELLABLE).unwrap();
-        rootfs.syncfs().unwrap();
 
         for (fname, before_meta) in files.iter().zip(metas.iter()) {
             let fpath = format!("{}/{}", PREFIX, fname);
             let after = rootfs.metadata(&fpath).unwrap();
-            assert!(
-                before_meta.stat().st_atime != after.stat().st_atime
-                    || before_meta.stat().st_atime_nsec != after.stat().st_atime_nsec
-            );
-            assert!(
-                before_meta.stat().st_mtime != after.stat().st_mtime
-                    || before_meta.stat().st_mtime_nsec != after.stat().st_mtime_nsec
-            );
+            if before_meta.stat().st_mtime == after.stat().st_mtime {
+                assert_ne!(before_meta.stat().st_mtime_nsec, after.stat().st_mtime_nsec);
+            }
         }
     }
 
