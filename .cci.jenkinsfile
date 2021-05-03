@@ -37,14 +37,12 @@ parallel insttests: {
         // run this stage first without installing deps, so we match exactly the cosa pkgset
         // (+ our built rpm-ostree)
         shwrap("""
-          dnf install -y *.rpm
+          # XXX: cosa is currently on f33 still, so skip installing
+          #dnf install -y *.rpm
           coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm
           mv *.rpm overrides/rpm
-          # for now, we cherry-pick newer libsolv to test that it correctly detects our rpmdb
-          # https://github.com/coreos/rpm-ostree/issues/2548
-          (cd overrides/rpm && curl -LO https://kojipkgs.fedoraproject.org//packages/libsolv/0.7.17/1.fc33/x86_64/libsolv-0.7.17-1.fc33.x86_64.rpm)
           coreos-assembler fetch
           coreos-assembler build
            ${env.WORKSPACE}/ci/composepost-checks.sh
@@ -77,7 +75,7 @@ parallel insttests: {
 compose: {
     def jobs = 5
     def mem = (jobs * 2048) + 512
-    cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${jobs}") {
+    buildPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${jobs}") {
         checkout scm
         unstash 'rpms'
         stage("Install Deps") {
