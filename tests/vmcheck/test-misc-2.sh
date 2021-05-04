@@ -202,7 +202,8 @@ if vm_rpmostree install conflict-pkg 2>err.txt; then
     assert_not_reached "Install packages with conflicting files unexpected succeeded"
 fi
 assert_not_file_has_content err.txt "Writing rpmdb"
-assert_file_has_content err.txt "File exists"
+# this used to trigger EEXIST, but in f34 changed to EPERM
+assert_file_has_content err.txt "Operation not permitted"
 echo "ok detecting file name conflicts before writing rpmdb"
 
 # check that the way we detect deployment changes is not dependent on pending-*
