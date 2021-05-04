@@ -291,9 +291,12 @@ echo "ok previous staged failure in status"
 
 # Test `deploy --register-driver` option
 # Create and start a transient test-driver.service unit to register our fake driver
-vm_cmd systemd-run --unit=test-driver.service --wait -q \
+cursor=$(vm_get_journal_cursor)
+vm_cmd systemd-run --unit=test-driver.service -q -r \
        rpm-ostree deploy \'\' \
        --register-driver=TestDriver
+# wait for driver to register
+vm_wait_content_after_cursor $cursor 'Txn Deploy on.*successful'
 vm_cmd test -f /run/rpm-ostree/update-driver.gv
 vm_cmd rpm-ostree status > status.txt
 assert_file_has_content status.txt 'AutomaticUpdatesDriver: TestDriver'
@@ -335,6 +338,13 @@ vm_rpmostree upgrade --bypass-driver 2>err.txt
 assert_not_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
 vm_rpmostree cleanup -p
 echo "ok upgrade when updates driver is registered"
+
+# Check that drivers are ignored if inactive even if registered
+vm_cmd systemctl stop test-driver.service
+vm_rpmostree upgrade --unchanged-exit-77 2>err.txt # notice we do not `--bypass-driver`
+assert_not_file_has_content err.txt 'Updates and deployments are driven by TestDriver'
+vm_rpmostree cleanup -p
+echo "ok ignore inactive registered driver"
 
 # Test that we don't need to --bypass-driver if the systemd unit associated with
 # the client's PID is the update driver's systemd unit.
