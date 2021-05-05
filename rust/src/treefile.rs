@@ -41,7 +41,7 @@ use crate::utils;
 const INCLUDE_MAXDEPTH: u32 = 50;
 
 #[cfg(not(feature = "sqlite-rpmdb-default"))]
-const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::BDB;
+const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Bdb;
 #[cfg(feature = "sqlite-rpmdb-default")]
 const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Sqlite;
 
@@ -624,9 +624,9 @@ impl Treefile {
 
     pub(crate) fn get_rpmdb(&self) -> String {
         let s: &str = match self.parsed.rpmdb.as_ref().unwrap_or(&DEFAULT_RPMDB_BACKEND) {
-            RpmdbBackend::BDB => "bdb",
+            RpmdbBackend::Bdb => "bdb",
             RpmdbBackend::Sqlite => "sqlite",
-            RpmdbBackend::NDB => "ndb",
+            RpmdbBackend::Ndb => "ndb",
         };
         s.to_string()
     }
@@ -1053,9 +1053,9 @@ pub(crate) enum Include {
 /// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
 /// and https://fedoraproject.org/wiki/Changes/Sqlite_Rpmdb
 pub(crate) enum RpmdbBackend {
-    BDB,
+    Bdb,
     Sqlite,
-    NDB,
+    Ndb,
 }
 
 // Because of how we handle includes, *everything* here has to be
