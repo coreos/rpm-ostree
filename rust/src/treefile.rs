@@ -1306,24 +1306,23 @@ impl TreeComposeConfig {
 
     // we need to ensure that appended repo packages override earlier ones
     fn handle_repo_packages_overrides(&mut self) {
-        if let Some(repo_packages) = self.repo_packages.take() {
+        self.repo_packages.as_mut().map(|repo_packages| {
             let mut seen_pkgs: HashSet<String> = HashSet::new();
-            self.repo_packages = Some({
-                let mut v: Vec<RepoPackage> = repo_packages
-                    .into_iter()
-                    .rev()
-                    .map(|mut rp| {
-                        rp.packages.retain(|p| seen_pkgs.insert(p.into()));
-                        rp
-                    })
-                    .filter(|rp| !rp.packages.is_empty())
-                    .collect();
-                // can't inline this in the iterator chain above:
-                // https://doc.rust-lang.org/std/iter/struct.Map.html#notes-about-side-effects
-                v.reverse();
-                v
-            });
-        }
+            // Create a temporary new filtered vec; see
+            // https://doc.rust-lang.org/std/iter/struct.Map.html#notes-about-side-effects for why
+            // the reverse and re-reverse due to the side effect during `map()`.
+            let v: Vec<_> = repo_packages
+                .drain(..)
+                .rev()
+                .map(|mut rp| {
+                    rp.packages.retain(|p| seen_pkgs.insert(p.into()));
+                    rp
+                })
+                .filter(|rp| !rp.packages.is_empty())
+                .collect();
+            // Now replace the original, re-reversing.
+            repo_packages.extend(v.into_iter().rev());
+        });
     }
 }
 
