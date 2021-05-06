@@ -31,7 +31,7 @@ camino = "1.0.4"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "2.33.3"
 curl = "0.4.36"
-cxx = "1.0.48"
+cxx = "1.0.49"
 envsubst = "0.2.0"
 env_logger = "0.8.3"
 fn-error-context = "0.1.2"
