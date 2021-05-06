@@ -2705,6 +2705,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   auto command_line = static_cast<const char *>(vardict_lookup_ptr (self->options, "initiating-command-line", "&s"));
   g_autofree char **append_if_missing = static_cast<char **>(vardict_lookup_strv_canonical (self->options, "append-if-missing"));
   g_autofree char **delete_if_present = static_cast<char **>(vardict_lookup_strv_canonical (self->options, "delete-if-present"));
+  gboolean changed = FALSE;
 
   /* don't want to pull new content for this */
   upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
@@ -2728,56 +2729,55 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   if (upgrader == NULL)
     return FALSE;
 
-  if (self->kernel_args_deleted)
-    {
       /* Delete all the entries included in the kernel args */
-      for (char **iter = self->kernel_args_deleted; iter && *iter; iter++)
-        {
-          const char*  arg =  *iter;
-          if (!ostree_kernel_args_delete (kargs, arg, error))
-            return FALSE;
-        }
+  for (char **iter = self->kernel_args_deleted; iter && *iter; iter++)
+    {
+      const char*  arg =  *iter;
+      if (!ostree_kernel_args_delete (kargs, arg, error))
+        return FALSE;
+      changed = TRUE;
     }
 
-  if (self->kernel_args_replaced)
+  for (char **iter = self->kernel_args_replaced; iter && *iter; iter++)
     {
-      for (char **iter = self->kernel_args_replaced; iter && *iter; iter++)
-        {
-          const char *arg = *iter;
-          if (!ostree_kernel_args_new_replace (kargs, arg, error))
-            return FALSE;
-        }
+      const char *arg = *iter;
+      if (!ostree_kernel_args_new_replace (kargs, arg, error))
+        return FALSE;
+      changed = TRUE;
     }
 
   if (self->kernel_args_added)
     {
       ostree_kernel_args_append_argv (kargs, self->kernel_args_added);
+      changed = TRUE;
     }
 
-  if (append_if_missing)
+  for (char **iter = append_if_missing; iter && *iter; iter++)
     {
-      for (char **iter = append_if_missing; iter && *iter; iter++)
+      const char *arg = *iter;
+      if (!g_strv_contains (existing_kargs, arg))
         {
-          const char *arg = *iter;
-          if (!g_strv_contains (existing_kargs, arg))
-            {
-              ostree_kernel_args_append (kargs, arg);
-            }
-
+          ostree_kernel_args_append (kargs, arg);
+          changed = TRUE;
         }
     }
-  if (delete_if_present)
+
+  for (char **iter = delete_if_present; iter && *iter; iter++)
     {
-      for (char **iter = delete_if_present; iter && *iter; iter++)
+      const char *arg = *iter;
+      if (g_strv_contains (existing_kargs, arg))
         {
-          const char *arg = *iter;
-          if (g_strv_contains (existing_kargs, arg))
-            {
-              if (!ostree_kernel_args_delete (kargs, arg, error))
-                return FALSE;
-            }
+          if (!ostree_kernel_args_delete (kargs, arg, error))
+            return FALSE;
+          changed = TRUE;
         }
-     }
+    }
+
+  if (!changed)
+    {
+      rpmostree_output_message ("No changes.");
+      return TRUE;
+    }
 
   /* After all the arguments are processed earlier, we convert it to a string list*/
   g_auto(GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);
