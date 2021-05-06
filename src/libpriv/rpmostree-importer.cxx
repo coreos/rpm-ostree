@@ -610,18 +610,6 @@ append_tmpfiles_d (RpmOstreeImporter *self,
     }
 }
 
-/* When we do a unified core, we'll likely need to add /boot to pick up
- * kernels here at least.  This is intended short term to address
- * https://github.com/projectatomic/rpm-ostree/issues/233
- */
-static gboolean
-path_is_ostree_compliant (const char *path)
-{
-  g_assert (*path == '/');
-  path++;
-  return (*path == '\0' || rpmostree_relative_path_is_ostree_compliant (path));
-}
-
 static OstreeRepoCommitFilterResult
 compose_filter_cb (OstreeRepo         *repo,
                    const char         *path,
@@ -635,6 +623,10 @@ compose_filter_cb (OstreeRepo         *repo,
   const char *group = NULL;
 
   gboolean error_was_set = (error && *error != NULL);
+
+  /* Sanity check that path is absolute */
+  g_assert (path != NULL);
+  g_assert (*path == '/');
 
   /* Are we filtering out docs?  Let's check that first */
   if (self->doc_files && g_hash_table_contains (self->doc_files, path))
@@ -699,11 +691,11 @@ compose_filter_cb (OstreeRepo         *repo,
   else if (!error_was_set)
     {
       /* And ensure the RPM installs into supported paths.
-       * Note that we rewrite opt in handle_translate_pathname, but
+       * Note that we rewrite /opt in handle_translate_pathname, but
        * this gets called with the old path, so handle it here too. */
-      if (!(path_is_ostree_compliant (path) ||
-            g_str_equal (path, "opt") ||
-            g_str_has_prefix (path, "opt/")))
+      bool is_supported = rpmostreecxx::path_is_ostree_compliant (path) ||
+                          rpmostreecxx::path_is_in_opt (path);
+      if (!is_supported)
         {
           if ((self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) == 0)
             g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -737,6 +729,11 @@ unprivileged_filter_cb (OstreeRepo         *repo,
                         gpointer            user_data)
 {
   RpmOstreeImporter *self = ((cb_data*)user_data)->self;
+
+  /* Sanity check that path is absolute */
+  g_assert (path != NULL);
+  g_assert (*path == '/');
+
   /* Are we filtering out docs?  Let's check that first */
   if (self->doc_files && g_hash_table_contains (self->doc_files, path))
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
@@ -778,6 +775,10 @@ rojig_filter_cb (OstreeRepo         *repo,
 
   if (error_was_set)
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
+
+  /* Sanity check that path is absolute */
+  g_assert (path != NULL);
+  g_assert (*path == '/');
 
   self->n_rojig_total++;
 
