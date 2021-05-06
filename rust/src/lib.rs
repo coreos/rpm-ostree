@@ -187,6 +187,12 @@ pub mod ffi {
         ) -> Result<DeploymentLayeredMeta>;
     }
 
+    // importer.rs
+    extern "Rust" {
+        fn path_is_in_opt(path: &str) -> bool;
+        fn path_is_ostree_compliant(path: &str) -> bool;
+    }
+
     // initramfs.rs
     extern "Rust" {
         fn get_dracut_random_cpio() -> &'static [u8];
@@ -528,11 +534,13 @@ pub(crate) use extensions::*;
 mod fedora_integration;
 mod history;
 pub use self::history::*;
+mod importer;
+pub(crate) use importer::*;
+mod initramfs;
+pub(crate) use self::initramfs::*;
 mod isolation;
 mod journal;
 pub(crate) use self::journal::*;
-mod initramfs;
-pub(crate) use self::initramfs::*;
 mod lockfile;
 pub(crate) use self::lockfile::*;
 mod live;
