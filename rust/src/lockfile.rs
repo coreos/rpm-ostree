@@ -129,10 +129,14 @@ enum LockedPackage {
     Evr {
         evr: String,
         digest: Option<String>,
+        #[serde(skip_serializing)]
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     Evra {
         evra: String,
         digest: Option<String>,
+        #[serde(skip_serializing)]
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
 }
 
@@ -161,13 +165,13 @@ impl LockfileConfig {
             .iter()
             .flatten()
             .map(|(k, v)| match v {
-                LockedPackage::Evr { evr, digest } => Ok(crate::ffi::LockedPackage {
+                LockedPackage::Evr { evr, digest, .. } => Ok(crate::ffi::LockedPackage {
                     name: k.clone(),
                     evr: evr.clone(),
                     arch: "".into(),
                     digest: digest.clone().unwrap_or_default(),
                 }),
-                LockedPackage::Evra { evra, digest } => {
+                LockedPackage::Evra { evra, digest, .. } => {
                     let evr_arch: Vec<&str> = evra.rsplitn(2, '.').collect();
                     if evr_arch.len() != 2 {
                         Err(anyhow!("package {} has malformed evra: {}", k, evra).into())
@@ -212,10 +216,15 @@ mod tests {
         },
         "bar": {
             "evra": "0.8-15.x86_64",
-            "digest": "sha256:cafedead"
+            "digest": "sha256:cafedead",
+            "metadata": {
+                "foo": true,
+                "bar": "baz"
+            }
         },
         "baz": {
-            "evr": "2.1.1-1"
+            "evr": "2.1.1-1",
+            "metadata": {}
         }
     },
     "source-packages": {
@@ -227,14 +236,14 @@ mod tests {
 
     fn assert_evra(locked_package: &LockedPackage, expected_evra: &str) {
         match locked_package {
-            LockedPackage::Evra { evra, digest: _ } => assert_eq!(evra, expected_evra),
+            LockedPackage::Evra { evra, .. } => assert_eq!(evra, expected_evra),
             _ => panic!("Expected LockedPackage::Evra variant"),
         }
     }
 
     fn assert_evr(locked_package: &LockedPackage, expected_evr: &str) {
         match locked_package {
-            LockedPackage::Evr { evr, digest: _ } => assert_eq!(evr, expected_evr),
+            LockedPackage::Evr { evr, .. } => assert_eq!(evr, expected_evr),
             _ => panic!("Expected LockedPackage::Evr variant"),
         }
     }
@@ -370,6 +379,7 @@ pub(crate) fn lockfile_write(
             LockedPackage::Evra {
                 evra: format!("{}.{}", evr.as_str(), arch.as_str()),
                 digest: Some(chksum),
+                metadata: None,
             },
         );
     }
