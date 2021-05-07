@@ -1622,12 +1622,17 @@ get_sd_unit_objpath (GDBusConnection  *connection,
  * instance that holds the value for property_name GVariant in cache_val. */
 static gboolean
 get_sd_unit_property (GDBusConnection *connection,
-                      const char      *objpath,
+                      const char      *method_name,
+                      GVariant        *parameters,
                       const char      *property_name,
                       GVariant       **cache_val,
                       GCancellable    *cancellable,
                       GError         **error)
 {
+  g_autofree const char *objpath = NULL;
+  if (!get_sd_unit_objpath (connection, method_name, parameters, &objpath, cancellable, error))
+    return FALSE;
+
   /* Look up property_name property of systemd unit. */
   g_autoptr(GDBusProxy) unit_obj_proxy =
     g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
@@ -1655,11 +1660,8 @@ append_docs_to_str (GString          *str,
 {
   g_autoptr(GVariant) docs_array = NULL;
   g_autoptr(GError) local_error = NULL;
-  const char *objpath = NULL;
-  if (!get_sd_unit_objpath (connection, "LoadUnit", g_variant_new ("(s)", sd_unit),
-                            &objpath, cancellable, &local_error))
-    g_printerr ("%s", local_error->message);
-  if (!get_sd_unit_property (connection, objpath, "Documentation", &docs_array, cancellable, &local_error))
+  if (!get_sd_unit_property (connection, "LoadUnit", g_variant_new ("(s)", sd_unit),
+                             "Documentation", &docs_array, cancellable, &local_error))
     {
       g_printerr ("%s", local_error->message);
     }
@@ -1682,7 +1684,29 @@ append_docs_to_str (GString          *str,
     }
 }
 
-/* Check whether sd_unit contains pid and return the boolean in sd_unit_contains_pid */
+/* Check whether sd_unit's `ActiveState` is "active" and return the boolean
+ * in `sd_unit_is_active`. */
+static gboolean
+check_sd_unit_state_is_active (char            *sd_unit,
+                               gboolean        *sd_unit_is_active,
+                               GDBusConnection *connection,
+                               GCancellable    *cancellable,
+                               GError         **error)
+{
+  g_autoptr(GVariant) active_state = NULL;
+  if (!get_sd_unit_property (connection, "LoadUnit", g_variant_new ("(s)", sd_unit),
+                             "ActiveState", &active_state, cancellable, error))
+    return FALSE;
+  g_assert (active_state);
+  // NB: include "failed" in states we consider "active" so we do not ignore crashed
+  // updates drivers.
+  const char *states[] = {"active", "activating", "reloading", "failed", NULL};
+  const char *active_state_str = g_variant_get_string (active_state, NULL);
+  *sd_unit_is_active = (active_state_str && g_strv_contains (states, active_state_str));
+  return TRUE;
+}
+
+/* Check whether sd_unit contains pid and return the boolean in sd_unit_contains_pid. */
 static gboolean
 check_sd_unit_contains_pid (char            *sd_unit,
                             pid_t            pid,
@@ -1692,13 +1716,10 @@ check_sd_unit_contains_pid (char            *sd_unit,
                             GError         **error)
 {
   // Get the systemd unit associated with pid.
-  const char *objpath = NULL;
   g_autoptr(GVariant) process_sd_unit_val = NULL;
   const char *process_sd_unit = NULL;
-  if (!get_sd_unit_objpath (connection, "GetUnitByPID", g_variant_new ("(u)", (guint32) pid),
-                            &objpath, cancellable, error))
-    return FALSE;
-  if (!get_sd_unit_property (connection, objpath, "Id", &process_sd_unit_val, cancellable, error))
+  if (!get_sd_unit_property (connection, "GetUnitByPID", g_variant_new ("(u)", (guint32) pid),
+                             "Id", &process_sd_unit_val, cancellable, error))
     return FALSE;
   process_sd_unit = g_variant_get_string (process_sd_unit_val, NULL);
   if (g_strcmp0 (process_sd_unit, sd_unit) == 0)
@@ -1708,7 +1729,7 @@ check_sd_unit_contains_pid (char            *sd_unit,
   return TRUE;
 }
 
-/* Throw an error if an updates driver is registered. */
+/* Throw an error if an updates driver is registered and active. */
 gboolean
 error_if_driver_registered (GBusType          bus_type,
                             RPMOSTreeSysroot *sysroot_proxy,
@@ -1741,9 +1762,18 @@ error_if_driver_registered (GBusType          bus_type,
       g_string_printf (error_msg, "Updates and deployments are driven by %s (%s)\n",
                        update_driver_name, update_driver_sd_unit);
       g_string_append_printf (error_msg, "See %s's documentation", update_driver_name);
-      /* only try to get unit's `Documentation` if we're on the system bus */
+      // Only try to get unit's `Documentation` and check unit's state if we're on the system bus.
       if (bus_type == G_BUS_TYPE_SYSTEM)
-        append_docs_to_str (error_msg, connection, update_driver_sd_unit, cancellable);
+        {
+          gboolean sd_unit_is_active = TRUE;
+          if (!check_sd_unit_state_is_active (update_driver_sd_unit, &sd_unit_is_active,
+                                              connection, cancellable, error))
+            return FALSE;
+          // Ignore driver if driver's `ActiveState` is not "active", even if registered.
+          if (!sd_unit_is_active)
+            return TRUE;
+          append_docs_to_str (error_msg, connection, update_driver_sd_unit, cancellable);
+        }
       g_string_append_printf (error_msg,
                               "Use --bypass-driver to bypass %s and perform the operation anyways",
                               update_driver_name);
