@@ -178,6 +178,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
                          OstreeRepo               *repo,
                          OstreeAsyncProgress      *progress,
                          RpmOstreeOrigin          *origin,
+                         gboolean                  skip_branch_check,
                          const char               *revision,
                          GCancellable             *cancellable,
                          GError                  **error)
@@ -225,10 +226,13 @@ apply_revision_override (RpmostreedTransaction    *transaction,
       switch (refspectype)
         {
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-          rpmostree_output_message ("Validating checksum '%s'", checksum);
-          if (!rpmostreed_repo_lookup_checksum (repo, rpmostree_origin_get_refspec (origin),
-                                                checksum, progress, cancellable, error))
-            return FALSE;
+          if (!skip_branch_check)
+            {
+              rpmostree_output_message ("Validating checksum '%s'", checksum);
+              if (!rpmostreed_repo_lookup_checksum (repo, rpmostree_origin_get_refspec (origin),
+                                                    checksum, progress, cancellable, error))
+                return FALSE;
+            }
           break;
         case RPMOSTREE_REFSPEC_TYPE_ROJIG:
           /* For now we skip validation here, if there's an error we'll see it later
@@ -358,7 +362,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     {
       g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
       rpmostreed_transaction_connect_download_progress (transaction, progress);
-      if (!apply_revision_override (transaction, repo, progress, origin,
+      if (!apply_revision_override (transaction, repo, progress, origin, FALSE,
                                     self->revision, cancellable, error))
         return FALSE;
       rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -1116,6 +1120,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
       rpmostreed_transaction_connect_download_progress (transaction, progress);
       if (!apply_revision_override (transaction, repo, progress, origin,
+                                    deploy_has_bool_option (self, "skip-branch-check"),
                                     self->revision, cancellable, error))
         return FALSE;
       rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));

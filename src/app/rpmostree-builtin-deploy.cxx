@@ -37,6 +37,7 @@ static gboolean opt_lock_finalization;
 static gboolean opt_disallow_downgrade;
 static gboolean opt_unchanged_exit_77;
 static gboolean opt_bypass_driver;
+static gboolean opt_skip_branch_check;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -48,6 +49,7 @@ static GOptionEntry option_entries[] = {
   { "preview", 0, 0, G_OPTION_ARG_NONE, &opt_preview, "Just preview package differences", NULL },
   { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
+  { "skip-branch-check", 0, 0, G_OPTION_ARG_NONE, &opt_skip_branch_check, "Do not check if commit belongs on the same branch", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade, "Forbid deployment of chronologically older trees", NULL },
   { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no new deployment made, exit 77", NULL },
@@ -132,6 +134,7 @@ rpmostree_builtin_deploy (int            argc,
       g_variant_dict_insert (&dict, "allow-downgrade", "b", !opt_disallow_downgrade);
       g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
+      g_variant_dict_insert (&dict, "skip-branch-check", "b", opt_skip_branch_check);
       g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
       g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
       if (opt_register_driver)
