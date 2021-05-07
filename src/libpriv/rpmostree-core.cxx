@@ -1976,6 +1976,33 @@ find_locked_packages (RpmOstreeContext *self,
   return util::move_nullify (pkgs);
 }
 
+/* Block installation of layered packages with versions mismatching
+ * already-installed base packages
+ */
+static void
+exclude_nonmatching_versions (DnfSack    *sack,
+                              const char *layered_name,
+                              const char *base_name)
+{
+  /* Query the base package, if it's installed */
+  hy_autoquery HyQuery base_query = hy_query_create (sack);
+  hy_query_filter (base_query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+  hy_query_filter (base_query, HY_PKG_NAME, HY_EQ, base_name);
+  g_autoptr(GPtrArray) base_pkgs = hy_query_run (base_query);
+  if (base_pkgs->len == 1)
+    {
+      const char *base_evr = dnf_package_get_evr (base_pkgs->pdata[0]);
+
+      /* Get all non-matching versions of the layered package */
+      hy_autoquery HyQuery query = hy_query_create (sack);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, layered_name);
+      hy_query_filter (query, HY_PKG_EVR, HY_NEQ, base_evr);
+      DnfPackageSet *mismatched = hy_query_run_set (query);
+      dnf_sack_add_excludes (sack, mismatched);
+      dnf_packageset_free (mismatched);
+    }
+}
+
 /* Check for/download new rpm-md, then depsolve */
 gboolean
 rpmostree_context_prepare (RpmOstreeContext *self,
@@ -2023,6 +2050,11 @@ rpmostree_context_prepare (RpmOstreeContext *self,
    */
   dnf_sack_set_installonly (sack, NULL);
   dnf_sack_set_installonly_limit (sack, 0);
+
+  /* ...but make sure we get the right kernel-devel package, in case
+   * we're installing something that depends on it.
+   */
+  exclude_nonmatching_versions (sack, "kernel-devel", "kernel-core");
 
   if (self->rojig_pure)
     {
