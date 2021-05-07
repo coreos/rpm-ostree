@@ -118,12 +118,13 @@ struct LockfileConfigMetadata {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 struct LockfileRepoMetadata {
     generated: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 enum LockedPackage {
     Evr {
         evr: String,
