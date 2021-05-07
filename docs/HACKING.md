@@ -110,7 +110,7 @@ So just do e.g.:
 ```
 cd libdnf
 git fetch origin
-git reset --hard origin/master
+git reset --hard origin/main
 cd ..
 ```
 
@@ -119,7 +119,7 @@ The various `make` targets will pick up the changes and recompile.
 ## Testing with a custom ostree
 
 It is sometimes necessary to develop against a version of ostree which is not
-even yet in git master. In such situations, one can simply do:
+even yet in git main. In such situations, one can simply do:
 
 ```sh
 $ # from the rpm-ostree build dir

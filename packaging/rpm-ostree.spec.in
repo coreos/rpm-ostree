@@ -1,5 +1,5 @@
 # The canonical copy of this spec file is upstream at:
-# https://github.com/coreos/rpm-ostree/blob/master/packaging/rpm-ostree.spec.in
+# https://github.com/coreos/rpm-ostree/blob/main/packaging/rpm-ostree.spec.in
 
 Summary: Hybrid image/package system
 Name: rpm-ostree

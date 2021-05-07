@@ -35,17 +35,17 @@ reason for this architecture is primarily:
 3. to allow unprivileged users to make system mutations via polkit
 
 The D-Bus API is defined here:
-https://github.com/coreos/rpm-ostree/blob/master/src/daemon/org.projectatomic.rpmostree1.xml
+https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.xml
 
 The rpm-ostree daemon runs as a systemd service which owns the
 `org.projectatomic.rpmostree1` name on the system D-Bus:
 
-https://github.com/coreos/rpm-ostree/blob/master/src/daemon/rpm-ostreed.service.in
+https://github.com/coreos/rpm-ostree/blob/main/src/daemon/rpm-ostreed.service.in
 
 When a client wants to talk to the daemon, the D-Bus daemon starts up the
 systemd service if it's not already running:
 
-https://github.com/coreos/rpm-ostree/blob/master/src/daemon/org.projectatomic.rpmostree1.service.in
+https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.service.in
 
 ### Interacting with the daemon
 
@@ -100,7 +100,7 @@ actions.
 
 We ship a base policy file which provide actions which should be allowed:
 
-https://github.com/coreos/rpm-ostree/blob/master/src/daemon/org.projectatomic.rpmostree1.policy
+https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.policy
 
 Some distros may enhance this policy by shipping rules which dynamically
 calculate authorization based on e.g. group membership. For example, in

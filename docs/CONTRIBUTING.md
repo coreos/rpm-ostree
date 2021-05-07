@@ -24,5 +24,5 @@ There is `make check` as well as `make vmcheck`. See also what the
 See the [OSTree CONTRIBUTING][contributing] coding style.
 
 [rpm-ostree]: https://github.com/coreos/rpm-ostree
-[jenkinsfile]: https://github.com/coreos/rpm-ostree/blob/master/.cci.jenkinsfile
+[jenkinsfile]: https://github.com/coreos/rpm-ostree/blob/main/.cci.jenkinsfile
 [contributing]: https://github.com/ostreedev/ostree/blob/master/docs/CONTRIBUTING.md

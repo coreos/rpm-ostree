@@ -19,7 +19,7 @@ codestyle: {
       checkout scm
       shwrap("""
         # Ensures that we get refs to aid `git describe`
-        git fetch origin +refs/heads/master:refs/remotes/origin/master
+        git fetch origin +refs/heads/main:refs/remotes/origin/main
         ci/commit-validation.sh
       """)
   }

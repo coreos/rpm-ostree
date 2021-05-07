@@ -3,7 +3,7 @@ set -euo pipefail
 
 # This is just a small wrapper for `make install`, but with the added logic to
 # pull in ostree packages from the build container. We always assume development
-# and testing is against git master ostree and that the build container is
+# and testing is against git main ostree and that the build container is
 # tracking e.g. CAHC or FAHC (see HACKING.md for more details).
 
 DESTDIR=${topsrcdir}/insttree
