@@ -702,8 +702,9 @@ compose_filter_cb (OstreeRepo         *repo,
        * Note that we rewrite opt in handle_translate_pathname, but
        * this gets called with the old path, so handle it here too. */
       if (!(path_is_ostree_compliant (path) ||
-            g_str_equal (path, "opt") ||
-            g_str_has_prefix (path, "opt/")))
+            path_is_ostree_compliant (path) ||
+            g_str_equal (path, "/opt") ||
+            g_str_has_prefix (path, "/opt/")))
         {
           if ((self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) == 0)
             g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
