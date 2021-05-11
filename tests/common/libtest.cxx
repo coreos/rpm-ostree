@@ -23,7 +23,7 @@
 #include "libtest.h"
 
 /* Copied and adapted from:
- * https://github.com/ostreedev/ostree/blob/master/tests/libostreetest.c
+ * https://github.com/ostreedev/ostree/blob/main/tests/libostreetest.c
  *
  * This function hovers in a quantum superposition of horrifying and
  * beautiful.  Future generations may interpret it as modern art.

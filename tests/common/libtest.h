@@ -21,7 +21,7 @@
  */
 
 /* Copied and adapted from:
- * https://github.com/ostreedev/ostree/blob/master/tests/libostreetest.c
+ * https://github.com/ostreedev/ostree/blob/main/tests/libostreetest.c
  */
 
 #pragma once
