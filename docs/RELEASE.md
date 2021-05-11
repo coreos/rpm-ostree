@@ -18,6 +18,8 @@ nav_order: 8
    tag with the release notes as its content. Make the first line be the name of
    the tag itself.
 8. Push the tag using `git push $upstream v202X.XX`.
-9. Create the xz tarball using `make -C packaging -f Makefile.dist-packaging dist-snapshot`.
+9. Create the xz tarball:
+   * `make -f Makefile.bindings bindings`
+   * `make -C packaging -f Makefile.dist-packaging dist-snapshot`
 10. Create a GitHub release for the new release tag using its contents and
     attach the tarball.
