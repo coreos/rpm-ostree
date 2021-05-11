@@ -7,6 +7,7 @@ fn inner_main(args: &Vec<&str>) -> Result<()> {
     match args.get(1).map(|s| *s) {
         // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
         Some("countme") => rpmostree_rust::countme::entrypoint(args),
+        Some("ex-container") => rpmostree_rust::container::entrypoint(args),
         _ => {
             // Otherwise fall through to C++ main().
             Ok(rpmostree_rust::ffi::rpmostree_main(&args)?)
