@@ -290,6 +290,17 @@ assert_file_has_content status.txt "failed to finalize previous deployment"
 assert_file_has_content status.txt "error: opendir"
 echo "ok previous staged failure in status"
 
+# check that --skip-branch-check indeeds skips branch checking
+csum=$(vm_cmd ostree commit -b otherbranch --tree=ref=vmcheck)
+if vm_rpmostree deploy $csum 2>err.txt; then
+    assert_not_reached "Deployed to commit on different branch"
+fi
+assert_file_has_content err.txt "Checksum .* not found in .*"
+vm_rpmostree cleanup -p
+vm_rpmostree deploy $csum --skip-branch-check
+vm_rpmostree cleanup -p
+echo "ok deploy --skip-branch-check"
+
 # Test `deploy --register-driver` option
 # Create and start a transient test-driver.service unit to register our fake driver
 cursor=$(vm_get_journal_cursor)

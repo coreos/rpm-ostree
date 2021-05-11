@@ -314,6 +314,9 @@
          "skip-purge" (type 'b')
             Do not purge the old refspec. Only valid if "set-refspec" is
             specified.
+         "skip-branch-check" (type 'b')
+            When deploying by commit hash (using "set-revision"), do not
+            check if commit belongs on the same branch.
          "no-pull-base" (type 'b')
             Do not pull a base layer from the remote. Not valid if
             either "set-refspec" or "set-revision" is specified.
