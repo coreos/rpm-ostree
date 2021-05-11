@@ -188,4 +188,4 @@ rpm-ostree specific talks:
 ## License
 
 rpm-ostree includes code licensed under GPLv2+, LGPLv2+, (Apache 2.0 OR MIT).
-For more information, see [LICENSE](https://github.com/coreos/rpm-ostree/blob/master/LICENSE).
+For more information, see [LICENSE](https://github.com/coreos/rpm-ostree/blob/main/LICENSE).

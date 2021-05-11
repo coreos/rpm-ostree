@@ -52,7 +52,7 @@ nav_order: 9
 
 ## Makefiles
 
-These files are used when doing raw build instructions. You can find more info [here](https://github.com/projectatomic/rpm-ostree/blob/master/HACKING.md#raw-build-instructions):
+These files are used when doing raw build instructions. You can find more info [here](https://github.com/projectatomic/rpm-ostree/blob/main/HACKING.md#raw-build-instructions):
 
 ```
 .

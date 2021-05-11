@@ -9,8 +9,8 @@ nav_order: 8
 3. Verify the libdnf deps in `rpm-ostree.spec.in` are up to date by comparing to
    the spec of the bundled version (`libdnf/libdnf.spec`).
 4. Submit as a PR and wait until reviewed *and* CI is green.
-5. Once merged, do `git pull $upstream && git reset --hard $upstream/master` on
-   your local `master` branch to make sure you're on the right commit.
+5. Once merged, do `git pull $upstream && git reset --hard $upstream/main` on
+   your local `main` branch to make sure you're on the right commit.
 6. Draft release notes by seeding a HackMD.io with `git shortlog $last_tag..`
    and ideally collaborating with others. Filter out the commits from
    `dependabot`. See previous releases for format.
