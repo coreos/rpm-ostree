@@ -519,6 +519,7 @@ pub(crate) use bwrap::*;
 mod client;
 pub(crate) use client::*;
 mod cliwrap;
+pub mod container;
 pub use cliwrap::*;
 mod composepost;
 pub mod countme;

@@ -1,0 +1,37 @@
+#!/bin/bash
+#
+# Copyright (C) 2021 Red Hat Inc.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+set -x
+
+libtest_prepare_offline
+
+booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+rpm-ostree ex-container export --repo=/ostree/repo ${booted_commit} containers-storage:localhost/fcos
+target_sha256=$(podman run --entrypoint bash --rm -i localhost/fcos -c 'sha256sum /usr/bin/rpm-ostree' | cut -f 1 -d ' ')
+src_sha256=$(sha256sum /usr/bin/rpm-ostree | cut -f 1 -d ' ')
+assert_streq "${src_sha256}" "${target_sha256}"
+echo "ok container export"
+
+# TODO test container import too, ideally via registry.  But I don't want to
+# make this test super flaky right now by pulling from the internet, and
+# we need infrastructure to mock up serving via local registry.

@@ -1532,6 +1532,7 @@ dependencies = [
  "env_logger",
  "envsubst",
  "fn-error-context",
+ "futures",
  "gio",
  "gio-sys",
  "glib",
@@ -1566,6 +1567,7 @@ dependencies = [
  "system-deps 3.1.1",
  "systemd",
  "tempfile",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
