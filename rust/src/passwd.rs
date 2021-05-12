@@ -19,6 +19,7 @@ use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::pin::Pin;
 
+const DEFAULT_MODE: u32 = 0o644;
 static PWGRP_SHADOW_FILES: &[&str] = &["shadow", "gshadow", "subuid", "subgid"];
 static USRLIB_PWGRP_FILES: &[&str] = &["passwd", "group"];
 
@@ -104,7 +105,7 @@ pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> CxxResult<()> {
 
     {
         let mut usrdest_stream = rootfs
-            .append_file(USRDEST_PATH, 0o664)
+            .append_file(USRDEST_PATH, DEFAULT_MODE)
             .map(BufWriter::new)?;
 
         for entry in &others {
@@ -114,12 +115,16 @@ pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> CxxResult<()> {
         usrdest_stream.flush()?;
     }
 
-    rootfs.write_file_with_sync(ETCSRC_PATH, 0o664, |mut etcdest_stream| -> Result<()> {
-        for entry in &roots {
-            entry.to_writer(&mut etcdest_stream)?;
-        }
-        Ok(())
-    })?;
+    rootfs.write_file_with_sync(
+        ETCSRC_PATH,
+        DEFAULT_MODE,
+        |mut etcdest_stream| -> Result<()> {
+            for entry in &roots {
+                entry.to_writer(&mut etcdest_stream)?;
+            }
+            Ok(())
+        },
+    )?;
 
     Ok(())
 }
@@ -143,7 +148,7 @@ pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>
 
     {
         let mut usrdest_stream = rootfs
-            .append_file(USRDEST_PATH, 0o664)
+            .append_file(USRDEST_PATH, DEFAULT_MODE)
             .map(BufWriter::new)?;
 
         for entry in &others {
@@ -159,12 +164,16 @@ pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>
         usrdest_stream.flush()?;
     }
 
-    rootfs.write_file_with_sync(ETCSRC_PATH, 0o664, |mut etcdest_stream| -> Result<()> {
-        for entry in &roots_preserved {
-            entry.to_writer(&mut etcdest_stream)?;
-        }
-        Ok(())
-    })?;
+    rootfs.write_file_with_sync(
+        ETCSRC_PATH,
+        DEFAULT_MODE,
+        |mut etcdest_stream| -> Result<()> {
+            for entry in &roots_preserved {
+                entry.to_writer(&mut etcdest_stream)?;
+            }
+            Ok(())
+        },
+    )?;
 
     Ok(())
 }
@@ -346,12 +355,17 @@ fn data_from_json(
 
     let mut seen_names = HashSet::new();
     rootfs
-        .write_file_with_sync(&target_etc_filename, 0o664, |dest_bufwr| -> Result<()> {
-            let mut buf_rd = BufReader::new(&mut src_file);
-            append_unique_entries(&mut buf_rd, &mut seen_names, dest_bufwr)
-                .with_context(|| format!("failed to process '{}' content from JSON", &target))?;
-            Ok(())
-        })
+        .write_file_with_sync(
+            &target_etc_filename,
+            DEFAULT_MODE,
+            |dest_bufwr| -> Result<()> {
+                let mut buf_rd = BufReader::new(&mut src_file);
+                append_unique_entries(&mut buf_rd, &mut seen_names, dest_bufwr).with_context(
+                    || format!("failed to process '{}' content from JSON", &target),
+                )?;
+                Ok(())
+            },
+        )
         .with_context(|| format!("failed to write /{}", &target_etc_filename))?;
 
     Ok(true)
@@ -398,7 +412,7 @@ fn concat_files(rootfs: &openat::Dir, prev_root: &gio::File, target: &str) -> Re
 
     let etc_target = format!("etc/{}", target);
     rootfs
-        .write_file_with_sync(&etc_target, 0o664, |dest_bufwr| -> Result<()> {
+        .write_file_with_sync(&etc_target, DEFAULT_MODE, |dest_bufwr| -> Result<()> {
             let mut seen_names = HashSet::new();
             if let Some(ref src_file) = orig_usretc_content {
                 let src_stream = src_file.read(gio::NONE_CANCELLABLE)?.into_read();

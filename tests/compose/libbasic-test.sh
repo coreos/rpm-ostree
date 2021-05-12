@@ -19,6 +19,9 @@ validate_passwd() {
 validate_passwd passwd
 validate_passwd group
 
+ostree --repo=${repo} ls ${treeref} /usr/etc/passwd > passwd.txt
+assert_file_has_content_literal passwd.txt '00644 '
+
 ostree --repo=${repo} cat ${treeref} /usr/etc/default/useradd > useradd.txt
 assert_file_has_content_literal useradd.txt HOME=/var/home
 
