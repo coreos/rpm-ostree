@@ -11,8 +11,14 @@ fn new_rpm_app<'r>() -> App<'r, 'static> {
         .bin_name(name)
         .version("0.1")
         .about("Wrapper for rpm")
-        .arg(Arg::with_name("verify").short("V"))
+        .arg(Arg::with_name("verify").short("V").long("verify"))
         .arg(Arg::with_name("version"))
+        .arg(
+            Arg::with_name("package")
+                .help("package")
+                .takes_value(true)
+                .multiple(true),
+        )
 }
 
 // clap doesn't easily allow us to parse unknown arguments right now,
@@ -48,7 +54,9 @@ fn disposition(argv: &[&str]) -> Result<RunDisposition> {
     {
         Ok(v) => v,
         Err(e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(RunDisposition::Ok),
-        _ => return Ok(RunDisposition::Warn),
+        Err(_) => {
+            return Ok(RunDisposition::Warn);
+        }
     };
 
     if matches.is_present("verify") {
@@ -133,6 +141,15 @@ mod tests {
     #[test]
     fn test_shorterase() -> Result<()> {
         assert_eq!(disposition(&["-e", "bash"])?, RunDisposition::Warn);
+        Ok(())
+    }
+
+    #[test]
+    fn test_verify() -> Result<()> {
+        assert!(matches!(
+            disposition(&["--verify", "bash"])?,
+            RunDisposition::Notice(_)
+        ));
         Ok(())
     }
 }

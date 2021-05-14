@@ -46,29 +46,6 @@ assert_file_has_content err.txt 'PkgChange not allowed for user'
 if runuser -u core rpm-ostree reload &>err.txt; then
     assert_not_reached "Was able to reload as non-root!"
 fi
-echo "ok polkit"
-
-wrapdir="/usr/libexec/rpm-ostree/wrapped"
-if [ -d "${wrapdir}" ]; then
-    # Test wrapped functions for rpm
-    rpm --version
-    rpm -qa > /dev/null
-    rpm --verify >out.txt
-    assert_file_has_content out.txt "rpm --verify is not necessary for ostree-based systems"
-    rm -f out.txt
-    if rpm -e bash 2>out.txt; then
-        fatal "rpm -e worked"
-    fi
-    assert_file_has_content out.txt 'Dropping privileges as `rpm` was executed with not "known safe" arguments'
-
-    if dracut --blah 2>out.txt; then
-        fatal "dracut worked"
-    fi
-    assert_file_has_content out.txt 'This system is rpm-ostree based'
-    rm -f out.txt
-else
-    echo "Missing ${wrapdir}; cliwrap not enabled"
-fi
 
 # StateRoot is only in --verbose, also verify we're not showing
 # unlocked.

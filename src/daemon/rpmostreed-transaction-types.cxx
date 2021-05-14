@@ -1140,6 +1140,16 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       changed = TRUE;
     }
 
+  // Handle the --ex-cliwrap option
+  {
+    gboolean cliwrap = FALSE;
+    if (g_variant_dict_lookup (self->options, "ex-cliwrap", "b", &cliwrap))
+      {
+        rpmostree_origin_set_cliwrap (origin, cliwrap);
+        changed = TRUE;
+      }
+  }
+
   gboolean remove_changed = FALSE;
   if (no_layering)
     {

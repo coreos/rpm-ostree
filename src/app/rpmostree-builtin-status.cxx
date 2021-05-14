@@ -969,6 +969,10 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         g_string_append (buf, "regenerate");
       rpmostree_print_kv ("Initramfs", max_key_len, buf->str);
     }
+  
+  gboolean cliwrap = FALSE;
+  if (g_variant_dict_lookup (dict, "cliwrap", "b", &cliwrap) && cliwrap)
+    rpmostree_print_kv ("Cliwrap", max_key_len, "enabled");
 
   g_autofree char **initramfs_etc_files = NULL;
   g_variant_dict_lookup (dict, "initramfs-etc", "^a&s", &initramfs_etc_files);

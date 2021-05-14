@@ -941,8 +941,8 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   g_autoptr(RpmOstreeTreespec) treespec = generate_treespec (self);
   if (treespec == NULL)
     return FALSE;
-
   rpmostree_context_set_treespec (self->ctx, treespec);
+
   if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath,
                                 cancellable, error))
     return FALSE;
@@ -1034,10 +1034,14 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
     {
       g_clear_pointer (&self->final_revision, g_free);
 
-      /* --- override/overlay and commit --- */
+      /* --- override/overlay --- */
       if (!rpmostree_context_assemble (self->ctx, cancellable, error))
         return FALSE;
     }
+
+  // TODO Unify with treefile origin handling in core
+  if (rpmostree_origin_get_cliwrap (self->origin))
+    rpmostreecxx::cliwrap_write_wrappers (self->tmprootfs_dfd);
 
   if (!rpmostree_rootfs_postprocess_common (self->tmprootfs_dfd, cancellable, error))
     return FALSE;
@@ -1164,7 +1168,8 @@ requires_local_assembly (RpmOstreeSysrootUpgrader *self)
    * https://github.com/projectatomic/rpm-ostree/issues/753
    */
 
-  return self->overlay_packages->len > 0 ||
+  return rpmostree_origin_get_cliwrap (self->origin) ||
+         self->overlay_packages->len > 0 ||
          self->override_remove_packages->len > 0 ||
          self->override_replace_local_packages->len > 0 ||
          g_hash_table_size (rpmostree_origin_get_local_packages (self->origin)) > 0 ||
