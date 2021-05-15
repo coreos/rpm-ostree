@@ -50,10 +50,16 @@ if dracut --blah 2>out.txt; then
 fi
 assert_file_has_content out.txt 'This system is rpm-ostree based'
 rm -f out.txt
-echo "ok cliwrap"
+echo "ok cliwrap rpm + dracut"
+
+if yum install tmux 2>err.txt; then
+    fatal "yum install worked"
+fi
+assert_file_has_content err.txt "operating system extensions"
+echo "ok cliwrap yum install"
 
 rpm-ostree deploy --ex-cliwrap=false
-rpm-ostree ex apply-live
+rpm-ostree ex apply-live --allow-replacement
 rpm --version
 rpm -qa >/dev/null
 rpm --verify bash >out.txt || true
