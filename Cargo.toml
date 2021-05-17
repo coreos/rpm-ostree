@@ -53,7 +53,7 @@ openat-ext = "^0.2.1"
 os-release = "0.1.0"
 ostree = { version = "0.11.0", features = ["v2021_1"] }
 ostree-sys = "0.7.3"
-ostree-ext = "0.1.0"
+ostree-ext = "0.1.2"
 paste = "1.0"
 phf = { version = "0.8", features = ["macros"] }
 rand = "0.8.3"
