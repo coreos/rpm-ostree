@@ -23,7 +23,6 @@
 #include <optional>
 
 #include "libglnx.h"
-#include "rpmostree-rojig-core.h"
 #include "rpmostree-core.h"
 #include "rpmostree-output.h"
 #include "rpmostree-cxxrs.h"

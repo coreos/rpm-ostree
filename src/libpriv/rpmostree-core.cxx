@@ -35,7 +35,6 @@
 #include <set>
 
 #include "rpmostree-core-private.h"
-#include "rpmostree-rojig-core.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-scripts.h"
@@ -1782,104 +1781,6 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
   return TRUE;
 }
 
-static char *
-parse_provided_checksum (const char *provide_data,
-                         GError **error)
-{
-  if (*provide_data != '(')
-    return (char*)glnx_null_throw (error, "Expected '('");
-  provide_data++;
-  const char *closeparen = strchr (provide_data, ')');
-  if (!closeparen)
-    return (char*)glnx_null_throw (error, "Expected ')'");
-  g_autofree char *ret = g_strndup (provide_data, closeparen - provide_data);
-  if (strlen (ret) != OSTREE_SHA256_STRING_LEN)
-    return (char*)glnx_null_throw (error, "Expected %u characters", OSTREE_SHA256_STRING_LEN);
-  return util::move_nullify (ret);
-}
-
-static gboolean
-setup_rojig_state (RpmOstreeContext *self,
-                   GError          **error)
-{
-  g_assert (self->rojig_spec);
-  g_assert (!self->rojig_pkg);
-  g_assert (!self->rojig_checksum);
-
-  g_autofree char *rojig_repoid = NULL;
-  g_autofree char *rojig_name = NULL;
-
-  { const char *colon = strchr (self->rojig_spec, ':');
-    if (!colon)
-      return glnx_throw (error, "Invalid rojig spec '%s', expected repoid:name", self->rojig_spec);
-    rojig_repoid = g_strndup (self->rojig_spec, colon - self->rojig_spec);
-    rojig_name = g_strdup (colon + 1);
-  }
-
-  const char *rojig_version = NULL;
-  g_variant_dict_lookup (self->spec->dict, "rojig-version", "&s", &rojig_version);
-
-  hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (self->dnfctx));
-  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, rojig_repoid);
-  hy_query_filter (query, HY_PKG_NAME, HY_EQ, rojig_name);
-  if (rojig_version)
-    hy_query_filter (query, HY_PKG_VERSION, HY_EQ, rojig_version);
-
-  g_autoptr(GPtrArray) pkglist = hy_query_run (query);
-  if (pkglist->len == 0)
-    {
-      if (!self->rojig_allow_not_found)
-        return glnx_throw (error, "Failed to find rojig package '%s'", self->rojig_spec);
-      else
-        {
-          /* Here we leave rojig_pkg NULL */
-          return TRUE;
-        }
-    }
-
-  g_ptr_array_sort (pkglist, compare_pkgs);
-  /* We use the last package in the array which should be newest */
-  self->rojig_pkg = static_cast<DnfPackage*>(g_object_ref (pkglist->pdata[pkglist->len-1]));
-
-  /* Iterate over provides directly to provide a nicer error on mismatch */
-  gboolean found_vprovide = FALSE;
-  g_autoptr(DnfReldepList) provides = dnf_package_get_provides (self->rojig_pkg);
-  const gint n_provides = dnf_reldep_list_count (provides);
-  for (int i = 0; i < n_provides; i++)
-    {
-      DnfReldep *provide = dnf_reldep_list_index (provides, i);
-
-      const char *provide_str = dnf_reldep_to_string (provide);
-      if (g_str_equal (provide_str, RPMOSTREE_ROJIG_PROVIDE_V5))
-        {
-          found_vprovide = TRUE;
-        }
-      else if (g_str_has_prefix (provide_str, RPMOSTREE_ROJIG_PROVIDE_COMMIT))
-        {
-          const char *rest = provide_str + strlen (RPMOSTREE_ROJIG_PROVIDE_COMMIT);
-          self->rojig_checksum = parse_provided_checksum (rest, error);
-          if (!self->rojig_checksum)
-            return glnx_prefix_error (error, "Invalid %s", provide_str);
-        }
-      else if (g_str_has_prefix (provide_str, RPMOSTREE_ROJIG_PROVIDE_INPUTHASH))
-        {
-          const char *rest = provide_str + strlen (RPMOSTREE_ROJIG_PROVIDE_INPUTHASH);
-          self->rojig_inputhash = parse_provided_checksum (rest, error);
-          if (!self->rojig_inputhash)
-            return glnx_prefix_error (error, "Invalid %s", provide_str);
-        }
-    }
-
-  if (!found_vprovide)
-    return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                       dnf_package_get_nevra (self->rojig_pkg), RPMOSTREE_ROJIG_PROVIDE_V5);
-  if (!self->rojig_checksum)
-    return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                       dnf_package_get_nevra (self->rojig_pkg), RPMOSTREE_ROJIG_PROVIDE_COMMIT);
-
-  return TRUE;
-}
-
 /* Return all the packages that match lockfile constraints. Multiple packages may be
  * returned per NEVRA so that libsolv can respect e.g. repo costs. */
 static GPtrArray*
@@ -2272,11 +2173,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       }
   }
 
-  if (self->rojig_spec)
-    {
-      if (!setup_rojig_state (self, error))
-        return FALSE;
-    }
+  g_assert (!self->rojig_spec);
 
   if (!self->rojig_pure)
     {

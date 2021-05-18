@@ -66,14 +66,6 @@ librpmostreeinternals_la_SOURCES = \
 	$(librpmostree_1_la_SOURCES) \
 	$(NULL)
 
-if BUILDOPT_ROJIG
-librpmostreeinternals_la_SOURCES += \
-	src/app/rpmostree-ex-builtin-commit2rojig.cxx \
-	src/app/rpmostree-ex-builtin-rojig2commit.cxx \
-	src/app/rpmostree-compose-builtin-rojig.cxx \
-	$(NULL)
-endif
-
 nodist_librpmostreeinternals_la_SOURCES = $(dbus_built_sources) $(nodist_librpmostreepriv_sources)
 
 rpmostree_common_cflags = -I$(srcdir)/src/app -I$(srcdir)/src/daemon \

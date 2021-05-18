@@ -482,51 +482,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
       {
-#ifdef BUILDOPT_ROJIG
-        // Not implemented yet, though we could do a query for the provides
-        if (override_commit)
-          return glnx_throw (error, "Specifying commit overrides for rojig:// is not implemented yet");
-
-        g_autoptr(GKeyFile) tsk = g_key_file_new ();
-        g_key_file_set_string (tsk, "tree", "rojig", refspec);
-        const char *rojig_version = rpmostree_origin_get_rojig_version (self->origin);
-        if (rojig_version)
-          g_key_file_set_string (tsk, "tree", "rojig-version", rojig_version);
-
-        g_autoptr(RpmOstreeTreespec) treespec = rpmostree_treespec_new_from_keyfile (tsk, error);
-        if (!treespec)
-          return FALSE;
-
-        /* This context is currently different from one that may be created later
-         * for e.g. package layering. I can't think why we couldn't unify them,
-         * but for now it seems a lot simpler to keep the symmetry that
-         * rojig == ostree pull.
-         */
-        g_autoptr(RpmOstreeContext) ctx =
-          rpmostree_context_new_client (self->repo);
-
-        /* We use / as a source root mostly so we get $releasever from it so
-         * things work out of the box. That said this is kind of wrong and we'll
-         * really need a way for users to configure a different releasever when
-         * e.g. rebasing across majors.
-         */
-        rpmostree_context_set_treespec (ctx, treespec);
-        if (!rpmostree_context_setup (ctx, NULL, "/", cancellable, error))
-          return FALSE;
-        /* We're also "pure" rojig - this adds assertions that we don't depsolve for example */
-        if (!rpmostree_context_prepare_rojig (ctx, FALSE, cancellable, error))
-          return FALSE;
-        DnfPackage *rojig_pkg = rpmostree_context_get_rojig_pkg (ctx);
-        new_base_rev = g_strdup (rpmostree_context_get_rojig_checksum (ctx));
-        gboolean rojig_changed;  /* Currently unused */
-        if (!rpmostree_context_execute_rojig (ctx, &rojig_changed, cancellable, error))
-          return FALSE;
-
-        if (rojig_changed)
-          rpmostree_origin_set_rojig_description (self->origin, rojig_pkg);
-#else
         return glnx_throw (error, "rojig is not supported in this build of rpm-ostree");
-#endif
       }
     }
 

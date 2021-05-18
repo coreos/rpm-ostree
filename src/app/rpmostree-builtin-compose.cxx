@@ -44,11 +44,6 @@ static RpmOstreeCommand compose_subcommands[] = {
   { "extensions", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Download RPM packages guaranteed to depsolve with a base OSTree",
     rpmostree_compose_builtin_extensions },
-#ifdef BUILDOPT_ROJIG
-  { "rojig", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
-    "EXPERIMENTAL: Build a rojig RPM from a treefile, output to a local rpm-md repo",
-    rpmostree_compose_builtin_rojig },
-#endif
   { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 

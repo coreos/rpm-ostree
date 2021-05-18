@@ -42,7 +42,6 @@
 #include "rpmostree-composeutil.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
-#include "rpmostree-rojig-build.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-package-variants.h"
 #include "rpmostree-libbuiltin.h"
