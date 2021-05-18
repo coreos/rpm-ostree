@@ -532,18 +532,6 @@ ensure_directories_user_writable (GFileInfo *file_info)
     }
 }
 
-static gboolean
-path_for_tmpfiles_should_be_ignored (const char *path)
-{
-  /* HACK: Avoid generating tmpfiles.d entries for the `rpm` package's
-   * /var/lib/rpm entries in --unified-core composes.  A much more
-   * rigorous approach here would be to maintain our built-in tmpfiles.d
-   * entries as a struct and ensure we're not writing any overrides for
-   * those here.
-   */
-  return g_str_has_prefix (path, "/var/lib/rpm");
-}
-
 /* systemd-tmpfiles complains loudly about writing to /var/run; ideally,
  * all of the packages get fixed for this but...eh.
  */
@@ -565,9 +553,6 @@ append_tmpfiles_d (RpmOstreeImporter *self,
                    const char *user,
                    const char *group)
 {
-  if (path_for_tmpfiles_should_be_ignored (path))
-    return;
-
   GString *tmpfiles_d = self->tmpfiles_d;
   const guint32 mode = g_file_info_get_attribute_uint32 (finfo, "unix::mode");
   char filetype_c;
@@ -632,6 +617,12 @@ compose_filter_cb (OstreeRepo         *repo,
   if (self->doc_files && g_hash_table_contains (self->doc_files, path))
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
+  /* HACK: special-case rpm's `/var/lib/rpm`, otherwise libsolv can get confused.
+   * See https://github.com/projectatomic/rpm-ostree/pull/290
+   */
+  if (g_str_has_prefix (path, "/var/lib/rpm"))
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
+
   /* Lookup any rpmfi overrides (was parsed from the header) */
   get_rpmfi_override (self, path, &user, &group, NULL);
 
@@ -675,17 +666,8 @@ compose_filter_cb (OstreeRepo         *repo,
   else if (g_str_has_prefix (path, "/run/") ||
            g_str_has_prefix (path, "/var/"))
     {
-      /* HACK: Avoid generating tmpfiles.d entries for the `rpm` package's
-       * /var/lib/rpm entries in --unified-core composes.  A much more
-       * rigorous approach here would be to maintain our built-in tmpfiles.d
-       * entries as a struct and ensure we're not writing any overrides for
-       * those here.
-       */
-      if (!g_str_has_prefix (path, "/var/lib/rpm"))
-        {
-          append_tmpfiles_d (self, path, file_info,
-                             user ?: "root", group ?: "root");
-        }
+      append_tmpfiles_d (self, path, file_info,
+                         user ?: "root", group ?: "root");
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
   else if (!error_was_set)
@@ -738,6 +720,12 @@ unprivileged_filter_cb (OstreeRepo         *repo,
   if (self->doc_files && g_hash_table_contains (self->doc_files, path))
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
+  /* HACK: special-case rpm's `/var/lib/rpm`, otherwise libsolv can get confused.
+   * See https://github.com/projectatomic/rpm-ostree/pull/290
+   */
+  if (g_str_has_prefix (path, "/var/lib/rpm"))
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
+
   /* First, the common directory workaround */
   ensure_directories_user_writable (file_info);
 
@@ -752,12 +740,6 @@ unprivileged_filter_cb (OstreeRepo         *repo,
       mode |= S_IRUSR;
       g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
     }
-
-  /* HACK: Also special-case rpm's `/var/lib/rpm` here like in the privileged flow;
-   * otherwise libsolv can get confused (see
-   * https://github.com/projectatomic/rpm-ostree/pull/290) */
-  if (g_str_has_prefix (path, "/var/lib/rpm"))
-    return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
@@ -779,6 +761,12 @@ rojig_filter_cb (OstreeRepo         *repo,
   /* Sanity check that path is absolute */
   g_assert (path != NULL);
   g_assert (*path == '/');
+
+  /* HACK: special-case rpm's `/var/lib/rpm`, otherwise libsolv can get confused.
+   * See https://github.com/projectatomic/rpm-ostree/pull/290
+   */
+  if (g_str_has_prefix (path, "/var/lib/rpm"))
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
   self->n_rojig_total++;
 
