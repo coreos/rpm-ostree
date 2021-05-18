@@ -39,6 +39,7 @@ pub mod ffi {
         type GObject = crate::FFIGObject;
         type GCancellable = crate::FFIGCancellable;
         type GDBusConnection = crate::FFIGDBusConnection;
+        type GFileInfo = crate::FFIGFileInfo;
         type GVariant = crate::FFIGVariant;
         type GVariantDict = crate::FFIGVariantDict;
         type GKeyFile = crate::FFIGKeyFile;
@@ -202,6 +203,7 @@ pub mod ffi {
     extern "Rust" {
         fn path_is_in_opt(path: &str) -> bool;
         fn path_is_ostree_compliant(path: &str) -> bool;
+        fn tweak_imported_file_info(mut file_info: Pin<&mut GFileInfo>, ro_executables: bool);
     }
 
     // initramfs.rs

@@ -6,6 +6,39 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use crate::cxxrsutil::FFIGObjectWrapper;
+use gio::FileType;
+use std::pin::Pin;
+
+/// Adjust mode for specific file entries.
+pub fn tweak_imported_file_info(
+    mut file_info: Pin<&mut crate::FFIGFileInfo>,
+    ro_executables: bool,
+) {
+    let file_info = file_info.gobj_wrap();
+    let filetype = file_info.get_file_type();
+
+    // Add the "user writable" permission bit for a directory.
+    // See this bug:
+    // https://bugzilla.redhat.com/show_bug.cgi?id=517575
+    if filetype == FileType::Directory {
+        let mut mode = file_info.get_attribute_uint32("unix::mode");
+        mode |= libc::S_IWUSR;
+        file_info.set_attribute_uint32("unix::mode", mode);
+    }
+
+    // Ensure executable files are not writable.
+    // See similar code in `ostree commit`:
+    // https://github.com/ostreedev/ostree/pull/2091/commits/7392259332e00c33ed45b904deabde08f4da3e3c
+    if ro_executables && filetype == FileType::Regular {
+        let mut mode = file_info.get_attribute_uint32("unix::mode");
+        if (mode & (libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH)) != 0 {
+            mode &= !(libc::S_IWUSR | libc::S_IWGRP | libc::S_IWOTH);
+            file_info.set_attribute_uint32("unix::mode", mode);
+        }
+    }
+}
+
 /// Whether absolute `path` is allowed in OSTree content.
 ///
 /// When we do a unified core, we'll likely need to add /boot to pick up
