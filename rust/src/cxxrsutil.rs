@@ -101,7 +101,7 @@ cxxrs_bind!(
     [Deployment, Repo, RepoTransactionStats, Sysroot]
 );
 cxxrs_bind!(G, glib, gobject_sys, [Object]);
-cxxrs_bind!(G, gio, gio_sys, [Cancellable, DBusConnection]);
+cxxrs_bind!(G, gio, gio_sys, [Cancellable, DBusConnection, FileInfo]);
 cxxrs_bind!(G, glib, glib_sys, [KeyFile, Variant, VariantDict]);
 
 // An error type helper; separate from the GObject bridging
