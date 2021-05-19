@@ -50,7 +50,7 @@
 
 static OstreeRepo * get_pkgcache_repo (RpmOstreeContext *self);
 
-/* Given a string, look for ostree:// or rojig:// prefix and
+/* Given a string, look for ostree:// prefix and
  * return its type and the remainder of the string.  Note
  * that ostree:// can be either a refspec (TYPE_OSTREE) or
  * a bare commit (TYPE_COMMIT).
@@ -61,13 +61,6 @@ rpmostree_refspec_classify (const char *refspec,
                             const char **out_remainder,
                             GError     **error)
 {
-  if (g_str_has_prefix (refspec, RPMOSTREE_REFSPEC_ROJIG_PREFIX))
-    {
-      *out_type = RPMOSTREE_REFSPEC_TYPE_ROJIG;
-      if (out_remainder)
-        *out_remainder = refspec + strlen (RPMOSTREE_REFSPEC_ROJIG_PREFIX);
-      return TRUE;
-    }
   /* Add any other prefixes here */
 
   /* For compatibility, fall back to ostree:// when we have no prefix. */
@@ -225,16 +218,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
 
-#define BIND_STRING(k)                                                  \
-  { g_autofree char *v = g_key_file_get_string (keyfile, "tree", k, NULL); \
-    if (v)                                                              \
-      g_variant_builder_add (&builder, "{sv}", k, g_variant_new_string (v)); \
-  }
-
-  BIND_STRING("rojig");
-  BIND_STRING("rojig-version");
-#undef BIND_STRING
-
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "exclude-packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "cached-packages", NULL, keyfile);
@@ -302,10 +285,6 @@ rpmostree_context_finalize (GObject *object)
   g_clear_object (&rctx->dnfctx);
 
   g_clear_pointer (&rctx->ref, g_free);
-
-  g_clear_object (&rctx->rojig_pkg);
-  g_free (rctx->rojig_checksum);
-  g_free (rctx->rojig_inputhash);
 
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
@@ -801,11 +780,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
         return glnx_throw (error, "No enabled repositories");
     }
 
-  /* Keep a handy pointer to the rojig source if specified, since it influences
-   * a lot of things here.
-   */
-  g_variant_dict_lookup (self->spec->dict, "rojig", "&s", &self->rojig_spec);
-
   /* Ensure that each repo that's enabled is marked as required; this should be
    * the default, but we make sure.  This is a bit of a messy topic, but for
    * rpm-ostree we're being more strict about requiring repos.
@@ -1062,8 +1036,6 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
   /* https://github.com/rpm-software-management/libdnf/pull/416
    * https://github.com/projectatomic/rpm-ostree/issues/1127
    */
-  if (self->rojig_pure)
-    flags = static_cast<DnfContextSetupSackFlags>(static_cast<int>(flags) | DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS);
   if (flags & DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS)
     dnf_context_set_enable_filelists (self->dnfctx, FALSE);
 
@@ -1348,8 +1320,7 @@ find_pkg_in_ostree (RpmOstreeContext *self,
   if (repo == NULL)
     return TRUE; /* Note early return */
 
-  g_autofree char *cachebranch = self->rojig_spec ?
-      rpmostree_get_rojig_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
+  g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *cached_rev = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
                                 &cached_rev, error))
@@ -1925,18 +1896,10 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   dnf_sack_set_installonly (sack, NULL);
   dnf_sack_set_installonly_limit (sack, 0);
 
-  if (self->rojig_pure)
-    {
-      g_assert_cmpint (g_strv_length (pkgnames), ==, 0);
-      g_assert_cmpint (g_strv_length (cached_pkgnames), ==, 0);
-      g_assert_cmpint (g_strv_length (cached_replace_pkgs), ==, 0);
-      g_assert_cmpint (g_strv_length (removed_base_pkgnames), ==, 0);
-    }
 
   if (self->lockfile)
     {
       /* we only support pure installs for now (compose case) */
-      g_assert (!self->rojig_pure);
       g_assert_cmpint (g_strv_length (cached_pkgnames), ==, 0);
       g_assert_cmpint (g_strv_length (cached_replace_pkgs), ==, 0);
       g_assert_cmpint (g_strv_length (removed_base_pkgnames), ==, 0);
@@ -1955,8 +1918,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_autofree char *sha256 = NULL;
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
-
-      g_assert (!self->rojig_pure);
 
       g_autoptr(DnfPackage) pkg = NULL;
       if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
@@ -1979,8 +1940,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_autofree char *sha256 = NULL;
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
-
-      g_assert (!self->rojig_pure);
 
       g_autoptr(DnfPackage) pkg = NULL;
       if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
@@ -2090,7 +2049,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   for (char **it = removed_base_pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
-      g_assert (!self->rojig_pure);
       if (!dnf_context_remove (dnfctx, pkgname, error))
         return FALSE;
 
@@ -2135,7 +2093,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
-      g_assert (!self->rojig_pure);
       g_autoptr(GError) local_error = NULL;
       if (!dnf_context_install (dnfctx, pkgname, &local_error))
         {
@@ -2173,51 +2130,23 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       }
   }
 
-  g_assert (!self->rojig_spec);
-
-  if (!self->rojig_pure)
-    {
-      auto actions = static_cast<DnfGoalActions>(DNF_INSTALL | DNF_ALLOW_UNINSTALL);
-
-      if (self->treefile_rs && !self->treefile_rs->get_recommends())
-        actions = static_cast<DnfGoalActions>(static_cast<int>(actions) | DNF_IGNORE_WEAK_DEPS);
-
-      auto task = rpmostreecxx::progress_begin_task("Resolving dependencies");
-
-      /* XXX: consider a --allow-uninstall switch? */
-      if (!dnf_goal_depsolve (goal, actions, error) ||
-          !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
-        return FALSE;
-      g_clear_pointer (&self->pkgs, (GDestroyNotify)g_ptr_array_unref);
-      self->pkgs = dnf_goal_get_packages (goal,
-                                          DNF_PACKAGE_INFO_INSTALL,
-                                          DNF_PACKAGE_INFO_UPDATE,
-                                          DNF_PACKAGE_INFO_DOWNGRADE, -1);
-      if (!sort_packages (self, self->pkgs, cancellable, error))
-        return glnx_prefix_error (error, "Sorting packages");
-    }
+  auto actions = static_cast<DnfGoalActions>(DNF_INSTALL | DNF_ALLOW_UNINSTALL);
+  if (self->treefile_rs && !self->treefile_rs->get_recommends())
+    actions = static_cast<DnfGoalActions>(static_cast<int>(actions) | DNF_IGNORE_WEAK_DEPS);
+  auto task = rpmostreecxx::progress_begin_task("Resolving dependencies");
+  /* XXX: consider a --allow-uninstall switch? */
+  if (!dnf_goal_depsolve (goal, actions, error) ||
+      !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
+    return FALSE;
+  g_clear_pointer (&self->pkgs, (GDestroyNotify)g_ptr_array_unref);
+  self->pkgs = dnf_goal_get_packages (goal,
+                                      DNF_PACKAGE_INFO_INSTALL,
+                                      DNF_PACKAGE_INFO_UPDATE,
+                                      DNF_PACKAGE_INFO_DOWNGRADE, -1);
+  if (!sort_packages (self, self->pkgs, cancellable, error))
+    return glnx_prefix_error (error, "Sorting packages");
 
   return TRUE;
-}
-
-/* Call this to ensure we don't do any "package stuff" like
- * depsolving - we're in "pure rojig" mode.  If specified
- * this obviously means there are no layered packages for
- * example.
- */
-gboolean
-rpmostree_context_prepare_rojig (RpmOstreeContext *self,
-                                 gboolean          allow_not_found,
-                                 GCancellable     *cancellable,
-                                 GError          **error)
-{
-  self->rojig_pure = TRUE;
-  /* Override the default policy load; rojig handles xattrs
-   * internally.
-   */
-  rpmostree_context_set_sepolicy (self, NULL);
-  self->rojig_allow_not_found = allow_not_found;
-  return rpmostree_context_prepare (self, cancellable, error);
 }
 
 /* Must have invoked rpmostree_context_prepare().
@@ -2455,30 +2384,6 @@ rpmostree_context_download (RpmOstreeContext *self,
   return rpmostree_download_packages (self->pkgs_to_download, cancellable, error);
 }
 
-/* Returns: (transfer none): The rojig package */
-DnfPackage *
-rpmostree_context_get_rojig_pkg (RpmOstreeContext  *self)
-{
-  g_assert (self->rojig_spec);
-  return self->rojig_pkg;
-}
-
-/* Returns: (transfer none): The rojig checksum */
-const char *
-rpmostree_context_get_rojig_checksum (RpmOstreeContext  *self)
-{
-  g_assert (self->rojig_spec);
-  return self->rojig_checksum;
-}
-
-/* Returns: (transfer none): The rojig inputhash (checksum of build-time inputs) */
-const char *
-rpmostree_context_get_rojig_inputhash (RpmOstreeContext  *self)
-{
-  g_assert (self->rojig_spec);
-  return self->rojig_inputhash;
-}
-
 static gboolean
 async_imports_mainctx_iter (gpointer user_data);
 
@@ -2514,14 +2419,6 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
                                 GCancellable *cancellable,
                                 GError **error)
 {
-  GVariant *rojig_xattrs = NULL;
-  if (self->rojig_pkg_to_xattrs)
-    {
-      rojig_xattrs = static_cast<GVariant*>(g_hash_table_lookup (self->rojig_pkg_to_xattrs, pkg));
-      if (!rojig_xattrs)
-        g_error ("Failed to find rojig xattrs for %s", dnf_package_get_nevra (pkg));
-    }
-
   glnx_fd_close int fd = -1;
   if (!rpmostree_context_consume_package (self, pkg, &fd, error))
     return FALSE;
@@ -2550,11 +2447,6 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
                                     self->sepolicy, error);
   if (!unpacker)
     return glnx_prefix_error (error, "creating importer");
-
-  if (rojig_xattrs)
-    {
-      g_assert (!self->sepolicy);
-    }
 
   rpmostree_importer_run_async (unpacker, cancellable, on_async_import_done, self);
 
@@ -2594,11 +2486,9 @@ async_imports_mainctx_iter (gpointer user_data)
 }
 
 gboolean
-rpmostree_context_import_rojig (RpmOstreeContext *self,
-                                GVariant         *rojig_xattr_table,
-                                GHashTable       *rojig_pkg_to_xattrs,
-                                GCancellable     *cancellable,
-                                GError          **error)
+rpmostree_context_import (RpmOstreeContext *self,
+                          GCancellable     *cancellable,
+                          GError          **error)
 {
   DnfContext *dnfctx = self->dnfctx;
   const int n = self->pkgs_to_import->len;
@@ -2616,8 +2506,6 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
   if (!rpmostree_repo_auto_transaction_start (&txn, repo, TRUE, cancellable, error))
     return FALSE;
 
-  self->rojig_xattr_table = rojig_xattr_table;
-  self->rojig_pkg_to_xattrs = rojig_pkg_to_xattrs;
   self->async_running = TRUE;
   self->async_index = 0;
   self->n_async_running = 0;
@@ -2657,14 +2545,6 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
                    "IMPORTED_N_PKGS=%u", n, NULL);
 
   return TRUE;
-}
-
-gboolean
-rpmostree_context_import (RpmOstreeContext *self,
-                          GCancellable     *cancellable,
-                          GError          **error)
-{
-  return rpmostree_context_import_rojig (self, NULL, NULL, cancellable, error);
 }
 
 /* Given a single package, verify its GPG signature (if enabled), open a file
@@ -3838,8 +3718,6 @@ run_all_transfiletriggers (RpmOstreeContext *self,
                            GCancellable *cancellable,
                            GError      **error)
 {
-  g_assert (!self->rojig_pure);
-
   /* Triggers from base packages, but only if we already have an rpmdb,
    * otherwise librpm will whine on our stderr.
    */

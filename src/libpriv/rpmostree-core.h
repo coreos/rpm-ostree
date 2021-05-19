@@ -162,11 +162,6 @@ gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
 gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
                                     GCancellable   *cancellable,
                                     GError        **error);
-/* Like above, but used for "pure rojig" cases */
-gboolean rpmostree_context_prepare_rojig (RpmOstreeContext     *self,
-                                          gboolean              allow_not_found,
-                                          GCancellable         *cancellable,
-                                          GError              **error);
 
 GPtrArray *rpmostree_context_get_packages (RpmOstreeContext *self);
 
@@ -194,30 +189,15 @@ gboolean rpmostree_context_download (RpmOstreeContext *self,
 void rpmostree_set_repos_on_packages (DnfContext *dnfctx,
                                       GPtrArray  *packages);
 
-gboolean rpmostree_context_execute_rojig (RpmOstreeContext     *self,
-                                          gboolean             *out_changed,
-                                          GCancellable         *cancellable,
-                                          GError              **error);
-
 gboolean
 rpmostree_context_consume_package (RpmOstreeContext  *self,
                                    DnfPackage        *package,
                                    int               *out_fd,
                                    GError           **error);
 
-DnfPackage *rpmostree_context_get_rojig_pkg (RpmOstreeContext  *self);
-const char *rpmostree_context_get_rojig_checksum (RpmOstreeContext  *self);
-const char *rpmostree_context_get_rojig_inputhash (RpmOstreeContext  *self);
-
 gboolean rpmostree_context_import (RpmOstreeContext *self,
                                    GCancellable     *cancellable,
                                    GError          **error);
-
-gboolean rpmostree_context_import_rojig (RpmOstreeContext *self,
-                                         GVariant         *xattr_table,
-                                         GHashTable       *pkg_to_xattrs,
-                                         GCancellable     *cancellable,
-                                         GError          **error);
 
 gboolean rpmostree_context_force_relabel (RpmOstreeContext *self,
                                           GCancellable     *cancellable,
