@@ -152,6 +152,11 @@ rpmostree_origin_set_rojig_version (RpmOstreeOrigin *origin,
                                     const char      *version);
 
 gboolean
+rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin);
+void
+rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap);
+
+gboolean
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,
                              GError         **error);

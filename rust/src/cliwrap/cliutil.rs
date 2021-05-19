@@ -96,6 +96,7 @@ pub fn run_unprivileged<T: AsRef<str>>(
         proc.args(setpriv_argv);
         proc.arg(real_bin);
         proc.args(argv);
+        proc.current_dir("/");
         Err(proc.exec().into())
     } else {
         exec_real_binary(target_bin, &argv)

@@ -352,7 +352,9 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
 gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
-  return rpmostree_origin_get_regenerate_initramfs (origin) ||
+  return 
+        rpmostree_origin_get_cliwrap (origin) || 
+        rpmostree_origin_get_regenerate_initramfs (origin) ||
         (g_hash_table_size (origin->cached_initramfs_etc_files) > 0) ||
         (g_hash_table_size (origin->cached_packages) > 0) ||
         (g_hash_table_size (origin->cached_local_packages) > 0) ||
@@ -527,6 +529,23 @@ rpmostree_origin_set_rojig_version (RpmOstreeOrigin *origin,
     g_key_file_remove_key (origin->kf, "origin", "rojig-override-version", NULL);
   g_free (origin->cached_rojig_version);
   origin->cached_rojig_version = g_strdup (version);
+}
+
+gboolean
+rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin)
+{
+  return g_key_file_get_boolean (origin->kf, "rpmostree", "ex-cliwrap", NULL);
+}
+
+void
+rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
+{
+  const char k[] = "rpmostree";
+  const char v[] = "ex-cliwrap";
+  if (cliwrap)
+    g_key_file_set_boolean (origin->kf, k, v, TRUE);
+  else
+    g_key_file_remove_key (origin->kf, k, v, NULL);
 }
 
 /* The rojigRPM is highly special; it doesn't live in the rpmdb for example, as

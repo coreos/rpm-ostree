@@ -91,7 +91,6 @@ rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self);
 void
 rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
                                        RpmOstreeOrigin *origin);
-
 const char *
 rpmostree_sysroot_upgrader_get_base (RpmOstreeSysrootUpgrader *self);
 

@@ -38,6 +38,7 @@ static gboolean opt_disallow_downgrade;
 static gboolean opt_unchanged_exit_77;
 static gboolean opt_bypass_driver;
 static gboolean opt_skip_branch_check;
+static char *opt_ex_cliwrap;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -55,6 +56,7 @@ static GOptionEntry option_entries[] = {
   { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no new deployment made, exit 77", NULL },
   { "register-driver", 0, 0, G_OPTION_ARG_STRING, &opt_register_driver, "Register the calling agent as the driver for updates; if REVISION is an empty string, register driver without deploying", "DRIVERNAME" },
   { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver, "Force a deploy even if an updates driver is registered", NULL},
+  { "ex-cliwrap", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_ex_cliwrap, "Enable or disable wrapping binaries like /usr/bin/rpm", NULL},
   { NULL }
 };
 
@@ -89,7 +91,11 @@ rpmostree_builtin_deploy (int            argc,
                                        error))
     return FALSE;
 
-  if (argc < 2)
+  const gboolean arg_specified = argc >= 2;
+  // If using --ex-cliwrap or --register-driver, we don't usually
+  // expect them to be performing another operation.
+  const gboolean arg_required = !(opt_ex_cliwrap || opt_register_driver);
+  if (!arg_specified && arg_required)
     {
       rpmostree_usage_error (context, "REVISION must be specified", error);
       return FALSE;
@@ -102,7 +108,10 @@ rpmostree_builtin_deploy (int            argc,
       return FALSE;
     }
 
-  revision = argv[1];
+  if (arg_specified)
+    revision = argv[1];
+  else
+    revision = NULL;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
@@ -132,6 +141,12 @@ rpmostree_builtin_deploy (int            argc,
       g_variant_dict_init (&dict, NULL);
       g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
       g_variant_dict_insert (&dict, "allow-downgrade", "b", !opt_disallow_downgrade);
+      /* If we're not specifying a revision, then don't touch the network */
+      if (revision == NULL)
+        {
+          opt_cache_only = TRUE;
+          g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
+        }
       g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
       g_variant_dict_insert (&dict, "skip-branch-check", "b", opt_skip_branch_check);
@@ -139,10 +154,19 @@ rpmostree_builtin_deploy (int            argc,
       g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
       if (opt_register_driver)
         g_variant_dict_insert (&dict, "register-driver", "s", opt_register_driver);
+      if (opt_ex_cliwrap)
+        {
+          gboolean cliwrap_enabled = FALSE;
+          if (g_str_equal (opt_ex_cliwrap, "true"))
+            cliwrap_enabled = TRUE;
+          else if (!g_str_equal (opt_ex_cliwrap, "false"))
+            return glnx_throw (error, "Expecting --ex-cli-wrap=true/false but found %s", opt_ex_cliwrap);
+          g_variant_dict_insert (&dict, "ex-cliwrap", "b", cliwrap_enabled);
+        }
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to so we maintain coverage. */
-      if (install_pkgs || uninstall_pkgs)
+      if (install_pkgs || uninstall_pkgs || opt_ex_cliwrap)
         {
           if (!rpmostree_update_deployment (os_proxy,
                                             NULL, /* refspec */

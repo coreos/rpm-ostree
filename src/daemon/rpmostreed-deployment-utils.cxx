@@ -370,6 +370,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   variant_add_from_hash_table (dict, "initramfs-etc",
                                rpmostree_origin_get_initramfs_etc_files (origin));
+  if (rpmostree_origin_get_cliwrap (origin))
+    g_variant_dict_insert (dict, "cliwrap", "b", TRUE);
 
   return g_variant_dict_end (dict);
 }

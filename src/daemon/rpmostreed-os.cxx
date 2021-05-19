@@ -211,6 +211,11 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
           (override_replace_local_pkgs != NULL && g_variant_n_children (override_replace_local_pkgs) > 0) ||
           no_overrides)
         g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.override");
+      /* If we couldn't figure out what's going on, count it as an override.  This occurs
+       * right now with `deploy --ex-cliwrap=true`.
+       */
+      if (actions->len == 0)
+        g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.override");
     }
   else if (g_strcmp0 (method_name, "FinalizeDeployment") == 0)
     {
