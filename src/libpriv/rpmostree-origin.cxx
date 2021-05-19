@@ -187,23 +187,13 @@ rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
   return origin->cached_refspec;
 }
 
-/* For rojig:// refspecs, includes the prefix. */
 char *
 rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
                                    RpmOstreeRefspecType *out_refspectype)
 {
   if (out_refspectype)
     *out_refspectype = origin->refspec_type;
-  switch (origin->refspec_type)
-    {
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-      return g_strdup (origin->cached_refspec);
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      return g_strconcat (RPMOSTREE_REFSPEC_ROJIG_PREFIX, origin->cached_refspec, NULL);
-    }
-  g_assert_not_reached ();
-  return NULL;
+  return g_strdup (origin->cached_refspec);
 }
 
 void
@@ -530,9 +520,6 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
           }
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      g_assert_not_reached ();
-      break;
     }
 
   return TRUE;
@@ -589,11 +576,6 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
             g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
             break;
           }
-        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-          /* Nothing to switch, since libostree already doesn't know how to
-           * handle rojig.
-           */
-          break;
         }
     }
 }

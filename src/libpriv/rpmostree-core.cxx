@@ -90,9 +90,6 @@ rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
       prefix = RPMOSTREE_REFSPEC_OSTREE_PREFIX;
       break;
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      prefix = RPMOSTREE_REFSPEC_ROJIG_PREFIX;
-      break;
     }
   g_assert (prefix);
   return g_strconcat (prefix, data, NULL);
@@ -2156,23 +2153,6 @@ GPtrArray *
 rpmostree_context_get_packages (RpmOstreeContext *self)
 {
   return g_ptr_array_ref (self->pkgs);
-}
-
-/* Rather than doing a depsolve, directly set which packages
- * are required.  Will be used by rojig.
- */
-gboolean
-rpmostree_context_set_packages (RpmOstreeContext *self,
-                                GPtrArray        *packages,
-                                GCancellable     *cancellable,
-                                GError          **error)
-{
-  g_clear_pointer (&self->pkgs_to_download, (GDestroyNotify)g_ptr_array_unref);
-  g_clear_pointer (&self->pkgs_to_import, (GDestroyNotify)g_ptr_array_unref);
-  self->n_async_pkgs_imported = 0;
-  g_clear_pointer (&self->pkgs_to_relabel, (GDestroyNotify)g_ptr_array_unref);
-  self->n_async_pkgs_relabeled = 0;
-  return sort_packages (self, packages, cancellable, error);
 }
 
 /* Returns a reference to the set of packages that will be imported */

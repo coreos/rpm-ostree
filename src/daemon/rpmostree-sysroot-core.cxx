@@ -109,7 +109,6 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
  */
 static gboolean
 add_package_refs_to_set (RpmOstreeRefSack *rsack,
-                         gboolean          is_rojig,
                          GHashTable *referenced_pkgs,
                          GCancellable *cancellable,
                          GError **error)
@@ -183,7 +182,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
           if (rsack == NULL)
             return FALSE;
 
-          if (!add_package_refs_to_set (rsack, FALSE, referenced_pkgs, cancellable, error))
+          if (!add_package_refs_to_set (rsack, referenced_pkgs, cancellable, error))
             return glnx_prefix_error (error, "Deployment index=%d", i);
         }
 
@@ -203,20 +202,6 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
   GLNX_HASH_TABLE_FOREACH (pkg_refs, const char*, ref)
-    {
-      if (g_hash_table_contains (referenced_pkgs, ref))
-        continue;
-
-      ostree_repo_transaction_set_ref (repo, NULL, ref, NULL);
-      n_freed++;
-    }
-
-  /* Loop over rojig refs */
-  g_autoptr(GHashTable) rojig_refs = NULL;
-  if (!ostree_repo_list_refs_ext (repo, "rpmostree/rojig", &rojig_refs,
-                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
-    return FALSE;
-  GLNX_HASH_TABLE_FOREACH (rojig_refs, const char*, ref)
     {
       if (g_hash_table_contains (referenced_pkgs, ref))
         continue;

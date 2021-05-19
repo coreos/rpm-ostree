@@ -15,7 +15,6 @@ use std::result::Result as StdResult;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-const ROJIG_PREFIX: &str = "rojig://";
 const ORIGIN: &str = "origin";
 const OVERRIDE_COMMIT: &str = "override-commit";
 
@@ -23,7 +22,6 @@ const OVERRIDE_COMMIT: &str = "override-commit";
 pub(crate) enum RefspecType {
     Checksum,
     Ostree,
-    Rojig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -224,11 +222,7 @@ impl Origin {
     }
 
     pub(crate) fn get_prefixed_refspec(&self) -> String {
-        let val = self.cache.refspec.value.as_str();
-        match self.cache.refspec.kind {
-            RefspecType::Rojig => format!("{}{}", ROJIG_PREFIX, val),
-            _ => val.to_string(),
-        }
+        self.cache.refspec.value.as_str().to_string()
     }
 
     pub(crate) fn get_custom_url(&self) -> Result<String> {

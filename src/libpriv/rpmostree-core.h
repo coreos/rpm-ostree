@@ -59,17 +59,13 @@ G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, G
 #define RPMOSTREE_TYPE_TREESPEC (rpmostree_treespec_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeTreespec, rpmostree_treespec, RPMOSTREE, TREESPEC, GObject)
 
-/* Now in the code we handle "refspec" types of rojig (rpm-ostree jigdo),
- * in addition to ostree.
- */
+
 typedef enum {
   RPMOSTREE_REFSPEC_TYPE_OSTREE,
-  RPMOSTREE_REFSPEC_TYPE_ROJIG,
   RPMOSTREE_REFSPEC_TYPE_CHECKSUM,
 } RpmOstreeRefspecType;
 
 #define RPMOSTREE_REFSPEC_OSTREE_PREFIX "ostree://"
-#define RPMOSTREE_REFSPEC_ROJIG_PREFIX "rojig://"
 
 gboolean rpmostree_refspec_classify (const char *refspec,
                                      RpmOstreeRefspecType *out_type,
@@ -164,12 +160,6 @@ gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
                                     GError        **error);
 
 GPtrArray *rpmostree_context_get_packages (RpmOstreeContext *self);
-
-/* Alternative to _prepare() for non-depsolve cases like rojig */
-gboolean rpmostree_context_set_packages (RpmOstreeContext *self,
-                                         GPtrArray        *packages,
-                                         GCancellable     *cancellable,
-                                         GError          **error);
 
 GPtrArray *rpmostree_context_get_packages_to_import (RpmOstreeContext *self);
 

@@ -52,7 +52,7 @@
  * The #RpmOstreeSysrootUpgrader class models a `baserefspec` OSTree branch
  * in an origin file, along with a set of layered RPM packages.
  *
- * It also supports the plain-ostree "refspec" model, as well as rojig://.
+ * It also supports the plain-ostree "refspec" model.
  */
 typedef struct {
   GObjectClass parent_class;
@@ -480,10 +480,6 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
           }
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      {
-        return glnx_throw (error, "rojig is not supported in this build of rpm-ostree");
-      }
     }
 
   gboolean changed = !g_str_equal (new_base_rev, self->base_revision);
