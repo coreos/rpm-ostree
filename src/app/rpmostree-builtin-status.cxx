@@ -653,31 +653,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
           }
           break;
         case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-          {
-            g_autoptr(GVariant) rojig_description = NULL;
-            g_variant_dict_lookup (dict, "rojig-description", "@a{sv}", &rojig_description);
-            if (rojig_description)
-              {
-                g_autoptr(GVariantDict) dict = g_variant_dict_new (rojig_description);
-                const char *repo = NULL;
-                g_variant_dict_lookup (dict, "repo", "&s", &repo);
-                const char *name = NULL;
-                g_variant_dict_lookup (dict, "name", "&s", &name);
-                const char *evr = NULL;
-                g_variant_dict_lookup (dict, "evr", "&s", &evr);
-                const char *arch = NULL;
-                g_variant_dict_lookup (dict, "arch", "&s", &arch);
-                g_assert (repo && name);
-                g_print ("%s:%s", repo, name);
-                if (evr && arch)
-                  g_print ("-%s.%s", evr, arch);
-              }
-            else
-              {
-                g_print ("%s", canonrefspec);
-              }
-          }
-          break;
+          g_assert_not_reached ();
         }
     }
   else

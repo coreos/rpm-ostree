@@ -319,9 +319,6 @@ It supports the following parameters:
 All options listed here are subject to change or removal in a future
 version of `rpm-ostree`.
 
- * `rojig`: Object, optional.  Sub-keys are `name`, `summary`, `license`,
-   and `description`.  Of those, `name` and `license` are mandatory.
-
  * `lockfile-repos`: array of strings, optional: Semantically similar to
    `repo`, but these repos will only be used to fetch packages locked
    via lockfiles. This is useful when locked packages are kept

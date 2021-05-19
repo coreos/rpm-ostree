@@ -54,14 +54,3 @@ librpmostreepriv_sources = \
 	src/libpriv/rpmostree-libarchive-input-stream.cxx \
 	src/libpriv/rpmostree-libarchive-input-stream.h \
 	$(NULL)
-
-if BUILDOPT_ROJIG
-librpmostreepriv_sources += \
-	src/libpriv/rpmostree-rojig-build.cxx \
-	src/libpriv/rpmostree-rojig-build.h \
-	src/libpriv/rpmostree-rojig-assembler.cxx \
-	src/libpriv/rpmostree-rojig-assembler.h \
-	src/libpriv/rpmostree-rojig-core.h \
-	src/libpriv/rpmostree-rojig-client.cxx \
-	$(NULL)
-endif

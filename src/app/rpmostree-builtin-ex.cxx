@@ -29,12 +29,6 @@ static RpmOstreeCommand ex_subcommands[] = {
   { "apply-live", (RpmOstreeBuiltinFlags)0,
     "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_apply_live },
-#ifdef BUILDOPT_ROJIG
-  { "commit2rojig", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Convert an OSTree commit into an rpm-ostree rojig", rpmostree_ex_builtin_commit2rojig },
-  { "rojig2commit", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Convert an rpm-ostree rojig into an OSTree commit", rpmostree_ex_builtin_rojig2commit },
-#endif
   { "history", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
   { "initramfs-etc", (RpmOstreeBuiltinFlags)0,

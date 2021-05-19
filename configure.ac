@@ -125,15 +125,6 @@ AM_CONDITIONAL(RUST_DEBUG, [test "x$rust_debug_release" = "xdebug"])
 dnl Unconditional now.
 RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rust"
 
-AC_ARG_ENABLE(rojig,
-  AC_HELP_STRING([--enable-rojig],
-    [Support for shipping ostree commits via RPMs [default=no]]))
-AM_CONDITIONAL([BUILDOPT_ROJIG], test x$enable_rojig = xyes)
-AM_COND_IF([BUILDOPT_ROJIG], [
-  RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rojig"
-  AC_DEFINE([BUILDOPT_ROJIG], 1, [Define if rojig is enabled])
-])
-
 AC_CONFIG_FILES([
 Makefile
 api-doc/Makefile

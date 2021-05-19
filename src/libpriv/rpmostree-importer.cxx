@@ -35,7 +35,6 @@
 #include "rpmostree-unpacker-core.h"
 #include "rpmostree-importer.h"
 #include "rpmostree-core.h"
-#include "rpmostree-rojig-assembler.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-util.h"
 #include <rpm/rpmlib.h>
@@ -744,62 +743,6 @@ unprivileged_filter_cb (OstreeRepo         *repo,
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
-#ifdef BUILDOPT_ROJIG
-static OstreeRepoCommitFilterResult
-rojig_filter_cb (OstreeRepo         *repo,
-                 const char         *path,
-                 GFileInfo          *file_info,
-                 gpointer            user_data)
-{
-  RpmOstreeImporter *self = ((cb_data*)user_data)->self;
-  GError **error = ((cb_data*)user_data)->error;
-  const gboolean error_was_set = (error && *error != NULL);
-
-  if (error_was_set)
-    return OSTREE_REPO_COMMIT_FILTER_SKIP;
-
-  /* Sanity check that path is absolute */
-  g_assert (path != NULL);
-  g_assert (*path == '/');
-
-  /* HACK: special-case rpm's `/var/lib/rpm`, otherwise libsolv can get confused.
-   * See https://github.com/projectatomic/rpm-ostree/pull/290
-   */
-  if (g_str_has_prefix (path, "/var/lib/rpm"))
-    return OSTREE_REPO_COMMIT_FILTER_SKIP;
-
-  self->n_rojig_total++;
-
-  if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
-    {
-      self->rojig_next_xattrs = NULL;
-      if (!rpmostree_rojig_assembler_xattr_lookup (self->rojig_xattr_table, path,
-                                                   self->rojig_xattrs,
-                                                   &self->rojig_next_xattrs,
-                                                   error))
-        return OSTREE_REPO_COMMIT_FILTER_SKIP;
-      /* No xattrs means we don't need to import it */
-      if (!self->rojig_next_xattrs)
-        {
-          self->n_rojig_skipped++;
-          return OSTREE_REPO_COMMIT_FILTER_SKIP;
-        }
-    }
-
-  return OSTREE_REPO_COMMIT_FILTER_ALLOW;
-}
-
-static GVariant*
-rojig_xattr_cb (OstreeRepo  *repo,
-                const char  *path,
-                GFileInfo   *file_info,
-                gpointer     user_data)
-{
-  auto self = static_cast<RpmOstreeImporter *>(user_data);
-  return util::move_nullify (self->rojig_next_xattrs);
-}
-#endif
-
 static GVariant*
 xattr_cb (OstreeRepo  *repo,
           const char  *path,
@@ -864,11 +807,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   const gboolean unprivileged = ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE_USER_ONLY;
   if (self->rojig_mode)
     {
-#ifdef BUILDOPT_ROJIG
-      filter = rojig_filter_cb;
-#else
       g_assert_not_reached ();
-#endif
     }
   else if (unprivileged)
     filter = unprivileged_filter_cb;
@@ -884,13 +823,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     ostree_repo_commit_modifier_new (static_cast<OstreeRepoCommitModifierFlags>(modifier_flags), filter, &fdata, NULL);
   if (self->rojig_mode)
     {
-#ifdef BUILDOPT_ROJIG
-      ostree_repo_commit_modifier_set_xattr_callback (modifier, rojig_xattr_cb,
-                                                      NULL, self);
-      g_assert (self->sepolicy == NULL);
-#else
       g_assert_not_reached ();
-#endif
     }
   else
     {
