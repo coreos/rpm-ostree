@@ -34,15 +34,12 @@ struct RpmOstreeOrigin {
   /* this is the single source of truth */
   GKeyFile *kf;
 
-  /* An origin can have either a refspec or a rojigspec */
+  /* Branch name or pinned to commit*/
   RpmOstreeRefspecType refspec_type;
   char *cached_refspec;
 
   /* Version data that goes along with the refspec */
   char *cached_override_commit;
-  char *cached_rojig_version;
-  /* The NEVRA of the rojigRPM */
-  char *cached_rojig_description;
 
   char *cached_unconfigured_state;
   char **cached_initramfs_args;
@@ -118,35 +115,22 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
   g_autofree char *refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
-  g_autofree char *rojig_spec = g_key_file_get_string (ret->kf, "origin", "rojig", NULL);
   if (!refspec)
     {
       refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
-      if (!refspec && !rojig_spec)
-        return (RpmOstreeOrigin *)glnx_null_throw (error, "No origin/refspec, origin/rojig, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
+      if (!refspec)
+        return (RpmOstreeOrigin *)glnx_null_throw (error, "No origin/refspec, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
     }
-  if (refspec && rojig_spec)
-    return (RpmOstreeOrigin *)glnx_null_throw (error, "Duplicate origin/refspec and origin/rojig in deployment origin");
-  else if (refspec)
-    {
-      if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, NULL, error))
-        return FALSE;
-      /* Note the lack of a prefix here so that code that just calls
-       * rpmostree_origin_get_refspec() in the ostree:// case
-       * sees it without the prefix for compatibility.
-       */
-      ret->cached_refspec = util::move_nullify (refspec);
-      ret->cached_override_commit =
-        g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
-    }
-  else
-    {
-      g_assert (rojig_spec);
-      ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_ROJIG;
-      ret->cached_refspec = util::move_nullify (rojig_spec);
-      ret->cached_rojig_version = g_key_file_get_string (ret->kf, "origin", "rojig-override-version", NULL);
-      ret->cached_rojig_description = g_key_file_get_string (ret->kf, "origin", "rojig-description", NULL);
-    }
+
+  if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, NULL, error))
+    return FALSE;
+  /* Note the lack of a prefix here so that code that just calls
+   * rpmostree_origin_get_refspec() in the ostree:// case
+   * sees it without the prefix for compatibility.
+   */
+  ret->cached_refspec = util::move_nullify (refspec);
+  ret->cached_override_commit =
+    g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
 
   if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE,
                             ret->cached_packages, error))
@@ -222,13 +206,6 @@ rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
   return NULL;
 }
 
-/* Returns: TRUE iff the origin type is rpm-ostree rojig */
-gboolean
-rpmostree_origin_is_rojig (RpmOstreeOrigin *origin)
-{
-  return origin->refspec_type == RPMOSTREE_REFSPEC_TYPE_ROJIG;
-}
-
 void
 rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
                                    RpmOstreeRefspecType *out_type,
@@ -237,37 +214,6 @@ rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
   *out_type = origin->refspec_type;
   if (out_refspecdata)
     *out_refspecdata = origin->cached_refspec;
-}
-
-const char *
-rpmostree_origin_get_rojig_version (RpmOstreeOrigin *origin)
-{
-  return origin->cached_rojig_version;
-}
-
-/* Returns a new (floating) variant of type a{sv} with fields:
- *  - s: repo
- *  - s: name
- *  - s: evr
- *  - s: arch
- * Note this type is exposed as DBus API.
- */
-GVariant *
-rpmostree_origin_get_rojig_description (RpmOstreeOrigin *origin)
-{
-  const char *colon = strchr (origin->cached_refspec, ':');
-  g_assert (colon);
-  const char *repo = strndupa (origin->cached_refspec, colon - origin->cached_refspec);
-  g_autofree char *rojig_evr = g_key_file_get_string (origin->kf, "origin", "rojig-imported-evr", NULL);
-  g_autofree char *rojig_arch = g_key_file_get_string (origin->kf, "origin", "rojig-imported-arch", NULL);
-  g_autoptr(GVariantBuilder) builder = g_variant_builder_new (G_VARIANT_TYPE_VARDICT);
-  g_variant_builder_add (builder, "{sv}", "repo", g_variant_new_string (repo));
-  g_variant_builder_add (builder, "{sv}", "name", g_variant_new_string (colon + 1));
-  if (rojig_evr)
-    g_variant_builder_add (builder, "{sv}", "evr", g_variant_new_string (rojig_evr));
-  if (rojig_arch)
-    g_variant_builder_add (builder, "{sv}", "arch", g_variant_new_string (rojig_arch));
-  return g_variant_builder_end (builder);
 }
 
 static char *
@@ -394,7 +340,6 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
     return;
   g_key_file_unref (origin->kf);
   g_free (origin->cached_refspec);
-  g_free (origin->cached_rojig_version);
   g_free (origin->cached_unconfigured_state);
   g_strfreev (origin->cached_initramfs_args);
   g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
@@ -519,18 +464,6 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
   origin->cached_override_commit = g_strdup (checksum);
 }
 
-void
-rpmostree_origin_set_rojig_version (RpmOstreeOrigin *origin,
-                                    const char      *version)
-{
-  if (version)
-    g_key_file_set_string (origin->kf, "origin", "rojig-override-version", version);
-  else
-    g_key_file_remove_key (origin->kf, "origin", "rojig-override-version", NULL);
-  g_free (origin->cached_rojig_version);
-  origin->cached_rojig_version = g_strdup (version);
-}
-
 gboolean
 rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin)
 {
@@ -546,24 +479,6 @@ rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
     g_key_file_set_boolean (origin->kf, k, v, TRUE);
   else
     g_key_file_remove_key (origin->kf, k, v, NULL);
-}
-
-/* The rojigRPM is highly special; it doesn't live in the rpmdb for example, as
- * that would be fully circular. Yet, it's of critical importance to the whole
- * system; we want to render it on the client. For now, what we do is stick the
- * EVR+A in the origin. That's the only data we really care about.
- *
- * Perhaps down the line, what we really want to do is store the whole Header at
- * least somewhere hooked off the deployment (or perhaps imported itself into
- * the pkgcache)?
- */
-void
-rpmostree_origin_set_rojig_description (RpmOstreeOrigin *origin,
-                                        DnfPackage      *package)
-{
-  g_assert_cmpint (origin->refspec_type, ==, RPMOSTREE_REFSPEC_TYPE_ROJIG);
-  g_key_file_set_string (origin->kf, "origin", "rojig-imported-evr", dnf_package_get_evr (package));
-  g_key_file_set_string (origin->kf, "origin", "rojig-imported-arch", dnf_package_get_arch (package));
 }
 
 gboolean
@@ -584,7 +499,6 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
    * rebase by default.
    */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
-  g_key_file_remove_key (origin->kf, "origin", "rojig-override-version", NULL);
 
   /* See related code in rpmostree_origin_parse_keyfile() */
   const char *refspecdata;
@@ -597,9 +511,6 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
-        g_key_file_remove_key (origin->kf, "origin", "rojig", NULL);
-        g_key_file_remove_key (origin->kf, "origin", "rojig-imported-evr", NULL);
-        g_key_file_remove_key (origin->kf, "origin", "rojig-imported-arch", NULL);
         const char *refspec_key =
           g_key_file_has_key (origin->kf, "origin", "baserefspec", NULL) ?
           "baserefspec" : "refspec";
@@ -620,16 +531,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
       }
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      {
-        g_assert (!custom_origin_url);
-        origin->cached_refspec = g_strdup (refspecdata);
-        g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
-        g_key_file_remove_key (origin->kf, "origin", "baserefspec", NULL);
-        g_key_file_remove_key (origin->kf, "origin", "custom-url", NULL);
-        g_key_file_remove_key (origin->kf, "origin", "custom-description", NULL);
-        /* Peeled */
-        g_key_file_set_string (origin->kf, "origin", "rojig", origin->cached_refspec);
-      }
+      g_assert_not_reached ();
       break;
     }
 
