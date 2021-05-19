@@ -2554,7 +2554,6 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
   if (rojig_xattrs)
     {
       g_assert (!self->sepolicy);
-      rpmostree_importer_set_rojig_mode (unpacker, self->rojig_xattr_table, rojig_xattrs);
     }
 
   rpmostree_importer_run_async (unpacker, cancellable, on_async_import_done, self);
