@@ -947,16 +947,6 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
                                 cancellable, error))
     return FALSE;
 
-  if (rpmostree_origin_is_rojig (self->origin))
-    {
-      /* We don't want to re-check the metadata, we already did that for the
-       * base. In the future we should try to re-use the DnfContext.
-       */
-      g_autoptr(DnfState) hifstate = dnf_state_new ();
-      if (!dnf_context_setup_sack (rpmostree_context_get_dnf (self->ctx), hifstate, error))
-        return FALSE;
-    }
-
   const gboolean have_packages = (self->overlay_packages->len > 0 ||
                                   g_hash_table_size (local_pkgs) > 0 ||
                                   self->override_remove_packages->len > 0 ||

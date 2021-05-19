@@ -156,7 +156,6 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
   for (guint i = 0; i < deployments->len; i++)
     {
       auto deployment = static_cast<OstreeDeployment *>(deployments->pdata[i]);
-      const char *current_checksum = ostree_deployment_get_csum (deployment);
 
       g_autofree char *base_commit = NULL;
       if (!rpmostree_deployment_get_base_layer (repo, deployment, &base_commit, error))
@@ -187,20 +186,6 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
 
           if (!add_package_refs_to_set (rsack, FALSE, referenced_pkgs, cancellable, error))
             return glnx_prefix_error (error, "Deployment index=%d", i);
-        }
-      /* In rojig mode, we need to also reference packages from the base; this
-       * is a different refspec format.
-       */
-      if (rpmostree_origin_is_rojig (origin))
-        {
-          const char *actual_base_commit = base_commit ?: current_checksum;
-          g_autoptr(RpmOstreeRefSack) base_rsack =
-            rpmostree_get_base_refsack_for_commit (repo, actual_base_commit, cancellable, error);
-          if (base_rsack == NULL)
-            return FALSE;
-
-          if (!add_package_refs_to_set (base_rsack, TRUE, referenced_pkgs, cancellable, error))
-            return FALSE;
         }
 
       /* also add any inactive local replacements */

@@ -338,10 +338,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       }
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      {
-        g_variant_dict_insert (dict, "rojig-description", "@a{sv}",
-                               rpmostree_origin_get_rojig_description (origin));
-      }
+      g_assert_not_reached ();
       break;
     }
 

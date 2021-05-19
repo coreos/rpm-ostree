@@ -212,8 +212,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
           }
           break;
         case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-          /* This case we'll look up later */
-          rpmostree_origin_set_rojig_version (origin, version);
+          g_assert_not_reached ();
           break;
         case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
           g_assert_not_reached ();  /* Handled above */
