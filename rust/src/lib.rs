@@ -276,8 +276,6 @@ pub mod ffi {
         fn format_install_langs_macro(&self) -> String;
         fn get_lockfile_repos(&self) -> Vec<String>;
         fn get_ref(&self) -> &str;
-        fn get_rojig_spec_path(&self) -> String;
-        fn get_rojig_name(&self) -> String;
         fn get_cliwrap(&self) -> bool;
         fn get_readonly_executables(&self) -> bool;
         fn get_documentation(&self) -> bool;

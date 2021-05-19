@@ -66,9 +66,6 @@ pub struct Treefile {
     primary_dfd: openat::Dir,
     #[allow(dead_code)] // Not used in tests
     pub(crate) parsed: TreeComposeConfig,
-    // This is a copy of rojig.name to avoid needing to convert to CStr when reading
-    rojig_name: Option<String>,
-    rojig_spec: Option<String>,
     serialized: CUtf8Buf,
     pub(crate) externals: TreefileExternals,
 }
@@ -484,20 +481,11 @@ impl Treefile {
         parsed.config = parsed.config.substitute_vars()?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
-        let (rojig_name, rojig_spec) = match (workdir.as_ref(), parsed.config.rojig.as_ref()) {
-            (Some(workdir), Some(rojig)) => (
-                Some(rojig.name.clone()),
-                Some(Treefile::write_rojig_spec(workdir, rojig)?),
-            ),
-            _ => (None, None),
-        };
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
             _workdir: workdir,
-            rojig_name,
-            rojig_spec,
             serialized,
             externals: parsed.externals,
         }))
@@ -588,14 +576,6 @@ impl Treefile {
 
     pub(crate) fn get_ref(&self) -> &str {
         self.parsed.treeref.as_deref().unwrap_or_default()
-    }
-
-    pub(crate) fn get_rojig_spec_path(&self) -> String {
-        self.rojig_spec.clone().unwrap_or_default()
-    }
-
-    pub(crate) fn get_rojig_name(&self) -> String {
-        self.rojig_name.clone().unwrap_or_default()
     }
 
     pub(crate) fn get_cliwrap(&self) -> bool {
@@ -750,59 +730,6 @@ impl Treefile {
             hasher.update(content_checksum.as_bytes());
         }
         Ok(hasher.get_string().expect("hash"))
-    }
-
-    /// Generate a rojig spec file.
-    fn write_rojig_spec(workdir: &openat::Dir, r: &Rojig) -> CxxResult<String> {
-        let description = r
-            .description
-            .as_ref()
-            .and_then(|v| {
-                if !v.is_empty() {
-                    Some(v.as_str())
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| r.summary.as_str());
-        let name: String = format!("{}.spec", r.name);
-        {
-            let mut f = workdir.write_file(name.as_str(), 0o644)?;
-            write!(
-                f,
-                r###"
-# The canonical version of this is maintained by rpm-ostree.
-# Suppress most build root processing we are just carrying
-# binary data.
-%global __os_install_post /usr/lib/rpm/brp-compress %{{nil}}
-Name: {rpmostree_rojig_name}
-Version:	%{{ostree_version}}
-Release:	1%{{?dist}}
-Summary:	{rpmostree_rojig_summary}
-License:	{rpmostree_rojig_license}
-#@@@rpmostree_rojig_meta@@@
-
-%description
-{rpmostree_rojig_description}
-
-%prep
-
-%build
-
-%install
-mkdir -p %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}
-for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; done
-
-%files
-%{{_prefix}}/lib/ostree-jigdo/%{{name}}
-"###,
-                rpmostree_rojig_name = r.name,
-                rpmostree_rojig_summary = r.summary,
-                rpmostree_rojig_license = r.license,
-                rpmostree_rojig_description = description,
-            )?;
-        }
-        Ok(name)
     }
 
     /// Perform sanity checks on externally provided input, such
@@ -1568,7 +1495,6 @@ pub(crate) mod tests {
         let workdir = tempfile::tempdir().unwrap();
         let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
         assert!(tf.parsed.rojig.is_none());
-        assert!(tf.rojig_spec.is_none());
         assert!(tf.parsed.machineid_compat.is_none());
     }
 
@@ -1579,6 +1505,7 @@ pub(crate) mod tests {
             summary: "ExampleOS rojig base image"
     "#};
 
+    // We need to support rojig: for a long time because it's used by fedora-coreos-config/coreos-assembler at least.
     #[test]
     fn test_treefile_new_rojig() {
         let workdir = tempfile::tempdir().unwrap();
@@ -1587,9 +1514,6 @@ pub(crate) mod tests {
         let tf = new_test_treefile(workdir.path(), buf.as_str(), None).unwrap();
         let rojig = tf.parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
-        let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().as_str();
-        let rojig_spec = Path::new(rojig_spec_str);
-        assert!(rojig_spec.file_name().unwrap() == "exampleos.spec");
     }
 
     #[test]
