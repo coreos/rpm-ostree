@@ -1418,15 +1418,6 @@ rpmostree_get_cache_branch_header (Header hdr)
   return rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
 }
 
-char *
-rpmostree_get_rojig_branch_header (Header hdr)
-{
-  g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
-  g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
-  g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
-  return get_branch_for_n_evr_a ("rojig", name, evr, arch);
-}
-
 /* Return the ostree cache branch from a libdnf Package */
 char *
 rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
@@ -1434,14 +1425,6 @@ rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
   return rpmostree_get_cache_branch_for_n_evr_a (dnf_package_get_name (pkg),
                                                  dnf_package_get_evr (pkg),
                                                  dnf_package_get_arch (pkg));
-}
-
-char *
-rpmostree_get_rojig_branch_pkg (DnfPackage *pkg)
-{
-  return get_branch_for_n_evr_a ("rojig", dnf_package_get_name (pkg),
-                                 dnf_package_get_evr (pkg),
-                                 dnf_package_get_arch (pkg));
 }
 
 GPtrArray*

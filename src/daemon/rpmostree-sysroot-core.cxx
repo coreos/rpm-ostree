@@ -128,8 +128,7 @@ add_package_refs_to_set (RpmOstreeRefSack *rsack,
       for (guint i = 0; i < pkglist->len; i++)
         {
           auto pkg = static_cast<DnfPackage *>(pkglist->pdata[i]);
-          g_autofree char *pkgref =
-            is_rojig ? rpmostree_get_rojig_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
+          g_autofree char *pkgref = rpmostree_get_cache_branch_pkg (pkg);
           g_hash_table_add (referenced_pkgs, util::move_nullify (pkgref));
         }
     }
