@@ -65,7 +65,6 @@ struct RpmOstreeImporter
   GHashTable *opt_files;
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
-  gboolean unpacking_as_nonroot;
   DnfPackage *pkg;
   char *hdr_sha256;
 
@@ -261,7 +260,6 @@ rpmostree_importer_new_take_fd (int                     *fd,
   ret->fi = util::move_nullify (fi);
   ret->archive = util::move_nullify (archive);
   ret->flags = flags;
-  ret->unpacking_as_nonroot = (getuid () != 0);
   ret->hdr = util::move_nullify (hdr);
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage*)(pkg ? g_object_ref (pkg) : NULL);
@@ -580,31 +578,14 @@ compose_filter_cb (OstreeRepo         *repo,
   /* Lookup any rpmfi overrides (was parsed from the header) */
   get_rpmfi_override (self, path, &user, &group, NULL);
 
-  if (self->unpacking_as_nonroot)
+  /* sanity check that RPM isn't using CPIO id fields */
+  const guint32 uid = g_file_info_get_attribute_uint32 (file_info, "unix::uid");
+  const guint32 gid = g_file_info_get_attribute_uint32 (file_info, "unix::gid");
+  if (uid != 0 || gid != 0)
     {
-      /* In the unprivileged case, libarchive returns our own uid by default.
-       * Let's ensure the object is always owned by 0/0, since we apply rpm
-       * header uid/gid at checkout time anyways.
-       *
-       * Note that for `ex container` we use
-       * OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS, which forces
-       * this, and that path also doesn't use this function, it uses
-       * unprivileged_filter_cb.
-       */
-      g_file_info_set_attribute_uint32 (file_info, "unix::uid", 0);
-      g_file_info_set_attribute_uint32 (file_info, "unix::gid", 0);
-    }
-  else
-    {
-      /* sanity check that RPM isn't using CPIO id fields */
-      const guint32 uid = g_file_info_get_attribute_uint32 (file_info, "unix::uid");
-      const guint32 gid = g_file_info_get_attribute_uint32 (file_info, "unix::gid");
-      if (uid != 0 || gid != 0)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "RPM had unexpected non-root owned path \"%s\", marked as %u:%u)", path, uid, gid);
-          return OSTREE_REPO_COMMIT_FILTER_SKIP;
-        }
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                    "RPM had unexpected non-root owned path \"%s\", marked as %u:%u)", path, uid, gid);
+      return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
 
   /* Special case exemptions */
@@ -653,46 +634,6 @@ compose_filter_cb (OstreeRepo         *repo,
           mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
           g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
         }
-    }
-
-  return OSTREE_REPO_COMMIT_FILTER_ALLOW;
-}
-
-static OstreeRepoCommitFilterResult
-unprivileged_filter_cb (OstreeRepo         *repo,
-                        const char         *path,
-                        GFileInfo          *file_info,
-                        gpointer            user_data)
-{
-  RpmOstreeImporter *self = ((cb_data*)user_data)->self;
-
-  /* Sanity check that path is absolute */
-  g_assert (path != NULL);
-  g_assert (*path == '/');
-
-  /* Are we filtering out docs?  Let's check that first */
-  if (self->doc_files && g_hash_table_contains (self->doc_files, path))
-    return OSTREE_REPO_COMMIT_FILTER_SKIP;
-
-  /* HACK: special-case rpm's `/var/lib/rpm`, otherwise libsolv can get confused.
-   * See https://github.com/projectatomic/rpm-ostree/pull/290
-   */
-  if (g_str_has_prefix (path, "/var/lib/rpm"))
-    return OSTREE_REPO_COMMIT_FILTER_SKIP;
-
-  /* First, the common directory workaround */
-  ensure_directories_user_writable (file_info);
-
-  /* For unprivileged unpacks, ensure that all files are at least user-readable.
-   * this is (AFAIK) just limited to /usr/etc/{,g}shadow.
-   * See also: https://github.com/projectatomic/rpm-ostree/pull/1046
-   * AKA commit 334f0b89be271cbe2b9973ebc7eab50f955517e8
-   */
-  if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_REGULAR)
-    {
-      guint32 mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
-      mode |= S_IRUSR;
-      g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
     }
 
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
@@ -755,23 +696,11 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   GError *cb_error = NULL;
   cb_data fdata = { self, &cb_error };
 
-  OstreeRepoCommitFilter filter;
-  /* This logic replaces our old UNPRIVILEGED flag; we now assume bare-user-only
-   * is unprivileged, anything else is a compose.
-   */
-  const gboolean unprivileged = ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE_USER_ONLY;
-  if (unprivileged)
-    filter = unprivileged_filter_cb;
-  else
-    filter = compose_filter_cb;
-
   /* If changing this, also look at changing rpmostree-postprocess.cxx */
   int modifier_flags =
     OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
-  if (unprivileged)
-    modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
   g_autoptr(OstreeRepoCommitModifier) modifier =
-    ostree_repo_commit_modifier_new (static_cast<OstreeRepoCommitModifierFlags>(modifier_flags), filter, &fdata, NULL);
+    ostree_repo_commit_modifier_new (static_cast<OstreeRepoCommitModifierFlags>(modifier_flags), compose_filter_cb, &fdata, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb, NULL, self);
   ostree_repo_commit_modifier_set_sepolicy (modifier, self->sepolicy);
 
