@@ -115,7 +115,6 @@ rpmostree_ex_builtin_initramfs_etc (int             argc,
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
@@ -138,7 +137,9 @@ rpmostree_ex_builtin_initramfs_etc (int             argc,
                                                 error))
     return FALSE;
 
-  if (!opt_reboot)
+  if (opt_reboot)
+    return rpmostree_client_reboot (error);
+  else
     {
       if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
         {

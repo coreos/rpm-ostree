@@ -139,7 +139,6 @@ rpmostree_builtin_deploy (int            argc,
 
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
-      g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
       g_variant_dict_insert (&dict, "allow-downgrade", "b", !opt_disallow_downgrade);
       /* If we're not specifying a revision, then don't touch the network */
       if (revision == NULL)
@@ -225,8 +224,12 @@ rpmostree_builtin_deploy (int            argc,
         }
 
       rpmostree_print_package_diffs (result);
+      return TRUE;
     }
-  else if (!opt_reboot)
+
+  if (opt_reboot)
+    return rpmostree_client_reboot (error);
+  else
     {
       if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
         {

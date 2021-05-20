@@ -79,7 +79,6 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "cache-only", "b", cache_only);
   g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
   g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
@@ -116,7 +115,11 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
     {
       g_print ("Exiting because of '--dry-run' option\n");
     }
-  else if (!opt_reboot)
+  else if (opt_reboot)
+    {
+      return rpmostree_client_reboot (error);
+    }
+  else
     {
       /* only print diff if a new deployment was laid down (e.g. reset --all may not) */
       if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))

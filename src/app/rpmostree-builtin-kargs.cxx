@@ -271,7 +271,6 @@ rpmostree_builtin_kargs (int            argc,
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
   if (opt_kernel_append_if_missing_strings && *opt_kernel_append_if_missing_strings)
@@ -362,6 +361,9 @@ rpmostree_builtin_kargs (int            argc,
     g_print("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
   else if (opt_unchanged_exit_77)
     invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+
+  if (opt_reboot)
+    return rpmostree_client_reboot (error);
 
   return TRUE;
 }

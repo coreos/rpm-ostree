@@ -92,7 +92,6 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
   g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
   g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
@@ -142,7 +141,7 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
     }
 
   return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, opt_unchanged_exit_77,
+                                           options, opt_unchanged_exit_77, opt_reboot,
                                            transaction_address,
                                            previous_deployment,
                                            cancellable, error);

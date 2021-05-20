@@ -373,6 +373,10 @@
             providing a checksum should be a conscious decision.
          "allow-unlocked" (type 'b')
             Don't error out if the staged deployment wasn't locked.
+         "reboot" (type 'b')
+            Have the daemon initiate a reboot.  Defaults to `TRUE`.
+            This option exists for compatibility reasons; it's recommended
+            to set it to `FALSE` and start the reboot in the calling process.
     -->
     <method name="FinalizeDeployment">
       <arg type="a{sv}" name="options" direction="in"/>

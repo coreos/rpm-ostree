@@ -42,7 +42,6 @@ get_args_variant (void)
   GVariantDict dict;
 
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
 
   return g_variant_dict_end (&dict);
 }
@@ -78,7 +77,6 @@ rpmostree_builtin_rollback (int             argc,
   /* really, rollback only supports the "reboot" option; all others are ignored */
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   if (!rpmostree_os_call_rollback_sync (os_proxy,
@@ -89,7 +87,7 @@ rpmostree_builtin_rollback (int             argc,
     return FALSE;
 
   return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, FALSE,
+                                           options, FALSE, opt_reboot,
                                            transaction_address,
                                            previous_deployment,
                                            cancellable, error);

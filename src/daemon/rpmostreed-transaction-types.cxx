@@ -1526,7 +1526,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
 
       if (deploy_has_bool_option (self, "reboot"))
-        rpmostreed_reboot (cancellable, error);
+        {
+          rpmostreed_reboot (cancellable, error);
+        }
     }
   else
     {
@@ -2604,6 +2606,9 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
     (char*)vardict_lookup_ptr (self->options, "checksum", "&s");
   const gboolean allow_missing_checksum =
     vardict_lookup_bool (self->options, "allow-missing-checksum", FALSE);
+  // Note this defaults to TRUE
+  const gboolean reboot =
+    vardict_lookup_bool (self->options, "reboot", TRUE);
   if (!expected_checksum && !allow_missing_checksum)
     return glnx_throw (error, "Missing expected checksum");
   if (expected_checksum && !g_str_equal (checksum, expected_checksum))
@@ -2624,8 +2629,15 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
    * version of `rpm-ostree finalize-deployment`). */
   (void) rpmostree_syscore_bump_mtime (sysroot, NULL);
 
-  sd_journal_print (LOG_INFO, "Finalized deployment; rebooting into %s", checksum);
-  rpmostreed_reboot (cancellable, error);
+  if (reboot)
+    {
+      sd_journal_print (LOG_INFO, "Finalized deployment; rebooting into %s", checksum);
+      rpmostreed_reboot (cancellable, error);
+    }
+  else
+    {
+      sd_journal_print (LOG_INFO, "Finalized deployment for %s", checksum);
+    }
   return TRUE;
 }
 

@@ -170,7 +170,6 @@ rpmostree_builtin_upgrade (int             argc,
     {
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
-      g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
       g_variant_dict_insert (&dict, "allow-downgrade", "b", opt_allow_downgrade);
       g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
@@ -233,8 +232,13 @@ rpmostree_builtin_upgrade (int             argc,
                                               cancellable, error))
             return FALSE;
         }
+
+      return TRUE;
     }
-  else if (!opt_reboot)
+
+  if (opt_reboot)
+    return rpmostree_client_reboot (error);
+  else
     {
       if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
         {

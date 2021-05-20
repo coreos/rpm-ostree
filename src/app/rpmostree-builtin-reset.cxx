@@ -94,7 +94,6 @@ rpmostree_builtin_reset (int             argc,
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
   g_variant_dict_insert (&dict, "no-layering", "b", opt_overlays);
   g_variant_dict_insert (&dict, "no-overrides", "b", opt_overrides);
@@ -110,7 +109,7 @@ rpmostree_builtin_reset (int             argc,
     return FALSE;
 
   return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, FALSE,
+                                           options, FALSE, opt_reboot,
                                            transaction_address,
                                            previous_deployment,
                                            cancellable, error);

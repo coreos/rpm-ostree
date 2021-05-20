@@ -904,6 +904,7 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
                                   RPMOSTreeOS      *os_proxy,
                                   GVariant         *options,
                                   gboolean          exit_unchanged_77,
+                                  gboolean          opt_reboot,
                                   const char       *transaction_address,
                                   GVariant         *previous_deployment,
                                   GCancellable     *cancellable,
@@ -918,16 +919,20 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
 
   g_auto(GVariantDict) optdict = G_VARIANT_DICT_INIT (options);
   /* Parse back the options variant */
-  gboolean opt_reboot = FALSE;
-  g_variant_dict_lookup (&optdict, "reboot", "b", &opt_reboot);
   gboolean opt_dry_run = FALSE;
   g_variant_dict_lookup (&optdict, "dry-run", "b", &opt_dry_run);
 
   if (opt_dry_run)
     {
       g_print ("Exiting because of '--dry-run' option\n");
+      return TRUE;
     }
-  else if (!opt_reboot)
+
+  if (opt_reboot)
+    {
+      return rpmostree_client_reboot (error);
+    }
+  else
     {
       if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
         {
@@ -1781,4 +1786,11 @@ error_if_driver_registered (GBusType          bus_type,
     }
 
   return TRUE;
+}
+
+gboolean
+rpmostree_client_reboot (GError ** error)
+{
+  execlp ("reboot", "reboot", NULL);
+  return glnx_null_throw_errno_prefix (error, "execlp(reboot)");
 }

@@ -134,7 +134,6 @@ rpmostree_builtin_initramfs (int             argc,
 
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
-      g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
       g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
       g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
@@ -156,6 +155,9 @@ rpmostree_builtin_initramfs (int             argc,
         return FALSE;
 
       g_print ("Initramfs regeneration is now: %s\n", opt_enable ? "enabled" : "disabled");
+
+      if (opt_reboot)
+        return rpmostree_client_reboot (error);
     }
 
   return TRUE;

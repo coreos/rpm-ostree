@@ -107,6 +107,7 @@ rpmostree_transaction_client_run             (RpmOstreeCommandInvocation *invoca
                                               RPMOSTreeOS      *os_proxy,
                                               GVariant         *options,
                                               gboolean          exit_unchanged_77,
+                                              gboolean          reboot,
                                               const char *transaction_address,
                                               GVariant         *previous_deployment,
                                               GCancellable *cancellable,
@@ -175,5 +176,8 @@ error_if_driver_registered (GBusType          bus_type,
                             RPMOSTreeSysroot *sysroot_proxy,
                             GCancellable     *cancellable,
                             GError          **error);
+
+gboolean
+rpmostree_client_reboot (GError ** error);
 
 G_END_DECLS

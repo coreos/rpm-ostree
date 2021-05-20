@@ -171,7 +171,6 @@ rpmostree_builtin_rebase (int             argc,
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "allow-downgrade", "b", !opt_disallow_downgrade);
   g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
   g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
@@ -231,7 +230,7 @@ rpmostree_builtin_rebase (int             argc,
     }
 
   return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, FALSE,
+                                           options, FALSE, opt_reboot,
                                            transaction_address,
                                            previous_deployment,
                                            cancellable, error);
