@@ -1,10 +1,11 @@
 //!
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+use crate::cxxrsutil::*;
 use crate::live;
-use crate::{cxxrsutil::*, variant_utils};
 use anyhow::{anyhow, Result};
 use gio::DBusProxyExt;
+use ostree_ext::variant_utils;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -53,7 +54,7 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> Result<()> {
 
     let args = get_args_variant(sysroot, opts)?;
 
-    let params = crate::variant_utils::new_variant_tuple(&[args]);
+    let params = variant_utils::new_variant_tuple(&[args]);
     let reply = &client.get_os_ex_proxy().call_sync(
         "LiveFs",
         Some(&params),
@@ -62,7 +63,7 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> Result<()> {
         gio::NONE_CANCELLABLE,
     )?;
     let reply_child =
-        variant_utils::variant_tuple_get(reply, 0).ok_or_else(|| anyhow!("Invalid reply"))?;
+        variant_utils::variant_get_child_value(reply, 0).ok_or_else(|| anyhow!("Invalid reply"))?;
     let txn_address = reply_child
         .get_str()
         .ok_or_else(|| anyhow!("Expected string transaction address"))?;
