@@ -61,6 +61,7 @@ struct _RpmostreedDaemon {
   GHashTable *bus_clients; /* <utf8 busname, struct RpmOstreeClient> */
 
   gboolean running;
+  gboolean rebooting;
   GDBusProxy *bus_proxy;
   GSource *idle_exit_source;
   guint rerender_status_id;
@@ -773,6 +774,47 @@ rpmostreed_daemon_exit_now (RpmostreedDaemon *self)
 {
   self->running = FALSE;
 }
+
+static gboolean
+idle_initiate_reboot (void *_unused)
+{
+  sd_journal_print (LOG_INFO, "Initiating reboot requested from transaction");
+
+  /* Note that we synchronously spawn this command, but the command just queues the request and returns.
+   */
+  const char *child_argv[] = { "systemctl", "reboot", NULL };
+  g_autoptr(GError) local_error = NULL;
+  if (!g_spawn_sync (NULL, (char**)child_argv, NULL, (GSpawnFlags)(G_SPAWN_CHILD_INHERITS_STDIN | G_SPAWN_SEARCH_PATH),
+                     NULL, NULL, NULL, NULL, NULL, &local_error))
+    {
+      sd_journal_print (LOG_WARNING, "Failed to initate reboot: %s", local_error->message);
+      // And now...not a lot of great choices.  We could loop and retry, but exiting will surface the error
+      // in an obvious way.
+      exit (1);
+    }
+  
+  return FALSE;
+}
+
+void
+rpmostreed_daemon_reboot (RpmostreedDaemon *self)
+{
+  g_assert (!self->rebooting);
+  self->rebooting = TRUE;
+  /* Queue actually starting the reboot until we return to the client, so
+   * that they get a success message for the transaction.  Otherwise
+   * if the daemon gets killed via SIGTERM they just see the bus connection
+   * broken and may spuriously error out.
+   */
+  g_idle_add_full (G_PRIORITY_LOW, idle_initiate_reboot, NULL, NULL);
+}
+
+gboolean
+rpmostreed_daemon_is_rebooting (RpmostreedDaemon *self)
+{
+  return self->rebooting;
+}
+
 
 void
 rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self)

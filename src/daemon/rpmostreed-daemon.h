@@ -53,6 +53,8 @@ char *             rpmostreed_daemon_client_get_agent_id (RpmostreedDaemon *self
 char *             rpmostreed_daemon_client_get_sd_unit (RpmostreedDaemon *self,
                                                          const char *client);
 void               rpmostreed_daemon_exit_now       (RpmostreedDaemon *self);
+void               rpmostreed_daemon_reboot         (RpmostreedDaemon *self);
+gboolean           rpmostreed_daemon_is_rebooting   (RpmostreedDaemon *self);
 void               rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self);
 void               rpmostreed_daemon_publish        (RpmostreedDaemon *self,
                                                      const gchar *path,

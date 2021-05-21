@@ -818,6 +818,8 @@ rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot     *self,
                                  RpmostreedTransaction **out_compat_txn,
                                  GError               **error)
 {
+  if (rpmostreed_daemon_is_rebooting (rpmostreed_daemon_get()))
+    return glnx_throw (error, "Reboot initiated, cannot start new transaction");
   if (self->transaction)
     {
       if (rpmostreed_transaction_is_compatible (self->transaction, invocation))
