@@ -542,7 +542,7 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   if (self->reboot)
-    rpmostreed_reboot (cancellable, error);
+    rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
 
   return TRUE;
 }
@@ -1511,7 +1511,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
 
       if (deploy_has_bool_option (self, "reboot"))
-        rpmostreed_reboot (cancellable, error);
+        rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
     }
   else
     {
@@ -1913,7 +1913,7 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
-    rpmostreed_reboot (cancellable, error);
+    rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
 
   return TRUE;
 }
@@ -2051,7 +2051,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
-    rpmostreed_reboot (cancellable, error);
+    rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
 
   return TRUE;
 }
@@ -2610,7 +2610,7 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   (void) rpmostree_syscore_bump_mtime (sysroot, NULL);
 
   sd_journal_print (LOG_INFO, "Finalized deployment; rebooting into %s", checksum);
-  rpmostreed_reboot (cancellable, error);
+  rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
   return TRUE;
 }
 
@@ -2787,7 +2787,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
-    rpmostreed_reboot (cancellable, error);
+    rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
 
   return TRUE;
 }

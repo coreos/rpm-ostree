@@ -36,8 +36,6 @@ gboolean   rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
                                              const gchar *base_refspec,
                                              gchar **out_refspec,
                                              GError **error);
-void
-rpmostreed_reboot (GCancellable *cancellable, GError **error);
 
 /* XXX These pull-ancestry and lookup-version functions should eventually
  *     be integrated into libostree, but it's still a bit premature to do

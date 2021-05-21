@@ -211,14 +211,6 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
   return TRUE;
 }
 
-void
-rpmostreed_reboot (GCancellable *cancellable, GError **error)
-{
-  const char *child_argv[] = { "systemctl", "reboot", NULL };
-  (void) g_spawn_sync (NULL, (char**)child_argv, NULL, (GSpawnFlags)(G_SPAWN_CHILD_INHERITS_STDIN | G_SPAWN_SEARCH_PATH),
-                       NULL, NULL, NULL, NULL, NULL, NULL);
-}
-
 /**
  * rpmostreed_repo_pull_ancestry:
  * @repo: Repo
