@@ -48,7 +48,6 @@
 /config.status.lineno
 /configure
 /configure.lineno
-/dbus-run-session
 /gtk-doc.make
 /insttree/
 /libglnx.la

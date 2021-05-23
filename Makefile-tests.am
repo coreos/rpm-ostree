@@ -22,10 +22,7 @@ uninstalled_test_scripts = \
 	$(NULL)
 
 uninstalled_test_extra_programs = \
-	dbus-run-session		\
 	$(NULL)
-
-dbus_run_session_SOURCES = tests/utils/dbus-run-session.c
 
 check-local:
 	@echo "  *** NOTE ***"
@@ -52,13 +49,3 @@ vmoverlay:
 # development so that e.g. we automatically overlay.
 vmcheck: vmoverlay
 	@tests/vmcheck.sh
-
-testenv:
-	@echo "===== ENTERING TESTENV ====="
-	test_tmpdir=$$(mktemp -d test.XXXXXX) && \
-	  cd $$test_tmpdir && \
-	  env $(BASE_TESTS_ENVIRONMENT) PATH=$(abs_builddir):$$PATH TESTENV=1 \
-	    sh ../tests/utils/setup-session.sh bash && \
-	  cd .. && \
-	  rm -rf $$test_tmpdir
-	@echo "===== LEAVING TESTENV ====="

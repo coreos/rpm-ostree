@@ -62,24 +62,6 @@ get_connection_for_path (const char *sysroot,
                          GCancellable *cancellable,
                          GError **error)
 {
-  /* This is only intended for use by installed tests.
-   * Note that it disregards the 'sysroot' and 'force_peer' options
-   * and assumes the service activation command has been configured
-   * to use the desired system root path. */
-  if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
-    {
-      if (sysroot != NULL)
-        g_warning ("RPMOSTREE_USE_SESSION_BUS set, ignoring --sysroot=%s", sysroot);
-
-      /* NB: as opposed to other early returns, this is _also_ a happy path */
-      GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
-      if (!ret)
-        return (GDBusConnection*)(glnx_prefix_error_null (error, "Connecting to session bus"));
-
-      *out_bus_type = G_BUS_TYPE_SESSION;
-      return ret;
-    }
-
   if (sysroot == NULL)
     sysroot = "/";
 
@@ -89,7 +71,6 @@ get_connection_for_path (const char *sysroot,
       GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
       if (!ret)
         return (GDBusConnection*)(glnx_prefix_error_null (error, "Connecting to system bus"));
-
       *out_bus_type = G_BUS_TYPE_SYSTEM;
       return ret;
     }

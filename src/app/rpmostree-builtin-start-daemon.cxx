@@ -84,7 +84,11 @@ start_daemon (GDBusConnection *connection,
                                       "connection", connection,
                                       "sysroot-path", opt_sysroot ?: "/",
                                       NULL);
-  return rpm_ostree_daemon != NULL;
+  if (rpm_ostree_daemon == NULL)
+    return FALSE;
+  (void) g_bus_own_name_on_connection (connection, DBUS_NAME, G_BUS_NAME_OWNER_FLAGS_NONE,
+                                       NULL, NULL, NULL, NULL);
+  return TRUE;
 }
 
 static void
@@ -315,8 +319,6 @@ rpmostree_builtin_start_daemon (int             argc,
        * the system bus. */
       if (g_getenv ("DBUS_STARTER_BUS_TYPE") != NULL)
         bus_type = G_BUS_TYPE_STARTER;
-      else if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
-        bus_type = G_BUS_TYPE_SESSION;
       else
         bus_type = G_BUS_TYPE_SYSTEM;
 
@@ -326,8 +328,6 @@ rpmostree_builtin_start_daemon (int             argc,
         return FALSE;
       if (!start_daemon (bus, error))
         return FALSE;
-      (void) g_bus_own_name_on_connection (bus, DBUS_NAME, G_BUS_NAME_OWNER_FLAGS_NONE,
-                                           NULL, NULL, NULL, NULL);
     }
   else if (!connect_to_peer (service_dbus_fd, error))
     return FALSE;

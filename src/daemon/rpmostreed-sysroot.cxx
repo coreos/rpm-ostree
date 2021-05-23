@@ -542,9 +542,6 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
 
   self->monitor = NULL;
 
-  if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
-    self->on_session_bus = TRUE;
-
   /* Only use polkit when running as root on system bus; self-tests don't need it */
   if (!self->on_session_bus)
     {
