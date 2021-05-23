@@ -334,6 +334,8 @@ pub mod ffi {
 
     // daemon.rs
     extern "Rust" {
+        fn daemon_main(debug: bool) -> Result<()>;
+        fn daemon_terminate();
         fn daemon_sanitycheck_environment(sysroot: &OstreeSysroot) -> Result<()>;
         fn deployment_generate_id(deployment: &OstreeDeployment) -> String;
         fn deployment_populate_variant(
@@ -799,6 +801,12 @@ pub mod ffi {
         fn rpmostree_main(args: &[&str]) -> Result<i32>;
         fn rpmostree_process_global_teardown();
         fn c_unit_tests() -> Result<()>;
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostreed-daemon.hpp");
+        fn daemon_init_inner(debug: bool) -> Result<()>;
+        fn daemon_main_inner() -> Result<()>;
     }
 
     unsafe extern "C++" {

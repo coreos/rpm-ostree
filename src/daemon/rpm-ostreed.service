@@ -21,6 +21,7 @@ MountFlags=slave
 # but as a subprocess.
 ProtectHome=true
 NotifyAccess=main
+Sockets=rpm-ostreed.socket
 # Significantly bump this timeout from the default because
 # we do a lot of stuff on daemon startup.
 TimeoutStartSec=5m

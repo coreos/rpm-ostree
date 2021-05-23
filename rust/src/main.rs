@@ -148,7 +148,9 @@ fn inner_main() -> Result<i32> {
         .enable_all()
         .build()
         .context("Failed to build tokio runtime")?;
-    runtime.block_on(dispatch_multicall(callname, args))
+    let r = runtime.block_on(dispatch_multicall(callname, args));
+    tracing::debug!("Exiting inner main with result: {r:?}");
+    r
 }
 
 fn print_error(e: anyhow::Error) {

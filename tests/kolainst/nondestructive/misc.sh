@@ -109,6 +109,10 @@ rpmostree_busctl_call_os Search as 1 should-not-exist-p-equals-np > out.txt
 assert_file_has_content_literal out.txt 'aa{sv} 0'
 echo "ok dbus Search"
 
+systemctl stop rpm-ostreed
+rpmostree_busctl_call_os ListRepos
+echo "restarting the daemon works"
+
 rpm-ostree search testdaemon > out.txt
 assert_file_has_content_literal out.txt '===== Name Matched ====='
 assert_file_has_content_literal out.txt 'testdaemon : awesome-daemon-for-testing'

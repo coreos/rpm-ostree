@@ -8,6 +8,7 @@
 #include "rpmostree-package-variants.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-util.h"
+#include "rpmostreed-daemon.hpp"
 #include "rpmostreemain.h"
 #include "src/libpriv/rpmostree-cxxrs-prelude.h"
 #include <algorithm>
@@ -2195,6 +2196,10 @@ extern "C"
                                                ::rust::Str opt_deploy_id, ::rust::Str opt_os_name,
                                                ::rpmostreecxx::OstreeDeployment **return$) noexcept;
 
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$daemon_main (bool debug) noexcept;
+
+  void rpmostreecxx$cxxbridge1$daemon_terminate () noexcept;
+
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$daemon_sanitycheck_environment (
       const ::rpmostreecxx::OstreeSysroot &sysroot) noexcept;
 
@@ -2964,6 +2969,34 @@ extern "C"
     ::rust::behavior::trycatch (
         [&] {
           c_unit_tests$ ();
+          throw$.ptr = nullptr;
+        },
+        ::rust::detail::Fail (throw$));
+    return throw$;
+  }
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$daemon_init_inner (bool debug) noexcept
+  {
+    void (*daemon_init_inner$) (bool) = ::rpmostreecxx::daemon_init_inner;
+    ::rust::repr::PtrLen throw$;
+    ::rust::behavior::trycatch (
+        [&] {
+          daemon_init_inner$ (debug);
+          throw$.ptr = nullptr;
+        },
+        ::rust::detail::Fail (throw$));
+    return throw$;
+  }
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$daemon_main_inner () noexcept
+  {
+    void (*daemon_main_inner$) () = ::rpmostreecxx::daemon_main_inner;
+    ::rust::repr::PtrLen throw$;
+    ::rust::behavior::trycatch (
+        [&] {
+          daemon_main_inner$ ();
           throw$.ptr = nullptr;
         },
         ::rust::detail::Fail (throw$));
@@ -4036,6 +4069,22 @@ deployment_get_base (::rpmostreecxx::OstreeSysroot &sysroot, ::rust::Str opt_dep
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
   return ::std::move (return$.value);
+}
+
+void
+daemon_main (bool debug)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$daemon_main (debug);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
+daemon_terminate () noexcept
+{
+  rpmostreecxx$cxxbridge1$daemon_terminate ();
 }
 
 void

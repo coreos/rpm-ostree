@@ -8,6 +8,7 @@
 #include "rpmostree-package-variants.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-util.h"
+#include "rpmostreed-daemon.hpp"
 #include "rpmostreemain.h"
 #include "src/libpriv/rpmostree-cxxrs-prelude.h"
 #include <algorithm>
@@ -1842,6 +1843,10 @@ void rewrite_rpmdb_for_target (::std::int32_t rootfs_dfd, bool normalize);
 ::rpmostreecxx::OstreeDeployment *deployment_get_base (::rpmostreecxx::OstreeSysroot &sysroot,
                                                        ::rust::Str opt_deploy_id,
                                                        ::rust::Str opt_os_name);
+
+void daemon_main (bool debug);
+
+void daemon_terminate () noexcept;
 
 void daemon_sanitycheck_environment (const ::rpmostreecxx::OstreeSysroot &sysroot);
 

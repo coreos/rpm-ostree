@@ -820,6 +820,7 @@ rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self)
   update_status (self);
   while (self->running)
     g_main_context_iteration (NULL, TRUE);
+  rpmostreecxx::daemon_terminate ();
 }
 
 void
