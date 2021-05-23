@@ -36,6 +36,12 @@ G_BEGIN_DECLS
 #define RPMOSTREE_DRIVER_SD_UNIT "driver-sd-unit"
 #define RPMOSTREE_DRIVER_NAME "driver-name"
 
+/* Note: Currently actually defined in rpmostree-builtin-start-daemon.cxx for historical reasons */
+namespace rpmostreecxx {
+void daemon_init_inner (bool debug);
+void daemon_main_inner ();
+}
+
 GType              rpmostreed_daemon_get_type       (void) G_GNUC_CONST;
 RpmostreedDaemon * rpmostreed_daemon_get            (void);
 GDBusConnection  * rpmostreed_daemon_connection     (void);

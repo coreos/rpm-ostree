@@ -33,6 +33,7 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-util.h"
+#include "rpmostreed-utils.h"
 #include "rpmostreed-daemon.h"
 #include "rpmostree-libbuiltin.h"
 
@@ -53,6 +54,7 @@ static GOptionEntry opt_entries[] =
   { NULL }
 };
 
+static GDBusConnection *bus = NULL;
 static RpmostreedDaemon *rpm_ostree_daemon = NULL;
 
 static void
@@ -225,20 +227,14 @@ on_log_handler (const gchar *log_domain,
   sd_journal_print (priority, "%s", message);
 }
 
-gboolean
-rpmostree_builtin_start_daemon (int             argc,
-                                char          **argv,
-                                RpmOstreeCommandInvocation *invocation,
-                                GCancellable   *cancellable,
-                                GError        **error)
+namespace rpmostreecxx {
+// This function is always called from the Rust side.  Hopefully
+// soon we'll move more of this code into daemon.rs.
+void
+daemon_init_inner (bool debug) 
 {
-  g_autoptr(GOptionContext) opt_context = g_option_context_new (" - start the daemon process");
-  g_option_context_add_main_entries (opt_context, opt_entries, NULL);
-
-  if (!g_option_context_parse (opt_context, &argc, &argv, error))
-    return FALSE;
-
-  if (opt_debug)
+  g_autoptr(GError) local_error = NULL;
+  if (debug)
     {
       g_autoptr(GIOChannel) channel = NULL;
       g_log_set_handler (G_LOG_DOMAIN, (GLogLevelFlags)(G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO), on_log_debug, NULL);
@@ -258,18 +254,24 @@ rpmostree_builtin_start_daemon (int             argc,
   g_unix_signal_add (SIGTERM, on_sigint, NULL);
 
   /* Get an explicit ref to the bus so we can use it later */
-  g_autoptr(GDBusConnection) bus = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, error);
+  g_autoptr(GDBusConnection) bus = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &local_error);
   if (!bus)
-    return FALSE;
-  if (!start_daemon (bus, error)) {
-    if (*error)
-      sd_notifyf (0, "STATUS=error: %s", (*error)->message);
-    return FALSE;
-  }
+    util::throw_gerror(local_error);
+  if (!start_daemon (bus, &local_error))
+    {
+      sd_notifyf (0, "STATUS=error: %s", local_error->message);
+      util::throw_gerror(local_error);
+    }
+}
 
+// Called from rust side to enter mainloop.
+void
+daemon_main_inner () 
+{
   state_transition (APPSTATE_RUNNING);
 
   g_debug ("Entering main event loop");
+  g_assert (rpm_ostree_daemon);
   rpmostreed_daemon_run_until_idle_exit (rpm_ostree_daemon);
 
   if (bus)
@@ -303,6 +305,23 @@ rpmostree_builtin_start_daemon (int             argc,
   g_autoptr(GMainContext) mainctx = g_main_context_default ();
   while (appstate == APPSTATE_FLUSHING)
     g_main_context_iteration (mainctx, TRUE);
+}
+} /* namespace */
+
+gboolean
+rpmostree_builtin_start_daemon (int             argc,
+                                char          **argv,
+                                RpmOstreeCommandInvocation *invocation,
+                                GCancellable   *cancellable,
+                                GError        **error)
+{
+  g_autoptr(GOptionContext) opt_context = g_option_context_new (" - start the daemon process");
+  g_option_context_add_main_entries (opt_context, opt_entries, NULL);
+
+  if (!g_option_context_parse (opt_context, &argc, &argv, error))
+    return FALSE;
+
+  rpmostreecxx::daemon_main (opt_debug);
 
   return TRUE;
 }

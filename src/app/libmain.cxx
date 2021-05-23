@@ -296,6 +296,8 @@ rpmostree_option_context_parse (GOptionContext *context,
             }
         }
 
+      rpmostreecxx::start_daemon_via_socket();
+
       /* root never needs to auth */
       if (getuid () != 0)
         /* ignore errors; we print out a warning if we fail to spawn pkttyagent */

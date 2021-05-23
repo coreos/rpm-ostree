@@ -1,0 +1,9 @@
+[Unit]
+ConditionKernelCommandLine=ostree
+
+[Socket]
+ListenStream=/run/rpm-ostree/client.sock
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target

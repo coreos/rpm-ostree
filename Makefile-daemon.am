@@ -63,14 +63,15 @@ systemdunit_service_in_files = \
 	$(NULL)
 
 systemdunit_service_files = $(systemdunit_service_in_files:.service.in=.service)
-systemdunit_timer_files = \
+systemdunit_other_files = \
+	$(srcdir)/src/daemon/rpm-ostreed.socket \
 	$(srcdir)/src/daemon/rpm-ostreed-automatic.timer \
 	$(srcdir)/src/daemon/rpm-ostree-countme.timer \
 	$(NULL)
 
 systemdunit_DATA = \
 	$(systemdunit_service_files) \
-	$(systemdunit_timer_files) \
+	$(systemdunit_other_files) \
 	$(NULL)
 
 systemdunitdir       = $(prefix)/lib/systemd/system/
@@ -110,7 +111,7 @@ EXTRA_DIST += \
 	$(sysconf_DATA) \
 	$(service_in_files) \
 	$(systemdunit_service_in_files) \
-	$(systemdunit_timer_files) \
+	$(systemdunit_other_files) \
 	$(NULL)
 
 CLEANFILES += \

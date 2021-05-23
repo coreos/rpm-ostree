@@ -5,7 +5,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::{cxxrsutil::*, variant_utils};
+use anyhow::{anyhow, Context, Result};
 use openat_ext::OpenatDirExt;
+use std::io::prelude::*;
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::prelude::FromRawFd;
 use std::pin::Pin;
 
 /// Validate basic assumptions on daemon startup.
@@ -24,6 +28,108 @@ pub(crate) fn daemon_sanitycheck_environment(
         }
     }
     Ok(())
+}
+
+/// Connect to the client socket and ensure the daemon is initialized;
+/// this avoids DBus and ensures that we get any early startup errors
+/// returned cleanly.
+pub(crate) fn start_daemon_via_socket() -> CxxResult<()> {
+    let address = "/run/rpm-ostree/client.sock";
+    let s = UnixStream::connect(address)
+        .with_context(|| anyhow!("Failed to connect to {}", address))?;
+    let mut s = std::io::BufReader::new(s);
+    let mut r = String::new();
+    s.read_to_string(&mut r)
+        .context("Reading from client socket")?;
+    if r.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!("{}", r).into())
+    }
+}
+
+fn send_init_result_to_client(client: &UnixStream, err: &Result<()>) {
+    let mut client = std::io::BufWriter::new(client);
+    match err {
+        Ok(_) => {
+            // On successwe close the stream without writing anything,
+            // which acknowledges successful startup to the client.
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            match client
+                .write_all(msg.as_bytes())
+                .and_then(|_| client.flush())
+            {
+                Ok(_) => {}
+                Err(inner_err) => {
+                    eprintln!(
+                        "Failed to write error message to client socket (original error: {}): {}",
+                        e, inner_err
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn process_clients(listener: UnixListener, res: &Result<()>) {
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => send_init_result_to_client(&stream, res),
+            Err(e) => {
+                // This shouldn't be fatal, we continue to start up.
+                eprintln!("Failed to listen for client stream: {}", e);
+            }
+        }
+        if res.is_err() {
+            break;
+        }
+    }
+}
+
+/// Perform initialization steps required by systemd service activation.
+///
+/// This ensures that the system is running under systemd, then receives the
+/// socket-FD for main IPC logic, and notifies systemd about ready-state.
+pub(crate) fn daemon_main(debug: bool) -> Result<()> {
+    if !systemd::daemon::booted()? {
+        return Err(anyhow!("not running as a systemd service"));
+    }
+
+    let init_res: Result<()> = crate::ffi::daemon_init_inner(debug).map_err(|e| e.into());
+
+    let mut fds = systemd::daemon::listen_fds(false)?.iter();
+    let listener = match fds.next() {
+        None => {
+            // If started directly via `systemctl start` or DBus activation, we
+            // directly propagate the error back to our exit code.
+            init_res?;
+            UnixListener::bind("/run/rpmostreed.socket")?
+        }
+        Some(fd) => {
+            if fds.next().is_some() {
+                return Err(anyhow!("Expected exactly 1 fd from systemd activation"));
+            }
+            let listener = unsafe { UnixListener::from_raw_fd(fd) };
+            match init_res {
+                Ok(_) => listener,
+                Err(e) => {
+                    let err_copy = Err(anyhow!("{}", e));
+                    process_clients(listener, &err_copy);
+                    return Err(e);
+                }
+            }
+        }
+    };
+
+    // On success, we spawn a helper thread that just responds with
+    // sucess to clients that connect via the socket.  In the future,
+    // perhaps we'll expose an API here.
+    std::thread::spawn(move || process_clients(listener, &Ok(())));
+
+    // And now, enter the main loop.
+    Ok(crate::ffi::daemon_main_inner()?)
 }
 
 /// Get a currently unique (for this host) identifier for the
