@@ -142,10 +142,8 @@ rpmostree_builtin_rebase (int             argc,
   RpmOstreeRefspecType refspectype;
   if (!rpmostree_refspec_classify (new_provided_refspec, &refspectype, &remainder, error))
     return FALSE;
-  if (!opt_experimental && refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
-    return glnx_throw (error, "rojig:// refspec requires --experimental");
 
-  /* catch "ostree://" or "rojig://"; we'd error out much later in the daemon otherwise */
+  /* catch "ostree://"; we'd error out much later in the daemon otherwise */
   if (strlen (remainder) == 0)
     return glnx_throw (error, "Refspec is empty");
 

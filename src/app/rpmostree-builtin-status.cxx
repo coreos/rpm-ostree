@@ -652,8 +652,6 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
             g_print ("%s", canonrefspec);
           }
           break;
-        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-          g_assert_not_reached ();
         }
     }
   else

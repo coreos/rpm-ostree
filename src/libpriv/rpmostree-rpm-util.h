@@ -219,9 +219,7 @@ rpmostree_create_rpmdb_pkglist_variant (int              dfd,
 
 char * rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch);
 char *rpmostree_get_cache_branch_header (Header hdr);
-char *rpmostree_get_rojig_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
-char *rpmostree_get_rojig_branch_pkg (DnfPackage *pkg);
 
 gboolean
 rpmostree_decompose_nevra (const char  *nevra,

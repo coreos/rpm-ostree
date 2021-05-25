@@ -337,12 +337,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
           }
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      {
-        g_variant_dict_insert (dict, "rojig-description", "@a{sv}",
-                               rpmostree_origin_get_rojig_description (origin));
-      }
-      break;
     }
 
   if (refspec)
@@ -809,17 +803,6 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
     const char *refspec_data;
     if (!rpmostree_refspec_classify (refspec, &refspectype, &refspec_data, error))
       return FALSE;
-
-    /* we don't support rojig-based origins yet */
-    switch (refspectype)
-      {
-      case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-        *out_update = NULL;
-        return TRUE; /* NB: early return */
-      case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-      case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-        break;
-      }
 
     /* just skip over "ostree://" so we can talk with libostree without thinking about it */
     refspec = refspec_data;

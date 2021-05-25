@@ -137,7 +137,6 @@ echo "
     $PACKAGE $VERSION
 
     introspection:                           $found_introspection
-    rojig:                                   ${enable_rojig:-no}
     ASAN + UBSAN:                            ${enable_sanitizers:-no}
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release

@@ -69,15 +69,7 @@ struct RpmOstreeImporter
   DnfPackage *pkg;
   char *hdr_sha256;
 
-  guint n_rojig_skipped;
-  guint n_rojig_total;
   char *ostree_branch;
-
-  gboolean rojig_mode;
-  char *rojig_cacheid;
-  GVariant *rojig_xattr_table;
-  GVariant *rojig_xattrs;
-  GVariant *rojig_next_xattrs; /* passed from filter to xattr cb */
 };
 
 G_DEFINE_TYPE(RpmOstreeImporter, rpmostree_importer, G_TYPE_OBJECT)
@@ -103,11 +95,6 @@ rpmostree_importer_finalize (GObject *object)
   g_clear_pointer (&self->opt_files, (GDestroyNotify)g_hash_table_unref);
 
   g_free (self->hdr_sha256);
-
-  g_free (self->rojig_cacheid);
-  g_clear_pointer (&self->rojig_xattr_table, (GDestroyNotify)g_variant_unref);
-  g_clear_pointer (&self->rojig_xattrs, (GDestroyNotify)g_variant_unref);
-  g_clear_pointer (&self->rojig_next_xattrs, (GDestroyNotify)g_variant_unref);
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
 }
@@ -293,18 +280,6 @@ rpmostree_importer_new_take_fd (int                     *fd,
   return ret;
 }
 
-void
-rpmostree_importer_set_rojig_mode (RpmOstreeImporter                    *self,
-                                   GVariant *xattr_table,
-                                   GVariant *xattrs)
-{
-  self->rojig_mode = TRUE;
-  self->rojig_xattr_table = g_variant_ref (xattr_table);
-  g_variant_get (xattrs, "(s@a(su))",
-                 &self->rojig_cacheid,
-                 &self->rojig_xattrs);
-}
-
 static void
 get_rpmfi_override (RpmOstreeImporter *self,
                     const char        *path,
@@ -334,10 +309,7 @@ rpmostree_importer_get_ostree_branch (RpmOstreeImporter *self)
 {
   if (!self->ostree_branch)
     {
-      if (self->rojig_mode)
-        self->ostree_branch = rpmostree_get_rojig_branch_header (self->hdr);
-      else
-        self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
+      self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
     }
 
   return self->ostree_branch;
@@ -481,23 +453,6 @@ build_metadata_variant (RpmOstreeImporter *self,
       g_variant_builder_add (&metadata_builder, "{sv}",
                              "rpmostree.repodata_checksum",
                              g_variant_new_string (chksum_repr.c_str()));
-    }
-
-  if (self->rojig_mode)
-    {
-      g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.rojig",
-                             g_variant_new_boolean (TRUE));
-      g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.rojig_cacheid",
-                             g_variant_new_string (self->rojig_cacheid));
-      g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.rojig_n_skipped",
-                             g_variant_new_uint32 (self->n_rojig_skipped));
-      g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.rojig_total",
-                             g_variant_new_uint32 (self->n_rojig_total));
-
     }
 
   if (self->doc_files)
@@ -805,11 +760,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
    * is unprivileged, anything else is a compose.
    */
   const gboolean unprivileged = ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE_USER_ONLY;
-  if (self->rojig_mode)
-    {
-      g_assert_not_reached ();
-    }
-  else if (unprivileged)
+  if (unprivileged)
     filter = unprivileged_filter_cb;
   else
     filter = compose_filter_cb;
@@ -821,15 +772,8 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
   g_autoptr(OstreeRepoCommitModifier) modifier =
     ostree_repo_commit_modifier_new (static_cast<OstreeRepoCommitModifierFlags>(modifier_flags), filter, &fdata, NULL);
-  if (self->rojig_mode)
-    {
-      g_assert_not_reached ();
-    }
-  else
-    {
-      ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb, NULL, self);
-      ostree_repo_commit_modifier_set_sepolicy (modifier, self->sepolicy);
-    }
+  ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb, NULL, self);
+  ostree_repo_commit_modifier_set_sepolicy (modifier, self->sepolicy);
 
   OstreeRepoImportArchiveOptions opts = { 0 };
   opts.ignore_unsupported_content = TRUE;

@@ -52,7 +52,7 @@
  * The #RpmOstreeSysrootUpgrader class models a `baserefspec` OSTree branch
  * in an origin file, along with a set of layered RPM packages.
  *
- * It also supports the plain-ostree "refspec" model, as well as rojig://.
+ * It also supports the plain-ostree "refspec" model.
  */
 typedef struct {
   GObjectClass parent_class;
@@ -480,10 +480,6 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
           }
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      {
-        return glnx_throw (error, "rojig is not supported in this build of rpm-ostree");
-      }
     }
 
   gboolean changed = !g_str_equal (new_base_rev, self->base_revision);
@@ -946,16 +942,6 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath,
                                 cancellable, error))
     return FALSE;
-
-  if (rpmostree_origin_is_rojig (self->origin))
-    {
-      /* We don't want to re-check the metadata, we already did that for the
-       * base. In the future we should try to re-use the DnfContext.
-       */
-      g_autoptr(DnfState) hifstate = dnf_state_new ();
-      if (!dnf_context_setup_sack (rpmostree_context_get_dnf (self->ctx), hifstate, error))
-        return FALSE;
-    }
 
   const gboolean have_packages = (self->overlay_packages->len > 0 ||
                                   g_hash_table_size (local_pkgs) > 0 ||

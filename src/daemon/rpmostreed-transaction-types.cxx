@@ -68,33 +68,6 @@ change_origin_refspec (GVariantDict    *options,
   const char *current_refspecdata;
   rpmostree_origin_classify_refspec (origin, &current_refspectype, &current_refspecdata);
 
-  /* This function ideally would be split into ostree/rojig handling
-   * and we'd also do "partial" support for rojig so one could do e.g.
-   * `rpm-ostree rebase fedora-atomic-workstation` instead of
-   * `rpm-ostree rebase updates:fedora-atomic-workstation` etc.
-   */
-  switch (refspectype)
-    {
-      case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-        {
-          if (!rpmostree_origin_set_rebase (origin, src_refspec, error))
-            return FALSE;
-
-          if (current_refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG
-              && strcmp (current_refspecdata, refspecdata) == 0)
-            return glnx_throw (error, "Old and new refs are equal: %s", src_refspec);
-
-          if (out_old_refspec != NULL)
-            *out_old_refspec = g_strdup (current_refspecdata);
-          if (out_new_refspec != NULL)
-            *out_new_refspec = g_strdup (src_refspec);
-          return TRUE;
-        }
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-      break;
-    }
-
   /* Now here we "peel" it since the rest of the code assumes libostree */
   const char *refspec = refspecdata;
 
@@ -211,10 +184,6 @@ apply_revision_override (RpmostreedTransaction    *transaction,
             rpmostree_origin_set_override_commit (origin, checksum, version);
           }
           break;
-        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-          /* This case we'll look up later */
-          rpmostree_origin_set_rojig_version (origin, version);
-          break;
         case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
           g_assert_not_reached ();  /* Handled above */
         }
@@ -233,11 +202,6 @@ apply_revision_override (RpmostreedTransaction    *transaction,
                                                     checksum, progress, cancellable, error))
                 return FALSE;
             }
-          break;
-        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-          /* For now we skip validation here, if there's an error we'll see it later
-           * on.
-           */
           break;
         case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
           g_assert_not_reached ();  /* Handled above */
@@ -1074,9 +1038,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!rpmostree_refspec_classify (self->refspec, &refspectype, &ref, error))
         return FALSE;
 
-      if (refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
-        return glnx_throw (error, "Local repo remotes not supported for rojig://");
-
       g_autoptr(OstreeRepo) local_repo_remote =
         ostree_repo_open_at (self->local_repo_remote_dfd, ".", cancellable, error);
       if (!local_repo_remote)
@@ -1437,7 +1398,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return glnx_throw (error, "Refusing to download rpm-md for offline OS '%s'",
                            self->osname);
 
-      /* XXX: in rojig mode we'll want to do this unconditionally */
       g_autoptr(DnfSack) sack = NULL;
       if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
         {

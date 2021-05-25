@@ -40,15 +40,6 @@ struct _RpmOstreeContext {
   gboolean disable_selinux;
   char *ref;
 
-  /* rojig-mode data */
-  const char *rojig_spec; /* The rojig spec like: repoid:package */
-  const char *rojig_version; /* Optional */
-  gboolean rojig_pure; /* There is only rojig */
-  gboolean rojig_allow_not_found; /* Don't error if package not found */
-  DnfPackage *rojig_pkg;
-  char *rojig_checksum;
-  char *rojig_inputhash;
-
   gboolean pkgcache_only;
   DnfContext *dnfctx;
   RpmOstreeContextDnfCachePolicy dnf_cache_policy;
@@ -59,9 +50,6 @@ struct _RpmOstreeContext {
   gboolean unprivileged;
   OstreeSePolicy *sepolicy;
   char *passwd_dir;
-  /* Used in async imports, not owned */
-  GVariant *rojig_xattr_table;
-  GHashTable *rojig_pkg_to_xattrs;
 
   guint async_index; /* Offset into array if applicable */
   guint n_async_running;

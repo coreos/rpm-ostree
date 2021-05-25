@@ -147,7 +147,6 @@ typedef struct {
   OstreeRepo *pkgcache_repo; /* unified mode: pkgcache repo where we import pkgs */
   OstreeRepoDevInoCache *devino_cache;
   const char *ref;
-  char *rojig_spec;
   char *previous_checksum;
 
   std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_rs;
@@ -295,8 +294,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   }
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
-   * we're doing unified core, in which case the pkgcache repo is the cache.  But
-   * the rojigSet build still requires the original RPMs too.
+   * we're doing unified core, in which case the pkgcache repo is the cache.
    */
   if (opt_cachedir && !opt_unified_core)
     dnf_context_set_keep_cache (dnfctx, TRUE);
@@ -448,9 +446,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
         return FALSE;
 
       /* Now reload the policy from the tmproot, and relabel the pkgcache - this
-       * is the same thing done in rpmostree_context_commit(). But here we want
-       * to ensure our pkgcache labels are accurate, since that will
-       * be important for the ostree-rojig work.
+       * is the same thing done in rpmostree_context_commit().
        */
       g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
       if (sepolicy == NULL)

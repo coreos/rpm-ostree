@@ -15,7 +15,6 @@ use std::result::Result as StdResult;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-const ROJIG_PREFIX: &str = "rojig://";
 const ORIGIN: &str = "origin";
 const OVERRIDE_COMMIT: &str = "override-commit";
 
@@ -23,7 +22,6 @@ const OVERRIDE_COMMIT: &str = "override-commit";
 pub(crate) enum RefspecType {
     Checksum,
     Ostree,
-    Rojig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,9 +35,6 @@ struct Cache {
     override_commit: Option<String>,
     #[allow(dead_code)]
     unconfigured_state: Option<String>,
-    rojig_override_version: Option<String>,
-    #[allow(dead_code)]
-    rojig_description: Option<String>,
 
     packages: BTreeSet<String>,
     packages_local: BTreeMap<String, String>,
@@ -135,14 +130,13 @@ impl Origin {
 
     fn new_parse(kf: &KeyFile) -> Result<Box<Self>> {
         let kf = keyfile_dup(kf);
-        let rojig = keyfile_get_optional_string(&kf, "origin", "rojig")?;
         let refspec_str = if let Some(r) = keyfile_get_optional_string(&kf, "origin", "refspec")? {
             Some(r)
         } else {
             keyfile_get_optional_string(&kf, "origin", "baserefspec")?
         };
-        let refspec = match (refspec_str, rojig) {
-            (Some(refspec), None) => {
+        let refspec = match refspec_str {
+            Some(refspec) => {
                 if ostree::validate_checksum_string(&refspec).is_ok() {
                     Refspec {
                         kind: RefspecType::Checksum,
@@ -155,12 +149,7 @@ impl Origin {
                     }
                 }
             },
-            (None, Some(rojig)) => Refspec {
-                kind: RefspecType::Rojig,
-                value: rojig
-            },
-            (None, None) => bail!("No origin/refspec, origin/rojig, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree"),
-            (Some(_), Some(_)) => bail!("Duplicate origin/refspec and origin/rojig in deployment origin"),
+            None => bail!("No origin/refspec, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree"),
         };
         let override_commit = keyfile_get_optional_string(&kf, "origin", "override-commit")?;
         let unconfigured_state = keyfile_get_optional_string(&kf, "origin", "unconfigured-state")?;
@@ -176,17 +165,12 @@ impl Origin {
                     r
                 })
                 .unwrap_or_default();
-        let rojig_override_version =
-            keyfile_get_optional_string(&kf, ORIGIN, "rojig-override-version")?;
-        let rojig_description = keyfile_get_optional_string(&kf, ORIGIN, "rojig-description")?;
         Ok(Box::new(Self {
             kf,
             cache: Cache {
                 refspec: refspec,
                 override_commit,
                 unconfigured_state,
-                rojig_override_version,
-                rojig_description,
                 packages,
                 packages_local,
                 override_remove,
@@ -233,30 +217,12 @@ impl Origin {
         }
     }
 
-    pub(crate) fn set_rojig_version(&mut self, version: Option<&str>) {
-        match version {
-            Some(version) => {
-                self.kf
-                    .set_string(ORIGIN, "rojig-override-version", version);
-                self.cache.rojig_override_version = Some(version.to_string());
-            }
-            None => {
-                let _ = self.kf.remove_key(ORIGIN, "rojig-override-version");
-                self.cache.rojig_override_version = None;
-            }
-        }
-    }
-
     pub(crate) fn get_refspec_type(&self) -> RefspecType {
         self.cache.refspec.kind
     }
 
     pub(crate) fn get_prefixed_refspec(&self) -> String {
-        let val = self.cache.refspec.value.as_str();
-        match self.cache.refspec.kind {
-            RefspecType::Rojig => format!("{}{}", ROJIG_PREFIX, val),
-            _ => val.to_string(),
-        }
+        self.cache.refspec.value.as_str().to_string()
     }
 
     pub(crate) fn get_custom_url(&self) -> Result<String> {
@@ -273,15 +239,6 @@ impl Origin {
             keyfile_get_nonempty_optional_string(&self.kf, "origin", "custom-description")?
                 .unwrap_or_default(),
         )
-    }
-
-    pub(crate) fn get_rojig_description(&self) -> String {
-        // FIXME(cxx-rs) propagate Option once supported
-        self.cache
-            .rojig_description
-            .as_ref()
-            .map(String::from)
-            .unwrap_or_default()
     }
 
     pub(crate) fn get_regenerate_initramfs(&self) -> bool {
@@ -307,10 +264,6 @@ impl Origin {
             || !self.cache.packages_local.is_empty()
             || !self.cache.override_replace_local.is_empty()
             || !self.cache.override_remove.is_empty()
-    }
-
-    pub(crate) fn is_rojig(&self) -> bool {
-        self.cache.refspec.kind == RefspecType::Rojig
     }
 
     // Binding for cxx
@@ -344,8 +297,6 @@ refspec=foo:bar/x86_64/baz
         assert!(!o.may_require_local_assembly());
         assert!(!o.get_regenerate_initramfs());
         assert!(o.get_initramfs_etc_files().is_empty());
-        assert!(!o.is_rojig());
-        assert_eq!(o.get_rojig_description(), "");
         assert_eq!(o.get_custom_url()?, "");
         assert_eq!(o.get_custom_description()?, "");
         assert!(o.get_override_local_pkgs().is_empty());
@@ -354,7 +305,6 @@ refspec=foo:bar/x86_64/baz
         let mut o = o.duplicate();
         assert_eq!(o.get_refspec_type(), RefspecType::Ostree);
         o.remove_transient_state();
-        o.set_rojig_version(Some("42"));
 
         let mut o = Origin::new_from_str(indoc! {"
             [origin]
