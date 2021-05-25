@@ -68,7 +68,6 @@ rpmostree_ex_builtin_initramfs_etc (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       NULL,
                                        error))
     return FALSE;
 

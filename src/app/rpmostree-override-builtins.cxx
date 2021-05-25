@@ -156,7 +156,6 @@ rpmostree_override_builtin_replace (int argc, char **argv,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       NULL,
                                        error))
     return FALSE;
 
@@ -198,7 +197,6 @@ rpmostree_override_builtin_remove (int argc, char **argv,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       NULL,
                                        error))
     return FALSE;
 
@@ -240,7 +238,6 @@ rpmostree_override_builtin_reset (int argc, char **argv,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       NULL,
                                        error))
     return FALSE;
 

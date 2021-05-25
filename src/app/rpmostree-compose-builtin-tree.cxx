@@ -1201,7 +1201,7 @@ rpmostree_compose_builtin_install (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL,
                                        error))
     return FALSE;
 
@@ -1268,7 +1268,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL,
                                        error))
     return FALSE;
 
@@ -1331,7 +1331,7 @@ rpmostree_compose_builtin_commit (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL,
                                        error))
     return FALSE;
 
@@ -1377,7 +1377,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL,
                                        error))
     return FALSE;
 
@@ -1441,7 +1441,7 @@ rpmostree_compose_builtin_extensions (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL,
                                        error))
     return FALSE;
 

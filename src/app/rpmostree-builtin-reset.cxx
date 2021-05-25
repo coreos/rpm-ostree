@@ -68,7 +68,6 @@ rpmostree_builtin_reset (int             argc,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       NULL,
                                        error))
     return FALSE;
 

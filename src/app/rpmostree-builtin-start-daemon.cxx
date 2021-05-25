@@ -46,12 +46,10 @@ typedef enum {
 static AppState appstate = APPSTATE_STARTING;
 static gboolean opt_debug = FALSE;
 static char *opt_sysroot = NULL;
-static gint service_dbus_fd = -1;
 static GOptionEntry opt_entries[] =
 {
   { "debug", 'd', 0, G_OPTION_ARG_NONE, &opt_debug, "Print debug information on stderr", NULL },
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
-  { "dbus-peer", 0, 0, G_OPTION_ARG_INT, &service_dbus_fd, "Use a peer to peer dbus connection on this fd", "FD" },
   { NULL }
 };
 
@@ -65,13 +63,6 @@ state_transition (AppState state)
   if (state > APPSTATE_RUNNING && rpm_ostree_daemon)
     rpmostreed_daemon_exit_now (rpm_ostree_daemon);
   g_main_context_wakeup (NULL);
-}
-
-static void
-state_transition_fatal_err (GError *error)
-{
-  sd_journal_print (LOG_ERR, "%s", error->message);
-  state_transition (APPSTATE_FLUSHING);
 }
 
 static gboolean
@@ -97,26 +88,6 @@ on_bus_name_released (GDBusConnection     *connection,
                       void                *user_data)
 {
   state_transition (APPSTATE_EXITING);
-}
-
-static void
-on_peer_acquired (GObject *source,
-                  GAsyncResult *result,
-                  gpointer user_data)
-{
-  g_autoptr(GError) error = NULL;
-  g_autoptr(GDBusConnection) connection = g_dbus_connection_new_finish (result, &error);
-  if (!connection)
-    {
-      state_transition_fatal_err (error);
-      return;
-    }
-
-  if (!start_daemon (connection, &error))
-    {
-      state_transition_fatal_err (error);
-      return;
-    }
 }
 
 static gboolean
@@ -254,29 +225,6 @@ on_log_handler (const gchar *log_domain,
   sd_journal_print (priority, "%s", message);
 }
 
-
-static gboolean
-connect_to_peer (int fd, GError **error)
-{
-  g_autoptr(GSocketConnection) stream = NULL;
-  g_autoptr(GSocket) socket = NULL;
-  g_autofree gchar *guid = NULL;
-
-  socket = g_socket_new_from_fd (fd, error);
-  if (!socket)
-    return FALSE;
-
-  stream = g_socket_connection_factory_create_connection (socket);
-  g_assert_nonnull (stream);
-
-  guid = g_dbus_generate_guid ();
-  g_dbus_connection_new (G_IO_STREAM (stream), guid,
-                         (GDBusConnectionFlags)(G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER |
-                         G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING),
-                         NULL, NULL, on_peer_acquired, NULL);
-  return TRUE;
-}
-
 gboolean
 rpmostree_builtin_start_daemon (int             argc,
                                 char          **argv,
@@ -309,27 +257,11 @@ rpmostree_builtin_start_daemon (int             argc,
   g_unix_signal_add (SIGINT, on_sigint, NULL);
   g_unix_signal_add (SIGTERM, on_sigint, NULL);
 
-  g_autoptr(GDBusConnection) bus = NULL;
-  if (service_dbus_fd == -1)
-    {
-      GBusType bus_type;
-
-      /* To facilitate testing, use whichever message bus activated
-       * this process.  If the process was started directly, assume
-       * the system bus. */
-      if (g_getenv ("DBUS_STARTER_BUS_TYPE") != NULL)
-        bus_type = G_BUS_TYPE_STARTER;
-      else
-        bus_type = G_BUS_TYPE_SYSTEM;
-
-      /* Get an explicit ref to the bus so we can use it later */
-      bus = g_bus_get_sync (bus_type, NULL, error);
-      if (!bus)
-        return FALSE;
-      if (!start_daemon (bus, error))
-        return FALSE;
-    }
-  else if (!connect_to_peer (service_dbus_fd, error))
+  /* Get an explicit ref to the bus so we can use it later */
+  g_autoptr(GDBusConnection) bus = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, error);
+  if (!bus)
+    return FALSE;
+  if (!start_daemon (bus, error))
     return FALSE;
 
   state_transition (APPSTATE_RUNNING);

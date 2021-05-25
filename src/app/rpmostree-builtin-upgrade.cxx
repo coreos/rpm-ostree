@@ -77,7 +77,6 @@ rpmostree_builtin_upgrade (int             argc,
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
-  GBusType bus_type;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -86,7 +85,6 @@ rpmostree_builtin_upgrade (int             argc,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &bus_type,
                                        error))
     return FALSE;
 
@@ -132,7 +130,7 @@ rpmostree_builtin_upgrade (int             argc,
     }
 
   if (!opt_bypass_driver)
-    if (!error_if_driver_registered (bus_type, sysroot_proxy, cancellable, error))
+    if (!error_if_driver_registered (sysroot_proxy, cancellable, error))
       return FALSE;
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
