@@ -4604,7 +4604,14 @@ rpmostree_context_commit (RpmOstreeContext      *self,
     if (!ostree_repo_write_mtree (self->ostreerepo, mtree, &root, cancellable, error))
       return FALSE;
 
-    { g_autoptr(GVariant) metadata = g_variant_ref_sink (g_variant_builder_end (&metadata_builder));
+    g_autoptr(GVariant) metadata_so_far = g_variant_ref_sink (g_variant_builder_end (&metadata_builder));
+    // Unfortunately this API takes GVariantDict, not GVariantBuilder, so convert
+    g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata_so_far);
+    if (!ostree_commit_metadata_for_bootable (root, metadata_dict, cancellable, error))
+      return FALSE;
+    g_autoptr(GVariant) metadata = g_variant_dict_end (metadata_dict);
+
+    { 
       if (!ostree_repo_write_commit (self->ostreerepo, parent, "", "",
                                      metadata,
                                      OSTREE_REPO_FILE (root),
