@@ -53,6 +53,12 @@ dnl RHEL8.1 has old libarchive
 AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
   [AC_DEFINE([HAVE_LIBARCHIVE_ZSTD], 1, [Define if we have libarchive with zstd])])
 
+# rpmver is available in rpm >= 4.16, el8 is still on 4.14
+AC_SEARCH_LIBS([rpmverCmp], [rpm],
+  AC_DEFINE([BUILDOPT_HAVE_RPMVER], 1, [Whether rpmver API is available in librpmio]),
+  AC_DEFINE([BUILDOPT_HAVE_RPMVER], 0, [Whether rpmver API is available in librpmio])
+)
+
 dnl We don't *actually* use this ourself, but librepo does, and libdnf gets confused
 dnl if librepo doesn't support it.
 have_zchunk=no

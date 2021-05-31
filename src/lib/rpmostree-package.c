@@ -32,11 +32,16 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <rpm/rpmver.h>
 #include "libglnx.h"
 
 #include "rpmostree-shlib-ipc-private.h"
 #include "rpmostree-package-priv.h"
+
+#if BUILDOPT_HAVE_RPMVER
+#include <rpm/rpmver.h>
+#else
+#include "rpmver-private.h"
+#endif
 
 typedef GObjectClass RpmOstreePackageClass;
 
