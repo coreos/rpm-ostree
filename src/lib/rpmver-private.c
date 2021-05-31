@@ -25,40 +25,40 @@ struct rpmver_s {
 
 /**
  * Split EVR into epoch, version, and release components.
- * @param evr		[epoch:]version[-release] string
- * @retval *ep		pointer to epoch
- * @retval *vp		pointer to version
- * @retval *rp		pointer to release
+ * @param evr                [epoch:]version[-release] string
+ * @retval *ep                pointer to epoch
+ * @retval *vp                pointer to version
+ * @retval *rp                pointer to release
  */
 static
 void parseEVR(char * evr,
-		const char ** ep,
-		const char ** vp,
-		const char ** rp)
+                const char ** ep,
+                const char ** vp,
+                const char ** rp)
 {
     const char *epoch;
-    const char *version;		/* assume only version is present */
+    const char *version;                /* assume only version is present */
     const char *release;
     char *s, *se;
 
     s = evr;
-    while (*s && risdigit(*s)) s++;	/* s points to epoch terminator */
-    se = strrchr(s, '-');		/* se points to version terminator */
+    while (*s && risdigit(*s)) s++;        /* s points to epoch terminator */
+    se = strrchr(s, '-');                /* se points to version terminator */
 
     if (*s == ':') {
-	epoch = evr;
-	*s++ = '\0';
-	version = s;
-	if (*epoch == '\0') epoch = "0";
+        epoch = evr;
+        *s++ = '\0';
+        version = s;
+        if (*epoch == '\0') epoch = "0";
     } else {
-	epoch = NULL;	/* XXX disable epoch compare if missing */
-	version = evr;
+        epoch = NULL;        /* XXX disable epoch compare if missing */
+        version = evr;
     }
     if (se) {
-	*se++ = '\0';
-	release = se;
+        *se++ = '\0';
+        release = se;
     } else {
-	release = NULL;
+        release = NULL;
     }
 
     if (ep) *ep = epoch;
@@ -73,38 +73,38 @@ int rpmverOverlap(rpmver v1, rpmsenseFlags f1, rpmver v2, rpmsenseFlags f2)
 
     /* Compare {A,B} [epoch:]version[-release] */
     if (v1->e && *v1->e && v2->e && *v2->e)
-	sense = rpmvercmp(v1->e, v2->e);
+        sense = rpmvercmp(v1->e, v2->e);
     else if (v1->e && *v1->e && atol(v1->e) > 0) {
-	sense = 1;
+        sense = 1;
     } else if (v2->e && *v2->e && atol(v2->e) > 0)
-	sense = -1;
+        sense = -1;
 
     if (sense == 0) {
-	sense = rpmvercmp(v1->v, v2->v);
-	if (sense == 0) {
-	    if (v1->r && *v1->r && v2->r && *v2->r) {
-		sense = rpmvercmp(v1->r, v2->r);
-	    } else {
-		/* always matches if the side with no release has SENSE_EQUAL */
-		if ((v1->r && *v1->r && (f2 & RPMSENSE_EQUAL)) ||
-		    (v2->r && *v2->r && (f1 & RPMSENSE_EQUAL))) {
-		    result = 1;
-		    goto exit;
-		}
-	    }
-	}
+        sense = rpmvercmp(v1->v, v2->v);
+        if (sense == 0) {
+            if (v1->r && *v1->r && v2->r && *v2->r) {
+                sense = rpmvercmp(v1->r, v2->r);
+            } else {
+                /* always matches if the side with no release has SENSE_EQUAL */
+                if ((v1->r && *v1->r && (f2 & RPMSENSE_EQUAL)) ||
+                    (v2->r && *v2->r && (f1 & RPMSENSE_EQUAL))) {
+                    result = 1;
+                    goto exit;
+                }
+            }
+        }
     }
 
     /* Detect overlap of {A,B} range. */
     if (sense < 0 && ((f1 & RPMSENSE_GREATER) || (f2 & RPMSENSE_LESS))) {
-	result = 1;
+        result = 1;
     } else if (sense > 0 && ((f1 & RPMSENSE_LESS) || (f2 & RPMSENSE_GREATER))) {
-	result = 1;
+        result = 1;
     } else if (sense == 0 &&
-	(((f1 & RPMSENSE_EQUAL) && (f2 & RPMSENSE_EQUAL)) ||
-	 ((f1 & RPMSENSE_LESS) && (f2 & RPMSENSE_LESS)) ||
-	 ((f1 & RPMSENSE_GREATER) && (f2 & RPMSENSE_GREATER)))) {
-	result = 1;
+        (((f1 & RPMSENSE_EQUAL) && (f2 & RPMSENSE_EQUAL)) ||
+         ((f1 & RPMSENSE_LESS) && (f2 & RPMSENSE_LESS)) ||
+         ((f1 & RPMSENSE_GREATER) && (f2 & RPMSENSE_GREATER)))) {
+        result = 1;
     }
 
 exit:
@@ -114,11 +114,11 @@ exit:
 static int compare_values(const char *str1, const char *str2)
 {
     if (!str1 && !str2)
-	return 0;
+        return 0;
     else if (str1 && !str2)
-	return 1;
+        return 1;
     else if (!str1 && str2)
-	return -1;
+        return -1;
     return rpmvercmp(str1, str2);
 }
 
@@ -129,9 +129,9 @@ int rpmverCmp(rpmver v1, rpmver v2)
 
     int rc = compare_values(e1, e2);
     if (!rc) {
-	rc = compare_values(v1->v, v2->v);
-	if (!rc)
-	    rc = compare_values(v1->r, v2->r);
+        rc = compare_values(v1->v, v2->v);
+        if (!rc)
+            rc = compare_values(v1->r, v2->r);
     }
     return rc;
 }
@@ -160,9 +160,9 @@ char *rpmverEVR(rpmver rv)
 {
     char *EVR = NULL;
     if (rv) {
-	rstrscat(&EVR, rv->e ? rv-> e : "", rv->e ? ":" : "",
-		       rv->v,
-		       rv->r ? "-" : "", rv->r ? rv->r : "", NULL);
+        rstrscat(&EVR, rv->e ? rv-> e : "", rv->e ? ":" : "",
+                       rv->v,
+                       rv->r ? "-" : "", rv->r ? rv->r : "", NULL);
     }
     return EVR;
 }
@@ -171,10 +171,10 @@ rpmver rpmverParse(const char *evr)
 {
     rpmver rv = NULL;
     if (evr && *evr) {
-	size_t evrlen = strlen(evr) + 1;
-	rv = xmalloc(sizeof(*rv) + evrlen);
-	memcpy(rv->arena, evr, evrlen);
-	parseEVR(rv->arena, &rv->e, &rv->v, &rv->r);
+        size_t evrlen = strlen(evr) + 1;
+        rv = xmalloc(sizeof(*rv) + evrlen);
+        memcpy(rv->arena, evr, evrlen);
+        parseEVR(rv->arena, &rv->e, &rv->v, &rv->r);
     }
     return rv;
 }
@@ -184,31 +184,31 @@ rpmver rpmverNew(const char *e, const char *v, const char *r)
     rpmver rv = NULL;
 
     if (v && *v) {
-	size_t nb = strlen(v) + 1;
-	nb += (e != NULL) ? strlen(e) + 1 : 0;
-	nb += (r != NULL) ? strlen(r) + 1 : 0;
-	rv = xmalloc(sizeof(*rv) + nb);
+        size_t nb = strlen(v) + 1;
+        nb += (e != NULL) ? strlen(e) + 1 : 0;
+        nb += (r != NULL) ? strlen(r) + 1 : 0;
+        rv = xmalloc(sizeof(*rv) + nb);
 
-	rv->e = NULL;
-	rv->v = NULL;
-	rv->r = NULL;
+        rv->e = NULL;
+        rv->v = NULL;
+        rv->r = NULL;
 
-	char *p = rv->arena;
-	if (e) {
-	    rv->e = p;
-	    p = stpcpy(p, e);
-	    p++;
-	}
+        char *p = rv->arena;
+        if (e) {
+            rv->e = p;
+            p = stpcpy(p, e);
+            p++;
+        }
 
-	rv->v = p;
-	p = stpcpy(p, v);
-	p++;
+        rv->v = p;
+        p = stpcpy(p, v);
+        p++;
 
-	if (r) {
-	    rv->r = p;
-	    p = stpcpy(p, r);
-	    p++;
-	}
+        if (r) {
+            rv->r = p;
+            p = stpcpy(p, r);
+            p++;
+        }
     }
     return rv;
 }
@@ -216,7 +216,7 @@ rpmver rpmverNew(const char *e, const char *v, const char *r)
 rpmver rpmverFree(rpmver rv)
 {
     if (rv) {
-	free(rv);
+        free(rv);
     }
     return NULL;
 }
