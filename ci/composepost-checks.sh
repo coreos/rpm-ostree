@@ -26,3 +26,7 @@ ostree --repo="${repo}" ls -R "${ref}" /usr/lib/modules > tmp/modules-lsr.txt
 assert_file_has_content tmp/modules-lsr.txt '/vmlinuz$'
 assert_file_has_content tmp/modules-lsr.txt '/initramfs.img$'
 echo "ok boot location modules"
+
+ostree --repo="${repo}" show --print-metadata-key=ostree.bootable "${ref}" >out.txt
+assert_file_has_content_literal out.txt 'true'
+echo "ok bootable metadata"

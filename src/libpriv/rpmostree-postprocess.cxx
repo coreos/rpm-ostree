@@ -839,7 +839,7 @@ gboolean
 rpmostree_compose_commit (int            rootfs_fd,
                           OstreeRepo    *repo,
                           const char    *parent_revision,
-                          GVariant      *metadata,
+                          GVariant      *src_metadata,
                           const char    *gpg_keyid,
                           gboolean       enable_selinux,
                           OstreeRepoDevInoCache *devino_cache,
@@ -917,6 +917,12 @@ rpmostree_compose_commit (int            rootfs_fd,
   g_autoptr(GFile) root_tree = NULL;
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
     return glnx_prefix_error (error, "While writing tree");
+
+  // Unfortunately this API takes GVariantDict, not GVariantBuilder, so convert
+  g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (src_metadata);
+  if (!ostree_commit_metadata_for_bootable (root_tree, metadata_dict, cancellable, error))
+    return FALSE;
+  g_autoptr(GVariant) metadata = g_variant_dict_end (metadata_dict);
 
   g_autofree char *new_revision = NULL;
   if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,

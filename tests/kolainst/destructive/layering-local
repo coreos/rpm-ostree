@@ -55,6 +55,12 @@ rpmostree_assert_status '.deployments[0]["packages"]|length == 0' \
 assert_streq $(rpm -q foo) foo-1.2-3.x86_64
 echo "ok pkg foo added locally"
 
+booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+
+ostree show --print-metadata-key=ostree.bootable ${booted_commit} >out.txt
+assert_file_has_content_literal out.txt 'true'
+echo "ok bootable metadata"
+
 # check we could uninstall the package using either its NEVRA or name
 rpm-ostree uninstall foo-1.2-3.x86_64
 rpmostree_assert_status '.deployments[0]["requested-local-packages"]|length == 0'
@@ -81,7 +87,6 @@ rpmostree_assert_status '.deployments[0]["packages"]|length == 1' \
 echo "ok layer foo back from repos"
 
 # check that trying to install a package already in the base errors out
-booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
 ostree refs ${booted_commit} --create vmcheck_tmp/with_foo
 ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo
 rpm-ostree uninstall foo
