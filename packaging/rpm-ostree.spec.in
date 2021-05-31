@@ -52,7 +52,7 @@ BuildRequires: /usr/bin/g-ir-scanner
 BuildRequires: pkgconfig(ostree-1) >= 2021.1
 BuildRequires: pkgconfig(polkit-gobject-1)
 BuildRequires: pkgconfig(json-glib-1.0)
-BuildRequires: pkgconfig(rpm) >= 4.16.0
+BuildRequires: pkgconfig(rpm) >= 4.14.0
 BuildRequires: pkgconfig(libarchive)
 BuildRequires: pkgconfig(libsystemd)
 BuildRequires: libcap-devel
