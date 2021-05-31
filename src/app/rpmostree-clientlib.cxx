@@ -48,97 +48,6 @@ impl_transaction_get_response_sync (GDBusConnection *connection,
 
 #define RPMOSTREE_CLI_ID "cli"
 
-static void
-child_setup_pdeathsig (void *unused)
-{
-  if (prctl (PR_SET_PDEATHSIG, SIGTERM) < 0)
-    err (EXIT_FAILURE, "prctl(PR_SET_PDEATHSIG)");
-}
-
-static GDBusConnection*
-get_connection_for_path (const char *sysroot,
-                         gboolean force_peer,
-                         GBusType *out_bus_type,
-                         GCancellable *cancellable,
-                         GError **error)
-{
-  /* This is only intended for use by installed tests.
-   * Note that it disregards the 'sysroot' and 'force_peer' options
-   * and assumes the service activation command has been configured
-   * to use the desired system root path. */
-  if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
-    {
-      if (sysroot != NULL)
-        g_warning ("RPMOSTREE_USE_SESSION_BUS set, ignoring --sysroot=%s", sysroot);
-
-      /* NB: as opposed to other early returns, this is _also_ a happy path */
-      GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
-      if (!ret)
-        return (GDBusConnection*)(glnx_prefix_error_null (error, "Connecting to session bus"));
-
-      *out_bus_type = G_BUS_TYPE_SESSION;
-      return ret;
-    }
-
-  if (sysroot == NULL)
-    sysroot = "/";
-
-  if (g_strcmp0 ("/", sysroot) == 0 && force_peer == FALSE)
-    {
-      /* NB: as opposed to other early returns, this is _also_ a happy path */
-      GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
-      if (!ret)
-        return (GDBusConnection*)(glnx_prefix_error_null (error, "Connecting to system bus"));
-
-      *out_bus_type = G_BUS_TYPE_SYSTEM;
-      return ret;
-    }
-
-  gchar buffer[16];
-  int pair[2];
-  const gchar *args[] = {
-    "rpm-ostree",
-    "start-daemon",
-    "--sysroot", sysroot,
-    "--dbus-peer", buffer,
-    NULL
-  };
-
-  g_print ("Running in single user mode. Be sure no other users are modifying the system\n");
-  if (socketpair (AF_UNIX, SOCK_STREAM, 0, pair) < 0)
-    return (GDBusConnection*)glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
-
-  g_snprintf (buffer, sizeof (buffer), "%d", pair[1]);
-
-  g_autoptr(GSocket) socket = g_socket_new_from_fd (pair[0], error);
-  if (socket == NULL)
-    {
-      close (pair[0]);
-      close (pair[1]);
-      return NULL;
-    }
-
-  if (!g_spawn_async (NULL, (gchar **)args, NULL,
-                      static_cast<GSpawnFlags>(G_SPAWN_LEAVE_DESCRIPTORS_OPEN),
-                      child_setup_pdeathsig, NULL, NULL, error))
-    {
-      close (pair[1]);
-      return NULL;
-    }
-
-  g_autoptr(GSocketConnection) stream =
-    g_socket_connection_factory_create_connection (socket);
-  g_autoptr(GDBusConnection) connection =
-    g_dbus_connection_new_sync (G_IO_STREAM (stream), NULL,
-                                G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
-                                NULL, cancellable, error);
-  if (!connection)
-    return NULL;
-
-  *out_bus_type = G_BUS_TYPE_NONE;
-  return connection;
-}
-
 /* Used to close race conditions by ensuring the daemon status is up-to-date */
 static void
 on_reload_done (GObject      *src,
@@ -166,19 +75,16 @@ await_reload_sync (RPMOSTreeSysroot *sysroot_proxy)
  * is in the process of auto-exiting.
  */
 static gboolean
-app_load_sysroot_impl (const char *sysroot, gboolean force_peer, 
+app_load_sysroot_impl (const char       *sysroot,
                        GCancellable *cancellable, 
-                       GDBusConnection **out_conn, GBusType *out_bus_type, 
+                       GDBusConnection **out_conn,
                        GError **error)
 {
   const char *bus_name = NULL;
-  glnx_unref_object GDBusConnection *connection = NULL;
 
-  GBusType bus_type;
-  connection = get_connection_for_path (sysroot, force_peer, &bus_type,
-                                        cancellable, error);
-  if (connection == NULL)
-    return FALSE;
+  g_autoptr(GDBusConnection) connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
+  if (!connection)
+    return glnx_prefix_error (error, "Connecting to system bus");
 
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
@@ -241,8 +147,6 @@ app_load_sysroot_impl (const char *sysroot, gboolean force_peer,
     }
 
   *out_conn = util::move_nullify(connection);
-  if (out_bus_type)
-    *out_bus_type = bus_type;
   return TRUE;
 }
 
@@ -253,11 +157,10 @@ new_client_connection()
 {
   g_autoptr(GError) local_error = NULL;
   GDBusConnection *conn = NULL;
-  GBusType bus_type;
 
-  if (!app_load_sysroot_impl(NULL, false, NULL, &conn, &bus_type, &local_error))
+  if (!app_load_sysroot_impl("/", NULL, &conn, &local_error))
     util::throw_gerror(local_error);
-  return std::make_unique<ClientConnection>(conn, bus_type);
+  return std::make_unique<ClientConnection>(conn);
 }
 
 // Connect to a transaction DBus and monitor its progress synchronously,
@@ -282,8 +185,6 @@ ClientConnection::transaction_connect_progress_sync(const rust::Str address) con
 
 /**
 * rpmostree_load_sysroot
-* @sysroot: sysroot path
-* @force_peer: Force a peer connection
 * @cancellable: A GCancellable
 * @out_sysroot: (out) Return location for sysroot
 * @error: A pointer to a GError pointer.
@@ -291,17 +192,14 @@ ClientConnection::transaction_connect_progress_sync(const rust::Str address) con
 * Returns: True on success
 **/
 gboolean
-rpmostree_load_sysroot (gchar *sysroot,
-                        gboolean force_peer,
-                        GCancellable *cancellable,
+rpmostree_load_sysroot (const char        *sysroot, 
+                        GCancellable      *cancellable,
                         RPMOSTreeSysroot **out_sysroot_proxy,
-                        GBusType *out_bus_type,
-                        GError **error)
+                        GError           **error)
 {
   g_autoptr(GDBusConnection) connection = NULL;
-  GBusType bus_type;
 
-  if (!app_load_sysroot_impl (sysroot, force_peer, cancellable, &connection, &bus_type, error))
+  if (!app_load_sysroot_impl (sysroot, cancellable, &connection, error))
     return FALSE;
 
   const char *bus_name;
@@ -319,8 +217,6 @@ rpmostree_load_sysroot (gchar *sysroot,
   await_reload_sync (sysroot_proxy);
 
   *out_sysroot_proxy = util::move_nullify (sysroot_proxy);
-  if (out_bus_type)
-    *out_bus_type = bus_type;
   return TRUE;
 }
 
@@ -1731,8 +1627,7 @@ check_sd_unit_contains_pid (char            *sd_unit,
 
 /* Throw an error if an updates driver is registered and active. */
 gboolean
-error_if_driver_registered (GBusType          bus_type,
-                            RPMOSTreeSysroot *sysroot_proxy,
+error_if_driver_registered (RPMOSTreeSysroot *sysroot_proxy,
                             GCancellable     *cancellable,
                             GError          **error)
 {
@@ -1763,17 +1658,14 @@ error_if_driver_registered (GBusType          bus_type,
                        update_driver_name, update_driver_sd_unit);
       g_string_append_printf (error_msg, "See %s's documentation", update_driver_name);
       // Only try to get unit's `Documentation` and check unit's state if we're on the system bus.
-      if (bus_type == G_BUS_TYPE_SYSTEM)
-        {
-          gboolean sd_unit_is_active = TRUE;
-          if (!check_sd_unit_state_is_active (update_driver_sd_unit, &sd_unit_is_active,
-                                              connection, cancellable, error))
-            return FALSE;
-          // Ignore driver if driver's `ActiveState` is not "active", even if registered.
-          if (!sd_unit_is_active)
-            return TRUE;
-          append_docs_to_str (error_msg, connection, update_driver_sd_unit, cancellable);
-        }
+      gboolean sd_unit_is_active = TRUE;
+      if (!check_sd_unit_state_is_active (update_driver_sd_unit, &sd_unit_is_active,
+                                          connection, cancellable, error))
+        return FALSE;
+      // Ignore driver if driver's `ActiveState` is not "active", even if registered.
+      if (!sd_unit_is_active)
+        return TRUE;
+      append_docs_to_str (error_msg, connection, update_driver_sd_unit, cancellable);
       g_string_append_printf (error_msg,
                               "Use --bypass-driver to bypass %s and perform the operation anyways",
                               update_driver_name);

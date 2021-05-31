@@ -99,13 +99,6 @@ check_root_test ()
     fi
 }
 
-ensure_dbus ()
-{
-    if test -z "$RPMOSTREE_USE_SESSION_BUS"; then
-        exec "$topsrcdir/tests/utils/setup-session.sh" "$self"
-    fi
-}
-
 # https://github.com/ostreedev/ostree/commit/47b4dd1b38e422254afa67756873957c25aeab6d
 # Unfortunately, introspection uses dlopen(), which doesn't quite
 # work when the DSO is compiled with ASAN but the outer executable

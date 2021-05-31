@@ -48,7 +48,7 @@ rpmostree_builtin_finalize_deployment (int             argc,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv,
                                        invocation, cancellable, NULL, NULL,
-                                       &sysroot_proxy, NULL, error))
+                                       &sysroot_proxy, error))
     return FALSE;
 
   const char *checksum = NULL;

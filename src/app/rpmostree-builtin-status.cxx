@@ -341,7 +341,6 @@ get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy,
 
 static gboolean
 print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
-                    GBusType          bus_type,
                     GCancellable     *cancellable,
                     GError          **error)
 {
@@ -370,16 +369,13 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
         g_print ("AutomaticUpdatesDriver: %s\n", update_driver_name);
 
       /* only try to get unit's StatusText if we're on the system bus */
-      if (bus_type == G_BUS_TYPE_SYSTEM)
-        {
-          g_autofree const char *update_driver_state = NULL;
-          g_autoptr(GError) local_error = NULL;
-          if (!get_update_driver_state (sysroot_proxy, update_driver_sd_unit,
-                                        &update_driver_state, cancellable, &local_error))
-            g_printerr ("%s", local_error->message);
-          else if (update_driver_state)
-            g_print ("  DriverState: %s\n", update_driver_state);
-        }
+      g_autofree const char *update_driver_state = NULL;
+      g_autoptr(GError) local_error = NULL;
+      if (!get_update_driver_state (sysroot_proxy, update_driver_sd_unit,
+                                    &update_driver_state, cancellable, &local_error))
+        g_printerr ("%s", local_error->message);
+      else if (update_driver_state)
+        g_print ("  DriverState: %s\n", update_driver_state);
     }
   else if (g_str_equal (policy, "none"))
     {
@@ -393,60 +389,51 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
     {
       g_print ("AutomaticUpdates: %s", policy);
 
-      /* don't try to get info from systemd if we're not on the system bus */
-      if (bus_type != G_BUS_TYPE_SYSTEM)
-        g_print ("\n");
-      else
+      AutoUpdateSdState state;
+      g_autofree char *last_run = NULL;
+      g_print ("; ");
+      GDBusConnection *connection =
+        g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+      if (!get_last_auto_update_run (connection, &state, &last_run, cancellable, error))
+        return FALSE;
+      switch (state)
         {
-          AutoUpdateSdState state;
-          g_autofree char *last_run = NULL;
-
-          g_print ("; ");
-
-          GDBusConnection *connection =
-            g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
-          if (!get_last_auto_update_run (connection, &state, &last_run, cancellable, error))
-            return FALSE;
-
-          switch (state)
-            {
-            case AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN:
-              {
-                g_print ("%s: unknown state\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
-                break;
-              }
-            case AUTO_UPDATE_SDSTATE_TIMER_INACTIVE:
-              {
-                g_print ("%s: inactive\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
-                break;
-              }
-            case AUTO_UPDATE_SDSTATE_SERVICE_FAILED:
-              {
-                g_print ("%s: %s%slast run failed%s%s\n",
-                         RPMOSTREE_AUTOMATIC_SERVICE_UNIT,
-                         get_red_start (), get_bold_start (),
-                         get_bold_end (), get_red_end ());
-                break;
-              }
-            case AUTO_UPDATE_SDSTATE_SERVICE_RUNNING:
-              {
-                g_print ("%s: running\n", RPMOSTREE_AUTOMATIC_SERVICE_UNIT);
-                break;
-              }
-            case AUTO_UPDATE_SDSTATE_SERVICE_EXITED:
-              {
-                if (last_run)
-                  /* e.g. "last run 4h 32min ago" */
-                  g_print ("%s: last run %s\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT, last_run);
-                else
-                  g_print ("%s: no runs since boot\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
-                break;
-              }
-            default:
-              {
-                g_assert_not_reached ();
-              }
-            }
+        case AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN:
+          {
+            g_print ("%s: unknown state\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
+            break;
+          }
+        case AUTO_UPDATE_SDSTATE_TIMER_INACTIVE:
+          {
+            g_print ("%s: inactive\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
+            break;
+          }
+        case AUTO_UPDATE_SDSTATE_SERVICE_FAILED:
+          {
+            g_print ("%s: %s%slast run failed%s%s\n",
+                     RPMOSTREE_AUTOMATIC_SERVICE_UNIT,
+                     get_red_start (), get_bold_start (),
+                     get_bold_end (), get_red_end ());
+            break;
+          }
+        case AUTO_UPDATE_SDSTATE_SERVICE_RUNNING:
+          {
+            g_print ("%s: running\n", RPMOSTREE_AUTOMATIC_SERVICE_UNIT);
+            break;
+          }
+        case AUTO_UPDATE_SDSTATE_SERVICE_EXITED:
+          {
+            if (last_run)
+              /* e.g. "last run 4h 32min ago" */
+              g_print ("%s: last run %s\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT, last_run);
+            else
+              g_print ("%s: no runs since boot\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
+            break;
+          }
+        default:
+          {
+            g_assert_not_reached ();
+          }
         }
     }
 
@@ -1102,7 +1089,6 @@ rpmostree_builtin_status (int             argc,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
 
-  GBusType bus_type;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -1110,7 +1096,6 @@ rpmostree_builtin_status (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &bus_type,
                                        error))
     return FALSE;
 
@@ -1185,7 +1170,7 @@ rpmostree_builtin_status (int             argc,
     }
   else
     {
-      if (!print_daemon_state (sysroot_proxy, bus_type, cancellable, error))
+      if (!print_daemon_state (sysroot_proxy, cancellable, error))
         return FALSE;
 
       gboolean printed_cached_update = FALSE;
@@ -1372,7 +1357,7 @@ rpmostree_ex_builtin_history (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL,
                                        error))
     return FALSE;
 

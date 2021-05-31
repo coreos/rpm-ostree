@@ -220,7 +220,6 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 const char *const* *out_install_pkgs,
                                 const char *const* *out_uninstall_pkgs,
                                 RPMOSTreeSysroot **out_sysroot_proxy,
-                                GBusType *out_bus_type,
                                 GError **error)
 {
   /* with --version there's no command, don't require a daemon for it */
@@ -302,11 +301,8 @@ rpmostree_option_context_parse (GOptionContext *context,
         /* ignore errors; we print out a warning if we fail to spawn pkttyagent */
         (void)rpmostree_polkit_agent_open ();
 
-      if (!rpmostree_load_sysroot (opt_sysroot,
-                                   opt_force_peer,
-                                   cancellable,
+      if (!rpmostree_load_sysroot (opt_sysroot, cancellable,
                                    out_sysroot_proxy,
-                                   out_bus_type,
                                    error))
         return FALSE;
     }
@@ -393,7 +389,7 @@ rpmostree_handle_subcommand (int argc, char **argv,
                                              &argc, &argv,
                                              invocation,
                                              cancellable,
-                                             NULL, NULL, NULL, NULL, NULL);
+                                             NULL, NULL, NULL, NULL);
       if (subcommand_name == NULL)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -508,7 +504,7 @@ rpmostree_main_inner (const rust::Slice<const rust::Str> args)
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
                                              NULL, NULL, NULL, NULL, NULL,
-                                             NULL, NULL);
+                                             NULL);
       g_autofree char *help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
       if (command_name == NULL)

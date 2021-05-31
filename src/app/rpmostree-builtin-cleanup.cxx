@@ -65,7 +65,6 @@ rpmostree_builtin_cleanup (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       NULL,
                                        error))
     return FALSE;
 

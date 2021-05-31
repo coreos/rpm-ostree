@@ -78,7 +78,6 @@ rpmostree_builtin_deploy (int            argc,
 
   context = g_option_context_new ("REVISION");
 
-  GBusType bus_type;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -87,7 +86,6 @@ rpmostree_builtin_deploy (int            argc,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &bus_type,
                                        error))
     return FALSE;
 
@@ -133,7 +131,7 @@ rpmostree_builtin_deploy (int            argc,
     {
       if (!opt_bypass_driver)
         {
-          if (!error_if_driver_registered (bus_type, sysroot_proxy, cancellable, error))
+          if (!error_if_driver_registered (sysroot_proxy, cancellable, error))
             return FALSE;
         }
 

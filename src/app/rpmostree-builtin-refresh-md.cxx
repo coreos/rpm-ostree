@@ -65,7 +65,6 @@ rpmostree_builtin_refresh_md (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       NULL,
                                        error))
     return FALSE;
 

@@ -37,19 +37,14 @@ namespace rpmostreecxx {
 class ClientConnection final {
 private:
     GDBusConnection *conn;
-    GBusType bus_type;
 public:
-    ClientConnection(GDBusConnection *connp, GBusType bus_typep) : conn(connp), bus_type(bus_typep) {}
+    ClientConnection(GDBusConnection *connp) : conn(connp) {}
     ~ClientConnection() {
         g_clear_object(&conn);
     }
 
     GDBusConnection &get_connection() {
         return *conn;
-    }
-
-    GBusType get_bus_type() const {
-        return bus_type;
     }
 
     void transaction_connect_progress_sync(const rust::Str address) const;
@@ -66,11 +61,9 @@ G_BEGIN_DECLS
 #define BUS_NAME "org.projectatomic.rpmostree1"
 
 gboolean
-rpmostree_load_sysroot                       (gchar *sysroot,
-                                              gboolean force_peer,
-                                              GCancellable *cancellable,
+rpmostree_load_sysroot                       (const char        *sysroot,
+                                              GCancellable      *cancellable,
                                               RPMOSTreeSysroot **out_sysroot_proxy,
-                                              GBusType *out_bus_type,
                                               GError **error);
 
 gboolean
@@ -171,8 +164,7 @@ get_sd_unit_objpath (GDBusConnection  *connection,
                      GError          **error);
 
 gboolean
-error_if_driver_registered (GBusType          bus_type,
-                            RPMOSTreeSysroot *sysroot_proxy,
+error_if_driver_registered (RPMOSTreeSysroot *sysroot_proxy,
                             GCancellable     *cancellable,
                             GError          **error);
 
