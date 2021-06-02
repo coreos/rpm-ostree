@@ -21,6 +21,7 @@
 #include "rpmostree-util.h"
 #include "rpmostreed-utils.h"
 #include "rpmostreed-errors.h"
+#include "rpmostreed-daemon.h"
 #include "libglnx.h"
 #include <systemd/sd-journal.h>
 #include <stdint.h>
@@ -608,4 +609,61 @@ rpmostreed_parse_revision (const char  *revision,
 
 out:
   return ret;
+}
+
+/* Throw an error if there exists systemd inhibitor locks in `block` mode only.
+ * Note: systemd 248 provides a `--check-inhibitors` option, but it also checks
+ * for inhibitors in `delay` mode, which isn't what we want. */
+gboolean
+check_sd_inhibitor_locks (GCancellable    *cancellable,
+                          GError         **error)
+{
+  GDBusConnection *connection = rpmostreed_daemon_connection ();
+  // https://www.freedesktop.org/software/systemd/man/org.freedesktop.login1.html
+  g_autoptr(GVariant) inhibitors_array_tuple = 
+    g_dbus_connection_call_sync (connection, "org.freedesktop.login1", "/org/freedesktop/login1",
+                                 "org.freedesktop.login1.Manager", "ListInhibitors",
+                                 NULL, (const GVariantType*)"(a(ssssuu))",
+                                 G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
+  if (!inhibitors_array_tuple)
+    return glnx_prefix_error (error, "Checking systemd inhibitor locks");
+  else if (g_variant_n_children (inhibitors_array_tuple) < 1)
+    return glnx_throw (error, "ListInhibitors returned empty tuple");
+  g_autoptr(GVariant) inhibitors_array =
+    g_variant_get_child_value (inhibitors_array_tuple, 0);
+
+  char *what = NULL;
+  char *who = NULL;
+  char *why = NULL;
+  char *mode = NULL;
+  int num_block_inhibitors = 0;
+  g_autoptr(GString) error_msg = g_string_new(NULL);
+  GVariantIter viter;
+  g_variant_iter_init (&viter, inhibitors_array);
+  while (g_variant_iter_loop (&viter, "(ssssuu)", &what, &who, &why, &mode, NULL, NULL))
+    {
+      // Only consider shutdown inhibitors in `block` mode.
+      if (strstr (what, "shutdown") && g_str_equal (mode, "block"))
+        {
+          num_block_inhibitors++;
+          if (num_block_inhibitors == 1)
+            {
+              g_string_append_printf (error_msg,
+                                      "Reboot blocked by a systemd inhibitor lock in `block` mode\n"
+                                      "Held by: %s\nReason: %s",
+                                      who, why);
+            }
+        }
+    }
+
+  if (num_block_inhibitors == 0)
+    return TRUE;
+  else if (num_block_inhibitors > 1)
+    {
+      g_string_append_printf (error_msg,
+                              "\nand %d other blocking inhibitor lock(s)\n"
+                              "Use `systemd-inhibit --list` to see details",
+                              num_block_inhibitors - 1);
+    }
+  return glnx_throw (error, "%s", error_msg->str);
 }

@@ -38,6 +38,7 @@ G_BEGIN_DECLS
 
 GType              rpmostreed_daemon_get_type       (void) G_GNUC_CONST;
 RpmostreedDaemon * rpmostreed_daemon_get            (void);
+GDBusConnection  * rpmostreed_daemon_connection     (void);
 gboolean           rpmostreed_get_client_uid        (RpmostreedDaemon *self,
                                                      const char       *client,
                                                      uid_t            *out_uid);
