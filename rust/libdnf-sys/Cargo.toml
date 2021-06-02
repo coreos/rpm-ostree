@@ -26,7 +26,8 @@ rpm = "4"
 librepo = "1"
 libsolv = "0.7"
 libsolvext = "0.7"
-gpgme = "1"
+# Older libgpgme did not provide a pkg-config file
+gpgme = { version = "1", optional = true }
 openssl = "1"
 libcurl = "7"
 sqlite3 = "3"
