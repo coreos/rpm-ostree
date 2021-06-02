@@ -34,3 +34,4 @@ sqlite3 = "3"
 modulemd = { name = "modulemd-2.0", version = "2" }
 jsonc = { name = "json-c", version = "0" }
 glib = { name = "glib-2.0", version = "2" }
+zck = { version = "0.9", optional = true }
