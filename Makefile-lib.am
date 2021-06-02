@@ -44,7 +44,7 @@ RpmOstree_1_0_gir_INCLUDES = OSTree-1.0 Gio-2.0
 RpmOstree_1_0_gir_CFLAGS = $(librpmostree_1_la_CFLAGS)
 RpmOstree_1_0_gir_LIBS = librpmostree-1.la
 RpmOstree_1_0_gir_SCANNERFLAGS = --warn-all --identifier-prefix=RpmOstree --symbol-prefix=rpm_ostree
-RpmOstree_1_0_gir_FILES = $(librpmostreeinclude_HEADERS) $(filter-out %-private.h,$(librpmostree_1_la_SOURCES))
+RpmOstree_1_0_gir_FILES = $(librpmostreeinclude_HEADERS) $(filter-out %-private.c %-private.h,$(librpmostree_1_la_SOURCES))
 INTROSPECTION_GIRS += RpmOstree-1.0.gir
 gir_DATA += RpmOstree-1.0.gir
 typelib_DATA += RpmOstree-1.0.typelib
