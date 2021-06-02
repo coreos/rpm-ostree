@@ -3,6 +3,7 @@ use anyhow::Result;
 
 fn main() -> Result<()> {
     let libs = system_deps::Config::new().probe()?;
+    let has_gpgme_pkgconfig = libs.get_by_name("gpgme").is_some();
 
     // first, the submodule proper
     let libdnf = cmake::Config::new("../../libdnf")
@@ -31,6 +32,10 @@ fn main() -> Result<()> {
         .always_configure(false)
         .build_target("all")
         .build();
+    // NOTE(lucab): consider using `gpgme-config` it this stops working.
+    if !has_gpgme_pkgconfig {
+        println!("cargo:rustc-link-lib=gpgme");
+    }
     println!(
         "cargo:rustc-link-search=native={}/build/libdnf",
         libdnf.display()
