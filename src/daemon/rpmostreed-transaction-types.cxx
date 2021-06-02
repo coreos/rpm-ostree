@@ -510,7 +510,11 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   if (self->reboot)
-    rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    {
+      if (!check_sd_inhibitor_locks (cancellable, error))
+        return FALSE;
+      rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    }
 
   return TRUE;
 }
@@ -1486,7 +1490,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
 
       if (deploy_has_bool_option (self, "reboot"))
-        rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+        {
+          if (!check_sd_inhibitor_locks (cancellable, error))
+            return FALSE;
+          rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+        }
     }
   else
     {
@@ -1888,7 +1896,11 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
-    rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    {
+      if (!check_sd_inhibitor_locks (cancellable, error))
+        return FALSE;
+      rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    }
 
   return TRUE;
 }
@@ -2026,7 +2038,11 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
-    rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    {
+      if (!check_sd_inhibitor_locks (cancellable, error))
+        return FALSE;
+      rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    }
 
   return TRUE;
 }
@@ -2541,7 +2557,7 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   FinalizeDeploymentTransaction *self = (FinalizeDeploymentTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
-
+    
   auto command_line = (const char*)
     vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
 
@@ -2569,6 +2585,10 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   if (expected_checksum && !g_str_equal (checksum, expected_checksum))
     return glnx_throw (error, "Expected staged base checksum %s, but found %s",
                        expected_checksum, checksum);
+
+  // Check for inhibitor locks before unlocking staged deployment.
+  if (!check_sd_inhibitor_locks (cancellable, error))
+    return FALSE;
 
   if (unlink (_OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED) < 0)
     {
@@ -2762,7 +2782,11 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
-    rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    {
+      if (!check_sd_inhibitor_locks (cancellable, error))
+        return FALSE;
+      rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    }
 
   return TRUE;
 }

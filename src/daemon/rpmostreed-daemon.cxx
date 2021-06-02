@@ -815,6 +815,12 @@ rpmostreed_daemon_is_rebooting (RpmostreedDaemon *self)
   return self->rebooting;
 }
 
+GDBusConnection *
+rpmostreed_daemon_connection(void)
+{
+  g_assert (_daemon_instance->connection);
+  return _daemon_instance->connection;
+}
 
 void
 rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self)

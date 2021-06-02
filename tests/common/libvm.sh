@@ -98,9 +98,6 @@ EOF
 
   vm_setup
 
-  # XXX: hack around https://github.com/systemd/systemd/issues/14328
-  vm_cmd systemctl mask --now systemd-logind
-
   # Some tests expect the ref to be on `vmcheck`. We should drop that
   # requirement, but for now let's just mangle the origin
   local deployment_root

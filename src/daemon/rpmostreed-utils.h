@@ -83,4 +83,7 @@ gboolean   rpmostreed_parse_revision (const char  *revision,
                                       char       **out_version,
                                       GError     **error);
 
+gboolean   check_sd_inhibitor_locks (GCancellable    *cancellable,
+                                     GError         **error);
+
 G_END_DECLS
