@@ -1204,7 +1204,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       changed = changed || overrides_changed;
     }
-  else if (self->override_reset_pkgs)
+  else if (self->override_reset_pkgs || self->override_replace_local_pkgs)
     {
       /* The origin stores removal overrides as pkgnames and replacement overrides as nevra.
        * To be nice, we support both name & nevra and do the translation here by just
@@ -1278,25 +1278,42 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);
         }
 
-      changed = TRUE;
-    }
-
-  if (self->override_replace_local_pkgs)
-    {
-      g_autoptr(GPtrArray) pkgs = NULL;
-      if (!import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
-                                   cancellable, error))
-        return FALSE;
-
-      if (pkgs->len > 0)
+      if (self->override_replace_local_pkgs)
         {
-          g_ptr_array_add (pkgs, NULL);
-          if (!rpmostree_origin_add_overrides (origin, (char**)pkgs->pdata,
-                                               RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL,
-                                               error))
+          g_autoptr(GPtrArray) pkgs = NULL;
+          if (!import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
+                                       cancellable, error))
             return FALSE;
-          changed = TRUE;
-        }
+
+          for (guint i = 0; i < pkgs->len; i++)
+            {
+
+              auto *pkg = static_cast<const char *> (g_ptr_array_index(pkgs,i));
+              g_autofree char *name = NULL;
+              g_autofree char *sha256 = NULL;
+
+              if (!rpmostree_decompose_sha256_nevra (&pkg, &sha256, error))
+                return FALSE;
+
+              if (!rpmostree_decompose_nevra (pkg, &name, NULL, NULL, NULL, NULL, error))
+                return FALSE;
+
+              auto nevra = static_cast<const char *> (g_hash_table_lookup (name_to_nevra, name));
+
+              if (nevra)
+                rpmostree_origin_remove_override (origin, nevra,
+                                                  RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL);
+            }
+          if (pkgs->len > 0)
+            {
+              g_ptr_array_add (pkgs, NULL);
+              if (!rpmostree_origin_add_overrides (origin, (char**)pkgs->pdata,
+                                                   RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL,
+                                                   error))
+                return FALSE;
+            }
+	}
+      changed = TRUE;
     }
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
