@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::Result;
+use nix::sys::signal;
 
 fn inner_main(args: &Vec<&str>) -> Result<()> {
     match args.get(1).map(|s| *s) {
@@ -21,6 +22,11 @@ fn inner_main(args: &Vec<&str>) -> Result<()> {
 // those, and if there's something we don't know about, invoke the C++
 // main().
 fn main() {
+    if std::env::var("RPMOSTREE_GDB_HOOK").is_ok() {
+        println!("RPMOSTREE_GDB_HOOK detected; stopping...");
+        println!("Attach via gdb using `gdb -p {}`.", std::process::id());
+        signal::raise(signal::Signal::SIGSTOP).expect("signal(SIGSTOP)");
+    }
     // Call this early on; it invokes e.g. setenv() so must be done
     // before we create threads.
     rpmostree_rust::ffi::early_main();

@@ -144,3 +144,86 @@ $ make vmoverlay SKIP_INSTALL=1
 
 Of course, you can use this pattern for not just ostree but whatever else you'd
 like to install into the VM (e.g. bubblewrap, libsolv, etc...).
+
+## Using GDB with the rpm-ostree daemon
+
+If you're new to rpm-ostree, before using GDB, it may be helpful to review the
+[daemon architecture doc](../architecture-daemon.md) for an architecture recap.
+
+### Server-side (composes)
+
+Server-side composes do not use the daemon architecture and so one can naturally
+do e.g. `gdb --args rpm-ostree compose tree ...`. If using coreos-assembler, you
+can set the `COSA_RPMOSTREE_GDB` environment variable like this:
+
+```sh
+$ COSA_RPMOSTREE_GDB="gdb --args" cosa build
+```
+
+When cosa gets to the point of invoking rpm-ostree for the compose, it will call
+GDB instead.
+
+### Client-side
+
+On the client side, you need to use the `make vmsync` flow before using GDB
+because it also copies over the source files into `/root/sync`.
+
+For throwaway/fresh VMs, a simple approach is to just layer it using e.g.
+`rpm-ostree install gdb-minimal -A`, and then use it directly. (XXX:
+`apply-live` currently isn't compatible with `make vmsync`, so you'll want to
+reboot for now: https://github.com/ostreedev/ostree/issues/2369).
+
+It's also possible to use GDB from a privileged container. Make sure to use the
+`--pid=host` flag when using e.g. `podman run` so that you can attach to
+processes running on the host. For example:
+
+```
+(host) podman run -ti --privileged --pid=host -v /:/host --name gdb \
+        registry.fedoraproject.org/fedora:34 /bin/bash
+(cnt) dnf install -y gdb procps-ng
+```
+
+#### Attaching to the daemon
+
+Run e.g. `rpm-ostree status` to ensure the daemon is started, and then:
+
+```
+(cnt) gdb -p $(pidof rpm-ostree) \
+        -ex 'set sysroot /host' \
+        -ex 'directory /host/var/roothome/sync' \
+        -ex 'directory /host/var/roothome/sync/libdnf/libdnf'
+```
+
+Then in GDB, you can do e.g.:
+
+```
+(gdb) break deploy_transaction_execute
+(gdb) continue
+```
+
+And in a separate terminal in the VM, run the CLI command which would trigger
+the breakpoint (e.g. `rpm-ostree override replace foobar.rpm`).
+
+#### Attaching to the CLI
+
+To attach to the CLI itself (or debug early daemon startup), you can use
+`gdb --args rpm-ostree status` if running GDB from the host directly.
+
+If running GDB in a container, you can use the `RPMOSTREE_GDB_HOOK` env var to
+have rpm-ostree wait for you to attach GDB from the container:
+
+```
+(host) RPMOSTREE_GDB_HOOK=1 rpm-ostree status
+RPMOSTREE_GDB_HOOK detected; stopping...
+Attach via gdb using `gdb -p 2519`.
+```
+
+Then:
+
+```
+(cnt) gdb -p 2519 \
+        -ex 'set sysroot /host' \
+        -ex 'directory /host/var/roothome/sync' \
+        -ex 'directory /host/var/roothome/sync/libdnf/libdnf' \
+        -ex n -ex n
+```
