@@ -533,6 +533,26 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
   return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL, error);
 }
 
+// Switch to `baserefspec` when changing the origin
+// to something core ostree doesnt't understand, i.e.
+// when `ostree admin upgrade` would no longer do the right thing.
+static void
+sync_baserefspec (RpmOstreeOrigin *origin)
+{
+  if (rpmostree_origin_may_require_local_assembly (origin))
+    {
+      g_key_file_set_value (origin->kf, "origin", "baserefspec",
+                            origin->cached_refspec);
+      g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
+    }
+  else
+    {
+      g_key_file_set_value (origin->kf, "origin", "refspec",
+                            origin->cached_refspec);
+      g_key_file_remove_key (origin->kf, "origin", "baserefspec", NULL);
+    }
+}
+
 static void
 update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
                                 const char      *group,
@@ -546,6 +566,7 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
   if (g_hash_table_size (pkgs) == 0)
     {
       g_key_file_remove_key (origin->kf, group, key, NULL);
+      sync_baserefspec (origin);
       return;
     }
 
@@ -564,20 +585,7 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
       update_string_list_from_hash_table (origin->kf, group, key, pkgs);
     }
 
-  if (g_hash_table_size (pkgs) > 0)
-    {
-      switch (origin->refspec_type)
-        {
-        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-        case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-          {
-            g_key_file_set_value (origin->kf, "origin", "baserefspec",
-                                  origin->cached_refspec);
-            g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
-            break;
-          }
-        }
-    }
+  sync_baserefspec (origin);
 }
 
 gboolean
@@ -714,6 +722,7 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
                                     origin->cached_local_packages, TRUE);
 
+  sync_baserefspec (origin);
   *out_changed = changed || local_changed;
   return TRUE;
 }
