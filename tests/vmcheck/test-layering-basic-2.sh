@@ -96,6 +96,10 @@ echo "ok layered pkglist"
 # remove accumulated crud from previous tests
 vm_rpmostree uninstall --all
 vm_reboot
+deploydir=$(vm_cmd ostree admin --print-current-dir)
+vm_cmd cat ${deploydir}.origin > origin.txt
+assert_file_has_content origin.txt "^refspec="
+echo "ok refspec"
 
 if vm_rpmostree install glibc &>out.txt; then
   assert_not_reached "Successfully requested glibc without --allow-inactive?"
