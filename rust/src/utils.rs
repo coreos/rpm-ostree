@@ -154,13 +154,16 @@ pub fn parent_dir(filename: &Path) -> Option<&Path> {
         .map(|p| if p.as_os_str() == "" { ".".as_ref() } else { p })
 }
 
+/// Parse the 2-tuple `<sha256>:<nevra>` string into a tuple of (nevra, sha256).
+/// Note the order is inverted, as it's expected to use the nevra as a key in
+/// a mapping.
 pub fn decompose_sha256_nevra(v: &str) -> Result<(&str, &str)> {
     let parts: Vec<&str> = v.splitn(2, ':').collect();
     match (parts.get(0), parts.get(1)) {
         (Some(_), None) => bail!("Missing : in {}", v),
-        (Some(first), Some(rest)) => {
-            ostree::validate_checksum_string(rest)?;
-            Ok((first, rest))
+        (Some(sha256), Some(nevra)) => {
+            ostree::validate_checksum_string(&sha256)?;
+            Ok((nevra, sha256))
         }
         (_, _) => unreachable!(),
     }
@@ -262,7 +265,7 @@ mod tests {
         .is_err());
         assert!(decompose_sha256_nevra("foo:bar:baz").is_err());
         let c = "41af286dc0b172ed2f1ca934fd2278de4a1199302ffa07087cea2682e7d372e3";
-        let foo = format!("foo:{}", c);
+        let foo = format!("{}:foo", c);
         let (n, p) = decompose_sha256_nevra(&foo).context("testing foo")?;
         assert_eq!(n, "foo");
         assert_eq!(p, c);

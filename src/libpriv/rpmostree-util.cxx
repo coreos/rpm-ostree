@@ -721,7 +721,7 @@ rpmostree_decompose_sha256_nevra (const char **nevra, /* gets incremented */
 
   if (strlen (sha256_nevra) < 66 || /* 64 + ":" + at least 1 char for nevra */
       sha256_nevra[64] != ':')
-    return FALSE;
+    return glnx_throw (error, "Invalid sha256-nevra: %s", sha256_nevra);
 
   sha256 = g_strndup (sha256_nevra, 64);
   if (!ostree_validate_checksum_string (sha256, error))
