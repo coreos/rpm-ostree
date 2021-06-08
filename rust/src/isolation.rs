@@ -7,7 +7,13 @@ use std::process::Command;
 
 const SELF_UNIT: &str = "rpm-ostreed.service";
 /// Run as a child process, synchronously.
-const BASE_ARGS: &[&str] = &["--wait", "--pipe", "--no-ask-password", "--quiet"];
+const BASE_ARGS: &[&str] = &[
+    "--collect",
+    "--wait",
+    "--pipe",
+    "--no-ask-password",
+    "--quiet",
+];
 
 /// Configuration for transient unit.
 pub(crate) struct UnitConfig<'a> {
