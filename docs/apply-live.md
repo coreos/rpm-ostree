@@ -1,5 +1,6 @@
 ---
-nav_order: 6
+parent: Architecture
+nav_order: 3
 ---
 
 # Architecture of apply-live

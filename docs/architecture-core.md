@@ -1,8 +1,9 @@
 ---
-nav_order: 5
+parent: Architecture
+nav_order: 1
 ---
 
-# Architecture: RPM packages, ostree commits
+# RPM packages, ostree commits
 {: .no_toc }
 
 1. TOC

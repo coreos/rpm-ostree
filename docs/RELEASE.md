@@ -1,5 +1,6 @@
 ---
-nav_order: 8
+parent: Contributing
+nav_order: 3
 ---
 
 # Releasing rpm-ostree

@@ -1,8 +1,9 @@
 ---
-nav_order: 5
+parent: Architecture
+nav_order: 2
 ---
 
-# Architecture: daemon model
+# Daemon model
 {: .no_toc }
 
 1. TOC

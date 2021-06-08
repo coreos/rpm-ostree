@@ -5,9 +5,6 @@ nav_order: 4
 # DNF Count Me support
 {: .no_toc }
 
-1. TOC
-{:toc}
-
 Classic DNF based operating systems can use the [DNF Count Me feature][countme]
 to anonymously report how long a system has been running without impacting the
 user privacy. This is implemented as an additional `countme` variable added to

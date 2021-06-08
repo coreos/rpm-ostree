@@ -2,7 +2,7 @@
 nav_order: 1
 ---
 
-# rpm-ostree: A true hybrid image/package system
+# A true hybrid image/package system
 {: .no_toc }
 
 1. TOC

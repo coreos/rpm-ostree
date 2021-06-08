@@ -1,8 +1,9 @@
 ---
-nav_order: 5
+parent: Composing images
+nav_order: 2
 ---
 
-# Treefile
+# Treefile reference
 
 A "treefile" is a made up term for a JSON-formatted specification used
 as input to `rpm-ostree compose tree` to bind "set of RPMs with
