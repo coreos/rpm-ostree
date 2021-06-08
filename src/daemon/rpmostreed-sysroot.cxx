@@ -760,6 +760,8 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
   if (!sysroot_populate_deployments_unlocked (self, NULL, error))
     return FALSE;
 
+  rpmostreecxx::daemon_sanitycheck_environment(*self->ot_sysroot);
+
   if (!reset_config_properties (self, error))
     return FALSE;
 

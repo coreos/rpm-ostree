@@ -171,6 +171,7 @@ pub mod ffi {
 
     // daemon.rs
     extern "Rust" {
+        fn daemon_sanitycheck_environment(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
         fn deployment_generate_id(deployment: Pin<&mut OstreeDeployment>) -> String;
         fn deployment_populate_variant(
             mut sysroot: Pin<&mut OstreeSysroot>,

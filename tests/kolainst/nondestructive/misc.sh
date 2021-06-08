@@ -95,6 +95,17 @@ mv /etc/ostree/remotes.d{.orig,}
 rpm-ostree reload
 echo "ok remote not found"
 
+systemctl stop rpm-ostreed
+mv /var/lib/rpm{,.orig}
+cp -a $(realpath /usr/share/rpm) /var/lib/rpm
+if systemctl start rpm-ostreed; then
+    fatal "Started rpm-ostreed with /var/lib/rpm"
+fi
+rm /var/lib/rpm -rf
+mv /var/lib/rpm{.orig,}
+systemctl reset-failed rpm-ostreed
+echo "ok validated rpmdb"
+
 rpm-ostree cleanup -p
 originpath=$(ostree admin --print-current-dir).origin
 unshare -m /bin/bash -c "mount -o remount,rw /sysroot && cp -a ${originpath}{,.orig} && 
