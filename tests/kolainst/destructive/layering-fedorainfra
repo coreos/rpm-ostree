@@ -7,6 +7,8 @@ set -euo pipefail
 . ${KOLA_EXT_DATA}/libtest.sh
 cd $(mktemp -d)
 
+set -x
+
 # bodhi update for rpm-ostree (Fedora 33)
 rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2021-e55da2fc78
 rpm-ostree status > status.txt
