@@ -1,5 +1,6 @@
 ---
-nav_order: 9
+parent: Contributing
+nav_order: 2
 ---
 
 # Repository structure

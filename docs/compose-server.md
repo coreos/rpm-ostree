@@ -1,5 +1,6 @@
 ---
-nav_order: 4
+parent: Composing images
+nav_order: 1
 ---
 
 # Compose server

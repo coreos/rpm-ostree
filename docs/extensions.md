@@ -1,5 +1,6 @@
 ---
-nav_order: 6
+parent: Composing images
+nav_order: 3
 ---
 
 # Extensions

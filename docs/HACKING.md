@@ -1,5 +1,6 @@
 ---
-nav_order: 7
+parent: Contributing
+nav_order: 1
 ---
 
 # Hacking on rpm-ostree

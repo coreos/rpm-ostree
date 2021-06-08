@@ -1,12 +1,15 @@
 ---
-nav_order: 10
+has_children: true
+has_toc: false
+nav_order: 7
 ---
 
 # Contributing
 {: .no_toc }
 
-1. TOC
-{:toc}
+1. [Hacking on rpm-ostree](HACKING.md)
+1. [Repository structure](repo_structure.md)
+1. [Releasing rpm-ostree](RELEASE.md)
 
 ## Submitting patches
 
