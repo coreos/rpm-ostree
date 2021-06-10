@@ -2715,16 +2715,14 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags),
                                     cancellable, error);
+  if (upgrader == NULL)
+    return FALSE;
   rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
                                               rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
                                               rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
   g_auto(GStrv) existing_kargs = g_strsplit (self->existing_kernel_args, " ", -1);
 
-  /* We need the upgrader to perform the deployment */
-  if (upgrader == NULL)
-    return FALSE;
-
-      /* Delete all the entries included in the kernel args */
+  /* Delete all the entries included in the kernel args */
   for (char **iter = self->kernel_args_deleted; iter && *iter; iter++)
     {
       const char*  arg =  *iter;
