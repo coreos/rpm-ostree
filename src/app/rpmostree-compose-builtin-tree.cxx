@@ -49,6 +49,9 @@
 
 #include "libglnx.h"
 
+/* Directory name for temporary rootfs tree during install */
+#define TMP_ROOTFS_DIRNAME "rootfs.tmp"
+
 static gboolean
 pull_local_into_target_repo (OstreeRepo   *src_repo,
                              OstreeRepo   *dest_repo,
@@ -858,17 +861,15 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
         g_print ("Previous commit: %s\n", self->previous_checksum);
     }
 
-  const char rootfs_name[] = "rootfs.tmp";
-  if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
+  if (!glnx_shutil_rm_rf_at (self->workdir_dfd, TMP_ROOTFS_DIRNAME, cancellable, error))
     return FALSE;
-  if (mkdirat (self->workdir_dfd, rootfs_name, 0755) < 0)
-    return glnx_throw_errno_prefix (error, "mkdirat(%s)", rootfs_name);
+  if (mkdirat (self->workdir_dfd, TMP_ROOTFS_DIRNAME, 0755) < 0)
+    return glnx_throw_errno_prefix (error, "mkdirat(%s)", TMP_ROOTFS_DIRNAME);
 
-  if (!glnx_opendirat (self->workdir_dfd, rootfs_name, TRUE,
+  if (!glnx_opendirat (self->workdir_dfd, TMP_ROOTFS_DIRNAME, TRUE,
                        &self->rootfs_dfd, error))
     return FALSE;
 
-  rust::String next_version;
   if (json_object_has_member (self->treefile, "automatic-version-prefix") &&
       /* let --add-metadata-string=version=... take precedence */
       !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
@@ -893,19 +894,9 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
           (void)g_variant_lookup (previous_metadata, OSTREE_COMMIT_META_KEY_VERSION, "s", &last_version);
         }
 
-      next_version = rpmostreecxx::util_next_version (ver_prefix, ver_suffix ?: "", last_version ?: "");
+      auto next_version = rpmostreecxx::util_next_version (ver_prefix, ver_suffix ?: "", last_version ?: "");
       g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
                            g_variant_ref_sink (g_variant_new_string (next_version.c_str())));
-    }
-  else
-    {
-      gpointer vp = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
-      auto v = static_cast<GVariant*>(vp);
-      if (v)
-        {
-          g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
-          next_version = rust::String(static_cast<char*>(g_variant_dup_string (v, NULL)));
-        }
     }
 
   /* Download rpm-md repos, packages, do install */
@@ -948,6 +939,10 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   if (!inject_advisories (self, cancellable, error))
     return FALSE;
 
+  /* Insert our input hash */
+  g_hash_table_replace (self->metadata, g_strdup ("rpmostree.inputhash"),
+                        g_variant_ref_sink (g_variant_new_string (new_inputhash)));
+
   /* Destroy this now so the libdnf stack won't have any references
    * into the filesystem before we manipulate it.
    */
@@ -955,6 +950,23 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
 
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     return FALSE;
+
+  *out_changed = TRUE;
+  return TRUE;
+}
+
+
+static gboolean
+impl_install_tree_post (RpmOstreeTreeComposeContext *self,
+                        GCancellable    *cancellable,
+                        GError         **error)
+{
+  /* Pick "next version" label from metadata */
+  gpointer vp = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
+  auto v = static_cast<GVariant*>(vp);
+  g_assert (v != NULL);
+  g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
+  auto next_version = rust::String(static_cast<char*>(g_variant_dup_string (v, NULL)));
 
   /* Start postprocessing */
   rpmostreecxx::compose_postprocess(self->rootfs_dfd, **self->treefile_rs, next_version, self->unified_core_and_fuse);
@@ -971,7 +983,8 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
   if (!glnx_ensure_dir (self->workdir_dfd, final_rootfs_name, 0755, error))
     return FALSE;
-  { glnx_autofd int target_rootfs_dfd = -1;
+  { 
+    glnx_autofd int target_rootfs_dfd = -1;
     if (!glnx_opendirat (self->workdir_dfd, final_rootfs_name, TRUE,
                          &target_rootfs_dfd, error))
       return FALSE;
@@ -981,17 +994,11 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     glnx_close_fd (&self->rootfs_dfd);
 
     /* Remove the old root, then retarget rootfs_dfd to the final one */
-    if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
+    if (!glnx_shutil_rm_rf_at (self->workdir_dfd, TMP_ROOTFS_DIRNAME, cancellable, error))
       return FALSE;
 
     self->rootfs_dfd = glnx_steal_fd (&target_rootfs_dfd);
   }
-
-  /* Insert our input hash */
-  g_hash_table_replace (self->metadata, g_strdup ("rpmostree.inputhash"),
-                        g_variant_ref_sink (g_variant_new_string (new_inputhash)));
-
-  *out_changed = TRUE;
   return TRUE;
 }
 
@@ -1232,11 +1239,20 @@ rpmostree_compose_builtin_install (int             argc,
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
     return FALSE;
   g_assert (self); /* Pacify static analysis */
-  gboolean changed;
+  gboolean changed = FALSE;
   if (!impl_install_tree (self, &changed, cancellable, error))
     {
       self->failed = TRUE;
       return FALSE;
+    }
+  if (changed)
+    {
+      /* Start processing content */
+      if (!impl_install_tree_post (self, cancellable, error))
+        {
+          self->failed = TRUE;
+          return FALSE;
+        }
     }
   if (opt_unified_core)
     {
@@ -1398,7 +1414,7 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
     return FALSE;
   g_assert (self); /* Pacify static analysis */
-  gboolean changed;
+  gboolean changed = FALSE;
   if (!impl_install_tree (self, &changed, cancellable, error))
     {
       self->failed = TRUE;
@@ -1406,6 +1422,12 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   if (changed)
     {
+      /* Start processing content */
+      if (!impl_install_tree_post (self, cancellable, error))
+        {
+          self->failed = TRUE;
+          return FALSE;
+        }
       /* Do the ostree commit */
       if (!impl_commit_tree (self, cancellable, error))
         {
