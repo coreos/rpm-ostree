@@ -186,6 +186,16 @@ vm_rpmostree override reset bar-0.9-1.x86_64
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 0' \
   '.deployments[0]["requested-base-local-replacements"]|length == 0'
+# check we can reset inactive overrides by name only
+vm_rpmostree override replace $YUMREPO/bar-0.9-1.x86_64.rpm
+vm_assert_status_jq \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 1' \
+  '.deployments[0]["requested-base-local-replacements"]|index("bar-0.9-1.x86_64") >= 0'
+vm_rpmostree override reset bar
+vm_assert_status_jq \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 0'
 echo "ok reset inactive override replace"
 
 vm_rpmostree cleanup -p
