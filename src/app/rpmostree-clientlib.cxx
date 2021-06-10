@@ -202,7 +202,7 @@ rpmostree_load_sysroot (const char        *sysroot,
   if (!app_load_sysroot_impl (sysroot, cancellable, &connection, error))
     return FALSE;
 
-  const char *bus_name;
+  const char *bus_name = NULL;
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
 
