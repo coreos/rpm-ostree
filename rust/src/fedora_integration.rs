@@ -11,13 +11,6 @@ const KOJI_URL_PREFIX: &str = "https://koji.fedoraproject.org/koji/";
 const BODHI_URL_PREFIX: &str = "https://bodhi.fedoraproject.org/updates/";
 const BODHI_UPDATE_PREFIX: &str = "FEDORA-";
 
-lazy_static::lazy_static! {
-    /// See https://github.com/cgwalters/koji-sane-json-api
-    static ref KOJI_JSON_API_HOST: String = {
-        std::env::var("RPMOSTREE_KOJI_JSON_API_HOST").ok().unwrap_or_else(|| "kojiproxy-coreos.svc.ci.openshift.org".to_string())
-    };
-}
-
 mod bodhi {
     use super::*;
 
@@ -64,7 +57,8 @@ mod bodhi {
         update.builds.iter().try_fold(Vec::new(), |mut r, buildid| {
             // For now hardcode skipping debuginfo because it's large and hopefully
             // people aren't layering that.
-            let rpms = koji::get_rpm_urls_from_build(&buildid.nvr, arch, true)?;
+            let buildid = koji::BuildReference::Nvr(buildid.nvr.to_string());
+            let rpms = koji::get_rpm_urls_from_build(&buildid, arch, true)?;
             r.extend(rpms);
             Ok(r)
         })
@@ -88,55 +82,97 @@ mod bodhi {
 
 mod koji {
     use super::*;
+    use anyhow::anyhow;
     use std::collections::BTreeMap;
+    use xmlrpc::{Request, Value};
 
-    #[derive(Default, Deserialize)]
-    #[serde(rename_all = "kebab-case")]
-    #[allow(dead_code)]
-    pub(crate) struct KojiBuildInfo {
-        nvr: String,
-        id: u64,
-        kojipkgs_url_prefix: String,
-        rpms: BTreeMap<String, Vec<String>>,
-    }
+    const KOJI_HUB: &str = "https://koji.fedoraproject.org/kojihub/";
+    const TOPURL: &str = "https://kojipkgs.fedoraproject.org/";
 
-    impl KojiBuildInfo {
-        fn rpmurl(&self, arch: &str, rpm: &str) -> String {
-            format!("{}/{}/{}", self.kojipkgs_url_prefix, arch, rpm)
-        }
-    }
-
-    pub(crate) fn get_buildid_from_url(url: &str) -> Result<&str> {
+    pub(crate) fn get_buildid_from_url(url: &str) -> Result<i64> {
         let id = url.rsplit('?').next().expect("split");
         match id.strip_prefix("buildID=") {
-            Some(s) => Ok(s),
+            Some(s) => Ok(s.parse()?),
             None => anyhow::bail!("Failed to parse Koji buildid from URL {}", url),
         }
     }
 
-    pub(crate) fn get_build(buildid: &str) -> Result<KojiBuildInfo> {
-        let url = format!("https://{}/buildinfo/{}", &*KOJI_JSON_API_HOST, buildid);
-        let f = crate::utils::download_url_to_tmpfile(&url, false)
-            .context("Failed to download buildinfo from koji proxy")?;
-        Ok(serde_json::from_reader(std::io::BufReader::new(f))?)
+    fn xmlrpc_require_str<'a>(
+        val: &'a BTreeMap<String, Value>,
+        k: impl AsRef<str>,
+    ) -> Result<&'a str> {
+        let k = k.as_ref();
+        let s = val.get(k).ok_or_else(|| anyhow!("Missing key {}", k))?;
+        Ok(s.as_str()
+            .ok_or_else(|| anyhow!("Key {} is not a string", k))?)
+    }
+
+    pub(crate) fn rpm_path_from_koji_rpm(
+        pkgname: &str,
+        kojirpm: &BTreeMap<String, Value>,
+    ) -> Result<String> {
+        let arch = xmlrpc_require_str(kojirpm, "arch")?;
+        let version = xmlrpc_require_str(kojirpm, "version")?;
+        let release = xmlrpc_require_str(kojirpm, "release")?;
+        let nvr = xmlrpc_require_str(kojirpm, "nvr")?;
+
+        Ok(format!(
+            "packages/{}/{}/{}/{}/{}.{}.rpm",
+            pkgname, version, release, arch, nvr, arch
+        ))
+    }
+
+    pub(crate) enum BuildReference {
+        Id(i64),
+        Nvr(String),
     }
 
     pub(crate) fn get_rpm_urls_from_build(
-        buildid: &str,
-        arch: &str,
+        buildid: &BuildReference,
+        target_arch: &str,
         skip_debug: bool,
     ) -> Result<impl IntoIterator<Item = String>> {
-        let build = get_build(buildid)?;
+        let req = match buildid {
+            BuildReference::Id(id) => Request::new("getBuild").arg(*id),
+            BuildReference::Nvr(nvr) => Request::new("getBuild").arg(nvr.as_str()),
+        };
+        let res = req.call_url(KOJI_HUB).context("Invoking koji getBuild()")?;
+        let res = res
+            .as_struct()
+            .ok_or_else(|| anyhow!("Expected struct from getBuild"))?;
+        let package_name = xmlrpc_require_str(res, "name")?;
+        let buildid = res
+            .get("id")
+            .ok_or_else(|| anyhow!("Missing `id` in getBuild"))?;
+        let buildid = buildid
+            .as_i64()
+            .ok_or_else(|| anyhow!("getBuild id is not an i64"))?;
+
+        let req = Request::new("listRPMs").arg(buildid);
+        let arches = &[target_arch, "noarch"];
         let mut ret = Vec::new();
-        if let Some(rpms) = build.rpms.get(arch) {
-            ret.extend(
-                rpms.iter()
-                    .filter(|r| !(skip_debug && is_debug_rpm(r)))
-                    .map(|r| build.rpmurl(arch, r)),
-            );
-        }
-        if let Some(rpms) = build.rpms.get("noarch") {
-            ret.extend(rpms.iter().map(|r| build.rpmurl("noarch", r)));
+        for build in req
+            .call_url(KOJI_HUB)
+            .context("Invoking koji listRPMs")?
+            .as_array()
+            .ok_or_else(|| anyhow!("Expected array from listRPMs"))?
+        {
+            let build = build
+                .as_struct()
+                .ok_or_else(|| anyhow!("Expected struct in listRPMs"))?;
+            let arch = xmlrpc_require_str(build, "arch")?;
+            if !arches.contains(&arch) {
+                continue;
+            }
+            let name = xmlrpc_require_str(build, "name")?;
+
+            if skip_debug && is_debug_rpm(name) {
+                continue;
+            }
+
+            let mut path = rpm_path_from_koji_rpm(package_name, build)?;
+            path.insert_str(0, TOPURL);
+            ret.push(path);
         }
         Ok(ret.into_iter())
     }
@@ -145,13 +181,22 @@ mod koji {
     mod test {
         use super::*;
 
+        #[ignore]
+        #[test]
+        fn test_get_build() -> Result<()> {
+            let buildid = BuildReference::Id(1746721);
+
+            get_rpm_urls_from_build(&buildid, "x86_64", false)?;
+            Ok(())
+        }
+
         #[test]
         fn test_url_buildid() -> Result<()> {
             assert_eq!(
                 get_buildid_from_url(
                     "https://koji.fedoraproject.org/koji/buildinfo?buildID=1637715"
                 )?,
-                "1637715"
+                1637715
             );
             Ok(())
         }
@@ -171,9 +216,10 @@ pub(crate) fn handle_cli_arg(url: &str, arch: &str) -> CxxResult<Option<Vec<File
         ))
     } else if url.starts_with(KOJI_URL_PREFIX) {
         let buildid = koji::get_buildid_from_url(url)?;
-        let urls: Vec<String> = koji::get_rpm_urls_from_build(&buildid, arch, true)?
-            .into_iter()
-            .collect();
+        let urls: Vec<String> =
+            koji::get_rpm_urls_from_build(&koji::BuildReference::Id(buildid), arch, true)?
+                .into_iter()
+                .collect();
         Ok(Some(
             crate::utils::download_urls_to_tmpfiles(urls, true)
                 .context("Failed to download RPMs")?,
