@@ -78,6 +78,10 @@ char* rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
 char* rpmostree_refspec_canonicalize (const char           *orig_refspec,
                                       GError              **error);
 
+namespace rpmostreecxx {
+void core_libdnf_process_global_init();
+}
+
 RpmOstreeContext *rpmostree_context_new_client (OstreeRepo   *repo);
 
 RpmOstreeContext *rpmostree_context_new_compose (int basedir_dfd,
