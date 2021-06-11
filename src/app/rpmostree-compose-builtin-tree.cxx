@@ -574,6 +574,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 {
   g_autoptr(RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
 
+  rpmostreecxx::core_libdnf_process_global_init();
+
   /* Init fds to -1 */
   self->workdir_dfd = self->rootfs_dfd = self->cachedir_dfd = -1;
   /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker

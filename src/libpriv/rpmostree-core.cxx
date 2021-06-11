@@ -653,6 +653,32 @@ rpmostree_context_set_treespec (RpmOstreeContext *self, RpmOstreeTreespec *trees
     self->spec = (RpmOstreeTreespec*)g_object_ref (treespec);
 }
 
+namespace rpmostreecxx {
+// Sadly, like most of librpm, macros are a process-global state.
+// For rpm-ostree, the dbpath must be overriden.
+void
+core_libdnf_process_global_init()
+{
+  static gsize initialized = 0;
+
+  if (g_once_init_enter (&initialized))
+    {
+      g_autoptr(GError) error = NULL;
+      /* Fatally error out if this fails */
+      if (!dnf_context_globals_init (&error))
+        g_error ("%s", error->message);
+
+      /* This is what we use as default. Note we should be able to drop this in the
+       * future on the *client side* now that we inject a macro to set that value in our OSTrees.
+       */
+      free (rpmExpand ("%define _dbpath /" RPMOSTREE_RPMDB_LOCATION, NULL));
+
+      g_once_init_leave (&initialized, 1);
+    }
+}
+
+} /* namespace */
+
 /* Wraps `dnf_context_setup()`, and initializes state based on the treespec
  * @spec. Another way to say it is we pair `DnfContext` with an
  * `RpmOstreeTreespec`. For example, we handle "instlangs", set the rpmdb root
@@ -673,6 +699,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   std::string releasever;
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
+
+  rpmostreecxx::core_libdnf_process_global_init();
 
   /* Auto-synthesize a spec for now; this will be removed */
   if (!self->spec)
@@ -709,10 +737,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       if (instlangs.length() > 0)
         dnf_context_set_rpm_macro (self->dnfctx, "_install_langs", instlangs.c_str());
     }
-
-  /* This is what we use as default. Note we should be able to drop this in the
-   * future now that we inject a macro to set that value in our OSTrees. */
-  dnf_context_set_rpm_macro (self->dnfctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
   /* Set the database backend only in the compose path.  It then becomes the default
    * for any client side layering.
