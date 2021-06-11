@@ -182,14 +182,17 @@ pub fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> CxxResult<()> {
 /// Ensure our own `_dbpath` macro exists in the tree.
 #[context("Writing _dbpath RPM macro")]
 fn postprocess_rpm_macro(rootfs_dfd: &openat::Dir) -> Result<()> {
-    let rpm_macros_dir = "usr/lib/rpm/macros.d";
-    rootfs_dfd.ensure_dir_all(rpm_macros_dir, 0o755)?;
-    let rpm_macros_dfd = rootfs_dfd.sub_dir(rpm_macros_dir)?;
-    rpm_macros_dfd.write_file_with("macros.rpm-ostree", 0o644, |w| -> Result<()> {
+    static RPM_MACROS_DIR: &str = "usr/lib/rpm/macros.d";
+    static MACRO_FILENAME: &str = "macros.rpm-ostree";
+    rootfs_dfd.ensure_dir_all(RPM_MACROS_DIR, 0o755)?;
+    let rpm_macros_dfd = rootfs_dfd.sub_dir(RPM_MACROS_DIR)?;
+    rpm_macros_dfd.write_file_with(&MACRO_FILENAME, 0o644, |w| -> Result<()> {
         w.write_all(b"%_dbpath /")?;
         w.write_all(RPMOSTREE_RPMDB_LOCATION.as_bytes())?;
+        w.write(b"\n")?;
         Ok(())
     })?;
+    rpm_macros_dfd.set_mode(MACRO_FILENAME, 0o644)?;
     Ok(())
 }
 
@@ -1231,5 +1234,30 @@ OSTREE_VERSION='33.4'
         assert_eq!(rpmdb.is_file(), true);
         let sysimage_link = rootfs.read_link(RPMOSTREE_SYSIMAGE_RPMDB).unwrap();
         assert_eq!(&sysimage_link, Path::new("../../share/rpm"));
+    }
+
+    #[test]
+    fn test_postprocess_rpm_macro() {
+        static MACRO_PATH: &str = "usr/lib/rpm/macros.d/macros.rpm-ostree";
+        let expected_content = format!("%_dbpath /{}\n", RPMOSTREE_RPMDB_LOCATION);
+        let temp_rootfs = tempfile::tempdir().unwrap();
+        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+        {
+            postprocess_rpm_macro(&rootfs).unwrap();
+
+            assert_eq!(rootfs.exists(MACRO_PATH).unwrap(), true);
+            let macrofile = rootfs.metadata(MACRO_PATH).unwrap();
+            assert_eq!(macrofile.is_file(), true);
+            assert_eq!(macrofile.stat().st_mode & 0o777, 0o644);
+            let content = rootfs.read_to_string(MACRO_PATH).unwrap();
+            assert_eq!(content, expected_content);
+        }
+        {
+            // Re-run, check basic idempotency.
+            postprocess_rpm_macro(&rootfs).unwrap();
+
+            let content = rootfs.read_to_string(MACRO_PATH).unwrap();
+            assert_eq!(content, expected_content);
+        }
     }
 }
