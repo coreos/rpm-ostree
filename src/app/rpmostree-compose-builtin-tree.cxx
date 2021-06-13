@@ -949,7 +949,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   g_clear_object (&self->corectx);
 
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
-    return FALSE;
+    return glnx_throw (error, "Aborting early due to RPM_OSTREE_BREAK flag.");
 
   *out_changed = TRUE;
   return TRUE;
@@ -961,12 +961,15 @@ impl_install_tree_post (RpmOstreeTreeComposeContext *self,
                         GCancellable    *cancellable,
                         GError         **error)
 {
-  /* Pick "next version" label from metadata */
+  /* Pick the next version label from metadata, if any */
+  rust::String next_version;
   gpointer vp = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
-  auto v = static_cast<GVariant*>(vp);
-  g_assert (v != NULL);
-  g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
-  auto next_version = rust::String(static_cast<char*>(g_variant_dup_string (v, NULL)));
+  if (vp != NULL)
+  {
+    auto v = static_cast<GVariant*>(vp);
+    g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
+    next_version = rust::String(g_variant_get_string (v, NULL));
+  }
 
   /* Start postprocessing */
   rpmostreecxx::compose_postprocess(self->rootfs_dfd, **self->treefile_rs, next_version, self->unified_core_and_fuse);
