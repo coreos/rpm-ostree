@@ -379,6 +379,9 @@ rpmostree_context_new_client (OstreeRepo   *repo)
   dnf_context_set_zchunk (self->dnfctx, FALSE);
 #endif
 
+  /* The rpmdb is at /usr/share/rpm */
+  dnf_context_set_rpm_macro (self->dnfctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
+
   return self;
 }
 
