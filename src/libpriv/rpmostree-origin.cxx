@@ -722,7 +722,6 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
                                     origin->cached_local_packages, TRUE);
 
-  sync_baserefspec (origin);
   *out_changed = changed || local_changed;
   return TRUE;
 }
