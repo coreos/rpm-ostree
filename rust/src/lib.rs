@@ -121,9 +121,13 @@ pub mod ffi {
     // core.rs
     extern "Rust" {
         type TempEtcGuard;
+        type FilesystemScriptPrep;
 
         fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>>;
         fn undo(self: &TempEtcGuard) -> Result<()>;
+
+        fn prepare_filesystem_script_prep(rootfs: i32) -> Result<Box<FilesystemScriptPrep>>;
+        fn undo(self: &FilesystemScriptPrep) -> Result<()>;
 
         fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Result<()>;
 

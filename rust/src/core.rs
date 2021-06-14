@@ -8,6 +8,12 @@ use crate::ffiutil;
 use ffiutil::*;
 use openat_ext::OpenatDirExt;
 
+/// The binary forked from useradd that pokes the sss cache.
+/// It spews warnings (and sometimes fatal errors) when used
+/// in a non-systemd container (default treecompose side) so
+/// we replace it with `true`.
+const SSS_CACHE: &str = "usr/sbin/sss_cache";
+
 /// Guard for running logic in a context with temporary /etc.
 ///
 /// We have a messy dance in dealing with /usr/etc and /etc; the
@@ -62,6 +68,26 @@ pub(crate) fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Cxx
         .collect();
     let _ = crate::bwrap::bubblewrap_run_sync(rootfs_dfd, &args, false, unified_core)?;
     Ok(())
+}
+
+/// Perform reversible filesystem transformations necessary before we execute scripts.
+pub(crate) struct FilesystemScriptPrep {
+    rootfs: openat::Dir,
+}
+
+pub(crate) fn prepare_filesystem_script_prep(rootfs: i32) -> CxxResult<Box<FilesystemScriptPrep>> {
+    let rootfs = ffi_view_openat_dir(rootfs);
+    rootfs.local_rename_optional(SSS_CACHE, &format!("{}.orig", SSS_CACHE))?;
+    Ok(Box::new(FilesystemScriptPrep { rootfs }))
+}
+
+impl FilesystemScriptPrep {
+    /// Undo the filesystem changes.
+    pub(crate) fn undo(&self) -> CxxResult<()> {
+        self.rootfs
+            .local_rename_optional(&format!("{}.orig", SSS_CACHE), SSS_CACHE)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
