@@ -114,6 +114,15 @@ assert_file_has_content status.txt '\(foo fooext\|fooext foo\) 1\.0-1 -> 2\.0-1'
 assert_file_has_content_literal status.txt 'bar 1.0-1 -> 0.9-1'
 echo "ok override replace bar"
 
+vm_rpmostree override replace $YUMREPO/bar-0.9-1.x86_64.rpm
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt 'bar 1.0-1 -> 0.9-1'
+vm_rpmostree override replace $YUMREPO/bar-1.0-1.x86_64.rpm
+vm_rpmostree override replace $YUMREPO/bar-0.9-1.x86_64.rpm
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt 'bar 1.0-1 -> 0.9-1'
+echo "ok override replace resets previous override"
+
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
 vm_rpmostree upgrade
 vm_assert_status_jq \
@@ -174,6 +183,16 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|index("bar-0.9-1.x86_64") >= 0'
 vm_rpmostree override reset bar-0.9-1.x86_64
+vm_assert_status_jq \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 0'
+# check we can reset inactive overrides by name only
+vm_rpmostree override replace $YUMREPO/bar-0.9-1.x86_64.rpm
+vm_assert_status_jq \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 1' \
+  '.deployments[0]["requested-base-local-replacements"]|index("bar-0.9-1.x86_64") >= 0'
+vm_rpmostree override reset bar
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 0' \
   '.deployments[0]["requested-base-local-replacements"]|length == 0'

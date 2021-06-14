@@ -1204,7 +1204,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       changed = changed || overrides_changed;
     }
-  else if (self->override_reset_pkgs)
+  else if (self->override_reset_pkgs || self->override_replace_local_pkgs)
     {
       /* The origin stores removal overrides as pkgnames and replacement overrides as nevra.
        * To be nice, we support both name & nevra and do the translation here by just
@@ -1244,6 +1244,20 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_ptr_array_add (gv_nevras, util::move_nullify (gv_nevra));
         }
 
+      /* and also add mappings from the origin replacements to handle inactive overrides */
+      GHashTable *cur_local_overrides = rpmostree_origin_get_overrides_local_replace (origin);
+      g_autoptr(GPtrArray) names_to_free = g_ptr_array_new_with_free_func (g_free); /* yuck */
+      GLNX_HASH_TABLE_FOREACH (cur_local_overrides, const char*, nevra)
+        {
+          g_autofree char *name = NULL;
+          if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
+            return FALSE;
+
+          g_hash_table_insert (name_to_nevra, (gpointer)name, (gpointer)nevra);
+          g_hash_table_insert (nevra_to_name, (gpointer)nevra, (gpointer)name);
+          g_ptr_array_add (names_to_free, g_steal_pointer (&name));
+        }
+
       for (char **it = self->override_reset_pkgs; it && *it; it++)
         {
           const char *name_or_nevra = *it;
@@ -1252,7 +1266,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
           if (name == NULL && nevra == NULL)
             {
-              /* it might be an inactive override; just try it both ways */
+              /* this is going to fail below because we should've covered all
+               * cases above, but just try both ways anyway */
               name = name_or_nevra;
               nevra = name_or_nevra;
             }
@@ -1278,25 +1293,42 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);
         }
 
-      changed = TRUE;
-    }
-
-  if (self->override_replace_local_pkgs)
-    {
-      g_autoptr(GPtrArray) pkgs = NULL;
-      if (!import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
-                                   cancellable, error))
-        return FALSE;
-
-      if (pkgs->len > 0)
+      if (self->override_replace_local_pkgs)
         {
-          g_ptr_array_add (pkgs, NULL);
-          if (!rpmostree_origin_add_overrides (origin, (char**)pkgs->pdata,
-                                               RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL,
-                                               error))
+          g_autoptr(GPtrArray) pkgs = NULL;
+          if (!import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
+                                       cancellable, error))
             return FALSE;
-          changed = TRUE;
+
+          for (guint i = 0; i < pkgs->len; i++)
+            {
+
+              auto *pkg = static_cast<const char *> (g_ptr_array_index(pkgs,i));
+              g_autofree char *name = NULL;
+              g_autofree char *sha256 = NULL;
+
+              if (!rpmostree_decompose_sha256_nevra (&pkg, &sha256, error))
+                return FALSE;
+
+              if (!rpmostree_decompose_nevra (pkg, &name, NULL, NULL, NULL, NULL, error))
+                return FALSE;
+
+              auto nevra = static_cast<const char *> (g_hash_table_lookup (name_to_nevra, name));
+
+              if (nevra)
+                rpmostree_origin_remove_override (origin, nevra,
+                                                  RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL);
+            }
+          if (pkgs->len > 0)
+            {
+              g_ptr_array_add (pkgs, NULL);
+              if (!rpmostree_origin_add_overrides (origin, (char**)pkgs->pdata,
+                                                   RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL,
+                                                   error))
+                return FALSE;
+            }
         }
+      changed = TRUE;
     }
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
