@@ -5,7 +5,26 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::{cxxrsutil::*, variant_utils};
+use openat_ext::OpenatDirExt;
 use std::pin::Pin;
+
+/// Validate basic assumptions on daemon startup.
+pub(crate) fn daemon_sanitycheck_environment(
+    mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
+) -> CxxResult<()> {
+    let sysroot = &sysroot.gobj_wrap();
+    let sysroot_dir = openat::Dir::open(format!("/proc/self/fd/{}", sysroot.get_fd()))?;
+    let loc = crate::composepost::TRADITIONAL_RPMDB_LOCATION;
+    if let Some(metadata) = sysroot_dir.metadata_optional(loc)? {
+        let t = metadata.simple_type();
+        if t != openat::SimpleType::Symlink {
+            return Err(
+                anyhow::anyhow!("/{} must be a symbolic link, but is: {:?}", loc, t).into(),
+            );
+        }
+    }
+    Ok(())
+}
 
 /// Get a currently unique (for this host) identifier for the
 /// deployment; TODO - adding the deployment timestamp would make it

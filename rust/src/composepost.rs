@@ -30,7 +30,7 @@ use std::pin::Pin;
 const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
 const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
 const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
-const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
+pub(crate) const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
 
 #[context("Moving {}", name)]
 fn dir_move_if_exists(src: &openat::Dir, dest: &openat::Dir, name: &str) -> Result<()> {
