@@ -3590,7 +3590,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       if (!S_ISDIR (stbuf.st_mode))
         {
           if (!ostree_break_hardlink (tmprootfs_dfd, fn, FALSE, cancellable, error))
-            return FALSE;
+            return glnx_prefix_error (error, "Copyup %s", fn);
         }
 
       uid_t uid = 0;
@@ -3628,7 +3628,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
           g_autoptr(GVariant) xattrs = rpmostree_fcap_to_xattr_variant (fcaps);
           if (!glnx_dfd_name_set_all_xattrs (tmprootfs_dfd, fn, xattrs,
                                              cancellable, error))
-            return FALSE;
+            return glnx_prefix_error (error, "%s", fn);
         }
 
       /* also reapply chmod since e.g. at least the setuid gets taken off */
