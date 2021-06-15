@@ -12,6 +12,11 @@ treefile_set "boot-location" '"new"'
 # to be able to interact with the compose output directly, feed it back to
 # rpm-ostree, etc... So we just run whole scripts inside the VM.
 
+case $(stat -f -c '%T' .) in
+    fuseblk) fatal "This test will not work on a fuse filesystem: $(pwd)" ;;
+    *) ;;
+esac
+
 instroot_tmp=cache/instroot
 instroot=${instroot_tmp}/rootfs
 integrationconf=usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf
@@ -53,6 +58,9 @@ echo \"${testdate}\" > ${instroot}-directcommit/usr/share/rpm-ostree-composetest
 ! test -f ${instroot}-directcommit/${integrationconf}
 rpm-ostree compose commit --repo=${repo} ${treefile} ${instroot}-directcommit
 ostree --repo=${repo} ls ${treeref} /usr/bin/bash
+if ostree --repo=${repo} ls ${treeref} /var/lib/rpm >/dev/null; then
+  echo found /var/lib/rpm in commit 1>&2; exit 1
+fi
 ostree --repo=${repo} cat ${treeref} /usr/share/rpm-ostree-composetest-split.txt >out.txt
 grep \"${testdate}\" out.txt
 ostree --repo=${repo} cat ${treeref} /${integrationconf}
