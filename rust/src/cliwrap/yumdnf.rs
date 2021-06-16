@@ -9,7 +9,7 @@ use std::process::Command;
 use structopt::StructOpt;
 
 /// Emitted at the first line.
-const IMAGEBASED: &str = "Note: This system is image (rpm-ostree) based.";
+pub(crate) const IMAGEBASED: &str = "Note: This system is image (rpm-ostree) based.";
 
 /// Emitted for unhandled options.
 const UNHANDLED: &str = indoc::indoc! {r#"
