@@ -4110,6 +4110,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
 
   auto etc_guard = rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd);
+  auto fs_prep = rpmostreecxx::prepare_filesystem_script_prep (tmprootfs_dfd);
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
@@ -4318,6 +4319,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   if (self->treefile_rs && self->treefile_rs->get_cliwrap())
     rpmostreecxx::cliwrap_write_wrappers (tmprootfs_dfd);
 
+  // And revert our filesystem changes.
+  fs_prep->undo();
   /* Undo the /etc move above */
   etc_guard->undo();
 
