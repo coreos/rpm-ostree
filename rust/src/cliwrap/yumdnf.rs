@@ -111,11 +111,10 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
                     valid_options.push_str(&format!("\n - `{}`: {}", cmd, text));
                 }
             }
-            let msg = formatdoc! {r#"{}
-            Before installing packages to the host root filesystem, consider other options:{}
+            let msg = formatdoc! {r#"Before installing packages to the host root filesystem, consider other options:{}
              - `rpm-ostree install`: Install RPM packages layered on the host root filesystem.
                 Consider these "operating system extensions".
-                Add `--apply-live` to immediately start using the layered packages."#, IMAGEBASED, valid_options.as_str()};
+                Add `--apply-live` to immediately start using the layered packages."#, valid_options.as_str()};
             Err(anyhow!("{}", msg))
         }
         RunDisposition::Unhandled => Err(anyhow!("{}", UNHANDLED)),
