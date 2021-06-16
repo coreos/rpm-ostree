@@ -5,14 +5,25 @@
 
 use crate::cxxrsutil::CxxResult;
 use crate::ffiutil;
+use anyhow::Result;
 use ffiutil::*;
+use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 
 /// The binary forked from useradd that pokes the sss cache.
 /// It spews warnings (and sometimes fatal errors) when used
 /// in a non-systemd container (default treecompose side) so
 /// we temporarily remove it.  https://github.com/SSSD/sssd/issues/5687
-const SSS_CACHE: &str = "usr/sbin/sss_cache";
+const SSS_CACHE_PATH: &str = "usr/sbin/sss_cache";
+// Also neuter systemctl - at least glusterfs for example calls `systemctl start`
+// in its %post which both violates Fedora policy and also will not
+// work with the rpm-ostree model.
+// See also https://github.com/projectatomic/rpm-ostree/issues/550
+// See also the SYSTEMD_OFFLINE bits in rpmostree-scripts.c; at some
+// point in the far future when we don't support RHEL/CentOS7 we can drop
+// our wrapper script.  If we remember.
+const SYSTEMCTL_PATH: &str = "usr/bin/systemctl";
+const SYSTEMCTL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/systemctl-wrapper.sh");
 
 /// Guard for running logic in a context with temporary /etc.
 ///
@@ -56,10 +67,6 @@ impl TempEtcGuard {
     }
 }
 
-pub(crate) fn get_systemctl_wrapper() -> &'static [u8] {
-    include_bytes!("../../src/libpriv/systemctl-wrapper.sh")
-}
-
 /// Run the standard `depmod` utility.
 pub(crate) fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> CxxResult<()> {
     let args: Vec<_> = vec!["depmod", "-a", kver]
@@ -77,15 +84,42 @@ pub(crate) struct FilesystemScriptPrep {
 
 pub(crate) fn prepare_filesystem_script_prep(rootfs: i32) -> CxxResult<Box<FilesystemScriptPrep>> {
     let rootfs = ffi_view_openat_dir(rootfs);
-    rootfs.local_rename_optional(SSS_CACHE, &format!("{}.orig", SSS_CACHE))?;
-    Ok(Box::new(FilesystemScriptPrep { rootfs }))
+    Ok(FilesystemScriptPrep::new(rootfs)?)
 }
 
 impl FilesystemScriptPrep {
+    /// Filesystem paths that we rename out of the way if present
+    const OPTIONAL_PATHS: &'static [&'static str] = &[SSS_CACHE_PATH];
+    const REPLACE_OPTIONAL_PATHS: &'static [(&'static str, &'static [u8])] =
+        &[(SYSTEMCTL_PATH, SYSTEMCTL_WRAPPER)];
+
+    fn saved_name(name: &str) -> String {
+        format!("{}.rpmostreesave", name)
+    }
+
+    #[context("Preparing filesystem for scripts")]
+    pub(crate) fn new(rootfs: openat::Dir) -> Result<Box<Self>> {
+        for &path in Self::OPTIONAL_PATHS {
+            rootfs.local_rename_optional(path, &Self::saved_name(path))?;
+        }
+        for &(path, contents) in Self::REPLACE_OPTIONAL_PATHS {
+            if rootfs.local_rename_optional(path, &Self::saved_name(path))? {
+                rootfs.write_file_contents(path, 0o755, contents)?;
+            }
+        }
+        Ok(Box::new(Self { rootfs }))
+    }
+
     /// Undo the filesystem changes.
+    #[context("Undoing prep filesystem for scripts")]
     pub(crate) fn undo(&self) -> CxxResult<()> {
-        self.rootfs
-            .local_rename_optional(&format!("{}.orig", SSS_CACHE), SSS_CACHE)?;
+        for &path in Self::OPTIONAL_PATHS
+            .iter()
+            .chain(Self::REPLACE_OPTIONAL_PATHS.iter().map(|x| &x.0))
+        {
+            self.rootfs
+                .local_rename_optional(&Self::saved_name(path), path)?;
+        }
         Ok(())
     }
 }
@@ -97,7 +131,7 @@ mod test {
     use std::os::unix::prelude::*;
 
     #[test]
-    fn basic() -> Result<()> {
+    fn etcguard() -> Result<()> {
         let td = tempfile::tempdir()?;
         let d = openat::Dir::open(td.path())?;
         let g = super::prepare_tempetc_guard(d.as_raw_fd())?;
@@ -109,6 +143,35 @@ mod test {
         g.undo()?;
         assert!(!d.exists("etc")?);
         assert!(d.exists("usr/etc/foo")?);
+        Ok(())
+    }
+
+    #[test]
+    fn rootfs() -> Result<()> {
+        let td = tempfile::tempdir()?;
+        let d = openat::Dir::open(td.path())?;
+        // The no-op case
+        {
+            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            g.undo()?;
+        }
+        d.ensure_dir_all("usr/bin", 0o755)?;
+        d.ensure_dir_all("usr/sbin", 0o755)?;
+        d.write_file_contents(super::SSS_CACHE_PATH, 0o755, "sss binary")?;
+        let original_systemctl = "original systemctl";
+        d.write_file_contents(super::SYSTEMCTL_PATH, 0o755, original_systemctl)?;
+        // Replaced systemctl
+        {
+            assert!(d.exists(super::SSS_CACHE_PATH)?);
+            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            assert!(!d.exists(super::SSS_CACHE_PATH)?);
+            let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
+            assert_eq!(contents.as_bytes(), super::SYSTEMCTL_WRAPPER);
+            g.undo()?;
+            let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
+            assert_eq!(contents, original_systemctl);
+            assert!(d.exists(super::SSS_CACHE_PATH)?);
+        }
         Ok(())
     }
 }
