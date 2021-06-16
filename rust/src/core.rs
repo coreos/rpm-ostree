@@ -11,7 +11,7 @@ use openat_ext::OpenatDirExt;
 /// The binary forked from useradd that pokes the sss cache.
 /// It spews warnings (and sometimes fatal errors) when used
 /// in a non-systemd container (default treecompose side) so
-/// we replace it with `true`.
+/// we temporarily remove it.  https://github.com/SSSD/sssd/issues/5687
 const SSS_CACHE: &str = "usr/sbin/sss_cache";
 
 /// Guard for running logic in a context with temporary /etc.
