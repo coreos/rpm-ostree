@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{anyhow, Result};
-use indoc::formatdoc;
 use indoc::indoc;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
@@ -29,6 +28,11 @@ const OTHER_OPTIONS: &[(&str, &str)] = &[
     ("docker", "General purpose containers"),
     ("flatpak", "Desktop (GUI) applications"),
 ];
+
+const RPMOSTREE_INSTALL_TEXT: &str = indoc! { r#"
+Install RPM packages layered on the host root filesystem.
+Consider these "operating system extensions".
+Add `--apply-live` to immediately start using the layered packages."#};
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -105,17 +109,25 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
         }
         RunDisposition::UseSomethingElse => {
             eprintln!("{}", IMAGEBASED);
-            let mut valid_options = String::new();
-            for (cmd, text) in OTHER_OPTIONS {
-                if Path::new(&format!("/usr/bin/{}", cmd)).exists() {
-                    valid_options.push_str(&format!("\n - `{}`: {}", cmd, text));
+            let mut valid_options: Vec<_> = OTHER_OPTIONS
+                .iter()
+                .filter(|(cmd, _)| Path::new(&format!("/usr/bin/{}", cmd)).exists())
+                .collect();
+            if !valid_options.is_empty() {
+                eprintln!("Before installing packages to the host root filesystem, consider other options:");
+            } else {
+                eprintln!("To explicitly perform the operation:");
+            }
+            valid_options.push(&("rpm-ostree install", RPMOSTREE_INSTALL_TEXT));
+            for (cmd, text) in valid_options {
+                let mut lines = text.lines();
+                eprintln!(" - `{}`: {}", cmd, lines.next().unwrap());
+                for line in lines {
+                    eprintln!("   {}", line)
                 }
             }
-            let msg = formatdoc! {r#"Before installing packages to the host root filesystem, consider other options:{}
-             - `rpm-ostree install`: Install RPM packages layered on the host root filesystem.
-                Consider these "operating system extensions".
-                Add `--apply-live` to immediately start using the layered packages."#, valid_options.as_str()};
-            Err(anyhow!("{}", msg))
+
+            Err(anyhow!("not implemented"))
         }
         RunDisposition::Unhandled => Err(anyhow!("{}", UNHANDLED)),
         RunDisposition::NotImplementedYet(msg) => Err(anyhow!("{}\n{}", IMAGEBASED, msg)),
