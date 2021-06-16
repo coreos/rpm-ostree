@@ -11,10 +11,7 @@ nav_order: 3
 ## Administering an rpm-ostree based system
 
 At the moment, there are four primary commands to be familiar with on
-an `rpm-ostree` based system.  Also remember that in a Project Atomic
-system, the `atomic host` command (from the
-[Atomic command](https://github.com/projectatomic/atomic/)) is an
-alias for `rpm-ostree`.
+an `rpm-ostree` based system.
 
 ```
 # rpm-ostree status
@@ -28,9 +25,10 @@ bootloader, the first deployment in the list being the current default one. The
 # rpm-ostree upgrade
 ```
 
-Will perform a system upgrade, creating a *new* deployment (root filesystem) and
-set it as the default for the next boot.  You should use `systemctl reboot`
-shortly afterwards.
+Will prepare a system upgrade offline, creating a *new* deployment (root filesystem) and
+set it as the default for the next boot.  The update will be "finalized" at
+shutdown and a new bootloader entry prepared.  Hence, use `reboot` to apply
+the update.
 
 ```
 # rpm-ostree rollback
