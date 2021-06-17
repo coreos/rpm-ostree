@@ -4110,47 +4110,19 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
 
   auto etc_guard = rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd);
-  auto fs_prep = rpmostreecxx::prepare_filesystem_script_prep (tmprootfs_dfd);
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
   if (overlays->len > 0 || overrides_replace->len > 0)
     {
       gboolean have_passwd;
-      gboolean have_systemctl;
+
+      auto fs_prep = rpmostreecxx::prepare_filesystem_script_prep (tmprootfs_dfd);
 
       auto passwd_entries = rpmostreecxx::new_passwd_entries();
 
       std::string passwd_dir(self->passwd_dir ?: "");
       have_passwd = rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dir);
-
-      /* Also neuter systemctl - at least glusterfs for example calls `systemctl
-       * start` in its %post which both violates Fedora policy and also will not
-       * work with the rpm-ostree model.
-       * See also https://github.com/projectatomic/rpm-ostree/issues/550
-       *
-       * See also the SYSTEMD_OFFLINE bits in rpmostree-scripts.c; at some
-       * point in the far future when we don't support CentOS7 we can drop
-       * our wrapper script.  If we remember.
-       */
-      if (renameat (tmprootfs_dfd, "usr/bin/systemctl",
-                    tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave") < 0)
-        {
-          if (errno == ENOENT)
-            have_systemctl = FALSE;
-          else
-            return glnx_throw_errno_prefix (error, "rename(usr/bin/systemctl)");
-        }
-      else
-        {
-          have_systemctl = TRUE;
-          auto systemctl_wrapper = rpmostreecxx::get_systemctl_wrapper ();
-          if (!glnx_file_replace_contents_with_perms_at (tmprootfs_dfd, "usr/bin/systemctl",
-                                                         systemctl_wrapper.data(), systemctl_wrapper.length(), 0755, (uid_t) -1, (gid_t) -1,
-                                                         GLNX_FILE_REPLACE_NODATASYNC,
-                                                         cancellable, error))
-            return FALSE;
-        }
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
       if (!rpmostree_rootfs_fixup_selinux_store_root (tmprootfs_dfd, cancellable, error))
@@ -4296,17 +4268,13 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           !rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
         return FALSE;
 
-      if (have_systemctl)
-        {
-          if (!glnx_renameat (tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave",
-                              tmprootfs_dfd, "usr/bin/systemctl", error))
-            return FALSE;
-        }
-
       if (have_passwd)
         {
           rpmostreecxx::complete_rpm_layering (tmprootfs_dfd);
         }
+
+        // Revert filesystem changes just for scripts.
+        fs_prep->undo();
     }
   else
     {
@@ -4319,8 +4287,6 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   if (self->treefile_rs && self->treefile_rs->get_cliwrap())
     rpmostreecxx::cliwrap_write_wrappers (tmprootfs_dfd);
 
-  // And revert our filesystem changes.
-  fs_prep->undo();
   /* Undo the /etc move above */
   etc_guard->undo();
 

@@ -130,8 +130,6 @@ pub mod ffi {
         fn undo(self: &FilesystemScriptPrep) -> Result<()>;
 
         fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Result<()>;
-
-        fn get_systemctl_wrapper() -> &'static [u8];
     }
 
     // composepost.rs
