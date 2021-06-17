@@ -351,7 +351,7 @@ fn compose_postprocess_add_files(rootfs_dfd: &openat::Dir, treefile: &mut Treefi
     for (src, dest) in add_files {
         let reldest = dest.trim_start_matches('/');
         if reldest.is_empty() {
-            return Err(anyhow!("Invalid add-files destination: {}", dest).into());
+            return Err(anyhow!("Invalid add-files destination: {}", dest));
         }
         let dest = if reldest.starts_with("etc/") {
             Cow::Owned(format!("usr/{}", reldest))
@@ -459,7 +459,7 @@ fn compose_postprocess_mutate_os_release(
     let path = bwrap.run_captured(cancellable)?;
     let path = std::str::from_utf8(&path)
         .context("Parsing realpath")?
-        .trim_start_matches("/")
+        .trim_start_matches('/')
         .trim_end();
     let path = if path.is_empty() {
         // fallback on just overwriting etc/os-release
@@ -690,7 +690,7 @@ fn convert_path_to_tmpfiles_d_recurse(
             write!(tmpfiles_bufwr, "{} ", groupname)?;
             write!(tmpfiles_bufwr, "- -")?;
         };
-        write!(tmpfiles_bufwr, "\n")?;
+        writeln!(tmpfiles_bufwr)?;
 
         if path_type == SimpleType::Dir {
             // New subdirectory discovered, recurse into it.

@@ -466,7 +466,7 @@ pub(crate) fn bubblewrap_run_sync(
     if capture_stdout {
         let buf = bwrap.run_captured(cancellable)?;
         tempetc.undo()?;
-        Ok(buf.as_ref().iter().map(|&x| x).collect())
+        Ok(buf.as_ref().iter().copied().collect())
     } else {
         bwrap.run_inner(cancellable)?;
         tempetc.undo()?;
