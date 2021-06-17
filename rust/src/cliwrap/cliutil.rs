@@ -61,10 +61,7 @@ pub fn run_unprivileged<T: AsRef<str>>(
     let app_name = "rpm-ostree";
     if with_warning {
         let delay_s = 5;
-        eprintln!(
-            "{name}: NOTE: This system is ostree based.",
-            name = app_name
-        );
+        eprintln!("{}: {}", app_name, super::yumdnf::IMAGEBASED);
         if drop_privileges {
             eprintln!(
                 r#"{name}: Dropping privileges as `{bin}` was executed with not "known safe" arguments."#,
