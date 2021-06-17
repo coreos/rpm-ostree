@@ -266,7 +266,7 @@ pub fn passwd_compose_prep_repo(
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
     let repo = ffi_repo.gobj_wrap();
     // C side uses "" for None
-    let repo_previous_rev = if previous_checksum == "" {
+    let repo_previous_rev = if previous_checksum.is_empty() {
         None
     } else {
         Some((&repo, previous_checksum))

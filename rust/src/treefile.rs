@@ -624,11 +624,7 @@ impl Treefile {
     }
 
     pub(crate) fn get_repo_packages(&self) -> &[RepoPackage] {
-        self.parsed
-            .repo_packages
-            .as_ref()
-            .map(|v| v.as_slice())
-            .unwrap_or_default()
+        self.parsed.repo_packages.as_deref().unwrap_or_default()
     }
 
     pub(crate) fn clear_repo_packages(&mut self) {
@@ -737,7 +733,7 @@ impl Treefile {
     pub(crate) fn sanitycheck_externals(&self) -> Result<()> {
         if let Some(script) = self.externals.postprocess_script.as_ref() {
             let mode = script.metadata()?.permissions().mode();
-            if !(mode & 0o111 > 0) {
+            if mode & 0o111 == 0 {
                 return Err(anyhow!("postprocess-script must be executable"));
             }
         }

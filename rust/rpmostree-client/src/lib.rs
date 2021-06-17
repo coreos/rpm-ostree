@@ -66,7 +66,7 @@ impl Status {
     /// Find the booted deployment.
     pub fn require_booted(&self) -> Result<&Deployment> {
         self.find_booted()
-            .ok_or_else(|| format!("No booted deployment").into())
+            .ok_or_else(|| "No booted deployment".to_string().into())
     }
 }
 
