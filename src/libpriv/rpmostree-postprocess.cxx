@@ -649,6 +649,9 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
         }
     }
 
+  /* Make sure there is an RPM macro in place pointing to the rpmdb in /usr */
+  rpmostreecxx::compose_postprocess_rpm_macro(rootfs_fd);
+
   if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
     return FALSE;
 

@@ -172,9 +172,15 @@ fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Result<()> {
     Ok(())
 }
 
-// We keep hitting issues with the ostree-remount preset not being
-// enabled; let's just do this rather than trying to propagate the
-// preset everywhere.
+/// Write an RPM macro file to ensure the rpmdb path is set on the client side.
+pub fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> CxxResult<()> {
+    let rootfs = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    postprocess_rpm_macro(rootfs)?;
+    Ok(())
+}
+
+/// Ensure our own `_dbpath` macro exists in the tree.
+#[context("Writing _dbpath RPM macro")]
 fn postprocess_rpm_macro(rootfs_dfd: &openat::Dir) -> Result<()> {
     let rpm_macros_dir = "usr/lib/rpm/macros.d";
     rootfs_dfd.ensure_dir_all(rpm_macros_dir, 0o755)?;
