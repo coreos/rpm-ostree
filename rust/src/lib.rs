@@ -160,6 +160,7 @@ pub mod ffi {
             rootfs_dfd: i32,
             cancellable: Pin<&mut GCancellable>,
         ) -> Result<()>;
+        fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> Result<()>;
     }
 
     // A grab-bag of metadata from the deployment's ostree commit
