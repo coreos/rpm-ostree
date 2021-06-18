@@ -9,14 +9,14 @@ export topsrcdir commondir
 . "${commondir}/libtest.sh"
 
 rm rpm-repos -rf
-mkdir rpm-repos
 
 test_tmpdir=$(mktemp -d)
+mkdir ${test_tmpdir}/rpm-repos
 repover=0
 
-# Right now we build just one rpm, with one repo version,
+# Right now we build a few RPMs, with one repo version,
 # but the idea is to extend this with more.
-mkdir rpm-repos/${repover}
+mkdir ${test_tmpdir}/rpm-repos/${repover}
 # The obligatory `foo` and `bar` packages
 build_rpm foo version 1.2 release 3
 build_rpm bar
@@ -57,4 +57,12 @@ build_rpm testdaemon \
 build_rpm testpkg-post-infinite-loop \
              post "echo entering testpkg-post-infinite-loop 1>&2; while true; do sleep 1h; done"
 
-mv ${test_tmpdir}/yumrepo/* rpm-repos/${repover}
+mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
+
+# Other repo versions here e.g.
+# repover=1
+# ...
+# mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
+
+# And finally; put in place. This is the marker for `make` to know we succeeded.
+mv ${test_tmpdir}/rpm-repos rpm-repos
