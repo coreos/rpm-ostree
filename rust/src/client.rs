@@ -106,8 +106,12 @@ impl ClientConnection {
     }
 }
 
-fn is_http(arg: &str) -> bool {
+pub(crate) fn is_http_arg(arg: &str) -> bool {
     arg.starts_with("https://") || arg.starts_with("http://")
+}
+
+pub(crate) fn is_rpm_arg(arg: &str) -> bool {
+    arg.ends_with(".rpm") || arg.starts_with("file://")
 }
 
 /// Given a string from the command line, determine if it represents one or more
@@ -120,10 +124,15 @@ pub(crate) fn client_handle_fd_argument(arg: &str, arch: &str) -> CxxResult<Vec<
         return Ok(fds.into_iter().map(|f| f.into_raw_fd()).collect());
     }
 
-    if is_http(arg) {
+    if is_http_arg(arg) {
         Ok(utils::download_url_to_tmpfile(arg, true).map(|f| vec![f.into_raw_fd()])?)
-    } else if arg.ends_with(".rpm") {
-        Ok(vec![std::fs::File::open(arg)?.into_raw_fd()])
+    } else if is_rpm_arg(arg) {
+        if arg.starts_with("file://") {
+            let formatted_arg: &str = &arg[7..];
+            Ok(vec![std::fs::File::open(formatted_arg)?.into_raw_fd()])
+        } else {
+            Ok(vec![std::fs::File::open(arg)?.into_raw_fd()])
+        }
     } else {
         Ok(Vec::new())
     }

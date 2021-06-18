@@ -74,6 +74,9 @@ build_module foomodular \
 build_module_defaults foomodular \
   defprofile with-default-profile:default
 
+# Test override replace --ex-pin-from-repos
+build_rpm zincati version 99.99 release 3
+
 mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
 
 # Other repo versions here e.g.

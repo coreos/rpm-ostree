@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# Copyright (C) 2021 Red Hat, Inc.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+cd $(mktemp -d)
+
+set -x
+
+rm -rf /etc/yum.repos.d/*
+cat > /etc/yum.repos.d/vmcheck.repo << EOF
+[test-repo]
+name=test-repo
+baseurl=file:///${KOLA_EXT_DATA}/rpm-repos/0
+gpgcheck=0
+EOF
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+"")
+
+# query and fetch for the lastest version of a package from enabled repos
+rpmostree_assert_status \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 0'
+rpm-ostree override replace zincati --ex-pin-from-repos
+rpm-ostree status > status.txt
+assert_file_has_content status.txt 'ReplacedBasePackages: zincati .* -> 99.99-3'
+rpmostree_assert_status \
+  '.deployments[0]["base-local-replacements"]|length == 1' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 1'
+/tmp/autopkgtest-reboot "1"
+;;
+"1")
+rpm-ostree status > status.txt
+rpmostree_assert_status \
+  '.deployments[0]["base-local-replacements"]|length == 1' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 1'
+assert_file_has_content status.txt 'ReplacedBasePackages: zincati .* -> 99.99-3'
+zincati > zincati_version.txt
+assert_file_has_content_literal zincati_version.txt '99.99-3'
+rm -f zincati_version.txt
+rm -f status.txt 
+echo "ok override replace fetch from repos"
+;;
+*) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac
