@@ -2,7 +2,7 @@ DESTDIR ?=
 
 TESTDIRS := $(shell find -mindepth 1 -maxdepth 1 -type d)
 
-KOLA_TESTDIR = $(DESTDIR)/usr/lib/coreos-assembler/tests/kola/rpm-ostree/
+KOLA_TESTDIR ?= $(DESTDIR)/usr/lib/coreos-assembler/tests/kola/rpm-ostree/
 
 rpm-repos: kolainst-build.sh
 	./kolainst-build.sh
@@ -16,3 +16,6 @@ install: all
 	rsync -prlv ../common/*.sh $(KOLA_TESTDIR)/nondestructive/data/
 	rsync -prlv ../common/*.sh $(KOLA_TESTDIR)/destructive/data/
 	rsync -prlv rpm-repos/ $(KOLA_TESTDIR)/destructive/data/rpm-repos/
+
+localinstall: all
+	make install KOLA_TESTDIR=../kola
