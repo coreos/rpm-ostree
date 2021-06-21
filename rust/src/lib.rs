@@ -111,6 +111,11 @@ pub mod ffi {
         fn applylive_entrypoint(args: &Vec<String>) -> Result<()>;
     }
 
+    // builtins/compose/
+    extern "Rust" {
+        fn write_commit_id(target_path: &str, revision: &str) -> Result<()>;
+    }
+
     // cliwrap.rs
     extern "Rust" {
         fn cliwrap_write_wrappers(rootfs: i32) -> Result<()>;
@@ -515,7 +520,8 @@ pub mod ffi {
 }
 
 mod builtins;
-pub(crate) use self::builtins::apply_live::*;
+pub(crate) use crate::builtins::apply_live::*;
+pub(crate) use crate::builtins::compose::commit::*;
 mod bwrap;
 pub(crate) use bwrap::*;
 mod client;
