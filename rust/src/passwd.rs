@@ -858,10 +858,11 @@ impl PasswdEntries {
         }
 
         // Validate all users in the new passwd DB.
+        let mut new_users = Vec::with_capacity(self.users.len());
         for (username, user_entry) in &self.users {
             let old_entry = match old_subset.users.get(username) {
                 None => {
-                    println!("New passwd entry: {}", &username);
+                    new_users.push(username.as_str());
                     continue;
                 }
                 Some(u) => u,
@@ -884,6 +885,9 @@ impl PasswdEntries {
                     user_entry.1,
                 );
             }
+        }
+        if !new_users.is_empty() {
+            println!("New passwd entries: {}", new_users.join(", "));
         }
 
         Ok(())
@@ -936,10 +940,11 @@ impl PasswdEntries {
         }
 
         // Validate all groups in the new group DB.
+        let mut new_groups = Vec::with_capacity(self.groups.len());
         for (groupname, group_entry) in &self.groups {
             let old_entry = match old_subset.groups.get(groupname) {
                 None => {
-                    println!("New passwd entry: {}", &groupname);
+                    new_groups.push(groupname.as_str());
                     continue;
                 }
                 Some(g) => g,
@@ -953,6 +958,9 @@ impl PasswdEntries {
                     old_entry
                 );
             }
+        }
+        if !new_groups.is_empty() {
+            println!("New group entries: {}", new_groups.join(", "));
         }
 
         Ok(())
