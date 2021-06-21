@@ -1119,6 +1119,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                  metadata, gpgkey, selinux, self->devino_cache,
                                  &new_revision, cancellable, error))
     return FALSE;
+  g_assert(new_revision != NULL);
 
   OstreeRepoTransactionStats stats = { 0, };
   OstreeRepoTransactionStats *statsp = NULL;
@@ -1166,10 +1167,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   if (opt_write_commitid_to)
-    {
-      if (!g_file_set_contents (opt_write_commitid_to, new_revision, -1, error))
-        return glnx_prefix_error (error, "While writing to '%s'", opt_write_commitid_to);
-    }
+    rpmostreecxx::write_commit_id(opt_write_commitid_to, new_revision);
 
   return TRUE;
 }
