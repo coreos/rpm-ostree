@@ -41,7 +41,9 @@ fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     } else {
         keyfile_get_optional_string(&kf, ORIGIN, "baserefspec")?
     };
-    cfg.derive.from = refspec_str;
+    let refspec_str = refspec_str
+        .ok_or_else(|| anyhow::anyhow!("Failed to find refspec/baserefspec in origin"))?;
+    cfg.derive.from = Some(refspec_str);
     cfg.packages = parse_stringlist(&kf, PACKAGES, "requested")?;
     cfg.derive.packages_local = parse_localpkglist(&kf, PACKAGES, "requested-local")?;
     cfg.derive.override_remove = parse_stringlist(&kf, OVERRIDES, "remove")?;
@@ -354,6 +356,9 @@ mod test {
 
     #[test]
     fn test_origin_parse() -> Result<()> {
+        let kf = kf_from_str("[origin]\n")?;
+        assert!(origin_to_treefile_inner(&kf).is_err());
+
         let kf = kf_from_str(BASE)?;
         let tf = origin_to_treefile_inner(&kf)?;
         assert_eq!(
