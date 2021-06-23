@@ -133,6 +133,9 @@ The %{name}-devel package includes the header files for %{name}-libs.
 
 %prep
 %autosetup -Sgit -n %{name}-%{version}
+%if 0%{?__isa_bits} == 32
+sed -ie 's,^lto = true,lto = false,' Cargo.toml
+%endif
 
 %build
 env NOCONFIGURE=1 ./autogen.sh
