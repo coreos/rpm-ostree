@@ -13,7 +13,6 @@
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use lazy_static::lazy_static;
-use std::borrow::Cow;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 
@@ -81,11 +80,11 @@ impl ProgressState {
         if is_hidden {
             print!("{}...", msg);
         } else {
-            let msg = match ptype {
-                ProgressType::Task => Cow::Owned(format!("{}...", msg)),
-                _ => Cow::Borrowed(&msg),
+            let prefix = match ptype {
+                ProgressType::Task => format!("{}...", msg),
+                _ => msg.clone(),
             };
-            pb.set_prefix(&msg);
+            pb.set_prefix(prefix);
         }
         Self {
             bar: pb,
@@ -99,7 +98,7 @@ impl ProgressState {
     /// text appears near the start of the progress bar.
     fn set_message<M: Into<String>>(&mut self, msg: M) {
         let msg = msg.into();
-        self.bar.set_prefix(&msg);
+        self.bar.set_prefix(msg.clone());
         self.message = msg;
     }
 
@@ -108,7 +107,7 @@ impl ProgressState {
     /// often (otherwise the progress bar would bounce around).
     fn set_sub_message<T: AsRef<str>>(&self, msg: Option<T>) {
         if let Some(ref sub_message) = msg {
-            self.bar.set_message(sub_message.as_ref())
+            self.bar.set_message(sub_message.as_ref().to_string())
         } else {
             self.bar.set_message("");
         }
