@@ -224,7 +224,17 @@ fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
 fn origin_validate_roundtrip_inner(kf: &glib::KeyFile) -> Result<()> {
     let tf = origin_to_treefile_inner(&kf)?;
     let newkf = treefile_to_origin_inner(&tf)?;
-    kf_diff(&kf, &newkf)
+    // Compare the two origin keyfiles.  This is the core check.
+    kf_diff(&kf, &newkf)?;
+    // And finally, triple-check things by round-tripping the origin
+    // back to a treefile and asserting it's identical.
+    // At the moment, we don't accept user-supplied treefiles as input
+    // to this code.  For now we fatally error if somehow they differed.
+    // But in the future this check should be part of validating treefile
+    // options that don't make sense on the client side.
+    let newtf = origin_to_treefile_inner(&newkf)?;
+    assert_eq!(tf.parsed, newtf.parsed);
+    Ok(())
 }
 
 /// Convert an origin keyfile to a treefile config.
