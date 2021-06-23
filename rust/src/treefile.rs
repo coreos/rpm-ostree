@@ -894,7 +894,7 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
     Ok(ret.into_iter())
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Copy, Clone)]
 pub(crate) enum BootLocation {
     #[serde(rename = "new")]
     New,
@@ -908,7 +908,7 @@ impl Default for BootLocation {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub(crate) enum CheckGroups {
     #[serde(rename = "none")]
@@ -921,17 +921,17 @@ pub(crate) enum CheckGroups {
     Data(CheckGroupsData),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct CheckFile {
     filename: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct CheckGroupsData {
     pub(crate) entries: BTreeMap<String, u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub(crate) enum CheckPasswd {
     #[serde(rename = "none")]
@@ -944,12 +944,12 @@ pub(crate) enum CheckPasswd {
     Data(CheckPasswdData),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct CheckPasswdData {
     pub(crate) entries: BTreeMap<String, CheckPasswdDataEntries>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub(crate) enum CheckPasswdDataEntries {
     IdValue(u32),
@@ -987,7 +987,7 @@ impl From<(u32, u32)> for CheckPasswdDataEntries {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct Rojig {
     pub(crate) name: String,
     pub(crate) summary: String,
@@ -995,7 +995,7 @@ pub(crate) struct Rojig {
     pub(crate) description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub(crate) enum Include {
     Single(String),
@@ -1015,7 +1015,7 @@ pub(crate) enum RpmdbBackend {
 // Because of how we handle includes, *everything* here has to be
 // Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
 // to `true`).
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub(crate) struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
@@ -1169,13 +1169,13 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) extra: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RepoPackage {
     pub(crate) repo: String,
     pub(crate) packages: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub(crate) struct LegacyTreeComposeConfigFields {
     #[serde(skip_serializing)]
     pub(crate) gpg_key: Option<String>,
@@ -1187,7 +1187,7 @@ pub(crate) struct LegacyTreeComposeConfigFields {
     pub(crate) automatic_version_prefix: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DeriveCustom {
     pub(crate) url: String,
@@ -1195,7 +1195,7 @@ pub(crate) struct DeriveCustom {
     pub(crate) description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DeriveInitramfs {
     pub(crate) regenerate: bool,
@@ -1208,7 +1208,7 @@ pub(crate) struct DeriveInitramfs {
 /// These fields are only useful when deriving from a prior ostree commit;
 /// at the moment we only use them when translating an origin file
 /// to a treefile for client side assembly.
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DeriveConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
