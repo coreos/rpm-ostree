@@ -74,11 +74,14 @@ TESTS='misc-2' ./tests/vmcheck.sh
 For development, there is also a `make vmsync` which copies the built rpm-ostree
 into an unlocked VM. To use this, you must have an `ssh-config` file with a host
 defined in it called `vmcheck`. You can provision the VM however you want;
-libvirt directly, vagrant, a remote OpenStack/EC2 instance, etc.  If you choose
-vagrant for example, do something like this:
+libvirt directly, vagrant, a remote OpenStack/EC2 instance, etc.  For QEMU, we
+have a helper script at `tests/vm.sh` which uses kola to spawn a CoreOS QEMU
+image. You can use it like this:
 
 ```sh
-vagrant ssh-config > /path/to/src/rpm-ostree/ssh-config
+export COSA_DIR=/path/to/cosa/workdir
+tests/vm.sh spawn
+make vmsync
 ```
 
 Note that by default, these commands will retrieve the latest version of ostree
