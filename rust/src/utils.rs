@@ -453,7 +453,8 @@ pub(crate) fn get_rpm_basearch() -> String {
     match std::env::consts::ARCH {
         "arm" => "armhfp".to_string(),
         "powerpc" => "ppc".to_string(),
-        "powerpc64" => "ppc64".to_string(),
+        "powerpc64" if cfg!(target_endian = "big") => "ppc64".to_string(),
+        "powerpc64" if cfg!(target_endian = "little") => "ppc64le".to_string(),
         "sparc64" => "sparc".to_string(),
         "x86" => "i386".to_string(),
         s => s.to_string(),
