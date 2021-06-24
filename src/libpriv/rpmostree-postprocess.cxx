@@ -924,7 +924,7 @@ rpmostree_compose_commit (int            rootfs_fd,
   // Unfortunately this API takes GVariantDict, not GVariantBuilder, so convert
   g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (src_metadata);
   if (!ostree_commit_metadata_for_bootable (root_tree, metadata_dict, cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Looking for bootable kernel");
   g_autoptr(GVariant) metadata = g_variant_dict_end (metadata_dict);
 
   g_autofree char *new_revision = NULL;

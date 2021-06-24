@@ -1118,7 +1118,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision,
                                  metadata, gpgkey, selinux, self->devino_cache,
                                  &new_revision, cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Writing commit");
   g_assert(new_revision != NULL);
 
   OstreeRepoTransactionStats stats = { 0, };
