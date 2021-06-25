@@ -31,10 +31,11 @@ pub mod ffi {
     extern "C++" {
         include!("src/libpriv/rpmostree-cxxrs-prelude.h");
 
-        type OstreeSysroot = crate::FFIOstreeSysroot;
+        type OstreeDeployment = crate::FFIOstreeDeployment;
         #[allow(dead_code)]
         type OstreeRepo = crate::FFIOstreeRepo;
-        type OstreeDeployment = crate::FFIOstreeDeployment;
+        type OstreeRepoTransactionStats = crate::FFIOstreeRepoTransactionStats;
+        type OstreeSysroot = crate::FFIOstreeSysroot;
         type GObject = crate::FFIGObject;
         type GCancellable = crate::FFIGCancellable;
         type GDBusConnection = crate::FFIGDBusConnection;

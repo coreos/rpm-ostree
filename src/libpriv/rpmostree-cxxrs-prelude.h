@@ -24,10 +24,11 @@
 
 namespace rpmostreecxx {
     // Currently cxx-rs requires that external bindings are in the same namespace as
-    // its own bindings, so we maintain typedefs.  Update cxx_bridge_gobject.rs first.
-    typedef ::OstreeSysroot OstreeSysroot;
-    typedef ::OstreeRepo OstreeRepo;
+    // its own bindings, so we maintain typedefs.  Update cxxrsutil.rs first.
     typedef ::OstreeDeployment OstreeDeployment;
+    typedef ::OstreeRepo OstreeRepo;
+    typedef ::OstreeRepoTransactionStats OstreeRepoTransactionStats;
+    typedef ::OstreeSysroot OstreeSysroot;
     typedef ::GObject GObject;
     typedef ::GCancellable GCancellable;
     typedef ::GDBusConnection GDBusConnection;

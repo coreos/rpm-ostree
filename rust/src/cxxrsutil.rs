@@ -55,7 +55,7 @@ macro_rules! impl_wrap {
             fn gobj_rewrap(&'a self) -> Pin<&'a mut Self::ReWrapped> {
                 // Access the underlying raw pointer behind the glib-rs
                 // newtype wrapper, e.g. `ostree_sys::OstreeRepo`.
-                let p: *mut $sys = self.to_glib_none().0;
+                let p: *const $sys = self.to_glib_none().0;
                 // Safety: Pin<T> is a #[repr(transparent)] newtype wrapper
                 // around our #[repr(transparent)] FFI newtype wrapper which
                 // for the glib-rs newtype wrapper, which finally holds the real
@@ -94,7 +94,12 @@ macro_rules! cxxrs_bind {
 
 // When extending this list, also update rpmostree-cxxrs-prelude.h and lib.rs
 // This macro is special to ostree types currently.
-cxxrs_bind!(Ostree, ostree, ostree_sys, [Sysroot, Repo, Deployment]);
+cxxrs_bind!(
+    Ostree,
+    ostree,
+    ostree_sys,
+    [Deployment, Repo, RepoTransactionStats, Sysroot]
+);
 cxxrs_bind!(G, glib, gobject_sys, [Object]);
 cxxrs_bind!(G, gio, gio_sys, [Cancellable, DBusConnection]);
 cxxrs_bind!(G, glib, glib_sys, [KeyFile, Variant, VariantDict]);
