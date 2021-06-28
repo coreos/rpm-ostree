@@ -581,8 +581,8 @@ on_sigint (gpointer user_data)
 static gboolean
 set_variable_false (gpointer data)
 {
-  auto donep = static_cast<gboolean*>(data);
-  *donep = TRUE;
+  auto donep = static_cast<int*>(data);
+  g_atomic_int_set (donep, 1);
   g_main_context_wakeup (NULL);
   return FALSE;
 }
@@ -593,10 +593,10 @@ set_variable_false (gpointer data)
 static void
 spin_mainloop_for_a_second (void)
 {
-  gboolean done = FALSE;
+  int done = 0;
 
   g_timeout_add_seconds (1, set_variable_false, &done);
-  while (!done)
+  while (g_atomic_int_get (&done) == 0)
     g_main_context_iteration (NULL, TRUE);
 }
 
