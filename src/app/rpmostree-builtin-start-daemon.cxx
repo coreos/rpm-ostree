@@ -261,8 +261,11 @@ rpmostree_builtin_start_daemon (int             argc,
   g_autoptr(GDBusConnection) bus = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, error);
   if (!bus)
     return FALSE;
-  if (!start_daemon (bus, error))
+  if (!start_daemon (bus, error)) {
+    if (*error)
+      sd_notifyf (0, "STATUS=error: %s", (*error)->message);
     return FALSE;
+  }
 
   state_transition (APPSTATE_RUNNING);
 
