@@ -43,7 +43,7 @@ fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     };
     let refspec_str = refspec_str
         .ok_or_else(|| anyhow::anyhow!("Failed to find refspec/baserefspec in origin"))?;
-    cfg.derive.from = Some(refspec_str);
+    cfg.derive.base_refspec = Some(refspec_str);
     cfg.packages = parse_stringlist(&kf, PACKAGES, "requested")?;
     cfg.derive.packages_local = parse_localpkglist(&kf, PACKAGES, "requested-local")?;
     cfg.derive.override_remove = parse_stringlist(&kf, OVERRIDES, "remove")?;
@@ -126,7 +126,7 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
 
     // refspec (note special handling right now for layering)
     let deriving = tf.packages.is_some() || tf.derive.packages_local.is_some();
-    if let Some(r) = tf.derive.from.as_deref() {
+    if let Some(r) = tf.derive.base_refspec.as_deref() {
         let k = if deriving { "baserefspec" } else { "refspec" };
         kf.set_string(ORIGIN, k, r)
     };
@@ -362,7 +362,7 @@ mod test {
         let kf = kf_from_str(BASE)?;
         let tf = origin_to_treefile_inner(&kf)?;
         assert_eq!(
-            tf.parsed.derive.from.as_ref().unwrap(),
+            tf.parsed.derive.base_refspec.as_ref().unwrap(),
             "foo:bar/x86_64/baz"
         );
 
@@ -375,7 +375,7 @@ mod test {
         "})?;
         let tf = origin_to_treefile_inner(&kf)?;
         assert_eq!(
-            tf.parsed.derive.from.as_ref().unwrap(),
+            tf.parsed.derive.base_refspec.as_ref().unwrap(),
             "fedora/33/x86_64/silverblue"
         );
         let pkgs = tf.parsed.packages.as_ref().unwrap();
