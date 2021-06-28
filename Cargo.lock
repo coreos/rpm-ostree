@@ -666,8 +666,8 @@ dependencies = [
  "futures-util",
  "gio-sys",
  "glib",
- "glib-sys",
- "gobject-sys",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "libc",
  "once_cell",
  "thiserror",
@@ -679,8 +679,8 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e24fb752f8f5d2cf6bbc2c606fd2bc989c81c5e2fe321ab974d54f8b6344eac"
 dependencies = [
- "glib-sys",
- "gobject-sys",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "libc",
  "system-deps 1.3.2",
  "winapi",
@@ -699,8 +699,8 @@ dependencies = [
  "futures-task",
  "futures-util",
  "glib-macros",
- "glib-sys",
- "gobject-sys",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "libc",
  "once_cell",
 ]
@@ -732,14 +732,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "glib-sys"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c1d60554a212445e2a858e42a0e48cece1bd57b311a19a9468f70376cf554ae"
+dependencies = [
+ "libc",
+ "system-deps 3.1.1",
+]
+
+[[package]]
 name = "gobject-sys"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "952133b60c318a62bf82ee75b93acc7e84028a093e06b9e27981c2b6fe68218c"
 dependencies = [
- "glib-sys",
+ "glib-sys 0.10.1",
  "libc",
  "system-deps 1.3.2",
+]
+
+[[package]]
+name = "gobject-sys"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa92cae29759dae34ab5921d73fff5ad54b3d794ab842c117e36cafc7994c3f5"
+dependencies = [
+ "glib-sys 0.14.0",
+ "libc",
+ "system-deps 3.1.1",
 ]
 
 [[package]]
@@ -1344,8 +1365,8 @@ dependencies = [
  "gio",
  "gio-sys",
  "glib",
- "glib-sys",
- "gobject-sys",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "hex",
  "libc",
  "once_cell",
@@ -1369,7 +1390,7 @@ dependencies = [
  "futures",
  "gio",
  "glib",
- "glib-sys",
+ "glib-sys 0.10.1",
  "gvariant",
  "hex",
  "indicatif 0.15.0",
@@ -1399,8 +1420,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d9ea917750072931dd9c57e536f5c36422060603bd7e755beb74bf7be797564"
 dependencies = [
  "gio-sys",
- "glib-sys",
- "gobject-sys",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "libc",
  "system-deps 1.3.2",
 ]
@@ -1871,8 +1892,8 @@ dependencies = [
  "gio",
  "gio-sys",
  "glib",
- "glib-sys",
- "gobject-sys",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.14.0",
  "indicatif 0.16.2",
  "indoc",
  "lazy_static",
