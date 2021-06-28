@@ -818,6 +818,8 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_lookup (&optdict, "reboot", "b", &opt_reboot);
   gboolean opt_dry_run = FALSE;
   g_variant_dict_lookup (&optdict, "dry-run", "b", &opt_dry_run);
+  gboolean opt_apply_live = FALSE;
+  g_variant_dict_lookup (&optdict, "apply-live", "b", &opt_apply_live);
 
   if (opt_dry_run)
     {
@@ -831,15 +833,25 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
             invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
           return TRUE;
         }
-      else
+      else if (!opt_apply_live)
         {
           /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
           const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
           rpmostreecxx::print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
                 RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable);
+          g_print ("Changes queued for next boot. Run \"systemctl reboot\" to start a reboot\n");
         }
-
-      g_print ("Run \"systemctl reboot\" to start a reboot\n");
+      else if (opt_apply_live)
+        {
+          const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+          g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+          g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
+          if (!ostree_sysroot_load (sysroot, cancellable, error))
+            return FALSE;
+          rpmostreecxx::applylive_finish (*sysroot);
+        }
+      else
+        g_assert_not_reached ();
     }
 
   return TRUE;
