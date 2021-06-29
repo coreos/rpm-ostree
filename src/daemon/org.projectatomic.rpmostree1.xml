@@ -305,6 +305,9 @@
          "custom-origin" (type '(ss)')
 
          Available options:
+         "apply-live" (type 'b')
+            Extend the running filesystem tree with queued changes.  This
+            does not allow replacing existing files/packages.
          "reboot" (type 'b')
             Initiate a reboot after transaction.
          "allow-downgrade" (type 'b')

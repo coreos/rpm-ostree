@@ -102,6 +102,8 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_insert (&dict, "idempotent-layering", "b", opt_idempotent);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
+  if (opt_apply_live)
+    g_variant_dict_insert (&dict, "apply-live", "b", opt_apply_live);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   gboolean met_local_pkg = FALSE;
@@ -110,7 +112,7 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
 
   /* Use newer D-Bus API only if we have to. */
   g_autofree char *transaction_address = NULL;
-  if (met_local_pkg)
+  if (met_local_pkg || opt_apply_live)
     {
       if (!rpmostree_update_deployment (os_proxy,
                                         NULL, /* refspec */
@@ -183,19 +185,10 @@ rpmostree_builtin_install (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
-  if (!pkg_change (invocation, sysroot_proxy,
+  return pkg_change (invocation, sysroot_proxy,
                      (const char *const*)argv,
                      (const char *const*)opt_uninstall,
-                     cancellable, error))
-    return FALSE;
-
-  if (opt_apply_live)
-    {
-      rust::Vec<rust::String> rustargv;
-      rpmostreecxx::applylive_entrypoint(rustargv);
-    }
-
-  return TRUE;
+                     cancellable, error);
 }
 
 gboolean

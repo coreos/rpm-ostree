@@ -889,6 +889,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   gboolean is_uninstall = FALSE;
   gboolean is_override = FALSE;
 
+  if (deploy_has_bool_option (self, "apply-live") && deploy_has_bool_option (self, "reboot"))
+    return glnx_throw (error, "Cannot specify `apply-live` and `reboot`");
+
   /* In practice today */
   if (no_pull_base)
     {
@@ -1521,7 +1524,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
         }
 
-      if (deploy_has_bool_option (self, "reboot"))
+      if (deploy_has_bool_option (self, "apply-live"))
+        {
+          g_autoptr(GVariantDict) dictv = g_variant_dict_new (NULL);
+          g_autoptr(GVariant) live_opts = g_variant_ref_sink (g_variant_dict_end (dictv));
+          rpmostreecxx::transaction_apply_live(*sysroot, *live_opts);
+        }
+      else if (deploy_has_bool_option (self, "reboot"))
         {
           if (!check_sd_inhibitor_locks (cancellable, error))
             return FALSE;

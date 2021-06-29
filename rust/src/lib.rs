@@ -112,6 +112,7 @@ pub mod ffi {
     // builtins/apply_live.rs
     extern "Rust" {
         fn applylive_entrypoint(args: &Vec<String>) -> Result<()>;
+        fn applylive_finish(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
     }
 
     // builtins/compose/

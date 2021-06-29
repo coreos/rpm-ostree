@@ -6,6 +6,7 @@ use crate::live;
 use anyhow::{anyhow, Result};
 use gio::DBusProxyExt;
 use ostree_ext::variant_utils;
+use std::pin::Pin;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -46,7 +47,7 @@ fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Vari
     Ok(r.end())
 }
 
-pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> Result<()> {
+pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
     let opts = &Opts::from_iter(args.iter());
     let client = &mut crate::client::ClientConnection::new()?;
     let sysroot = &ostree::Sysroot::new_default();
@@ -68,12 +69,13 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> Result<()> {
         .get_str()
         .ok_or_else(|| anyhow!("Expected string transaction address"))?;
     client.transaction_connect_progress_sync(txn_address)?;
-    finish(sysroot)?;
+    applylive_finish(sysroot.gobj_rewrap())?;
     Ok(())
 }
 
 // Postprocessing after the daemon has reported completion; print an rpmdb diff.
-fn finish(sysroot: &ostree::Sysroot) -> Result<()> {
+pub(crate) fn applylive_finish(mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>) -> CxxResult<()> {
+    let sysroot = sysroot.gobj_wrap();
     let cancellable = gio::NONE_CANCELLABLE;
     sysroot.load_if_changed(cancellable)?;
     let repo = &sysroot.get_repo(cancellable)?;
