@@ -570,16 +570,15 @@ compose_filter_cb (OstreeRepo         *repo,
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
 
-  bool skip_extraneous = (self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) != 0;
-  bool is_ignored = false;
   try {
-    is_ignored = rpmostreecxx::importer_compose_filter (path, *file_info, skip_extraneous);
+    bool skip_extraneous = (self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) != 0;
+    auto is_ignored = rpmostreecxx::importer_compose_filter (path, *file_info, skip_extraneous);
+    if (is_ignored)
+      return OSTREE_REPO_COMMIT_FILTER_SKIP;
   } catch (std::exception& e) {
     g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
-    is_ignored = true;
-  }
-  if (is_ignored)
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
+  }
 
   bool ro_executables = (self->flags & RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES) != 0;
   rpmostreecxx::tweak_imported_file_info (*file_info, ro_executables);
