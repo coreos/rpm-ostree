@@ -432,8 +432,8 @@ rebuild_command_line (int    argc,
   g_autoptr(GString) command = g_string_new (NULL);
   for (int i = 1; i < argc; i++)
     {
-      g_autofree char *quoted = rpmostree_maybe_shell_quote (argv[i]);
-      g_string_append (command, quoted ?: argv[i]);
+      auto quoted = rpmostreecxx::maybe_shell_quote (argv[i]);
+      g_string_append (command, quoted.c_str());
       g_string_append_c (command, ' ');
     }
   return g_string_free (util::move_nullify (command), FALSE);

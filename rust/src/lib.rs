@@ -206,6 +206,12 @@ pub mod ffi {
             mut file_info: Pin<&mut GFileInfo>,
             skip_extraneous: bool,
         ) -> Result<bool>;
+        fn tmpfiles_translate(
+            abs_path: &str,
+            mut file_info: Pin<&mut GFileInfo>,
+            username: &str,
+            groupname: &str,
+        ) -> Result<String>;
         fn tweak_imported_file_info(mut file_info: Pin<&mut GFileInfo>, ro_executables: bool);
     }
 
@@ -270,6 +276,7 @@ pub mod ffi {
     // testutils.rs
     extern "Rust" {
         fn testutils_entrypoint(argv: Vec<String>) -> Result<()>;
+        fn maybe_shell_quote(input: &str) -> String;
     }
 
     // treefile.rs

@@ -320,9 +320,6 @@ rpmostree_str_to_auto_update_policy (const char *str,
 char*
 rpmostree_timestamp_str_from_unix_utc (guint64 t);
 
-char*
-rpmostree_maybe_shell_quote (const char *s);
-
 void
 rpmostree_journal_error (GError *error);
 
