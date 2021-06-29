@@ -7,6 +7,7 @@ use crate::utils;
 use anyhow::{anyhow, Result};
 use gio::DBusProxyExt;
 use std::os::unix::io::IntoRawFd;
+use std::process::Command;
 
 /// The well-known bus name.
 const BUS_NAME: &str = "org.projectatomic.rpmostree1";
@@ -125,4 +126,30 @@ pub(crate) fn client_handle_fd_argument(arg: &str, arch: &str) -> CxxResult<Vec<
     } else {
         Ok(Vec::new())
     }
+}
+
+/// Explicitly ensure the daemon is started via systemd, if possible.
+///
+/// This works around bugs from DBus activation, see
+/// https://github.com/coreos/rpm-ostree/pull/2932
+///
+/// Basically we load too much data before claiming the bus name,
+/// and dbus doesn't give us a useful error.  Instead, let's talk
+/// to systemd directly and use its client tools to scrape errors.
+pub(crate) fn client_start_daemon() -> CxxResult<()> {
+    let service = "rpm-ostreed.service";
+    // Assume non-root can't use systemd right now.
+    if !nix::unistd::getuid().is_root() {
+        return Ok(());
+    }
+    let res = Command::new("systemctl")
+        .args(&["--no-ask-password", "start", service])
+        .status()?;
+    if !res.success() {
+        let _ = Command::new("systemctl")
+            .args(&["status", service])
+            .status();
+        return Err(anyhow!("{}", res).into());
+    }
+    Ok(())
 }

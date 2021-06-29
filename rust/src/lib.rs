@@ -63,6 +63,7 @@ pub mod ffi {
 
     // client.rs
     extern "Rust" {
+        fn client_start_daemon() -> Result<()>;
         fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
     }
 
