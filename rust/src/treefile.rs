@@ -388,7 +388,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         repo_packages
     );
 
-    merge_basic_field(&mut dest.derive.from, &mut src.derive.from);
+    merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
 }
 
 /// Merge the treefile externals. There are currently only two keys that
@@ -1212,7 +1212,7 @@ pub(crate) struct DeriveInitramfs {
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DeriveConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) from: Option<String>,
+    pub(crate) base_refspec: Option<String>,
 
     // Packages
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1246,7 +1246,7 @@ impl DeriveConfigFields {
                 }
             }};
         }
-        check!(from);
+        check!(base_refspec);
         check!(packages_local);
         check!(override_remove);
         check!(override_replace_local);
