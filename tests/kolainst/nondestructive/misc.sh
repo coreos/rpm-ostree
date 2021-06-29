@@ -106,6 +106,17 @@ mv /var/lib/rpm{.orig,}
 systemctl reset-failed rpm-ostreed
 echo "ok validated rpmdb"
 
+systemctl stop rpm-ostreed
+unshare -m /bin/bash -c 'mount -o remount,rw /boot && mkdir /boot/orig-loader && mv /boot/loader* /boot/orig-loader'
+if rpm-ostree status &>err.txt; then
+    fatal "started rpm-ostreed with no /boot/loader"
+fi
+assert_file_has_content_literal err.txt "Unexpected state: /run/ostree-booted found, but no /boot/loader directory"
+rm -f err.txt
+unshare -m /bin/bash -c 'mount -o remount,rw /boot && mv /boot/orig-loader/* /boot'
+systemctl restart rpm-ostreed
+echo "ok daemon statup failure gives useful error"
+
 rpm-ostree cleanup -p
 originpath=$(ostree admin --print-current-dir).origin
 unshare -m /bin/bash -c "mount -o remount,rw /sysroot && cp -a ${originpath}{,.orig} && 

@@ -82,6 +82,8 @@ app_load_sysroot_impl (const char       *sysroot,
 {
   const char *bus_name = NULL;
 
+  rpmostreecxx::client_start_daemon();
+
   g_autoptr(GDBusConnection) connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
   if (!connection)
     return glnx_prefix_error (error, "Connecting to system bus");
