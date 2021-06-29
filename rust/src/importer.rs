@@ -7,10 +7,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
-use anyhow::{bail, Result};
+use crate::utils;
+use anyhow::{bail, format_err, Result};
 use fn_error_context::context;
-use gio::FileType;
+use gio::{FileInfo, FileType};
 use ostree::RepoCommitFilterResult;
+use std::borrow::Cow;
+use std::fmt::Write;
 use std::pin::Pin;
 
 /// Adjust mode for specific file entries.
@@ -61,7 +64,7 @@ pub fn importer_compose_filter(
 #[context("Analyzing {}", path)]
 fn import_filter(
     path: &str,
-    file_info: &mut gio::FileInfo,
+    file_info: &mut FileInfo,
     skip_extraneous: bool,
 ) -> Result<RepoCommitFilterResult> {
     // Sanity check that RPM isn't using CPIO id fields.
@@ -126,6 +129,66 @@ fn path_is_in_opt(path: &str) -> bool {
     path == "/opt" || path.starts_with("/opt/")
 }
 
+pub fn tmpfiles_translate(
+    abs_path: &str,
+    mut file_info: Pin<&mut crate::FFIGFileInfo>,
+    username: &str,
+    groupname: &str,
+) -> CxxResult<String> {
+    let file_info = file_info.gobj_wrap();
+    let entry = translate_to_tmpfiles_d(abs_path, &file_info, username, groupname)?;
+    Ok(entry)
+}
+
+/// Translate a filepath entry to an equivalent tmpfiles.d line.
+#[context("Translating {}", abs_path)]
+pub(crate) fn translate_to_tmpfiles_d(
+    abs_path: &str,
+    file_info: &FileInfo,
+    username: &str,
+    groupname: &str,
+) -> Result<String> {
+    let mut bufwr = String::new();
+
+    let path_type = file_info.get_file_type();
+    let filetype_char = match path_type {
+        FileType::Directory => 'd',
+        FileType::Regular => 'f',
+        FileType::SymbolicLink => 'L',
+        x => bail!("path '{}' has invalid type: {:?}", abs_path, x),
+    };
+    let fixed_path = fix_tmpfiles_path(Cow::Borrowed(abs_path));
+    write!(&mut bufwr, "{} {}", filetype_char, fixed_path)?;
+
+    if path_type == FileType::SymbolicLink {
+        let link_target = file_info
+            .get_symlink_target()
+            .ok_or_else(|| format_err!("missing symlink target"))?;
+        write!(&mut bufwr, " - - - - {}", link_target)?;
+    } else {
+        let mode = file_info.get_attribute_uint32("unix::mode") & !libc::S_IFMT;
+        write!(&mut bufwr, " {:04o} {} {} - -", mode, username, groupname)?;
+    };
+    writeln!(&mut bufwr)?;
+
+    Ok(bufwr)
+}
+
+fn fix_tmpfiles_path(abs_path: Cow<str>) -> Cow<str> {
+    let mut tweaked_path = abs_path;
+
+    // systemd-tmpfiles complains loudly about writing to /var/run;
+    // ideally, all of the packages get fixed for this but...eh.
+    if tweaked_path.starts_with("/var/run/") {
+        let trimmed = tweaked_path.trim_start_matches("/var");
+        tweaked_path = Cow::Owned(trimmed.to_string());
+    }
+
+    // Handle file paths with spaces and other chars;
+    // see https://github.com/coreos/rpm-ostree/issues/2029 */
+    utils::shellsafe_quote(tweaked_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,6 +211,25 @@ mod tests {
         for entry in denied_cases {
             assert_eq!(path_is_ostree_compliant(entry), false, "{}", entry);
             assert_eq!(path_is_in_opt(entry), false, "{}", entry);
+        }
+    }
+
+    #[test]
+    fn test_fix_tmpfiles_path() {
+        let intact_cases = vec!["/", "/var", "/var/foo", "/run/foo"];
+        for entry in intact_cases {
+            let output = fix_tmpfiles_path(Cow::Borrowed(entry));
+            assert_eq!(output, entry);
+        }
+
+        let quoting_cases = maplit::btreemap! {
+            "/var/foo bar" => r#"'/var/foo bar'"#,
+            "/var/run/" => "/run/",
+            "/var/run/foo bar" => r#"'/run/foo bar'"#,
+        };
+        for (input, expected) in quoting_cases {
+            let output = fix_tmpfiles_path(Cow::Borrowed(input));
+            assert_eq!(output, expected);
         }
     }
 }

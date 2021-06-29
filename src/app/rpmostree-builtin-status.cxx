@@ -113,8 +113,8 @@ print_packages (const char *k, guint max_key_len,
       if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, pkg))
         continue;
 
-      g_autofree char *quoted = rpmostree_maybe_shell_quote (pkg) ?: g_strdup (pkg);
-      g_ptr_array_add (packages_sorted, util::move_nullify (quoted));
+      auto quoted = rpmostreecxx::maybe_shell_quote (pkg);
+      g_ptr_array_add (packages_sorted, g_strdup(quoted.c_str()));
     }
 
   const guint n_packages = packages_sorted->len;
@@ -946,8 +946,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
       for (char **iter = initramfs_args; iter && *iter; iter++)
         {
           const char *arg = *iter;
-          g_autofree char *quoted = rpmostree_maybe_shell_quote (arg);
-          g_string_append (buf, quoted ?: arg);
+          auto quoted = rpmostreecxx::maybe_shell_quote (arg);
+          g_string_append (buf, quoted.c_str());
           g_string_append_c (buf, ' ');
         }
       if (buf->len == 0)

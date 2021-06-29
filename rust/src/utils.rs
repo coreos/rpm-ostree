@@ -11,6 +11,9 @@ use crate::cxxrsutil::*;
 use crate::variant_utils;
 use anyhow::{bail, Context, Result};
 use glib::translate::ToGlibPtr;
+use lazy_static::lazy_static;
+use regex::Regex;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io::prelude::*;
 use std::os::unix::io::IntoRawFd;
@@ -200,7 +203,7 @@ fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
     Ok(s)
 }
 
-lazy_static::lazy_static! {
+lazy_static! {
     static ref RUNNING_IN_SYSTEMD: bool = {
         // See https://www.freedesktop.org/software/systemd/man/systemd.exec.html#%24INVOCATION_ID
         std::env::var_os("INVOCATION_ID").filter(|s| !s.is_empty()).is_some()
@@ -212,6 +215,25 @@ lazy_static::lazy_static! {
 /// to e.g. log to the journal instead of printing to stdout.
 pub(crate) fn running_in_systemd() -> bool {
     *RUNNING_IN_SYSTEMD
+}
+
+pub fn maybe_shell_quote(input: &str) -> String {
+    shellsafe_quote(Cow::Borrowed(input)).into_owned()
+}
+
+pub(crate) fn shellsafe_quote(input: Cow<str>) -> Cow<str> {
+    lazy_static! {
+        static ref SHELLSAFE: Regex = Regex::new("^[[:alnum:]-._/=]+$").unwrap();
+    }
+
+    if SHELLSAFE.is_match(&input) {
+        input
+    } else {
+        // SAFETY: if input is non-NULL, this always returns non-NULL.
+        let quoted = glib::shell_quote(input.as_ref()).expect("NULL quoted output");
+        // SAFETY: if input is UTF-8, so is the quoted string.
+        Cow::Owned(quoted.into_string().expect("non UTF-8 quoted output"))
+    }
 }
 
 #[cfg(test)]

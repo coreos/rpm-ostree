@@ -5,14 +5,14 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::bwrap;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::passwd::PasswdDB;
 use crate::treefile::Treefile;
-use anyhow::{anyhow, bail, Context, Result};
+use crate::{bwrap, importer};
+use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::Utf8Path;
 use fn_error_context::context;
-use gio::CancellableExt;
+use gio::{CancellableExt, FileType};
 use nix::sys::stat::Mode;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
@@ -676,30 +676,34 @@ fn convert_path_to_tmpfiles_d_recurse(
             continue;
         }
 
-        let filetype_char = match path_type {
-            SimpleType::Dir => 'd',
-            SimpleType::Symlink => 'L',
-            SimpleType::File => 'f',
-            x => unreachable!("invalid path type: {:?}", x),
-        };
-        write!(tmpfiles_bufwr, "{} ", filetype_char)?;
-        write!(tmpfiles_bufwr, "/{} ", full_path)?;
-
-        if path_type == SimpleType::Symlink {
-            let link_target = rootfs.read_link(&full_path)?;
-            write!(tmpfiles_bufwr, "- - - - ")?;
-            write!(tmpfiles_bufwr, "{}", link_target.display())?;
-        } else {
+        // Translate this file entry.
+        let entry = {
             let meta = rootfs.metadata(&full_path)?;
-            let perm = meta.stat().st_mode & !libc::S_IFMT;
-            write!(tmpfiles_bufwr, "{:04o} ", perm)?;
+            let mode = meta.stat().st_mode & !libc::S_IFMT;
+
+            let file_info = gio::FileInfo::new();
+            file_info.set_attribute_uint32("unix::mode", mode);
+
+            match path_type {
+                SimpleType::Dir => file_info.set_file_type(FileType::Directory),
+                SimpleType::Symlink => {
+                    file_info.set_file_type(FileType::SymbolicLink);
+                    let link_target = rootfs.read_link(&full_path)?;
+                    let target_path = Utf8Path::from_path(&link_target).ok_or_else(|| {
+                        format_err!("non UTF-8 symlink target '{}'", &link_target.display())
+                    })?;
+                    file_info.set_symlink_target(target_path.as_str());
+                }
+                SimpleType::File => file_info.set_file_type(FileType::Regular),
+                x => unreachable!("invalid path type: {:?}", x),
+            };
+
+            let abs_path = format!("/{}", full_path);
             let username = pwdb.lookup_user(meta.stat().st_uid)?;
-            write!(tmpfiles_bufwr, "{} ", username)?;
             let groupname = pwdb.lookup_group(meta.stat().st_gid)?;
-            write!(tmpfiles_bufwr, "{} ", groupname)?;
-            write!(tmpfiles_bufwr, "- -")?;
+            importer::translate_to_tmpfiles_d(&abs_path, &file_info, &username, &groupname)?
         };
-        writeln!(tmpfiles_bufwr)?;
+        tmpfiles_bufwr.write_all(entry.as_bytes())?;
 
         if path_type == SimpleType::Dir {
             // New subdirectory discovered, recurse into it.

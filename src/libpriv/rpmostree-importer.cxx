@@ -470,69 +470,6 @@ typedef struct
   GError  **error;
 } cb_data;
 
-/* systemd-tmpfiles complains loudly about writing to /var/run; ideally,
- * all of the packages get fixed for this but...eh.
- */
-static void
-append_translated_tmpfiles_path (GString *buf, const char *path)
-{
-  static const char varrun[] = "/var/run/";
-  if (g_str_has_prefix (path, varrun))
-    path += strlen ("/var");
-  /* Handle file paths with spaces and other chars https://github.com/coreos/rpm-ostree/issues/2029 */
-  g_autofree char *quoted = rpmostree_maybe_shell_quote (path);
-  g_string_append (buf, quoted ?: path);
-}
-
-static void
-append_tmpfiles_d (RpmOstreeImporter *self,
-                   const char *path,
-                   GFileInfo *finfo,
-                   const char *user,
-                   const char *group)
-{
-  GString *tmpfiles_d = self->tmpfiles_d;
-  const guint32 mode = g_file_info_get_attribute_uint32 (finfo, "unix::mode");
-  char filetype_c;
-
-  switch (g_file_info_get_file_type (finfo))
-    {
-    case G_FILE_TYPE_DIRECTORY:
-      filetype_c = 'd';
-      break;
-    case G_FILE_TYPE_SYMBOLIC_LINK:
-      filetype_c = 'L';
-      break;
-    default:
-      return;
-    }
-
-  g_string_append_c (tmpfiles_d, filetype_c);
-  g_string_append_c (tmpfiles_d, ' ');
-  append_translated_tmpfiles_path (tmpfiles_d, path);
-
-  switch (g_file_info_get_file_type (finfo))
-    {
-    case G_FILE_TYPE_DIRECTORY:
-      {
-        g_string_append_printf (tmpfiles_d, " 0%02o", mode & ~S_IFMT);
-        g_string_append_printf (tmpfiles_d, " %s %s - -", user, group);
-        g_string_append_c (tmpfiles_d, '\n');
-      }
-      break;
-    case G_FILE_TYPE_SYMBOLIC_LINK:
-      {
-        const char *target = g_file_info_get_symlink_target (finfo);
-        g_string_append (tmpfiles_d, " - - - - ");
-        g_string_append (tmpfiles_d, target);
-        g_string_append_c (tmpfiles_d, '\n');
-      }
-      break;
-    default:
-      g_assert_not_reached ();
-    }
-}
-
 static OstreeRepoCommitFilterResult
 compose_filter_cb (OstreeRepo         *repo,
                    const char         *path,
@@ -560,12 +497,31 @@ compose_filter_cb (OstreeRepo         *repo,
       if (g_str_has_prefix (path, "/var/lib/rpm"))
         return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
+      // Only convert directories and symlinks.
+      switch (g_file_info_get_file_type (file_info))
+        {
+        case G_FILE_TYPE_DIRECTORY:
+          break;
+        case G_FILE_TYPE_SYMBOLIC_LINK:
+          break;
+        default:
+          return OSTREE_REPO_COMMIT_FILTER_SKIP;
+        }
+
       /* Lookup any rpmfi overrides (was parsed from the header) */
       const char *user = NULL;
       const char *group = NULL;
       get_rpmfi_override (self, path, &user, &group, NULL);
 
-      append_tmpfiles_d (self, path, file_info, user ?: "root", group ?: "root");
+      try {
+        auto entry = rpmostreecxx::tmpfiles_translate(path, *file_info,
+                                                      user ?: "root",
+                                                      group ?: "root");
+        g_string_append(self->tmpfiles_d, entry.c_str());
+      } catch (std::exception& e) {
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
+        return OSTREE_REPO_COMMIT_FILTER_SKIP;
+      }
 
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
@@ -672,13 +628,13 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   GLNX_HASH_TABLE_FOREACH (self->opt_files, const char*, filename)
     {
       g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
-      g_autofree char *opt_quoted = rpmostree_maybe_shell_quote (opt);
+      auto opt_quoted = rpmostreecxx::maybe_shell_quote (opt);
       /* Note that the destination can't be quoted as systemd just
        * parses the remainder of the line, and doesn't expand quotes.
        **/
       g_string_append_printf (self->tmpfiles_d,
                               "L %s - - - - /usr/lib/opt/%s\n",
-                              opt_quoted ?: opt, filename);
+                              opt_quoted.c_str(), filename);
     }
 
   /* Handle any data we've accumulated data to write to tmpfiles.d.

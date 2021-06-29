@@ -1133,23 +1133,6 @@ rpmostree_timestamp_str_from_unix_utc (guint64 t)
   return g_strdup_printf ("(invalid timestamp)");
 }
 
-char*
-rpmostree_maybe_shell_quote (const char *s)
-{
-  static gsize regex_initialized;
-  static GRegex *safe_chars_regex;
-  if (g_once_init_enter (&regex_initialized))
-    {
-      safe_chars_regex = g_regex_new ("^[[:alnum:]-._/=]+$", (GRegexCompileFlags)0, (GRegexMatchFlags)0, NULL);
-      g_assert (safe_chars_regex);
-      g_once_init_leave (&regex_initialized, 1);
-    }
-
-  if (g_regex_match (safe_chars_regex, s, (GRegexMatchFlags)0, 0))
-    return NULL;
-  return g_shell_quote (s);
-}
-
 /* Given an error, log it to the systemd journal; use this
  * for code paths where we can't easily propagate it back
  * up the stack - particularly "shouldn't happen" errors.
