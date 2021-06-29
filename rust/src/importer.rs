@@ -65,12 +65,10 @@ fn import_filter(
     skip_extraneous: bool,
 ) -> Result<RepoCommitFilterResult> {
     // Sanity check that RPM isn't using CPIO id fields.
-    {
-        let uid = file_info.get_attribute_uint32("unix::uid");
-        let gid = file_info.get_attribute_uint32("unix::gid");
-        if uid != 0 || gid != 0 {
-            bail!("Unexpected non-root owned path (marked as {}:{})", uid, gid);
-        }
+    let uid = file_info.get_attribute_uint32("unix::uid");
+    let gid = file_info.get_attribute_uint32("unix::gid");
+    if uid != 0 || gid != 0 {
+        bail!("Unexpected non-root owned path (marked as {}:{})", uid, gid);
     }
 
     // Skip some empty lock files, they are known to cause problems:
