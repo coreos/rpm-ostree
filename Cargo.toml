@@ -37,7 +37,7 @@ env_logger = "0.8.4"
 fn-error-context = "0.1.2"
 futures = "0.3.15"
 gio = "0.9.1"
-gio-sys = "0.10.1"
+gio-sys = "0.14.0"
 gobject-sys = "0.10.0"
 glib = "0.10.3"
 glib-sys = "0.10.1"
@@ -59,6 +59,7 @@ paste = "1.0"
 phf = { version = "0.9", features = ["macros"] }
 rand = "0.8.4"
 rayon = "1.5.1"
+regex = "1.5"
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 rust-ini = "0.17.0"
 serde = { version = "1.0.126", features = ["derive"] }
