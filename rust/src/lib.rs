@@ -277,6 +277,7 @@ pub mod ffi {
         type Treefile;
 
         fn treefile_new(filename: &str, basearch: &str, workdir: i32) -> Result<Box<Treefile>>;
+        fn treefile_new_from_string(buf: &str) -> Result<Box<Treefile>>;
         fn treefile_new_compose(
             filename: &str,
             basearch: &str,
@@ -292,6 +293,9 @@ pub mod ffi {
         fn get_all_ostree_layers(&self) -> Vec<String>;
         fn get_repos(&self) -> Vec<String>;
         fn get_packages(&self) -> Vec<String>;
+        fn get_packages_local(&self) -> Vec<String>;
+        fn get_packages_override_replace_local(&self) -> Vec<String>;
+        fn get_packages_override_remove(&self) -> Vec<String>;
         fn get_exclude_packages(&self) -> Vec<String>;
         fn get_install_langs(&self) -> Vec<String>;
         fn format_install_langs_macro(&self) -> String;

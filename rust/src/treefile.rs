@@ -494,6 +494,22 @@ impl Treefile {
         }))
     }
 
+    pub(crate) fn new_from_string(buf: &str) -> Result<Box<Self>> {
+        let mut treefile =
+            treefile_parse_stream(utils::InputFormat::JSON, &mut buf.as_bytes(), None)?;
+        treefile = treefile.substitute_vars()?;
+        let serialized = CUtf8Buf::from(buf);
+        let td = tempfile::tempdir()?;
+        let primary_dfd = openat::Dir::open(td.path())?;
+        Ok(Box::new(Treefile {
+            primary_dfd,
+            parsed: treefile,
+            _workdir: None,
+            serialized,
+            externals: Default::default(),
+        }))
+    }
+
     pub(crate) fn new_from_config(
         parsed: TreeComposeConfig,
         cfgdir: Option<&openat::Dir>,
@@ -572,6 +588,34 @@ impl Treefile {
 
     pub(crate) fn get_packages(&self) -> Vec<String> {
         self.parsed.packages.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_packages_local(&self) -> Vec<String> {
+        self.parsed
+            .derive
+            .packages_local
+            .iter()
+            .flatten()
+            .map(|(k, v)| format!("{}:{}", v, k))
+            .collect()
+    }
+
+    pub(crate) fn get_packages_override_remove(&self) -> Vec<String> {
+        self.parsed
+            .derive
+            .override_remove
+            .clone()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn get_packages_override_replace_local(&self) -> Vec<String> {
+        self.parsed
+            .derive
+            .override_replace_local
+            .iter()
+            .flatten()
+            .map(|(k, v)| format!("{}:{}", v, k))
+            .collect()
     }
 
     pub(crate) fn get_exclude_packages(&self) -> Vec<String> {
@@ -1962,6 +2006,11 @@ pub(crate) fn treefile_new(
         basearch.as_deref(),
         workdir,
     )?)
+}
+
+/// Create a new treefile from a string.
+pub(crate) fn treefile_new_from_string(buf: &str) -> CxxResult<Box<Treefile>> {
+    Ok(Treefile::new_from_string(buf)?)
 }
 
 /// Create a new treefile, returning an error if any (currently) client-side options are set.

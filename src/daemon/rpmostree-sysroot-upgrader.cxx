@@ -20,6 +20,7 @@
 
 #include "config.h"
 #include <sstream>
+#include <optional>
 
 #include <libglnx.h>
 #include <gio/gunixoutputstream.h>
@@ -72,6 +73,7 @@ struct RpmOstreeSysrootUpgrader {
   OstreeDeployment *cfg_merge_deployment;
   OstreeDeployment *origin_merge_deployment;
   RpmOstreeOrigin *origin;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile;
 
   /* Used during tree construction */
   OstreeRepoDevInoCache *devino_cache;
@@ -616,50 +618,66 @@ load_base_rsack (RpmOstreeSysrootUpgrader *self,
   return TRUE;
 }
 
-/* XXX: This is ugly, but the alternative is to de-couple RpmOstreeTreespec from
- * RpmOstreeContext, which also use it for hashing and store it directly in
- * assembled commit metadata. Probably assemble_commit() should live somewhere
- * else, maybe directly in `container-builtins.c`. */
-static RpmOstreeTreespec *
-generate_treespec (RpmOstreeSysrootUpgrader *self)
+/* TODO: Change this class to filter the origin file instead of carrying
+ * an out-of-band subset, then translate that origin to a treefile and
+ * pass it to the core.
+ */
+static void
+generate_treefile (RpmOstreeSysrootUpgrader *self)
 {
-  g_autoptr(GKeyFile) treespec = g_key_file_new ();
+  g_assert (!self->treefile.has_value());
+  glnx_unref_object JsonBuilder *builder = json_builder_new ();
+  json_builder_begin_object (builder);
 
-  if (self->overlay_packages->len > 0)
+  json_builder_set_member_name (builder, "packages");
+  json_builder_begin_array (builder);
+  for (guint i = 0; i < self->overlay_packages->len; i++)
     {
-      g_key_file_set_string_list (treespec, "tree", "packages",
-                                  (const char* const*)self->overlay_packages->pdata,
-                                  self->overlay_packages->len);
+      auto val = (const char *)self->overlay_packages->pdata[i];
+      json_builder_add_string_value (builder, val);
     }
+  json_builder_end_array (builder);
 
   GHashTable *local_packages = rpmostree_origin_get_local_packages (self->origin);
-  if (g_hash_table_size (local_packages) > 0)
+  json_builder_set_member_name (builder, "packages-local");
+  json_builder_begin_object (builder);
+  GLNX_HASH_TABLE_FOREACH_KV (local_packages, const char*, k, const char*, v)
     {
-      g_autoptr(GPtrArray) sha256_nevra = g_ptr_array_new_with_free_func (g_free);
-
-      GLNX_HASH_TABLE_FOREACH_KV (local_packages, const char*, k, const char*, v)
-        g_ptr_array_add (sha256_nevra, g_strconcat (v, ":", k, NULL));
-
-      g_key_file_set_string_list (treespec, "tree", "cached-packages",
-                                  (const char* const*)sha256_nevra->pdata,
-                                  sha256_nevra->len);
+      json_builder_set_member_name (builder, k);
+      json_builder_add_string_value (builder, v);
     }
+  json_builder_end_object (builder);
 
-  if (self->override_replace_local_packages->len > 0)
+  json_builder_set_member_name (builder, "override-replace-local");
+  json_builder_begin_object (builder);
+  for (guint i = 0; i < self->override_replace_local_packages->len; i++)
     {
-      g_key_file_set_string_list (treespec, "tree", "cached-replaced-base-packages",
-                                  (const char* const*)self->override_replace_local_packages->pdata,
-                                  self->override_replace_local_packages->len);
+      auto nevra = (const char *)self->override_replace_local_packages->pdata[i];
+      g_autofree char *sha256 = NULL;
+      g_autoptr(GError) local_error = NULL;
+      if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, &local_error))
+        util::throw_gerror(local_error);
+      json_builder_set_member_name (builder, nevra);
+      json_builder_add_string_value (builder, sha256);
     }
+  json_builder_end_object (builder);
 
-  if (self->override_remove_packages->len > 0)
+  json_builder_set_member_name (builder, "override-remove");
+  json_builder_begin_array (builder);
+  for (guint i = 0; i < self->override_remove_packages->len; i++)
     {
-      g_key_file_set_string_list (treespec, "tree", "removed-base-packages",
-                                  (const char* const*)self->override_remove_packages->pdata,
-                                  self->override_remove_packages->len);
+      auto val = (const char *)self->override_remove_packages->pdata[i];
+      json_builder_add_string_value (builder, val);
     }
+  json_builder_end_array (builder);
 
-  return rpmostree_treespec_new_from_keyfile (treespec, NULL);
+  json_builder_end_object (builder);
+  g_autoptr(JsonNode) root = json_builder_get_root (builder);
+  g_autoptr(JsonGenerator) gen = json_generator_new ();
+  json_generator_set_root (gen, root);
+  g_autofree char *str = json_generator_to_data (gen, NULL);
+
+  self->treefile = rpmostreecxx::treefile_new_from_string (str);
 }
 
 static gboolean
@@ -931,13 +949,8 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
 
-  /* NB: We're pretty much using the defaults for the other treespec values like
-   * instlang and docs since it would be hard to expose the cli for them because
-   * they wouldn't affect just the new pkgs, but even previously added ones. */
-  g_autoptr(RpmOstreeTreespec) treespec = generate_treespec (self);
-  if (treespec == NULL)
-    return FALSE;
-  rpmostree_context_set_treespec (self->ctx, treespec);
+  generate_treefile (self);
+  rpmostree_context_set_treefile (self->ctx, **self->treefile);
 
   if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath,
                                 cancellable, error))
