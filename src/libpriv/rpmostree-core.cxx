@@ -217,9 +217,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "exclude-packages", NULL, keyfile);
-  add_canonicalized_string_array (&builder, "cached-packages", NULL, keyfile);
-  add_canonicalized_string_array (&builder, "removed-base-packages", NULL, keyfile);
-  add_canonicalized_string_array (&builder, "cached-replaced-base-packages", NULL, keyfile);
 
   /* We allow the "repos" key to be missing. This means that we rely on libdnf's
    * normal behaviour (i.e. look at repos in repodir with enabled=1). */
@@ -640,6 +637,12 @@ enable_repos (RpmOstreeContext  *context,
 }
 
 void 
+rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile &treefile)
+{
+  self->treefile_rs = &treefile;
+}
+
+void 
 rpmostree_context_set_treespec (RpmOstreeContext *self, RpmOstreeTreespec *treespec)
 {
   g_assert (!self->spec);
@@ -678,6 +681,28 @@ core_libdnf_process_global_init()
 }
 
 } /* namespace */
+
+// Union the set of packages requested via treespec and via treefile.
+// TODO remove this once treespec is gone, then we just can iterate over `self->treefile_rs->get_packages()`
+static rust::Vec<rust::String>
+get_requested_packages (RpmOstreeContext *self)
+{
+  rust::Vec<rust::String> packages;
+  { g_autofree char **pkgnames_c = NULL;
+    g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgnames_c);
+    for (char **it = pkgnames_c; it && *it; it++)
+      packages.push_back(*it);
+  }
+  if (self->treefile_rs)
+    {
+      for (auto &pkgname : self->treefile_rs->get_packages())
+        {
+          packages.push_back(pkgname);
+        }
+    }
+
+  return packages;
+}
 
 /* Wraps `dnf_context_setup()`, and initializes state based on the treespec
  * @spec. Another way to say it is we pair `DnfContext` with an
@@ -798,9 +823,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       /* To be nice, let's only make this fatal if "packages" is empty (e.g. if
        * we're only installing local RPMs. Missing deps will cause the regular
        * 'not found' error from libdnf. */
-      g_autofree char **pkgs = NULL;
-      if (g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgs) &&
-          g_strv_length (pkgs) > 0)
+      auto pkgs = get_requested_packages (self);
+      if (!pkgs.empty())
         return glnx_throw (error, "No enabled repositories");
     }
 
@@ -1881,24 +1905,31 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   g_assert (!self->empty);
 
   DnfContext *dnfctx = self->dnfctx;
-  g_autofree char **pkgnames = NULL;
+
+  // We take package lists from both the legacy treespec and the treefile for now.
+  rust::Vec<rust::String> packages = get_requested_packages (self);
+
   g_autofree char **exclude_packages = NULL;
-  g_assert (g_variant_dict_lookup (self->spec->dict, "packages",
-                                   "^a&s", &pkgnames));
   g_variant_dict_lookup (self->spec->dict, "exclude-packages",
                          "^a&s", &exclude_packages);
 
-  g_autofree char **cached_pkgnames = NULL;
-  g_assert (g_variant_dict_lookup (self->spec->dict, "cached-packages",
-                                   "^a&s", &cached_pkgnames));
+  rust::Vec<rust::String> packages_local;
+  rust::Vec<rust::String> packages_override_replace_local;
+  rust::Vec<rust::String> packages_override_remove;
+  if (self->treefile_rs)
+    {
+      packages_local = self->treefile_rs->get_packages_local();
+      packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local();
+      packages_override_remove = self->treefile_rs->get_packages_override_remove();
 
-  g_autofree char **cached_replace_pkgs = NULL;
-  g_assert (g_variant_dict_lookup (self->spec->dict, "cached-replaced-base-packages",
-                                   "^a&s", &cached_replace_pkgs));
-
-  g_autofree char **removed_base_pkgnames = NULL;
-  g_assert (g_variant_dict_lookup (self->spec->dict, "removed-base-packages",
-                                   "^a&s", &removed_base_pkgnames));
+      /* we only support pure installs for now (compose case) */
+      if (self->lockfile)
+        {
+          g_assert_cmpint (packages_local.size(), ==, 0);
+          g_assert_cmpint (packages_override_replace_local.size(), ==, 0);
+          g_assert_cmpint (packages_override_remove.size(), ==, 0);
+        }
+    }
 
   /* setup sack if not yet set up */
   if (dnf_context_get_sack (dnfctx) == NULL)
@@ -1920,15 +1951,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   dnf_sack_set_installonly (sack, NULL);
   dnf_sack_set_installonly_limit (sack, 0);
 
-
-  if (self->lockfile)
-    {
-      /* we only support pure installs for now (compose case) */
-      g_assert_cmpint (g_strv_length (cached_pkgnames), ==, 0);
-      g_assert_cmpint (g_strv_length (cached_replace_pkgs), ==, 0);
-      g_assert_cmpint (g_strv_length (removed_base_pkgnames), ==, 0);
-    }
-
   /* track cached pkgs already added to the sack so far */
   g_autoptr(GHashTable) local_pkgs_to_install =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_object_unref);
@@ -1936,31 +1958,28 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   /* Handle packages to replace; only add them to the sack for now */
   g_autoptr(GPtrArray) replaced_nevras = g_ptr_array_new ();
   g_autoptr(GPtrArray) replaced_pkgnames = g_ptr_array_new_with_free_func (g_free);
-  for (char **it = cached_replace_pkgs; it && *it; it++)
+  for (auto &nevra_v: packages_override_replace_local)
     {
-      const char *nevra = *it;
+      const char *nevra = nevra_v.c_str();
       g_autofree char *sha256 = NULL;
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
-
       g_autoptr(DnfPackage) pkg = NULL;
       if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
         return FALSE;
-
       const char *name = dnf_package_get_name (pkg);
       g_assert (name);
-
       g_ptr_array_add (replaced_nevras, (gpointer)nevra);
       // this is a bit wasteful, but for locking purposes, we need the pkgname to match
       // against the base, not the nevra which naturally will be different
       g_ptr_array_add (replaced_pkgnames, g_strdup (name));
       g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
-    }
+   }
 
   /* Now handle local package; only add them to the sack for now */
-  for (char **it = cached_pkgnames; it && *it; it++)
+  for (auto &nevra_v: packages_local)
     {
-      const char *nevra = *it;
+      const char *nevra = nevra_v.c_str();
       g_autofree char *sha256 = NULL;
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
@@ -2070,9 +2089,9 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   /* First, handle packages to remove */
   g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
-  for (char **it = removed_base_pkgnames; it && *it; it++)
+  for (auto &pkgname_v: packages_override_remove)
     {
-      const char *pkgname = *it;
+      const char *pkgname = pkgname_v.c_str();
       if (!dnf_context_remove (dnfctx, pkgname, error))
         return FALSE;
 
@@ -2114,9 +2133,9 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   /* And finally, handle repo packages to install */
   g_autoptr(GPtrArray) missing_pkgs = NULL;
-  for (char **it = pkgnames; it && *it; it++)
+  for (auto &pkgname_v : packages)
     {
-      const char *pkgname = *it;
+      const char *pkgname = pkgname_v.c_str();
       g_autoptr(GError) local_error = NULL;
       if (!dnf_context_install (dnfctx, pkgname, &local_error))
         {
@@ -4486,10 +4505,13 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.rpmmd-repos", rpmmd_meta);
 
         /* embed packages (really, "patterns") layered */
-        g_autoptr(GVariant) pkgs =
-          g_variant_dict_lookup_value (self->spec->dict, "packages", G_VARIANT_TYPE ("as"));
-        g_assert (pkgs);
-        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.packages", pkgs);
+        auto pkgs = get_requested_packages (self);
+        auto pkgs_v = g_variant_builder_new (G_VARIANT_TYPE ("as"));
+        for (auto &pkg: pkgs)
+          {
+            g_variant_builder_add (pkgs_v, "s", pkg.c_str());
+          }
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.packages", g_variant_builder_end (pkgs_v));
 
         /* embed packages removed */
         /* we have to embed both the pkgname and the full nevra to make it easier to match

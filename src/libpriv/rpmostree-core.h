@@ -110,6 +110,7 @@ GVariant *rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *s
 
 GVariant *rpmostree_treespec_to_variant (RpmOstreeTreespec *spec);
 
+void rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile &treefile);
 void rpmostree_context_set_treespec (RpmOstreeContext *self, RpmOstreeTreespec *treespec);
 
 gboolean rpmostree_context_setup (RpmOstreeContext     *self,
