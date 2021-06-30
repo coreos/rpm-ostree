@@ -611,10 +611,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   const char *custom_origin_description = NULL;
   if (origin_refspec)
     {
-      const char *refspec_data;
-      if (!rpmostree_refspec_classify (origin_refspec, &refspectype, &refspec_data, error))
+      if (!rpmostree_refspec_classify (origin_refspec, &refspectype, error))
         return FALSE;
-      g_autofree char *canonrefspec = rpmostree_refspec_to_string (refspectype, refspec_data);
       switch (refspectype)
         {
         case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
@@ -631,12 +629,12 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                 g_print ("%s", custom_origin_url);
               }
             else
-              g_print ("%s", canonrefspec);
+              g_print ("%s", origin_refspec);
           }
           break;
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
           {
-            g_print ("%s", canonrefspec);
+            g_print ("%s", origin_refspec);
           }
           break;
         }

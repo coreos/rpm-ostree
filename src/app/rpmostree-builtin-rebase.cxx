@@ -118,31 +118,26 @@ rpmostree_builtin_rebase (int             argc,
       if (argc == 3)
         revision = argv[2];
 
-      /* Canonicalize */
-      new_provided_refspec = new_refspec_owned =
-        rpmostree_refspec_canonicalize (new_provided_refspec, error);
-      if (!new_provided_refspec)
-        return FALSE;
+      new_provided_refspec = new_refspec_owned = g_strdup (new_provided_refspec);
     }
   else
     {
       if (opt_remote)
         {
           new_provided_refspec = new_refspec_owned =
-            g_strconcat (RPMOSTREE_REFSPEC_OSTREE_PREFIX, opt_remote, ":", opt_branch ?: "", NULL);
+            g_strconcat (opt_remote, ":", opt_branch ?: "", NULL);
         }
       else
         new_provided_refspec = opt_branch;
     }
   (void)new_refspec_owned; /* Pacify static analysis */
 
-  const char *remainder = NULL;
   RpmOstreeRefspecType refspectype;
-  if (!rpmostree_refspec_classify (new_provided_refspec, &refspectype, &remainder, error))
+  if (!rpmostree_refspec_classify (new_provided_refspec, &refspectype, error))
     return FALSE;
 
-  /* catch "ostree://"; we'd error out much later in the daemon otherwise */
-  if (strlen (remainder) == 0)
+  /* catch empty refspec now; we'd error out much later in the daemon otherwise */
+  if (strlen (new_provided_refspec) == 0)
     return glnx_throw (error, "Refspec is empty");
 
   /* Check if remote refers to a local repo */
@@ -150,12 +145,12 @@ rpmostree_builtin_rebase (int             argc,
   if (G_IN_SET (refspectype, RPMOSTREE_REFSPEC_TYPE_OSTREE,
                              RPMOSTREE_REFSPEC_TYPE_CHECKSUM))
     {
-      if (*remainder == '/')
+      if (*new_provided_refspec == '/')
         {
-          const char *ref = strrchr (remainder, ':');
+          const char *ref = strrchr (new_provided_refspec, ':');
           if (!ref)
             return glnx_throw (error, "Missing ':' in LOCALPATH:REF rebase");
-          local_repo_remote = g_strndup (remainder, ref - remainder);
+          local_repo_remote = g_strndup (new_provided_refspec, ref - new_provided_refspec);
           new_provided_refspec = ref + 1;
           /* just don't support "/path/to/repo:" for now */
           if (strlen (new_provided_refspec) == 0)

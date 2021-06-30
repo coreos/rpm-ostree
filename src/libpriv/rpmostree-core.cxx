@@ -50,63 +50,20 @@
 
 static OstreeRepo * get_pkgcache_repo (RpmOstreeContext *self);
 
-/* Given a string, look for ostree:// prefix and
- * return its type and the remainder of the string.  Note
- * that ostree:// can be either a refspec (TYPE_OSTREE) or
- * a bare commit (TYPE_COMMIT).
+/* Given a string, infer its type and return it in `out_type`.
+ * Could be either an ostree refspec (TYPE_OSTREE)
+ * or a bare commit (TYPE_COMMIT).
  */
 gboolean
 rpmostree_refspec_classify (const char *refspec,
                             RpmOstreeRefspecType *out_type,
-                            const char **out_remainder,
                             GError     **error)
 {
-  /* Add any other prefixes here */
-
-  /* For compatibility, fall back to ostree:// when we have no prefix. */
-  const char *remainder;
-  if (g_str_has_prefix (refspec, RPMOSTREE_REFSPEC_OSTREE_PREFIX))
-    remainder = refspec + strlen (RPMOSTREE_REFSPEC_OSTREE_PREFIX);
-  else
-    remainder = refspec;
-
-  if (ostree_validate_checksum_string (remainder, NULL))
+  /* Fall back to TYPE_OSTREE if we cannot infer type */
+  *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  if (ostree_validate_checksum_string (refspec, NULL))
     *out_type = RPMOSTREE_REFSPEC_TYPE_CHECKSUM;
-  else
-    *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
-  if (out_remainder)
-    *out_remainder = remainder;
   return TRUE;
-}
-
-char*
-rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
-                             const char           *data)
-{
-  const char *prefix = NULL;
-  switch (reftype)
-    {
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-      prefix = RPMOSTREE_REFSPEC_OSTREE_PREFIX;
-      break;
-    }
-  g_assert (prefix);
-  return g_strconcat (prefix, data, NULL);
-}
-
-
-/* Primarily this makes sure that ostree refspecs start with `ostree://`.
- */
-char*
-rpmostree_refspec_canonicalize (const char *orig_refspec,
-                                GError    **error)
-{
-  RpmOstreeRefspecType refspectype;
-  const char *refspec_data;
-  if (!rpmostree_refspec_classify (orig_refspec, &refspectype, &refspec_data, error))
-    return NULL;
-  return rpmostree_refspec_to_string (refspectype, refspec_data);
 }
 
 static int

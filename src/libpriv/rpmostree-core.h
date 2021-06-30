@@ -65,18 +65,9 @@ typedef enum {
   RPMOSTREE_REFSPEC_TYPE_CHECKSUM,
 } RpmOstreeRefspecType;
 
-#define RPMOSTREE_REFSPEC_OSTREE_PREFIX "ostree://"
-
 gboolean rpmostree_refspec_classify (const char *refspec,
                                      RpmOstreeRefspecType *out_type,
-                                     const char **out_remainder,
                                      GError     **error);
-
-char* rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
-                                   const char           *data);
-
-char* rpmostree_refspec_canonicalize (const char           *orig_refspec,
-                                      GError              **error);
 
 namespace rpmostreecxx {
 void core_libdnf_process_global_init();

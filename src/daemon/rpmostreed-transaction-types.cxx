@@ -53,39 +53,28 @@ static gboolean
 change_origin_refspec (GVariantDict    *options,
                        OstreeSysroot *sysroot,
                        RpmOstreeOrigin *origin,
-                       const gchar *src_refspec,
+                       const gchar *refspec,
                        GCancellable *cancellable,
                        gchar **out_old_refspec,
                        gchar **out_new_refspec,
                        GError **error)
 {
-  RpmOstreeRefspecType refspectype;
-  const char *refspecdata;
-  if (!rpmostree_refspec_classify (src_refspec, &refspectype, &refspecdata, error))
-    return FALSE;
-
   RpmOstreeRefspecType current_refspectype;
-  const char *current_refspecdata;
-  rpmostree_origin_classify_refspec (origin, &current_refspectype, &current_refspecdata);
-
-  /* Now here we "peel" it since the rest of the code assumes libostree */
-  const char *refspec = refspecdata;
-
-  g_autofree gchar *current_refspec =
-    g_strdup (rpmostree_origin_get_refspec (origin));
+  g_autofree gchar *current_refspec = rpmostree_origin_get_full_refspec (origin, &current_refspectype);
+  
   g_autofree gchar *new_refspec = NULL;
-
   if (!rpmostreed_refspec_parse_partial (refspec,
                                          current_refspec,
                                          &new_refspec,
                                          error))
     return FALSE;
 
-  /* Re-classify after canonicalization to ensure we handle TYPE_CHECKSUM */
-  if (!rpmostree_refspec_classify (new_refspec, &refspectype, &refspecdata, error))
+  /* Classify to ensure we handle TYPE_CHECKSUM */
+  RpmOstreeRefspecType new_refspectype;
+  if (!rpmostree_refspec_classify (new_refspec, &new_refspectype, error))
     return FALSE;
 
-  if (refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
+  if (new_refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
     {
       const char *custom_origin_url = NULL;
       const char *custom_origin_description = NULL;
@@ -1039,8 +1028,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       g_assert (self->refspec);
 
       RpmOstreeRefspecType refspectype;
-      const char *ref;
-      if (!rpmostree_refspec_classify (self->refspec, &refspectype, &ref, error))
+      if (!rpmostree_refspec_classify (self->refspec, &refspectype, error))
         return FALSE;
 
       g_autoptr(OstreeRepo) local_repo_remote =
@@ -1048,7 +1036,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!local_repo_remote)
         return glnx_prefix_error (error, "Failed to open local repo");
       g_autofree char *rev = NULL;
-      if (!ostree_repo_resolve_rev (local_repo_remote, ref, FALSE, &rev, error))
+      if (!ostree_repo_resolve_rev (local_repo_remote, self->refspec, FALSE, &rev, error))
         return FALSE;
 
       g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
@@ -1719,16 +1707,9 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   self->flags = deploy_flags_from_options (self->options, default_flags);
 
   auto refspec = (const char *)vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
-  /* Canonicalize here; the later code actually ends up peeling it
-   * again, but long term we want to manipulate canonicalized refspecs
-   * internally, and only peel when writing origin files for ostree:// types.
-   */
   if (refspec)
-    {
-      self->refspec = rpmostree_refspec_canonicalize (refspec, error);
-      if (!self->refspec)
-        return NULL;
-    }
+    self->refspec = g_strdup (refspec);
+
   const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
 
   self->revision = (char*)vardict_lookup_ptr (self->modifiers, "set-revision", "&s");

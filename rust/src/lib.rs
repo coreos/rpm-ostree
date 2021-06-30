@@ -1,4 +1,4 @@
-//! rpm-ostree a hybrid Rust and C/C++ application.  This is the
+//! rpm-ostree is a hybrid Rust and C/C++ application. This is the
 //! main library used by the executable, which also links to the
 //! C/C++ `librpmostreeinternals.a` static library.
 
