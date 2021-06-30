@@ -123,7 +123,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
         return (RpmOstreeOrigin *)glnx_null_throw (error, "No origin/refspec, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
     }
 
-  if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, NULL, error))
+  if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, error))
     return FALSE;
   /* Note the lack of a prefix here so that code that just calls
    * rpmostree_origin_get_refspec() in the ostree:// case
@@ -208,11 +208,11 @@ rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
 void
 rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
                                    RpmOstreeRefspecType *out_type,
-                                   const char          **out_refspecdata)
+                                   const char          **out_refspec)
 {
   *out_type = origin->refspec_type;
-  if (out_refspecdata)
-    *out_refspecdata = origin->cached_refspec;
+  if (out_refspec)
+    *out_refspec = rpmostree_origin_get_refspec (origin);
 }
 
 static char *
@@ -500,11 +500,10 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
 
   /* See related code in rpmostree_origin_parse_keyfile() */
-  const char *refspecdata;
-  if (!rpmostree_refspec_classify (new_refspec, &origin->refspec_type, &refspecdata, error))
+  if (!rpmostree_refspec_classify (new_refspec, &origin->refspec_type, error))
     return FALSE;
   g_free (origin->cached_refspec);
-  origin->cached_refspec = g_strdup (refspecdata);
+  origin->cached_refspec = g_strdup (new_refspec);
   switch (origin->refspec_type)
     {
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:

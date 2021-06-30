@@ -28,7 +28,6 @@ checksum=$(vm_get_booted_csum)
 vm_rpmostree rebase :${checksum}
 vm_assert_status_jq ".deployments[0][\"origin\"] == \"${checksum}\""
 vm_rpmostree status > status.txt
-assert_file_has_content status.txt '^  ostree://'${checksum}
 echo "ok pin to commit"
 
 vm_rpmostree upgrade >out.txt

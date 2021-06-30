@@ -406,10 +406,8 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
     }
   else
     {
-      const char *refspec_remainder = NULL;
-      if (!rpmostree_refspec_classify (refspec, &refspec_type, &refspec_remainder, error))
+      if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
         return FALSE;
-      refspec = refspec_remainder;
     }
   (void)refspec_owned; /* Pacify static analysis */
   refspec_is_ostree = refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE;
@@ -800,12 +798,8 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
 
   const char *refspec = rpmostree_origin_get_refspec (origin);
   { RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
-    const char *refspec_data;
-    if (!rpmostree_refspec_classify (refspec, &refspectype, &refspec_data, error))
+    if (!rpmostree_refspec_classify (refspec, &refspectype, error))
       return FALSE;
-
-    /* just skip over "ostree://" so we can talk with libostree without thinking about it */
-    refspec = refspec_data;
   }
 
   /* let's start with the ostree side of things */
