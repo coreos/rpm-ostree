@@ -178,8 +178,6 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
 
   if (!treespec_bind_array (treedata, treespec, "packages", NULL, TRUE, error))
     return NULL;
-  if (!treespec_bind_array (treedata, treespec, "exclude-packages", NULL, FALSE, error))
-    return NULL;
   if (!treespec_bind_array (treedata, treespec, "repos", NULL, FALSE, error))
     return NULL;
   if (!treespec_bind_array (treedata, treespec, "lockfile-repos", NULL, FALSE, error))
