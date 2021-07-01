@@ -169,7 +169,6 @@ pub(crate) fn translate_to_tmpfiles_d(
         let mode = file_info.get_attribute_uint32("unix::mode") & !libc::S_IFMT;
         write!(&mut bufwr, " {:04o} {} {} - -", mode, username, groupname)?;
     };
-    writeln!(&mut bufwr)?;
 
     Ok(bufwr)
 }
@@ -230,6 +229,46 @@ mod tests {
         for (input, expected) in quoting_cases {
             let output = fix_tmpfiles_path(Cow::Borrowed(input));
             assert_eq!(output, expected);
+        }
+    }
+
+    #[test]
+    fn test_translate_to_tmpfiles_d() {
+        let path = r#"/var/foo bar"#;
+        let username = "testuser";
+        let groupname = "testgroup";
+        {
+            // Directory
+            let file_info = FileInfo::new();
+            file_info.set_file_type(FileType::Directory);
+            file_info.set_attribute_uint32("unix::mode", 0o721);
+            let out = translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap();
+            let expected = r#"d '/var/foo bar' 0721 testuser testgroup - -"#;
+            assert_eq!(out, expected);
+        }
+        {
+            // Symlink
+            let file_info = FileInfo::new();
+            file_info.set_file_type(FileType::SymbolicLink);
+            file_info.set_symlink_target("/mytarget");
+            let out = translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap();
+            let expected = r#"L '/var/foo bar' - - - - /mytarget"#;
+            assert_eq!(out, expected);
+        }
+        {
+            // File
+            let file_info = FileInfo::new();
+            file_info.set_file_type(FileType::Regular);
+            file_info.set_attribute_uint32("unix::mode", 0o123);
+            let out = translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap();
+            let expected = r#"f '/var/foo bar' 0123 testuser testgroup - -"#;
+            assert_eq!(out, expected);
+        }
+        {
+            // Other unsupported
+            let file_info = FileInfo::new();
+            file_info.set_file_type(FileType::Unknown);
+            translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap_err();
         }
     }
 }

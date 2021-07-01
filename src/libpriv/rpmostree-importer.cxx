@@ -514,10 +514,11 @@ compose_filter_cb (OstreeRepo         *repo,
       get_rpmfi_override (self, path, &user, &group, NULL);
 
       try {
-        auto entry = rpmostreecxx::tmpfiles_translate(path, *file_info,
-                                                      user ?: "root",
-                                                      group ?: "root");
-        g_string_append(self->tmpfiles_d, entry.c_str());
+        auto entry = rpmostreecxx::tmpfiles_translate (path, *file_info,
+                                                       user ?: "root",
+                                                       group ?: "root");
+        g_string_append (self->tmpfiles_d, entry.c_str());
+        g_string_append_c (self->tmpfiles_d, '\n');
       } catch (std::exception& e) {
         g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
         return OSTREE_REPO_COMMIT_FILTER_SKIP;
