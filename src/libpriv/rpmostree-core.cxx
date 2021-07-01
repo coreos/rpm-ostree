@@ -233,10 +233,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   }
   add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile);
 
-  if (g_key_file_get_boolean (keyfile, "tree", "skip-sanity-check", NULL))
-    g_variant_builder_add (&builder, "{sv}", "skip-sanity-check", g_variant_new_boolean (TRUE));
-
-
   ret->spec = g_variant_builder_end (&builder);
   ret->dict = g_variant_dict_new (ret->spec);
 
@@ -4129,9 +4125,6 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     return FALSE;
   rpmostreecxx::rootfs_prepare_links(tmprootfs_dfd);
 
-  gboolean skip_sanity_check = FALSE;
-  g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
-
   auto etc_guard = rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd);
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
@@ -4287,8 +4280,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
        * with a script; see https://github.com/projectatomic/rpm-ostree/pull/888
        * (otherwise, on a script that did `rm -rf`, we'd fail first on the renameat below)
        */
-      if (!skip_sanity_check &&
-          !rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
+      if (!rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
         return FALSE;
 
       if (have_passwd)
@@ -4302,8 +4294,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   else
     {
       /* Also do a sanity check even if we have no layered packages */
-      if (!skip_sanity_check &&
-          !rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
+      if (!rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
         return FALSE;
     }
 
@@ -4421,12 +4412,9 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
   /* And now also sanity check the rpmdb */
-  if (!skip_sanity_check)
-    {
-      if (!rpmostree_deployment_sanitycheck_rpmdb (tmprootfs_dfd, overlays,
-                                                   overrides_replace, cancellable, error))
-        return FALSE;
-    }
+  if (!rpmostree_deployment_sanitycheck_rpmdb (tmprootfs_dfd, overlays,
+                                               overrides_replace, cancellable, error))
+    return FALSE;
 
   return TRUE;
 }
