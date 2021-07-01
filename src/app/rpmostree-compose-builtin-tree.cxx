@@ -1473,15 +1473,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   const char *extensions_path = argv[2];
 
   g_autofree char *basearch = rpm_ostree_get_basearch ();
-  auto treefile = rpmostreecxx::treefile_new_compose(treefile_path, basearch, -1);
-
-  /* We don't want the core to handle repo packages from the treefile. Normally,
-   * if repo packages worked like other knobs and went via the treespec, this
-   * would naturally be handled because we create our own treespec below. But
-   * we're trying to move away from that. We'll eventually want repo packages on
-   * the client-side too though, which means it won't be a treefile thing
-   * anymore, so we can rejig this then. */
-  treefile->clear_repo_packages();
+  auto src_treefile = rpmostreecxx::treefile_new_compose(treefile_path, basearch, -1);
 
   g_autoptr(OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!repo)
@@ -1489,7 +1481,7 @@ rpmostree_compose_builtin_extensions (int             argc,
 
   if (!opt_extensions_base_rev)
     {
-      auto treeref = treefile->get_ostree_ref();
+      auto treeref = src_treefile->get_ostree_ref();
       if (treeref.length() == 0)
         return glnx_throw (error, "--base-rev not specified and treefile doesn't have a ref");
       opt_extensions_base_rev = g_strdup(treeref.c_str());
@@ -1539,13 +1531,17 @@ rpmostree_compose_builtin_extensions (int             argc,
 
   auto extensions = rpmostreecxx::extensions_load (extensions_path, basearch, *packages_mapping);
 
+  // This treefile basically tells the core to download the extension packages
+  // from the repos, and that's it.
+  auto extension_tf = extensions->generate_treefile(*src_treefile);
+
   // notice we don't use a pkgcache repo here like in the treecompose path: we
   // want RPMs, so having them already imported isn't useful to us (and anyway,
   // for OS extensions by definition they're not expected to be cached since
   // they're not in the base tree)
-  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_compose (cachedir_dfd, repo, *treefile);
+  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_compose (cachedir_dfd, repo, *extension_tf);
 
-  { int tf_dfd = treefile->get_workdir();
+  { int tf_dfd = src_treefile->get_workdir();
     g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
     dnf_context_set_repo_dir (rpmostree_context_get_dnf (ctx), abs_tf_path);
   }
@@ -1562,28 +1558,7 @@ rpmostree_compose_builtin_extensions (int             argc,
     return FALSE;
   g_print ("done!\n");
 
-  g_autoptr(RpmOstreeTreespec) spec = NULL;
-  { g_autoptr(GPtrArray) gpkgs = g_ptr_array_new_with_free_func (g_free);
-    auto pkgs = extensions->get_os_extension_packages();
-    for (auto & pkg : pkgs)
-      g_ptr_array_add (gpkgs, (gpointer*) g_strdup (pkg.c_str()));
-    g_autoptr(GPtrArray) grepos = g_ptr_array_new ();
-    auto repos = treefile->get_repos();
-    for (auto & repo : repos)
-      g_ptr_array_add (grepos, (void*)repo.c_str());
-    auto extrepos = extensions->get_repos();
-    for (auto & repo : extrepos)
-      g_ptr_array_add (grepos, (void*)repo.c_str());
-    g_autoptr(GKeyFile) treespec = g_key_file_new ();
-    g_key_file_set_string_list (treespec, "tree", "packages",
-                                (const char* const*)gpkgs->pdata, gpkgs->len);
-    g_key_file_set_string_list (treespec, "tree", "repos",
-                                (const char* const*)grepos->pdata, grepos->len);
-    spec = rpmostree_treespec_new_from_keyfile (treespec, NULL);
-  }
-
   g_autofree char *checkout_path = glnx_fdrel_abspath (cachedir_dfd, TMP_EXTENSIONS_ROOTFS);
-  rpmostree_context_set_treespec (ctx, spec);
   if (!rpmostree_context_setup (ctx, checkout_path, checkout_path, cancellable, error))
     return FALSE;
 
