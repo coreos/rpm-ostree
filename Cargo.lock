@@ -1009,7 +1009,7 @@ dependencies = [
  "cxx",
  "cxx-build",
  "glib",
- "system-deps 3.1.1",
+ "system-deps 3.1.2",
 ]
 
 [[package]]
@@ -1182,6 +1182,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c3728fec49d363a50a8828a190b379a446cc5cf085c06259bbbeb34447e4ec7"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if 1.0.0",
+ "libc",
+ "memoffset",
+]
+
+[[package]]
 name = "nom"
 version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1263,7 +1276,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64d8c39f87cebbf893a221d307e578da316157c6c65aa1c1518c573be0cd8c11"
 dependencies = [
  "libc",
- "nix",
+ "nix 0.20.0",
  "openat",
  "rand 0.8.4",
 ]
@@ -1360,7 +1373,7 @@ dependencies = [
  "hex",
  "indicatif 0.15.0",
  "libc",
- "nix",
+ "nix 0.20.0",
  "openat",
  "openat-ext",
  "openssl",
@@ -1864,7 +1877,7 @@ dependencies = [
  "libdnf-sys",
  "maplit",
  "memfd",
- "nix",
+ "nix 0.21.0",
  "openat",
  "openat-ext",
  "os-release",
@@ -1884,7 +1897,7 @@ dependencies = [
  "serde_yaml",
  "structopt",
  "subprocess",
- "system-deps 3.1.1",
+ "system-deps 3.1.2",
  "systemd",
  "tempfile",
  "tokio",
@@ -2093,9 +2106,9 @@ checksum = "57bd81eb48f4c437cadc685403cad539345bf703d78e63707418431cecd4522b"
 
 [[package]]
 name = "strum"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
+checksum = "aaf86bbcfd1fa9670b7a129f64fc0c9fcbbfe4f1bc4210e9e98fe71ffc12cde2"
 
 [[package]]
 name = "strum_macros"
@@ -2111,9 +2124,9 @@ dependencies = [
 
 [[package]]
 name = "strum_macros"
-version = "0.20.1"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
+checksum = "d06aaeeee809dbc59eb4556183dd927df67db1540de5be8d3ec0b6636358a5ec"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2159,17 +2172,17 @@ dependencies = [
 
 [[package]]
 name = "system-deps"
-version = "3.1.1"
+version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c248107ad7bc1ac07066a4d003cae9e9a7bc2e27d3418f7a9cdcdc8699dbea70"
+checksum = "7ab7dbd121ce66af2176147a48c7e01aaf1f001837a18a7cf4317858606bbdf8"
 dependencies = [
  "anyhow",
  "cfg-expr",
  "heck",
  "itertools 0.10.1",
  "pkg-config",
- "strum 0.20.0",
- "strum_macros 0.20.1",
+ "strum 0.21.0",
+ "strum_macros 0.21.1",
  "thiserror",
  "toml",
  "version-compare 0.0.11",
