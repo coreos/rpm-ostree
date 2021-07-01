@@ -817,10 +817,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                                  DNF_TRANSACTION_FLAG_NODOCS);
     }
 
-  /* We could likely delete this, but I'm keeping a log message just in case */
-  if (g_variant_dict_contains (self->spec->dict, "ignore-scripts"))
-    sd_journal_print (LOG_INFO, "ignore-scripts is no longer supported");
-
   bool selinux = !self->disable_selinux && (!self->treefile_rs || self->treefile_rs->get_selinux());
   /* Load policy from / if SELinux is enabled, and we haven't already loaded
    * a policy.  This is mostly for the "compose tree" case.
