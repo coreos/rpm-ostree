@@ -39,11 +39,6 @@ gboolean
 rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
                                        GError    **error);
 
-RpmOstreeTreespec *
-rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
-                                    rpmostreecxx::Treefile &treefile_rs,
-                                    JsonObject  *treedata,
-                                    GError     **error);
 gboolean
 rpmostree_composeutil_read_json_metadata (JsonNode    *root,
                                           GHashTable  *metadata,

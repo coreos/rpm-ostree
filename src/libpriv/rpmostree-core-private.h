@@ -34,7 +34,7 @@ struct _RpmOstreeContext {
 
   /* Whether we were created with new_system() */
   gboolean is_system;
-  RpmOstreeTreespec *spec;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_owned;
   rpmostreecxx::Treefile *treefile_rs; /* For composes for now */
   gboolean empty;
   gboolean disable_selinux;
