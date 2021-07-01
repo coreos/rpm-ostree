@@ -76,147 +76,6 @@ compare_pkgs (gconstpointer ap,
 }
 
 /***********************************************************
- *                    RpmOstreeTreespec                    *
- ***********************************************************
- */
-
-struct _RpmOstreeTreespec {
-  GObject parent;
-
-  GVariant *spec;
-  GVariantDict *dict;
-};
-
-G_DEFINE_TYPE (RpmOstreeTreespec, rpmostree_treespec, G_TYPE_OBJECT)
-
-static void
-rpmostree_treespec_finalize (GObject *object)
-{
-  RpmOstreeTreespec *self = RPMOSTREE_TREESPEC (object);
-
-  g_clear_pointer (&self->spec, g_variant_unref);
-  g_clear_pointer (&self->dict, g_variant_dict_unref);
-
-  G_OBJECT_CLASS (rpmostree_treespec_parent_class)->finalize (object);
-}
-
-static void
-rpmostree_treespec_class_init (RpmOstreeTreespecClass *klass)
-{
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
-  object_class->finalize = rpmostree_treespec_finalize;
-}
-
-static void
-rpmostree_treespec_init (RpmOstreeTreespec *self)
-{
-}
-
-static int
-qsort_cmpstr (const void*ap, const void *bp, gpointer data)
-{
-  const char *a = *((const char *const*) ap);
-  const char *b = *((const char *const*) bp);
-  return strcmp (a, b);
-}
-
-/* Handle converting "treespec" bits to GVariant.
- * Look for @key in @keyfile (under the section "tree"), and
- * if found, strip leading/trailing whitespace from each entry,
- * sort them, and add it to @builder under the same key name.
- * If there are no entries for it, and @notfound_key is provided,
- * set @notfound_key in the variant to TRUE.
- */
-static void
-add_canonicalized_string_array (GVariantBuilder *builder,
-                                const char *key,
-                                const char *notfound_key,
-                                GKeyFile *keyfile)
-{
-  g_autoptr(GHashTable) set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-
-  g_auto(GStrv) input = g_key_file_get_string_list (keyfile, "tree", key, NULL, NULL);
-  if (!(input && *input))
-    {
-      if (notfound_key)
-        {
-          g_variant_builder_add (builder, "{sv}", notfound_key, g_variant_new_boolean (TRUE));
-          return;
-        }
-    }
-
-  /* Iterate over strings, strip leading/trailing whitespace */
-  for (char ** iter = input; iter && *iter; iter++)
-    {
-      g_autofree char *stripped = g_strdup (*iter);
-      g_strchug (g_strchomp (stripped));
-      g_hash_table_add (set, g_steal_pointer (&stripped));
-    }
-
-  /* Ensure sorted */
-  guint count;
-  g_autofree char **sorted = (char**)g_hash_table_get_keys_as_array (set, &count);
-  if (count > 1)
-    g_qsort_with_data (sorted, count, sizeof (void*), qsort_cmpstr, NULL);
-
-  g_variant_builder_add (builder, "{sv}", key,
-                         g_variant_new_strv ((const char*const*)sorted, count));
-}
-
-RpmOstreeTreespec *
-rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
-                                     GError    **error)
-{
-  g_autoptr(RpmOstreeTreespec) ret = (RpmOstreeTreespec*)g_object_new (RPMOSTREE_TYPE_TREESPEC, NULL);
-  g_auto(GVariantBuilder) builder;
-
-  g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
-
-  add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
-
-  /* We allow the "repos" key to be missing. This means that we rely on libdnf's
-   * normal behaviour (i.e. look at repos in repodir with enabled=1). */
-  { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "repos", NULL, NULL);
-    if (val && *val)
-      add_canonicalized_string_array (&builder, "repos", NULL, keyfile);
-  }
-  { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "lockfile-repos", NULL, NULL);
-    if (val && *val)
-      add_canonicalized_string_array (&builder, "lockfile-repos", NULL, keyfile);
-  }
-  add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile);
-
-  ret->spec = g_variant_builder_end (&builder);
-  ret->dict = g_variant_dict_new (ret->spec);
-
-  return util::move_nullify (ret);
-}
-
-RpmOstreeTreespec *
-rpmostree_treespec_new_from_path (const char *path, GError  **error)
-{
-  g_autoptr(GKeyFile) specdata = g_key_file_new();
-  if (!g_key_file_load_from_file (specdata, path, static_cast<GKeyFileFlags>(0), error))
-    return NULL;
-  return rpmostree_treespec_new_from_keyfile (specdata, error);
-}
-
-RpmOstreeTreespec *
-rpmostree_treespec_new (GVariant   *variant)
-{
-  g_autoptr(RpmOstreeTreespec) ret = (RpmOstreeTreespec*)g_object_new (RPMOSTREE_TYPE_TREESPEC, NULL);
-  ret->spec = g_variant_ref (variant);
-  ret->dict = g_variant_dict_new (ret->spec);
-  return util::move_nullify (ret);
-}
-
-GVariant *
-rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
-{
-  return g_variant_ref (spec->spec);
-}
-
-/***********************************************************
  *                    RpmOstreeContext                     *
  ***********************************************************
  */
@@ -227,7 +86,6 @@ rpmostree_context_finalize (GObject *object)
 {
   RpmOstreeContext *rctx = RPMOSTREE_CONTEXT (object);
 
-  g_clear_object (&rctx->spec);
   g_clear_object (&rctx->dnfctx);
 
   g_clear_pointer (&rctx->ref, g_free);
@@ -420,7 +278,7 @@ rpmostree_context_set_pkgcache_only (RpmOstreeContext *self,
                                      gboolean          pkgcache_only)
 {
   /* if called, must always be before setup() */
-  g_assert (!self->spec);
+  g_assert (!self->treefile_rs);
   self->pkgcache_only = pkgcache_only;
 }
 
@@ -595,13 +453,13 @@ disable_all_repos (RpmOstreeContext  *context)
 /* Enable all repos in @repos */
 static gboolean
 enable_repos (RpmOstreeContext  *context,
-              const char        *const *repos,
+              rust::Vec<rust::String> &repos,
               GError           **error)
 {
   GPtrArray *sources = dnf_context_get_repos (context->dnfctx);
-  for (const char *const *iter = repos; iter && *iter; iter++)
+  for (auto &repo: repos)
     {
-      if (!enable_one_repo (sources, *iter, error))
+      if (!enable_one_repo (sources, repo.c_str(), error))
         return FALSE;
     }
 
@@ -612,20 +470,6 @@ void
 rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile &treefile)
 {
   self->treefile_rs = &treefile;
-}
-
-void 
-rpmostree_context_set_treespec (RpmOstreeContext *self, RpmOstreeTreespec *treespec)
-{
-  g_assert (!self->spec);
-  /* allow NULL for treespec, but canonicalize to an empty keyfile for cleaner queries */
-  if (!treespec)
-    {
-      g_autoptr(GKeyFile) kf = g_key_file_new ();
-      self->spec = rpmostree_treespec_new_from_keyfile (kf, NULL);
-    }
-  else
-    self->spec = (RpmOstreeTreespec*)g_object_ref (treespec);
 }
 
 namespace rpmostreecxx {
@@ -654,28 +498,6 @@ core_libdnf_process_global_init()
 
 } /* namespace */
 
-// Union the set of packages requested via treespec and via treefile.
-// TODO remove this once treespec is gone, then we just can iterate over `self->treefile_rs->get_packages()`
-static rust::Vec<rust::String>
-get_requested_packages (RpmOstreeContext *self)
-{
-  rust::Vec<rust::String> packages;
-  { g_autofree char **pkgnames_c = NULL;
-    g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgnames_c);
-    for (char **it = pkgnames_c; it && *it; it++)
-      packages.push_back(*it);
-  }
-  if (self->treefile_rs)
-    {
-      for (auto &pkgname : self->treefile_rs->get_packages())
-        {
-          packages.push_back(pkgname);
-        }
-    }
-
-  return packages;
-}
-
 /* Wraps `dnf_context_setup()`, and initializes state based on the treespec
  * @spec. Another way to say it is we pair `DnfContext` with an
  * `RpmOstreeTreespec`. For example, we handle "instlangs", set the rpmdb root
@@ -693,18 +515,22 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                          GCancellable  *cancellable,
                          GError       **error)
 {
-  std::string releasever;
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
 
   rpmostreecxx::core_libdnf_process_global_init();
 
-  /* Auto-synthesize a spec for now; this will be removed */
-  if (!self->spec)
-    rpmostree_context_set_treespec (self, NULL);
+  /* Auto-synthesize an empty treefile if none is set; this avoids us
+   * having to check for whether it's NULL everywhere.  The empty treefile
+   * is equivalent to an unset one.
+   */
+  if (!self->treefile_rs)
+    {
+      self->treefile_owned = rpmostreecxx::treefile_new_empty ();
+      self->treefile_rs = &**self->treefile_owned;
+    }
 
-  if (self->treefile_rs)
-    releasever = std::string(self->treefile_rs->get_releasever());
+  auto releasever = std::string(self->treefile_rs->get_releasever());
 
   if (!install_root)
     install_root = emptydir_path;
@@ -728,7 +554,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* Set the RPM _install_langs macro, which gets processed by librpm; this is
    * currently only referenced in the traditional or non-"unified core" code.
    */
-  if (!self->is_system && self->treefile_rs)
+  if (!self->is_system)
     {
       auto instlangs = self->treefile_rs->format_install_langs_macro();
       if (instlangs.length() > 0)
@@ -738,7 +564,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* Set the database backend only in the compose path.  It then becomes the default
    * for any client side layering.
    */
-  if (!self->is_system && self->treefile_rs)
+  if (!self->is_system)
     {
       // See also validate_rpmdb() that we called early
       auto rpmdb_backend = self->treefile_rs->get_rpmdb();
@@ -762,15 +588,15 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
       /* NB: missing "repos" --> let libdnf figure it out for itself (we're likely doing a
        * client-side compose where we want to use /etc/yum.repos.d/) */
-      g_autofree char **enabled_repos = NULL;
-      if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
+      auto repos = self->treefile_rs->get_repos();
+      if (!repos.empty())
         {
           if (!disabled_all_repos)
             {
               disable_all_repos (self);
               disabled_all_repos = true;
             }
-          if (!enable_repos (self, (const char *const*)enabled_repos, error))
+          if (!enable_repos (self, repos, error))
             return FALSE;
         }
 
@@ -778,12 +604,12 @@ rpmostree_context_setup (RpmOstreeContext    *self,
        * time fetching metadata */
       if (self->lockfile)
         {
-          g_autofree char **enabled_lockfile_repos = NULL;
-          if (g_variant_dict_lookup (self->spec->dict, "lockfile-repos", "^a&s", &enabled_lockfile_repos))
+          auto lockfile_repos = self->treefile_rs->get_lockfile_repos();
+          if (!lockfile_repos.empty())
             {
               if (!disabled_all_repos)
                 disable_all_repos (self);
-              if (!enable_repos (self, (const char *const*)enabled_lockfile_repos, error))
+              if (!enable_repos (self, lockfile_repos, error))
                 return FALSE;
             }
         }
@@ -796,7 +622,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       /* To be nice, let's only make this fatal if "packages" is empty (e.g. if
        * we're only installing local RPMs. Missing deps will cause the regular
        * 'not found' error from libdnf. */
-      auto pkgs = get_requested_packages (self);
+      auto pkgs = self->treefile_rs->get_packages();
       if (!pkgs.empty())
         return glnx_throw (error, "No enabled repositories");
     }
@@ -808,13 +634,13 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   for (guint i = 0; i < repos->len; i++)
     dnf_repo_set_required (static_cast<DnfRepo*>(repos->pdata[i]), TRUE);
 
-  if (self->treefile_rs && !self->treefile_rs->get_documentation())
+  if (!self->treefile_rs->get_documentation())
     { 
       dnf_transaction_set_flags (dnf_context_get_transaction (self->dnfctx),
                                  DNF_TRANSACTION_FLAG_NODOCS);
     }
 
-  bool selinux = !self->disable_selinux && (!self->treefile_rs || self->treefile_rs->get_selinux());
+  bool selinux = !self->disable_selinux && self->treefile_rs->get_selinux();
   /* Load policy from / if SELinux is enabled, and we haven't already loaded
    * a policy.  This is mostly for the "compose tree" case.
    */
@@ -1875,27 +1701,18 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   DnfContext *dnfctx = self->dnfctx;
 
-  // We take package lists from both the legacy treespec and the treefile for now.
-  rust::Vec<rust::String> packages = get_requested_packages (self);
+  auto packages = self->treefile_rs->get_packages();
+  auto packages_local = self->treefile_rs->get_packages_local();
+  auto packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local();
+  auto packages_override_remove = self->treefile_rs->get_packages_override_remove();
+  auto exclude_packages = self->treefile_rs->get_exclude_packages ();
 
-  rust::Vec<rust::String> packages_local;
-  rust::Vec<rust::String> packages_override_replace_local;
-  rust::Vec<rust::String> packages_override_remove;
-  rust::Vec<rust::String> exclude_packages;
-  if (self->treefile_rs)
+  /* we only support pure installs for now (compose case) */
+  if (self->lockfile)
     {
-      packages_local = self->treefile_rs->get_packages_local();
-      packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local();
-      packages_override_remove = self->treefile_rs->get_packages_override_remove();
-      exclude_packages = self->treefile_rs->get_exclude_packages ();
-
-      /* we only support pure installs for now (compose case) */
-      if (self->lockfile)
-        {
-          g_assert_cmpint (packages_local.size(), ==, 0);
-          g_assert_cmpint (packages_override_replace_local.size(), ==, 0);
-          g_assert_cmpint (packages_override_remove.size(), ==, 0);
-        }
+      g_assert_cmpint (packages_local.size(), ==, 0);
+      g_assert_cmpint (packages_override_replace_local.size(), ==, 0);
+      g_assert_cmpint (packages_override_remove.size(), ==, 0);
     }
 
   /* setup sack if not yet set up */
@@ -2000,13 +1817,11 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       else
         {
           /* Exclude all the packages in lockfile repos except locked packages. */
-          g_autofree char **lockfile_repos = NULL;
-          g_variant_dict_lookup (self->spec->dict, "lockfile-repos", "^a&s", &lockfile_repos);
-          for (char **it = lockfile_repos; it && *it; it++)
+          auto lockfile_repos = self->treefile_rs->get_lockfile_repos();
+          for (auto &repo : lockfile_repos)
             {
-              const char *repo = *it;
               hy_autoquery HyQuery query = hy_query_create (sack);
-              hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo);
+              hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo.c_str());
               DnfPackageSet *pset = hy_query_run_set (query);
               Map *map = dnf_packageset_get_map (pset);
               map_subtract (map, dnf_packageset_get_map (locked_pset));
@@ -2140,7 +1955,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   }
 
   auto actions = static_cast<DnfGoalActions>(DNF_INSTALL | DNF_ALLOW_UNINSTALL);
-  if (self->treefile_rs && !self->treefile_rs->get_recommends())
+  if (!self->treefile_rs->get_recommends())
     actions = static_cast<DnfGoalActions>(static_cast<int>(actions) | DNF_IGNORE_WEAK_DEPS);
   auto task = rpmostreecxx::progress_begin_task("Resolving dependencies");
   /* XXX: consider a --allow-uninstall switch? */
@@ -2281,8 +2096,8 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
                                     GError          **error)
 {
   g_autoptr(GChecksum) state_checksum = g_checksum_new (G_CHECKSUM_SHA512);
-  g_checksum_update (state_checksum, static_cast<const guchar*>(g_variant_get_data (self->spec->spec)),
-                     g_variant_get_size (self->spec->spec));
+  auto tf_checksum = self->treefile_rs->get_checksum(*self->ostreerepo);
+  g_checksum_update (state_checksum, (const guint8*)tf_checksum.data(), tf_checksum.size());
 
   if (!self->empty)
     {
@@ -2426,10 +2241,10 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
       g_str_equal (pkg_name, "rootfiles"))
     flags |= RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS;
 
-  if (self->treefile_rs && !self->treefile_rs->get_documentation())
+  if (!self->treefile_rs->get_documentation())
     flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
 
-  if (self->treefile_rs && self->treefile_rs->get_readonly_executables())
+  if (self->treefile_rs->get_readonly_executables())
     flags |= RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES;
 
   /* TODO - tweak the unpacker flags for containers */
@@ -2827,17 +2642,14 @@ checkout_package_into_root (RpmOstreeContext *self,
 {
   /* If called on compose-side, there may be files to remove from packages specified in the treefile. */
   g_autoptr(GPtrArray) files_remove_regex = NULL;
-  if (self->treefile_rs)
+  auto files_remove_regex_patterns = self->treefile_rs->get_files_remove_regex(dnf_package_get_name (pkg));
+  files_remove_regex = g_ptr_array_new_full (files_remove_regex_patterns.size(), (GDestroyNotify)g_regex_unref);
+  for (auto pattern : files_remove_regex_patterns) 
     {
-      auto files_remove_regex_patterns = self->treefile_rs->get_files_remove_regex(dnf_package_get_name (pkg));
-      files_remove_regex = g_ptr_array_new_full (files_remove_regex_patterns.size(), (GDestroyNotify)g_regex_unref);
-      for (auto pattern : files_remove_regex_patterns) 
-        {
-          GRegex *regex = g_regex_new (pattern.c_str(), G_REGEX_JAVASCRIPT_COMPAT, static_cast<GRegexMatchFlags>(0), NULL);
-          if (!regex)
-            return FALSE;
-          g_ptr_array_add (files_remove_regex, regex);
-        }
+      GRegex *regex = g_regex_new (pattern.c_str(), G_REGEX_JAVASCRIPT_COMPAT, static_cast<GRegexMatchFlags>(0), NULL);
+      if (!regex)
+        return FALSE;
+      g_ptr_array_add (files_remove_regex, regex);
     }
   
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
@@ -3833,9 +3645,6 @@ process_ostree_layers (RpmOstreeContext *self,
                        GCancellable     *cancellable,
                        GError          **error)
 {
-  if (!self->treefile_rs)
-    return TRUE;
-  
   auto layers = self->treefile_rs->get_ostree_layers();
   auto override_layers = self->treefile_rs->get_ostree_override_layers();
   const size_t n = layers.size() + override_layers.size();
@@ -4402,7 +4211,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
     }
 
-  if (self->treefile_rs && self->treefile_rs->get_cliwrap())
+  if (self->treefile_rs->get_cliwrap())
     rpmostreecxx::cliwrap_write_wrappers (tmprootfs_dfd);
 
   /* Undo the /etc move above */
@@ -4424,7 +4233,6 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   if (!rpmostree_deployment_sanitycheck_rpmdb (tmprootfs_dfd, overlays,
                                                overrides_replace, cancellable, error))
     return FALSE;
-
   return TRUE;
 }
 
@@ -4479,7 +4287,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.rpmmd-repos", rpmmd_meta);
 
         /* embed packages (really, "patterns") layered */
-        auto pkgs = get_requested_packages (self);
+        auto pkgs = self->treefile_rs->get_packages();
         auto pkgs_v = g_variant_builder_new (G_VARIANT_TYPE ("as"));
         for (auto &pkg: pkgs)
           {
@@ -4529,14 +4337,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
       {
         /* Note this branch isn't actually used today; the compose side commit
          * code is in impl_commit_tree(). */
-        g_autoptr(GVariant) spec_v =
-          g_variant_ref_sink (rpmostree_treespec_to_variant (self->spec));
-
-        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.spec",
-                              spec_v);
-
-        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.serverbase",
-                               g_variant_new_uint32 (1));
+        g_assert_not_reached ();
       }
     else
       {

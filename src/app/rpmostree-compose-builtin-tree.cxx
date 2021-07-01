@@ -153,7 +153,6 @@ typedef struct {
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile; /* Unowned */
-  RpmOstreeTreespec   *treespec;
 } RpmOstreeTreeComposeContext;
 
 static void
@@ -180,7 +179,6 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
   g_free (ctx->previous_checksum);
   g_clear_object (&ctx->treefile_parser);
-  g_clear_object (&ctx->treespec);
   g_free (ctx);
 }
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeTreeComposeContext, rpm_ostree_tree_compose_context_free)
@@ -307,7 +305,6 @@ install_packages (RpmOstreeTreeComposeContext  *self,
                                      opt_cache_only ? RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER :
                                      RPMOSTREE_CONTEXT_DNF_CACHE_NEVER);
 
-  rpmostree_context_set_treespec (self->corectx, self->treespec);
   { g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
     if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL,
                                   cancellable, error))
@@ -772,13 +769,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
             return FALSE;
         }
     }
-
-  self->treespec = rpmostree_composeutil_get_treespec (self->corectx,
-                                                       **self->treefile_rs,
-                                                       self->treefile,
-                                                       error);
-  if (!self->treespec)
-    return FALSE;
 
   *out_context = util::move_nullify (self);
   return TRUE;

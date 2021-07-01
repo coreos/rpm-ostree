@@ -56,10 +56,6 @@ G_BEGIN_DECLS
 #define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
 
-#define RPMOSTREE_TYPE_TREESPEC (rpmostree_treespec_get_type ())
-G_DECLARE_FINAL_TYPE (RpmOstreeTreespec, rpmostree_treespec, RPMOSTREE, TREESPEC, GObject)
-
-
 typedef enum {
   RPMOSTREE_REFSPEC_TYPE_OSTREE,
   RPMOSTREE_REFSPEC_TYPE_CHECKSUM,
@@ -98,16 +94,9 @@ void rpmostree_context_set_dnf_caching (RpmOstreeContext *self,
 
 DnfContext * rpmostree_context_get_dnf (RpmOstreeContext *self);
 
-RpmOstreeTreespec *rpmostree_treespec_new_from_keyfile (GKeyFile *keyfile, GError  **error);
-RpmOstreeTreespec *rpmostree_treespec_new_from_path (const char *path, GError  **error);
-RpmOstreeTreespec *rpmostree_treespec_new (GVariant   *variant);
-
 GVariant *rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self);
 
-GVariant *rpmostree_treespec_to_variant (RpmOstreeTreespec *spec);
-
 void rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile &treefile);
-void rpmostree_context_set_treespec (RpmOstreeContext *self, RpmOstreeTreespec *treespec);
 
 gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   const char    *install_root,
