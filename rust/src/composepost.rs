@@ -704,6 +704,7 @@ fn convert_path_to_tmpfiles_d_recurse(
             importer::translate_to_tmpfiles_d(&abs_path, &file_info, &username, &groupname)?
         };
         tmpfiles_bufwr.write_all(entry.as_bytes())?;
+        writeln!(tmpfiles_bufwr)?;
 
         if path_type == SimpleType::Dir {
             // New subdirectory discovered, recurse into it.
