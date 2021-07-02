@@ -125,7 +125,7 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     let kf = glib::KeyFile::new();
 
     // refspec (note special handling right now for layering)
-    let deriving = tf.packages.is_some() || tf.derive.packages_local.is_some();
+    let deriving = tf.packages.is_some() || tf.derive.has_overrides();
     if let Some(r) = tf.derive.base_refspec.as_deref() {
         let k = if deriving { "baserefspec" } else { "refspec" };
         kf.set_string(ORIGIN, k, r)
@@ -313,6 +313,15 @@ mod test {
     refspec=foo:bar/x86_64/baz
     "};
 
+    const MIN_OVERRIDES: &str = indoc! {"
+    [origin]
+    baserefspec=fedora:fedora/34/x86_64/silverblue
+
+    [overrides]
+    remove=docker;
+    replace-local=0c7072500af2758e7dc7d7700fed82c3c5f4da7453b4d416e79f75384eee96b0:rpm-ostree-devel-2021.1-2.fc33.x86_64;648ab3ff4d4b708ea180269297de5fa3e972f4481d47b7879c6329272e474d68:rpm-ostree-2021.1-2.fc33.x86_64;8b29b78d0ade6ec3aedb8e3846f036f6f28afe64635d83cb6a034f1004607678:rpm-ostree-libs-2021.1-2.fc33.x86_64;
+    "};
+
     const COMPLEX: &str = indoc! {"
     [origin]
     baserefspec=fedora:fedora/34/x86_64/silverblue
@@ -388,6 +397,8 @@ mod test {
     fn test_origin_roundtrip() -> Result<()> {
         let kf = kf_from_str(BASE)?;
         origin_validate_roundtrip_inner(&kf).expect("validating BASE");
+        let kf = kf_from_str(MIN_OVERRIDES)?;
+        origin_validate_roundtrip_inner(&kf).expect("validating MIN_OVERRIDES");
         let kf = kf_from_str(COMPLEX)?;
         origin_validate_roundtrip_inner(&kf).expect("validating COMPLEX");
         Ok(())

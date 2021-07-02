@@ -1279,6 +1279,15 @@ pub(crate) struct DeriveConfigFields {
 }
 
 impl DeriveConfigFields {
+    /// Returns `true` if there are fields set which override the content.
+    pub(crate) fn has_overrides(&self) -> bool {
+        self.packages_local.is_some()
+            || self.override_remove.is_some()
+            || self.override_replace_local.is_some()
+            || self.initramfs.is_some()
+    }
+
+    /// Error if a field is set.
     pub(crate) fn error_if_nonempty(&self) -> Result<()> {
         macro_rules! check {
             ( $field:ident ) => {{
