@@ -286,6 +286,7 @@ pub mod ffi {
         type Treefile;
 
         fn treefile_new(filename: &str, basearch: &str, workdir: i32) -> Result<Box<Treefile>>;
+        fn treefile_new_empty() -> Result<Box<Treefile>>;
         fn treefile_new_from_string(buf: &str) -> Result<Box<Treefile>>;
         fn treefile_new_compose(
             filename: &str,
