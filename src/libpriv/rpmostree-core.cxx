@@ -3900,6 +3900,118 @@ process_ostree_layers (RpmOstreeContext *self,
   return TRUE;
 }
 
+static gboolean
+write_rpmdb (RpmOstreeContext      *self,
+             int tmprootfs_dfd, 
+             GPtrArray *overlays,
+             GPtrArray *overrides_replace,
+             GPtrArray *overrides_remove,
+             GCancellable *cancellable,
+             GError **error)
+{
+  auto task = rpmostreecxx::progress_begin_task("Writing rpmdb");
+
+
+  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, 0755, cancellable, error))
+    return FALSE;
+
+  /* Now, we use the separate rpmdb ts which *doesn't* have a rootdir set,
+   * because if it did rpmtsRun() would try to chroot which it won't be able to
+   * if we're unprivileged, even though we're not trying to run %post scripts
+   * now.
+   *
+   * Instead, this rpmts has the dbpath as absolute.
+   */
+  { g_autofree char *rpmdb_abspath = glnx_fdrel_abspath (tmprootfs_dfd,
+                                                         RPMOSTREE_RPMDB_LOCATION);
+
+    /* if we were passed an existing tmprootfs, and that tmprootfs already has
+     * an rpmdb, we have to make sure to break its hardlinks as librpm mutates
+     * the db in place */
+    if (!break_hardlinks_at (tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, cancellable, error))
+      return FALSE;
+
+    set_rpm_macro_define ("_dbpath", rpmdb_abspath);
+  }
+
+  g_auto(rpmts) rpmdb_ts = rpmtsCreate ();
+  /* Always call rpmtsSetRootDir() here so rpmtsRootDir() isn't NULL -- see rhbz#1613517 */
+  rpmtsSetRootDir (rpmdb_ts, "/");
+  rpmtsSetVSFlags (rpmdb_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS);
+  /* https://bugzilla.redhat.com/show_bug.cgi?id=1607223
+   * Newer librpm defaults to doing a full payload checksum, which we can't
+   * do at this point because we imported the RPMs into ostree commits, saving
+   * just the header in metadata - we don't have the exact original content to
+   * provide again.
+   */
+  rpmtsSetVfyLevel (rpmdb_ts, 0);
+  /* We're just writing the rpmdb, hence _JUSTDB. Also disable the librpm
+   * SELinux plugin since rpm-ostree (and ostree) have fundamentally better
+   * code.
+   */
+  rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB | RPMTRANS_FLAG_NOCONTEXTS);
+
+  TransactionData tdata = { 0, NULL };
+  tdata.ctx = self;
+  rpmtsSetNotifyCallback (rpmdb_ts, ts_callback, &tdata);
+
+  /* Skip validating scripts since we already validated them above */
+  RpmOstreeTsAddInstallFlags rpmdb_instflags = RPMOSTREE_TS_FLAG_NOVALIDATE_SCRIPTS;
+  for (guint i = 0; i < overlays->len; i++)
+    {
+      auto pkg = static_cast<DnfPackage *>(overlays->pdata[i]);
+
+      if (!rpmts_add_install (self, rpmdb_ts, pkg, rpmdb_instflags,
+                              cancellable, error))
+        return FALSE;
+    }
+
+  for (guint i = 0; i < overrides_replace->len; i++)
+    {
+      auto pkg = static_cast<DnfPackage *>(overrides_replace->pdata[i]);
+
+      if (!rpmts_add_install (self, rpmdb_ts, pkg,
+                              static_cast<RpmOstreeTsAddInstallFlags>(rpmdb_instflags | RPMOSTREE_TS_FLAG_UPGRADE),
+                              cancellable, error))
+        return FALSE;
+    }
+
+  /* and mark removed packages as such so they drop out of rpmdb */
+  for (guint i = 0; i < overrides_remove->len; i++)
+    {
+      auto pkg = static_cast<DnfPackage*>(overrides_remove->pdata[i]);
+      if (!rpmts_add_erase (self, rpmdb_ts, pkg, cancellable, error))
+        return FALSE;
+    }
+
+  rpmtsOrder (rpmdb_ts);
+
+  /* NB: Because we're using the real root here (see above for reason why), rpm
+   * will see the read-only /usr mount and think that there isn't any disk space
+   * available for install. For now, we just tell rpm to ignore space
+   * calculations, but then we lose that nice check. What we could do is set a
+   * root dir at least if we have CAP_SYS_CHROOT, or maybe do the space req
+   * check ourselves if rpm makes that information easily accessible (doesn't
+   * look like it from a quick glance). */
+  /* Also enable OLDPACKAGE to allow replacement overrides to older version. */
+  int r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE | RPMPROB_FILTER_OLDPACKAGE);
+  if (r < 0)
+    return glnx_throw (error, "Failed to update rpmdb (rpmtsRun code %d)", r);
+  if (r > 0)
+    {
+      if (!dnf_rpmts_look_for_problems (rpmdb_ts, error))
+        return FALSE;
+    }
+
+  task->end("");
+
+  /* And finally revert the _dbpath setting because libsolv relies on it as well
+   * to find the rpmdb and RPM macros are global state. */
+  set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
+
+  return TRUE;
+}
+
 gboolean
 rpmostree_context_assemble (RpmOstreeContext      *self,
                             GCancellable          *cancellable,
@@ -3931,7 +4043,6 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     return FALSE;
 
   DnfContext *dnfctx = self->dnfctx;
-  TransactionData tdata = { 0, NULL };
   g_autoptr(GHashTable) pkg_to_ostree_commit =
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
   DnfPackage *filesystem_package = NULL;   /* It's special, see below */
@@ -4345,103 +4456,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
-  auto task = rpmostreecxx::progress_begin_task("Writing rpmdb");
-
-  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, 0755, cancellable, error))
-    return FALSE;
-
-  /* Now, we use the separate rpmdb ts which *doesn't* have a rootdir set,
-   * because if it did rpmtsRun() would try to chroot which it won't be able to
-   * if we're unprivileged, even though we're not trying to run %post scripts
-   * now.
-   *
-   * Instead, this rpmts has the dbpath as absolute.
-   */
-  { g_autofree char *rpmdb_abspath = glnx_fdrel_abspath (tmprootfs_dfd,
-                                                         RPMOSTREE_RPMDB_LOCATION);
-
-    /* if we were passed an existing tmprootfs, and that tmprootfs already has
-     * an rpmdb, we have to make sure to break its hardlinks as librpm mutates
-     * the db in place */
-    if (!break_hardlinks_at (tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, cancellable, error))
-      return FALSE;
-
-    set_rpm_macro_define ("_dbpath", rpmdb_abspath);
-  }
-
-  g_auto(rpmts) rpmdb_ts = rpmtsCreate ();
-  /* Always call rpmtsSetRootDir() here so rpmtsRootDir() isn't NULL -- see rhbz#1613517 */
-  rpmtsSetRootDir (rpmdb_ts, "/");
-  rpmtsSetVSFlags (rpmdb_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS);
-  /* https://bugzilla.redhat.com/show_bug.cgi?id=1607223
-   * Newer librpm defaults to doing a full payload checksum, which we can't
-   * do at this point because we imported the RPMs into ostree commits, saving
-   * just the header in metadata - we don't have the exact original content to
-   * provide again.
-   */
-  rpmtsSetVfyLevel (rpmdb_ts, 0);
-  /* We're just writing the rpmdb, hence _JUSTDB. Also disable the librpm
-   * SELinux plugin since rpm-ostree (and ostree) have fundamentally better
-   * code.
-   */
-  rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB | RPMTRANS_FLAG_NOCONTEXTS);
-
-  tdata.ctx = self;
-  rpmtsSetNotifyCallback (rpmdb_ts, ts_callback, &tdata);
-
-  /* Skip validating scripts since we already validated them above */
-  RpmOstreeTsAddInstallFlags rpmdb_instflags = RPMOSTREE_TS_FLAG_NOVALIDATE_SCRIPTS;
-  for (guint i = 0; i < overlays->len; i++)
-    {
-      auto pkg = static_cast<DnfPackage *>(overlays->pdata[i]);
-
-      if (!rpmts_add_install (self, rpmdb_ts, pkg, rpmdb_instflags,
-                              cancellable, error))
-        return FALSE;
-    }
-
-  for (guint i = 0; i < overrides_replace->len; i++)
-    {
-      auto pkg = static_cast<DnfPackage *>(overrides_replace->pdata[i]);
-
-      if (!rpmts_add_install (self, rpmdb_ts, pkg,
-                              static_cast<RpmOstreeTsAddInstallFlags>(rpmdb_instflags | RPMOSTREE_TS_FLAG_UPGRADE),
-                              cancellable, error))
-        return FALSE;
-    }
-
-  /* and mark removed packages as such so they drop out of rpmdb */
-  for (guint i = 0; i < overrides_remove->len; i++)
-    {
-      auto pkg = static_cast<DnfPackage*>(overrides_remove->pdata[i]);
-      if (!rpmts_add_erase (self, rpmdb_ts, pkg, cancellable, error))
-        return FALSE;
-    }
-
-  rpmtsOrder (rpmdb_ts);
-
-  /* NB: Because we're using the real root here (see above for reason why), rpm
-   * will see the read-only /usr mount and think that there isn't any disk space
-   * available for install. For now, we just tell rpm to ignore space
-   * calculations, but then we lose that nice check. What we could do is set a
-   * root dir at least if we have CAP_SYS_CHROOT, or maybe do the space req
-   * check ourselves if rpm makes that information easily accessible (doesn't
-   * look like it from a quick glance). */
-  /* Also enable OLDPACKAGE to allow replacement overrides to older version. */
-  int r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE | RPMPROB_FILTER_OLDPACKAGE);
-  if (r < 0)
-    return glnx_throw (error, "Failed to update rpmdb (rpmtsRun code %d)", r);
-  if (r > 0)
-    {
-      if (!dnf_rpmts_look_for_problems (rpmdb_ts, error))
-        return FALSE;
-    }
-
-  task->end("");
-
-  /* And finally revert the _dbpath setting because libsolv relies on it as well
-   * to find the rpmdb and RPM macros are global state. */
-  set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
+  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove, cancellable, error))
+    return glnx_prefix_error (error, "Writing rpmdb");
 
   /* And now also sanity check the rpmdb */
   if (!skip_sanity_check)
