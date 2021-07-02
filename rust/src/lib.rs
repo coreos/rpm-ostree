@@ -426,6 +426,7 @@ pub mod ffi {
         fn state_checksum_changed(&self, chksum: &str, output_dir: &str) -> Result<bool>;
         fn update_state_checksum(&self, chksum: &str, output_dir: &str) -> Result<()>;
         fn serialize_to_dir(&self, output_dir: &str) -> Result<()>;
+        fn generate_treefile(&self, src: &Treefile) -> Result<Box<Treefile>>;
     }
 
     struct LockedPackage {
