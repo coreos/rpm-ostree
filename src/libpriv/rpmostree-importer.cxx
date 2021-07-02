@@ -60,9 +60,16 @@ struct RpmOstreeImporter
   Header hdr;
   rpmfi fi;
   off_t cpio_offset;
+  // Hashmap of file-overrides from RPM header:
+  //  - [K] absolute full path of the file
+  //  - [V] iterator index in RPM header for this file
   GHashTable *rpmfi_overrides;
+  // Hashset of all file entries marked as 'doc' in an RPM;
+  // each key is the absolute full path of the file.
   GHashTable *doc_files;
-  GHashTable *opt_files;
+  // Hashset of filepath entries which are direct children of /opt;
+  // each key is a plain path fragment, e.g. 'foo' for '/opt/foo/bar'.
+  GHashTable *opt_direntries;
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
   DnfPackage *pkg;
@@ -91,7 +98,7 @@ rpmostree_importer_finalize (GObject *object)
 
   g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
-  g_clear_pointer (&self->opt_files, (GDestroyNotify)g_hash_table_unref);
+  g_clear_pointer (&self->opt_direntries, (GDestroyNotify)g_hash_table_unref);
 
   g_free (self->hdr_sha256);
 
@@ -263,7 +270,7 @@ rpmostree_importer_new_take_fd (int                     *fd,
   ret->hdr = util::move_nullify (hdr);
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage*)(pkg ? g_object_ref (pkg) : NULL);
-  ret->opt_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  ret->opt_direntries = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -476,6 +483,9 @@ compose_filter_cb (OstreeRepo         *repo,
                    GFileInfo          *file_info,
                    gpointer            user_data)
 {
+  // NOTE(lucab): `path` here is the ostree-compatible absolute filepath,
+  //  i.e. after translation by `translate_pathname` callback.
+
   /* Sanity checks: path is absolute, file info is present, data pointer is ok */
   g_assert (path != NULL);
   g_assert (*path == '/');
@@ -549,6 +559,14 @@ xattr_cb (OstreeRepo  *repo,
           GFileInfo   *file_info,
           gpointer     user_data)
 {
+  // NOTE(lucab): `path` here is the ostree-compatible absolute filepath,
+  //  i.e. after translation by `translate_pathname` callback.
+
+  /* Sanity checks: path is absolute, data pointer is ok */
+  g_assert (path != NULL);
+  g_assert (*path == '/');
+  g_assert (user_data != NULL);
+
   auto self = static_cast<RpmOstreeImporter *>(user_data);
   const char *fcaps = NULL;
 
@@ -580,10 +598,14 @@ handle_translate_pathname (OstreeRepo   *repo,
                            const char   *path,
                            gpointer      user_data)
 {
+  // Sanity check that path is relative (i.e. no leading slash).
+  g_assert (path != NULL);
+  g_assert (*path != '/');
+
   auto self = static_cast<RpmOstreeImporter *>(user_data);
 
   if (g_str_has_prefix (path, "opt/"))
-    g_hash_table_add (self->opt_files,
+    g_hash_table_add (self->opt_direntries,
                       get_first_path_element (path + strlen("opt/")));
 
   return rpmostree_translate_path_for_ostree (path);
@@ -626,7 +648,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
       return FALSE;
     }
 
-  GLNX_HASH_TABLE_FOREACH (self->opt_files, const char*, filename)
+  GLNX_HASH_TABLE_FOREACH (self->opt_direntries, const char*, filename)
     {
       g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
       auto opt_quoted = rpmostreecxx::maybe_shell_quote (opt);
@@ -638,7 +660,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
                               opt_quoted.c_str(), filename);
     }
 
-  /* Handle any data we've accumulated data to write to tmpfiles.d.
+  /* Handle any data we've accumulated to write to tmpfiles.d.
    * I originally tried to do this entirely in memory but things
    * like selinux labeling only happen as callbacks out of using
    * the input dfd/archive paths...so let's just use a tempdir. (:sadface:)
