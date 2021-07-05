@@ -1424,10 +1424,11 @@ pub(crate) mod tests {
     "#};
 
     // This one has "comments" (hence unknown keys)
-    static VALID_PRELUDE_JS: &str = indoc! {r#"
+    pub(crate) static VALID_PRELUDE_JS: &str = indoc! {r#"
         {
          "ref": "exampleos/${basearch}/blah",
          "comment-packages": "We want baz to enable frobnication",
+         "repos": ["baserepo"],
          "packages": ["foo", "bar", "baz"],
          "packages-x86_64": ["grub2", "grub2-tools"],
          "comment-packages-s390x": "Note that s390x uses its own bootloader",

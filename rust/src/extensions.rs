@@ -14,6 +14,8 @@ use std::collections::HashMap;
 use crate::cxxrsutil::*;
 use crate::ffi::StringMapping;
 use crate::utils;
+use crate::TreeComposeConfig;
+use crate::Treefile;
 
 const RPMOSTREE_EXTENSIONS_STATE_FILE: &str = ".rpm-ostree-state-chksum";
 
@@ -151,6 +153,19 @@ impl Extensions {
             })
             .context("while serializing")?)
     }
+
+    /// Create a treefile representing just what needs to be installed for extensions.
+    pub(crate) fn generate_treefile(&self, src: &Treefile) -> CxxResult<Box<Treefile>> {
+        let mut repos = src.parsed.repos.clone().unwrap_or_default();
+        repos.extend(self.repos.iter().flatten().map(|s| s.clone()));
+        let ret = TreeComposeConfig {
+            repos: Some(repos),
+            packages: Some(self.get_os_extension_packages()),
+            releasever: src.parsed.releasever.clone(),
+            ..Default::default()
+        };
+        Ok(Box::new(Treefile::new_from_config(ret, None)?))
+    }
 }
 
 #[cfg(test)]
@@ -185,6 +200,32 @@ extensions:
         assert!(extensions.get_repos() == vec!["my-repo"]);
         assert!(extensions.get_os_extension_packages() == vec!["bazboo"]);
         assert!(extensions.get_development_packages().is_empty());
+
+        let src_tf =
+            crate::Treefile::new_from_string(crate::treefile::tests::VALID_PRELUDE_JS).unwrap();
+        let tf = extensions.generate_treefile(&src_tf).unwrap();
+
+        assert_ne!(src_tf.parsed, tf.parsed);
+
+        let allrepos: Vec<_> = tf
+            .parsed
+            .repos
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        // rpm-md repos are unioned
+        assert_eq!(allrepos, vec!["baserepo", "my-repo"]);
+        // packages are reset to just extension packages
+        assert_eq!(tf.parsed.packages.as_ref().unwrap().len(), 1);
+        assert_eq!(
+            tf.parsed.packages.iter().flatten().next().unwrap(),
+            "bazboo"
+        );
+        // Other bits shouldn't be there.
+        assert!(src_tf.parsed.treeref.is_some());
+        assert!(tf.parsed.treeref.is_none());
     }
 
     #[test]
