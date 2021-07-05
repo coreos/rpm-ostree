@@ -216,7 +216,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
-  add_canonicalized_string_array (&builder, "exclude-packages", NULL, keyfile);
 
   /* We allow the "repos" key to be missing. This means that we rely on libdnf's
    * normal behaviour (i.e. look at repos in repodir with enabled=1). */
@@ -1901,18 +1900,16 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   // We take package lists from both the legacy treespec and the treefile for now.
   rust::Vec<rust::String> packages = get_requested_packages (self);
 
-  g_autofree char **exclude_packages = NULL;
-  g_variant_dict_lookup (self->spec->dict, "exclude-packages",
-                         "^a&s", &exclude_packages);
-
   rust::Vec<rust::String> packages_local;
   rust::Vec<rust::String> packages_override_replace_local;
   rust::Vec<rust::String> packages_override_remove;
+  rust::Vec<rust::String> exclude_packages;
   if (self->treefile_rs)
     {
       packages_local = self->treefile_rs->get_packages_local();
       packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local();
       packages_override_remove = self->treefile_rs->get_packages_override_remove();
+      exclude_packages = self->treefile_rs->get_exclude_packages ();
 
       /* we only support pure installs for now (compose case) */
       if (self->lockfile)
@@ -2069,11 +2066,10 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     }
 
   /* Process excludes */
-  for (char **iter = exclude_packages; iter && *iter; iter++)
+  for (auto &pkgname: exclude_packages)
     {
-      const char *pkgname = *iter;
       hy_autoquery HyQuery query = hy_query_create (sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname.c_str());
       DnfPackageSet *pset = hy_query_run_set (query);
       dnf_sack_add_excludes (sack, pset);
       dnf_packageset_free (pset);
