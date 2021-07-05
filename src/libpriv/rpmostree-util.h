@@ -91,6 +91,15 @@ ruststr_or_empty (const char *c_str) {
   return rust::Str(c_str ?: "");
 }
 
+// Copy convert a NULL-terminated C string array to a Rust vector of owned strings.
+static inline rust::Vec<rust::String>
+rust_stringvec_from_strv(const char *const*strv) {
+  rust::Vec<rust::String> ret;
+  for (const char *const*it = strv; it && *it; it++)
+    ret.push_back(*it);
+  return ret;
+}
+
 }
 
 namespace rpmostreecxx {

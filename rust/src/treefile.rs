@@ -20,7 +20,7 @@
  */
 
 use crate::cxxrsutil::*;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use c_utf8::CUtf8Buf;
 use nix::unistd::{Gid, Uid};
 use openat_ext::OpenatDirExt;
@@ -1436,6 +1436,11 @@ pub(crate) mod tests {
     "#};
 
     #[test]
+    fn from_string() {
+        let _ = Treefile::new_from_string("{}").unwrap();
+    }
+
+    #[test]
     fn basic_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
         let mut treefile =
@@ -2010,7 +2015,12 @@ pub(crate) fn treefile_new(
 
 /// Create a new treefile from a string.
 pub(crate) fn treefile_new_from_string(buf: &str) -> CxxResult<Box<Treefile>> {
-    Ok(Treefile::new_from_string(buf)?)
+    Ok(Treefile::new_from_string(buf).context("Parsing treefile from string")?)
+}
+
+/// Create a new empty treefile.
+pub(crate) fn treefile_new_empty() -> CxxResult<Box<Treefile>> {
+    Ok(Treefile::new_from_string("{}")?)
 }
 
 /// Create a new treefile, returning an error if any (currently) client-side options are set.
