@@ -128,6 +128,11 @@ pub mod ffi {
         fn cliwrap_destdir() -> String;
     }
 
+    // sysroot_upgrade.rs
+    extern "Rust" {
+        fn import_container(sysroot: Pin<&mut OstreeSysroot>, imgref: String) -> Result<String>;
+    }
+
     // core.rs
     extern "Rust" {
         type TempEtcGuard;
@@ -140,6 +145,8 @@ pub mod ffi {
         fn undo(self: &FilesystemScriptPrep) -> Result<()>;
 
         fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Result<()>;
+
+        fn is_container_image_reference(refspec: &str) -> bool;
     }
 
     // composepost.rs
@@ -600,6 +607,8 @@ pub(crate) use self::console_progress::*;
 mod progress;
 mod scripts;
 pub(crate) use self::scripts::*;
+mod sysroot_upgrade;
+pub(crate) use crate::sysroot_upgrade::*;
 mod rpmutils;
 pub(crate) use self::rpmutils::*;
 mod testutils;

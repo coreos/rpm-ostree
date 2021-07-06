@@ -443,6 +443,16 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
 
   switch (refspec_type)
     {
+    case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+      {
+        if (override_commit)
+          return glnx_throw (error, "Specifying commit overrides for container-image-reference type refspecs is not supported");
+
+        auto commit = rpmostreecxx::import_container(*self->sysroot, std::string(refspec));
+
+        new_base_rev = strdup (commit.c_str());
+        break;
+      }
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {

@@ -1,0 +1,78 @@
+#!/bin/bash
+#
+# Copyright (C) 2021 Red Hat, Inc.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+set -x
+
+libtest_prepare_offline
+cd $(mktemp -d)
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+  "")
+    # Test rebase
+    checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    rpm-ostree ex-container export --repo=/ostree/repo ${checksum} containers-storage:localhost/fcos
+    rpm-ostree rebase containers-storage:localhost/fcos:latest --experimental
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"containers-storage:localhost/fcos:latest\""
+    rpmostree_assert_status ".deployments[0][\"checksum\"] == \"${checksum}\""
+    echo "ok rebase to container image reference"
+
+    /tmp/autopkgtest-reboot 1
+    ;;
+  1)
+    if rpm-ostree deploy 42 2>err.txt; then
+        fatal "unexpectedly deployed version from container image reference"
+    fi
+    assert_file_has_content err.txt 'Cannot look up version while tracking a container image reference'
+    echo "ok cannot deploy when tracking container image"
+
+    # Test layering
+    if rpm -q foo 2>/dev/null; then
+      fatal "found foo"
+    fi
+    rpm-ostree install ${KOLA_EXT_DATA}/rpm-repos/0/packages/x86_64/foo-1.2-3.x86_64.rpm
+    echo "ok layering package"
+
+    # Test upgrade
+    rpm-ostree upgrade > out.txt;
+    assert_file_has_content out.txt "No upgrade available."
+    echo "ok no upgrade available"
+
+    # Create a new ostree commit containing foo and export the commit as a container image
+    with_foo_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    ostree refs ${with_foo_commit} --create vmcheck_tmp/new_update
+    new_commit=$(ostree commit -b vmcheck --tree=ref=vmcheck_tmp/new_update)
+    rpm-ostree ex-container export --repo=/ostree/repo ${new_commit} containers-storage:localhost/fcos
+
+    rpm-ostree uninstall foo
+    rpm-ostree upgrade
+    rpmostree_assert_status ".deployments[0][\"checksum\"] == \"${new_commit}\""
+
+    /tmp/autopkgtest-reboot 2
+    ;;
+  2)
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"containers-storage:localhost/fcos:latest\""
+    assert_streq $(rpm -q foo) foo-1.2-3.x86_64
+    echo "ok upgrade"
+    ;;
+  *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac

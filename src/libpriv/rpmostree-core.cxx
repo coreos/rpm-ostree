@@ -59,6 +59,12 @@ rpmostree_refspec_classify (const char *refspec,
                             RpmOstreeRefspecType *out_type,
                             GError     **error)
 {
+  if (rpmostreecxx::is_container_image_reference(refspec))
+    {
+      *out_type = RPMOSTREE_REFSPEC_TYPE_CONTAINER;
+      return TRUE;
+    }
+
   /* Fall back to TYPE_OSTREE if we cannot infer type */
   *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
   if (ostree_validate_checksum_string (refspec, NULL))
