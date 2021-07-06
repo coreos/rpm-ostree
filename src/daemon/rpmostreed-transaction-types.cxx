@@ -59,9 +59,37 @@ change_origin_refspec (GVariantDict    *options,
                        gchar **out_new_refspec,
                        GError **error)
 {
+  RpmOstreeRefspecType refspectype;
+  if (!rpmostree_refspec_classify (refspec, &refspectype, error))
+    return FALSE;
+
   RpmOstreeRefspecType current_refspectype;
   g_autofree gchar *current_refspec = rpmostree_origin_get_full_refspec (origin, &current_refspectype);
-  
+
+  switch (refspectype)
+    {
+      case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+        {
+          if (!rpmostree_origin_set_rebase (origin, refspec, error))
+            return FALSE;
+
+          if (current_refspectype == RPMOSTREE_REFSPEC_TYPE_CONTAINER
+              && strcmp (current_refspec, refspec) == 0)
+            return glnx_throw (error, "Old and new refs are equal: %s", refspec);
+
+          if (out_old_refspec != NULL)
+            *out_old_refspec = util::move_nullify (current_refspec);
+          if (out_new_refspec != NULL)
+            *out_new_refspec = g_strdup (refspec);
+          return TRUE;
+        }
+      case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+        break;
+      case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
+        break;
+    }
+
+  /* The rest of the code assumes TYPE_OSTREE refspec */
   g_autofree gchar *new_refspec = NULL;
   if (!rpmostreed_refspec_parse_partial (refspec,
                                          current_refspec,
@@ -151,6 +179,11 @@ apply_revision_override (RpmostreedTransaction    *transaction,
   if (refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
     return glnx_throw (error, "Cannot look up version while pinned to commit");
 
+  if (refspectype == RPMOSTREE_REFSPEC_TYPE_CONTAINER)
+    /* NB: Not supported for now, but We can perhaps support this if we allow `revision` to
+     * possibly be a tag or digest */
+    return glnx_throw (error, "Cannot look up version while tracking a container image reference");
+
   g_autofree char *checksum = NULL;
   g_autofree char *version = NULL;
   if (!rpmostreed_parse_revision (revision, &checksum, &version, error))
@@ -160,6 +193,8 @@ apply_revision_override (RpmostreedTransaction    *transaction,
     {
       switch (refspectype)
         {
+        case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+          g_assert_not_reached ();  /* Handled above */
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
           {
             /* Perhaps down the line we'll drive history traversal into libostree */
@@ -183,6 +218,8 @@ apply_revision_override (RpmostreedTransaction    *transaction,
 
       switch (refspectype)
         {
+        case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+          g_assert_not_reached ();  /* Handled above */
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
           if (!skip_branch_check)
             {

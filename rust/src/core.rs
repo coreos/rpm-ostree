@@ -77,6 +77,16 @@ pub(crate) fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Cxx
     Ok(())
 }
 
+/// Infer whether refspec is a ctonainer image reference.
+pub(crate) fn is_container_image_reference(refspec: &str) -> bool {
+    // Currently, we are simply relying on the fact that there cannot be multiple colons
+    // or the `@` symbol in TYPE_OSTREE or TYPE_COMMIT refspecs. We may want a more robust
+    // and reliable way of determining the refspec type in the future, as some container
+    // transports may possibly not contain colons.
+    // https://github.com/coreos/rpm-ostree/issues/2909#issuecomment-868151689
+    refspec.split(':').nth(2).is_some() || refspec.contains('@')
+}
+
 /// Perform reversible filesystem transformations necessary before we execute scripts.
 pub(crate) struct FilesystemScriptPrep {
     rootfs: openat::Dir,
@@ -172,6 +182,36 @@ mod test {
             assert_eq!(contents, original_systemctl);
             assert!(d.exists(super::SSS_CACHE_PATH)?);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_is_container_image_reference() -> Result<()> {
+        use super::is_container_image_reference;
+
+        let refspec_type_checksum =
+            "ee10f8e7ef638d78ba9a9596665067f58021624118875cc4079568da6c63efb0";
+        assert!(!is_container_image_reference(refspec_type_checksum));
+
+        let refspec_type_ostree_with_remote = "fedora:fedora/x86_64/coreos/testing-devel";
+        assert!(!is_container_image_reference(
+            refspec_type_ostree_with_remote
+        ));
+        let refspec_type_ostree = "fedora/x86_64/coreos/foo-branch";
+        assert!(!is_container_image_reference(refspec_type_ostree));
+
+        const REFSPEC_TYPE_CONTAINER: &[&str] = &[
+            "containers-storage:localhost/fcos:latest",
+            "docker://quay.io/test-repository/os:version1",
+            "registry:docker.io/test-repository/os:latest",
+            "registry:customhostname.com:8080/test-repository/os:latest",
+            "docker://quay.io/test-repository/os@sha256:6006dca86c2dc549c123ff4f1dcbe60105fb05886531c93a3351ebe81dbe772f",
+        ];
+
+        for refspec in REFSPEC_TYPE_CONTAINER {
+            assert!(is_container_image_reference(refspec));
+        }
+
         Ok(())
     }
 }

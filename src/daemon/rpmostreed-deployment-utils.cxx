@@ -253,6 +253,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   RpmOstreeRefspecType refspec_type;
   g_autofree char *refspec = rpmostree_origin_get_full_refspec (origin, &refspec_type);
+  g_assert (refspec);
 
   gboolean is_layered = FALSE;
   g_autofree char *base_checksum = NULL;
@@ -301,8 +302,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   switch (refspec_type)
     {
+    case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+      g_variant_dict_insert (dict, "container-image-reference", "s", refspec);
+      break;
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
       {
+        g_variant_dict_insert (dict, "origin", "s", refspec);
         g_autofree char *custom_origin_url = NULL;
         g_autofree char *custom_origin_description = NULL;
         rpmostree_origin_get_custom_description (origin, &custom_origin_url,
@@ -315,6 +320,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       break;
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
+        g_variant_dict_insert (dict, "origin", "s", refspec);
         if (!variant_add_remote_status (repo, refspec, base_checksum, dict, error))
           return NULL;
 
@@ -338,9 +344,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       }
       break;
     }
-
-  if (refspec)
-    g_variant_dict_insert (dict, "origin", "s", refspec);
 
   variant_add_from_hash_table (dict, "requested-packages",
                                rpmostree_origin_get_packages (origin));

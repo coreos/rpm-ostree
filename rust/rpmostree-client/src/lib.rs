@@ -53,7 +53,8 @@ pub struct Deployment {
     pub staged: Option<bool>,
     pub booted: bool,
     pub serial: u32,
-    pub origin: String,
+    pub origin: Option<String>,
+    pub container_image_reference: Option<String>,
     pub version: Option<String>,
 }
 

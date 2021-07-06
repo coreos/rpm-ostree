@@ -115,23 +115,47 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 
   ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
-  g_autofree char *refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
-  if (!refspec)
+  /* Note that the refspec type can be inferred from the key in the orgin file, where
+   * the `RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY` and `RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY` keys
+   * may correspond to either TYPE_OSTREE or TYPE_CHECKSUM (further classification is required), and 
+   * `RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY` always only corresponds to TYPE_CONTAINER. */
+  g_autofree char *ost_refspec = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
+  g_autofree char *imgref = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
+  if (!ost_refspec)
     {
-      refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
-      if (!refspec)
-        return (RpmOstreeOrigin *)glnx_null_throw (error, "No origin/refspec, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
+      /* See if ostree refspec is baserefspec. */
+      ost_refspec = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL);
+      if (!ost_refspec && !imgref)
+        return (RpmOstreeOrigin *)glnx_null_throw (error, 
+                                                   "No origin/%s, origin/%s, or origin/%s "
+                                                   "in current deployment origin; cannot handle via rpm-ostree",
+                                                   RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY,
+                                                   RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
+                                                   RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY);
     }
-
-  if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, error))
-    return FALSE;
-  /* Note the lack of a prefix here so that code that just calls
-   * rpmostree_origin_get_refspec() in the ostree:// case
-   * sees it without the prefix for compatibility.
-   */
-  ret->cached_refspec = util::move_nullify (refspec);
-  ret->cached_override_commit =
-    g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
+  if (ost_refspec && imgref)
+    {
+      return (RpmOstreeOrigin *)glnx_null_throw (error,
+                                                "Refspec expressed by multiple keys in deployment origin");
+    }
+  else if (ost_refspec)
+    {
+      /* Classify to distinguish between TYPE_CHECKSUM and TYPE_OSTREE */
+      if (!rpmostree_refspec_classify (ost_refspec, &ret->refspec_type, error))
+        return FALSE;
+      ret->cached_refspec = util::move_nullify (ost_refspec);
+      ret->cached_override_commit =
+        g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
+    }
+  else if (imgref)
+    {
+      ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_CONTAINER;
+      ret->cached_refspec = util::move_nullify (imgref);
+    }
+  else
+    {
+      g_assert_not_reached ();
+    }
 
   if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE,
                             ret->cached_packages, error))
@@ -499,8 +523,8 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
     }
 
    /* We don't want to carry any commit overrides or version pinning during a
-   * rebase by default.
-   */
+    * rebase by default.
+    */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
 
   /* See related code in rpmostree_origin_parse_keyfile() */
@@ -508,14 +532,21 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
     return FALSE;
   g_free (origin->cached_refspec);
   origin->cached_refspec = g_strdup (new_refspec);
+  /* Note the following sets different keys depending on the type of refspec; 
+   * TYPE_OSTREE and TYPE_CHECKSUM may set either `RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY`
+   * or `RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY`, while TYPE_CONTAINER will set the 
+   * `RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY` key. */
   switch (origin->refspec_type)
     {
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
+        /* Remove `TYPE_CONTAINER`-related keys */
+        g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
+
         const char *refspec_key =
-          g_key_file_has_key (origin->kf, "origin", "baserefspec", NULL) ?
-          "baserefspec" : "refspec";
+          g_key_file_has_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL) ?
+          RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY : RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY;
         g_key_file_set_string (origin->kf, "origin", refspec_key, origin->cached_refspec);
         if (!custom_origin_url)
           {
@@ -532,6 +563,18 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
           }
       }
       break;
+    case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+      {
+        /* Remove `TYPE_OSTREE` and `TYPE_CHECKSUM`-related keys */
+        g_assert (!custom_origin_url);
+        g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
+        g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL);
+        g_key_file_remove_key (origin->kf, "origin", "custom-url", NULL);
+        g_key_file_remove_key (origin->kf, "origin", "custom-description", NULL);
+
+        g_key_file_set_string (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, origin->cached_refspec);
+      }
+      break;
     }
 
   return TRUE;
@@ -545,23 +588,28 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
   return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL, error);
 }
 
-// Switch to `baserefspec` when changing the origin
-// to something core ostree doesnt't understand, i.e.
-// when `ostree admin upgrade` would no longer do the right thing.
+/* If necessary, switch to `baserefspec` when changing the origin
+ * to something core ostree doesnt't understand, i.e.
+ * when `ostree admin upgrade` would no longer do the right thing. */
 static void
 sync_baserefspec (RpmOstreeOrigin *origin)
 {
+  /* If we're based on a container image reference, this is not necessary since
+   * `ostree admin upgrade` won't work regardless of whether or not packages are
+   * layered. Though this may change in the future. */
+  if (origin->refspec_type == RPMOSTREE_REFSPEC_TYPE_CONTAINER)
+    return;
   if (rpmostree_origin_may_require_local_assembly (origin))
     {
-      g_key_file_set_value (origin->kf, "origin", "baserefspec",
+      g_key_file_set_value (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
                             origin->cached_refspec);
-      g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
+      g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
     }
   else
     {
-      g_key_file_set_value (origin->kf, "origin", "refspec",
+      g_key_file_set_value (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY,
                             origin->cached_refspec);
-      g_key_file_remove_key (origin->kf, "origin", "baserefspec", NULL);
+      g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL);
     }
 }
 

@@ -559,6 +559,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
     return TRUE;
 
   const gchar *origin_refspec;
+  RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
   g_autofree const gchar **origin_packages = NULL;
   g_autofree const gchar **origin_requested_packages = NULL;
   g_autofree const gchar **origin_requested_local_packages = NULL;
@@ -566,7 +567,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_autofree const gchar **origin_requested_base_removals = NULL;
   g_autoptr(GVariant) origin_base_local_replacements = NULL;
   g_autofree const gchar **origin_requested_base_local_replacements = NULL;
-  if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
+  if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec) ||
+      g_variant_dict_lookup (dict, "container-image-reference", "&s", &origin_refspec))
     {
       origin_packages =
         lookup_array_and_canonicalize (dict, "packages");
@@ -606,7 +608,6 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
 
   g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
 
-  RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
   const char *custom_origin_url = NULL;
   const char *custom_origin_description = NULL;
   if (origin_refspec)
@@ -637,6 +638,11 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
             g_print ("%s", origin_refspec);
           }
           break;
+        case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+          {
+            g_print ("%s", origin_refspec);
+          }
+         break;
         }
     }
   else

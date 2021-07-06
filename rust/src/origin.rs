@@ -32,11 +32,14 @@ fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     let mut cfg: crate::treefile::TreeComposeConfig = Default::default();
     let refspec_str = if let Some(r) = keyfile_get_optional_string(&kf, ORIGIN, "refspec")? {
         Some(r)
+    } else if let Some(r) = keyfile_get_optional_string(&kf, ORIGIN, "baserefspec")? {
+        Some(r)
     } else {
-        keyfile_get_optional_string(&kf, ORIGIN, "baserefspec")?
+        keyfile_get_optional_string(&kf, ORIGIN, "container-image-reference")?
     };
-    let refspec_str = refspec_str
-        .ok_or_else(|| anyhow::anyhow!("Failed to find refspec/baserefspec in origin"))?;
+    let refspec_str = refspec_str.ok_or_else(|| {
+        anyhow::anyhow!("Failed to find refspec/baserefspec/container-image-reference in origin")
+    })?;
     cfg.derive.base_refspec = Some(refspec_str);
     cfg.packages = parse_stringlist(&kf, PACKAGES, "requested")?;
     cfg.derive.packages_local = parse_localpkglist(&kf, PACKAGES, "requested-local")?;

@@ -59,7 +59,12 @@ G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, G
 typedef enum {
   RPMOSTREE_REFSPEC_TYPE_OSTREE,
   RPMOSTREE_REFSPEC_TYPE_CHECKSUM,
+  RPMOSTREE_REFSPEC_TYPE_CONTAINER,
 } RpmOstreeRefspecType;
+
+#define RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY "refspec"
+#define RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY "baserefspec"
+#define RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY "container-image-reference"
 
 gboolean rpmostree_refspec_classify (const char *refspec,
                                      RpmOstreeRefspecType *out_type,
