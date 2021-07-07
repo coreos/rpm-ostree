@@ -325,16 +325,15 @@ set_rpm_macro_define (const char *key, const char *value)
   free (rpmExpand (buf, NULL));
 }
 
-/* Create a context intended for use "client side", e.g. for package layering
- * operations.
+/* Low level API to create a context.  Avoid this in preference
+ * to creating a client or compose context unless necessary.
  */
 RpmOstreeContext *
-rpmostree_context_new_client (OstreeRepo   *repo)
+rpmostree_context_new_base (OstreeRepo   *repo)
 {
   g_assert (repo != NULL);
 
   auto self = static_cast<RpmOstreeContext*>(g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL));
-  self->is_system = TRUE;
   self->ostreerepo = static_cast<OstreeRepo*>(g_object_ref (repo));
 
   /* We can always be control-c'd at any time; this is new API,
@@ -377,6 +376,17 @@ rpmostree_context_new_client (OstreeRepo   *repo)
   return self;
 }
 
+/* Create a context intended for use "client side", e.g. for package layering
+ * operations.
+ */
+RpmOstreeContext *
+rpmostree_context_new_client (OstreeRepo   *repo)
+{
+  auto ret = rpmostree_context_new_base (repo);
+  ret->is_system = TRUE;
+  return ret;
+}
+
 /* Create a context that assembles a new filesystem tree, possibly without root
  * privileges. Some behavioral distinctions are made by looking at the undelying
  * OstreeRepoMode.  In particular, an OSTREE_REPO_MODE_BARE_USER_ONLY repo
@@ -387,26 +397,11 @@ rpmostree_context_new_compose (int               userroot_dfd,
                                OstreeRepo       *repo,
                                rpmostreecxx::Treefile &treefile_rs)
 {
-  /* Inherit the client baseline, but flip it back to be a "compose" context */
-  auto ret = rpmostree_context_new_client (repo);
-  ret->is_system = FALSE;
+  auto ret = rpmostree_context_new_base (repo);
+  /* Compose contexts always have a treefile */
   ret->treefile_rs = &treefile_rs;
 
-  { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
-    dnf_context_set_repo_dir (ret->dnfctx, reposdir);
-  }
-  { const char *cache_rpmmd = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_REPOMD);
-    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_rpmmd);
-    dnf_context_set_cache_dir (ret->dnfctx, cachedir);
-  }
-  { const char *cache_solv = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_SOLV);
-    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_solv);
-    dnf_context_set_solv_dir (ret->dnfctx, cachedir);
-  }
-  { const char *lock = glnx_strjoina ("cache/", RPMOSTREE_DIR_LOCK);
-    g_autofree char *lockdir = glnx_fdrel_abspath (userroot_dfd, lock);
-    dnf_context_set_lock_dir (ret->dnfctx, lockdir);
-  }
+  rpmostree_context_set_cache_root (ret, userroot_dfd);
 
   // The ref needs special handling as it gets variable-substituted.
   auto ref = ret->treefile_rs->get_ref();
@@ -418,6 +413,28 @@ rpmostree_context_new_compose (int               userroot_dfd,
     }
 
   return util::move_nullify (ret);
+}
+
+/* Set the cache directories to be rooted below the provided directory file descriptor. */
+void
+rpmostree_context_set_cache_root (RpmOstreeContext *self,
+                                  int               userroot_dfd)
+{
+  { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
+    dnf_context_set_repo_dir (self->dnfctx, reposdir);
+  }
+  { const char *cache_rpmmd = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_REPOMD);
+    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_rpmmd);
+    dnf_context_set_cache_dir (self->dnfctx, cachedir);
+  }
+  { const char *cache_solv = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_SOLV);
+    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_solv);
+    dnf_context_set_solv_dir (self->dnfctx, cachedir);
+  }
+  { const char *lock = glnx_strjoina ("cache/", RPMOSTREE_DIR_LOCK);
+    g_autofree char *lockdir = glnx_fdrel_abspath (userroot_dfd, lock);
+    dnf_context_set_lock_dir (self->dnfctx, lockdir);
+  }
 }
 
 static gboolean
