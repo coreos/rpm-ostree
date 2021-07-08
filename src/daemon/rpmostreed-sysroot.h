@@ -64,6 +64,10 @@ void                rpmostreed_sysroot_finish_txn (RpmostreedSysroot     *self,
 void                rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
                                                 RpmostreedTransaction *txn);
 
+void                rpmostreed_sysroot_set_txn_and_title (RpmostreedSysroot     *self,
+                                                          RpmostreedTransaction *txn,
+                                                          const char            *title);
+
 void                rpmostreed_sysroot_emit_update      (RpmostreedSysroot *self);
 
 G_END_DECLS

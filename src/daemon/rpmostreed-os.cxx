@@ -511,8 +511,7 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "package-diff");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
 
   /* Make sure we refresh CachedUpdate after the transaction. This normally happens
    * automatically if new data was downloaded (through the repo mtime bump --> UPDATED
@@ -608,8 +607,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
        * "new-deployment" for now so that at least we don't print a spurious "null" transaction
        * if a new transaction is attempted before this transaction actually executes.
        * The proper transaction title will be updated later in the path. */
-      rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "new-deployment");
-      rpmostreed_sysroot_set_txn (rsysroot, transaction);
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "new-deployment");
 
       /* For the AutomaticUpdateTrigger "check" case, we want to make sure we refresh
        * the CachedUpdate property; "stage" will do this through sysroot_changed */
@@ -872,8 +870,7 @@ os_handle_rollback (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "rollback");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "rollback");
 
 out:
   if (local_error != NULL)
@@ -940,8 +937,7 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
 
   if (force)
     g_string_append (title, " (force)");
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, title->str);
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, title->str);
 
 out:
   if (local_error != NULL)
@@ -995,8 +991,7 @@ os_handle_modify_yum_repo (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "modify-yum-repo");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "modify-yum-repo");
 
 out:
   if (local_error != NULL)
@@ -1043,10 +1038,9 @@ os_handle_finalize_deployment (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction,
-                                   g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
-                                   command_line : "kargs");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, 
+                                        g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
+                                        command_line : "finalize-deployment");
 
 out:
   if (local_error != NULL)
@@ -1099,7 +1093,7 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "clear-rollback");
 
 out:
   if (local_error != NULL)
@@ -1160,10 +1154,9 @@ os_handle_initramfs_etc (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction,
-                                   g_variant_lookup (options, "initiating-command-line", "&s", &command_line) ?
-                                   command_line : "initramfs-etc");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction,
+                                        g_variant_lookup (options, "initiating-command-line", "&s", &command_line) ?
+                                        command_line : "initramfs-etc");
 
 out:
   if (local_error != NULL)
@@ -1221,10 +1214,9 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction,
-                                    g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
-                                    command_line : "initramfs");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction,
+                                        g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
+                                        command_line : "initramfs");
 
 out:
   if (local_error != NULL)
@@ -1285,10 +1277,9 @@ os_handle_kernel_args (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction,
-                                   g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
-                                   command_line : "kargs");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction,
+                                        g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
+                                        command_line : "kargs");
 
 out:
   if (local_error != NULL)
@@ -1449,8 +1440,7 @@ os_handle_cleanup (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "cleanup");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "cleanup");
 
 out:
   if (local_error != NULL)
@@ -1575,8 +1565,7 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "package-diff");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
 
 out:
   if (local_error != NULL)
@@ -1716,8 +1705,7 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "package-diff");
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
 
 out:
   if (local_error != NULL)
