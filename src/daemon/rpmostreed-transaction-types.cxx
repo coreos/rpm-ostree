@@ -459,8 +459,6 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "rollback");
-
   g_autoptr(OstreeDeployment) pending_deployment = NULL;
   g_autoptr(OstreeDeployment) rollback_deployment = NULL;
   ostree_sysroot_query_deployments_for (sysroot, self->osname,
@@ -1881,8 +1879,6 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
   auto command_line = (const char *)
     vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "initramfs-etc");
-
   int upgrader_flags = 0;
   if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
@@ -2039,8 +2035,6 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   auto command_line = (const char*)
     vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
-
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "initramfs");
 
   int upgrader_flags = 0;
   if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
@@ -2207,8 +2201,6 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
   const gboolean cleanup_pending = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY) > 0;
   const gboolean cleanup_rollback = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY) > 0;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "cleanup");
-
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   g_autoptr(OstreeRepo) repo = NULL;
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
@@ -2331,11 +2323,6 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
   const gboolean force = ((self->flags & RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE) > 0);
-
-  g_autoptr(GString) title = g_string_new ("refresh-md");
-  if (force)
-    g_string_append (title, " (force)");
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, title->str);
 
   g_autoptr(OstreeDeployment) cfg_merge_deployment =
     ostree_sysroot_get_merge_deployment (sysroot, self->osname);
@@ -2467,8 +2454,6 @@ modify_yum_repo_transaction_execute (RpmostreedTransaction *transaction,
   ModifyYumRepoTransaction *self = (ModifyYumRepoTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "modify-yum-repo");
-
   g_autoptr(OstreeDeployment) cfg_merge_deployment =
     ostree_sysroot_get_merge_deployment (sysroot, self->osname);
 
@@ -2598,11 +2583,6 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   FinalizeDeploymentTransaction *self = (FinalizeDeploymentTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
-    
-  auto command_line = (const char*)
-    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
-
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "finalize-deployment");
 
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   if (deployments->len == 0)
@@ -2748,8 +2728,6 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
   if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
-
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "kargs");
 
   /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
   g_autoptr(OstreeKernelArgs) kargs = ostree_kernel_args_from_string (self->existing_kernel_args);
