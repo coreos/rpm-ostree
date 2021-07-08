@@ -511,6 +511,7 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "package-diff");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
   /* Make sure we refresh CachedUpdate after the transaction. This normally happens
@@ -601,6 +602,13 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
       if (!transaction)
         goto err;
 
+      /* We should be able to loop through the options and determine the exact transaction
+       * title earlier in the path here as well, but that would duplicate a lot of the work that
+       * needs to happen anyway in `deploy_transaction_execute()`. Set the transaction title as
+       * "new-deployment" for now so that at least we don't print a spurious "null" transaction
+       * if a new transaction is attempted before this transaction actually executes.
+       * The proper transaction title will be updated later in the path. */
+      rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "new-deployment");
       rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
       /* For the AutomaticUpdateTrigger "check" case, we want to make sure we refresh
@@ -864,6 +872,7 @@ os_handle_rollback (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "rollback");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -891,6 +900,8 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
   const char *osname;
   GError *local_error = NULL;
   int flags = 0;
+  gboolean force = FALSE;
+  g_autoptr(GString) title = g_string_new ("refresh-md");
   g_auto(GVariantDict) dict;
   g_variant_dict_init (&dict, arg_options);
 
@@ -913,7 +924,10 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
 
 
   if (vardict_lookup_bool (&dict, "force", FALSE))
-    flags |= RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE;
+    {
+      flags |= RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE;
+      force = TRUE;
+    }
 
   transaction = rpmostreed_transaction_new_refresh_md (invocation,
                                                        ot_sysroot,
@@ -924,6 +938,9 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  if (force)
+    g_string_append (title, " (force)");
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, title->str);
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -978,6 +995,7 @@ os_handle_modify_yum_repo (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "modify-yum-repo");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -1004,6 +1022,7 @@ os_handle_finalize_deployment (RPMOSTreeOS *interface,
   g_autoptr(OstreeSysroot) sysroot = NULL;
   const char *osname;
   GError *local_error = NULL;
+  const char *command_line;
 
   /* try to merge with an existing transaction, otherwise start a new one */
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
@@ -1024,6 +1043,9 @@ os_handle_finalize_deployment (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction,
+                                   g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
+                                   command_line : "kargs");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -1106,6 +1128,7 @@ os_handle_initramfs_etc (RPMOSTreeOS *interface,
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
+  const char *command_line = NULL;
 
   /* try to merge with an existing transaction, otherwise start a new one */
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
@@ -1137,6 +1160,9 @@ os_handle_initramfs_etc (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction,
+                                   g_variant_lookup (options, "initiating-command-line", "&s", &command_line) ?
+                                   command_line : "initramfs-etc");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -1165,6 +1191,7 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface,
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
+  const char *command_line = NULL;
 
   /* try to merge with an existing transaction, otherwise start a new one */
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
@@ -1194,6 +1221,9 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction,
+                                    g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
+                                    command_line : "initramfs");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -1224,6 +1254,7 @@ os_handle_kernel_args (RPMOSTreeOS *interface,
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GError *local_error = NULL;
   const char *osname = NULL;
+  const char *command_line = NULL;
 
   /* try to merge with an existing transaction, otherwise start a new one */
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
@@ -1254,6 +1285,9 @@ os_handle_kernel_args (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction,
+                                   g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ?
+                                   command_line : "kargs");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -1415,6 +1449,7 @@ os_handle_cleanup (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "cleanup");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -1540,6 +1575,7 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "package-diff");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
@@ -1680,6 +1716,7 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)transaction, "package-diff");
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
