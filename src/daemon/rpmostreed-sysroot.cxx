@@ -909,6 +909,15 @@ rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
 }
 
 void
+rpmostreed_sysroot_set_txn_and_title (RpmostreedSysroot     *self,
+                                      RpmostreedTransaction *txn,
+                                      const char            *title)
+{
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)txn, title);
+  rpmostreed_sysroot_set_txn (self, txn);
+}
+
+void
 rpmostreed_sysroot_finish_txn (RpmostreedSysroot     *self,
                                RpmostreedTransaction *txn)
 {
