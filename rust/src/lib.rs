@@ -455,7 +455,7 @@ pub mod ffi {
     // origin.rs
     extern "Rust" {
         fn origin_to_treefile(kf: Pin<&mut GKeyFile>) -> Result<Box<Treefile>>;
-        fn origin_validate_roundtrip(mut kf: Pin<&mut GKeyFile>) -> Result<()>;
+        fn origin_validate_roundtrip(mut kf: Pin<&mut GKeyFile>);
     }
 
     // rpmutils.rs
