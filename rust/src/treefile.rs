@@ -40,9 +40,9 @@ use crate::utils;
 
 const INCLUDE_MAXDEPTH: u32 = 50;
 
-#[cfg(not(feature = "sqlite-rpmdb-default"))]
+#[cfg(feature = "bdb-rpmdb-default")]
 const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Bdb;
-#[cfg(feature = "sqlite-rpmdb-default")]
+#[cfg(not(feature = "bdb-rpmdb-default"))]
 const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Sqlite;
 
 /// Path to the flattened JSON serialization of the treefile, installed on the target (client)
