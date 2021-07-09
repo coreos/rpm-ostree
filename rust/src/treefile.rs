@@ -1062,6 +1062,8 @@ pub(crate) enum Include {
 /// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
 /// and https://fedoraproject.org/wiki/Changes/Sqlite_Rpmdb
 pub(crate) enum RpmdbBackend {
+    // We messed up the name originally, allow this for backcompat.  xref https://github.com/openshift/os/issues/552
+    #[serde(alias = "b-d-b")]
     Bdb,
     Sqlite,
     Ndb,
@@ -1584,11 +1586,13 @@ pub(crate) mod tests {
             boot-location: new
             default-target: bar
             automatic-version-prefix: baz
+            rpmdb: b-d-b
         "});
         assert!(treefile.gpg_key.unwrap() == "foo");
         assert!(treefile.boot_location.unwrap() == BootLocation::New);
         assert!(treefile.default_target.unwrap() == "bar");
         assert!(treefile.automatic_version_prefix.unwrap() == "baz");
+        assert!(treefile.rpmdb.unwrap() == RpmdbBackend::Bdb);
     }
 
     #[test]
