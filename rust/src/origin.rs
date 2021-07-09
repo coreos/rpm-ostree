@@ -30,11 +30,6 @@ static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
 
 #[context("Parsing origin")]
 fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
-    // First thing here, we remove libostree-transient bits, as those should
-    // never carry over into new origins, and we don't actually operate on those
-    // fields.
-    ostree::Deployment::origin_remove_transient_state(kf);
-
     let mut cfg: crate::treefile::TreeComposeConfig = Default::default();
     let refspec_str = if let Some(r) = keyfile_get_optional_string(&kf, ORIGIN, "refspec")? {
         Some(r)
@@ -224,6 +219,13 @@ fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
 }
 
 fn origin_validate_roundtrip_inner(kf: &glib::KeyFile) -> Result<()> {
+    // Make a copy of our input so we can remove the transient fields.
+    let kf_copy = glib::KeyFile::new();
+    kf_copy.load_from_data(kf.to_data().as_str(), glib::KeyFileFlags::NONE)?;
+    let kf = kf_copy;
+    // We don't translate transient fields
+    drop(kf.remove_group("libostree-transient"));
+
     let tf = origin_to_treefile_inner(&kf)?;
     let newkf = treefile_to_origin_inner(&tf)?;
     // Compare the two origin keyfiles.  This is the core check.
@@ -381,6 +383,13 @@ mod test {
         let pkgs = tf.parsed.packages.as_ref().unwrap();
         assert_eq!(pkgs.len(), 3);
         assert_eq!(pkgs[1], "libvirt");
+
+        let kf = kf_from_str(COMPLEX)?;
+        let tf = origin_to_treefile_inner(&kf)?;
+        assert_eq!(
+            tf.parsed.derive.override_commit.unwrap(),
+            "41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3"
+        );
         Ok(())
     }
 
