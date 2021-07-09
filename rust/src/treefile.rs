@@ -681,6 +681,17 @@ impl Treefile {
         s.to_string()
     }
 
+    /// Error out if the default is sqlite, but something else is configured.
+    /// xref https://bugzilla.redhat.com/show_bug.cgi?id=1938928
+    pub(crate) fn validate_rpmdb(&self) -> CxxResult<()> {
+        if let Some(rpmdb) = self.parsed.rpmdb.as_ref() {
+            if DEFAULT_RPMDB_BACKEND == RpmdbBackend::Sqlite && *rpmdb != DEFAULT_RPMDB_BACKEND {
+                return Err(anyhow!("Cannot write rpmdb backend: {:?}", rpmdb).into());
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn get_files_remove_regex(&self, package: &str) -> Vec<String> {
         let mut files_to_remove: Vec<String> = Vec::new();
         if let Some(ref packages) = self.parsed.remove_from_packages {

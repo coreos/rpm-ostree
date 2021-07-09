@@ -401,6 +401,9 @@ rpmostree_context_new_compose (int               userroot_dfd,
   /* Compose contexts always have a treefile */
   ret->treefile_rs = &treefile_rs;
 
+  // Check this early
+  ret->treefile_rs->validate_rpmdb();
+
   rpmostree_context_set_cache_root (ret, userroot_dfd);
 
   // The ref needs special handling as it gets variable-substituted.
@@ -780,6 +783,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
    */
   if (!self->is_system && self->treefile_rs)
     {
+      // See also validate_rpmdb() that we called early
       auto rpmdb_backend = self->treefile_rs->get_rpmdb();
       dnf_context_set_rpm_macro (self->dnfctx, "_db_backend", rpmdb_backend.c_str());
     }
