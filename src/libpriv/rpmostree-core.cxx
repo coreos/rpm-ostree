@@ -1089,6 +1089,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     }
   rpmostree_output_message ("%s", enabled_repos->str);
 
+  g_autoptr(GHashTable) updated_repos = g_hash_table_new (NULL, NULL);
   /* Update each repo individually, and print its timestamp, so users can keep
    * track of repo up-to-dateness more easily.
    */
@@ -1120,7 +1121,6 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
           cache_age = 0;
           break;
         }
-      gboolean did_update = FALSE;
       if (!dnf_repo_check(repo,
                           cache_age,
                           hifstate,
@@ -1135,17 +1135,11 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
           if (!dnf_repo_update (repo, DNF_REPO_UPDATE_FLAG_FORCE, hifstate, error))
             return glnx_prefix_error (error, "Updating rpm-md repo '%s'", dnf_repo_get_id (repo));
 
-          did_update = TRUE;
+          g_hash_table_add (updated_repos, repo);
 
           g_signal_handler_disconnect (hifstate, progress_sigid);
           progress->end("");
         }
-
-      guint64 ts = dnf_repo_get_timestamp_generated (repo);
-      g_autofree char *repo_ts_str = rpmostree_timestamp_str_from_unix_utc (ts);
-      rpmostree_output_message ("rpm-md repo '%s'%s; generated: %s",
-                                dnf_repo_get_id (repo), !did_update ? " (cached)" : "",
-                                repo_ts_str);
     }
 
   if (g_cancellable_set_error_if_cancelled (cancellable, error))
@@ -1183,6 +1177,18 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     rpmostree_get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
   for (guint i = 0; i < repos->len; i++)
     dnf_repo_set_module_hotfixes (static_cast<DnfRepo*>(repos->pdata[i]), TRUE);
+
+  // Print repo information
+  for (guint i = 0; i < repos->len; i++)
+    {
+      auto repo = static_cast<DnfRepo*>(repos->pdata[i]);
+      gboolean updated = g_hash_table_contains (updated_repos, repo);
+      guint64 ts = dnf_repo_get_timestamp_generated (repo);
+      g_autofree char *repo_ts_str = rpmostree_timestamp_str_from_unix_utc (ts);
+      rpmostree_output_message ("rpm-md repo '%s'%s; generated: %s solvables: %u",
+                                dnf_repo_get_id (repo), !updated ? " (cached)" : "",
+                                repo_ts_str, dnf_repo_get_n_solvables (repo));
+    }
 
   return TRUE;
 }
