@@ -651,9 +651,9 @@ dependencies = [
  "futures-io",
  "futures-util",
  "gio-sys",
- "glib",
- "glib-sys",
- "gobject-sys",
+ "glib 0.10.3",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "libc",
  "once_cell",
  "thiserror",
@@ -665,8 +665,8 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e24fb752f8f5d2cf6bbc2c606fd2bc989c81c5e2fe321ab974d54f8b6344eac"
 dependencies = [
- "glib-sys",
- "gobject-sys",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "libc",
  "system-deps 1.3.2",
  "winapi",
@@ -684,11 +684,30 @@ dependencies = [
  "futures-executor",
  "futures-task",
  "futures-util",
- "glib-macros",
- "glib-sys",
- "gobject-sys",
+ "glib-macros 0.10.1",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "libc",
  "once_cell",
+]
+
+[[package]]
+name = "glib"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbecad7a3a898ee749d491ce2ae0decb0bce9e736f9747bc49159b1cea5d37f4"
+dependencies = [
+ "bitflags",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-task",
+ "glib-macros 0.14.1",
+ "glib-sys 0.14.0",
+ "gobject-sys 0.14.0",
+ "libc",
+ "once_cell",
+ "smallvec",
 ]
 
 [[package]]
@@ -700,7 +719,22 @@ dependencies = [
  "anyhow",
  "heck",
  "itertools 0.9.0",
- "proc-macro-crate",
+ "proc-macro-crate 0.1.5",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "glib-macros"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2aad66361f66796bfc73f530c51ef123970eb895ffba991a234fcf7bea89e518"
+dependencies = [
+ "anyhow",
+ "heck",
+ "proc-macro-crate 1.0.0",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -718,14 +752,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "glib-sys"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c1d60554a212445e2a858e42a0e48cece1bd57b311a19a9468f70376cf554ae"
+dependencies = [
+ "libc",
+ "system-deps 3.1.2",
+]
+
+[[package]]
 name = "gobject-sys"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "952133b60c318a62bf82ee75b93acc7e84028a093e06b9e27981c2b6fe68218c"
 dependencies = [
- "glib-sys",
+ "glib-sys 0.10.1",
  "libc",
  "system-deps 1.3.2",
+]
+
+[[package]]
+name = "gobject-sys"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa92cae29759dae34ab5921d73fff5ad54b3d794ab842c117e36cafc7994c3f5"
+dependencies = [
+ "glib-sys 0.14.0",
+ "libc",
+ "system-deps 3.1.2",
 ]
 
 [[package]]
@@ -1008,7 +1063,7 @@ dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
- "glib",
+ "glib 0.14.2",
  "system-deps 3.1.2",
 ]
 
@@ -1342,9 +1397,9 @@ dependencies = [
  "bitflags",
  "gio",
  "gio-sys",
- "glib",
- "glib-sys",
- "gobject-sys",
+ "glib 0.10.3",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "hex",
  "libc",
  "once_cell",
@@ -1367,8 +1422,8 @@ dependencies = [
  "fn-error-context",
  "futures",
  "gio",
- "glib",
- "glib-sys",
+ "glib 0.10.3",
+ "glib-sys 0.10.1",
  "gvariant",
  "hex",
  "indicatif 0.15.0",
@@ -1398,8 +1453,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d9ea917750072931dd9c57e536f5c36422060603bd7e755beb74bf7be797564"
 dependencies = [
  "gio-sys",
- "glib-sys",
- "gobject-sys",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "libc",
  "system-deps 1.3.2",
 ]
@@ -1559,6 +1614,16 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6ea3c4595b96363c13943497db34af4460fb474a95c43f4446ad341b8c9785"
 dependencies = [
+ "toml",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41fdbd1df62156fbc5945f4762632564d7d038153091c3fcf1067f6aef7cff92"
+dependencies = [
+ "thiserror",
  "toml",
 ]
 
@@ -1867,9 +1932,9 @@ dependencies = [
  "futures",
  "gio",
  "gio-sys",
- "glib",
- "glib-sys",
- "gobject-sys",
+ "glib 0.14.2",
+ "glib-sys 0.10.1",
+ "gobject-sys 0.10.0",
  "indicatif 0.16.2",
  "indoc",
  "lazy_static",
