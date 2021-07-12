@@ -1233,11 +1233,17 @@ rpmostree_compose_builtin_install (int             argc,
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
-  if (!impl_install_tree (self, &changed, cancellable, error))
-    {
-      self->failed = TRUE;
-      return FALSE;
-    }
+  /* Need to handle both GError and C++ exceptions here */
+  try {
+    if (!impl_install_tree (self, &changed, cancellable, error))
+      {
+        self->failed = TRUE;
+        return FALSE;
+      }
+  } catch (std::exception &e) {
+    self->failed = TRUE;
+    throw;
+  }
   if (opt_unified_core)
     {
       if (!glnx_renameat (self->workdir_tmp.src_dfd, self->workdir_tmp.path,
@@ -1399,11 +1405,17 @@ rpmostree_compose_builtin_tree (int             argc,
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
-  if (!impl_install_tree (self, &changed, cancellable, error))
-    {
-      self->failed = TRUE;
-      return FALSE;
-    }
+  /* Need to handle both GError and C++ exceptions here */
+  try {
+    if (!impl_install_tree (self, &changed, cancellable, error))
+      {
+        self->failed = TRUE;
+        return FALSE;
+      }
+  } catch (std::exception &e) {
+    self->failed = TRUE;
+    throw;
+  }
   if (changed)
     {
       /* Do the ostree commit */
