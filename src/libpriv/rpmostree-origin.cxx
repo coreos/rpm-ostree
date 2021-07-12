@@ -157,13 +157,9 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->cached_initramfs_args =
     g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
 
-  try {
-    rpmostreecxx::origin_validate_roundtrip(*ret->kf);
-  } catch (std::exception& e) {
-    // We don't make this fatal right now until we're confident we're handling
-    // absolutely everything.
-    sd_journal_print (LOG_WARNING, "%s", e.what());
-  }
+  // We will eventually start converting origin to treefile, this helps us
+  // debug cases that may fail currently.
+  rpmostreecxx::origin_validate_roundtrip(*ret->kf);
 
   return util::move_nullify (ret);
 }

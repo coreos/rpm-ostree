@@ -8,7 +8,6 @@
 
 use crate::cxxrsutil::*;
 use crate::treefile::Treefile;
-use anyhow::Context;
 use anyhow::Result;
 use fn_error_context::context;
 use glib::KeyFile;
@@ -239,15 +238,16 @@ fn origin_validate_roundtrip_inner(kf: &glib::KeyFile) -> Result<()> {
     Ok(())
 }
 
-/// Convert an origin keyfile to a treefile config.
+/// Validate that an origin keyfile can be losslessly converted to a treefile config.
 ///
 /// For historical reasons, rpm-ostree has two file formats to represent
 /// state.  This bridges parts of an origin file to a treefile that
 /// is understood by the core.
-pub(crate) fn origin_validate_roundtrip(mut kf: Pin<&mut crate::ffi::GKeyFile>) -> CxxResult<()> {
+pub(crate) fn origin_validate_roundtrip(mut kf: Pin<&mut crate::ffi::GKeyFile>) {
     let kf = kf.gobj_wrap();
-    Ok(origin_validate_roundtrip_inner(&kf)
-        .with_context(|| format!("Failed to roundtrip origin:\n{}", kf.to_data()))?)
+    origin_validate_roundtrip_inner(&kf).err().map(|e| {
+        tracing::debug!("Failed to roundtrip origin: {}", e);
+    });
 }
 
 fn map_keyfile_optional<T>(res: StdResult<T, glib::Error>) -> StdResult<Option<T>, glib::Error> {
