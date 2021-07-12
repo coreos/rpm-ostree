@@ -681,15 +681,21 @@ impl Treefile {
         s.to_string()
     }
 
-    /// Error out if the default is sqlite, but something else is configured.
+    /// Error out if the backend is ndb, which Fedora doesn't support.
     /// xref https://bugzilla.redhat.com/show_bug.cgi?id=1938928
     pub(crate) fn validate_rpmdb(&self) -> CxxResult<()> {
-        if let Some(rpmdb) = self.parsed.rpmdb.as_ref() {
-            if DEFAULT_RPMDB_BACKEND == RpmdbBackend::Sqlite && *rpmdb != DEFAULT_RPMDB_BACKEND {
-                return Err(anyhow!("Cannot write rpmdb backend: {:?}", rpmdb).into());
-            }
+        match self.parsed.rpmdb.as_ref() {
+            None | Some(&RpmdbBackend::Sqlite) | Some(&RpmdbBackend::Bdb) => Ok(()),
+            other => Err(anyhow!("Unsupported rpmdb backend: {:?}", other).into()),
         }
-        Ok(())
+    }
+
+    /// Returns true if the database backend is the same as the rpm-ostree default.
+    pub(crate) fn rpmdb_backend_is_default(&self) -> bool {
+        self.parsed
+            .rpmdb
+            .as_ref()
+            .map_or(true, |b| *b == DEFAULT_RPMDB_BACKEND)
     }
 
     pub(crate) fn get_files_remove_regex(&self, package: &str) -> Vec<String> {

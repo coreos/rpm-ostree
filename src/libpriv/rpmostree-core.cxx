@@ -561,16 +561,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
         dnf_context_set_rpm_macro (self->dnfctx, "_install_langs", instlangs.c_str());
     }
 
-  /* Set the database backend only in the compose path.  It then becomes the default
-   * for any client side layering.
-   */
-  if (!self->is_system)
-    {
-      // See also validate_rpmdb() that we called early
-      auto rpmdb_backend = self->treefile_rs->get_rpmdb();
-      dnf_context_set_rpm_macro (self->dnfctx, "_db_backend", rpmdb_backend.c_str());
-    }
-
   if (!dnf_context_setup (self->dnfctx, cancellable, error))
     return FALSE;
 
@@ -3790,6 +3780,20 @@ write_rpmdb (RpmOstreeContext      *self,
    * to find the rpmdb and RPM macros are global state. */
   set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
+  if (self->treefile_rs && !self->treefile_rs->rpmdb_backend_is_default())
+    {
+      auto rpmdb_type = self->treefile_rs->get_rpmdb();
+      g_print ("Regenerating rpmdb: %s\n", rpmdb_type.c_str());
+      rpmostreecxx::rewrite_rpmdb_for_target(tmprootfs_dfd);
+    }
+  else
+    {
+      // TODO: Rework this to fork off rpm -q in bwrap
+      if (!rpmostree_deployment_sanitycheck_rpmdb (tmprootfs_dfd, overlays,
+                                                   overrides_replace, cancellable, error))
+      return FALSE;
+    }
+
   return TRUE;
 }
 
@@ -4235,10 +4239,6 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove, cancellable, error))
     return glnx_prefix_error (error, "Writing rpmdb");
 
-  /* And now also sanity check the rpmdb */
-  if (!rpmostree_deployment_sanitycheck_rpmdb (tmprootfs_dfd, overlays,
-                                               overrides_replace, cancellable, error))
-    return FALSE;
   return TRUE;
 }
 
