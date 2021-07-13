@@ -128,9 +128,22 @@ pub mod ffi {
         fn cliwrap_destdir() -> String;
     }
 
+    /// `ContainerImport` is currently identical to ostree-rs-ext's `Import` struct, because
+    /// cxx.rs currently requires types used as extern Rust types to be defined by the same crate
+    /// that contains the bridge using them, so we redefine an `ContainerImport` struct here.
+    pub(crate) struct ContainerImport {
+        pub ostree_commit: String,
+        pub image_digest: String,
+    }
+
     // sysroot_upgrade.rs
     extern "Rust" {
-        fn import_container(sysroot: Pin<&mut OstreeSysroot>, imgref: String) -> Result<String>;
+        fn import_container(
+            sysroot: Pin<&mut OstreeSysroot>,
+            imgref: String,
+        ) -> Result<Box<ContainerImport>>;
+
+        fn fetch_digest(imgref: String) -> Result<String>;
     }
 
     // core.rs

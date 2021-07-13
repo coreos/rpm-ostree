@@ -39,6 +39,9 @@ struct RpmOstreeOrigin {
   RpmOstreeRefspecType refspec_type;
   char *cached_refspec;
 
+  /* Container image digest, if tracking a container image reference */
+  char *cached_digest;
+
   /* Version data that goes along with the refspec */
   char *cached_override_commit;
 
@@ -115,7 +118,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 
   ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
-  /* Note that the refspec type can be inferred from the key in the orgin file, where
+  /* Note that the refspec type can be inferred from the key in the origin file, where
    * the `RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY` and `RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY` keys
    * may correspond to either TYPE_OSTREE or TYPE_CHECKSUM (further classification is required), and 
    * `RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY` always only corresponds to TYPE_CONTAINER. */
@@ -151,6 +154,8 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
     {
       ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_CONTAINER;
       ret->cached_refspec = util::move_nullify (imgref);
+
+      ret->cached_digest = g_key_file_get_string (ret->kf, "origin", "container-image-reference-digest", NULL);
     }
   else
     {
@@ -208,6 +213,12 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
 
   /* this is already covered by the above, but the below also updates the cached value */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
+}
+
+const char *
+rpmostree_origin_get_container_image_reference_digest (RpmOstreeOrigin *origin)
+{
+  return origin->cached_digest;
 }
 
 const char *
@@ -466,6 +477,23 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
 }
 
 void
+rpmostree_origin_set_container_image_reference_digest (RpmOstreeOrigin *origin,
+                                                       const char      *digest)
+{
+  if (digest != NULL)
+    {
+      g_key_file_set_string (origin->kf, "origin", "container-image-reference-digest", digest);
+    }
+  else
+    {
+      g_key_file_remove_key (origin->kf, "origin", "container-image-reference-digest", NULL);
+    }
+
+  g_free (origin->cached_digest);
+  origin->cached_digest = g_strdup (digest);
+}
+
+void
 rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
                                       const char      *checksum,
                                       const char      *version)
@@ -543,6 +571,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
       {
         /* Remove `TYPE_CONTAINER`-related keys */
         g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
+        g_key_file_remove_key (origin->kf, "origin", "container-image-reference-digest", NULL);
 
         const char *refspec_key =
           g_key_file_has_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL) ?

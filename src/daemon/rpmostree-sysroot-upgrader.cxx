@@ -448,9 +448,26 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         if (override_commit)
           return glnx_throw (error, "Specifying commit overrides for container-image-reference type refspecs is not supported");
 
-        auto commit = rpmostreecxx::import_container(*self->sysroot, std::string(refspec));
+        if (strstr (refspec, "@"))
+          return glnx_throw (error, "Pinned to specific container image digest, cannot upgrade");
 
-        new_base_rev = strdup (commit.c_str());
+        /* Check to see if the digest that `refspec` points to is the same before pulling a new container image. */
+        const char *cur_digest = rpmostree_origin_get_container_image_reference_digest (self->original_origin);
+        if (cur_digest)
+          {
+            auto new_digest = rpmostreecxx::fetch_digest(std::string(refspec));
+            if (strcmp (new_digest.c_str(), cur_digest) == 0)
+              {
+                /* No new digest. */
+                *out_changed = FALSE;
+                return TRUE;
+              }
+          }
+
+        auto import = rpmostreecxx::import_container(*self->sysroot, std::string(refspec));
+
+        rpmostree_origin_set_container_image_reference_digest (self->original_origin, import->image_digest.c_str());
+        new_base_rev = strdup (import->ostree_commit.c_str());
         break;
       }
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
