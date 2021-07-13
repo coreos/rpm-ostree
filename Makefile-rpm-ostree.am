@@ -94,8 +94,8 @@ if BUILDOPT_PREBUILT_BINDINGS
 cargo_build += "--offline"
 endif
 
-if BUILDOPT_ENABLE_SQLITE_RPMDB_DEFAULT
-cargo_build += --features sqlite-rpmdb-default
+if BUILDOPT_ENABLE_BDB_RPMDB_DEFAULT
+cargo_build += --features bdb-rpmdb-default
 endif
 if BUILDOPT_ASAN
 cargo_build += --features sanitizers

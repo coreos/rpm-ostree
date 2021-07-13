@@ -27,15 +27,20 @@ BuildRequires: rust
 
 # RHEL8 doesn't ship zchunk today.  See also the comments
 # in configure.ac around this as libdnf/librepo need to be in
-# sync, and today we bundle libdnf but not librepo.
+# sync, and today we bundle libdnf but not librepo.  Also
+# flip the rpmdb default to be bdb.
 %if 0%{?rhel} && 0%{?rhel} <= 8
 %bcond_with zchunk
+%define rpmdb_default "--enable-bdb-rpmdb-default"
 %else
 %bcond_without zchunk
 %endif
 
-%if 0%{?fedora} >= 34
-%define sqlite_rpmdb_default "--enable-sqlite-rpmdb-default"
+# See https://fedoraproject.org/wiki/Changes/Sqlite_Rpmdb
+# https://bugzilla.redhat.com/show_bug.cgi?id=1938928
+# https://github.com/openshift/os/issues/552
+%if 0%{?fedora} <= 33
+%define rpmdb_default "--enable-bdb-rpmdb-default"
 %endif
 
 # For the autofiles bits below
@@ -145,7 +150,7 @@ env NOCONFIGURE=1 ./autogen.sh
 %if 0%{?build_rustflags:1}
 export RUSTFLAGS="%{build_rustflags}"
 %endif
-%configure --disable-silent-rules --enable-gtk-doc %{?sqlite_rpmdb_default} %{?with_sanitizers:--enable-sanitizers}
+%configure --disable-silent-rules --enable-gtk-doc %{?rpmdb_default} %{?with_sanitizers:--enable-sanitizers}
 
 %make_build
 
