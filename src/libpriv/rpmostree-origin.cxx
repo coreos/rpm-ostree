@@ -293,14 +293,22 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
 gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
-  return 
+  return
         rpmostree_origin_get_cliwrap (origin) || 
         rpmostree_origin_get_regenerate_initramfs (origin) ||
         (g_hash_table_size (origin->cached_initramfs_etc_files) > 0) ||
-        (g_hash_table_size (origin->cached_packages) > 0) ||
-        (g_hash_table_size (origin->cached_local_packages) > 0) ||
-        (g_hash_table_size (origin->cached_overrides_local_replace) > 0) ||
-        (g_hash_table_size (origin->cached_overrides_remove) > 0);
+        rpmostree_origin_has_packages (origin);
+}
+
+/* Returns TRUE if this origin contains overlay or override packages */
+gboolean
+rpmostree_origin_has_packages (RpmOstreeOrigin *origin)
+{
+  return 
+    (g_hash_table_size (origin->cached_packages) > 0) ||
+    (g_hash_table_size (origin->cached_local_packages) > 0) ||
+    (g_hash_table_size (origin->cached_overrides_local_replace) > 0) ||
+    (g_hash_table_size (origin->cached_overrides_remove) > 0);
 }
 
 GKeyFile *

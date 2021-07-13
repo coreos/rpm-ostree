@@ -47,13 +47,31 @@
 
 /**
  * SECTION:rpmostree-sysroot-upgrader
- * @title: Simple upgrade class
- * @short_description: Upgrade RPM+OSTree systems
+ * @title: Process an origin file to look for updates
+ * @short_description: Client side update for rpm-ostree systems
  *
- * The #RpmOstreeSysrootUpgrader class models a `baserefspec` OSTree branch
- * in an origin file, along with a set of layered RPM packages.
+ * The base libostree "upgrade" logic is ultimately very simple - a client
+ * system is tracking a single ostree branch.  This appears as 
+ * `origin/refspec` key in the origin file.
  *
- * It also supports the plain-ostree "refspec" model.
+ * rpm-ostree has much more logic and sophistication - optional package layering, overrides,
+ * client side initramfs regeneration, etc.
+ *
+ * This upgrader is intended to be similar to [OstreeSysrootUpgrader](https://ostreedev.github.io/ostree/reference/ostree-Simple-upgrade-class.html).
+ * If none of those features are enabled, then all we do is pull new OSTree updates.
+ *
+ * If extended features are enabled, rpm-ostree adds keys the base ostree "origin" file logic;
+ * see also `rpmostree-origin.h`.  Most of the manipulation of the origin file is performed
+ * via DBus in `rpmostree-transaction-types.cxx`.
+ * 
+ * One important subtlety here is optimizing the case of
+ * e.g. `rpm-ostree install --allow-inactive docker` on a system that already has `docker`
+ * installed.  The intended semantics here are that we just notice `docker` is installed
+ * and treat it as a no-op.  If however on an upgrade/rebase to a new version the package
+ * is no longer in the base, then we enable package layering.  To implement this we
+ * also maintain a `computed_origin`.  If for example we detect `docker` is requested but
+ * installed, then we remove it from the `computed_origin` package list.  If the final set
+ * of requested packages is empty, we then know not to enable the client-side libdnf bits.
  */
 typedef struct {
   GObjectClass parent_class;
@@ -72,7 +90,12 @@ struct RpmOstreeSysrootUpgrader {
 
   OstreeDeployment *cfg_merge_deployment;
   OstreeDeployment *origin_merge_deployment;
-  RpmOstreeOrigin *origin;
+  // The origin that was passed in and should be written to the deployment.
+  RpmOstreeOrigin *original_origin;
+  // An in-memory computed subset of the origin; used mainly as an optimization
+  // to e.g. avoid fetching rpm-md if all we have is "inactive requests".
+  // Longer term, this functionality should be moved down into the core.
+  RpmOstreeOrigin *computed_origin;
   std::optional<rust::Box<rpmostreecxx::Treefile>> treefile;
 
   /* Used during tree construction */
@@ -82,10 +105,6 @@ struct RpmOstreeSysrootUpgrader {
   GLnxTmpDir metatmpdir;
   RpmOstreeContext *ctx;
   DnfSack *rpmmd_sack; /* sack from core */
-
-  GPtrArray *overlay_packages; /* Finalized list of pkgs to overlay */
-  GPtrArray *override_remove_packages; /* Finalized list of base pkgs to remove */
-  GPtrArray *override_replace_local_packages; /* Finalized list of local base pkgs to replace */
 
   gboolean layering_initialized; /* Whether layering_type is known */
   RpmOstreeSysrootUpgraderLayeringType layering_type;
@@ -116,20 +135,22 @@ parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
                          GCancellable           *cancellable,
                          GError                **error)
 {
-  self->origin = rpmostree_origin_parse_deployment (deployment, error);
-  if (!self->origin)
+  self->original_origin = rpmostree_origin_parse_deployment (deployment, error);
+  if (!self->original_origin)
     return FALSE;
-  rpmostree_origin_remove_transient_state (self->origin);
+  rpmostree_origin_remove_transient_state (self->original_origin);
 
-  if (rpmostree_origin_get_unconfigured_state (self->origin) &&
+  if (rpmostree_origin_get_unconfigured_state (self->original_origin) &&
       !(self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED))
     {
       /* explicit action is required OS creator to upgrade, print their text as an error */
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "origin unconfigured-state: %s",
-                   rpmostree_origin_get_unconfigured_state (self->origin));
+                   rpmostree_origin_get_unconfigured_state (self->original_origin));
       return FALSE;
     }
+
+  self->computed_origin = rpmostree_origin_dup (self->original_origin);
 
   return TRUE;
 }
@@ -221,12 +242,11 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
 
   g_clear_object (&self->cfg_merge_deployment);
   g_clear_object (&self->origin_merge_deployment);
-  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
+  g_clear_pointer (&self->original_origin, (GDestroyNotify)rpmostree_origin_unref);
+  g_clear_pointer (&self->computed_origin, (GDestroyNotify)rpmostree_origin_unref);
   g_free (self->base_revision);
   g_free (self->final_revision);
   g_strfreev (self->kargs_strv);
-  g_clear_pointer (&self->overlay_packages, (GDestroyNotify)g_ptr_array_unref);
-  g_clear_pointer (&self->override_remove_packages, (GDestroyNotify)g_ptr_array_unref);
 
   G_OBJECT_CLASS (rpmostree_sysroot_upgrader_parent_class)->finalize (object);
 }
@@ -362,15 +382,17 @@ rpmostree_sysroot_upgrader_set_caller_info (RpmOstreeSysrootUpgrader *self,
 RpmOstreeOrigin *
 rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self)
 {
-  return rpmostree_origin_dup (self->origin);
+  return rpmostree_origin_dup (self->original_origin);
 }
 
 void
 rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
                                        RpmOstreeOrigin          *new_origin)
 {
-  rpmostree_origin_unref (self->origin);
-  self->origin = rpmostree_origin_dup (new_origin);
+  rpmostree_origin_unref (self->original_origin);
+  self->original_origin = rpmostree_origin_dup (new_origin);
+  rpmostree_origin_unref (self->computed_origin);
+  self->computed_origin = rpmostree_origin_dup (self->original_origin);
 }
 
 const char *
@@ -411,11 +433,11 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
   const gboolean synthetic =
     (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL) > 0;
 
-  const char *override_commit = rpmostree_origin_get_override_commit (self->origin);
+  const char *override_commit = rpmostree_origin_get_override_commit (self->computed_origin);
 
   RpmOstreeRefspecType refspec_type;
   const char *refspec;
-  rpmostree_origin_classify_refspec (self->origin, &refspec_type, &refspec);
+  rpmostree_origin_classify_refspec (self->computed_origin, &refspec_type, &refspec);
 
   g_autofree char *new_base_rev = NULL;
 
@@ -618,68 +640,6 @@ load_base_rsack (RpmOstreeSysrootUpgrader *self,
   return TRUE;
 }
 
-/* TODO: Change this class to filter the origin file instead of carrying
- * an out-of-band subset, then translate that origin to a treefile and
- * pass it to the core.
- */
-static void
-generate_treefile (RpmOstreeSysrootUpgrader *self)
-{
-  g_assert (!self->treefile.has_value());
-  glnx_unref_object JsonBuilder *builder = json_builder_new ();
-  json_builder_begin_object (builder);
-
-  json_builder_set_member_name (builder, "packages");
-  json_builder_begin_array (builder);
-  for (guint i = 0; i < self->overlay_packages->len; i++)
-    {
-      auto val = (const char *)self->overlay_packages->pdata[i];
-      json_builder_add_string_value (builder, val);
-    }
-  json_builder_end_array (builder);
-
-  GHashTable *local_packages = rpmostree_origin_get_local_packages (self->origin);
-  json_builder_set_member_name (builder, "packages-local");
-  json_builder_begin_object (builder);
-  GLNX_HASH_TABLE_FOREACH_KV (local_packages, const char*, k, const char*, v)
-    {
-      json_builder_set_member_name (builder, k);
-      json_builder_add_string_value (builder, v);
-    }
-  json_builder_end_object (builder);
-
-  json_builder_set_member_name (builder, "override-replace-local");
-  json_builder_begin_object (builder);
-  for (guint i = 0; i < self->override_replace_local_packages->len; i++)
-    {
-      auto nevra = (const char *)self->override_replace_local_packages->pdata[i];
-      g_autofree char *sha256 = NULL;
-      g_autoptr(GError) local_error = NULL;
-      if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, &local_error))
-        util::throw_gerror(local_error);
-      json_builder_set_member_name (builder, nevra);
-      json_builder_add_string_value (builder, sha256);
-    }
-  json_builder_end_object (builder);
-
-  json_builder_set_member_name (builder, "override-remove");
-  json_builder_begin_array (builder);
-  for (guint i = 0; i < self->override_remove_packages->len; i++)
-    {
-      auto val = (const char *)self->override_remove_packages->pdata[i];
-      json_builder_add_string_value (builder, val);
-    }
-  json_builder_end_array (builder);
-
-  json_builder_end_object (builder);
-  g_autoptr(JsonNode) root = json_builder_get_root (builder);
-  g_autoptr(JsonGenerator) gen = json_generator_new ();
-  json_generator_set_root (gen, root);
-  g_autofree char *str = json_generator_to_data (gen, NULL);
-
-  self->treefile = rpmostreecxx::treefile_new_from_string (str);
-}
-
 static gboolean
 initialize_metatmpdir (RpmOstreeSysrootUpgrader *self,
                        GError                  **error)
@@ -701,7 +661,7 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self,
 {
   g_assert (self->rsack);
 
-  GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
+  GHashTable *removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
   g_autoptr(GPtrArray) ret_final_removals = g_ptr_array_new_with_free_func (g_free);
 
   g_autoptr(GPtrArray) inactive_removals = g_ptr_array_new ();
@@ -721,11 +681,13 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self,
     {
       rpmostree_output_message ("Inactive base removals:");
       for (guint i = 0; i < inactive_removals->len; i++)
-        rpmostree_output_message ("  %s", (const char*)inactive_removals->pdata[i]);
+        {
+          const char *item = (const char*)inactive_removals->pdata[i];
+          rpmostree_output_message ("  %s", item);
+          rpmostree_origin_remove_override (self->computed_origin, item, RPMOSTREE_ORIGIN_OVERRIDE_REMOVE);
+        }
     }
 
-  g_assert (!self->override_remove_packages);
-  self->override_remove_packages = util::move_nullify (ret_final_removals);
   return TRUE;
 }
 
@@ -737,7 +699,7 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
   g_assert (self->rsack);
 
   GHashTable *local_replacements =
-    rpmostree_origin_get_overrides_local_replace (self->origin);
+    rpmostree_origin_get_overrides_local_replace (self->computed_origin);
   g_autoptr(GPtrArray) ret_final_local_replacements =
     g_ptr_array_new_with_free_func (g_free);
 
@@ -767,11 +729,13 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
     {
       rpmostree_output_message ("Inactive base replacements:");
       for (guint i = 0; i < inactive_replacements->len; i++)
-        rpmostree_output_message ("  %s", (const char*)inactive_replacements->pdata[i]);
+        {
+          const char *item = (const char*)inactive_replacements->pdata[i];
+          rpmostree_output_message ("  %s", item);
+          rpmostree_origin_remove_override (self->computed_origin, item, RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL);
+        }
     }
 
-  g_assert (!self->override_replace_local_packages);
-  self->override_replace_local_packages = util::move_nullify (ret_final_local_replacements);
   return TRUE;
 }
 
@@ -809,7 +773,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
    * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
    * you can have foo-1.0-1.x86_64 layered, and foo or /usr/bin/foo as dormant.
    * */
-  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
+  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->computed_origin);
   if (g_hash_table_size (local_pkgs) > 0)
     {
       if (!initialize_metatmpdir (self, error))
@@ -842,10 +806,10 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
         }
     }
 
-  GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
+  GHashTable *removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
 
   /* check for each package if we have a provides or a path match */
-  GLNX_HASH_TABLE_FOREACH (rpmostree_origin_get_packages (self->origin),
+  GLNX_HASH_TABLE_FOREACH (rpmostree_origin_get_packages (self->computed_origin),
                            const char*, pattern)
     {
       g_autoptr(GPtrArray) matches =
@@ -886,13 +850,20 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
 
   if (g_hash_table_size (inactive_requests) > 0)
     {
+      gboolean changed = FALSE;
       rpmostree_output_message ("Inactive requests:");
       GLNX_HASH_TABLE_FOREACH_KV (inactive_requests, const char*, req, const char*, nevra)
-        rpmostree_output_message ("  %s (already provided by %s)", req, nevra);
+        {
+          const char *pkgs[] = { req, NULL };
+          g_autoptr(GError) local_error = NULL;
+          rpmostree_output_message ("  %s (already provided by %s)", req, nevra);
+          if (!rpmostree_origin_remove_packages (self->computed_origin, (char**)pkgs, FALSE, &changed, &local_error))
+            g_error ("%s", local_error->message);
+          g_assert (changed);
+          changed = FALSE;
+        }
     }
 
-  g_assert (!self->overlay_packages);
-  self->overlay_packages = util::move_nullify (ret_missing_pkgs);
   return TRUE;
 }
 
@@ -933,8 +904,8 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   /* If initramfs regeneration is enabled, it's silly to support /etc overlays on top of
    * that. Just point users at dracut's -I instead. I guess we could auto-convert
    * ourselves? */
-  if (rpmostree_origin_get_regenerate_initramfs (self->origin) &&
-      g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->origin)) > 0)
+  if (rpmostree_origin_get_regenerate_initramfs (self->computed_origin) &&
+      g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->computed_origin)) > 0)
     return glnx_throw (error, "initramfs regeneration and /etc overlay not compatible; use dracut arg -I instead");
 
   if (!checkout_base_tree (self, cancellable, error))
@@ -947,20 +918,17 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!prepare_context_for_assembly (self, tmprootfs_abspath, cancellable, error))
     return FALSE;
 
-  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
-
-  generate_treefile (self);
+  {
+    g_autoptr(GKeyFile) computed_origin_kf = rpmostree_origin_dup_keyfile (self->computed_origin);
+    self->treefile = rpmostreecxx::origin_to_treefile (*computed_origin_kf);
+  }
   rpmostree_context_set_treefile (self->ctx, **self->treefile);
 
   if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath,
                                 cancellable, error))
     return FALSE;
 
-  const gboolean have_packages = (self->overlay_packages->len > 0 ||
-                                  g_hash_table_size (local_pkgs) > 0 ||
-                                  self->override_remove_packages->len > 0 ||
-                                  self->override_replace_local_packages->len > 0);
-  if (have_packages)
+  if (rpmostree_origin_has_packages (self->computed_origin))
     {
       if (!rpmostree_context_prepare (self->ctx, cancellable, error))
         return FALSE;
@@ -978,7 +946,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN)
     {
-      if (have_packages)
+      if (rpmostree_origin_has_packages (self->computed_origin))
         rpmostree_print_transaction (rpmostree_context_get_dnf (self->ctx));
     }
 
@@ -1039,7 +1007,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
     }
 
   // TODO Unify with treefile origin handling in core
-  if (rpmostree_origin_get_cliwrap (self->origin))
+  if (rpmostree_origin_get_cliwrap (self->computed_origin))
     rpmostreecxx::cliwrap_write_wrappers (self->tmprootfs_dfd);
 
   if (!rpmostree_rootfs_postprocess_common (self->tmprootfs_dfd, cancellable, error))
@@ -1050,7 +1018,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
    */
   const gboolean kernel_or_initramfs_changed =
     rpmostree_context_get_kernel_changed (self->ctx) ||
-    rpmostree_origin_get_regenerate_initramfs (self->origin);
+    rpmostree_origin_get_regenerate_initramfs (self->computed_origin);
   g_autoptr(GVariant) kernel_state = NULL;
   g_autoptr(GPtrArray) initramfs_args = g_ptr_array_new_with_free_func (g_free);
   const char *bootdir = NULL;
@@ -1112,8 +1080,8 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
     {
       /* append the extra args */
       const char *const* add_dracut_argv = NULL;
-      if (rpmostree_origin_get_regenerate_initramfs (self->origin))
-         add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
+      if (rpmostree_origin_get_regenerate_initramfs (self->computed_origin))
+         add_dracut_argv = rpmostree_origin_get_initramfs_args (self->computed_origin);
       for (char **it = (char**)add_dracut_argv; it && *it; it++)
         g_ptr_array_add (initramfs_args, g_strdup (*it));
       g_ptr_array_add (initramfs_args, NULL);
@@ -1129,7 +1097,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       if (!rpmostree_run_dracut (self->tmprootfs_dfd,
                                  (const char* const*)initramfs_args->pdata,
                                  kver, initramfs_path,
-                                 rpmostree_origin_get_regenerate_initramfs (self->origin),
+                                 rpmostree_origin_get_regenerate_initramfs (self->computed_origin),
                                  NULL, &initramfs_tmpf, cancellable, error))
         return FALSE;
 
@@ -1167,12 +1135,7 @@ requires_local_assembly (RpmOstreeSysrootUpgrader *self)
    * https://github.com/projectatomic/rpm-ostree/issues/753
    */
 
-  return rpmostree_origin_get_cliwrap (self->origin) ||
-         self->overlay_packages->len > 0 ||
-         self->override_remove_packages->len > 0 ||
-         self->override_replace_local_packages->len > 0 ||
-         g_hash_table_size (rpmostree_origin_get_local_packages (self->origin)) > 0 ||
-         rpmostree_origin_get_regenerate_initramfs (self->origin);
+  return rpmostree_origin_may_require_local_assembly (self->computed_origin);
 }
 
 /* Determine whether or not we require local modifications,
@@ -1191,7 +1154,7 @@ rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
   *out_layering = self->layering_type;
   *out_changed = FALSE;
 
-  if (!rpmostree_origin_may_require_local_assembly (self->origin))
+  if (!rpmostree_origin_may_require_local_assembly (self->computed_origin))
     {
       g_clear_pointer (&self->final_revision, g_free);
       /* No assembly? We're done then */
@@ -1317,7 +1280,7 @@ write_history (RpmOstreeSysrootUpgrader *self,
                    "DEPLOYMENT_DEVICE=%" PRIu64, (uint64_t) stbuf.st_dev,
                    "DEPLOYMENT_INODE=%" PRIu64, (uint64_t) stbuf.st_ino,
                    "DEPLOYMENT_CHECKSUM=%s", ostree_deployment_get_csum (new_deployment),
-                   "DEPLOYMENT_REFSPEC=%s", rpmostree_origin_get_refspec (self->origin),
+                   "DEPLOYMENT_REFSPEC=%s", rpmostree_origin_get_refspec (self->computed_origin),
                    /* we could use iovecs here and sd_journal_sendv to make these truly
                     * conditional, but meh, empty field works fine too */
                    "DEPLOYMENT_VERSION=%s", version ?: "",
@@ -1390,15 +1353,18 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       self->kargs_strv = g_strsplit (options, " ", -1);
     }
 
-  g_autoptr(GKeyFile) origin = rpmostree_origin_dup_keyfile (self->origin);
+  // Note that most of the code here operates on ->computed_origin except this.
+  // We want to preserve all the original requests, for cases like inactive
+  // layers/overrides.
+  g_autoptr(GKeyFile) origin = rpmostree_origin_dup_keyfile (self->original_origin);
   g_autoptr(OstreeDeployment) new_deployment = NULL;
 
   g_autofree char *overlay_initrd_checksum = NULL;
   const char *overlay_v[] = { NULL, NULL };
-  if (g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->origin)) > 0)
+  if (g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->computed_origin)) > 0)
     {
       glnx_fd_close int fd = -1;
-      auto etc_files_gset = rpmostree_origin_get_initramfs_etc_files (self->origin);
+      auto etc_files_gset = rpmostree_origin_get_initramfs_etc_files (self->computed_origin);
       rust::Vec<rust::String> etc_files;
       GLNX_HASH_TABLE_FOREACH(etc_files_gset, const char *, key)
         {
