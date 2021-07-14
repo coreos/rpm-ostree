@@ -465,6 +465,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fn-error-context"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "236b4e4ae2b8be5f7a5652f6108c4a0f2627c569db4e7923333d31c7dbfed0fb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1364,7 +1375,7 @@ dependencies = [
  "camino",
  "cjson",
  "flate2",
- "fn-error-context",
+ "fn-error-context 0.1.2",
  "futures",
  "gio",
  "glib",
@@ -1863,7 +1874,7 @@ dependencies = [
  "cxx",
  "env_logger",
  "envsubst",
- "fn-error-context",
+ "fn-error-context 0.2.0",
  "futures",
  "gio",
  "gio-sys",
