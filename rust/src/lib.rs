@@ -512,8 +512,8 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("rpmostreemain.h");
         fn early_main();
-        fn rpmostree_main(args: &[&str]) -> Result<()>;
-        fn main_print_error(msg: &str);
+        fn rpmostree_main(args: &[&str]) -> Result<i32>;
+        fn rpmostree_process_global_teardown();
     }
 
     unsafe extern "C++" {

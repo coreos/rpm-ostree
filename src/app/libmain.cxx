@@ -466,8 +466,10 @@ early_main (void)
   dnf_context_set_config_file_path("");
 }
 
-static int
-rpmostree_main_inner (const rust::Slice<const rust::Str> args)
+// The C++ `main()`, invoked from Rust for most CLI commands currently.
+// This may throw an exception which will be converted into a `Result` in Rust.
+int
+rpmostree_main (const rust::Slice<const rust::Str> args)
 {
   auto argv0 = std::string(args[0]);
   g_set_prgname (argv0.c_str());
@@ -540,36 +542,11 @@ rpmostree_main_inner (const rust::Slice<const rust::Str> args)
     }
 }
 
-/* Never returns */
+// Tear down any process global state */
 void
-rpmostree_main (const rust::Slice<const rust::Str> args)
+rpmostree_process_global_teardown ()
 {
-  int r = EXIT_FAILURE;
-  try {
-    r = rpmostree_main_inner (args);
-  } catch (std::exception& e) {
-    auto msg = std::string(e.what());
-    main_print_error(msg);
-  }
-  
-  /* Teardown any important process global state here */
   rpmostree_polkit_agent_close ();
-
-  exit (r);
-}
-
-void
-main_print_error (rust::Str msg)
-{
-  int is_tty = isatty (1);
-  const char *prefix = "";
-  const char *suffix = "";
-  if (is_tty)
-    {
-      prefix = "\x1b[31m\x1b[1m"; /* red, bold */
-      suffix = "\x1b[22m\x1b[0m"; /* bold off, color reset */
-    }
-  g_printerr ("%serror: %s%.*s\n", prefix, suffix, (int)msg.length(), msg.data());
 }
 
 } /* namespace */
