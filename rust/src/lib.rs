@@ -202,6 +202,11 @@ pub mod ffi {
         ) -> Result<DeploymentLayeredMeta>;
     }
 
+    // failpoint_bridge.rs
+    extern "Rust" {
+        fn failpoint(p: &str);
+    }
+
     // importer.rs
     extern "Rust" {
         fn importer_compose_filter(
@@ -572,7 +577,9 @@ mod core;
 use crate::core::*;
 mod daemon;
 mod dirdiff;
+pub mod failpoint_bridge;
 pub(crate) use daemon::*;
+use failpoint_bridge::*;
 mod extensions;
 pub(crate) use extensions::*;
 #[cfg(feature = "fedora-integration")]
