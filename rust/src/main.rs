@@ -3,9 +3,11 @@
 
 use anyhow::Result;
 use nix::sys::signal;
+use std::io::Write;
+use termcolor::WriteColor;
 
 /// The real main function returns a `Result<>`.
-fn inner_main() -> Result<()> {
+fn inner_main() -> Result<i32> {
     if std::env::var("RPMOSTREE_GDB_HOOK").is_ok() {
         println!("RPMOSTREE_GDB_HOOK detected; stopping...");
         println!("Attach via gdb using `gdb -p {}`.", std::process::id());
@@ -41,9 +43,9 @@ fn inner_main() -> Result<()> {
     // main().
     match args.get(1).copied() {
         // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
-        Some("countme") => rpmostree_rust::countme::entrypoint(&args),
-        Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(&args),
-        Some("ex-container") => rpmostree_rust::container::entrypoint(&args),
+        Some("countme") => rpmostree_rust::countme::entrypoint(&args).map(|_| 0),
+        Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(&args).map(|_| 0),
+        Some("ex-container") => rpmostree_rust::container::entrypoint(&args).map(|_| 0),
         _ => {
             // Otherwise fall through to C++ main().
             Ok(rpmostree_rust::ffi::rpmostree_main(&args)?)
@@ -51,14 +53,33 @@ fn inner_main() -> Result<()> {
     }
 }
 
+fn print_error(e: anyhow::Error) {
+    // See discussion in CxxResult for why we use this format
+    let msg = format!("{:#}", e);
+    // Print the error: prefix in red if we're on a tty
+    let stderr = termcolor::BufferWriter::stderr(termcolor::ColorChoice::Auto);
+    let stderrbuf = {
+        let mut stderrbuf = stderr.buffer();
+        let _ =
+            stderrbuf.set_color(termcolor::ColorSpec::new().set_fg(Some(termcolor::Color::Red)));
+        let _ = write!(&mut stderrbuf, "error: ");
+        let _ = stderrbuf.reset();
+        let _ = writeln!(&mut stderrbuf, "{}", msg);
+        stderrbuf
+    };
+    let _ = stderr.print(&stderrbuf);
+}
+
 fn main() {
     // Capture any error.  Note that in some cases the C++ code may still call exit(<code>) directly.
     let r = inner_main();
+    rpmostree_rust::ffi::rpmostree_process_global_teardown();
     // Print the error
-    if let Err(e) = r {
-        // See discussion in CxxResult for why we use this format
-        let msg = format!("{:#}", e);
-        rpmostree_rust::ffi::main_print_error(msg.as_str());
-        std::process::exit(1)
+    match r {
+        Ok(e) => std::process::exit(e),
+        Err(e) => {
+            print_error(e);
+            std::process::exit(1)
+        }
     }
 }

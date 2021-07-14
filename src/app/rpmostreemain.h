@@ -5,7 +5,7 @@
 namespace rpmostreecxx {
 
 void early_main ();
-void main_print_error (rust::Str msg);
-void rpmostree_main (rust::Slice<const rust::Str> args);
+void rpmostree_process_global_teardown ();
+int rpmostree_main (rust::Slice<const rust::Str> args);
 
 }
