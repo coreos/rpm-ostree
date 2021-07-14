@@ -171,6 +171,7 @@ pub mod ffi {
             cancellable: Pin<&mut GCancellable>,
         ) -> Result<()>;
         fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> Result<()>;
+        fn rewrite_rpmdb_for_target(rootfs_dfd: i32) -> Result<()>;
     }
 
     // A grab-bag of metadata from the deployment's ostree commit
@@ -319,6 +320,7 @@ pub mod ffi {
         fn get_releasever(&self) -> &str;
         fn get_rpmdb(&self) -> String;
         fn validate_rpmdb(&self) -> Result<()>;
+        fn rpmdb_backend_is_default(&self) -> bool;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);
         fn sanitycheck_externals(&self) -> Result<()>;

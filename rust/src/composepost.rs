@@ -5,7 +5,10 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
+use crate::bwrap::Bubblewrap;
+use crate::cxxrsutil::*;
+use crate::ffi::BubblewrapMutability;
+use crate::ffiutil::ffi_view_openat_dir;
 use crate::passwd::PasswdDB;
 use crate::treefile::Treefile;
 use crate::{bwrap, importer};
@@ -23,8 +26,11 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Seek, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::AsRawFd;
+use std::os::unix::prelude::IntoRawFd;
 use std::path::Path;
 use std::pin::Pin;
+use std::rc::Rc;
+use subprocess::{Exec, Redirection};
 
 /* See rpmostree-core.h */
 const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
@@ -902,6 +908,56 @@ fn hardlink_rpmdb_base_location(
     rootfs.symlink(RPMOSTREE_SYSIMAGE_RPMDB, "../../share/rpm")?;
 
     Ok(true)
+}
+
+#[context("Rewriting rpmdb for target native format")]
+fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir) -> Result<()> {
+    let tempetc = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
+
+    let dbfd = Rc::new(
+        memfd::MemfdOptions::default()
+            .allow_sealing(true)
+            .create("rpmdb")?
+            .into_file(),
+    );
+
+    let dbpath_arg = format!("--dbpath=/proc/self/cwd/{}", RPMOSTREE_RPMDB_LOCATION);
+    // Fork rpmdb from the *host* rootfs to read the rpmdb back into memory
+    let r = Exec::cmd("rpmdb")
+        .args(&[dbpath_arg.as_str(), "--exportdb"])
+        .cwd(format!("/proc/self/fd/{}", rootfs_dfd.as_raw_fd()))
+        .stdout(Redirection::RcFile(Rc::clone(&dbfd)))
+        .join()?;
+    if !r.success() {
+        return Err(anyhow!("Failed to execute rpmdb --exportdb: {:?}", r));
+    }
+
+    // Clear out the db on disk
+    rootfs_dfd.remove_all(RPMOSTREE_RPMDB_LOCATION)?;
+    rootfs_dfd.create_dir(RPMOSTREE_RPMDB_LOCATION, 0o755)?;
+
+    // Only one owner now
+    let mut dbfd = Rc::try_unwrap(dbfd).unwrap();
+    dbfd.seek(std::io::SeekFrom::Start(0))?;
+
+    // Fork the target rpmdb to write the content from memory to disk
+    let mut bwrap = Bubblewrap::new_with_mutability(rootfs_dfd, BubblewrapMutability::RoFiles)?;
+    bwrap.append_child_argv(&["rpmdb", dbpath_arg.as_str(), "--importdb"]);
+    bwrap.take_stdin_fd(dbfd.into_raw_fd());
+    let cancellable = gio::Cancellable::new();
+    bwrap
+        .run(cancellable.gobj_rewrap())
+        .context("Failed to run rpmdb --importdb")?;
+
+    tempetc.undo()?;
+
+    Ok(())
+}
+
+pub(crate) fn rewrite_rpmdb_for_target(rootfs_dfd: i32) -> CxxResult<()> {
+    Ok(rewrite_rpmdb_for_target_inner(&ffi_view_openat_dir(
+        rootfs_dfd,
+    ))?)
 }
 
 /// Recursively hard-link `source` hierarchy to `target` directory.
