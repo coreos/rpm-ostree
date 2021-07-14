@@ -60,6 +60,10 @@ vm_cmd test -d "'/opt/some lib/subdir'"
 vm_cmd test -d '/opt/quote\"ed/subdir'
 vm_cmd test -d "'/var/app/some lib/subdir'"
 vm_cmd test -d '/var/app/quote\"ed/subdir'
+vm_cmd test -d '/usr/lib/opt/app'
+vm_cmd test -L '/opt/app'
+vm_cmd test -L "'/opt/some lib'"
+vm_cmd test -L '/opt/quote\"ed'
 vm_rpmostree rollback
 
 echo "ok Installed rpm with /opt ended up in /usr/lib/opt"

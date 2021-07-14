@@ -86,10 +86,8 @@ fn import_filter(
     }
 
     // And ensure the RPM installs into supported paths.
-    // Note that we rewrite /opt in `handle_translate_pathname`, but
-    // this gets called with the old path, so handle it here too.
-    let is_supported = path_is_ostree_compliant(path) || path_is_in_opt(path);
-    if !is_supported {
+    // Note that we rewrote /opt to /usr/lib/opt in `handle_translate_pathname`.
+    if !path_is_ostree_compliant(path) {
         if !skip_extraneous {
             bail!("Unsupported path; see https://github.com/projectatomic/rpm-ostree/issues/233");
         }
@@ -122,11 +120,6 @@ fn path_is_ostree_compliant(path: &str) -> bool {
     }
 
     false
-}
-
-/// Whether absolute `path` belongs to `/opt` hierarchy.
-fn path_is_in_opt(path: &str) -> bool {
-    path == "/opt" || path.starts_with("/opt/")
 }
 
 pub fn tmpfiles_translate(
@@ -194,22 +187,19 @@ mod tests {
 
     #[test]
     fn test_path_is_compliant() {
-        let ostree_cases = &["/", "/usr", "/usr/share", "/bin/foo"];
+        let ostree_cases = &["/", "/usr", "/usr/share", "/bin/foo", "/usr/lib/opt/bar"];
         for entry in ostree_cases {
             assert_eq!(path_is_ostree_compliant(entry), true, "{}", entry);
-            assert_eq!(path_is_in_opt(entry), false, "{}", entry);
         }
 
         let opt_cases = &["/opt", "/opt/misc"];
         for entry in opt_cases {
             assert_eq!(path_is_ostree_compliant(entry), false, "{}", entry);
-            assert_eq!(path_is_in_opt(entry), true, "{}", entry);
         }
 
         let denied_cases = &["/var", "/etc", "/var/run", "/usr/local", "", "./", "usr/"];
         for entry in denied_cases {
             assert_eq!(path_is_ostree_compliant(entry), false, "{}", entry);
-            assert_eq!(path_is_in_opt(entry), false, "{}", entry);
         }
     }
 
