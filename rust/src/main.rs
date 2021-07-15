@@ -27,6 +27,9 @@ fn main() {
         println!("Attach via gdb using `gdb -p {}`.", std::process::id());
         signal::raise(signal::Signal::SIGSTOP).expect("signal(SIGSTOP)");
     }
+    // Initialize failpoints
+    let _scenario = fail::FailScenario::setup();
+    fail::fail_point!("main");
     // Call this early on; it invokes e.g. setenv() so must be done
     // before we create threads.
     rpmostree_rust::ffi::early_main();

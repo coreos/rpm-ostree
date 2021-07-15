@@ -714,6 +714,8 @@ impl_transaction_get_response_sync (GDBusConnection *connection,
                         tp);
     }
 
+  rpmostreecxx::failpoint("client::connect");
+
   transaction = transaction_connect (transaction_address, cancellable, error);
   if (!transaction)
     goto out;

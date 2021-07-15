@@ -194,14 +194,20 @@ transaction_owner_vanished_cb (GDBusConnection *connection,
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (user_data);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
+  g_debug ("transaction owner vanished");
+
   if (priv->watch_id > 0)
     {
       g_bus_unwatch_name (priv->watch_id);
       priv->watch_id = 0;
 
+      sd_journal_print (LOG_WARNING, "client disconnected before calling Start; cancelling transaction");
+
       /* Emit the signal AFTER unwatching the bus name, since this
        * may finalize the transaction and invalidate the watch_id. */
       g_signal_emit (self, signals[CLOSED], 0);
+
+      rpmostreed_sysroot_finish_txn (rpmostreed_sysroot_get (), self);
     }
 }
 

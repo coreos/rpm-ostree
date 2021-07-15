@@ -78,6 +78,17 @@ echo "ok moo"
 rpm-ostree reload
 echo "ok reload"
 
+cursor=$(journalctl -o json -n 1 | jq -r '.["__CURSOR"]')
+if env FAILPOINTS=client::connect=panic rpm-ostree initramfs --enable 2>err.txt; then
+    fatal "should have errored"
+fi
+assert_file_has_content_literal err.txt "failpoint client::connect panic"
+journalctl -u rpm-ostreed --after-cursor "${cursor}" > out.txt
+assert_file_has_content_literal out.txt 'client disconnected before calling Start'
+rpm-ostree status > out.txt
+assert_file_has_content_literal out.txt 'State: idle'
+echo "ok auto-cancel not-started transaction"
+
 # See rpmostree-scripts.c
 grep ^DEFAULT /etc/crypto-policies/config
 echo "ok crypto-policies DEFAULT backend"
