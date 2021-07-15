@@ -31,6 +31,12 @@ while read cmd; do
 done < commands.txt
 echo "ok error on unknown command options"
 
+if rpm-ostree status "--track=/etc/NetworkManager/system-connections`echo -n -e \"\xE2\x80\"`" 2>err.txt; then
+    fatal "handled non UTF-8 args"
+fi
+assert_file_has_content_literal err.txt 'error: Argument is invalid UTF-8'
+echo "ok error on non UTF-8"
+
 rpm-ostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
 assert_file_has_content_literal jsonpath.txt 'true'
 echo "ok jsonpath"

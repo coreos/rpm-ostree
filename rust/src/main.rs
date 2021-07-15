@@ -4,11 +4,21 @@
 use anyhow::Result;
 use nix::sys::signal;
 
-fn inner_main(args: &[&str]) -> Result<()> {
+fn inner_main() -> Result<()> {
+    // Gather our arguments.
+    let args: Result<Vec<String>> = std::env::args_os()
+        .map(|s| -> Result<String> {
+            s.into_string()
+                .map_err(|s| anyhow::anyhow!("Argument is invalid UTF-8: {}", s.to_string_lossy()))
+                .into()
+        })
+        .collect();
+    let args = args?;
+    let args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     match args.get(1).copied() {
         // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
-        Some("countme") => rpmostree_rust::countme::entrypoint(args),
-        Some("ex-container") => rpmostree_rust::container::entrypoint(args),
+        Some("countme") => rpmostree_rust::countme::entrypoint(&args),
+        Some("ex-container") => rpmostree_rust::container::entrypoint(&args),
         _ => {
             // Otherwise fall through to C++ main().
             Ok(rpmostree_rust::ffi::rpmostree_main(&args)?)
@@ -40,12 +50,8 @@ fn main() {
         .with_writer(std::io::stderr)
         .init();
     tracing::trace!("starting");
-    // Gather our arguments.
-    let args: Vec<String> = std::env::args().collect();
-    let args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    // Process arguments, capturing any error.  Note that in some
-    // cases the C++ code may call exit(<code>) directly.
-    let r = inner_main(&args);
+    // Capture any error.  Note that in some cases the C++ code may still call exit(<code>) directly.
+    let r = inner_main();
     // Print the error
     if let Err(e) = r {
         // See discussion in CxxResult for why we use this format
