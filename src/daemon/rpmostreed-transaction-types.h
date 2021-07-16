@@ -59,6 +59,16 @@ typedef enum {
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY = (1 << 9),
 } RpmOstreeTransactionDeployFlags;
 
+gboolean
+rpmostree_callimpl_update_deployment (OstreeSysroot         *sysroot,
+                                      char                  *osname,
+                                      RpmOstreeTransactionDeployFlags default_flags,
+                                      GVariant              *options_v,
+                                      GVariant              *modifiers_v,
+                                      GUnixFDList           *fd_list,
+                                      RpmostreedTransaction *transaction,
+                                      GCancellable          *cancellable,
+                                      GError               **error);
 
 RpmostreedTransaction *
 rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
@@ -78,6 +88,20 @@ rpmostreed_transaction_new_finalize_deployment (GDBusMethodInvocation *invocatio
                                                 GVariant              *options,
                                                 GCancellable          *cancellable,
                                                 GError               **error);
+
+
+/* XXX: this method should go in a different file */
+gboolean
+rpmostree_callimpl_initramfs_etc (OstreeSysroot         *sysroot,
+                                  char                  *osname,
+                                  char                 **track,
+                                  char                 **untrack,
+                                  gboolean               untrack_all,
+                                  gboolean               force_sync,
+                                  GVariantDict          *options,
+                                  RpmostreedTransaction *transaction,
+                                  GCancellable          *cancellable,
+                                  GError               **error);
 
 RpmostreedTransaction *
 rpmostreed_transaction_new_initramfs_etc (GDBusMethodInvocation *invocation,

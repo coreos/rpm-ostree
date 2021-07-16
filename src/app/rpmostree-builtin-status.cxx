@@ -1089,17 +1089,15 @@ rpmostree_builtin_status (int             argc,
                           GCancellable   *cancellable,
                           GError        **error)
 {
+  g_autoptr(RpmOstreeMux) mux = NULL;
   g_autoptr(GOptionContext) context = g_option_context_new ("");
-  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
                                        NULL, NULL,
-                                       &sysroot_proxy,
+                                       NULL, &mux,
                                        error))
     return FALSE;
 
@@ -1110,13 +1108,18 @@ rpmostree_builtin_status (int             argc,
       return FALSE;
     }
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, cancellable, &os_proxy, error))
+  if (!rpmostree_mux_load_os (mux, NULL, cancellable, error))
     return FALSE;
 
-  g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+  RPMOSTreeOS *os_proxy = rpmostree_mux_get_os_proxy (mux);;
+  RPMOSTreeSysroot *sysroot_proxy = rpmostree_mux_get_sysroot_proxy (mux);;
+
+  g_autoptr(GVariant) deployments = rpmostree_mux_get_deployments (mux, error);
+  if (!deployments)
+    return FALSE;
   g_assert (deployments);
   g_autoptr(GVariant) cached_update = NULL;
-  if (rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
+  if (os_proxy && rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
     cached_update = rpmostree_os_dup_cached_update (os_proxy);
   g_autoptr(GVariant) driver_info = NULL;
   if (!get_driver_g_variant (&driver_info, error))
@@ -1130,7 +1133,7 @@ rpmostree_builtin_status (int             argc,
       json_builder_set_member_name (builder, "deployments");
       json_builder_add_value (builder, json_gvariant_serialize (deployments));
       json_builder_set_member_name (builder, "transaction");
-      GVariant *txn = get_active_txn (sysroot_proxy);
+      GVariant *txn = sysroot_proxy ? get_active_txn (sysroot_proxy) : NULL;
       JsonNode *txn_node =
         txn ? json_gvariant_serialize (txn) : json_node_new (JSON_NODE_NULL);
       json_builder_add_value (builder, txn_node);
@@ -1174,22 +1177,28 @@ rpmostree_builtin_status (int             argc,
     }
   else
     {
-      if (!print_daemon_state (sysroot_proxy, cancellable, error))
-        return FALSE;
+      if (sysroot_proxy)
+        {
+          if (!print_daemon_state (sysroot_proxy, cancellable, error))
+            return FALSE;
+        }
 
       gboolean printed_cached_update = FALSE;
       if (!print_deployments (sysroot_proxy, deployments, cached_update,
                               &printed_cached_update, cancellable, error))
         return FALSE;
 
-      const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
-      gboolean auto_updates_enabled = (!g_str_equal (policy, "none"));
-      if (cached_update && !printed_cached_update && auto_updates_enabled)
+      if (sysroot_proxy)
         {
-          g_print ("\n");
-          if (!rpmostree_print_cached_update (cached_update, opt_verbose,
-                                              opt_verbose_advisories, cancellable, error))
-            return FALSE;
+          const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
+          gboolean auto_updates_enabled = (!g_str_equal (policy, "none"));
+          if (cached_update && !printed_cached_update && auto_updates_enabled)
+            {
+              g_print ("\n");
+              if (!rpmostree_print_cached_update (cached_update, opt_verbose,
+                                                  opt_verbose_advisories, cancellable, error))
+                return FALSE;
+            }
         }
     }
 
@@ -1361,7 +1370,7 @@ rpmostree_ex_builtin_history (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL,
+                                       NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
 

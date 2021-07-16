@@ -67,7 +67,7 @@ rpmostree_load_sysroot                       (GCancellable      *cancellable,
 
 gboolean
 rpmostree_load_os_proxy                      (RPMOSTreeSysroot *sysroot_proxy,
-                                              gchar *opt_osname,
+                                              const char *opt_osname,
                                               GCancellable *cancellable,
                                               RPMOSTreeOS **out_os_proxy,
                                               GError **error);
@@ -166,5 +166,69 @@ gboolean
 error_if_driver_registered (RPMOSTreeSysroot *sysroot_proxy,
                             GCancellable     *cancellable,
                             GError          **error);
+
+typedef struct RpmOstreeMux RpmOstreeMux;
+
+gboolean
+rpmostree_mux_should_direct (const char *sysroot_path);
+
+RpmOstreeMux*
+rpmostree_mux_new (const char *sysroot_path,
+                   GCancellable *cancellable,
+                   GError **error);
+
+void
+rpmostree_mux_free (RpmOstreeMux *mux);
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeMux, rpmostree_mux_free);
+
+gboolean
+rpmostree_mux_is_dbus (RpmOstreeMux *mux);
+
+RPMOSTreeSysroot*
+rpmostree_mux_get_sysroot_proxy (RpmOstreeMux *mux);
+
+RPMOSTreeOS*
+rpmostree_mux_get_os_proxy (RpmOstreeMux *mux);
+
+gboolean
+rpmostree_mux_load_os (RpmOstreeMux *mux,
+                       const char *osname,
+                       GCancellable *cancellable,
+                       GError **error);
+
+GVariant*
+rpmostree_mux_get_default_deployment (RpmOstreeMux *mux,
+                                      GError **error);
+
+GVariant*
+rpmostree_mux_get_deployments (RpmOstreeMux *mux,
+                               GError **error);
+
+gboolean
+rpmostree_mux_call_initramfs_etc (RpmOstreeMux *mux,
+                                  const char *const *arg_track,
+                                  const char *const *arg_untrack,
+                                  gboolean arg_untrack_all,
+                                  gboolean arg_force_sync,
+                                  GVariantDict *arg_options,
+                                  GCancellable *cancellable,
+                                  GError **error);
+
+gboolean
+rpmostree_mux_call_update_deployment (RpmOstreeMux *mux,
+                                      RpmOstreeCommandInvocation *invocation,
+                                      const char   *set_refspec,
+                                      const char   *set_revision,
+                                      const char *const* install_pkgs,
+                                      const char *const* uninstall_pkgs,
+                                      const char *const* override_replace_pkgs,
+                                      const char *const* override_remove_pkgs,
+                                      const char *const* override_reset_pkgs,
+                                      const char   *local_repo_remote,
+                                      GVariant     *options,
+                                      gboolean      unchanged_exit_77,
+                                      GCancellable *cancellable,
+                                      GError      **error);
 
 G_END_DECLS

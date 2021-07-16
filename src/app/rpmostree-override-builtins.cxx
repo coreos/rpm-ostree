@@ -119,7 +119,8 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   else if (!opt_reboot)
     {
       /* only print diff if a new deployment was laid down (e.g. reset --all may not) */
-      if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
+      g_autoptr(GVariant) new_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+      if (!rpmostree_has_new_default_deployment (previous_deployment, new_deployment))
         return TRUE;
 
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
@@ -155,7 +156,7 @@ rpmostree_override_builtin_replace (int argc, char **argv,
                                        cancellable,
                                        &install_pkgs,
                                        &uninstall_pkgs,
-                                       &sysroot_proxy,
+                                       &sysroot_proxy, NULL,
                                        error))
     return FALSE;
 
@@ -196,7 +197,7 @@ rpmostree_override_builtin_remove (int argc, char **argv,
                                        cancellable,
                                        &install_pkgs,
                                        &uninstall_pkgs,
-                                       &sysroot_proxy,
+                                       &sysroot_proxy, NULL,
                                        error))
     return FALSE;
 
@@ -237,7 +238,7 @@ rpmostree_override_builtin_reset (int argc, char **argv,
                                        cancellable,
                                        &install_pkgs,
                                        &uninstall_pkgs,
-                                       &sysroot_proxy,
+                                       &sysroot_proxy, NULL,
                                        error))
     return FALSE;
 

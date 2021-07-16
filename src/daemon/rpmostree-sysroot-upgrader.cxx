@@ -517,9 +517,6 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
             if (!ostree_repo_pull_with_options (self->repo, origin_remote, opts, progress,
                                                 cancellable, error))
               return glnx_prefix_error (error, "While pulling %s", override_commit ?: origin_ref);
-
-            if (progress)
-              ostree_async_progress_finish (progress);
           }
 
         if (override_commit)
@@ -1259,7 +1256,7 @@ write_history (RpmOstreeSysrootUpgrader *self,
                GError                  **error)
 {
   g_autoptr(GVariant) deployment_variant =
-    rpmostreed_deployment_generate_variant (self->sysroot, new_deployment, NULL,
+    rpmostreed_deployment_generate_variant (self->sysroot, new_deployment,
                                             self->repo, FALSE, error);
   if (!deployment_variant)
     return FALSE;

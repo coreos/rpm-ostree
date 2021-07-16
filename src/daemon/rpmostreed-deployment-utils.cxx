@@ -228,7 +228,6 @@ filter_commit_meta (GVariant *commit_meta)
 GVariant*
 rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                         OstreeDeployment *deployment,
-                                        const char       *booted_id,
                                         OstreeRepo       *repo,
                                         gboolean          filter,
                                         GError          **error)

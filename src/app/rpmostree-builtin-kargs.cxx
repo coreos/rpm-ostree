@@ -180,7 +180,7 @@ rpmostree_builtin_kargs (int            argc,
                                        invocation,
                                        cancellable,
                                        NULL, NULL,
-                                       &sysroot_proxy,
+                                       &sysroot_proxy, NULL,
                                        error))
     return FALSE;
 
@@ -357,7 +357,8 @@ rpmostree_builtin_kargs (int            argc,
                                                 error))
     return FALSE;
 
-  if (rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
+  g_autoptr(GVariant) new_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  if (!rpmostree_has_new_default_deployment (previous_deployment, new_deployment))
     g_print("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
   else if (opt_unchanged_exit_77)
     invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;

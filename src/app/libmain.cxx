@@ -143,7 +143,6 @@ static RpmOstreeCommand commands[] = {
 };
 
 static gboolean opt_version;
-static gboolean opt_force_peer;
 static char *opt_sysroot;
 static gchar **opt_install;
 static gchar **opt_uninstall;
@@ -153,9 +152,8 @@ static GOptionEntry global_entries[] = {
   { NULL }
 };
 
-static GOptionEntry daemon_entries[] = {
+static GOptionEntry mux_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
-  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer-to-peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -219,13 +217,15 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 GCancellable *cancellable,
                                 const char *const* *out_install_pkgs,
                                 const char *const* *out_uninstall_pkgs,
+                                /* eventually, we'll just have out_mux here */
                                 RPMOSTreeSysroot **out_sysroot_proxy,
+                                RpmOstreeMux **out_mux,
                                 GError **error)
 {
   /* with --version there's no command, don't require a daemon for it */
   const RpmOstreeBuiltinFlags flags =
     invocation ? invocation->command->flags : RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD;
-  gboolean use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
+  gboolean use_mux = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
 
   if (invocation && invocation->command->description != NULL)
     {
@@ -240,8 +240,8 @@ rpmostree_option_context_parse (GOptionContext *context,
   if (main_entries != NULL)
     g_option_context_add_main_entries (context, main_entries, NULL);
 
-  if (use_daemon)
-    g_option_context_add_main_entries (context, daemon_entries, NULL);
+  if (use_mux)
+    g_option_context_add_main_entries (context, mux_entries, NULL);
 
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS) > 0)
     g_option_context_add_main_entries (context, pkg_entries, NULL);
@@ -276,13 +276,15 @@ rpmostree_option_context_parse (GOptionContext *context,
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0)
     rpmostreecxx::client_require_root();
 
-  if (use_daemon)
+  const char *sysroot_path = opt_sysroot ?: g_getenv ("RPMOSTREE_SYSROOT");
+
+  if (use_mux)
     {
       /* More gracefully handle the case where
        * no --sysroot option was specified and we're not booted via ostree
        * https://github.com/projectatomic/rpm-ostree/issues/1537
        */
-      if (!opt_sysroot)
+      if (!sysroot_path)
         {
           if (!glnx_fstatat_allow_noent (AT_FDCWD, "/run/ostree-booted", NULL, 0, error))
             return FALSE;
@@ -301,10 +303,21 @@ rpmostree_option_context_parse (GOptionContext *context,
         /* ignore errors; we print out a warning if we fail to spawn pkttyagent */
         (void)rpmostree_polkit_agent_open ();
 
-      if (!rpmostree_load_sysroot (cancellable,
-                                   out_sysroot_proxy,
-                                   error))
-        return FALSE;
+      /* Eventually we'll always load the mux here. See also comment in that
+       * function. For now, we only use it if the caller is opted in. */
+      if (out_mux)
+        {
+          g_assert_null (out_sysroot_proxy);
+          *out_mux = rpmostree_mux_new (sysroot_path, cancellable, error);
+          if (!*out_mux)
+            return FALSE;
+        }
+      else
+        {
+          g_assert_nonnull (out_sysroot_proxy);
+          if (!rpmostree_load_sysroot (cancellable, out_sysroot_proxy, error))
+            return FALSE;
+        }
     }
 
   if (out_install_pkgs)
@@ -389,7 +402,7 @@ rpmostree_handle_subcommand (int argc, char **argv,
                                              &argc, &argv,
                                              invocation,
                                              cancellable,
-                                             NULL, NULL, NULL, NULL);
+                                             NULL, NULL, NULL, NULL, NULL);
       if (subcommand_name == NULL)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -504,7 +517,7 @@ rpmostree_main_inner (const rust::Slice<const rust::Str> args)
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
                                              NULL, NULL, NULL, NULL, NULL,
-                                             NULL);
+                                             NULL, NULL);
       g_autofree char *help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
       if (command_name == NULL)

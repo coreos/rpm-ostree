@@ -356,6 +356,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                     self->revision, cancellable, error))
         return FALSE;
       rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+      ostree_async_progress_finish (progress);
     }
   else if (upgrading)
     {
@@ -377,6 +378,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                                cancellable, error))
       return FALSE;
     rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+    ostree_async_progress_finish (progress);
   }
 
   if (!changed)
@@ -592,20 +594,11 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
 
 typedef struct {
   RpmostreedTransaction parent;
-  RpmOstreeTransactionDeployFlags flags;
+  RpmOstreeTransactionDeployFlags default_flags;
   char   *osname;
-  GVariantDict *options;
-  GVariantDict *modifiers;
-  char   *refspec; /* NULL for non-rebases */
-  const char   *revision; /* NULL for upgrade; owned by @options */
-  char  **install_pkgs; /* strv but strings owned by modifiers */
-  GUnixFDList *install_local_pkgs;
-  char  **uninstall_pkgs; /* strv but strings owned by modifiers */
-  char  **override_replace_pkgs; /* strv but strings owned by modifiers */
-  GUnixFDList *override_replace_local_pkgs;
-  char  **override_remove_pkgs; /* strv but strings owned by modifiers */
-  char  **override_reset_pkgs; /* strv but strings owned by modifiers */
-  int local_repo_remote_dfd;
+  GVariant *options;
+  GVariant *modifiers;
+  GUnixFDList *fd_list;
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -624,17 +617,9 @@ deploy_transaction_finalize (GObject *object)
 
   self = (DeployTransaction *) object;
   g_free (self->osname);
-  g_clear_pointer (&self->options, g_variant_dict_unref);
-  g_clear_pointer (&self->modifiers, g_variant_dict_unref);
-  g_free (self->refspec);
-  g_free (self->install_pkgs);
-  g_clear_pointer (&self->install_local_pkgs, g_object_unref);
-  g_free (self->uninstall_pkgs);
-  g_free (self->override_replace_pkgs);
-  g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
-  g_free (self->override_remove_pkgs);
-  g_free (self->override_reset_pkgs);
-  glnx_close_fd (&self->local_repo_remote_dfd);
+  g_clear_pointer (&self->options, g_variant_unref);
+  g_clear_pointer (&self->modifiers, g_variant_unref);
+  g_clear_pointer (&self->fd_list, g_object_unref);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
@@ -779,17 +764,17 @@ get_sack_for_booted (OstreeSysroot    *sysroot,
 }
 
 static gboolean
-deploy_has_bool_option (DeployTransaction *self,
-                        const char        *option)
+dict_has_bool_option (GVariantDict   *dict,
+                      const char     *option)
 {
-  return vardict_lookup_bool (self->options, option, FALSE);
+  return vardict_lookup_bool (dict, option, FALSE);
 }
 
 static const char *
-deploy_has_string_option (DeployTransaction *self,
-                          const char        *option)
+dict_has_string_option (GVariantDict *dict,
+                        const char   *option)
 {
-  return static_cast<const char*>(vardict_lookup_ptr (self->options, option, "s"));
+  return static_cast<const char*>(vardict_lookup_ptr (dict, option, "s"));
 }
 
 /* Write a state file which records information about the agent that is "driving" updates */
@@ -882,38 +867,92 @@ get_driver_info (char   **name,
   return TRUE;
 }
 
-static gboolean
-deploy_transaction_execute (RpmostreedTransaction *transaction,
-                            GCancellable *cancellable,
-                            GError **error)
+/* See canonical version of this in ot-builtin-pull.c */
+static void
+noninteractive_console_progress_changed (OstreeAsyncProgress *progress,
+                                         gpointer             user_data)
 {
-  DeployTransaction *self = (DeployTransaction *) transaction;
-  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  /* We do nothing here - we just want the final status */
+}
+
+typedef struct {
+  char          *set_refspec;
+  char          *set_revision;
+  char         **install_pkgs;
+  char         **uninstall_pkgs;
+  GUnixFDList   *install_local_pkgs;
+  char         **override_replace_pkgs;
+  GUnixFDList   *override_replace_local_pkgs;
+  char         **override_remove_pkgs;
+  char         **override_reset_pkgs;
+  int            local_repo_remote_dfd;
+  RpmOstreeTransactionDeployFlags flags;
+} UpdateDeploymentCtx;
+
+static void
+update_deployment_ctx_free (UpdateDeploymentCtx *ctx)
+{
+  g_free (ctx->set_refspec);
+  g_free (ctx->install_pkgs);
+  g_free (ctx->uninstall_pkgs);
+  g_clear_pointer (&ctx->install_local_pkgs, g_object_unref);
+  g_free (ctx->override_replace_pkgs);
+  g_clear_pointer (&ctx->override_replace_local_pkgs, g_object_unref);
+  g_free (ctx->override_remove_pkgs);
+  g_free (ctx->override_reset_pkgs);
+  glnx_close_fd (&ctx->local_repo_remote_dfd);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(UpdateDeploymentCtx, update_deployment_ctx_free);
+
+static UpdateDeploymentCtx*
+update_deployment_ctx (RpmOstreeTransactionDeployFlags default_flags,
+                       GVariantDict *options,
+                       GVariantDict *modifiers,
+                       GUnixFDList  *fd_list,
+                       GError      **error);
+
+gboolean
+rpmostree_callimpl_update_deployment (OstreeSysroot         *sysroot,
+                                      char                  *osname,
+                                      RpmOstreeTransactionDeployFlags default_flags,
+                                      GVariant              *options_v,
+                                      GVariant              *modifiers_v,
+                                      GUnixFDList           *fd_list,
+                                      RpmostreedTransaction *transaction,
+                                      GCancellable          *cancellable,
+                                      GError               **error)
+{
+  g_autoptr(GVariantDict) options = g_variant_dict_new (options_v);
+  g_autoptr(GVariantDict) modifiers = g_variant_dict_new (modifiers_v);
+  g_autoptr(UpdateDeploymentCtx) ctx = update_deployment_ctx (default_flags, options, modifiers, fd_list, error);
+  if (!ctx)
+    return FALSE;
 
   const gboolean dry_run =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN) > 0);
-  const gboolean no_overrides = deploy_has_bool_option (self, "no-overrides");
-  const gboolean no_layering = deploy_has_bool_option (self, "no-layering");
-  const gboolean no_initramfs = deploy_has_bool_option (self, "no-initramfs");
-  const gboolean cache_only = deploy_has_bool_option (self, "cache-only");
-  const gboolean idempotent_layering = deploy_has_bool_option (self, "idempotent-layering");
+    ((ctx->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN) > 0);
+  const gboolean no_overrides = dict_has_bool_option (options, "no-overrides");
+  const gboolean no_layering = dict_has_bool_option (options, "no-layering");
+  const gboolean no_initramfs = dict_has_bool_option (options, "no-initramfs");
+  const gboolean cache_only = dict_has_bool_option (options, "cache-only");
+  const gboolean idempotent_layering = dict_has_bool_option (options, "idempotent-layering");
   const gboolean download_only =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY) > 0);
+    ((ctx->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY) > 0);
   /* Mainly for the `install` and `override` commands */
   const gboolean no_pull_base =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
+    ((ctx->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
   /* Used to background check for updates; this essentially means downloading the minimum
    * amount of metadata only to check if there's an upgrade */
   const gboolean download_metadata_only =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY) > 0);
-  const gboolean allow_inactive = deploy_has_bool_option (self, "allow-inactive");
-  g_autofree const char *update_driver = deploy_has_string_option (self, "register-driver");
+    ((ctx->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY) > 0);
+  const gboolean allow_inactive = dict_has_bool_option (options, "allow-inactive");
+  g_autofree const char *update_driver = dict_has_string_option (options, "register-driver");
 
   gboolean is_install = FALSE;
   gboolean is_uninstall = FALSE;
   gboolean is_override = FALSE;
 
-  if (deploy_has_bool_option (self, "apply-live") && deploy_has_bool_option (self, "reboot"))
+  if (dict_has_bool_option (options, "apply-live") && dict_has_bool_option (options, "reboot"))
     return glnx_throw (error, "Cannot specify `apply-live` and `reboot`");
 
   /* In practice today */
@@ -921,14 +960,14 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       /* this is a heuristic; by the end, once the proper switches are added, the two
        * commands can look indistinguishable at the D-Bus level */
-      is_override = (self->override_reset_pkgs ||
-                     self->override_remove_pkgs ||
-                     self->override_replace_pkgs ||
-                     self->override_replace_local_pkgs ||
+      is_override = (ctx->override_reset_pkgs ||
+                     ctx->override_remove_pkgs ||
+                     ctx->override_replace_pkgs ||
+                     ctx->override_replace_local_pkgs ||
                      no_overrides);
       if (!is_override)
         {
-          if (self->install_pkgs || self->install_local_pkgs)
+          if (ctx->install_pkgs || ctx->install_local_pkgs)
             is_install = TRUE;
           else
             is_uninstall = TRUE;
@@ -936,15 +975,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   auto command_line = (const char *)
-    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
+    vardict_lookup_ptr (options, "initiating-command-line", "&s");
 
   /* If we're not actively holding back pulling a new update and we're staying on the same
    * ref, then by definition we're upgrading. */
-  const gboolean is_upgrade = (!no_pull_base && !self->refspec && !self->revision);
+  const gboolean is_upgrade = (!no_pull_base && !ctx->set_refspec && !ctx->set_revision);
 
   /* Now set the transaction title before doing any work.
    * https://github.com/projectatomic/rpm-ostree/issues/454 */
-  if (command_line)
+  if (command_line && transaction)
     {
       /* special-case the automatic one, otherwise just use verbatim as title */
       const char *title = command_line;
@@ -952,7 +991,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         title = download_metadata_only ? "automatic (check)" : "automatic (stage)";
       rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), title);
     }
-  else
+  else if (transaction)
     {
       g_autoptr(GString) txn_title = g_string_new ("");
       if (is_install)
@@ -961,9 +1000,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         g_string_append (txn_title, "uninstall");
       else if (is_override)
         g_string_append (txn_title, "override");
-      else if (self->refspec)
+      else if (ctx->set_refspec)
         g_string_append (txn_title, "rebase");
-      else if (self->revision)
+      else if (ctx->set_revision)
         g_string_append (txn_title, "deploy");
       else
         g_string_append (txn_title, "upgrade");
@@ -976,27 +1015,27 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       else if (download_only)
         g_string_append (txn_title, " (download only)");
 
-      if (self->uninstall_pkgs)
+      if (ctx->uninstall_pkgs)
         g_string_append_printf (txn_title, "; uninstall: %u",
-                                g_strv_length (self->uninstall_pkgs));
-      if (self->install_pkgs)
+                                g_strv_length (ctx->uninstall_pkgs));
+      if (ctx->install_pkgs)
         g_string_append_printf (txn_title, "; install: %u",
-                                g_strv_length (self->install_pkgs));
-      if (self->install_local_pkgs)
+                                g_strv_length (ctx->install_pkgs));
+      if (ctx->install_local_pkgs)
         g_string_append_printf (txn_title, "; localinstall: %u",
-                                g_unix_fd_list_get_length (self->install_local_pkgs));
+                                g_unix_fd_list_get_length (ctx->install_local_pkgs));
 
       rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), txn_title->str);
     }
 
-  if (update_driver)
+  if (update_driver && transaction)
     {
       if (!record_driver_info (transaction, update_driver, cancellable, error))
         return FALSE;
       /* If revision is an empty string, we interpret this to mean that the invocation
        * was called solely for the purpose of registering the update driver. Exit early without
        * doing any further work. */
-      if (self->revision && self->revision[0] == '\0')
+      if (ctx->set_revision && ctx->set_revision[0] == '\0')
         {
           rpmostree_output_message ("Empty string revision found; registering update driver only");
           return TRUE;
@@ -1004,11 +1043,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   int upgrader_flags = 0;
-  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
+  if (ctx->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (dry_run)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
-  if (deploy_has_bool_option (self, "lock-finalization"))
+  if (dict_has_bool_option (options, "lock-finalization"))
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
 
   /* DOWNLOAD_METADATA_ONLY isn't directly exposed at the D-Bus API level, so we shouldn't
@@ -1029,13 +1068,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (no_overrides)
     {
-      g_assert (self->override_replace_pkgs == NULL);
-      g_assert (self->override_replace_local_pkgs == NULL);
-      g_assert (self->override_remove_pkgs == NULL);
-      g_assert (self->override_reset_pkgs == NULL);
+      g_assert (ctx->override_replace_pkgs == NULL);
+      g_assert (ctx->override_replace_local_pkgs == NULL);
+      g_assert (ctx->override_remove_pkgs == NULL);
+      g_assert (ctx->override_reset_pkgs == NULL);
     }
 
-  if (self->refspec)
+  if (ctx->set_refspec)
     {
       /* When rebasing, we should be able to switch to a different tree even if
        * the current origin is unconfigured */
@@ -1048,7 +1087,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, (RpmOstreeSysrootUpgraderFlags)upgrader_flags,
+    rpmostree_sysroot_upgrader_new (sysroot, osname, (RpmOstreeSysrootUpgraderFlags)upgrader_flags,
                                     cancellable, error);
   if (upgrader == NULL)
     return FALSE;
@@ -1059,62 +1098,105 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* Handle local repo remotes immediately; the idea is that the remote is "transient"
    * (otherwise, one should set up a proper file:/// remote), so we only support rebasing to
    * a checksum. We don't want to import a ref. */
-  if (self->local_repo_remote_dfd != -1)
+  if (ctx->local_repo_remote_dfd != -1)
     {
-      /* self->refspec is the rev in the other local repo we'll rebase to */
-      g_assert (self->refspec);
+      /* set_refspec is the rev in the other local repo we'll rebase to */
+      g_assert (ctx->set_refspec);
 
       RpmOstreeRefspecType refspectype;
-      if (!rpmostree_refspec_classify (self->refspec, &refspectype, error))
+      if (!rpmostree_refspec_classify (ctx->set_refspec, &refspectype, error))
         return FALSE;
 
       g_autoptr(OstreeRepo) local_repo_remote =
-        ostree_repo_open_at (self->local_repo_remote_dfd, ".", cancellable, error);
+        ostree_repo_open_at (ctx->local_repo_remote_dfd, ".", cancellable, error);
       if (!local_repo_remote)
         return glnx_prefix_error (error, "Failed to open local repo");
       g_autofree char *rev = NULL;
-      if (!ostree_repo_resolve_rev (local_repo_remote, self->refspec, FALSE, &rev, error))
+      if (!ostree_repo_resolve_rev (local_repo_remote, ctx->set_refspec, FALSE, &rev, error))
         return FALSE;
 
+      // XXX: fold into rpmostree_output API
       g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
-      rpmostreed_transaction_connect_download_progress (transaction, progress);
+      g_auto(GLnxConsoleRef) console = { 0, };
+      if (transaction)
+        rpmostreed_transaction_connect_download_progress (transaction, progress);
+      else
+        {
+          glnx_console_lock (&console);
+          g_signal_connect (progress, "changed", G_CALLBACK (console.is_tty
+                ? ostree_repo_pull_default_console_progress_changed
+                : noninteractive_console_progress_changed), &console);
+        }
 
       /* pull-local into the system repo */
       const char *refs_to_fetch[] = { rev, NULL };
       g_autofree char *local_repo_uri =
-        g_strdup_printf ("file:///proc/self/fd/%d", self->local_repo_remote_dfd);
+        g_strdup_printf ("file:///proc/self/fd/%d", ctx->local_repo_remote_dfd);
       if (!ostree_repo_pull (repo, local_repo_uri, (char**)refs_to_fetch,
                              OSTREE_REPO_PULL_FLAGS_NONE, progress, cancellable, error))
         return glnx_prefix_error (error, "Pulling commit %s from local repo", rev);
+      if (!transaction)
+        {
+          if (!console.is_tty)
+            {
+              const char *status = ostree_async_progress_get_status (progress);
+              if (status)
+                g_print ("%s\n", status);
+            }
+        }
+      else
+        rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
       ostree_async_progress_finish (progress);
-      rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
       /* as far as the rest of the code is concerned, we're rebasing to :SHA256 now */
-      g_clear_pointer (&self->refspec, g_free);
-      self->refspec = g_strdup_printf (":%s", rev);
-      glnx_close_fd (&self->local_repo_remote_dfd);
+      g_clear_pointer (&ctx->set_refspec, g_free);
+      ctx->set_refspec = g_strdup_printf (":%s", rev);
+      glnx_close_fd (&ctx->local_repo_remote_dfd);
     }
 
   g_autofree gchar *new_refspec = NULL;
   g_autofree gchar *old_refspec = NULL;
-  if (self->refspec)
+  if (ctx->set_refspec)
     {
-      if (!change_origin_refspec (self->options, sysroot, origin, self->refspec, cancellable,
+      if (!change_origin_refspec (options, sysroot, origin, ctx->set_refspec, cancellable,
                                   &old_refspec, &new_refspec, error))
         return FALSE;
     }
 
-  rpmostreed_transaction_connect_signature_progress (transaction, repo);
+  if (transaction)
+    rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
-  if (self->revision)
+  if (ctx->set_revision)
     {
+      // XXX: fold into rpmostree_output API
       g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
-      rpmostreed_transaction_connect_download_progress (transaction, progress);
+      g_auto(GLnxConsoleRef) console = { 0, };
+      if (transaction)
+        rpmostreed_transaction_connect_download_progress (transaction, progress);
+      else
+        {
+          glnx_console_lock (&console);
+          g_signal_connect (progress, "changed", G_CALLBACK (console.is_tty
+                ? ostree_repo_pull_default_console_progress_changed
+                : noninteractive_console_progress_changed), &console);
+        }
+
       if (!apply_revision_override (transaction, repo, progress, origin,
-                                    deploy_has_bool_option (self, "skip-branch-check"),
-                                    self->revision, cancellable, error))
+                                    dict_has_bool_option (options, "skip-branch-check"),
+                                    ctx->set_revision, cancellable, error))
         return FALSE;
-      rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+      if (transaction)
+        {
+          if (!console.is_tty)
+            {
+              const char *status = ostree_async_progress_get_status (progress);
+              if (status)
+                g_print ("%s\n", status);
+            }
+        }
+      else
+        rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+      ostree_async_progress_finish (progress);
     }
   else
     {
@@ -1134,7 +1216,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   // Handle the --ex-cliwrap option
   {
     gboolean cliwrap = FALSE;
-    if (g_variant_dict_lookup (self->options, "ex-cliwrap", "b", &cliwrap))
+    if (g_variant_dict_lookup (options, "ex-cliwrap", "b", &cliwrap))
       {
         rpmostree_origin_set_cliwrap (origin, cliwrap);
         changed = TRUE;
@@ -1147,9 +1229,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!rpmostree_origin_remove_all_packages (origin, &remove_changed, error))
         return FALSE;
     }
-  else if (self->uninstall_pkgs)
+  else if (ctx->uninstall_pkgs)
     {
-      if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs,
+      if (!rpmostree_origin_remove_packages (origin, ctx->uninstall_pkgs,
                                              idempotent_layering, &remove_changed, error))
         return FALSE;
     }
@@ -1162,7 +1244,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* lazily loaded cache that's used in a few conditional blocks */
   g_autoptr(RpmOstreeRefSack) base_rsack = NULL;
 
-  if (self->install_pkgs)
+  if (ctx->install_pkgs)
     {
       /* we run a special check here; let's just not allow trying to install a pkg that will
        * right away become inactive because it's already installed */
@@ -1175,7 +1257,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
         }
 
-      for (char **it = self->install_pkgs; it && *it; it++)
+      for (char **it = ctx->install_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
           g_autoptr(GPtrArray) pkgs =
@@ -1195,17 +1277,17 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
 
       gboolean add_changed = FALSE;
-      if (!rpmostree_origin_add_packages (origin, self->install_pkgs, FALSE,
+      if (!rpmostree_origin_add_packages (origin, ctx->install_pkgs, FALSE,
                                           idempotent_layering, &add_changed, error))
         return FALSE;
 
       changed = changed || add_changed;
     }
 
-  if (self->install_local_pkgs != NULL)
+  if (ctx->install_local_pkgs != NULL)
     {
       g_autoptr(GPtrArray) pkgs = NULL;
-      if (!import_many_local_rpms (repo, self->install_local_pkgs, &pkgs,
+      if (!import_many_local_rpms (repo, ctx->install_local_pkgs, &pkgs,
                                    cancellable, error))
         return FALSE;
 
@@ -1230,7 +1312,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       changed = changed || overrides_changed;
     }
-  else if (self->override_reset_pkgs || self->override_replace_local_pkgs)
+  else if (ctx->override_reset_pkgs || ctx->override_replace_local_pkgs)
     {
       /* The origin stores removal overrides as pkgnames and replacement overrides as nevra.
        * To be nice, we support both name & nevra and do the translation here by just
@@ -1284,7 +1366,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_ptr_array_add (names_to_free, g_steal_pointer (&name));
         }
 
-      for (char **it = self->override_reset_pkgs; it && *it; it++)
+      for (char **it = ctx->override_reset_pkgs; it && *it; it++)
         {
           const char *name_or_nevra = *it;
           auto name = static_cast<const char *>(g_hash_table_lookup (nevra_to_name, name_or_nevra));
@@ -1319,10 +1401,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);
         }
 
-      if (self->override_replace_local_pkgs)
+      if (ctx->override_replace_local_pkgs)
         {
           g_autoptr(GPtrArray) pkgs = NULL;
-          if (!import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
+          if (!import_many_local_rpms (repo, ctx->override_replace_local_pkgs, &pkgs,
                                        cancellable, error))
             return FALSE;
 
@@ -1367,12 +1449,34 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (download_metadata_only)
         flags |= OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY;
 
+      // XXX: fold into rpmostree_output API
       g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
-      rpmostreed_transaction_connect_download_progress (transaction, progress);
+      g_auto(GLnxConsoleRef) console = { 0, };
+      if (transaction)
+        rpmostreed_transaction_connect_download_progress (transaction, progress);
+      else
+        {
+          glnx_console_lock (&console);
+          g_signal_connect (progress, "changed", G_CALLBACK (console.is_tty
+                ? ostree_repo_pull_default_console_progress_changed
+                : noninteractive_console_progress_changed), &console);
+        }
+
       if (!rpmostree_sysroot_upgrader_pull_base (upgrader, NULL, (OstreeRepoPullFlags)flags, progress,
                                                  &base_changed, cancellable, error))
         return FALSE;
-      rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+      if (!transaction)
+        {
+          if (!console.is_tty)
+            {
+              const char *status = ostree_async_progress_get_status (progress);
+              if (status)
+                g_print ("%s\n", status);
+            }
+        }
+      else
+        rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+      ostree_async_progress_finish (progress);
 
       if (base_changed)
         changed = TRUE;
@@ -1396,7 +1500,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
    * anyway in the common case even if there's an error with the overrides,
    * users will fix it and try again, so the second pull will be a no-op */
 
-  if (self->override_remove_pkgs)
+  if (ctx->override_remove_pkgs)
     {
       if (!base_rsack)
         {
@@ -1408,7 +1512,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       /* NB: the strings are owned by the sack pool */
       g_autoptr(GPtrArray) pkgnames = g_ptr_array_new ();
-      for (char **it = self->override_remove_pkgs; it && *it; it++)
+      for (char **it = ctx->override_remove_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
           g_autoptr(GPtrArray) pkgs =
@@ -1456,9 +1560,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       /* this is checked in AutomaticUpdateTrigger, but check here too to be safe */
       if (!booted_deployment ||
-          !g_str_equal (self->osname, ostree_deployment_get_osname (booted_deployment)))
+          !g_str_equal (osname, ostree_deployment_get_osname (booted_deployment)))
         return glnx_throw (error, "Refusing to download rpm-md for offline OS '%s'",
-                           self->osname);
+                           osname);
 
       g_autoptr(DnfSack) sack = NULL;
       if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
@@ -1493,15 +1597,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
     }
 
-  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
-                                              rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
-                                              rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line,
+    transaction ? rpmostreed_transaction_get_agent_id (transaction) : NULL,
+    transaction ? rpmostreed_transaction_get_sd_unit (transaction) : NULL);
 
   /* TODO - better logic for "changed" based on deployments */
-  if (changed || self->refspec)
+  if (changed)
     {
       /* Note early return; we stop short of actually writing the deployment */
-      if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY)
+      if (ctx->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY)
         {
           /* XXX: improve msg here; e.g. cache will be blown on next operation? */
           if (changed)
@@ -1517,7 +1621,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
 
       /* Are we rebasing?  May want to delete the previous ref */
-      if (self->refspec && !(deploy_has_bool_option (self, "skip-purge")))
+      if (ctx->set_refspec && !(dict_has_bool_option (options, "skip-purge")))
         {
           g_autofree char *remote = NULL;
           g_autofree char *ref = NULL;
@@ -1547,13 +1651,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
         }
 
-      if (deploy_has_bool_option (self, "apply-live"))
+      if (dict_has_bool_option (options, "apply-live"))
         {
           g_autoptr(GVariantDict) dictv = g_variant_dict_new (NULL);
           g_autoptr(GVariant) live_opts = g_variant_ref_sink (g_variant_dict_end (dictv));
           rpmostreecxx::transaction_apply_live(*sysroot, *live_opts);
         }
-      else if (deploy_has_bool_option (self, "reboot"))
+      else if (dict_has_bool_option (options, "reboot"))
         {
           if (!check_sd_inhibitor_locks (cancellable, error))
             return FALSE;
@@ -1583,6 +1687,24 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   return TRUE;
 }
 
+static gboolean
+deploy_transaction_execute (RpmostreedTransaction *transaction,
+                            GCancellable *cancellable,
+                            GError **error)
+{
+  DeployTransaction *self = (DeployTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  return rpmostree_callimpl_update_deployment (sysroot,
+                                               self->osname,
+                                               self->default_flags,
+                                               self->options,
+                                               self->modifiers,
+                                               self->fd_list,
+                                               transaction,
+                                               cancellable,
+                                               error);
+}
+
 static void
 deploy_transaction_class_init (DeployTransactionClass *clazz)
 {
@@ -1597,7 +1719,6 @@ deploy_transaction_class_init (DeployTransactionClass *clazz)
 static void
 deploy_transaction_init (DeployTransaction *self)
 {
-  self->local_repo_remote_dfd = -1;
 }
 
 static char **
@@ -1738,37 +1859,52 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
    */
 
   self->osname = g_strdup (osname);
-  self->options = g_variant_dict_ref (options_dict);
-  self->modifiers = g_variant_dict_new (modifiers);
+  self->options = g_variant_ref (options);
+  self->modifiers = g_variant_ref (modifiers);
 
-  self->flags = deploy_flags_from_options (self->options, default_flags);
+  self->default_flags = default_flags;
+  self->fd_list = (GUnixFDList*)g_object_ref (fd_list);
+  return (RpmostreedTransaction *) util::move_nullify (self);
+}
 
-  auto refspec = (const char *)vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
+static UpdateDeploymentCtx*
+update_deployment_ctx (RpmOstreeTransactionDeployFlags default_flags,
+                       GVariantDict *options,
+                       GVariantDict *modifiers,
+                       GUnixFDList  *fd_list,
+                       GError      **error)
+{
+  UpdateDeploymentCtx *self = g_new0 (UpdateDeploymentCtx, 1);
+  self->local_repo_remote_dfd = -1;
+
+  self->flags = deploy_flags_from_options (options, default_flags);
+
+  auto refspec = (const char *)vardict_lookup_ptr (modifiers, "set-refspec", "&s");
   if (refspec)
-    self->refspec = g_strdup (refspec);
+    self->set_refspec = g_strdup (refspec);
 
-  const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
+  self->set_revision = (char*)vardict_lookup_ptr (modifiers, "set-revision", "&s");
+  self->install_pkgs = vardict_lookup_strv_canonical (modifiers, "install-packages");
+  self->uninstall_pkgs = vardict_lookup_strv_canonical (modifiers, "uninstall-packages");
+  self->override_replace_pkgs = vardict_lookup_strv_canonical (modifiers, "override-replace-packages");
+  self->override_remove_pkgs = vardict_lookup_strv_canonical (modifiers, "override-remove-packages");
+  self->override_reset_pkgs = vardict_lookup_strv_canonical (modifiers, "override-reset-packages");
 
-  self->revision = (char*)vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
-  self->install_pkgs = vardict_lookup_strv_canonical (self->modifiers, "install-packages");
-  self->uninstall_pkgs = vardict_lookup_strv_canonical (self->modifiers, "uninstall-packages");
-  self->override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
-  self->override_remove_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-remove-packages");
-  self->override_reset_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-reset-packages");
+  const gboolean refspec_or_revision = (self->set_refspec != NULL || self->set_revision != NULL);
 
   /* default to allowing downgrades for rebases & deploys (without --disallow-downgrade) */
-  if (vardict_lookup_bool (self->options, "allow-downgrade", refspec_or_revision))
-    self->flags = static_cast<RpmOstreeTransactionDeployFlags>(self-> flags | RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE);
+  if (vardict_lookup_bool (options, "allow-downgrade", refspec_or_revision))
+    self->flags = static_cast<RpmOstreeTransactionDeployFlags>(self->flags | RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE);
 
   g_autoptr(GVariant) install_local_pkgs_idxs =
-    g_variant_dict_lookup_value (self->modifiers, "install-local-packages",
+    g_variant_dict_lookup_value (modifiers, "install-local-packages",
                                  G_VARIANT_TYPE("ah"));
   g_autoptr(GVariant) override_replace_local_pkgs_idxs =
-    g_variant_dict_lookup_value (self->modifiers, "override-replace-local-packages",
+    g_variant_dict_lookup_value (modifiers, "override-replace-local-packages",
                                  G_VARIANT_TYPE("ah"));
   int local_repo_remote_idx = -1;
   /* See related blurb in get_modifiers_variant() */
-  g_variant_dict_lookup (self->modifiers, "ex-local-repo-remote", "h", &local_repo_remote_idx);
+  g_variant_dict_lookup (modifiers, "ex-local-repo-remote", "h", &local_repo_remote_idx);
 
   /* First in the fd list is local RPM fds, which are relevant in the
    * `install foo.rpm` case and the `override replace foo.rpm` case. Let's make sure that
@@ -1791,7 +1927,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
     actual_fdn = g_unix_fd_list_get_length (fd_list);
 
   if (expected_fdn != actual_fdn)
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Expected %u fds but received %u",
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Expected %u fds but received %u",
                             expected_fdn, actual_fdn);
 
   /* split into two fd lists to make it easier for deploy_transaction_execute */
@@ -1824,33 +1960,33 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
 
   /* Also check for conflicting options -- this is after all a public API. */
 
-  if (!self->refspec && vardict_lookup_bool (self->options, "skip-purge", FALSE))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify skip-purge if not setting a "
+  if (!self->set_refspec && vardict_lookup_bool (options, "skip-purge", FALSE))
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Can't specify skip-purge if not setting a "
                                    "new refspec");
   if (refspec_or_revision &&
-      vardict_lookup_bool (self->options, "no-pull-base", FALSE))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify no-pull-base if setting a "
+      vardict_lookup_bool (options, "no-pull-base", FALSE))
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Can't specify no-pull-base if setting a "
                                    "new refspec or revision");
-  if (vardict_lookup_bool (self->options, "cache-only", FALSE) &&
-      vardict_lookup_bool (self->options, "download-only", FALSE))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify cache-only and download-only");
-  if (vardict_lookup_bool (self->options, "dry-run", FALSE) &&
-      vardict_lookup_bool (self->options, "download-only", FALSE))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify dry-run and download-only");
+  if (vardict_lookup_bool (options, "cache-only", FALSE) &&
+      vardict_lookup_bool (options, "download-only", FALSE))
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Can't specify cache-only and download-only");
+  if (vardict_lookup_bool (options, "dry-run", FALSE) &&
+      vardict_lookup_bool (options, "download-only", FALSE))
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Can't specify dry-run and download-only");
   if (self->override_replace_pkgs)
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
 
-  if (vardict_lookup_bool (self->options, "no-overrides", FALSE) &&
+  if (vardict_lookup_bool (options, "no-overrides", FALSE) &&
       (self->override_remove_pkgs || self->override_reset_pkgs ||
        self->override_replace_pkgs || override_replace_local_pkgs_idxs))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify no-overrides if setting "
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Can't specify no-overrides if setting "
                                    "override modifiers");
-  if (!self->refspec && self->local_repo_remote_dfd != -1)
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Missing ref for transient local rebases");
-  if (self->revision && self->local_repo_remote_dfd != -1)
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Revision overrides for transient local rebases not implemented yet");
+  if (!self->set_refspec && self->local_repo_remote_dfd != -1)
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Missing ref for transient local rebases");
+  if (self->set_revision && self->local_repo_remote_dfd != -1)
+    return (UpdateDeploymentCtx*)glnx_null_throw (error, "Revision overrides for transient local rebases not implemented yet");
 
-  return (RpmostreedTransaction *) util::move_nullify (self);
+  return (UpdateDeploymentCtx *) util::move_nullify (self);
 }
 
 /* ================================ InitramfsEtc ================================ */
@@ -1887,52 +2023,59 @@ initramfs_etc_transaction_finalize (GObject *object)
   G_OBJECT_CLASS (initramfs_etc_transaction_parent_class)->finalize (object);
 }
 
-static gboolean
-initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
-                                   GCancellable *cancellable,
-                                   GError **error)
+/* XXX: should be in a separate file */
+gboolean
+rpmostree_callimpl_initramfs_etc (OstreeSysroot         *sysroot,
+                                  char                  *osname,
+                                  char                 **track,
+                                  char                 **untrack,
+                                  gboolean               untrack_all,
+                                  gboolean               force_sync,
+                                  GVariantDict          *options,
+                                  RpmostreedTransaction *transaction,
+                                  GCancellable          *cancellable,
+                                  GError               **error)
 {
-  InitramfsEtcTransaction *self = (InitramfsEtcTransaction *) transaction;
-  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   auto command_line = (const char *)
-    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
+    vardict_lookup_ptr (options, "initiating-command-line", "&s");
 
   int upgrader_flags = 0;
-  if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
+  if (vardict_lookup_bool (options, "lock-finalization", FALSE))
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
 
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags), cancellable, error);
+    rpmostree_sysroot_upgrader_new (sysroot, osname,
+        static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags), cancellable, error);
   if (upgrader == NULL)
     return FALSE;
-  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
-                                              rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
-                                              rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line,
+    transaction ? rpmostreed_transaction_get_agent_id (transaction) : NULL,
+    transaction ? rpmostreed_transaction_get_sd_unit (transaction) : NULL);
 
   g_autoptr(RpmOstreeOrigin) origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
   gboolean changed = FALSE;
-  if (self->untrack_all)
+  if (untrack_all)
     {
       gboolean subchanged = FALSE;
       rpmostree_origin_initramfs_etc_files_untrack_all (origin, &subchanged);
       changed = changed || subchanged;
     }
-  else if (self->untrack)
+  else if (untrack)
     {
       gboolean subchanged = FALSE;
-      rpmostree_origin_initramfs_etc_files_untrack (origin, self->untrack, &subchanged);
+      rpmostree_origin_initramfs_etc_files_untrack (origin, untrack, &subchanged);
       changed = changed || subchanged;
     }
 
-  if (self->track)
+  if (track)
     {
       gboolean subchanged = FALSE;
-      rpmostree_origin_initramfs_etc_files_track (origin, self->track, &subchanged);
+      rpmostree_origin_initramfs_etc_files_track (origin, track, &subchanged);
       changed = changed || subchanged;
     }
 
-  if (!changed && !self->force_sync)
+  if (!changed && !force_sync)
     {
       rpmostree_output_message ("No changes.");
       return TRUE; /* Note early return */
@@ -1950,7 +2093,7 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
 
-  if (vardict_lookup_bool (self->options, "reboot", FALSE))
+  if (vardict_lookup_bool (options, "reboot", FALSE))
     {
       if (!check_sd_inhibitor_locks (cancellable, error))
         return FALSE;
@@ -1958,6 +2101,25 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   return TRUE;
+}
+
+static gboolean
+initramfs_etc_transaction_execute (RpmostreedTransaction *transaction,
+                                   GCancellable *cancellable,
+                                   GError **error)
+{
+  InitramfsEtcTransaction *self = (InitramfsEtcTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  return rpmostree_callimpl_initramfs_etc (sysroot,
+                                           self->osname,
+                                           self->track,
+                                           self->untrack,
+                                           self->untrack_all,
+                                           self->force_sync,
+                                           self->options,
+                                           transaction,
+                                           cancellable,
+                                           error);
 }
 
 static void

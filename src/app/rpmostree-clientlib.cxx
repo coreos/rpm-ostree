@@ -24,6 +24,7 @@
 #include <sys/socket.h>
 #include <sys/prctl.h>
 #include <err.h>
+#include <systemd/sd-daemon.h>
 #include <systemd/sd-login.h>
 #include <utility>
 #include <unistd.h>
@@ -38,7 +39,10 @@
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-cxxrs.h"
+
+/* XXX: should move things we need from there into libpriv */
 #include "rpmostreed-transaction-types.h"
+#include "rpmostreed-deployment-utils.h"
 
 static gboolean
 impl_transaction_get_response_sync (GDBusConnection *connection,
@@ -286,7 +290,7 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
 
 gboolean
 rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
-                         gchar *opt_osname,
+                         const char *opt_osname,
                          GCancellable *cancellable,
                          RPMOSTreeOS **out_os_proxy,
                          GError **error)
@@ -792,9 +796,65 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
   return TRUE;
 }
 
+static gboolean
+transaction_handle_options_and_diff (RpmOstreeCommandInvocation *invocation,
+                                     GVariant         *options,
+                                     gboolean          exit_unchanged_77,
+                                     const char       *sysroot_path,
+                                     GVariant         *previous_deployment,
+                                     GVariant         *new_deployment,
+                                     GCancellable     *cancellable,
+                                     GError          **error)
+{
+  g_auto(GVariantDict) optdict = G_VARIANT_DICT_INIT (options);
+  /* Parse back the options variant */
+  gboolean opt_reboot = FALSE;
+  g_variant_dict_lookup (&optdict, "reboot", "b", &opt_reboot);
+  gboolean opt_dry_run = FALSE;
+  g_variant_dict_lookup (&optdict, "dry-run", "b", &opt_dry_run);
+  gboolean opt_apply_live = FALSE;
+  g_variant_dict_lookup (&optdict, "apply-live", "b", &opt_apply_live);
+
+  if (opt_dry_run)
+    {
+      g_print ("Exiting because of '--dry-run' option\n");
+    }
+  else if (!opt_reboot)
+    {
+      if (!rpmostree_has_new_default_deployment (previous_deployment, new_deployment))
+        {
+          if (exit_unchanged_77)
+            invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+          return TRUE;
+        }
+      else if (!opt_apply_live)
+        {
+          /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
+          rpmostreecxx::print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
+                RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable);
+          g_print ("Changes queued for next boot. Run \"systemctl reboot\" to start a reboot\n");
+        }
+      else if (opt_apply_live)
+        {
+          g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+          g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
+          if (!ostree_sysroot_load (sysroot, cancellable, error))
+            return FALSE;
+          rpmostreecxx::applylive_finish (*sysroot);
+        }
+      else
+        g_assert_not_reached ();
+    }
+
+  return TRUE;
+}
+
 /* Handles client-side processing for most command line tools
  * after a transaction has been started.  Wraps invocation
  * of rpmostree_transaction_get_response_sync().
+ *
+ * XXX: Eventually once everything is migrated, this will be a private function
+ * of RpmOstreeMux.
  */
 gboolean
 rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
@@ -812,51 +872,11 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
                                                 cancellable, error))
     return FALSE;
 
-  /* Process the result of the txn and our options */
-
-  g_auto(GVariantDict) optdict = G_VARIANT_DICT_INIT (options);
-  /* Parse back the options variant */
-  gboolean opt_reboot = FALSE;
-  g_variant_dict_lookup (&optdict, "reboot", "b", &opt_reboot);
-  gboolean opt_dry_run = FALSE;
-  g_variant_dict_lookup (&optdict, "dry-run", "b", &opt_dry_run);
-  gboolean opt_apply_live = FALSE;
-  g_variant_dict_lookup (&optdict, "apply-live", "b", &opt_apply_live);
-
-  if (opt_dry_run)
-    {
-      g_print ("Exiting because of '--dry-run' option\n");
-    }
-  else if (!opt_reboot)
-    {
-      if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
-        {
-          if (exit_unchanged_77)
-            invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
-          return TRUE;
-        }
-      else if (!opt_apply_live)
-        {
-          /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
-          const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-          rpmostreecxx::print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
-                RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable);
-          g_print ("Changes queued for next boot. Run \"systemctl reboot\" to start a reboot\n");
-        }
-      else if (opt_apply_live)
-        {
-          const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-          g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
-          g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
-          if (!ostree_sysroot_load (sysroot, cancellable, error))
-            return FALSE;
-          rpmostreecxx::applylive_finish (*sysroot);
-        }
-      else
-        g_assert_not_reached ();
-    }
-
-  return TRUE;
+  const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+  g_autoptr(GVariant) new_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  return transaction_handle_options_and_diff (invocation, options, exit_unchanged_77,
+                                              sysroot_path, previous_deployment,
+                                              new_deployment, cancellable, error);
 }
 
 static void
@@ -1150,6 +1170,7 @@ get_modifiers_variant (const char   *set_refspec,
   return TRUE;
 }
 
+/* XXX: nuke once everything has migrated to mux */
 gboolean
 rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                              const char   *set_refspec,
@@ -1687,4 +1708,345 @@ error_if_driver_registered (RPMOSTreeSysroot *sysroot_proxy,
     }
 
   return TRUE;
+}
+
+typedef enum {
+  SELECTOR_DIRECT,
+  SELECTOR_DBUS,
+} RpmOstreeMuxSelector;
+
+struct RpmOstreeMux {
+  RpmOstreeMuxSelector selector;
+
+  OstreeSysroot *sysroot;
+  char *osname;
+
+  RPMOSTreeSysroot *sysroot_proxy;
+  RPMOSTreeOS *os_proxy;
+};
+
+/* Right now, as we transition from unconditionally using daemon mode, we only
+ * use the mux in some situations. Eventually, we'll always use the mux, so this
+ * function will become only used in `rpmostree_mux_new()`.
+ * */
+gboolean
+rpmostree_mux_should_direct (const char *sysroot_path)
+{
+  if (g_getenv ("RPMOSTREE_FORCE_DIRECT"))
+    return TRUE;
+
+  if (sd_booted () <= 0)
+    return TRUE;
+
+  if (sysroot_path && !g_str_equal (sysroot_path, "/"))
+    return TRUE;
+
+  return FALSE;
+}
+
+RpmOstreeMux*
+rpmostree_mux_new (const char *sysroot_path,
+                   GCancellable *cancellable,
+                   GError **error)
+{
+  RpmOstreeMuxSelector selector = SELECTOR_DBUS;
+  if (rpmostree_mux_should_direct (sysroot_path))
+    selector = SELECTOR_DIRECT;
+
+  g_autoptr(OstreeSysroot) sysroot = NULL;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  if (selector == SELECTOR_DBUS)
+    {
+      if (!rpmostree_load_sysroot (cancellable, &sysroot_proxy, error))
+        return FALSE;
+    }
+  else
+    {
+      g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+      sysroot = ostree_sysroot_new (sysroot_file);
+      if (!ostree_sysroot_load (sysroot, cancellable, error))
+        return FALSE;
+    }
+
+  g_autoptr(RpmOstreeMux) mux = g_new0 (RpmOstreeMux, 1);
+  mux->selector = selector;
+  mux->sysroot_proxy = util::move_nullify (sysroot_proxy);
+  mux->sysroot = util::move_nullify (sysroot);
+  return util::move_nullify (mux);
+}
+
+void
+rpmostree_mux_free (RpmOstreeMux *mux)
+{
+  g_clear_pointer (&mux->sysroot, g_object_unref);
+  g_clear_pointer (&mux->osname, g_free);
+  g_clear_pointer (&mux->sysroot_proxy, g_object_unref);
+  g_clear_pointer (&mux->os_proxy, g_object_unref);
+  g_free (mux);
+}
+
+gboolean
+rpmostree_mux_is_dbus (RpmOstreeMux *mux)
+{
+  return mux->selector == SELECTOR_DBUS;
+}
+
+RPMOSTreeSysroot*
+rpmostree_mux_get_sysroot_proxy (RpmOstreeMux *mux)
+{
+  return mux->sysroot_proxy;
+}
+
+RPMOSTreeOS*
+rpmostree_mux_get_os_proxy (RpmOstreeMux *mux)
+{
+  return mux->os_proxy;
+}
+
+static char*
+matching_osname_or_null (OstreeSysroot *sysroot)
+{
+  const char *last_osname = NULL;
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  for (guint i = 0; deployments != NULL && i < deployments->len; i++)
+    {
+      auto deployment = static_cast<OstreeDeployment *>(deployments->pdata[i]);
+      const char *osname = ostree_deployment_get_osname (deployment);
+      if (!last_osname)
+        last_osname = osname;
+      else if (!g_str_equal (last_osname, osname))
+        return NULL;
+    }
+  /* NB: implicitly returns NULL if no deployments */
+  return g_strdup (last_osname);
+}
+
+gboolean
+rpmostree_mux_load_os (RpmOstreeMux *mux,
+                       const char *osname,
+                       GCancellable *cancellable,
+                       GError **error)
+{
+  if (mux->selector == SELECTOR_DIRECT)
+    {
+      /* as a convenience so that users don't have to pass in --os, we
+       * auto-detect if there's only one kind; if so, assume that */
+      if (!osname)
+        mux->osname = matching_osname_or_null (mux->sysroot);
+      else
+        mux->osname = g_strdup (osname);
+    }
+  else
+    {
+      glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
+      if (!rpmostree_load_os_proxy (mux->sysroot_proxy, osname,
+                                    cancellable, &os_proxy, error))
+        return FALSE;
+
+      mux->os_proxy = util::move_nullify (os_proxy);
+    }
+
+  return TRUE;
+}
+
+/* One might ask: why not just have clients always use OstreeSysroot locally for
+ * read-only operations? The answer is that there would then be no
+ * synchronization between daemon modifications and the object. A lot of work
+ * went into making sure that e.g. the sysroot is reloaded when needed and
+ * properties are up-to-date etc... */
+
+GVariant*
+rpmostree_mux_get_default_deployment (RpmOstreeMux *mux,
+                                      GError **error)
+{
+  if (mux->selector == SELECTOR_DBUS)
+    return rpmostree_os_dup_default_deployment (mux->os_proxy);
+
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (mux->sysroot);
+  if (deployments->len == 0)
+    return (GVariant*)glnx_null_throw (error, "No deployments found for OS '%s'", mux->osname);
+
+  OstreeDeployment *deployment = (OstreeDeployment*)deployments->pdata[0];
+  g_autoptr(GVariant) ret = rpmostreed_deployment_generate_variant (mux->sysroot, deployment,
+                                              ostree_sysroot_repo (mux->sysroot), TRUE,
+                                              error);
+  if (!ret)
+    return FALSE;
+  return g_variant_ref_sink (util::move_nullify (ret));
+}
+
+GVariant*
+rpmostree_mux_get_deployments (RpmOstreeMux *mux,
+                               GError **error)
+{
+  if (mux->selector == SELECTOR_DBUS)
+    return rpmostree_sysroot_dup_deployments (mux->sysroot_proxy);
+
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (mux->sysroot);
+  if (deployments->len == 0)
+    return (GVariant*)glnx_null_throw (error, "No deployments found for OS '%s'", mux->osname);
+
+  /* For the purposes of rpmostreed_deployment_generate_variant(), we don't want to directly
+   * use the sysroot's repo because it won't be able to find the remotes. Ideally, we'd be
+   * able to transiently set the remotes dir on the repo, but currently it requires setting
+   * at construction time, so we hack around this by using a separate repo object.
+   * */
+  g_autoptr(OstreeRepo) repo = NULL;
+  {
+    OstreeDeployment *deployment = (OstreeDeployment*)deployments->pdata[0];
+    g_autofree char *deployment_root = rpmostree_get_deployment_root (mux->sysroot, deployment);
+    g_autofree char *remotes_dir = g_build_filename (deployment_root, "etc/ostree/remotes.d", NULL);
+    repo = (OstreeRepo*)g_object_new (OSTREE_TYPE_REPO,
+        "path", ostree_repo_get_path (ostree_sysroot_repo (mux->sysroot)),
+        "remotes-config-dir", remotes_dir, NULL);
+    if (!ostree_repo_open (repo, NULL, error))
+      return FALSE;
+  }
+
+  GVariantBuilder builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
+
+  for (guint i = 0; deployments != NULL && i < deployments->len; i++)
+    {
+      auto deployment = static_cast<OstreeDeployment *>(deployments->pdata[i]);
+      GVariant *variant =
+        rpmostreed_deployment_generate_variant (mux->sysroot, deployment,
+                                                repo, TRUE, error);
+      if (!variant)
+        return (GVariant*)glnx_prefix_error_null (error, "Reading deployment %u", i);
+
+      g_variant_builder_add_value (&builder, variant);
+    }
+  return g_variant_ref_sink (g_variant_builder_end (&builder));
+}
+
+gboolean
+rpmostree_mux_call_initramfs_etc (RpmOstreeMux *mux,
+                                  const char *const *arg_track,
+                                  const char *const *arg_untrack,
+                                  gboolean arg_untrack_all,
+                                  gboolean arg_force_sync,
+                                  GVariantDict *arg_options,
+                                  GCancellable *cancellable,
+                                  GError **error)
+{
+  switch (mux->selector)
+    {
+    case SELECTOR_DBUS:
+      {
+        g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (arg_options));
+
+        g_autofree char *transaction_address = NULL;
+        if (!rpmostree_os_call_initramfs_etc_sync (mux->os_proxy,
+                                                   (const char *const*)arg_track,
+                                                   (const char *const*)arg_untrack,
+                                                   arg_untrack_all,
+                                                   arg_force_sync,
+                                                   options,
+                                                   &transaction_address,
+                                                   cancellable,
+                                                   error))
+          return FALSE;
+
+        return rpmostree_transaction_get_response_sync (mux->sysroot_proxy,
+                                                        transaction_address,
+                                                        cancellable,
+                                                        error);
+      }
+    case SELECTOR_DIRECT:
+      return rpmostree_callimpl_initramfs_etc (mux->sysroot,
+                                               mux->osname,
+                                               (char**)arg_track,
+                                               (char**)arg_untrack,
+                                               arg_untrack_all,
+                                               arg_force_sync,
+                                               arg_options,
+                                               NULL,
+                                               cancellable,
+                                               error);
+    default:
+      g_assert_not_reached ();
+    }
+}
+
+gboolean
+rpmostree_mux_call_update_deployment (RpmOstreeMux *mux,
+                                      RpmOstreeCommandInvocation *invocation,
+                                      const char   *set_refspec,
+                                      const char   *set_revision,
+                                      const char *const* install_pkgs,
+                                      const char *const* uninstall_pkgs,
+                                      const char *const* override_replace_pkgs,
+                                      const char *const* override_remove_pkgs,
+                                      const char *const* override_reset_pkgs,
+                                      const char   *local_repo_remote,
+                                      GVariant     *options,
+                                      gboolean      unchanged_exit_77,
+                                      GCancellable *cancellable,
+                                      GError      **error)
+{
+  g_autoptr(GVariant) modifiers = NULL;
+  glnx_unref_object GUnixFDList *fd_list = NULL;
+  if (!get_modifiers_variant (set_refspec, set_revision,
+                              install_pkgs, uninstall_pkgs,
+                              override_replace_pkgs,
+                              override_remove_pkgs,
+                              override_reset_pkgs,
+                              local_repo_remote,
+                              &modifiers, &fd_list, error))
+    return FALSE;
+
+  g_autoptr(GVariant) previous_deployment = rpmostree_mux_get_default_deployment (mux, error);
+  if (!previous_deployment)
+    return FALSE;
+
+  switch (mux->selector)
+    {
+    case SELECTOR_DBUS:
+      {
+        g_autofree char *transaction_address = NULL;
+        if (!rpmostree_os_call_update_deployment_sync (mux->os_proxy,
+                                                       modifiers,
+                                                       options,
+                                                       fd_list,
+                                                       &transaction_address,
+                                                       NULL,
+                                                       cancellable,
+                                                       error))
+          return FALSE;
+
+        return rpmostree_transaction_client_run (invocation,
+                                                 mux->sysroot_proxy,
+                                                 mux->os_proxy,
+                                                 options,
+                                                 unchanged_exit_77,
+                                                 transaction_address,
+                                                 previous_deployment,
+                                                 cancellable, error);
+      }
+    case SELECTOR_DIRECT:
+      {
+        if (!rpmostree_callimpl_update_deployment (mux->sysroot,
+                                                   mux->osname,
+                                                   static_cast<RpmOstreeTransactionDeployFlags>(0),
+                                                   options,
+                                                   modifiers,
+                                                   fd_list,
+                                                   NULL,
+                                                   cancellable,
+                                                   error))
+          return FALSE;
+
+        g_autoptr(GVariant) new_deployment = rpmostree_mux_get_default_deployment (mux, error);
+        if (!new_deployment)
+          return FALSE;
+
+        const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (mux->sysroot));
+        return transaction_handle_options_and_diff (invocation, options, unchanged_exit_77,
+                                                    sysroot_path, previous_deployment,
+                                                    new_deployment, cancellable, error);
+      }
+    default:
+      g_assert_not_reached ();
+    }
 }
