@@ -43,7 +43,9 @@ fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
         }
         _ => anyhow::bail!("Invalid non-regfile/symlink/directory: {}", path),
     }
-    filelist.insert(path.to_string());
+    if !filelist.contains(path) {
+        filelist.insert(path.to_string());
+    }
     Ok(())
 }
 
@@ -68,7 +70,10 @@ fn gather_filelist<P: glib::IsA<gio::Cancellable>>(
                 Component::Normal(c) => {
                     path.push(c);
                     // safe to unwrap here since it's all built up of components of a known UTF-8 path
-                    filelist.insert(path.to_str().unwrap().into());
+                    let s = path.to_str().unwrap();
+                    if !filelist.contains(s) {
+                        filelist.insert(s.into());
+                    }
                 }
                 _ => anyhow::bail!("invalid path /etc/{}: must be canonical", file),
             }
