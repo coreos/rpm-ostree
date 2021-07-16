@@ -50,26 +50,43 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     rpm-ostree ex initramfs-etc --force-sync > out.txt
     assert_file_has_content_literal out.txt "Staging deployment"
 
+    # test that we can created parent dirs and we don't include other files in
+    # that hierarchy
+    mkdir -p /etc/foo/bar/baz/boo
+    echo 'supernested' > /etc/foo/bar/baz/boo/nested.conf
+    touch /etc/foo/bar/this_better_not_be_included
+    mkdir /etc/foo/bar/this
+    touch /etc/foo/bar/this/neither
+    ln -sf /etc/foo/bar/baz/boo/nested.conf /etc/cmdline.d/
+    rpm-ostree ex initramfs-etc --track /etc/cmdline.d/nested.conf --track /etc/foo/bar/baz/boo
+
     /tmp/autopkgtest-reboot 2
     ;;
   2)
     check_for_dracut_karg barbaz
+    check_for_dracut_karg supernested
     if check_for_dracut_karg foobar; then
       assert_not_reached "Found karg foobar; expected barbaz"
     fi
+
+    latest_overlay=$(ls -t /boot/ostree/initramfs-overlays | head -n1)
+    lsinitrd "/boot/ostree/initramfs-overlays/${latest_overlay}" > out.txt
+    assert_not_file_has_content_literal out.txt this_better_not_be_included neither
 
     # let's try tracking a whole directory instead
     echo 'bazboo' > /etc/cmdline.d/bazboo.conf
     # and for fun, let's use the the locked finalization flow
     rpm-ostree ex initramfs-etc --lock-finalization \
       --untrack /etc/cmdline.d/foobar.conf \
+      --untrack /etc/cmdline.d/nested.conf \
       --track /etc/cmdline.d
     rpm-ostree status > status.txt
     assert_file_has_content_literal status.txt "InitramfsEtc: /etc/cmdline.d"
     rpm-ostree status --json > status.json
     assert_jq status.json \
-      '.deployments[0]["initramfs-etc"]|length == 1' \
-      '.deployments[0]["initramfs-etc"][0] == "/etc/cmdline.d"'
+      '.deployments[0]["initramfs-etc"]|length == 2' \
+      '.deployments[0]["initramfs-etc"][0] == "/etc/foo/bar/baz/boo"' \
+      '.deployments[0]["initramfs-etc"][1] == "/etc/cmdline.d"'
 
     /tmp/autopkgtest-reboot-prepare 3
     rpm-ostree finalize-deployment --allow-missing-checksum
@@ -77,6 +94,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   3)
     check_for_dracut_karg barbaz
     check_for_dracut_karg bazboo
+    check_for_dracut_karg supernested
 
     # finally, check that passing no args prints the tracked files
     rpm-ostree ex initramfs-etc > out.txt

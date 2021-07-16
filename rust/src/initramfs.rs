@@ -14,7 +14,7 @@ use std::io;
 use std::io::prelude::*;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::IntoRawFd;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
 use std::rc;
 use subprocess::Exec;
@@ -58,6 +58,22 @@ fn gather_filelist<P: glib::IsA<gio::Cancellable>>(
             Some(f) => f,
             None => anyhow::bail!("Invalid non-/etc path: {}", file),
         };
+
+        // We need to include all the directories leading up to the path because cpio doesn't do
+        // that, and the kernel at extraction time won't create missing leading dirs. But this also
+        // serves as validation that the path is canonical and doesn't do e.g. /etc/foo/../bar.
+        let mut path = PathBuf::new();
+        for component in Path::new(file).components() {
+            match component {
+                Component::Normal(c) => {
+                    path.push(c);
+                    // safe to unwrap here since it's all built up of components of a known UTF-8 path
+                    filelist.insert(path.to_str().unwrap().into());
+                }
+                _ => anyhow::bail!("invalid path /etc/{}: must be canonical", file),
+            }
+        }
+
         list_files_recurse(&d, file, &mut filelist, cancellable)
             .with_context(|| format!("Adding {}", file))?;
     }
