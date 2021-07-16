@@ -75,8 +75,7 @@ await_reload_sync (RPMOSTreeSysroot *sysroot_proxy)
  * is in the process of auto-exiting.
  */
 static gboolean
-app_load_sysroot_impl (const char       *sysroot,
-                       GCancellable *cancellable, 
+app_load_sysroot_impl (GCancellable *cancellable, 
                        GDBusConnection **out_conn,
                        GError **error)
 {
@@ -160,7 +159,7 @@ new_client_connection()
   g_autoptr(GError) local_error = NULL;
   GDBusConnection *conn = NULL;
 
-  if (!app_load_sysroot_impl("/", NULL, &conn, &local_error))
+  if (!app_load_sysroot_impl(NULL, &conn, &local_error))
     util::throw_gerror(local_error);
   return std::make_unique<ClientConnection>(conn);
 }
@@ -194,14 +193,13 @@ ClientConnection::transaction_connect_progress_sync(const rust::Str address) con
 * Returns: True on success
 **/
 gboolean
-rpmostree_load_sysroot (const char        *sysroot, 
-                        GCancellable      *cancellable,
+rpmostree_load_sysroot (GCancellable      *cancellable,
                         RPMOSTreeSysroot **out_sysroot_proxy,
                         GError           **error)
 {
   g_autoptr(GDBusConnection) connection = NULL;
 
-  if (!app_load_sysroot_impl (sysroot, cancellable, &connection, error))
+  if (!app_load_sysroot_impl (cancellable, &connection, error))
     return FALSE;
 
   const char *bus_name = NULL;

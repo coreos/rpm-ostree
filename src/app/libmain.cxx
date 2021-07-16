@@ -301,7 +301,7 @@ rpmostree_option_context_parse (GOptionContext *context,
         /* ignore errors; we print out a warning if we fail to spawn pkttyagent */
         (void)rpmostree_polkit_agent_open ();
 
-      if (!rpmostree_load_sysroot (opt_sysroot, cancellable,
+      if (!rpmostree_load_sysroot (cancellable,
                                    out_sysroot_proxy,
                                    error))
         return FALSE;

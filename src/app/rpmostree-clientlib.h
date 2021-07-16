@@ -61,8 +61,7 @@ G_BEGIN_DECLS
 #define BUS_NAME "org.projectatomic.rpmostree1"
 
 gboolean
-rpmostree_load_sysroot                       (const char        *sysroot,
-                                              GCancellable      *cancellable,
+rpmostree_load_sysroot                       (GCancellable      *cancellable,
                                               RPMOSTreeSysroot **out_sysroot_proxy,
                                               GError **error);
 
