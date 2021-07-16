@@ -7,8 +7,8 @@ nav_order: 3
 
 1. Increment the `year_version` and `release_version` macros in `configure.ac`.
 2. Increment the `Version` field in `rpm-ostree.spec.in`.
-3. Verify the libdnf deps in `rpm-ostree.spec.in` are up to date by comparing to
-   the spec of the bundled version (`libdnf/libdnf.spec`).
+3. Verify the libdnf deps in `rpm-ostree.spec.in` are up to date by copy/pasting
+   the relevant bits from the spec in the git submodule (`libdnf/libdnf.spec`).
 4. Submit as a PR and wait until reviewed *and* CI is green.
 5. Once merged, do `git pull $upstream && git reset --hard $upstream/main` on
    your local `main` branch to make sure you're on the right commit.
