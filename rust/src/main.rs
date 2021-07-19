@@ -71,6 +71,7 @@ fn print_error(e: anyhow::Error) {
 }
 
 fn main() {
+    // NOTE!  Don't add new code here.  Only add new code into `inner_main()`.
     // Capture any error.  Note that in some cases the C++ code may still call exit(<code>) directly.
     let r = inner_main();
     rpmostree_rust::ffi::rpmostree_process_global_teardown();
