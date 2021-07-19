@@ -1,10 +1,28 @@
 //! The main CLI logic.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use nix::sys::signal;
 use std::io::Write;
+use std::os::unix::prelude::CommandExt;
 use termcolor::WriteColor;
+
+/// Directly exec(ostree admin unlock) - does not return on success.
+fn usroverlay(args: &[&str]) -> Result<()> {
+    // Handle --help and error on extra arguments
+    let _ = clap::App::new("rpm-ostree usroverlay")
+        .bin_name("rpm-ostree usroverlay")
+        .long_version("")
+        .long_about("Apply a transient overlayfs to /usr")
+        .get_matches_from(args.iter().skip(1));
+    Err::<_, anyhow::Error>(
+        std::process::Command::new("ostree")
+            .args(&["admin", "unlock"])
+            .exec()
+            .into(),
+    )
+    .context("Failed to execute ostree admin unlock")
+}
 
 /// The real main function returns a `Result<>`.
 fn inner_main() -> Result<i32> {
@@ -47,6 +65,8 @@ fn inner_main() -> Result<i32> {
         Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(&args).map(|_| 0),
         Some("ex-container") => rpmostree_rust::container::entrypoint(&args).map(|_| 0),
         Some("module") => rpmostree_rust::modularity::entrypoint(&args).map(|_| 0),
+        // The `unlock` is a hidden alias for "ostree CLI compatibility"
+        Some("usroverlay") | Some("unlock") => usroverlay(&args).map(|_| 0),
         _ => {
             // Otherwise fall through to C++ main().
             Ok(rpmostree_rust::ffi::rpmostree_main(&args)?)

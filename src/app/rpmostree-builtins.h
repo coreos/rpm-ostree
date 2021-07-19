@@ -35,7 +35,6 @@ BUILTINPROTO(compose);
 BUILTINPROTO(countme);
 BUILTINPROTO(upgrade);
 BUILTINPROTO(reload);
-BUILTINPROTO(usroverlay);
 BUILTINPROTO(deploy);
 BUILTINPROTO(rebase);
 BUILTINPROTO(cancel);

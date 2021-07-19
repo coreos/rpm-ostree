@@ -70,13 +70,6 @@ static RpmOstreeCommand commands[] = {
   { "reload", static_cast<RpmOstreeBuiltinFlags>(0),
     "Reload configuration",
     rpmostree_builtin_reload },
-  { "usroverlay", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
-    "Apply a transient overlayfs to /usr",
-    rpmostree_builtin_usroverlay },
-  /* Let's be "cognitively" compatible with `ostree admin unlock` */
-  { "unlock", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
-    NULL,
-    rpmostree_builtin_usroverlay },
   { "cancel", static_cast<RpmOstreeBuiltinFlags>(0),
     "Cancel an active transaction",
     rpmostree_builtin_cancel },
@@ -105,6 +98,8 @@ static RpmOstreeCommand commands[] = {
    *  handled Rust side. */
   { "module", static_cast<RpmOstreeBuiltinFlags>(0),
     "Commands to install/uninstall modules", NULL },
+  { "usroverlay", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
+    "Apply a transient overlayfs to /usr", NULL },
   /* Legacy aliases */
   { "pkg-add", static_cast<RpmOstreeBuiltinFlags>(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_install },
