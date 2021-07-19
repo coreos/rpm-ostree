@@ -4,7 +4,16 @@
 use anyhow::Result;
 use nix::sys::signal;
 use std::io::Write;
+use std::os::unix::prelude::CommandExt;
 use termcolor::WriteColor;
+
+/// Directly exec(ostree admin unlock) - does not return on success.
+fn usroverlay() -> Result<()> {
+    Err(std::process::Command::new("ostree")
+        .args(&["admin", "unlock"])
+        .exec()
+        .into())
+}
 
 /// The real main function returns a `Result<>`.
 fn inner_main() -> Result<i32> {
@@ -46,6 +55,8 @@ fn inner_main() -> Result<i32> {
         Some("countme") => rpmostree_rust::countme::entrypoint(&args).map(|_| 0),
         Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(&args).map(|_| 0),
         Some("ex-container") => rpmostree_rust::container::entrypoint(&args).map(|_| 0),
+        // The `unlock` is a hidden alias for "ostree CLI compatibility"
+        Some("usroverlay") | Some("unlock") => usroverlay().map(|_| 0),
         _ => {
             // Otherwise fall through to C++ main().
             Ok(rpmostree_rust::ffi::rpmostree_main(&args)?)
