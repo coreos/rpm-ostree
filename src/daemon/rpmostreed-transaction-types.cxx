@@ -641,20 +641,12 @@ deploy_transaction_finalize (GObject *object)
 
 static gboolean
 import_local_rpm (OstreeRepo    *repo,
+                  OstreeSePolicy *policy,
                   int           *fd,
                   char         **sha256_nevra,
                   GCancellable  *cancellable,
                   GError       **error)
 {
-  /* let's just use the current sepolicy -- we'll just relabel it if the new
-   * base turns out to have a different one */
-  glnx_autofd int rootfs_dfd = -1;
-  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_dfd, error))
-    return FALSE;
-  g_autoptr(OstreeSePolicy) policy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
-  if (policy == NULL)
-    return FALSE;
-
   g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (fd, repo, NULL, static_cast<RpmOstreeImporterFlags>(0), policy, error);
   if (unpacker == NULL)
     return FALSE;
@@ -705,6 +697,15 @@ import_many_local_rpms (OstreeRepo    *repo,
   if (!rpmostree_repo_auto_transaction_start (&txn, repo, TRUE, cancellable, error))
     return FALSE;
 
+  /* let's just use the current sepolicy -- we'll just relabel it if the new
+   * base turns out to have a different one */
+  glnx_autofd int rootfs_dfd = -1;
+  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_dfd, error))
+    return FALSE;
+  g_autoptr(OstreeSePolicy) policy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
+  if (policy == NULL)
+    return FALSE;
+
   g_autoptr(GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_free);
 
   g_autoptr(GPtrArray) fds = unixfdlist_to_ptrarray (fdl);
@@ -715,7 +716,7 @@ import_many_local_rpms (OstreeRepo    *repo,
       fds->pdata[i] = GINT_TO_POINTER (-1);
       g_autofree char *sha256_nevra = NULL;
       /* Transfer fd to import */
-      if (!import_local_rpm (repo, &fd, &sha256_nevra, cancellable, error))
+      if (!import_local_rpm (repo, policy, &fd, &sha256_nevra, cancellable, error))
         return FALSE;
 
       g_ptr_array_add (pkgs, util::move_nullify (sha256_nevra));
