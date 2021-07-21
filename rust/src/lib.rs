@@ -119,6 +119,7 @@ pub mod ffi {
     // builtins/compose/
     extern "Rust" {
         fn write_commit_id(target_path: &str, revision: &str) -> Result<()>;
+        fn composeutil_legacy_prep_dev(rootfs_dfd: i32) -> Result<()>;
     }
 
     // cliwrap.rs
@@ -580,6 +581,7 @@ pub mod ffi {
 mod builtins;
 pub(crate) use crate::builtins::apply_live::*;
 pub(crate) use crate::builtins::compose::commit::*;
+pub(crate) use crate::builtins::compose::*;
 mod bwrap;
 pub(crate) use bwrap::*;
 mod client;
