@@ -486,8 +486,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
       glnx_console_lock (&console);
 
-      if (!rpmostree_composeutil_legacy_prep_dev (rootfs_dfd, error))
-        return FALSE;
+      rpmostreecxx::composeutil_legacy_prep_dev(rootfs_dfd);
 
       if (!dnf_transaction_commit (dnf_context_get_transaction (dnfctx),
                                    dnf_context_get_goal (dnfctx),
