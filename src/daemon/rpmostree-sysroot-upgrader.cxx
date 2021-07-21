@@ -1150,21 +1150,6 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
   return TRUE;
 }
 
-static gboolean
-requires_local_assembly (RpmOstreeSysrootUpgrader *self)
-{
-  /* Now, it's possible all requested packages are in the new tree, so we have
-   * another optimization here for that case. This is a bit tricky: assuming we
-   * came here from an 'rpm-ostree install', this might mean that we redeploy
-   * the exact same base layer, with the only difference being the origin file.
-   * We could down the line experiment with optimizing this by just updating the
-   * merge deployment's origin.
-   * https://github.com/projectatomic/rpm-ostree/issues/753
-   */
-
-  return rpmostree_origin_may_require_local_assembly (self->computed_origin);
-}
-
 /* Determine whether or not we require local modifications,
  * and if so, prepare layering (download rpm-md, depsolve etc).
  */
@@ -1196,8 +1181,15 @@ rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
   if (!finalize_overlays (self, cancellable, error))
     return FALSE;
 
-  /* Recheck the state */
-  if (!requires_local_assembly (self))
+  /* Now, it's possible all requested packages are in the new tree, so we have
+   * another optimization here for that case. This is a bit tricky: assuming we
+   * came here from an 'rpm-ostree install', this might mean that we redeploy
+   * the exact same base layer, with the only difference being the origin file.
+   * We could down the line experiment with optimizing this by just updating the
+   * merge deployment's origin.
+   * https://github.com/projectatomic/rpm-ostree/issues/753
+   */
+  if (!rpmostree_origin_may_require_local_assembly (self->computed_origin))
     {
       g_clear_pointer (&self->final_revision, g_free);
       /* No assembly? We're done then */
