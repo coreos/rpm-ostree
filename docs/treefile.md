@@ -104,9 +104,12 @@ It supports the following parameters:
     `--no-hostonly` will be used.
 
  * `rpmdb`: String, optional: The RPM database backend.  Can be one of
-    `bdb`, `ndb`, or `sqlite`.  If unspecified, defaults to `bdb` for
-    compatibility. The default can be set to `sqlite` at compile-time
-    via `--enable-sqlite-rpmdb-default`.
+    `target` (the default) or `host`.  Legacy values 
+    `bdb`, `ndb`, and `sqlite` are treated as `target`.
+    This option is a historical mistake; ultimately the only thing that really works is to write
+    the rpmdb in the `target` format - the format that the `librpm`
+    library in the target filesystem tree understands.  However, this is
+    a relatively new default, so the value `host` is provided as a fallback
 
  * `cliwrap`: boolean, optional.  Defaults to `false`.  If enabled,
     rpm-ostree will replace binaries such as `/usr/bin/rpm` with

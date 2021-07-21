@@ -100,7 +100,6 @@ debug = true
 lto = true
 
 [features]
-bdb-rpmdb-default = []
 fedora-integration = []
 # ASAN+UBSAN
 sanitizers = []

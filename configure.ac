@@ -90,15 +90,6 @@ AM_CONDITIONAL(BUILDOPT_WERROR, [test x$enable_werror != xno])
 dnl always have the compose feature now
 RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"
 
-AC_ARG_ENABLE(bdb_rpmdb_default,
-              AS_HELP_STRING([--enable-bdb-rpmdb-default],
-                             [Default to bdb rpmdb backend (default: no)]),,
-              [enable_bdb_rpmdb_default=no])
-AM_CONDITIONAL(BUILDOPT_ENABLE_BDB_RPMDB_DEFAULT, test x$enable_bdb_rpmdb_default = xyes)
-AM_COND_IF([BUILDOPT_ENABLE_BDB_RPMDB_DEFAULT], [
-  RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rpmdb-bdb"
-])
-
 PKG_CHECK_VAR(BASH_COMPLETIONSDIR, [bash-completion], [completionsdir],,
   BASH_COMPLETIONSDIR="${datadir}/bash-completion/completions")
 AC_SUBST(BASH_COMPLETIONSDIR)

@@ -342,9 +342,7 @@ pub mod ffi {
         fn get_recommends(&self) -> bool;
         fn get_selinux(&self) -> bool;
         fn get_releasever(&self) -> &str;
-        fn get_rpmdb(&self) -> String;
-        fn validate_rpmdb(&self) -> Result<()>;
-        fn rpmdb_backend_is_default(&self) -> bool;
+        fn rpmdb_backend_is_target(&self) -> bool;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn print_deprecation_warnings(&self);
         fn sanitycheck_externals(&self) -> Result<()>;

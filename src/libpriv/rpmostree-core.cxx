@@ -222,9 +222,6 @@ rpmostree_context_new_compose (int               userroot_dfd,
   /* Compose contexts always have a treefile */
   ret->treefile_rs = &treefile_rs;
 
-  // Check this early
-  ret->treefile_rs->validate_rpmdb();
-
   rpmostree_context_set_cache_root (ret, userroot_dfd);
 
   // The ref needs special handling as it gets variable-substituted.
@@ -3786,10 +3783,9 @@ write_rpmdb (RpmOstreeContext      *self,
    * to find the rpmdb and RPM macros are global state. */
   set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
-  if (self->treefile_rs && !self->treefile_rs->rpmdb_backend_is_default())
+  if (self->treefile_rs && self->treefile_rs->rpmdb_backend_is_target())
     {
-      auto rpmdb_type = self->treefile_rs->get_rpmdb();
-      g_print ("Regenerating rpmdb: %s\n", rpmdb_type.c_str());
+      g_print ("Regenerating rpmdb for target\n");
       rpmostreecxx::rewrite_rpmdb_for_target(tmprootfs_dfd);
     }
   else

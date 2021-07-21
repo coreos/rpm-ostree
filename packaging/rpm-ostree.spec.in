@@ -31,16 +31,8 @@ BuildRequires: rust
 # flip the rpmdb default to be bdb.
 %if 0%{?rhel} && 0%{?rhel} <= 8
 %bcond_with zchunk
-%define rpmdb_default "--enable-bdb-rpmdb-default"
 %else
 %bcond_without zchunk
-%endif
-
-# See https://fedoraproject.org/wiki/Changes/Sqlite_Rpmdb
-# https://bugzilla.redhat.com/show_bug.cgi?id=1938928
-# https://github.com/openshift/os/issues/552
-%if 0%{?fedora} <= 33
-%define rpmdb_default "--enable-bdb-rpmdb-default"
 %endif
 
 # For the autofiles bits below

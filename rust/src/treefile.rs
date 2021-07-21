@@ -40,11 +40,6 @@ use crate::utils;
 
 const INCLUDE_MAXDEPTH: u32 = 50;
 
-#[cfg(feature = "bdb-rpmdb-default")]
-const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Bdb;
-#[cfg(not(feature = "bdb-rpmdb-default"))]
-const DEFAULT_RPMDB_BACKEND: RpmdbBackend = RpmdbBackend::Sqlite;
-
 /// Path to the flattened JSON serialization of the treefile, installed on the target (client)
 /// filesystem.  Nothing actually parses this by default client side today,
 /// it's intended to be informative.
@@ -672,30 +667,12 @@ impl Treefile {
         self.parsed.releasever.as_deref().unwrap_or_default()
     }
 
-    pub(crate) fn get_rpmdb(&self) -> String {
-        let s: &str = match self.parsed.rpmdb.as_ref().unwrap_or(&DEFAULT_RPMDB_BACKEND) {
-            RpmdbBackend::Bdb => "bdb",
-            RpmdbBackend::Sqlite => "sqlite",
-            RpmdbBackend::Ndb => "ndb",
-        };
-        s.to_string()
-    }
-
-    /// Error out if the backend is ndb, which Fedora doesn't support.
-    /// xref https://bugzilla.redhat.com/show_bug.cgi?id=1938928
-    pub(crate) fn validate_rpmdb(&self) -> CxxResult<()> {
-        match self.parsed.rpmdb.as_ref() {
-            None | Some(&RpmdbBackend::Sqlite) | Some(&RpmdbBackend::Bdb) => Ok(()),
-            other => Err(anyhow!("Unsupported rpmdb backend: {:?}", other).into()),
-        }
-    }
-
-    /// Returns true if the database backend is the same as the rpm-ostree default.
-    pub(crate) fn rpmdb_backend_is_default(&self) -> bool {
+    /// Returns true if the database backend must be regenerated using the target system.
+    pub(crate) fn rpmdb_backend_is_target(&self) -> bool {
         self.parsed
             .rpmdb
             .as_ref()
-            .map_or(true, |b| *b == DEFAULT_RPMDB_BACKEND)
+            .map_or(true, |b| *b != RpmdbBackend::Host)
     }
 
     pub(crate) fn get_files_remove_regex(&self, package: &str) -> Vec<String> {
@@ -1073,6 +1050,8 @@ pub(crate) enum RpmdbBackend {
     Bdb,
     Sqlite,
     Ndb,
+    Target,
+    Host,
 }
 
 // Because of how we handle includes, *everything* here has to be
@@ -1499,6 +1478,24 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn basic_valid_rpmdb_target() {
+        let tf = new_test_tf_basic(VALID_PRELUDE).unwrap();
+        assert!(tf.rpmdb_backend_is_target());
+        for v in &["target", "bdb"] {
+            let mut buf = String::from(VALID_PRELUDE);
+            buf.push_str(&format!("rpmdb: {}", v));
+            let tf = new_test_tf_basic(buf.as_str()).unwrap();
+            assert!(tf.rpmdb_backend_is_target());
+        }
+        {
+            let mut buf = String::from(VALID_PRELUDE);
+            buf.push_str("rpmdb: host");
+            let tf = new_test_tf_basic(buf.as_str()).unwrap();
+            assert!(!tf.rpmdb_backend_is_target());
+        }
+    }
+
+    #[test]
     fn test_default() {
         let _cfg: TreeComposeConfig = Default::default();
     }
@@ -1658,6 +1655,12 @@ pub(crate) mod tests {
             basearch,
             Some(openat::Dir::open(workdir)?),
         )?)
+    }
+
+    pub(crate) fn new_test_tf_basic(contents: impl AsRef<str>) -> Result<Box<Treefile>> {
+        let contents = contents.as_ref();
+        let workdir = tempfile::tempdir().unwrap();
+        new_test_treefile(workdir.path(), contents, None)
     }
 
     #[test]
