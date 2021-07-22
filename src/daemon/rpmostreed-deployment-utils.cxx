@@ -303,7 +303,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   switch (refspec_type)
     {
     case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
-      g_variant_dict_insert (dict, "container-image-reference", "s", refspec);
+      {
+        g_variant_dict_insert (dict, "container-image-reference", "s", refspec);
+        auto digest = rpmostree_origin_get_container_image_reference_digest (origin);
+        g_variant_dict_insert (dict, "container-image-reference-digest", "s", digest);
+      }
       break;
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
       {

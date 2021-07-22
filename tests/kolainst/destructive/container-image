@@ -39,6 +39,9 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     rpmostree_assert_status ".deployments[0][\"checksum\"] == \"${checksum}\""
     echo "ok rebase to container image reference"
 
+    rpm-ostree status | tee out.txt
+    assert_file_has_content_literal out.txt 'Digest: sha256:'
+
     /tmp/autopkgtest-reboot 1
     ;;
   1)

@@ -610,6 +610,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
 
   const char *custom_origin_url = NULL;
   const char *custom_origin_description = NULL;
+  const char *container_image_reference_digest = NULL;
   if (origin_refspec)
     {
       if (!rpmostree_refspec_classify (origin_refspec, &refspectype, error))
@@ -640,6 +641,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
           break;
         case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
           {
+            g_assert (g_variant_dict_lookup (dict, "container-image-reference-digest", "s", &container_image_reference_digest));
             g_print ("%s", origin_refspec);
           }
          break;
@@ -649,7 +651,9 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
     g_print ("%s", checksum);
   g_print ("\n");
 
-  if (custom_origin_description)
+  if (container_image_reference_digest)
+    rpmostree_print_kv ("Digest", max_key_len, container_image_reference_digest);
+  else if (custom_origin_description)
     rpmostree_print_kv ("CustomOrigin", max_key_len, custom_origin_description);
 
   const char *remote_not_found = NULL;
