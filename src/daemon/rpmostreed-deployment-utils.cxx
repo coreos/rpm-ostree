@@ -203,15 +203,6 @@ variant_add_commit_details (GVariantDict *dict,
                            "t", timestamp);
 }
 
-static void
-variant_add_from_hash_table (GVariantDict *dict,
-                             const char   *key,
-                             GHashTable   *table)
-{
-  g_autofree char **values = (char**)g_hash_table_get_keys_as_array (table, NULL);
-  g_variant_dict_insert (dict, key, "^as", values);
-}
-
 /* Returns floating GVariant equivalent of `commit_meta` minus blacklisted keys. */
 static GVariant*
 filter_commit_meta (GVariant *commit_meta)
@@ -223,7 +214,6 @@ filter_commit_meta (GVariant *commit_meta)
   g_variant_dict_remove (&dict, "rpmostree.advisories");
   return g_variant_dict_end (&dict);
 }
-
 
 GVariant*
 rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
@@ -349,30 +339,9 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       break;
     }
 
-  variant_add_from_hash_table (dict, "requested-packages",
-                               rpmostree_origin_get_packages (origin));
-  variant_add_from_hash_table (dict, "requested-local-packages",
-                               rpmostree_origin_get_local_packages (origin));
-  variant_add_from_hash_table (dict, "requested-base-removals",
-                               rpmostree_origin_get_overrides_remove (origin));
-  variant_add_from_hash_table (dict, "requested-base-local-replacements",
-                               rpmostree_origin_get_overrides_local_replace (origin));
-
   g_variant_dict_insert (dict, "packages", "^as", layered_pkgs);
   g_variant_dict_insert_value (dict, "base-removals", removed_base_pkgs);
   g_variant_dict_insert_value (dict, "base-local-replacements", replaced_base_pkgs);
-
-  g_variant_dict_insert (dict, "regenerate-initramfs", "b",
-                         rpmostree_origin_get_regenerate_initramfs (origin));
-  { const char *const* args = rpmostree_origin_get_initramfs_args (origin);
-    if (args && *args)
-      g_variant_dict_insert (dict, "initramfs-args", "^as", args);
-  }
-
-  variant_add_from_hash_table (dict, "initramfs-etc",
-                               rpmostree_origin_get_initramfs_etc_files (origin));
-  if (rpmostree_origin_get_cliwrap (origin))
-    g_variant_dict_insert (dict, "cliwrap", "b", TRUE);
 
   return g_variant_dict_end (dict);
 }

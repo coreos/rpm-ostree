@@ -5,7 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::{cxxrsutil::*, variant_utils};
+use anyhow::Result;
 use openat_ext::OpenatDirExt;
+use std::collections::BTreeMap;
 use std::pin::Pin;
 
 /// Validate basic assumptions on daemon startup.
@@ -40,6 +42,77 @@ pub(crate) fn deployment_generate_id(
         deployment.get_csum().unwrap(),
         deployment.get_deployserial()
     )
+}
+
+/// Insert values from `v` into the target `dict` with key `k`.
+fn vdict_insert_strv<'a>(dict: &glib::VariantDict, k: &str, v: impl IntoIterator<Item = &'a str>) {
+    // TODO: drive this into variant_utils in ostree-rs-ext so we don't need
+    // to allocate the intermediate vector.
+    let v: Vec<&str> = v.into_iter().collect();
+    let v = ostree_ext::variant_utils::new_variant_as(&v);
+    dict.insert_value(k, &v);
+}
+
+/// Insert values from `v` into the target `dict` with key `k`.
+fn vdict_insert_optvec<'a>(dict: &glib::VariantDict, k: &str, v: Option<&Vec<String>>) {
+    let v = v.iter().map(|s| s.iter()).flatten().map(|s| s.as_str());
+    vdict_insert_strv(dict, k, v);
+}
+
+/// Insert keys from the provided map into the target `dict` with key `k`.
+fn vdict_insert_optmap<'a>(
+    dict: &glib::VariantDict,
+    k: &str,
+    v: Option<&BTreeMap<String, String>>,
+) {
+    let v = v.iter().map(|s| s.keys()).flatten().map(|s| s.as_str());
+    vdict_insert_strv(dict, k, v);
+}
+
+/// Insert into `dict` metadata keys derived from `origin`.
+fn deployment_populate_variant_origin(
+    origin: &glib::KeyFile,
+    dict: &glib::VariantDict,
+) -> Result<()> {
+    // Convert the origin to a treefile, and operate on that.
+    // See https://github.com/coreos/rpm-ostree/issues/2326
+    let tf = crate::origin::origin_to_treefile_inner(&origin)?;
+    let tf = &tf.parsed;
+
+    // Package mappings.  Note these are inserted unconditionally, even if empty.
+    vdict_insert_optvec(&dict, "requested-packages", tf.packages.as_ref());
+    vdict_insert_optmap(
+        &dict,
+        "requested-local-packages",
+        tf.derive.packages_local.as_ref(),
+    );
+    vdict_insert_optvec(
+        &dict,
+        "requested-base-removals",
+        tf.derive.override_remove.as_ref(),
+    );
+    vdict_insert_optmap(
+        &dict,
+        "requested-base-local-replacements",
+        tf.derive.override_replace_local.as_ref(),
+    );
+
+    // Initramfs data.
+    if let Some(initramfs) = tf.derive.initramfs.as_ref() {
+        dict.insert("regenerate-initramfs", &initramfs.regenerate);
+        vdict_insert_optvec(dict, "initramfs-args", initramfs.args.as_ref());
+        vdict_insert_optvec(dict, "initramfs-etc", initramfs.etc.as_ref());
+    } else {
+        // This key is also always injected.
+        dict.insert("regenerate-initramfs", &false);
+    }
+
+    // Other bits.
+    if tf.cliwrap.unwrap_or_default() {
+        dict.insert("cliwrap", &true);
+    }
+
+    Ok(())
 }
 
 /// Serialize information about the given deployment into the `dict`;
@@ -97,6 +170,12 @@ pub(crate) fn deployment_populate_variant(
             .as_str(),
     );
 
+    // Some of the origin-based state.  But not all yet; see the rest of the
+    // code in rpmostreed-deployment-utils.cxx
+    if let Some(origin) = deployment.get_origin() {
+        deployment_populate_variant_origin(&origin, &dict)?;
+    }
+
     Ok(())
 }
 
@@ -149,4 +228,25 @@ pub(crate) fn deployment_layeredmeta_load(
         deployment.get_csum().unwrap().as_str(),
     )?;
     deployment_layeredmeta_from_commit(deployment.gobj_rewrap(), commit.gobj_rewrap())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn origin_to_variant(s: &str) -> glib::VariantDict {
+        let kf = &crate::origin::test::kf_from_str(s).unwrap();
+        let vdict = glib::VariantDict::new(None);
+        deployment_populate_variant_origin(kf, &vdict).unwrap();
+        vdict
+    }
+
+    #[test]
+    fn origin_variant() {
+        let vdict = &origin_to_variant(crate::origin::test::COMPLEX);
+        // Operating on container-typed variants in current glib 0.10 + Rust is painful.  Just validate
+        // that a value exists as a start.  It's *much* better in glib 0.14, but
+        // porting to that is a ways away.
+        assert!(vdict.lookup_value("requested-packages", None).is_some());
+    }
 }

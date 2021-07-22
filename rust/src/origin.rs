@@ -28,7 +28,7 @@ static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
 };
 
 #[context("Parsing origin")]
-fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
+pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     let mut cfg: crate::treefile::TreeComposeConfig = Default::default();
     let refspec_str = if let Some(r) = keyfile_get_optional_string(&kf, ORIGIN, "refspec")? {
         Some(r)
@@ -299,7 +299,7 @@ fn keyfile_get_optional_string(kf: &KeyFile, group: &str, key: &str) -> Result<O
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use indoc::indoc;
 
@@ -313,12 +313,12 @@ mod test {
         }};
     }
 
-    const BASE: &str = indoc! {"
+    pub(crate) const BASE: &str = indoc! {"
     [origin]
     refspec=foo:bar/x86_64/baz
     "};
 
-    const COMPLEX: &str = indoc! {"
+    pub(crate) const COMPLEX: &str = indoc! {"
     [origin]
     baserefspec=fedora:fedora/34/x86_64/silverblue
     override-commit=41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3
@@ -340,7 +340,7 @@ mod test {
     pinned=true
     "};
 
-    fn kf_from_str(s: &str) -> Result<glib::KeyFile> {
+    pub(crate) fn kf_from_str(s: &str) -> Result<glib::KeyFile> {
         let kf = glib::KeyFile::new();
         kf.load_from_data(s, glib::KeyFileFlags::KEEP_COMMENTS)?;
         Ok(kf)
