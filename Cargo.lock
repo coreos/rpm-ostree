@@ -1293,12 +1293,12 @@ dependencies = [
 
 [[package]]
 name = "openat-ext"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64d8c39f87cebbf893a221d307e578da316157c6c65aa1c1518c573be0cd8c11"
+checksum = "08ebe55c8d6ada962ca7ddaef14f020dae1af91748bea3d36e8c941036b5d85b"
 dependencies = [
  "libc",
- "nix 0.20.0",
+ "nix 0.22.0",
  "openat",
  "rand 0.8.4",
 ]

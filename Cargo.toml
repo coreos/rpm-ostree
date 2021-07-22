@@ -51,7 +51,7 @@ maplit = "1.0"
 memfd = "0.4.0"
 nix = "0.22.0"
 openat = "0.1.21"
-openat-ext = "^0.2.1"
+openat-ext = "^0.2.2"
 os-release = "0.1.0"
 ostree = { version = "0.11.0", features = ["v2021_1"] }
 ostree-sys = "0.7.3"
