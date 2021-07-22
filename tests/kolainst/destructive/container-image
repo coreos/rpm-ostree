@@ -26,12 +26,15 @@ set -x
 libtest_prepare_offline
 cd $(mktemp -d)
 
+image=containers-storage:localhost/fcos:latest
+
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   "")
     # Test rebase
     checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
     rpm-ostree ex-container export --repo=/ostree/repo ${checksum} containers-storage:localhost/fcos
-    rpm-ostree rebase containers-storage:localhost/fcos:latest --experimental
+    rpm-ostree rebase "$image" --experimental | tee out.txt
+    assert_file_has_content_literal out.txt 'Pulling: '"$image"
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"containers-storage:localhost/fcos:latest\""
     rpmostree_assert_status ".deployments[0][\"checksum\"] == \"${checksum}\""
     echo "ok rebase to container image reference"
@@ -53,7 +56,8 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     echo "ok layering package"
 
     # Test upgrade
-    rpm-ostree upgrade > out.txt;
+    rpm-ostree upgrade | tee out.txt
+    assert_file_has_content_literal out.txt "Pulling manifest: ${image}"
     assert_file_has_content out.txt "No upgrade available."
     echo "ok no upgrade available"
 
