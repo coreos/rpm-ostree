@@ -564,10 +564,13 @@ repo_is_on_netfs (OstreeRepo  *repo)
  */
 static gboolean
 rpm_ostree_compose_context_new (const char    *treefile_pathstr,
+                                const char    *basearch,
                                 RpmOstreeTreeComposeContext **out_context,
                                 GCancellable  *cancellable,
                                 GError       **error)
 {
+  g_assert(basearch != NULL);
+
   g_autoptr(RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
 
   rpmostreecxx::core_libdnf_process_global_init();
@@ -685,14 +688,9 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       self->build_repo = static_cast<OstreeRepo*>(g_object_ref (self->repo));
     }
 
-  /* FIXME refactor things to break the dependency of DnfContext -> arch -> treefile */
-  std::string arch;
-  {
-      g_autoptr(DnfContext) ctx = dnf_context_new ();
-      arch = dnf_context_get_base_arch (ctx);
-  }
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
-  self->treefile_rs = rpmostreecxx::treefile_new_compose(gs_file_get_path_cached (self->treefile_path), arch, self->workdir_dfd);
+  self->treefile_rs = rpmostreecxx::treefile_new_compose(gs_file_get_path_cached (self->treefile_path),
+                                                         basearch, self->workdir_dfd);
   self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo,
                                                  **self->treefile_rs);
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
@@ -1161,16 +1159,6 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   return TRUE;
 }
 
-static gboolean
-parse_and_print_treefile (const char *treefile_path, GError **error)
-{
-  g_autofree char *arch = rpm_ostree_get_basearch ();
-  auto treefile_rs = rpmostreecxx::treefile_new (treefile_path, arch, -1);
-  auto buf = treefile_rs->get_json_string();
-  g_print ("%s\n", buf.c_str());
-  return TRUE;
-}
-
 gboolean
 rpmostree_compose_builtin_install (int             argc,
                                    char          **argv,
@@ -1197,9 +1185,14 @@ rpmostree_compose_builtin_install (int             argc,
     }
 
   const char *treefile_path = argv[1];
+  auto basearch = rpmostreecxx::get_rpm_basearch();
 
   if (opt_print_only)
-    return parse_and_print_treefile (treefile_path, error);
+    {
+      auto treefile = rpmostreecxx::treefile_new (treefile_path, basearch, -1);
+      treefile->prettyprint_json_stdout ();
+      return TRUE;
+    }
 
   if (!opt_repo)
     {
@@ -1218,7 +1211,7 @@ rpmostree_compose_builtin_install (int             argc,
   opt_workdir = g_strdup (destdir);
 
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
-  if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
+  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
@@ -1340,9 +1333,10 @@ rpmostree_compose_builtin_commit (int             argc,
 
   const char *treefile_path = argv[1];
   const char *rootfs_path = argv[2];
+  auto basearch = rpmostreecxx::get_rpm_basearch();
 
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
-  if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
+  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
     return FALSE;
   if (!glnx_opendirat (AT_FDCWD, rootfs_path, TRUE, &self->rootfs_dfd, error))
     return FALSE;
@@ -1379,9 +1373,14 @@ rpmostree_compose_builtin_tree (int             argc,
     }
 
   const char *treefile_path = argv[1];
+  auto basearch = rpmostreecxx::get_rpm_basearch();
 
   if (opt_print_only)
-    return parse_and_print_treefile (treefile_path, error);
+    {
+      auto treefile = rpmostreecxx::treefile_new (treefile_path, basearch, -1);
+      treefile->prettyprint_json_stdout ();
+      return TRUE;
+    }
 
   if (!opt_repo)
     {
@@ -1390,7 +1389,7 @@ rpmostree_compose_builtin_tree (int             argc,
     }
 
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
-  if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
+  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
@@ -1461,7 +1460,7 @@ rpmostree_compose_builtin_extensions (int             argc,
   const char *treefile_path = argv[1];
   const char *extensions_path = argv[2];
 
-  g_autofree char *basearch = rpm_ostree_get_basearch ();
+  auto basearch = rpmostreecxx::get_rpm_basearch ();
   auto src_treefile = rpmostreecxx::treefile_new_compose(treefile_path, basearch, -1);
 
   g_autoptr(OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
