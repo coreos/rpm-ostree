@@ -945,3 +945,45 @@ rpmostreed_daemon_unpublish (RpmostreedDaemon *self,
 
   g_object_unref (object);
 }
+
+// Fallback method that only authorizes a caller with uid 0.
+// If polkit can't be activated, it's probably not installed.  systemd upstream
+// today falls back to getting the remote pid, then from there gathering the capabilities
+// from /proc to check for CAP_SYS_ADMIN in most cases.  That's nice but also currently
+// racy, and subject to issues when the pid namespace differs.
+//  We'll just be OK with uid == 0.  SELinux should put a stop to processes
+// that run as uid 0 but shouldn't talk to us from working.
+gboolean
+rpmostreed_authorize_method_for_uid0 (GDBusMethodInvocation *invocation)
+{
+  const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
+  const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(GVariant) res =
+        g_dbus_connection_call_sync (g_dbus_method_invocation_get_connection (invocation), 
+                                     "org.freedesktop.DBus", "/org/freedesktop/DBus",
+                                     "org.freedesktop.DBus",
+                                     "GetConnectionUnixUser",
+                                     g_variant_new ("(s)", sender),
+                                     (GVariantType*)"(u)",
+                                     G_DBUS_CALL_FLAGS_NONE, -1,
+                                     NULL, &local_error);
+  if (!res)
+    {
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                             "GetConnectionUnixUser failed: %s", local_error->message);
+      return FALSE;
+    }
+  guint32 uid = 1;
+  g_variant_get (res, "(u)", &uid);
+  if (uid != 0)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_ACCESS_DENIED,
+                                             "rpmostreed operation %s not allowed for non-root user (polkit not available)", method_name);
+      return FALSE;
+    }
+
+  return TRUE;
+}

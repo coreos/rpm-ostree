@@ -68,6 +68,8 @@ gboolean           rpmostreed_daemon_reload_config  (RpmostreedDaemon *self,
                                                      gboolean         *out_changed,
                                                      GError          **error);
 
+gboolean rpmostreed_authorize_method_for_uid0 (GDBusMethodInvocation *invocation);
+
 RpmostreedAutomaticUpdatePolicy
 rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self);
 

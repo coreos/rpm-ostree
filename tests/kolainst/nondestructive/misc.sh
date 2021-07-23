@@ -66,6 +66,26 @@ echo "ok status text"
 runuser -u bin rpm-ostree status
 echo "ok status doesn't require active PAM session"
 
+# Verify we work without polkit, as root
+systemctl mask --now polkit
+systemctl restart rpm-ostreed
+# This should work as root
+rpm-ostree reload
+# And non-root should still work for methods that don't need auth
+runuser -u bin rpm-ostree status
+# But these shouldn't work
+if runuser -u core rpm-ostree reload 2>err.txt; then
+    assert_not_reached "Was able to reload as non-root!"
+fi
+assert_file_has_content_literal err.txt 'not allowed for non-root user (polkit not available)'
+rm -f err.txt
+if runuser -u core -- rpm-ostree initramfs --enable 2>err.txt; then
+    assert_not_reached "Was able to enable initramfs as non-root!"
+fi
+assert_file_has_content_literal err.txt 'not allowed for non-root user (polkit not available)'
+systemctl unmask polkit
+echo "ok worked without polkit"
+
 rpm-ostree status -b > status.txt
 assert_file_has_content status.txt BootedDeployment:
 echo "ok status -b"
