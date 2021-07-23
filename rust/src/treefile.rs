@@ -739,6 +739,13 @@ impl Treefile {
         self.parsed.derive.error_if_nonempty()
     }
 
+    /// Pretty-print treefile content as JSON to stdout.
+    pub fn prettyprint_json_stdout(&self) {
+        std::io::stdout()
+            .write_all(self.serialized.as_bytes())
+            .unwrap();
+    }
+
     /// Given a treefile, print warnings about items which are deprecated.
     pub(crate) fn print_deprecation_warnings(&self) {
         let mut deprecated = false;

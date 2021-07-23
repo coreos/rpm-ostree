@@ -345,12 +345,13 @@ pub mod ffi {
         fn get_releasever(&self) -> &str;
         fn rpmdb_backend_is_target(&self) -> bool;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
-        fn print_deprecation_warnings(&self);
-        fn sanitycheck_externals(&self) -> Result<()>;
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
         fn get_ostree_ref(&self) -> String;
         fn get_repo_packages(&self) -> &[RepoPackage];
         fn clear_repo_packages(&mut self);
+        fn prettyprint_json_stdout(&self);
+        fn print_deprecation_warnings(&self);
+        fn sanitycheck_externals(&self) -> Result<()>;
     }
 
     // treefile.rs (split out from above to make &self nice to use)
@@ -365,6 +366,7 @@ pub mod ffi {
     extern "Rust" {
         fn varsubstitute(s: &str, vars: &Vec<StringMapping>) -> Result<String>;
         fn get_features() -> Vec<String>;
+        fn get_rpm_basearch() -> String;
         fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32>;
         fn running_in_systemd() -> bool;
         fn calculate_advisories_diff(
