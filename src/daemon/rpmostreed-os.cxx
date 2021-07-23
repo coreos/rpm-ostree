@@ -98,9 +98,10 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
   if (rpmostreed_sysroot_is_on_session_bus (sysroot))
     {
       /* The daemon is on the session bus, running self tests */
-      authorized = TRUE;
+      return TRUE;
     }
-  else if (g_strcmp0 (method_name, "GetDeploymentsRpmDiff") == 0 ||
+
+  if (g_strcmp0 (method_name, "GetDeploymentsRpmDiff") == 0 ||
            g_strcmp0 (method_name, "GetCachedDeployRpmDiff") == 0 ||
            g_strcmp0 (method_name, "DownloadDeployRpmDiff") == 0 ||
            g_strcmp0 (method_name, "GetCachedUpdateRpmDiff") == 0 ||
