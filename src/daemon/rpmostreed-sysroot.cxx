@@ -624,6 +624,15 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
                                                    NULL, &local_error);
       if (result == NULL)
         {
+          g_assert (local_error);
+          if (g_dbus_error_is_remote_error (local_error))
+            {
+              g_autofree char *remote_err = g_dbus_error_get_remote_error (local_error);
+              if (g_str_equal (remote_err, "org.freedesktop.DBus.Error.NameHasNoOwner"))
+                {
+                  return rpmostreed_authorize_method_for_uid0 (invocation);
+                }
+            }
           g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
                                                  G_DBUS_ERROR_FAILED,
                                                  "Authorization error: %s",
