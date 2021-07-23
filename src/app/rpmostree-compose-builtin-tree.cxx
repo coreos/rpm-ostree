@@ -387,7 +387,9 @@ install_packages (RpmOstreeTreeComposeContext  *self,
                                        &ret_new_inputhash, error))
     return FALSE;
 
+  g_assert (ret_new_inputhash != NULL);
   g_print ("Input state hash: %s\n", ret_new_inputhash);
+  *out_new_inputhash = g_strdup (ret_new_inputhash);
 
   /* Only look for previous checksum if caller has passed *out_unmodified */
   if (self->previous_checksum && out_unmodified != NULL)
@@ -498,7 +500,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   if (out_unmodified)
     *out_unmodified = FALSE;
-  *out_new_inputhash = util::move_nullify (ret_new_inputhash);
+
   return TRUE;
 }
 
