@@ -229,8 +229,7 @@ pub(crate) fn shellsafe_quote(input: Cow<str>) -> Cow<str> {
     if SHELLSAFE.is_match(&input) {
         input
     } else {
-        // SAFETY: if input is non-NULL, this always returns non-NULL.
-        let quoted = glib::shell_quote(input.as_ref()).expect("NULL quoted output");
+        let quoted = glib::shell_quote(input.as_ref());
         // SAFETY: if input is UTF-8, so is the quoted string.
         Cow::Owned(quoted.into_string().expect("non UTF-8 quoted output"))
     }
@@ -368,7 +367,7 @@ mod tests {
         assert_eq!(util_next_version("10.1", "-", "10.1-5").unwrap(), "10.1-6");
 
         fn t(pre: &str, last: &str, final_datefmt: &str) {
-            let now = glib::DateTime::new_now_utc();
+            let now = glib::DateTime::new_now_utc().unwrap();
             let final_version = now.format(final_datefmt).unwrap();
             let ver = util_next_version(pre, "", last).expect("version");
             assert_eq!(ver, final_version);
@@ -379,7 +378,7 @@ mod tests {
         // Test increment reset when date changed.
         t("10.<date:%Y%m%d>", "10.20001010.5", "10.%Y%m%d.0");
 
-        let now = glib::DateTime::new_now_utc();
+        let now = glib::DateTime::new_now_utc().unwrap();
         // Test increment up when same date.
         let prev_version = now.format("10.%Y%m%d.1").unwrap();
         t("10.<date:%Y%m%d>", prev_version.as_str(), "10.%Y%m%d.2");
@@ -522,7 +521,7 @@ pub(crate) fn calculate_advisories_diff(
             for i in 0..variant_utils::n_children(advisories_from) {
                 let child = variant_utils::variant_tuple_get(advisories_from, i).unwrap();
                 let advisory_id_v = variant_utils::variant_tuple_get(&child, 0).unwrap();
-                let advisory_id = advisory_id_v.get_str().unwrap().to_string();
+                let advisory_id = advisory_id_v.str().unwrap().to_string();
                 previous_advisories.insert(advisory_id);
             }
         }
@@ -530,7 +529,7 @@ pub(crate) fn calculate_advisories_diff(
         for i in 0..variant_utils::n_children(advisories_to) {
             let child = variant_utils::variant_tuple_get(advisories_to, i).unwrap();
             let advisory_id_v = variant_utils::variant_tuple_get(&child, 0).unwrap();
-            if !previous_advisories.contains(advisory_id_v.get_str().unwrap()) {
+            if !previous_advisories.contains(advisory_id_v.str().unwrap()) {
                 new_advisories.push(child);
             }
         }

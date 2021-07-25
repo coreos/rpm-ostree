@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{anyhow, bail, Result};
-use gio::DBusProxyExt;
-use ostree_ext::variant_utils;
+use gio::prelude::*;
+use glib::Variant;
 use structopt::StructOpt;
 
 use crate::utils::print_treepkg_diff;
@@ -97,11 +97,11 @@ fn modules_impl(key: &str, opts: &InstallOpts) -> Result<()> {
     let client = &mut crate::client::ClientConnection::new()?;
     let previous_deployment = client
         .get_os_proxy()
-        .get_cached_property("DefaultDeployment")
+        .cached_property("DefaultDeployment")
         .ok_or_else(|| anyhow!("Failed to find default-deployment property"))?;
     let modifiers = get_modifiers_variant(key, &opts.modules)?;
     let options = get_options_variant(opts)?;
-    let params = variant_utils::new_variant_tuple(&[modifiers, options]);
+    let params = Variant::from_tuple(&[modifiers, options]);
     let reply = &client.get_os_proxy().call_sync(
         "UpdateDeployment",
         Some(&params),
@@ -112,7 +112,7 @@ fn modules_impl(key: &str, opts: &InstallOpts) -> Result<()> {
     let reply_child = crate::variant_utils::variant_tuple_get(reply, 0)
         .ok_or_else(|| anyhow!("Invalid reply"))?;
     let txn_address = reply_child
-        .get_str()
+        .str()
         .ok_or_else(|| anyhow!("Expected string transaction address"))?;
     client.transaction_connect_progress_sync(txn_address)?;
     if opts.dry_run {
@@ -120,7 +120,7 @@ fn modules_impl(key: &str, opts: &InstallOpts) -> Result<()> {
     } else if !opts.reboot {
         let new_deployment = client
             .get_os_proxy()
-            .get_cached_property("DefaultDeployment")
+            .cached_property("DefaultDeployment")
             .ok_or_else(|| anyhow!("Failed to find default-deployment property"))?;
         if previous_deployment != new_deployment {
             print_treepkg_diff("/");

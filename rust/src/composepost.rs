@@ -15,7 +15,8 @@ use crate::{bwrap, importer};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::Utf8Path;
 use fn_error_context::context;
-use gio::{CancellableExt, FileType};
+use gio::prelude::*;
+use gio::FileType;
 use nix::sys::stat::Mode;
 use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
@@ -512,8 +513,7 @@ fn mutate_os_release_contents(contents: &str, base_version: &str, next_version: 
         buf.push('\n');
     }
 
-    // Unwrap safety; we provided it UTF-8
-    let quoted_version = glib::shell_quote(next_version).unwrap();
+    let quoted_version = glib::shell_quote(next_version);
     let quoted_version = quoted_version.to_str().unwrap();
     // Unwrap safety: write! to a String can't fail
     writeln!(buf, "OSTREE_VERSION={}", quoted_version).unwrap();

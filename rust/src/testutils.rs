@@ -12,9 +12,8 @@
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use fn_error_context::context;
-use glib::ToVariant;
+use glib::{ToVariant, Variant};
 use openat_ext::{FileExt, OpenatDirExt};
-use ostree_ext::variant_utils;
 use rand::Rng;
 use std::fs;
 use std::fs::File;
@@ -240,7 +239,7 @@ fn test_moo() -> Result<()> {
     let mut bus_conn = client_conn.pin_mut().get_connection();
     let bus_conn = bus_conn.gobj_wrap();
 
-    let params = variant_utils::new_variant_tuple(&[true.to_variant()]);
+    let params = Variant::from_tuple(&[true.to_variant()]);
     let reply = &bus_conn.call_sync(
         Some("org.projectatomic.rpmostree1"),
         "/org/projectatomic/rpmostree1/fedora_coreos",
@@ -252,9 +251,9 @@ fn test_moo() -> Result<()> {
         -1,
         gio::NONE_CANCELLABLE,
     )?;
-    let reply = variant_utils::variant_get_child_value(reply, 0).unwrap();
+    let reply = reply.child_value(0);
     // Unwrap safety: We validated the (s) above.
-    let reply = reply.get_str().unwrap();
+    let reply = reply.str().unwrap();
     let cow = "🐄\n";
     assert_eq!(reply, cow);
     println!("ok {}", cow.trim());

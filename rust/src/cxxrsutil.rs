@@ -215,7 +215,7 @@ mod test {
         let p = td.path().join("repo");
         let r = ostree::Repo::new_for_path(&p);
         r.create(ostree::RepoMode::Archive, cancellable)?;
-        let fd = r.get_dfd();
+        let fd = r.dfd();
         assert_eq!(
             fd,
             crate::ffi::testutil_validate_cxxrs_passthrough(r.gobj_rewrap())

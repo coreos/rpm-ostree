@@ -4,8 +4,8 @@
 use crate::cxxrsutil::*;
 use crate::live;
 use anyhow::{anyhow, Result};
-use gio::DBusProxyExt;
-use ostree_ext::variant_utils;
+use gio::prelude::*;
+use glib::Variant;
 use std::pin::Pin;
 use structopt::StructOpt;
 
@@ -36,7 +36,7 @@ fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Vari
     } else if opts.reset {
         let booted = sysroot.require_booted_deployment()?;
         // Unwrap safety: This can't return NULL
-        let csum = booted.get_csum().expect("csum");
+        let csum = booted.csum().expect("csum");
         r.insert(live::OPT_TARGET, &csum.as_str());
     }
 
@@ -55,7 +55,7 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
 
     let args = get_args_variant(sysroot, opts)?;
 
-    let params = variant_utils::new_variant_tuple(&[args]);
+    let params = Variant::from_tuple(&[args]);
     let reply = &client.get_os_ex_proxy().call_sync(
         "LiveFs",
         Some(&params),
@@ -63,12 +63,10 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
         -1,
         gio::NONE_CANCELLABLE,
     )?;
-    let reply_child =
-        variant_utils::variant_get_child_value(reply, 0).ok_or_else(|| anyhow!("Invalid reply"))?;
-    let txn_address = reply_child
-        .get_str()
-        .ok_or_else(|| anyhow!("Expected string transaction address"))?;
-    client.transaction_connect_progress_sync(txn_address)?;
+    let txn_address = reply
+        .get::<(String,)>()
+        .ok_or_else(|| anyhow!("Invalid reply {:?}, expected (s)", reply.type_()))?;
+    client.transaction_connect_progress_sync(txn_address.0.as_str())?;
     applylive_finish(sysroot.gobj_rewrap())?;
     Ok(())
 }
@@ -78,9 +76,9 @@ pub(crate) fn applylive_finish(mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>)
     let sysroot = sysroot.gobj_wrap();
     let cancellable = gio::NONE_CANCELLABLE;
     sysroot.load_if_changed(cancellable)?;
-    let repo = &sysroot.get_repo(cancellable)?;
+    let repo = &sysroot.repo().unwrap();
     let booted = &sysroot.require_booted_deployment()?;
-    let booted_commit = booted.get_csum().expect("csum");
+    let booted_commit = booted.csum().expect("csum");
     let booted_commit = booted_commit.as_str();
 
     let live_state = live::get_live_state(repo, booted)?
