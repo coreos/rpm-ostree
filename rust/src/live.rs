@@ -48,8 +48,8 @@ fn get_runstate_dir(deploy: &ostree::Deployment) -> PathBuf {
     format!(
         "{}/{}.{}",
         OSTREE_RUNSTATE_DIR,
-        deploy.get_csum().expect("csum"),
-        deploy.get_deployserial()
+        deploy.csum().expect("csum"),
+        deploy.deployserial()
     )
     .into()
 }
@@ -237,7 +237,7 @@ fn update_etc(
     // The labels for /etc and /usr/etc may differ; ensure that we label
     // the files with the /etc target, even though we're checking out
     // from /usr/etc.  This is the same as what libostree does.
-    if sepolicy.get_name().is_some() {
+    if sepolicy.name().is_some() {
         opts.sepolicy = Some(sepolicy.clone());
     }
     // Added directories and files
@@ -346,8 +346,8 @@ pub(crate) fn transaction_apply_live(
     let repo = &sysroot.repo().expect("repo");
 
     let booted = sysroot.require_booted_deployment()?;
-    let osname = booted.get_osname().expect("osname");
-    let booted_commit = booted.get_csum().expect("csum");
+    let osname = booted.osname().expect("osname");
+    let booted_commit = booted.csum().expect("csum");
     let booted_commit = booted_commit.as_str();
 
     let target_commit = if let Some(t) = target {
@@ -355,7 +355,7 @@ pub(crate) fn transaction_apply_live(
     } else {
         match sysroot.query_deployments_for(Some(osname.as_str())) {
             (Some(pending), _) => {
-                let pending_commit = pending.get_csum().expect("csum");
+                let pending_commit = pending.csum().expect("csum");
                 let pending_commit = pending_commit.as_str();
                 Cow::Owned(pending_commit.to_string())
             }
@@ -367,7 +367,7 @@ pub(crate) fn transaction_apply_live(
 
     let state = get_live_state(repo, &booted)?;
     if state.is_none() {
-        match booted.get_unlocked() {
+        match booted.unlocked() {
             DeploymentUnlockedState::None => {
                 unlock_transient(sysroot)?;
             }
@@ -377,7 +377,7 @@ pub(crate) fn transaction_apply_live(
             }
         };
     } else {
-        match booted.get_unlocked() {
+        match booted.unlocked() {
             DeploymentUnlockedState::Transient | DeploymentUnlockedState::Development => {}
             s => {
                 return Err(anyhow!("deployment not unlocked, is in state: {}", s).into());
@@ -503,8 +503,8 @@ pub(crate) fn applylive_sync_ref(
     mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
 ) -> CxxResult<()> {
     let sysroot = sysroot.gobj_wrap();
-    let repo = &sysroot.get_repo(gio::NONE_CANCELLABLE)?;
-    let booted = if let Some(b) = sysroot.get_booted_deployment() {
+    let repo = &sysroot.repo().unwrap();
+    let booted = if let Some(b) = sysroot.booted_deployment() {
         b
     } else {
         return Ok(());
@@ -540,7 +540,7 @@ pub(crate) fn get_live_apply_state(
 ) -> CxxResult<LiveApplyState> {
     let sysroot = sysroot.gobj_wrap();
     let deployment = deployment.gobj_wrap();
-    let repo = &sysroot.get_repo(gio::NONE_CANCELLABLE)?;
+    let repo = &sysroot.repo().unwrap();
     if let Some(state) = get_live_state(&repo, &deployment)? {
         Ok(state)
     } else {

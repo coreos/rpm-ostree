@@ -144,7 +144,7 @@ fn child_wait_check(
 ) -> std::result::Result<(), glib::Error> {
     match child.wait(cancellable) {
         Ok(_) => {
-            let estatus = child.get_exit_status();
+            let estatus = child.exit_status();
             glib::spawn_check_exit_status(estatus)?;
             Ok(())
         }
@@ -378,7 +378,7 @@ impl Bubblewrap {
         let child_argv0_i: usize = self.child_argv0.expect("child argument").into();
         let child_argv0 = format!("bwrap({})", self.argv[child_argv0_i].as_str());
         let argv: Vec<_> = self.argv.iter().map(|s| s.as_ref()).collect();
-        let child = self.launcher.spawnv(&argv)?;
+        let child = self.launcher.spawn(&argv)?;
         Ok((child, child_argv0))
     }
 

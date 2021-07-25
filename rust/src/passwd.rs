@@ -8,8 +8,7 @@ use crate::nameservice;
 use crate::treefile::{CheckGroups, CheckPasswd, Treefile};
 use anyhow::{anyhow, Context, Result};
 use fn_error_context::context;
-use gio::prelude::InputStreamExtManual;
-use gio::FileExt;
+use gio::prelude::*;
 use nix::unistd::{Gid, Uid};
 use openat_ext::OpenatDirExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -404,7 +403,10 @@ fn concat_files(rootfs: &openat::Dir, prev_root: &gio::File, target: &str) -> Re
         let usrlib_src = format!("usr/lib/{}", &target);
         prev_root.resolve_relative_path(usrlib_src)
     };
-    if orig_usretc_content.is_none() && orig_usrlib_content.is_none() {
+
+    if !(orig_usretc_content.query_exists(gio::NONE_CANCELLABLE)
+        && orig_usrlib_content.query_exists(gio::NONE_CANCELLABLE))
+    {
         // This could actually happen after we transition to systemd-sysusers;
         // we won't have a need for preallocated user data in the tree.
         return Ok(());
@@ -414,14 +416,14 @@ fn concat_files(rootfs: &openat::Dir, prev_root: &gio::File, target: &str) -> Re
     rootfs
         .write_file_with_sync(&etc_target, DEFAULT_MODE, |dest_bufwr| -> Result<()> {
             let mut seen_names = HashSet::new();
-            if let Some(ref src_file) = orig_usretc_content {
-                let src_stream = src_file.read(gio::NONE_CANCELLABLE)?.into_read();
+            if orig_usretc_content.query_exists(gio::NONE_CANCELLABLE) {
+                let src_stream = orig_usretc_content.read(gio::NONE_CANCELLABLE)?.into_read();
                 let mut buf_rd = BufReader::new(src_stream);
                 append_unique_fn(&mut buf_rd, &mut seen_names, dest_bufwr)
                     .with_context(|| format!("failed to process /usr/etc/{}", &target))?;
             }
-            if let Some(ref src_file) = orig_usrlib_content {
-                let src_stream = src_file.read(gio::NONE_CANCELLABLE)?.into_read();
+            if orig_usrlib_content.query_exists(gio::NONE_CANCELLABLE) {
+                let src_stream = orig_usrlib_content.read(gio::NONE_CANCELLABLE)?.into_read();
                 let mut buf_rd = BufReader::new(src_stream);
                 append_unique_fn(&mut buf_rd, &mut seen_names, dest_bufwr)
                     .with_context(|| format!("failed to process /usr/lib/{}", &target))?;
@@ -743,10 +745,10 @@ impl PasswdEntries {
                     None => return Ok(()),
                 };
                 let (prev_root, _name) = repo.read_commit(previous_rev, gio::NONE_CANCELLABLE)?;
-                let old_path = match prev_root.resolve_relative_path("usr/lib/passwd") {
-                    Some(v) => v,
-                    None => return Ok(()),
-                };
+                let old_path = prev_root.resolve_relative_path("usr/lib/passwd");
+                if !old_path.query_exists(gio::NONE_CANCELLABLE) {
+                    return Ok(());
+                }
                 let old_passwd_stream = old_path.read(gio::NONE_CANCELLABLE)?.into_read();
                 let buf_rd = BufReader::new(old_passwd_stream);
                 let entries = nameservice::passwd::parse_passwd_content(buf_rd)?;
@@ -793,10 +795,10 @@ impl PasswdEntries {
                     None => return Ok(()),
                 };
                 let (prev_root, _name) = repo.read_commit(previous_rev, gio::NONE_CANCELLABLE)?;
-                let old_path = match prev_root.resolve_relative_path("usr/lib/group") {
-                    Some(v) => v,
-                    None => return Ok(()),
-                };
+                let old_path = prev_root.resolve_relative_path("usr/lib/group");
+                if !old_path.query_exists(gio::NONE_CANCELLABLE) {
+                    return Ok(());
+                }
                 let old_passwd_stream = old_path.read(gio::NONE_CANCELLABLE)?.into_read();
                 let buf_rd = BufReader::new(old_passwd_stream);
                 let entries = nameservice::group::parse_group_content(buf_rd)?;

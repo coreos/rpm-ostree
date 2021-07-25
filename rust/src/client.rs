@@ -5,7 +5,7 @@
 use crate::cxxrsutil::*;
 use crate::utils;
 use anyhow::{anyhow, Result};
-use gio::DBusProxyExt;
+use gio::prelude::*;
 use std::os::unix::io::IntoRawFd;
 use std::process::Command;
 
@@ -46,10 +46,10 @@ impl ClientConnection {
         )?;
         // Today the daemon mode requires running inside a booted deployment.
         let booted = sysroot_proxy
-            .get_cached_property("Booted")
+            .cached_property("Booted")
             .ok_or_else(|| anyhow!("Failed to find booted property"))?;
         let booted = booted
-            .get_str()
+            .str()
             .ok_or_else(|| anyhow!("Booted sysroot is not a string"))?;
         let booted_proxy = gio::DBusProxy::new_sync(
             &bus_conn,

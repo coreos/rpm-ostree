@@ -56,7 +56,7 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     cfg.derive.override_replace_local = parse_localpkglist(&kf, OVERRIDES, "replace-local")?;
 
     let regenerate_initramfs = kf
-        .get_boolean(RPMOSTREE, "regenerate-initramfs")
+        .boolean(RPMOSTREE, "regenerate-initramfs")
         .unwrap_or_default();
     let initramfs_etc = parse_stringlist(kf, RPMOSTREE, "initramfs-etc")?;
     let initramfs_args = parse_stringlist(kf, RPMOSTREE, "initramfs-args")?;
@@ -74,7 +74,7 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
         cfg.derive.custom = Some(crate::treefile::DeriveCustom { url, description })
     }
 
-    if map_keyfile_optional(kf.get_boolean(RPMOSTREE, "ex-cliwrap"))?.unwrap_or_default() {
+    if map_keyfile_optional(kf.boolean(RPMOSTREE, "ex-cliwrap"))?.unwrap_or_default() {
         cfg.cliwrap = Some(true)
     }
 
@@ -213,10 +213,10 @@ fn kf_diff_value(group: &str, key: &str, a: &str, b: &str) -> bool {
 /// Diff two key files.
 fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
     let mut errs = Vec::new();
-    for grp in kf.get_groups().0.iter().map(|g| g.as_str()) {
-        for k in kf.get_keys(grp)?.0.iter().map(|g| g.as_str()) {
-            let origv = kf.get_value(grp, k)?;
-            match newkf.get_value(grp, k) {
+    for grp in kf.groups().0.iter().map(|g| g.as_str()) {
+        for k in kf.keys(grp)?.0.iter().map(|g| g.as_str()) {
+            let origv = kf.value(grp, k)?;
+            match newkf.value(grp, k) {
                 Ok(newv) => {
                     if !kf_diff_value(grp, k, origv.as_str(), newv.as_str()) {
                         errs.push(format!("Mismatched value for {}/{}: {}", grp, k, newv));
@@ -226,8 +226,8 @@ fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
             }
         }
     }
-    for grp in newkf.get_groups().0.iter().map(|g| g.as_str()) {
-        for k in newkf.get_keys(grp)?.0.iter().map(|g| g.as_str()) {
+    for grp in newkf.groups().0.iter().map(|g| g.as_str()) {
+        for k in newkf.keys(grp)?.0.iter().map(|g| g.as_str()) {
             if !kf.has_key(grp, k)? {
                 errs.push(format!("Unexpected new key: {}/{}", grp, k));
             }
@@ -291,7 +291,7 @@ fn map_keyfile_optional<T>(res: StdResult<T, glib::Error>) -> StdResult<Option<T
 }
 
 fn parse_stringlist(kf: &KeyFile, group: &str, key: &str) -> Result<Option<Vec<String>>> {
-    let r = map_keyfile_optional(kf.get_string_list(group, key))?
+    let r = map_keyfile_optional(kf.string_list(group, key))?
         .map(|o| o.into_iter().map(|s| s.to_string()).collect());
     Ok(r)
 }
@@ -301,7 +301,7 @@ fn parse_localpkglist(
     group: &str,
     key: &str,
 ) -> Result<Option<BTreeMap<String, String>>> {
-    if let Some(v) = map_keyfile_optional(kf.get_string_list(group, key))? {
+    if let Some(v) = map_keyfile_optional(kf.string_list(group, key))? {
         let mut r = BTreeMap::new();
         for s in v {
             let (nevra, sha256) = crate::utils::decompose_sha256_nevra(s.as_str())?;
@@ -314,7 +314,7 @@ fn parse_localpkglist(
 }
 
 fn keyfile_get_optional_string(kf: &KeyFile, group: &str, key: &str) -> Result<Option<String>> {
-    Ok(map_keyfile_optional(kf.get_string(group, key))?.map(|v| v.to_string()))
+    Ok(map_keyfile_optional(kf.string(group, key))?.map(|v| v.to_string()))
 }
 
 #[cfg(test)]

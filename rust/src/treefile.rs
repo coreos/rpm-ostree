@@ -828,7 +828,7 @@ impl Treefile {
         // comments/whitespace/hash table key reorderings don't trigger a respin. We could take
         // this further by using a custom `serialize_with` for Vecs where ordering doesn't matter
         // (or just sort the Vecs).
-        let mut hasher = glib::Checksum::new(glib::ChecksumType::Sha256);
+        let mut hasher = glib::Checksum::new(glib::ChecksumType::Sha256).unwrap();
         self.parsed.hasher_update(&mut hasher)?;
         self.externals.hasher_update(&mut hasher)?;
 
@@ -849,7 +849,7 @@ impl Treefile {
             let content_checksum = content_checksum.as_str();
             hasher.update(content_checksum.as_bytes());
         }
-        Ok(hasher.get_string().expect("hash"))
+        Ok(hasher.string().expect("hash"))
     }
 
     /// Perform sanity checks on externally provided input, such

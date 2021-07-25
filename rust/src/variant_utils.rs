@@ -59,7 +59,7 @@ pub(crate) fn n_children(v: &glib::Variant) -> usize {
 pub(crate) fn variant_dict_lookup_str(v: &glib::VariantDict, k: &str) -> Option<String> {
     // Unwrap safety: Passing the GVariant type string gives us the right value type
     v.lookup_value(k, Some(*TY_S))
-        .map(|v| v.get_str().unwrap().to_string())
+        .map(|v| v.str().unwrap().to_string())
 }
 
 /// Find a boolean value in a GVariantDict

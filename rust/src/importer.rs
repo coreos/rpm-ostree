@@ -22,13 +22,13 @@ pub fn tweak_imported_file_info(
     ro_executables: bool,
 ) {
     let file_info = file_info.gobj_wrap();
-    let filetype = file_info.get_file_type();
+    let filetype = file_info.file_type();
 
     // Add the "user writable" permission bit for a directory.
     // See this bug:
     // https://bugzilla.redhat.com/show_bug.cgi?id=517575
     if filetype == FileType::Directory {
-        let mut mode = file_info.get_attribute_uint32("unix::mode");
+        let mut mode = file_info.attribute_uint32("unix::mode");
         mode |= libc::S_IWUSR;
         file_info.set_attribute_uint32("unix::mode", mode);
     }
@@ -37,7 +37,7 @@ pub fn tweak_imported_file_info(
     // See similar code in `ostree commit`:
     // https://github.com/ostreedev/ostree/pull/2091/commits/7392259332e00c33ed45b904deabde08f4da3e3c
     if ro_executables && filetype == FileType::Regular {
-        let mut mode = file_info.get_attribute_uint32("unix::mode");
+        let mut mode = file_info.attribute_uint32("unix::mode");
         if (mode & (libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH)) != 0 {
             mode &= !(libc::S_IWUSR | libc::S_IWGRP | libc::S_IWOTH);
             file_info.set_attribute_uint32("unix::mode", mode);
@@ -68,8 +68,8 @@ fn import_filter(
     skip_extraneous: bool,
 ) -> Result<RepoCommitFilterResult> {
     // Sanity check that RPM isn't using CPIO id fields.
-    let uid = file_info.get_attribute_uint32("unix::uid");
-    let gid = file_info.get_attribute_uint32("unix::gid");
+    let uid = file_info.attribute_uint32("unix::uid");
+    let gid = file_info.attribute_uint32("unix::gid");
     if uid != 0 || gid != 0 {
         bail!("Unexpected non-root owned path (marked as {}:{})", uid, gid);
     }
@@ -143,7 +143,7 @@ pub(crate) fn translate_to_tmpfiles_d(
 ) -> Result<String> {
     let mut bufwr = String::new();
 
-    let path_type = file_info.get_file_type();
+    let path_type = file_info.file_type();
     let filetype_char = match path_type {
         FileType::Directory => 'd',
         FileType::Regular => 'f',
@@ -155,11 +155,11 @@ pub(crate) fn translate_to_tmpfiles_d(
 
     if path_type == FileType::SymbolicLink {
         let link_target = file_info
-            .get_symlink_target()
+            .symlink_target()
             .ok_or_else(|| format_err!("missing symlink target"))?;
         write!(&mut bufwr, " - - - - {}", link_target)?;
     } else {
-        let mode = file_info.get_attribute_uint32("unix::mode") & !libc::S_IFMT;
+        let mode = file_info.attribute_uint32("unix::mode") & !libc::S_IFMT;
         write!(&mut bufwr, " {:04o} {} {} - -", mode, username, groupname)?;
     };
 

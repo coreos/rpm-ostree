@@ -6,6 +6,7 @@
 
 use crate::{cxxrsutil::*, variant_utils};
 use anyhow::Result;
+use glib::prelude::*;
 use openat_ext::OpenatDirExt;
 use std::collections::BTreeMap;
 use std::pin::Pin;
@@ -15,7 +16,7 @@ pub(crate) fn daemon_sanitycheck_environment(
     mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
 ) -> CxxResult<()> {
     let sysroot = &sysroot.gobj_wrap();
-    let sysroot_dir = openat::Dir::open(format!("/proc/self/fd/{}", sysroot.get_fd()))?;
+    let sysroot_dir = openat::Dir::open(format!("/proc/self/fd/{}", sysroot.fd()))?;
     let loc = crate::composepost::TRADITIONAL_RPMDB_LOCATION;
     if let Some(metadata) = sysroot_dir.metadata_optional(loc)? {
         let t = metadata.simple_type();
@@ -38,9 +39,9 @@ pub(crate) fn deployment_generate_id(
     // unwrap safety: These can't actually return NULL
     format!(
         "{}-{}.{}",
-        deployment.get_osname().unwrap(),
-        deployment.get_csum().unwrap(),
-        deployment.get_deployserial()
+        deployment.osname().unwrap(),
+        deployment.csum().unwrap(),
+        deployment.deployserial()
     )
 }
 
@@ -48,9 +49,8 @@ pub(crate) fn deployment_generate_id(
 fn vdict_insert_strv<'a>(dict: &glib::VariantDict, k: &str, v: impl IntoIterator<Item = &'a str>) {
     // TODO: drive this into variant_utils in ostree-rs-ext so we don't need
     // to allocate the intermediate vector.
-    let v: Vec<&str> = v.into_iter().collect();
-    let v = ostree_ext::variant_utils::new_variant_as(&v);
-    dict.insert_value(k, &v);
+    let v: Vec<_> = v.into_iter().collect();
+    dict.insert_value(k, &v.to_variant());
 }
 
 /// Insert values from `v` into the target `dict` with key `k`.
@@ -140,15 +140,12 @@ pub(crate) fn deployment_populate_variant(
     // First, basic values from ostree
     dict.insert("id", &id);
 
-    dict.insert("osname", &deployment.get_osname().expect("osname").as_str());
-    dict.insert("checksum", &deployment.get_csum().expect("csum").as_str());
-    dict.insert_value(
-        "serial",
-        &glib::Variant::from(deployment.get_deployserial() as i32),
-    );
+    dict.insert("osname", &deployment.osname().expect("osname").as_str());
+    dict.insert("checksum", &deployment.csum().expect("csum").as_str());
+    dict.insert_value("serial", &(deployment.deployserial() as i32).to_variant());
 
     let booted: bool = sysroot
-        .get_booted_deployment()
+        .booted_deployment()
         .map(|b| b.equal(deployment))
         .unwrap_or_default();
     dict.insert("booted", &booted);
@@ -171,7 +168,7 @@ pub(crate) fn deployment_populate_variant(
     }
 
     dict.insert("pinned", &deployment.is_pinned());
-    let unlocked = deployment.get_unlocked();
+    let unlocked = deployment.unlocked();
     // Unwrap safety: This always returns a value
     dict.insert(
         "unlocked",
@@ -182,7 +179,7 @@ pub(crate) fn deployment_populate_variant(
 
     // Some of the origin-based state.  But not all yet; see the rest of the
     // code in rpmostreed-deployment-utils.cxx
-    if let Some(origin) = deployment.get_origin() {
+    if let Some(origin) = deployment.origin() {
         deployment_populate_variant_origin(&origin, &dict)?;
     }
 
@@ -207,7 +204,7 @@ pub(crate) fn deployment_layeredmeta_from_commit(
     if !is_layered {
         Ok(crate::ffi::DeploymentLayeredMeta {
             is_layered,
-            base_commit: deployment.get_csum().unwrap().into(),
+            base_commit: deployment.csum().unwrap().into(),
             clientlayer_version: 0,
         })
     } else {
@@ -235,7 +232,7 @@ pub(crate) fn deployment_layeredmeta_load(
     let deployment = deployment.gobj_wrap();
     let commit = &repo.load_variant(
         ostree::ObjectType::Commit,
-        deployment.get_csum().unwrap().as_str(),
+        deployment.csum().unwrap().as_str(),
     )?;
     deployment_layeredmeta_from_commit(deployment.gobj_rewrap(), commit.gobj_rewrap())
 }

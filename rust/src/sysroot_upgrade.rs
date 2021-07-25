@@ -15,7 +15,7 @@ pub(crate) fn import_container(
 ) -> CxxResult<Box<ContainerImport>> {
     // TODO: take a GCancellable and monitor it, and drop the import task (which is how async cancellation works in Rust).
     let sysroot = &sysroot.gobj_wrap();
-    let repo = &sysroot.get_repo(gio::NONE_CANCELLABLE)?;
+    let repo = &sysroot.repo().unwrap();
     let imgref = imgref.as_str().try_into()?;
     let imported = build_runtime()?
         .block_on(async { ostree_ext::container::import(&repo, &imgref, None).await })?;
