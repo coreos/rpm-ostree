@@ -992,15 +992,13 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
   dnf_sack_set_module_excludes (dnf_context_get_sack (self->dnfctx), NULL);
   /* And also mark all repos as hotfix repos so that we can indiscriminately cherry-pick
    * from modular repos and non-modular repos alike. */
-  g_autoptr(GPtrArray) repos =
-    rpmostree_get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
-  for (guint i = 0; i < repos->len; i++)
-    dnf_repo_set_module_hotfixes (static_cast<DnfRepo*>(repos->pdata[i]), TRUE);
+  for (guint i = 0; i < rpmmd_repos->len; i++)
+    dnf_repo_set_module_hotfixes (static_cast<DnfRepo*>(rpmmd_repos->pdata[i]), TRUE);
 
   // Print repo information
-  for (guint i = 0; i < repos->len; i++)
+  for (guint i = 0; i < rpmmd_repos->len; i++)
     {
-      auto repo = static_cast<DnfRepo*>(repos->pdata[i]);
+      auto repo = static_cast<DnfRepo*>(rpmmd_repos->pdata[i]);
       gboolean updated = g_hash_table_contains (updated_repos, repo);
       guint64 ts = dnf_repo_get_timestamp_generated (repo);
       g_autofree char *repo_ts_str = rpmostree_timestamp_str_from_unix_utc (ts);
