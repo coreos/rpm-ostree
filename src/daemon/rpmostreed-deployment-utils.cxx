@@ -248,10 +248,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   gboolean is_layered = FALSE;
   g_autofree char *base_checksum = NULL;
   g_auto(GStrv) layered_pkgs = NULL;
+  g_auto(GStrv) layered_modules = NULL;
   g_autoptr(GVariant) removed_base_pkgs = NULL;
   g_autoptr(GVariant) replaced_base_pkgs = NULL;
   if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, NULL,
-                                              &base_checksum, &layered_pkgs,
+                                              &base_checksum, &layered_pkgs, &layered_modules,
                                               &removed_base_pkgs, &replaced_base_pkgs,
                                               error))
     return NULL;
@@ -340,6 +341,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
     }
 
   g_variant_dict_insert (dict, "packages", "^as", layered_pkgs);
+  g_variant_dict_insert (dict, "modules", "^as", layered_modules);
   g_variant_dict_insert_value (dict, "base-removals", removed_base_pkgs);
   g_variant_dict_insert_value (dict, "base-local-replacements", replaced_base_pkgs);
 

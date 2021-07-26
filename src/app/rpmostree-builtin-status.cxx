@@ -561,7 +561,10 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   const gchar *origin_refspec;
   RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
   g_autofree const gchar **origin_packages = NULL;
+  g_autofree const gchar **origin_modules = NULL;
+  g_autofree const gchar **origin_modules_enabled = NULL;
   g_autofree const gchar **origin_requested_packages = NULL;
+  g_autofree const gchar **origin_requested_modules = NULL;
   g_autofree const gchar **origin_requested_local_packages = NULL;
   g_autoptr(GVariant) origin_base_removals = NULL;
   g_autofree const gchar **origin_requested_base_removals = NULL;
@@ -572,8 +575,14 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
     {
       origin_packages =
         lookup_array_and_canonicalize (dict, "packages");
+      origin_modules =
+        lookup_array_and_canonicalize (dict, "modules");
+      origin_modules_enabled =
+        lookup_array_and_canonicalize (dict, "modules-enabled");
       origin_requested_packages =
         lookup_array_and_canonicalize (dict, "requested-packages");
+      origin_requested_modules =
+        lookup_array_and_canonicalize (dict, "requested-modules");
       origin_requested_local_packages =
         lookup_array_and_canonicalize (dict, "requested-local-packages");
       origin_base_removals =
@@ -935,10 +944,21 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
     /* requested-packages - packages = inactive (i.e. dormant requests) */
     print_packages ("InactiveRequests", max_key_len,
                     origin_requested_packages, origin_packages);
+  if (origin_requested_modules && opt_verbose)
+    /* requested-modules - modules = inactive (i.e. dormant requests) */
+    /* note the core doesn't support inactive modules yet, but could in the future */
+    print_packages ("InactiveModuleRequests", max_key_len,
+                    origin_requested_modules, origin_modules);
 
   if (origin_packages)
     print_packages ("LayeredPackages", max_key_len,
                     origin_packages, NULL);
+  if (origin_modules)
+    print_packages ("LayeredModules", max_key_len,
+                    origin_modules, NULL);
+  if (origin_modules_enabled)
+    print_packages ("EnabledModules", max_key_len,
+                    origin_modules_enabled, NULL);
 
   if (origin_requested_local_packages)
     print_packages ("LocalPackages", max_key_len,

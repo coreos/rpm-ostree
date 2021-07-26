@@ -876,6 +876,18 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
                            g_strdup (providing_nevra));
     }
 
+  /* XXX: Currently, we don't retain information about which modules were
+   * installed in the commit metadata. So we can't really detect "inactive"
+   * requests. See related discussions in
+   * https://github.com/rpm-software-management/libdnf/pull/1207.
+   *
+   * In the future, here we could extract e.g. the NSVCAPs from the base
+   * commit, and mark as inactive all the requests for module names (and
+   * optionally streams) already installed.
+   *
+   * For now, we just implicitly pass through via computed_origin.
+   */
+
   if (g_hash_table_size (inactive_requests) > 0)
     {
       gboolean changed = FALSE;
@@ -968,6 +980,13 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
     }
   else
     {
+      /* We still want to prepare() even if there's only enabled modules to validate.
+       * See comment in rpmostree_origin_may_require_local_assembly(). */
+      if (g_hash_table_size (rpmostree_origin_get_modules_enable (self->computed_origin)) > 0)
+        {
+          if (!rpmostree_context_prepare (self->ctx, cancellable, error))
+            return FALSE;
+        }
       rpmostree_context_set_is_empty (self->ctx);
       self->layering_type = RPMOSTREE_SYSROOT_UPGRADER_LAYERING_LOCAL;
     }
