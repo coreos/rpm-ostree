@@ -136,14 +136,20 @@ rpm_ostree_db_diff_ext (OstreeRepo               *repo,
   g_autoptr(GPtrArray) orig_pkglist = NULL;
   if (!_rpm_ostree_package_list_for_commit (repo, orig_ref, allow_noent, &orig_pkglist,
                                             cancellable, error))
-    return FALSE;
+    {
+      g_prefix_error (error, "Failed to load package list: ");
+      return FALSE;
+    }
 
   g_autoptr(GPtrArray) new_pkglist = NULL;
   if (orig_pkglist)
     {
       if (!_rpm_ostree_package_list_for_commit (repo, new_ref, allow_noent, &new_pkglist,
                                                 cancellable, error))
-        return FALSE;
+        {
+          g_prefix_error (error, "Failed to load package list: ");
+          return FALSE;
+        }
     }
 
   if (!orig_pkglist || !new_pkglist)
