@@ -838,8 +838,8 @@ on_progress_timeout (gpointer datap)
  * for all the other cases like client side layering and `ex container` for
  * buildroots.
  */
-gboolean
-rpmostree_compose_commit (int            rootfs_fd,
+static gboolean
+internal_rpmostree_compose_commit (int            rootfs_fd,
                           OstreeRepo    *repo,
                           const char    *parent_revision,
                           GVariant      *src_metadata,
@@ -944,4 +944,27 @@ rpmostree_compose_commit (int            rootfs_fd,
     *out_new_revision = util::move_nullify (new_revision);
 
   return TRUE;
+}
+
+namespace rpmostreecxx {
+rust::String
+compose_commit (int            rootfs_fd,
+                OstreeRepo    *repo,
+                const char    *parent_revision,
+                GVariant      *src_metadata,
+                const char    *gpg_keyid,
+                bool           enable_selinux,
+                OstreeRepoDevInoCache *devino_cache,
+                GCancellable  *cancellable)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autofree char *new_revision = NULL;
+  try {
+    if (!internal_rpmostree_compose_commit (rootfs_fd, repo, parent_revision, src_metadata, gpg_keyid, enable_selinux, devino_cache, &new_revision, cancellable, &local_error))
+      util::throw_gerror(local_error);
+  } catch (std::exception &e) {
+    util::rethrow_prefixed(e, "Writing commit");
+  }
+  return rust::String(new_revision);
+}
 }

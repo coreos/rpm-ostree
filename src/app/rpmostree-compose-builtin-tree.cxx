@@ -1103,11 +1103,10 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     }
 
   /* The penultimate step, just basically `ostree commit` */
-  g_autofree char *new_revision = NULL;
-  if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision,
-                                 metadata, gpgkey, selinux, self->devino_cache,
-                                 &new_revision, cancellable, error))
-    return glnx_prefix_error (error, "Writing commit");
+  auto new_revision_str =
+    rpmostreecxx::compose_commit(self->rootfs_dfd, self->build_repo, parent_revision,
+                                 metadata, gpgkey, selinux, self->devino_cache,cancellable);
+  const char *new_revision = new_revision_str.c_str();
   g_assert(new_revision != NULL);
 
   OstreeRepoTransactionStats stats = { 0, };

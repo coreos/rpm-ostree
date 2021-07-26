@@ -54,16 +54,16 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                              GCancellable  *cancellable,
                              GError       **error);
 
-gboolean
-rpmostree_compose_commit (int            rootfs_dfd,
-                          OstreeRepo    *repo,
-                          const char    *parent,
-                          GVariant      *metadata,
-                          const char    *gpg_keyid,
-                          gboolean       enable_selinux,
-                          OstreeRepoDevInoCache *devino_cache,
-                          char         **out_new_revision,
-                          GCancellable  *cancellable,
-                          GError       **error);
-
 G_END_DECLS
+
+namespace rpmostreecxx {
+rust::String
+compose_commit (int            rootfs_fd,
+                OstreeRepo    *repo,
+                const char    *parent_revision,
+                GVariant      *src_metadata,
+                const char    *gpg_keyid,
+                bool           enable_selinux,
+                OstreeRepoDevInoCache *devino_cache,
+                GCancellable  *cancellable);
+}
