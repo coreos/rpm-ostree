@@ -796,7 +796,6 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
   /* request (owned by origin) --> providing nevra */
   g_autoptr(GHashTable) inactive_requests =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-  g_autoptr(GPtrArray) ret_missing_pkgs = g_ptr_array_new_with_free_func (g_free);
 
   /* Add the local pkgs as if they were installed: since they're unconditionally
    * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
@@ -846,8 +845,8 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
 
       if (matches->len == 0)
         {
-          /* no matches, so we'll need to layer it */
-          g_ptr_array_add (ret_missing_pkgs, g_strdup (pattern));
+          /* no matches, so we'll need to layer it (i.e. not remove it from the
+           * computed origin) */
           continue;
         }
 
