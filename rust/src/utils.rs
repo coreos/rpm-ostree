@@ -223,7 +223,7 @@ pub fn maybe_shell_quote(input: &str) -> String {
 
 pub(crate) fn shellsafe_quote(input: Cow<str>) -> Cow<str> {
     lazy_static! {
-        static ref SHELLSAFE: Regex = Regex::new("^[[:alnum:]-._/=]+$").unwrap();
+        static ref SHELLSAFE: Regex = Regex::new("^[[:alnum:]-._/=:]+$").unwrap();
     }
 
     if SHELLSAFE.is_match(&input) {
