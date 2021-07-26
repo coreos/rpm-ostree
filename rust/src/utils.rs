@@ -539,3 +539,14 @@ pub(crate) fn calculate_advisories_diff(
     let r = variant_utils::new_variant_array(&GV_ADVISORY_TYPE, new_advisories.as_slice());
     Ok(r.to_glib_full() as *mut _)
 }
+
+pub(crate) fn print_treepkg_diff(sysroot: &str) {
+    unsafe {
+        crate::ffi::print_treepkg_diff_from_sysroot_path(
+            sysroot,
+            crate::ffi::RpmOstreeDiffPrintFormat::RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+}
