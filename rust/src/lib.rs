@@ -192,6 +192,7 @@ pub mod ffi {
         ) -> Result<()>;
         fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> Result<()>;
         fn rewrite_rpmdb_for_target(rootfs_dfd: i32) -> Result<()>;
+        fn directory_size(dfd: i32, mut cancellable: Pin<&mut GCancellable>) -> Result<u64>;
     }
 
     // A grab-bag of metadata from the deployment's ostree commit

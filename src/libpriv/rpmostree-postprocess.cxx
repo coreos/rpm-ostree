@@ -763,47 +763,6 @@ filter_xattrs_cb (OstreeRepo     *repo,
   }
 }
 
-static gboolean
-count_filesizes (int dfd,
-                 const char *path,
-                 off_t *out_n_bytes,
-                 GCancellable *cancellable,
-                 GError **error)
-{
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  
-  if (!glnx_dirfd_iterator_init_at (dfd, path, TRUE, &dfd_iter, error))
-    return FALSE;
-  
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-      if (!dent)
-        break;
-
-      if (dent->d_type == DT_DIR)
-        {
-          if (!count_filesizes (dfd_iter.fd, dent->d_name, out_n_bytes,
-                                cancellable, error))
-            return FALSE;
-        }
-      else
-        {
-          struct stat stbuf;
-
-          if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-            return FALSE;
-
-          (*out_n_bytes) += stbuf.st_size;
-        }
-    }
-
-  return TRUE;
-}
-
 static gpointer
 write_dfd_thread (gpointer datap)
 {
@@ -884,9 +843,7 @@ rpmostree_compose_commit (int            rootfs_fd,
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
-  off_t n_bytes = 0;
-  if (!count_filesizes (rootfs_fd, ".", &n_bytes, cancellable, error))
-    return FALSE;
+  uint64_t n_bytes = rpmostreecxx::directory_size(rootfs_fd, *cancellable);
 
   tdata.n_bytes = n_bytes;
   tdata.repo = repo;
