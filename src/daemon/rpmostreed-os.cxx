@@ -1809,7 +1809,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
       booted_variant =
         g_variant_ref_sink (
             rpmostreed_deployment_generate_variant (ot_sysroot, booted_deployment,
-                                                    booted_id, ot_repo, TRUE, error));
+                                                    ot_repo, TRUE, error));
       if (!booted_variant)
         return FALSE;
       auto bootedid_v = rpmostreecxx::deployment_generate_id(*booted_deployment);
@@ -1831,7 +1831,6 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
       default_variant =
         g_variant_ref_sink (rpmostreed_deployment_generate_variant (ot_sysroot,
                                                                     pending_deployment,
-                                                                    booted_id,
                                                                     ot_repo, TRUE, error));
       if (!default_variant)
         return FALSE;
@@ -1844,7 +1843,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   if (rollback_deployment)
     {
       rollback_variant =
-        rpmostreed_deployment_generate_variant (ot_sysroot, rollback_deployment, booted_id,
+        rpmostreed_deployment_generate_variant (ot_sysroot, rollback_deployment,
                                                 ot_repo, TRUE, error);
       if (!rollback_variant)
         return FALSE;

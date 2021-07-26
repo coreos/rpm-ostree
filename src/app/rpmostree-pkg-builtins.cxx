@@ -70,7 +70,7 @@ static GOptionEntry install_option_entry[] = {
 
 static gboolean
 pkg_change (RpmOstreeCommandInvocation *invocation,
-            RPMOSTreeSysroot *sysroot_proxy,
+            RpmOstreeMux      *mux,
             const char *const* packages_to_add,
             const char *const* packages_to_remove,
             GCancellable  *cancellable,
@@ -83,12 +83,8 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
   if (!packages_to_remove)
     packages_to_remove = strv_empty;
 
-  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_mux_load_os (mux, opt_osname, cancellable, error))
     return FALSE;
-
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -112,26 +108,31 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
 
   /* Use newer D-Bus API only if we have to. */
   g_autofree char *transaction_address = NULL;
-  if (met_local_pkg || opt_apply_live)
+  if (met_local_pkg || opt_apply_live || !rpmostree_mux_is_dbus (mux))
     {
-      if (!rpmostree_update_deployment (os_proxy,
-                                        NULL, /* refspec */
-                                        NULL, /* revision */
-                                        packages_to_add,
-                                        packages_to_remove,
-                                        NULL, /* override replace */
-                                        NULL, /* override remove */
-                                        NULL, /* override reset */
-                                        NULL, /* local_repo_remote */
-                                        options,
-                                        &transaction_address,
-                                        cancellable,
-                                        error))
+      if (!rpmostree_mux_call_update_deployment (mux,
+                                                 invocation,
+                                                 NULL, /* refspec */
+                                                 NULL, /* revision */
+                                                 packages_to_add,
+                                                 packages_to_remove,
+                                                 NULL, /* override replace */
+                                                 NULL, /* override remove */
+                                                 NULL, /* override reset */
+                                                 NULL, /* local_repo_remote */
+                                                 options,
+                                                 opt_unchanged_exit_77,
+                                                 cancellable,
+                                                 error))
         return FALSE;
     }
   else
     {
-      if (!rpmostree_os_call_pkg_change_sync (os_proxy,
+      g_autoptr(GVariant) previous_deployment = rpmostree_mux_get_default_deployment (mux, error);
+      if (!previous_deployment)
+        return FALSE;
+
+      if (!rpmostree_os_call_pkg_change_sync (rpmostree_mux_get_os_proxy (mux),
                                               options,
                                               packages_to_add,
                                               packages_to_remove,
@@ -141,13 +142,18 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
                                               cancellable,
                                               error))
         return FALSE;
+
+      if (!rpmostree_transaction_client_run (invocation,
+                                             rpmostree_mux_get_sysroot_proxy (mux),
+                                             rpmostree_mux_get_os_proxy (mux),
+                                             options, opt_unchanged_exit_77,
+                                             transaction_address,
+                                             previous_deployment,
+                                             cancellable, error))
+        return FALSE;
     }
 
-  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, opt_unchanged_exit_77,
-                                           transaction_address,
-                                           previous_deployment,
-                                           cancellable, error);
+  return TRUE;
 }
 
 gboolean
@@ -157,20 +163,17 @@ rpmostree_builtin_install (int            argc,
                            GCancellable  *cancellable,
                            GError       **error)
 {
-  GOptionContext *context;
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-
-  context = g_option_context_new ("PACKAGE [PACKAGE...]");
-
+  GOptionContext *context = g_option_context_new ("PACKAGE [PACKAGE...]");
   g_option_context_add_main_entries (context, install_option_entry, NULL);
 
+  g_autoptr(RpmOstreeMux) mux = NULL;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
                                        NULL, NULL,
-                                       &sysroot_proxy,
+                                       NULL, &mux,
                                        error))
     return FALSE;
 
@@ -185,7 +188,7 @@ rpmostree_builtin_install (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
-  return pkg_change (invocation, sysroot_proxy,
+  return pkg_change (invocation, mux,
                      (const char *const*)argv,
                      (const char *const*)opt_uninstall,
                      cancellable, error);
@@ -198,20 +201,17 @@ rpmostree_builtin_uninstall (int            argc,
                              GCancellable  *cancellable,
                              GError       **error)
 {
-  GOptionContext *context;
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-
-  context = g_option_context_new ("PACKAGE [PACKAGE...]");
-
+  GOptionContext *context = g_option_context_new ("PACKAGE [PACKAGE...]");
   g_option_context_add_main_entries (context, uninstall_option_entry, NULL);
 
+  g_autoptr(RpmOstreeMux) mux = NULL;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
                                        NULL, NULL,
-                                       &sysroot_proxy,
+                                       NULL, &mux,
                                        error))
     return FALSE;
 
@@ -231,7 +231,7 @@ rpmostree_builtin_uninstall (int            argc,
   if (!opt_install)
     opt_cache_only = TRUE;
 
-  return pkg_change (invocation, sysroot_proxy,
+  return pkg_change (invocation, mux,
                      (const char *const*)opt_install,
                      (const char *const*)argv,
                      cancellable, error);

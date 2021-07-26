@@ -39,7 +39,6 @@ GVariant *      rpmostreed_deployment_generate_blank_variant (void);
 
 GVariant *      rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                                         OstreeDeployment *deployment,
-                                                        const char       *booted_id,
                                                         OstreeRepo       *repo,
                                                         gboolean          filter,
                                                         GError          **error);

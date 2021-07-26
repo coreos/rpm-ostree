@@ -799,14 +799,21 @@ idle_initiate_reboot (void *_unused)
 void
 rpmostreed_daemon_reboot (RpmostreedDaemon *self)
 {
-  g_assert (!self->rebooting);
-  self->rebooting = TRUE;
-  /* Queue actually starting the reboot until we return to the client, so
-   * that they get a success message for the transaction.  Otherwise
-   * if the daemon gets killed via SIGTERM they just see the bus connection
-   * broken and may spuriously error out.
-   */
-  g_idle_add_full (G_PRIORITY_LOW, idle_initiate_reboot, NULL, NULL);
+  if (self)
+    {
+      g_assert (!self->rebooting);
+      self->rebooting = TRUE;
+      /* Queue actually starting the reboot until we return to the client, so
+       * that they get a success message for the transaction.  Otherwise
+       * if the daemon gets killed via SIGTERM they just see the bus connection
+       * broken and may spuriously error out.
+       */
+      g_idle_add_full (G_PRIORITY_LOW, idle_initiate_reboot, NULL, NULL);
+    }
+  else
+    {
+      (void)idle_initiate_reboot (NULL);
+    }
 }
 
 gboolean

@@ -418,12 +418,12 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
         {
           stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
           if (stdout_fd < 0)
-            return glnx_prefix_error (error, "While creating stdout stream fd");
+            return glnx_throw (error, "While creating stdout stream fd: %s", g_strerror (-stdout_fd));
           bwrap->take_stdout_fd(stdout_fd);
 
           stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
           if (stderr_fd < 0)
-            return glnx_prefix_error (error, "While creating stderr stream fd");
+            return glnx_throw (error, "While creating stderr stream fd: %s", g_strerror (-stderr_fd));
           bwrap->take_stderr_fd(stderr_fd);
         }
       else

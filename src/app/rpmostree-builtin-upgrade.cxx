@@ -84,7 +84,7 @@ rpmostree_builtin_upgrade (int             argc,
                                        cancellable,
                                        &install_pkgs,
                                        &uninstall_pkgs,
-                                       &sysroot_proxy,
+                                       &sysroot_proxy, NULL,
                                        error))
     return FALSE;
 
@@ -234,7 +234,8 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else if (!opt_reboot)
     {
-      if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
+      g_autoptr(GVariant) new_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+      if (!rpmostree_has_new_default_deployment (previous_deployment, new_deployment))
         {
           if (opt_upgrade_unchanged_exit_77 || opt_unchanged_exit_77)
             invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;

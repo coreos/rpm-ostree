@@ -69,11 +69,9 @@ get_id_from_deployment_variant (GVariant *deployment)
 }
 
 gboolean
-rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
-                                      GVariant    *previous_deployment)
+rpmostree_has_new_default_deployment (GVariant *previous_deployment,
+                                      GVariant *new_deployment)
 {
-  g_autoptr(GVariant) new_deployment = rpmostree_os_dup_default_deployment (os_proxy);
-
   /* trivial case */
   if (g_variant_equal (previous_deployment, new_deployment))
     return FALSE;

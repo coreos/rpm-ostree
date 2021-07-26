@@ -291,9 +291,6 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
                                               g_variant_dict_end (&options),
                                               progress, cancellable, error))
             goto out;
-
-          if (progress)
-            ostree_async_progress_finish (progress);
         }
 
       /* First pass only.  Now we can resolve the ref to a checksum. */
@@ -618,7 +615,19 @@ gboolean
 check_sd_inhibitor_locks (GCancellable    *cancellable,
                           GError         **error)
 {
-  GDBusConnection *connection = rpmostreed_daemon_connection ();
+  if (!rpmostreed_daemon_get ())
+    return TRUE;
+
+  g_autoptr(GDBusConnection) connection = NULL;
+  if (rpmostreed_daemon_get ())
+    connection = (GDBusConnection*)g_object_ref (rpmostreed_daemon_connection ());
+  else
+    {
+      connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, error);
+      if (!connection)
+        return FALSE;
+    }
+
   // https://www.freedesktop.org/software/systemd/man/org.freedesktop.login1.html
   g_autoptr(GVariant) inhibitors_array_tuple = 
     g_dbus_connection_call_sync (connection, "org.freedesktop.login1", "/org/freedesktop/login1",

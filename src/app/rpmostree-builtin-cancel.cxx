@@ -72,7 +72,7 @@ rpmostree_builtin_cancel (int             argc,
                                        invocation,
                                        cancellable,
                                        NULL, NULL,
-                                       &sysroot_proxy,
+                                       &sysroot_proxy, NULL,
                                        error))
     return FALSE;
 

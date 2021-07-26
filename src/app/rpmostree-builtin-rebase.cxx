@@ -90,7 +90,7 @@ rpmostree_builtin_rebase (int             argc,
                                        cancellable,
                                        &install_pkgs,
                                        &uninstall_pkgs,
-                                       &sysroot_proxy,
+                                       &sysroot_proxy, NULL,
                                        error))
     return FALSE;
 

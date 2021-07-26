@@ -60,8 +60,8 @@ rpmostree_usage_error (GOptionContext  *context,
                        GError         **error);
 
 gboolean
-rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
-                                      GVariant    *previous_deployment);
+rpmostree_has_new_default_deployment (GVariant *previous_deployment,
+                                      GVariant *new_deployment);
 
 namespace rpmostreecxx {
 

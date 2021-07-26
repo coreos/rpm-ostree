@@ -290,7 +290,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
       auto deployment = static_cast<OstreeDeployment *>(deployments->pdata[i]);
       GVariant *variant =
         rpmostreed_deployment_generate_variant (self->ot_sysroot, deployment,
-                                                booted_id, self->repo, TRUE, error);
+                                                self->repo, TRUE, error);
       if (!variant)
         return glnx_prefix_error (error, "Reading deployment %u", i);
 
