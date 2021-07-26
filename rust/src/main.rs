@@ -46,6 +46,7 @@ fn inner_main() -> Result<i32> {
         Some("countme") => rpmostree_rust::countme::entrypoint(&args).map(|_| 0),
         Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(&args).map(|_| 0),
         Some("ex-container") => rpmostree_rust::container::entrypoint(&args).map(|_| 0),
+        Some("module") => rpmostree_rust::modularity::entrypoint(&args).map(|_| 0),
         _ => {
             // Otherwise fall through to C++ main().
             Ok(rpmostree_rust::ffi::rpmostree_main(&args)?)

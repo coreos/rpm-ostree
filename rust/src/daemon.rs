@@ -81,6 +81,16 @@ fn deployment_populate_variant_origin(
 
     // Package mappings.  Note these are inserted unconditionally, even if empty.
     vdict_insert_optvec(&dict, "requested-packages", tf.packages.as_ref());
+    vdict_insert_optvec(
+        &dict,
+        "requested-modules",
+        tf.modules.as_ref().map(|m| m.install.as_ref()).flatten(),
+    );
+    vdict_insert_optvec(
+        &dict,
+        "modules-enabled",
+        tf.modules.as_ref().map(|m| m.enable.as_ref()).flatten(),
+    );
     vdict_insert_optmap(
         &dict,
         "requested-local-packages",

@@ -332,6 +332,8 @@ pub mod ffi {
         fn get_packages_local(&self) -> Vec<String>;
         fn get_packages_override_replace_local(&self) -> Vec<String>;
         fn get_packages_override_remove(&self) -> Vec<String>;
+        fn get_modules_enable(&self) -> Vec<String>;
+        fn get_modules_install(&self) -> Vec<String>;
         fn get_exclude_packages(&self) -> Vec<String>;
         fn get_install_langs(&self) -> Vec<String>;
         fn format_install_langs_macro(&self) -> String;
@@ -618,6 +620,7 @@ mod lockfile;
 pub(crate) use self::lockfile::*;
 mod live;
 pub(crate) use self::live::*;
+pub mod modularity;
 mod nameservice;
 mod origin;
 pub(crate) use self::origin::*;

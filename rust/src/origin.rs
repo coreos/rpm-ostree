@@ -19,6 +19,7 @@ use std::result::Result as StdResult;
 const ORIGIN: &str = "origin";
 const RPMOSTREE: &str = "rpmostree";
 const PACKAGES: &str = "packages";
+const MODULES: &str = "modules";
 const OVERRIDES: &str = "overrides";
 
 /// The set of keys that we parse as BTreeMap and need to ignore ordering changes.
@@ -43,6 +44,14 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     cfg.derive.base_refspec = Some(refspec_str);
     cfg.packages = parse_stringlist(&kf, PACKAGES, "requested")?;
     cfg.derive.packages_local = parse_localpkglist(&kf, PACKAGES, "requested-local")?;
+    let modules_enable = parse_stringlist(&kf, MODULES, "enable")?;
+    let modules_install = parse_stringlist(&kf, MODULES, "install")?;
+    if modules_enable.is_some() || modules_install.is_some() {
+        cfg.modules = Some(crate::treefile::ModulesConfig {
+            enable: modules_enable,
+            install: modules_install,
+        });
+    }
     cfg.derive.override_remove = parse_stringlist(&kf, OVERRIDES, "remove")?;
     cfg.derive.override_replace_local = parse_localpkglist(&kf, OVERRIDES, "replace-local")?;
 
@@ -142,6 +151,16 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     }
     if let Some(pkgs) = tf.derive.override_replace_local.as_ref() {
         set_sha256_nevra_pkgs(&kf, OVERRIDES, "replace-local", pkgs)
+    }
+    if let Some(ref modcfg) = tf.modules {
+        if let Some(modules) = modcfg.enable.as_deref() {
+            let modules = modules.iter().map(|s| s.as_str());
+            kf_set_string_list(&kf, MODULES, "enable", modules)
+        }
+        if let Some(modules) = modcfg.install.as_deref() {
+            let modules = modules.iter().map(|s| s.as_str());
+            kf_set_string_list(&kf, MODULES, "install", modules)
+        }
     }
 
     // Initramfs bits
@@ -332,6 +351,10 @@ pub(crate) mod test {
     requested=libvirt;fish;
     requested-local=4ed748ba060fce4571e7ef19f3f5ed6209f67dbac8327af0d38ea70b96d2f723:foo-1.2-3.x86_64;
 
+    [modules]
+    enable=foo:2.0;bar:rolling;
+    install=baz:next/development;
+
     [overrides]
     remove=docker;
     replace-local=0c7072500af2758e7dc7d7700fed82c3c5f4da7453b4d416e79f75384eee96b0:rpm-ostree-devel-2021.1-2.fc33.x86_64;648ab3ff4d4b708ea180269297de5fa3e972f4481d47b7879c6329272e474d68:rpm-ostree-2021.1-2.fc33.x86_64;8b29b78d0ade6ec3aedb8e3846f036f6f28afe64635d83cb6a034f1004607678:rpm-ostree-libs-2021.1-2.fc33.x86_64;
@@ -392,6 +415,13 @@ pub(crate) mod test {
         assert_eq!(
             tf.parsed.derive.override_commit.unwrap(),
             "41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3"
+        );
+        assert_eq!(
+            tf.parsed.modules,
+            Some(crate::treefile::ModulesConfig {
+                enable: Some(vec!["foo:2.0".into(), "bar:rolling".into()]),
+                install: Some(vec!["baz:next/development".into()]),
+            })
         );
         Ok(())
     }

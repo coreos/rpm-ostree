@@ -245,6 +245,7 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        guint             *out_layer_version,
                                        char             **out_base_layer,
                                        char            ***out_layered_pkgs,
+                                       char            ***out_layered_modules,
                                        GVariant         **out_removed_base_pkgs,
                                        GVariant         **out_replaced_base_pkgs,
                                        GError           **error);
@@ -337,5 +338,8 @@ rpmostree_variant_be_to_native (GVariant **v);
 
 void
 rpmostree_variant_native_to_be (GVariant **v);
+
+char**
+rpmostree_cxx_string_vec_to_strv (rust::Vec<rust::String> &v);
 
 G_END_DECLS
