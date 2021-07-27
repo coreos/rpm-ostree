@@ -1148,12 +1148,16 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   else
     g_print ("Wrote commit: %s\n", new_revision);
 
+  try {
   if (!rpmostree_composeutil_write_composejson (self->repo,
                                                 opt_write_composejson_to, statsp,
                                                 new_revision, new_commit,
                                                 &composemeta_builder,
                                                 cancellable, error))
-    return FALSE;
+    util::throw_gerror(*error);
+  } catch (std::exception &e) {
+    util::rethrow_prefixed(e, "Failed to write composejson");
+  }
 
   if (opt_write_commitid_to)
     rpmostreecxx::write_commit_id(opt_write_commitid_to, new_revision);
