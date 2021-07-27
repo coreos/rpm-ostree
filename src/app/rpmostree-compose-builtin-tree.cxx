@@ -1021,7 +1021,7 @@ pull_local_into_target_repo (OstreeRepo   *src_repo,
   /* no fancy flags here, so just use the old school simpler API */
   if (!ostree_repo_pull (dest_repo, src_repo_uri, (char**)refs, static_cast<OstreeRepoPullFlags>(0), progress,
                          cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Copying from build repo into target repo");
 
   if (!console.is_tty)
     {
