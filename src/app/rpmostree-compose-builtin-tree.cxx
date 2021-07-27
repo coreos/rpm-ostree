@@ -215,7 +215,6 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self,
                             GCancellable                 *cancellable,
                             GError                      **error)
 {
-  GLNX_AUTO_PREFIX_ERROR ("Loading previous sepolicy", error);
   gboolean selinux = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux",
                                                                &selinux, error))
@@ -312,7 +311,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   }
 
   if (!try_load_previous_sepolicy (self, cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Loading previous sepolicy");
 
   /* For unified core, we have a pkgcache repo. This is auto-created under the cachedir. */
   if (opt_unified_core)
