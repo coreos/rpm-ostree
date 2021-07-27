@@ -3,10 +3,10 @@
 binding_rust_sources = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.lock
 
 rust/cxx.h: Makefile.bindings
-	cxxbridge --header >$@
+	./target/cxxbridge/bin/cxxbridge --header >$@
 
 rpmostree-cxxrs.h: $(binding_rust_sources)
-	$(AM_V_GEN) if cxxbridge rust/src/lib.rs --header > $@.tmp; then \
+	$(AM_V_GEN) if ./target/cxxbridge/bin/cxxbridge rust/src/lib.rs --header > $@.tmp; then \
 	  if test -f $@ && cmp $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else \
 	    mv $@.tmp $@; \
 	  fi; \
@@ -14,7 +14,7 @@ rpmostree-cxxrs.h: $(binding_rust_sources)
 	  echo cxxbridge failed; exit 1; \
 	fi
 rpmostree-cxxrs.cxx: $(binding_rust_sources) rpmostree-cxxrs.h
-	$(AM_V_GEN) if cxxbridge --include rpmostree-cxxrs.h rust/src/lib.rs > $@.tmp; then \
+	$(AM_V_GEN) if ./target/cxxbridge/bin/cxxbridge --include rpmostree-cxxrs.h rust/src/lib.rs > $@.tmp; then \
 	  if test -f $@ && cmp $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else \
 	    mv $@.tmp $@; \
 	  fi; \

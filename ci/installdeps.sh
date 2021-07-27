@@ -17,4 +17,5 @@ fi
 # source code, which we vendor along with our dependent crates into release
 # tarballs.
 CXX_VER=$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name == "cxx").version')
-time cargo install cxxbridge-cmd --version "${CXX_VER}"
+mkdir -p target
+time cargo install --root=target/cxxbridge cxxbridge-cmd --version "${CXX_VER}"
