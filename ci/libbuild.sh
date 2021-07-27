@@ -5,8 +5,6 @@
 if test -z "$HOME" || test ! -w "$HOME"; then
     export HOME=$(mktemp -d -t --suffix .prowhome)
 fi
-# In some cases we install tools via cargo, ensure that's in PATH
-export PATH="$HOME/.cargo/bin:$PATH"
 
 pkg_upgrade() {
     echo "Running dnf -y distro-sync... $(date)"
