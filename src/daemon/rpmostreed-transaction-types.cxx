@@ -49,6 +49,10 @@ vardict_lookup_ptr (GVariantDict  *dict,
                     const char    *key,
                     const char    *fmt);
 
+static inline char **
+vardict_lookup_strv_canonical (GVariantDict  *dict,
+                               const char    *key);
+
 static gboolean
 change_origin_refspec (GVariantDict    *options,
                        OstreeSysroot *sysroot,
@@ -598,13 +602,7 @@ typedef struct {
   GVariantDict *modifiers;
   char   *refspec; /* NULL for non-rebases */
   const char   *revision; /* NULL for upgrade; owned by @options */
-  char  **install_pkgs; /* strv but strings owned by modifiers */
   GUnixFDList *install_local_pkgs;
-  char  **uninstall_pkgs; /* strv but strings owned by modifiers */
-  char  **enable_modules; /* strv but strings owned by modifiers */
-  char  **disable_modules; /* strv but strings owned by modifiers */
-  char  **install_modules; /* strv but strings owned by modifiers */
-  char  **uninstall_modules; /* strv but strings owned by modifiers */
   char  **override_replace_pkgs; /* strv but strings owned by modifiers */
   GUnixFDList *override_replace_local_pkgs;
   char  **override_remove_pkgs; /* strv but strings owned by modifiers */
@@ -631,13 +629,7 @@ deploy_transaction_finalize (GObject *object)
   g_clear_pointer (&self->options, g_variant_dict_unref);
   g_clear_pointer (&self->modifiers, g_variant_dict_unref);
   g_free (self->refspec);
-  g_free (self->install_pkgs);
   g_clear_pointer (&self->install_local_pkgs, g_object_unref);
-  g_free (self->uninstall_pkgs);
-  g_free (self->enable_modules);
-  g_free (self->disable_modules);
-  g_free (self->install_modules);
-  g_free (self->uninstall_modules);
   g_free (self->override_replace_pkgs);
   g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
   g_free (self->override_remove_pkgs);
@@ -918,6 +910,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   const gboolean allow_inactive = deploy_has_bool_option (self, "allow-inactive");
   g_autofree const char *update_driver = deploy_has_string_option (self, "register-driver");
 
+  g_autofree char **install_pkgs = vardict_lookup_strv_canonical (self->modifiers, "install-packages");
+  g_autofree char **uninstall_pkgs = vardict_lookup_strv_canonical (self->modifiers, "uninstall-packages");
+  g_autofree char **enable_modules = vardict_lookup_strv_canonical (self->modifiers, "enable-modules");
+  g_autofree char **disable_modules = vardict_lookup_strv_canonical (self->modifiers, "disable-modules");
+  g_autofree char **install_modules = vardict_lookup_strv_canonical (self->modifiers, "install-modules");
+  g_autofree char **uninstall_modules = vardict_lookup_strv_canonical (self->modifiers, "uninstall-modules");
+
   gboolean is_install = FALSE;
   gboolean is_uninstall = FALSE;
   gboolean is_override = FALSE;
@@ -937,7 +936,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                      no_overrides);
       if (!is_override)
         {
-          if (self->install_pkgs || self->install_local_pkgs || self->install_modules)
+          if (install_pkgs || self->install_local_pkgs || install_modules)
             is_install = TRUE;
           else
             is_uninstall = TRUE;
@@ -985,27 +984,27 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       else if (download_only)
         g_string_append (txn_title, " (download only)");
 
-      if (self->uninstall_pkgs)
+      if (uninstall_pkgs)
         g_string_append_printf (txn_title, "; uninstall: %u",
-                                g_strv_length (self->uninstall_pkgs));
-      if (self->disable_modules)
+                                g_strv_length (uninstall_pkgs));
+      if (disable_modules)
         g_string_append_printf (txn_title, "; module disable: %u",
-                                g_strv_length (self->disable_modules));
-      if (self->uninstall_modules)
+                                g_strv_length (disable_modules));
+      if (uninstall_modules)
         g_string_append_printf (txn_title, "; module uninstall: %u",
-                                g_strv_length (self->uninstall_modules));
-      if (self->install_pkgs)
+                                g_strv_length (uninstall_modules));
+      if (install_pkgs)
         g_string_append_printf (txn_title, "; install: %u",
-                                g_strv_length (self->install_pkgs));
+                                g_strv_length (install_pkgs));
       if (self->install_local_pkgs)
         g_string_append_printf (txn_title, "; localinstall: %u",
                                 g_unix_fd_list_get_length (self->install_local_pkgs));
-      if (self->enable_modules)
+      if (enable_modules)
         g_string_append_printf (txn_title, "; module enable: %u",
-                                g_strv_length (self->enable_modules));
-      if (self->install_modules)
+                                g_strv_length (enable_modules));
+      if (install_modules)
         g_string_append_printf (txn_title, "; module install: %u",
-                                g_strv_length (self->install_modules));
+                                g_strv_length (install_modules));
 
       rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), txn_title->str);
     }
@@ -1169,24 +1168,24 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
   else
     {
-      if (self->uninstall_pkgs)
+      if (uninstall_pkgs)
         {
           /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
            * (if e.g. we're removing a duplicate provides). But the origin has changed so we need to
            * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
-          if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs,
+          if (!rpmostree_origin_remove_packages (origin, uninstall_pkgs,
                                                  idempotent_layering, &changed, error))
             return FALSE;
         }
-      if (self->disable_modules)
+      if (disable_modules)
         {
-          if (!rpmostree_origin_remove_modules (origin, self->disable_modules,
+          if (!rpmostree_origin_remove_modules (origin, disable_modules,
                                                 TRUE, &changed, error))
             return FALSE;
         }
-      if (self->uninstall_modules)
+      if (uninstall_modules)
         {
-          if (!rpmostree_origin_remove_modules (origin, self->uninstall_modules,
+          if (!rpmostree_origin_remove_modules (origin, uninstall_modules,
                                                 FALSE, &changed, error))
             return FALSE;
         }
@@ -1195,7 +1194,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* lazily loaded cache that's used in a few conditional blocks */
   g_autoptr(RpmOstreeRefSack) base_rsack = NULL;
 
-  if (self->install_pkgs)
+  if (install_pkgs)
     {
       /* we run a special check here; let's just not allow trying to install a pkg that will
        * right away become inactive because it's already installed */
@@ -1208,7 +1207,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
         }
 
-      for (char **it = self->install_pkgs; it && *it; it++)
+      for (char **it = install_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
           g_autoptr(GPtrArray) pkgs =
@@ -1227,20 +1226,20 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             }
         }
 
-      if (!rpmostree_origin_add_packages (origin, self->install_pkgs, FALSE,
+      if (!rpmostree_origin_add_packages (origin, install_pkgs, FALSE,
                                           idempotent_layering, &changed, error))
         return FALSE;
     }
 
-  if (self->enable_modules)
+  if (enable_modules)
     {
-      if (!rpmostree_origin_add_modules (origin, self->enable_modules, TRUE, &changed, error))
+      if (!rpmostree_origin_add_modules (origin, enable_modules, TRUE, &changed, error))
         return FALSE;
     }
 
-  if (self->install_modules)
+  if (install_modules)
     {
-      if (!rpmostree_origin_add_modules (origin, self->install_modules, FALSE, &changed, error))
+      if (!rpmostree_origin_add_modules (origin, install_modules, FALSE, &changed, error))
         return FALSE;
     }
 
@@ -1786,15 +1785,9 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
 
   self->revision = (char*)vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
-  self->install_pkgs = vardict_lookup_strv_canonical (self->modifiers, "install-packages");
-  self->uninstall_pkgs = vardict_lookup_strv_canonical (self->modifiers, "uninstall-packages");
   self->override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
   self->override_remove_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-remove-packages");
   self->override_reset_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-reset-packages");
-  self->enable_modules = vardict_lookup_strv_canonical (self->modifiers, "enable-modules");
-  self->disable_modules = vardict_lookup_strv_canonical (self->modifiers, "disable-modules");
-  self->install_modules = vardict_lookup_strv_canonical (self->modifiers, "install-modules");
-  self->uninstall_modules = vardict_lookup_strv_canonical (self->modifiers, "uninstall-modules");
 
   /* default to allowing downgrades for rebases & deploys (without --disallow-downgrade) */
   if (vardict_lookup_bool (self->options, "allow-downgrade", refspec_or_revision))
