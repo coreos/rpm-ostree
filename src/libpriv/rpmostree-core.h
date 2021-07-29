@@ -158,10 +158,11 @@ GPtrArray *rpmostree_context_get_packages (RpmOstreeContext *self);
 
 GPtrArray *rpmostree_context_get_packages_to_import (RpmOstreeContext *self);
 
-void
+gboolean
 rpmostree_context_set_lockfile (RpmOstreeContext *self,
                                 char            **lockfiles,
-                                gboolean          strict);
+                                gboolean          strict,
+                                GError          **error);
 
 gboolean rpmostree_download_packages (GPtrArray      *packages,
                                       GCancellable   *cancellable,

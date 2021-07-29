@@ -235,8 +235,8 @@ rpmostree_builtin_deploy (int            argc,
 
       /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      rpmostreecxx::print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
-            RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable);
+      CXX_TRY(print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
+            RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable), error);
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }

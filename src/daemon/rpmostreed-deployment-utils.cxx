@@ -34,20 +34,25 @@
 #include "rpmostree-cxxrs.h"
 #include "rpmostreed-errors.h"
 
-OstreeDeployment *
-rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
-                                  const gchar *deploy_id)
+gboolean
+rpmostreed_deployment_get_for_id (OstreeSysroot     *sysroot,
+                                  const gchar       *deploy_id,
+                                  OstreeDeployment **out_deployment,
+                                  GError           **error)
 {
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   for (guint i = 0; i < deployments->len; i++)
     {
       auto deployment = static_cast<OstreeDeployment*>(deployments->pdata[i]);
-      auto id = rpmostreecxx::deployment_generate_id(*deployment);
+      auto id = CXX_TRY_VAL(rust::String, deployment_generate_id(*deployment), error);
       if (g_strcmp0 (deploy_id, id.c_str()) == 0)
-        return (OstreeDeployment*)g_object_ref (deployments->pdata[i]);
+        {
+          *out_deployment = (OstreeDeployment*)g_object_ref (deployment);
+          return TRUE;
+        }
     }
 
-  return NULL;
+  return glnx_throw (error, "Deployment with id '%s' not found", deploy_id);
 }
 
 
@@ -215,17 +220,18 @@ filter_commit_meta (GVariant *commit_meta)
   return g_variant_dict_end (&dict);
 }
 
-GVariant*
+gboolean
 rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                         OstreeDeployment *deployment,
                                         const char       *booted_id,
                                         OstreeRepo       *repo,
                                         gboolean          filter,
+                                        GVariant        **out_variant,
                                         GError          **error)
 {
   g_autoptr(GVariantDict) dict = g_variant_dict_new (NULL);
 
-  rpmostreecxx::deployment_populate_variant(*sysroot, *deployment, *dict);
+  CXX_TRY(deployment_populate_variant(*sysroot, *deployment, *dict), error);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   /* Load the commit object */
   g_autoptr(GVariant) commit = NULL;
@@ -234,12 +240,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                  csum,
                                  &commit,
                                  error))
-    return NULL;
+    return FALSE;
 
   /* And the origin */
   g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
   if (!origin)
-    return NULL;
+    return FALSE;
 
   RpmOstreeRefspecType refspec_type;
   g_autofree char *refspec = rpmostree_origin_get_full_refspec (origin, &refspec_type);
@@ -255,14 +261,14 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                               &base_checksum, &layered_pkgs, &layered_modules,
                                               &removed_base_pkgs, &replaced_base_pkgs,
                                               error))
-    return NULL;
+    return FALSE;
 
   g_autoptr(GVariant) base_commit = NULL;
   if (is_layered)
     {
       if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
                                      base_checksum, &base_commit, error))
-        return NULL;
+        return FALSE;
 
       g_variant_dict_insert (dict, "base-checksum", "s", base_checksum);
       variant_add_commit_details (dict, "base-", base_commit);
@@ -317,12 +323,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
       {
         g_variant_dict_insert (dict, "origin", "s", refspec);
         if (!variant_add_remote_status (repo, refspec, base_checksum, dict, error))
-          return NULL;
+          return FALSE;
 
         g_autofree char *pending_base_commitrev = NULL;
         if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
                                       &pending_base_commitrev, error))
-          return NULL;
+          return FALSE;
 
         if (pending_base_commitrev && !g_str_equal (pending_base_commitrev, base_checksum))
           {
@@ -331,7 +337,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
             if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
                                            pending_base_commitrev, &pending_base_commit,
                                            error))
-              return NULL;
+              return FALSE;
 
             g_variant_dict_insert (dict, "pending-base-checksum", "s", pending_base_commitrev);
             variant_add_commit_details (dict, "pending-base-", pending_base_commit);
@@ -345,7 +351,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   g_variant_dict_insert_value (dict, "base-removals", removed_base_pkgs);
   g_variant_dict_insert_value (dict, "base-local-replacements", replaced_base_pkgs);
 
-  return g_variant_dict_end (dict);
+  *out_variant = g_variant_dict_end (dict);
+  return TRUE;
 }
 
 /* Adds the following keys to the vardict:
@@ -913,7 +920,7 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
 
   if (staged_deployment)
     {
-      auto id = rpmostreecxx::deployment_generate_id (*staged_deployment);
+      auto id = CXX_TRY_VAL(rust::String, deployment_generate_id (*staged_deployment), error);
       g_variant_dict_insert (&dict, "deployment", "s", id.c_str());
     }
 

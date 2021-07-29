@@ -456,7 +456,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         if (cur_digest)
           {
             rpmostree_output_message ("Pulling manifest: %s", refspec);
-            auto new_digest = rpmostreecxx::fetch_digest(std::string(refspec));
+            auto new_digest = CXX_TRY_VAL(rust::String, fetch_digest(std::string(refspec)), error);
             if (strcmp (new_digest.c_str(), cur_digest) == 0)
               {
                 /* No new digest. */
@@ -466,7 +466,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
           }
 
         rpmostree_output_message ("Pulling: %s", refspec);
-        auto import = rpmostreecxx::import_container(*self->sysroot, std::string(refspec));
+        auto import = CXX_TRY_VAL(rust::Box<rpmostreecxx::ContainerImport>, import_container(*self->sysroot, std::string(refspec)), error);
 
         rpmostree_origin_set_container_image_reference_digest (self->original_origin, import->image_digest.c_str());
         new_base_rev = strdup (import->ostree_commit.c_str());
@@ -617,13 +617,15 @@ try_load_base_rsack_from_pending (RpmOstreeSysrootUpgrader *self,
                                   GCancellable             *cancellable,
                                   GError                  **error)
 {
-  auto is_live = rpmostreecxx::has_live_apply_state(*self->sysroot, *self->origin_merge_deployment);
+  auto is_live = CXX_TRY_VAL(bool,
+          has_live_apply_state(*self->sysroot, *self->origin_merge_deployment), error);
   /* livefs invalidates the deployment */
   if (is_live)
     return TRUE;
 
   auto repo = ostree_sysroot_repo(self->sysroot);
-  auto layeredmeta = rpmostreecxx::deployment_layeredmeta_load(*repo, *self->origin_merge_deployment);
+  auto layeredmeta = CXX_TRY_VAL(rpmostreecxx::DeploymentLayeredMeta,
+          deployment_layeredmeta_load(*repo, *self->origin_merge_deployment), error);
   /* older client layers have a bug blocking us from using their base rpmdb:
    * https://github.com/projectatomic/rpm-ostree/pull/1560 */
   if (layeredmeta.is_layered && layeredmeta.clientlayer_version < 4)
@@ -960,7 +962,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   {
     g_autoptr(GKeyFile) computed_origin_kf = rpmostree_origin_dup_keyfile (self->computed_origin);
-    self->treefile = rpmostreecxx::origin_to_treefile (*computed_origin_kf);
+    self->treefile = CXX_TRY_VAL(rust::Box<::rpmostreecxx::Treefile>, origin_to_treefile (*computed_origin_kf), error);
   }
   rpmostree_context_set_treefile (self->ctx, **self->treefile);
 
@@ -1055,7 +1057,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   // TODO Unify with treefile origin handling in core
   if (rpmostree_origin_get_cliwrap (self->computed_origin))
-    rpmostreecxx::cliwrap_write_wrappers (self->tmprootfs_dfd);
+    CXX_TRY(cliwrap_write_wrappers (self->tmprootfs_dfd), error);
 
   if (!rpmostree_rootfs_postprocess_common (self->tmprootfs_dfd, cancellable, error))
     return FALSE;
@@ -1120,7 +1122,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (rpmostree_context_get_kernel_changed (self->ctx))
     {
       g_assert (kernel_state && kver);
-      rpmostreecxx::run_depmod(self->tmprootfs_dfd, kver, true);
+      CXX_TRY(run_depmod(self->tmprootfs_dfd, kver, true), error);
     }
 
   if (kernel_or_initramfs_changed)
@@ -1270,10 +1272,9 @@ write_history (RpmOstreeSysrootUpgrader *self,
                GCancellable             *cancellable,
                GError                  **error)
 {
-  g_autoptr(GVariant) deployment_variant =
-    rpmostreed_deployment_generate_variant (self->sysroot, new_deployment, NULL,
-                                            self->repo, FALSE, error);
-  if (!deployment_variant)
+  g_autoptr(GVariant) deployment_variant = NULL;
+  if (!rpmostreed_deployment_generate_variant (self->sysroot, new_deployment, NULL,
+                                            self->repo, FALSE, &deployment_variant, error))
     return FALSE;
 
   g_autofree char *deployment_dirpath =
@@ -1410,7 +1411,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
           etc_files.push_back(std::string(key));
         }
       try {
-        fd = rpmostreecxx::initramfs_overlay_generate (etc_files, *cancellable);
+        fd = CXX_TRY_VAL(int, initramfs_overlay_generate (etc_files, *cancellable), error);
       } catch (std::exception& e) {
         util::rethrow_prefixed(e, "Generating initramfs overlay");
       }

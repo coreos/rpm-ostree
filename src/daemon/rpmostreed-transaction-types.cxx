@@ -1442,7 +1442,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           OstreeDeployment *deployment =
             rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
 
-          auto is_live = rpmostreecxx::has_live_apply_state(*sysroot, *deployment);
+          auto is_live = CXX_TRY_VAL(bool, has_live_apply_state(*sysroot, *deployment), error);
           if (is_live)
             changed = TRUE;
         }
@@ -1609,7 +1609,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         {
           g_autoptr(GVariantDict) dictv = g_variant_dict_new (NULL);
           g_autoptr(GVariant) live_opts = g_variant_ref_sink (g_variant_dict_end (dictv));
-          rpmostreecxx::transaction_apply_live(*sysroot, *live_opts);
+          CXX_TRY(transaction_apply_live(*sysroot, *live_opts), error);
         }
       else if (deploy_has_bool_option (self, "reboot"))
         {
@@ -2674,7 +2674,8 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   if (!g_str_equal (ostree_deployment_get_osname (default_deployment), self->osname))
     return glnx_throw (error, "Staged deployment is not for osname '%s'", self->osname);
 
-  auto layeredmeta = rpmostreecxx::deployment_layeredmeta_load(*repo, *default_deployment);
+  auto layeredmeta = CXX_TRY_VAL(rpmostreecxx::DeploymentLayeredMeta,
+          deployment_layeredmeta_load(*repo, *default_deployment), error);
   const char *checksum = layeredmeta.base_commit.c_str();
 
   auto expected_checksum =

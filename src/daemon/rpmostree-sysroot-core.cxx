@@ -190,8 +190,8 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
       GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
       GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
         {
-          auto cachebranch = rpmostreecxx::nevra_to_cache_branch (std::string(nevra));
-          g_hash_table_add (referenced_pkgs, g_strdup (cachebranch->c_str()));
+          auto cachebranch = CXX_TRY_VAL(rust::String, nevra_to_cache_branch (std::string(nevra)), error);
+          g_hash_table_add (referenced_pkgs, g_strdup (cachebranch.c_str()));
         }
     }
 
@@ -267,7 +267,7 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
                              cancellable, error))
     return glnx_prefix_error (error, "cleaning tmp rootfs");
   /* also delete extra history entries */
-  rpmostreecxx::history_prune();
+  CXX_TRY(history_prune(), error);
 
   /* Regenerate all refs */
   guint n_pkgcache_freed = 0;
@@ -276,7 +276,7 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
     return FALSE;
 
   /* Refs for the live state */
-  rpmostreecxx::applylive_sync_ref(*sysroot);
+  CXX_TRY(applylive_sync_ref(*sysroot), error);
 
   /* And do a prune */
   guint64 freed_space;
@@ -413,7 +413,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
       OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
       if (booted)
         {
-          auto is_live = rpmostreecxx::has_live_apply_state(*sysroot, *booted);
+          auto is_live = CXX_TRY_VAL(bool, has_live_apply_state(*sysroot, *booted), error);
           if (is_live)
             flags = static_cast<OstreeSysrootSimpleWriteDeploymentFlags>(flags | OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK);
         }

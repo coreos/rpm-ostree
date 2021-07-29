@@ -265,7 +265,7 @@ rpmostree_option_context_parse (GOptionContext *context,
     }
 
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0)
-    rpmostreecxx::client_require_root();
+    CXX_TRY(client_require_root(), error);
 
   if (use_daemon)
     {
@@ -459,7 +459,7 @@ early_main (void)
   dnf_context_set_config_file_path("");
 }
 
-// The C++ `main()`, invoked from Rust for most CLI commands currently.
+// The C++ `main()`, invoked from Rust only for most CLI commands currently.
 // This may throw an exception which will be converted into a `Result` in Rust.
 int
 rpmostree_main (const rust::Slice<const rust::Str> args)

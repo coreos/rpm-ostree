@@ -22,6 +22,7 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
+#include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-clientlib.h"
 

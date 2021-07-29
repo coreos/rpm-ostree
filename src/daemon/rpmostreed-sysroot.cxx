@@ -274,7 +274,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
       const gchar *os = ostree_deployment_get_osname (booted);
       g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, os, NULL);
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
-      auto bootedid_v = rpmostreecxx::deployment_generate_id(*booted);
+      auto bootedid_v = CXX_TRY_VAL(rust::String, deployment_generate_id(*booted), error);
       booted_id = g_strdup(bootedid_v.c_str());
     }
   else
@@ -288,10 +288,9 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
   for (guint i = 0; deployments != NULL && i < deployments->len; i++)
     {
       auto deployment = static_cast<OstreeDeployment *>(deployments->pdata[i]);
-      GVariant *variant =
-        rpmostreed_deployment_generate_variant (self->ot_sysroot, deployment,
-                                                booted_id, self->repo, TRUE, error);
-      if (!variant)
+      GVariant *variant = NULL;
+      if (!rpmostreed_deployment_generate_variant (self->ot_sysroot, deployment,
+            booted_id, self->repo, TRUE, &variant, error))
         return glnx_prefix_error (error, "Reading deployment %u", i);
 
       g_variant_builder_add_value (&builder, variant);
@@ -769,7 +768,7 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
   if (!sysroot_populate_deployments_unlocked (self, NULL, error))
     return FALSE;
 
-  rpmostreecxx::daemon_sanitycheck_environment(*self->ot_sysroot);
+  CXX_TRY(daemon_sanitycheck_environment(*self->ot_sysroot), error);
 
   if (!reset_config_properties (self, error))
     return FALSE;

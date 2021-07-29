@@ -228,6 +228,7 @@ rpmostree_context_new_compose (int               userroot_dfd,
   auto ref = ret->treefile_rs->get_ref();
   if (ref.length() > 0)
     {
+      // NB: can throw; but no error-handling here anyway
       auto varsubsts = rpmostree_dnfcontext_get_varsubsts(ret->dnfctx);
       auto subst_ref = rpmostreecxx::varsubstitute(ref, *varsubsts);
       ret->ref = g_strdup(subst_ref.c_str());
@@ -521,7 +522,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
 
-  rpmostreecxx::core_libdnf_process_global_init();
+  CXX_TRY(core_libdnf_process_global_init(), error);
 
   /* Auto-synthesize an empty treefile if none is set; this avoids us
    * having to check for whether it's NULL everywhere.  The empty treefile
@@ -840,7 +841,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     GCancellable  *cancellable,
                                     GError       **error)
 {
-  auto cachebranch = rpmostreecxx::nevra_to_cache_branch (nevra);
+  auto cachebranch = CXX_TRY_VAL(rust::String, nevra_to_cache_branch (nevra), error);
 
   if (expected_sha256 != NULL)
     {
@@ -848,7 +849,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
       g_autoptr(GVariant) commit = NULL;
       g_autofree char *actual_sha256 = NULL;
 
-      if (!ostree_repo_resolve_rev (pkgcache, cachebranch->c_str(), FALSE, &commit_csum, error))
+      if (!ostree_repo_resolve_rev (pkgcache, cachebranch.c_str(), FALSE, &commit_csum, error))
         return FALSE;
 
       if (!ostree_repo_load_commit (pkgcache, commit_csum, &commit, NULL, error))
@@ -861,7 +862,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
         return glnx_throw (error, "Checksum mismatch for package %s", nevra);
     }
 
-  return get_header_variant (pkgcache, cachebranch->c_str(), out_header, cancellable, error);
+  return get_header_variant (pkgcache, cachebranch.c_str(), out_header, cancellable, error);
 }
 
 static gboolean
@@ -1205,7 +1206,7 @@ find_pkg_in_ostree (RpmOstreeContext *self,
   const char *reponame = dnf_package_get_reponame (pkg);
   if (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) != 0)
     {
-      auto expected_chksum_repr = rpmostreecxx::get_repodata_chksum_repr(*pkg);
+      auto expected_chksum_repr = CXX_TRY_VAL(rust::String, get_repodata_chksum_repr(*pkg), error);
 
       gboolean same_pkg_chksum = FALSE;
       if (!commit_has_matching_repodata_chksum_repr (commit,
@@ -1604,8 +1605,9 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
 
 /* Return all the packages that match lockfile constraints. Multiple packages may be
  * returned per NEVRA so that libsolv can respect e.g. repo costs. */
-static GPtrArray*
+static gboolean
 find_locked_packages (RpmOstreeContext *self,
+                      GPtrArray       **out_pkgs,
                       GError          **error)
 {
   g_assert (self->lockfile);
@@ -1625,8 +1627,8 @@ find_locked_packages (RpmOstreeContext *self,
       g_autoptr(GPtrArray) matches = hy_query_run (query);
       if (matches->len == 0)
         {
-          return (GPtrArray*)glnx_null_throw (error, "Couldn't find locked source package '%s-%s'",
-                                              pkg.name.c_str(), pkg.evr.c_str());
+          return glnx_throw (error, "Couldn't find locked source package '%s-%s'",
+                             pkg.name.c_str(), pkg.evr.c_str());
         }
       for (guint i = 0; i < matches->len; i++)
         {
@@ -1671,7 +1673,7 @@ find_locked_packages (RpmOstreeContext *self,
             }
           else
             {
-              auto repodata_chksum = rpmostreecxx::get_repodata_chksum_repr(*match);
+              auto repodata_chksum = CXX_TRY_VAL(rust::String, get_repodata_chksum_repr(*match), error);
               if (pkg.digest != repodata_chksum) /* we're comparing two rust::String here */
                 n_checksum_mismatches++;
               else
@@ -1687,15 +1689,16 @@ find_locked_packages (RpmOstreeContext *self,
             g_strdup_printf ("%s-%s%s%s", pkg.name.c_str(), pkg.evr.c_str(),
                              pkg.arch.length() > 0 ? "." : "",
                              pkg.arch.length() > 0 ? pkg.arch.c_str() : "");
-          return (GPtrArray*)glnx_null_throw (error, "Couldn't find locked package '%s'%s%s "
-                                                     "(pkgs matching NEVRA: %d; mismatched checksums: %d)",
-                                              spec, pkg.digest.length() > 0 ? " with checksum " : "",
-                                              pkg.digest.length() > 0 ? pkg.digest.c_str() : "",
-                                              matches->len, n_checksum_mismatches);
+          return glnx_throw (error, "Couldn't find locked package '%s'%s%s "
+                                    "(pkgs matching NEVRA: %d; mismatched checksums: %d)",
+                             spec, pkg.digest.length() > 0 ? " with checksum " : "",
+                             pkg.digest.length() > 0 ? pkg.digest.c_str() : "",
+                             matches->len, n_checksum_mismatches);
         }
     }
 
-  return util::move_nullify (pkgs);
+  *out_pkgs = util::move_nullify (pkgs);
+  return TRUE;
 }
 
 /* Check for/download new rpm-md, then depsolve */
@@ -1801,8 +1804,8 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   if (self->lockfile)
     {
       /* first, find our locked pkgs in the rpmmd */
-      g_autoptr(GPtrArray) locked_pkgs = find_locked_packages (self, error);
-      if (!locked_pkgs)
+      g_autoptr(GPtrArray) locked_pkgs = NULL;
+      if (!find_locked_packages (self, &locked_pkgs, error))
         return FALSE;
 
       /* build a packageset from it */
@@ -2036,17 +2039,19 @@ rpmostree_context_get_packages_to_import (RpmOstreeContext *self)
 }
 
 /* Note this must be called *before* rpmostree_context_setup(). */
-void
+gboolean
 rpmostree_context_set_lockfile (RpmOstreeContext *self,
                                 char            **lockfiles,
-                                gboolean          strict)
+                                gboolean          strict,
+                                GError          **error)
 {
   g_assert (!self->lockfile);
   rust::Vec<rust::String> rs_lockfiles;
   for (char **it = lockfiles; it && *it; it++)
     rs_lockfiles.push_back(std::string(*it));
-  self->lockfile = rpmostreecxx::lockfile_read(rs_lockfiles);
+  self->lockfile = CXX_TRY_VAL(rust::Box<rpmostreecxx::LockfileConfig>, lockfile_read(rs_lockfiles), error);
   self->lockfile_strict = strict;
+  return TRUE;
 }
 
 /* XXX: push this into libdnf */
@@ -2128,7 +2133,7 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
             }
         }
 
-      auto chksum_repr = rpmostreecxx::get_repodata_chksum_repr(*pkg);
+      auto chksum_repr = CXX_TRY_VAL(rust::String, get_repodata_chksum_repr(*pkg), error);
       g_checksum_update (checksum, (guint8*)chksum_repr.data(), chksum_repr.size());
     }
 
@@ -3832,7 +3837,7 @@ write_rpmdb (RpmOstreeContext      *self,
   if (self->treefile_rs && self->treefile_rs->rpmdb_backend_is_target())
     {
       g_print ("Regenerating rpmdb for target\n");
-      rpmostreecxx::rewrite_rpmdb_for_target(tmprootfs_dfd);
+      CXX_TRY(rewrite_rpmdb_for_target(tmprootfs_dfd), error);
     }
   else
     {
@@ -4094,9 +4099,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
    */
   if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "var/tmp", 0755, cancellable, error))
     return FALSE;
-  rpmostreecxx::rootfs_prepare_links(tmprootfs_dfd);
+  CXX_TRY(rootfs_prepare_links(tmprootfs_dfd), error);
 
-  auto etc_guard = rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd);
+  auto etc_guard = CXX_TRY_VAL(rust::Box<rpmostreecxx::TempEtcGuard>,
+      prepare_tempetc_guard (tmprootfs_dfd), error);
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
@@ -4104,12 +4110,13 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     {
       gboolean have_passwd;
 
-      auto fs_prep = rpmostreecxx::prepare_filesystem_script_prep (tmprootfs_dfd);
+      auto fs_prep = CXX_TRY_VAL(rust::Box<rpmostreecxx::FilesystemScriptPrep>,
+          prepare_filesystem_script_prep (tmprootfs_dfd), error);
 
       auto passwd_entries = rpmostreecxx::new_passwd_entries();
 
       std::string passwd_dir(self->passwd_dir ?: "");
-      have_passwd = rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dir);
+      have_passwd = CXX_TRY_VAL(bool, prepare_rpm_layering (tmprootfs_dfd, passwd_dir), error);
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
       if (!rpmostree_rootfs_fixup_selinux_store_root (tmprootfs_dfd, cancellable, error))
@@ -4256,7 +4263,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       if (have_passwd)
         {
-          rpmostreecxx::complete_rpm_layering (tmprootfs_dfd);
+          CXX_TRY(complete_rpm_layering (tmprootfs_dfd), error);
         }
 
         // Revert filesystem changes just for scripts.

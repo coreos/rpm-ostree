@@ -82,7 +82,7 @@ app_load_sysroot_impl (const char       *sysroot,
 {
   const char *bus_name = NULL;
 
-  rpmostreecxx::client_start_daemon();
+  CXX_TRY(client_start_daemon(), error);
 
   g_autoptr(GDBusConnection) connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
   if (!connection)
@@ -841,8 +841,8 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
         {
           /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
           const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-          rpmostreecxx::print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
-                RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable);
+          CXX_TRY(print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
+                RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable), error);
           g_print ("Changes queued for next boot. Run \"systemctl reboot\" to start a reboot\n");
         }
       else if (opt_apply_live)
@@ -852,7 +852,7 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
           g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
           if (!ostree_sysroot_load (sysroot, cancellable, error))
             return FALSE;
-          rpmostreecxx::applylive_finish (*sysroot);
+          CXX_TRY(applylive_finish (*sysroot), error);
         }
       else
         g_assert_not_reached ();
@@ -1035,7 +1035,7 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
   for (const char *const* pkgiter = pkgs; pkgiter && *pkgiter; pkgiter++)
     {
       auto pkg = *pkgiter;
-      auto fds = rpmostreecxx::client_handle_fd_argument(pkg, basearch);
+      auto fds = CXX_TRY_VAL(rust::Vec<int>, client_handle_fd_argument(pkg, basearch), error);
       if (fds.size() > 0)
         {
           for (const auto & fd: fds)

@@ -66,7 +66,7 @@ mod test {
         assert_eq!(nevra, exp_nevra);
         cxx::let_cxx_string!(cxx_exp_nevra = exp_nevra);
         let actual_branch = crate::ffi::nevra_to_cache_branch(&cxx_exp_nevra).expect("nevra");
-        assert_eq!(b, actual_branch.to_string_lossy());
+        assert_eq!(b, actual_branch);
     }
 
     #[test]
