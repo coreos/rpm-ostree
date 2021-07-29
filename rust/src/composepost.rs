@@ -883,6 +883,38 @@ pub fn prepare_rpmdb_base_location(
     Ok(())
 }
 
+/// Recurse into this directory and return the total size of all regular files.
+#[context("Computing directory size")]
+pub fn directory_size(
+    dfd: i32,
+    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+) -> CxxResult<u64> {
+    let cancellable = &cancellable.gobj_wrap();
+    let dfd = crate::ffiutil::ffi_view_openat_dir(dfd);
+    fn directory_size_recurse(d: &openat::Dir, cancellable: &gio::Cancellable) -> Result<u64> {
+        let mut r = 0;
+        for ent in d.list_dir(".")? {
+            cancellable.set_error_if_cancelled()?;
+            let ent = ent?;
+            let meta = d
+                .metadata(ent.file_name())
+                .with_context(|| format!("Failed to access {:?}", ent.file_name()))?;
+            match meta.simple_type() {
+                openat::SimpleType::Dir => {
+                    let child = d.sub_dir(ent.file_name())?;
+                    r += directory_size_recurse(&child, cancellable)?;
+                }
+                openat::SimpleType::File => {
+                    r += meta.stat().st_size as u64;
+                }
+                _ => {}
+            }
+        }
+        Ok(r)
+    }
+    Ok(directory_size_recurse(&dfd, cancellable)?)
+}
+
 #[context("Hardlinking rpmdb to base location")]
 fn hardlink_rpmdb_base_location(
     rootfs: &openat::Dir,
@@ -1171,6 +1203,13 @@ OSTREE_VERSION='33.4'
         rootfs
             .symlink("var/lib/test/nested/symlink", "../")
             .unwrap();
+
+        // Also make this a sanity test for our directory size API
+        let cancellable = gio::Cancellable::new();
+        assert_eq!(
+            directory_size(rootfs.as_raw_fd(), cancellable.gobj_rewrap()).unwrap(),
+            42
+        );
 
         var_to_tmpfiles(&rootfs, gio::NONE_CANCELLABLE).unwrap();
 
