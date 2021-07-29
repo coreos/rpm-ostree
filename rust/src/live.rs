@@ -7,22 +7,22 @@
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
 
+use crate::cxxrsutil::*;
 use crate::ffi::LiveApplyState;
 use crate::isolation;
 use crate::progress::progress_task;
-use crate::{cxxrsutil::*, variant_utils};
 use anyhow::{anyhow, Context, Result};
 use fn_error_context::context;
 use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
 use ostree_ext::diff::FileTreeDiff;
+use ostree_ext::variant_utils::VariantDictExt;
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use variant_utils::{variant_dict_lookup_bool, variant_dict_lookup_str};
 
 /// GVariant `s`: Choose a specific commit
 pub(crate) const OPT_TARGET: &str = "target";
@@ -341,8 +341,8 @@ pub(crate) fn transaction_apply_live(
     let sysroot = &sysroot.gobj_wrap();
     let options = &options.gobj_wrap();
     let options = &glib::VariantDict::new(Some(options));
-    let target = &variant_dict_lookup_str(options, OPT_TARGET);
-    let allow_replacement = variant_dict_lookup_bool(options, OPT_REPLACE).unwrap_or_default();
+    let target = &options.lookup_str(OPT_TARGET);
+    let allow_replacement = options.lookup_bool(OPT_REPLACE).unwrap_or_default();
     let repo = &sysroot.repo().expect("repo");
 
     let booted = sysroot.require_booted_deployment()?;

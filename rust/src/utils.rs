@@ -11,6 +11,7 @@ use crate::cxxrsutil::*;
 use crate::variant_utils;
 use anyhow::{bail, Context, Result};
 use glib::translate::ToGlibPtr;
+use glib::Variant;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::borrow::Cow;
@@ -483,15 +484,10 @@ pub fn get_rpm_basearch() -> String {
     }
 }
 
-// also defined in rpmostree-rpm-util.h
-const GV_ADVISORY_TYPE_STR: &str = "(suuasa{sv})";
 // oddly, AFAICT there isn't an easy way to use GV_ADVISORIES_TYPE_STR in this definition
 const GV_ADVISORIES_TYPE_STR: &str = "a(suuasa{sv})";
 
 lazy_static::lazy_static! {
-    static ref GV_ADVISORY_TYPE: &'static glib::VariantTy = {
-        glib::VariantTy::new(GV_ADVISORY_TYPE_STR).unwrap()
-    };
     static ref GV_ADVISORIES_TYPE: &'static glib::VariantTy = {
         glib::VariantTy::new(GV_ADVISORIES_TYPE_STR).unwrap()
     };
@@ -499,7 +495,7 @@ lazy_static::lazy_static! {
 
 fn get_commit_advisories(repo: &mut ostree::Repo, checksum: &str) -> Result<Option<glib::Variant>> {
     let (commit, _) = repo.load_commit(checksum)?;
-    let metadata = &variant_utils::variant_tuple_get(&commit, 0).expect("commit metadata");
+    let metadata = &commit.child_value(0);
     let metadata = variant_utils::byteswap_be_to_native(metadata);
     let dict = &glib::VariantDict::new(Some(&metadata));
     Ok(dict.lookup_value("rpmostree.advisories", Some(&GV_ADVISORIES_TYPE)))
@@ -518,24 +514,22 @@ pub(crate) fn calculate_advisories_diff(
     if let Some(ref advisories_to) = get_commit_advisories(&mut repo, checksum_to)? {
         let mut previous_advisories: HashSet<String> = HashSet::new();
         if let Some(ref advisories_from) = get_commit_advisories(&mut repo, checksum_from)? {
-            for i in 0..variant_utils::n_children(advisories_from) {
-                let child = variant_utils::variant_tuple_get(advisories_from, i).unwrap();
-                let advisory_id_v = variant_utils::variant_tuple_get(&child, 0).unwrap();
-                let advisory_id = advisory_id_v.str().unwrap().to_string();
+            for child in advisories_from.iter() {
+                let advisory_id = child.child_value(0).str().unwrap().to_string();
                 previous_advisories.insert(advisory_id);
             }
         }
 
-        for i in 0..variant_utils::n_children(advisories_to) {
-            let child = variant_utils::variant_tuple_get(advisories_to, i).unwrap();
-            let advisory_id_v = variant_utils::variant_tuple_get(&child, 0).unwrap();
-            if !previous_advisories.contains(advisory_id_v.str().unwrap()) {
+        for child in advisories_to.iter() {
+            if !previous_advisories.contains(child.child_value(0).str().unwrap()) {
                 new_advisories.push(child);
             }
         }
     }
 
-    let r = variant_utils::new_variant_array(&GV_ADVISORY_TYPE, new_advisories.as_slice());
+    let r = Variant::from_array::<(&str, u32, u32, &[&str], HashMap<&str, glib::Variant>)>(
+        &new_advisories,
+    );
     Ok(r.to_glib_full() as *mut _)
 }
 

@@ -4,10 +4,11 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::{cxxrsutil::*, variant_utils};
+use crate::cxxrsutil::*;
 use anyhow::Result;
 use glib::prelude::*;
 use openat_ext::OpenatDirExt;
+use ostree_ext::variant_utils::VariantDictExt;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 
@@ -193,13 +194,14 @@ pub(crate) fn deployment_layeredmeta_from_commit(
 ) -> CxxResult<crate::ffi::DeploymentLayeredMeta> {
     let deployment = deployment.gobj_wrap();
     let commit = &commit.gobj_wrap();
-    let metadata = &variant_utils::variant_tuple_get(commit, 0).expect("commit metadata");
+    let metadata = &commit.child_value(0);
     let dict = &glib::VariantDict::new(Some(metadata));
 
     // More recent versions have an explicit clientlayer attribute (which
     // realistically will always be TRUE). For older versions, we just
     // rely on the treespec being present. */
-    let is_layered = variant_utils::variant_dict_lookup_bool(dict, "rpmostree.clientlayer")
+    let is_layered = dict
+        .lookup_bool("rpmostree.clientlayer")
         .unwrap_or_else(|| dict.contains("rpmostree.spec"));
     if !is_layered {
         Ok(crate::ffi::DeploymentLayeredMeta {
@@ -212,8 +214,9 @@ pub(crate) fn deployment_layeredmeta_from_commit(
             .expect("commit parent")
             .into();
         let clientlayer_version = dict
-            .lookup_value("rpmostree.clientlayer_version", Some(&*variant_utils::TY_U))
-            .map(|u| u.get().unwrap())
+            .lookup_value("rpmostree.clientlayer_version", None)
+            .map(|u| u.get::<u32>())
+            .flatten()
             .unwrap_or_default();
         Ok(crate::ffi::DeploymentLayeredMeta {
             is_layered,

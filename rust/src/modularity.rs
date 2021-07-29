@@ -56,7 +56,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
 
 fn get_modifiers_variant(key: &str, modules: &[String]) -> Result<glib::Variant> {
     let r = glib::VariantDict::new(None);
-    r.insert_value(key, &crate::variant_utils::new_variant_strv(modules));
+    r.insert_value(key, &modules.to_variant());
     Ok(r.end())
 }
 
@@ -109,12 +109,10 @@ fn modules_impl(key: &str, opts: &InstallOpts) -> Result<()> {
         -1,
         gio::NONE_CANCELLABLE,
     )?;
-    let reply_child = crate::variant_utils::variant_tuple_get(reply, 0)
+    let reply = reply
+        .get::<(String,)>()
         .ok_or_else(|| anyhow!("Invalid reply"))?;
-    let txn_address = reply_child
-        .str()
-        .ok_or_else(|| anyhow!("Expected string transaction address"))?;
-    client.transaction_connect_progress_sync(txn_address)?;
+    client.transaction_connect_progress_sync(reply.0.as_str())?;
     if opts.dry_run {
         println!("Exiting because of '--dry-run' option");
     } else if !opts.reboot {
