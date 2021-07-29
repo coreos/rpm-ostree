@@ -168,7 +168,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   /* Ensure depmod (kernel modules index) is up to date; because on Fedora we
    * suppress the kernel %posttrans we need to take care of this.
    */
-  rpmostreecxx::run_depmod(rootfs_dfd, kver, unified_core_mode);
+  CXX_TRY(run_depmod(rootfs_dfd, kver, unified_core_mode), error);
 
   RpmOstreePostprocessBootLocation boot_location =
     RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
@@ -281,7 +281,7 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
                                        GCancellable  *cancellable,
                                        GError       **error)
 {
-  rpmostreecxx::workaround_selinux_cross_labeling(dfd, *cancellable);
+  CXX_TRY(workaround_selinux_cross_labeling(dfd, *cancellable), error);
 
   g_autoptr(OstreeSePolicy) ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
   if (ret_sepolicy == NULL)
@@ -418,7 +418,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                                                                error))
     return FALSE;
 
-  rpmostreecxx::compose_postprocess_final (rootfs_dfd);
+  CXX_TRY(compose_postprocess_final (rootfs_dfd), error);
 
   if (selinux)
     {
@@ -427,7 +427,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
       /* Now regenerate SELinux policy so that postprocess scripts from users and from us
        * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
       rust::Vec child_argv = { rust::String("semodule"), rust::String("-nB") };
-      rpmostreecxx::bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode);
+      CXX_TRY(bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode), error);
     }
 
   gboolean container = FALSE;
@@ -437,12 +437,8 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                                                                error))
     return FALSE;
 
-  try {
-    g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
-    rpmostreecxx::migrate_passwd_except_root(rootfs_dfd);
-  } catch (std::exception& e) {
-    util::rethrow_prefixed(e, "failed to migrate 'passwd' to /usr/lib");
-  }
+  g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
+  CXX_TRY(migrate_passwd_except_root(rootfs_dfd), error);
 
   rust::Vec<rust::String> preserve_groups_set;
   if (treefile && json_object_has_member (treefile, "etc-group-members"))
@@ -459,15 +455,11 @@ rpmostree_postprocess_final (int            rootfs_dfd,
         }
     }
 
-  try {
-    g_print ("Migrating /usr/etc/group to /usr/lib/\n");
-    rpmostreecxx::migrate_group_except_root(rootfs_dfd, preserve_groups_set);
-  } catch (std::exception& e) {
-    util::rethrow_prefixed(e, "failed to migrate 'group' to /usr/lib");
-  }
+  g_print ("Migrating /usr/etc/group to /usr/lib/\n");
+  CXX_TRY(migrate_group_except_root(rootfs_dfd, preserve_groups_set), error);
 
   /* NSS configuration to look at the new files */
-  rpmostreecxx::composepost_nsswitch_altfiles(rootfs_dfd);
+  CXX_TRY(composepost_nsswitch_altfiles(rootfs_dfd), error);
 
   if (selinux)
     {
@@ -475,9 +467,9 @@ rpmostree_postprocess_final (int            rootfs_dfd,
         return glnx_prefix_error (error, "SELinux postprocess");
     }
 
-  rpmostreecxx::convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable);
+  CXX_TRY(convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
 
-  rpmostreecxx::rootfs_prepare_links(rootfs_dfd);
+  CXX_TRY(rootfs_prepare_links(rootfs_dfd), error);
 
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
@@ -516,7 +508,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
     }
 
   /* we're composing a new tree; copy the rpmdb to the base location */
-  rpmostreecxx::prepare_rpmdb_base_location(rootfs_dfd, *cancellable);
+  CXX_TRY(prepare_rpmdb_base_location(rootfs_dfd, *cancellable), error);
 
   return TRUE;
 }
@@ -650,7 +642,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
     }
 
   /* Make sure there is an RPM macro in place pointing to the rpmdb in /usr */
-  rpmostreecxx::compose_postprocess_rpm_macro(rootfs_fd);
+  CXX_TRY(compose_postprocess_rpm_macro(rootfs_fd), error);
 
   if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
     return FALSE;
@@ -658,7 +650,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
     return FALSE;
 
-  rpmostreecxx::passwd_cleanup(rootfs_fd);
+  CXX_TRY(passwd_cleanup(rootfs_fd), error);
 
   return TRUE;
 }
@@ -679,12 +671,15 @@ struct CommitThreadData {
   GError **error;
 };
 
+/* Filters out all xattrs that aren't accepted. */
 static GVariant *
-filter_xattrs_impl (OstreeRepo     *repo,
+filter_xattrs_cb (OstreeRepo     *repo,
                   const char     *relpath,
                   GFileInfo      *file_info,
                   gpointer        user_data)
 {
+  g_assert (relpath);
+
   auto tdata = static_cast<struct CommitThreadData *>(user_data);
   int rootfs_fd = tdata->rootfs_fd;
   /* If you have a use case for something else, file an issue */
@@ -708,13 +703,13 @@ filter_xattrs_impl (OstreeRepo     *repo,
   if (!*relpath)
     {
       if (!glnx_fd_get_all_xattrs (rootfs_fd, &existing_xattrs, NULL, error))
-        util::throw_gerror(local_error);
+        g_error ("Reading xattrs on /: %s", local_error->message);
     }
   else
     {
       if (!glnx_dfd_name_get_all_xattrs (rootfs_fd, relpath, &existing_xattrs,
                                          NULL, error))
-        util::throw_gerror(local_error);
+        g_error ("Reading xattrs on %s: %s", relpath, local_error->message);
     }
 
   if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
@@ -743,24 +738,6 @@ filter_xattrs_impl (OstreeRepo     *repo,
     }
 
   return g_variant_ref_sink (g_variant_builder_end (&builder));
-}
-
-/* Filters out all xattrs that aren't accepted. */
-static GVariant *
-filter_xattrs_cb (OstreeRepo     *repo,
-                  const char     *relpath,
-                  GFileInfo      *file_info,
-                  gpointer        user_data)
-{
-  g_assert (relpath);
-
-  try {
-    return filter_xattrs_impl(repo, relpath, file_info, user_data);
-  } catch (std::exception& e) {
-      /* Unfortunately we have no way to throw from this callback */
-      g_printerr ("Failed to read xattrs of '%s': %s\n", relpath, e.what());
-      exit (1);
-  }
 }
 
 static gpointer
@@ -843,7 +820,7 @@ rpmostree_compose_commit (int            rootfs_fd,
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
-  uint64_t n_bytes = rpmostreecxx::directory_size(rootfs_fd, *cancellable);
+  auto n_bytes = CXX_TRY_VAL(uint64_t, directory_size(rootfs_fd, *cancellable), error);
 
   tdata.n_bytes = n_bytes;
   tdata.repo = repo;

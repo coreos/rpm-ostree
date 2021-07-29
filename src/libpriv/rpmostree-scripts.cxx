@@ -342,7 +342,8 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
     strcmp (pkg_script, "glibc-common.post") == 0;
   rpmostreecxx::BubblewrapMutability mutability =
     (is_glibc_locales || !enable_fuse) ? rpmostreecxx::BubblewrapMutability::MutateFreely : rpmostreecxx::BubblewrapMutability::RoFiles;
-  auto bwrap = rpmostreecxx::bubblewrap_new_with_mutability (rootfs_fd, mutability);
+  auto bwrap = CXX_TRY_VAL(rust::Box<rpmostreecxx::Bubblewrap>,
+      bubblewrap_new_with_mutability (rootfs_fd, mutability), error);
   /* Scripts can see a /var with compat links like alternatives */
   bwrap->var_tmp_tmpfs();
 
@@ -406,7 +407,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   else
     {
       rust::Slice<const uint8_t> scriptslice{(guint8*)script, strlen (script)};
-      glnx_fd_close int script_memfd = rpmostreecxx::sealed_memfd (pkg_script, scriptslice);
+      glnx_fd_close int script_memfd = CXX_TRY_VAL(int, sealed_memfd (pkg_script, scriptslice), error);
 
       /* Only try to log to the journal if we're already set up that way (normally
        * rpm-ostreed for host system management). Otherwise we might be in a Docker
@@ -960,7 +961,8 @@ rpmostree_deployment_sanitycheck_true (int           rootfs_fd,
     return TRUE;
 
   g_assert(cancellable);
-  auto bwrap = rpmostreecxx::bubblewrap_new_with_mutability(rootfs_fd, rpmostreecxx::BubblewrapMutability::Immutable);
+  auto bwrap = CXX_TRY_VAL(rust::Box<::rpmostreecxx::Bubblewrap>,
+      bubblewrap_new_with_mutability(rootfs_fd, rpmostreecxx::BubblewrapMutability::Immutable), error);
   bwrap->append_child_arg("/usr/bin/true");
   try {
     bwrap->run(*cancellable);

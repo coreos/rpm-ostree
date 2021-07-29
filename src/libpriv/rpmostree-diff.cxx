@@ -21,6 +21,7 @@
 #include "rpmostree-db.h"
 #include "rpmostree-util.h"
 
+// Only used by Rust side.
 namespace rpmostreecxx {
 
 RPMDiff::RPMDiff(GPtrArray *removed, GPtrArray *added, GPtrArray *modified_old, GPtrArray *modified_new) {

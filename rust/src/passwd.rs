@@ -91,6 +91,7 @@ pub fn passwd_cleanup(rootfs_dfd: i32) -> Result<()> {
 /// in /usr/etc at this point), and splitting it into two streams: a new
 /// /etc/passwd that just contains the root entry, and /usr/lib/passwd which
 /// contains everything else.
+#[context("Migrating 'passwd' to /usr/lib")]
 pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> CxxResult<()> {
     static ETCSRC_PATH: &str = "usr/etc/passwd";
     static USRDEST_PATH: &str = "usr/lib/passwd";
@@ -134,6 +135,7 @@ pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> CxxResult<()> {
 /// in /usr/etc at this point), and splitting it into two streams: a new
 /// /etc/group that just contains roots and preserved entries, and /usr/lib/group
 /// which contains everything else.
+#[context("Migrating 'group' to /usr/lib")]
 pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>) -> CxxResult<()> {
     static ETCSRC_PATH: &str = "usr/etc/group";
     static USRDEST_PATH: &str = "usr/lib/group";

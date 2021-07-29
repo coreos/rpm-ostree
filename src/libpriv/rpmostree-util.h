@@ -30,6 +30,7 @@
 #include <sys/wait.h>
 #include <ostree.h>
 #include <libdnf/libdnf.h>
+#include <optional>
 
 #include "libglnx.h"
 #include "rpmostree.h"
@@ -70,6 +71,31 @@ throw_gerror (GError *&error)
   error = NULL;
   throw std::runtime_error (s);
 }
+
+// Calls a rpmostreecxx function, returning any error immediately.
+// Similar to Rust's ?  operator.
+#define CXX_TRY(cxxfn, err)                    \
+  ({ try {                                     \
+       rpmostreecxx::cxxfn;                    \
+     } catch (std::exception &e) {             \
+       return glnx_throw(err, "%s", e.what()); \
+     }                                         \
+  })
+
+// Have to use the optional<> dance here so that we don't implicitly call a constructor
+// before the try block. But we need the value to outlive the try-catch so we can return it.
+// Also the constructor might be explicitly deleted (e.g. rust::Box). The C++ compiler
+// doesn't understand that the final value will always be initialized since we return in the
+// catch block.
+#define CXX_TRY_VAL(t, cxxfn, err)             \
+  ({ std::optional<t> v;                       \
+     try {                                     \
+       v.emplace(rpmostreecxx::cxxfn);         \
+     } catch (std::exception &e) {             \
+       return glnx_throw(err, "%s", e.what()); \
+     }                                         \
+     std::move(v.value());                     \
+  })
 
 // Duplicate a non-empty Rust Str to a NUL-terminated C string.
 // The empty string is converted to a NULL pointer.

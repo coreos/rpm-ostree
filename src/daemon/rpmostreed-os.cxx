@@ -365,26 +365,12 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
   ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
-  deployment0 = rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid0);
-  if (!deployment0)
-    {
-      local_error = g_error_new (RPM_OSTREED_ERROR,
-                                 RPM_OSTREED_ERROR_FAILED,
-                                 "Invalid deployment id %s",
-                                 arg_deployid0);
-      goto out;
-    }
+  if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid0, &deployment0, &local_error))
+    goto out;
   ref0 = ostree_deployment_get_csum (deployment0);
 
-  deployment1 = rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid1);
-  if (!deployment1)
-    {
-      local_error = g_error_new (RPM_OSTREED_ERROR,
-                                 RPM_OSTREED_ERROR_FAILED,
-                                 "Invalid deployment id %s",
-                                 arg_deployid1);
-      goto out;
-    }
+  if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid1, &deployment1, &local_error))
+    goto out;
   ref1 = ostree_deployment_get_csum (deployment1);
 
   if (!rpm_ostree_db_diff_variant (ot_repo, ref0, ref1, FALSE, &value,
@@ -439,15 +425,8 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
     }
   else
     {
-      base_deployment = rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid);
-      if (!base_deployment)
-        {
-          local_error = g_error_new (RPM_OSTREED_ERROR,
-                                     RPM_OSTREED_ERROR_FAILED,
-                                     "Invalid deployment id %s",
-                                     arg_deployid);
-          goto out;
-        }
+      if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid, &base_deployment, &local_error))
+        goto out;
     }
 
   origin = rpmostree_origin_parse_deployment (base_deployment, &local_error);
@@ -1827,13 +1806,11 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   g_autoptr(GVariant) booted_variant = NULL; /* Strong ref as we reuse it below */
   if (booted_deployment && g_strcmp0 (ostree_deployment_get_osname (booted_deployment), name) == 0)
     {
-      booted_variant =
-        g_variant_ref_sink (
-            rpmostreed_deployment_generate_variant (ot_sysroot, booted_deployment,
-                                                    booted_id, ot_repo, TRUE, error));
-      if (!booted_variant)
+      if (!rpmostreed_deployment_generate_variant (ot_sysroot, booted_deployment,
+                                                   booted_id, ot_repo, TRUE, &booted_variant, error))
         return FALSE;
-      auto bootedid_v = rpmostreecxx::deployment_generate_id(*booted_deployment);
+      g_variant_ref_sink (booted_variant);
+      auto bootedid_v = CXX_TRY_VAL(rust::String, deployment_generate_id(*booted_deployment), error);
       booted_id = g_strdup(bootedid_v.c_str());
     }
   else
@@ -1849,13 +1826,10 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   g_autoptr(GVariant) default_variant = NULL;
   if (pending_deployment)
     {
-      default_variant =
-        g_variant_ref_sink (rpmostreed_deployment_generate_variant (ot_sysroot,
-                                                                    pending_deployment,
-                                                                    booted_id,
-                                                                    ot_repo, TRUE, error));
-      if (!default_variant)
+      if (!rpmostreed_deployment_generate_variant (ot_sysroot, pending_deployment, booted_id,
+                                                   ot_repo, TRUE, &default_variant, error))
         return FALSE;
+      g_variant_ref_sink (default_variant);
     }
   else
     default_variant = g_variant_ref (booted_variant); /* Default to booted */
@@ -1864,10 +1838,8 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   GVariant *rollback_variant = NULL; /* Floating */
   if (rollback_deployment)
     {
-      rollback_variant =
-        rpmostreed_deployment_generate_variant (ot_sysroot, rollback_deployment, booted_id,
-                                                ot_repo, TRUE, error);
-      if (!rollback_variant)
+      if (!rpmostreed_deployment_generate_variant (ot_sysroot, rollback_deployment, booted_id,
+                                                ot_repo, TRUE, &rollback_variant, error))
         return FALSE;
     }
   else

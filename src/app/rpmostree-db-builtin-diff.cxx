@@ -102,7 +102,7 @@ print_diff (OstreeRepo   *repo,
 
   if (opt_advisories)
     {
-      auto diff = rpmostreecxx::calculate_advisories_diff(*repo, from_checksum, to_checksum);
+      auto diff = CXX_TRY_VAL(GVariant*, calculate_advisories_diff(*repo, from_checksum, to_checksum), error);
       g_print ("\n");
       rpmostree_print_advisories (diff, TRUE, 0);
     }
@@ -272,7 +272,8 @@ rpmostree_db_builtin_diff (int argc, char **argv,
                                        FALSE, &diffv, cancellable, error))
         return FALSE;
       g_variant_builder_add (&builder, "{sv}", "pkgdiff", diffv);
-      auto adv_diff = rpmostreecxx::calculate_advisories_diff(*repo, from_checksum, to_checksum);
+      auto adv_diff = CXX_TRY_VAL(GVariant*,
+             calculate_advisories_diff(*repo, from_checksum, to_checksum), error);
       g_variant_builder_add (&builder, "{sv}", "advisories", adv_diff);
       g_autoptr(GVariant) metadata = g_variant_builder_end (&builder);
 

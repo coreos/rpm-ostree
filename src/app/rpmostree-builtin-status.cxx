@@ -802,8 +802,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
     {
       /* No cached update, but we can still print a diff summary */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      rpmostreecxx::print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path), diff_format,
-                                                          max_key_len, NULL);
+      CXX_TRY(print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path), diff_format,
+                                                          max_key_len, NULL), error);
     }
 
   /* print base overrides before overlays */
@@ -1395,7 +1395,7 @@ rpmostree_ex_builtin_history (int             argc,
   /* initiate a history context, then iterate over each (boot time, deploy time), then print */
 
   /* XXX: enhance with option for going in reverse (oldest first) */
-  auto history_ctx = rpmostreecxx::history_ctx_new ();
+  auto history_ctx = CXX_TRY_VAL(rust::Box<rpmostreecxx::HistoryCtx>, history_ctx_new (), error);
 
   /* XXX: use pager here */
 

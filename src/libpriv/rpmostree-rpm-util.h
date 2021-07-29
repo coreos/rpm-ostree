@@ -35,7 +35,7 @@
 
 // C++ code
 namespace rpmostreecxx {
-  std::unique_ptr<std::string> nevra_to_cache_branch(const std::string &nevra);
+  rust::String nevra_to_cache_branch(const std::string &nevra);
   rust::String get_repodata_chksum_repr(DnfPackage &pkg);
 }
 

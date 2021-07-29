@@ -27,9 +27,12 @@ G_BEGIN_DECLS
 
 char *          rpmostreed_deployment_generate_id (OstreeDeployment *deployment);
 
-OstreeDeployment *
-                rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
-                                                  const gchar *deploy_id);
+gboolean
+rpmostreed_deployment_get_for_id (OstreeSysroot     *sysroot,
+                                  const gchar       *deploy_id,
+                                  OstreeDeployment **out_deployment,
+                                  GError           **error);
+
 OstreeDeployment *
                 rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
                                                      const gchar   *index,
@@ -37,11 +40,12 @@ OstreeDeployment *
 
 GVariant *      rpmostreed_deployment_generate_blank_variant (void);
 
-GVariant *      rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
+gboolean        rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                                         OstreeDeployment *deployment,
                                                         const char       *booted_id,
                                                         OstreeRepo       *repo,
                                                         gboolean          filter,
+                                                        GVariant        **out_variant,
                                                         GError          **error);
 
 GVariant *      rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,

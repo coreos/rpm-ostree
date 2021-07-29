@@ -851,7 +851,7 @@ get_sack_for_root (int               dfd,
   GLNX_AUTO_PREFIX_ERROR ("Loading sack", error);
   g_assert (out_sack != NULL);
 
-  rpmostreecxx::core_libdnf_process_global_init();
+  CXX_TRY(core_libdnf_process_global_init(), error);
 
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
@@ -1324,7 +1324,7 @@ rpmostree_decompose_nevra (const char  *nevra,
 
 /* translates NEVRA to its cache branch */
 namespace rpmostreecxx {
-std::unique_ptr<std::string>
+rust::String
 nevra_to_cache_branch (const std::string &nevra)
 {
   /* It's cumbersome, but we have to decompose the NEVRA and the rebuild it into a cache
@@ -1342,8 +1342,7 @@ nevra_to_cache_branch (const std::string &nevra)
   g_autofree char *evr = rpmostree_custom_nevra_strdup (name, epoch, version, release, arch,
                                                         PKG_NEVRA_FLAGS_EVR);
   g_autofree char *branch = rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
-  auto ret = std::string (branch);
-  return std::make_unique<std::string>(ret);
+  return rust::String (util::move_nullify(branch));
 }
 }
 

@@ -578,7 +578,7 @@ pub mod ffi {
         include!("rpmostree-rpm-util.h");
         // Currently only used in unit tests
         #[allow(dead_code)]
-        fn nevra_to_cache_branch(nevra: &CxxString) -> Result<UniquePtr<CxxString>>;
+        fn nevra_to_cache_branch(nevra: &CxxString) -> Result<String>;
         fn get_repodata_chksum_repr(pkg: &mut DnfPackage) -> Result<String>;
     }
 }
