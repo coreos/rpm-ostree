@@ -709,6 +709,14 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
   sync_baserefspec (origin);
 }
 
+static void
+set_changed (gboolean *out, gboolean c)
+{
+  if (!out)
+    return;
+  *out = *out || c;
+}
+
 gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                char             **packages,
@@ -771,7 +779,7 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                     local ? origin->cached_local_packages
                                           : origin->cached_packages, local);
 
-  *out_changed = changed;
+  set_changed (out_changed, changed);
   return TRUE;
 }
 
@@ -843,7 +851,7 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
                                     origin->cached_local_packages, TRUE);
 
-  *out_changed = changed || local_changed;
+  set_changed (out_changed, changed || local_changed);
   return TRUE;
 }
 
@@ -863,9 +871,8 @@ rpmostree_origin_add_modules (RpmOstreeOrigin  *origin,
 
   if (changed)
     update_string_list_from_hash_table (origin->kf, "modules", key, target);
-  if (out_changed)
-    *out_changed = changed;
 
+  set_changed (out_changed, changed);
   return TRUE;
 }
 
@@ -885,9 +892,8 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin  *origin,
 
   if (changed)
     update_string_list_from_hash_table (origin->kf, "modules", key, target);
-  if (out_changed)
-    *out_changed = changed;
 
+  set_changed (out_changed, changed);
   return TRUE;
 }
 
@@ -937,8 +943,9 @@ rpmostree_origin_remove_all_packages (RpmOstreeOrigin  *origin,
   if (modules_install_changed)
     update_keyfile_pkgs_from_cache (origin, "modules", "install",
                                     origin->cached_modules_install, FALSE);
-  if (out_changed)
-    *out_changed = changed || local_changed || modules_enable_changed || modules_install_changed;
+
+  changed = changed || local_changed || modules_enable_changed || modules_install_changed;
+  set_changed (out_changed, changed);
   return TRUE;
 }
 
@@ -1037,7 +1044,7 @@ rpmostree_origin_remove_all_overrides (RpmOstreeOrigin  *origin,
   if (local_replace_changed)
     update_keyfile_pkgs_from_cache (origin, "overrides", "replace-local",
                                     origin->cached_overrides_local_replace, TRUE);
-  if (out_changed)
-    *out_changed = remove_changed || local_replace_changed;
+
+  set_changed (out_changed, remove_changed || local_replace_changed);
   return TRUE;
 }

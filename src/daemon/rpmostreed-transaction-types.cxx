@@ -1162,42 +1162,35 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       }
   }
 
-  gboolean remove_changed = FALSE;
   if (no_layering)
     {
-      if (!rpmostree_origin_remove_all_packages (origin, &remove_changed, error))
+      if (!rpmostree_origin_remove_all_packages (origin, &changed, error))
         return FALSE;
     }
   else
     {
-      gboolean local_changed = FALSE;
       if (self->uninstall_pkgs)
         {
+          /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
+           * (if e.g. we're removing a duplicate provides). But the origin has changed so we need to
+           * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
           if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs,
-                                                 idempotent_layering, &local_changed, error))
+                                                 idempotent_layering, &changed, error))
             return FALSE;
         }
-      remove_changed = remove_changed || local_changed;
       if (self->disable_modules)
         {
           if (!rpmostree_origin_remove_modules (origin, self->disable_modules,
-                                                TRUE, &local_changed, error))
+                                                TRUE, &changed, error))
             return FALSE;
         }
-      remove_changed = remove_changed || local_changed;
       if (self->uninstall_modules)
         {
           if (!rpmostree_origin_remove_modules (origin, self->uninstall_modules,
-                                                FALSE, &local_changed, error))
+                                                FALSE, &changed, error))
             return FALSE;
         }
-      remove_changed = remove_changed || local_changed;
     }
-
-  /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
-   * (if e.g. we're removing a duplicate provides). But the origin has changed so we need to
-   * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
-  changed = changed || remove_changed;
 
   /* lazily loaded cache that's used in a few conditional blocks */
   g_autoptr(RpmOstreeRefSack) base_rsack = NULL;
@@ -1234,30 +1227,21 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             }
         }
 
-      gboolean add_changed = FALSE;
       if (!rpmostree_origin_add_packages (origin, self->install_pkgs, FALSE,
-                                          idempotent_layering, &add_changed, error))
+                                          idempotent_layering, &changed, error))
         return FALSE;
-
-      changed = changed || add_changed;
     }
 
   if (self->enable_modules)
     {
-      gboolean add_changed = FALSE;
-      if (!rpmostree_origin_add_modules (origin, self->enable_modules, TRUE, &add_changed, error))
+      if (!rpmostree_origin_add_modules (origin, self->enable_modules, TRUE, &changed, error))
         return FALSE;
-
-      changed = changed || add_changed;
     }
 
   if (self->install_modules)
     {
-      gboolean add_changed = FALSE;
-      if (!rpmostree_origin_add_modules (origin, self->install_modules, FALSE, &add_changed, error))
+      if (!rpmostree_origin_add_modules (origin, self->install_modules, FALSE, &changed, error))
         return FALSE;
-
-      changed = changed || add_changed;
     }
 
   if (self->install_local_pkgs != NULL)
@@ -1271,22 +1255,16 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         {
           g_ptr_array_add (pkgs, NULL);
 
-          gboolean add_changed = FALSE;
           if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE,
-                                              idempotent_layering, &add_changed, error))
+                                              idempotent_layering, &changed, error))
             return FALSE;
-
-          changed = changed || add_changed;
         }
     }
 
   if (no_overrides)
     {
-      gboolean overrides_changed = FALSE;
-      if (!rpmostree_origin_remove_all_overrides (origin, &overrides_changed, error))
+      if (!rpmostree_origin_remove_all_overrides (origin, &changed, error))
         return FALSE;
-
-      changed = changed || overrides_changed;
     }
   else if (self->override_reset_pkgs || self->override_replace_local_pkgs)
     {
