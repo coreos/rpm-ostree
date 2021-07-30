@@ -108,10 +108,10 @@ assert_file_has_content ls.txt rpmdb.sqlite
 assert_not_file_has_content ls.txt /usr/share/rpm/Packages
 echo "ok rpmdb is sqlite"
 
-ostree --repo=${repo} show ${treeref} \
-  --print-metadata-key rpmostree.rpmdb.pkglist > pkglist.txt
+rpm-ostree db list --repo=${repo} ${treeref} > pkglist.txt
 assert_file_has_content pkglist.txt 'systemd'
-assert_file_has_content_literal pkglist.txt 'foobar'
+# this implicitly checks it didn't pick the modular version of foobar
+assert_file_has_content_literal pkglist.txt 'foobar-1.0-1.x86_64'
 assert_not_file_has_content pkglist.txt 'foobar-rec'
 echo "ok compose pkglist"
 
