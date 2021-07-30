@@ -809,6 +809,8 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
                                   gboolean         *out_changed,
                                   GError          **error)
 {
+  if (!packages)
+    return TRUE;
   gboolean changed = FALSE;
   gboolean local_changed = FALSE;
 
@@ -862,6 +864,8 @@ rpmostree_origin_add_modules (RpmOstreeOrigin  *origin,
                               gboolean        *out_changed,
                               GError         **error)
 {
+  if (!modules)
+    return TRUE;
   const char *key = enable_only ? "enable" : "install";
   GHashTable *target = enable_only ? origin->cached_modules_enable
                                    : origin->cached_modules_install;
@@ -883,6 +887,8 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin  *origin,
                                  gboolean        *out_changed,
                                  GError         **error)
 {
+  if (!modules)
+    return TRUE;
   const char *key = enable_only ? "enable" : "install";
   GHashTable *target = enable_only ? origin->cached_modules_enable
                                    : origin->cached_modules_install;

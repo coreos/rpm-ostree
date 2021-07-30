@@ -1168,27 +1168,18 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
   else
     {
-      if (uninstall_pkgs)
-        {
-          /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
-           * (if e.g. we're removing a duplicate provides). But the origin has changed so we need to
-           * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
-          if (!rpmostree_origin_remove_packages (origin, uninstall_pkgs,
-                                                 idempotent_layering, &changed, error))
-            return FALSE;
-        }
-      if (disable_modules)
-        {
-          if (!rpmostree_origin_remove_modules (origin, disable_modules,
-                                                TRUE, &changed, error))
-            return FALSE;
-        }
-      if (uninstall_modules)
-        {
-          if (!rpmostree_origin_remove_modules (origin, uninstall_modules,
-                                                FALSE, &changed, error))
-            return FALSE;
-        }
+      /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
+       * (if e.g. we're removing a duplicate provides). But the origin has changed so we need to
+       * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
+      if (!rpmostree_origin_remove_packages (origin, uninstall_pkgs,
+                                             idempotent_layering, &changed, error))
+        return FALSE;
+      if (!rpmostree_origin_remove_modules (origin, disable_modules,
+                                            TRUE, &changed, error))
+        return FALSE;
+      if (!rpmostree_origin_remove_modules (origin, uninstall_modules,
+                                            FALSE, &changed, error))
+        return FALSE;
     }
 
   /* lazily loaded cache that's used in a few conditional blocks */
@@ -1231,17 +1222,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
     }
 
-  if (enable_modules)
-    {
-      if (!rpmostree_origin_add_modules (origin, enable_modules, TRUE, &changed, error))
-        return FALSE;
-    }
-
-  if (install_modules)
-    {
-      if (!rpmostree_origin_add_modules (origin, install_modules, FALSE, &changed, error))
-        return FALSE;
-    }
+  if (!rpmostree_origin_add_modules (origin, enable_modules, TRUE, &changed, error))
+    return FALSE;
+  if (!rpmostree_origin_add_modules (origin, install_modules, FALSE, &changed, error))
+    return FALSE;
 
   if (self->install_local_pkgs != NULL)
     {
