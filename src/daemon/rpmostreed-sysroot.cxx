@@ -274,7 +274,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
       const gchar *os = ostree_deployment_get_osname (booted);
       g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, os, NULL);
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
-      auto bootedid_v = CXX_TRY_VAL(rust::String, deployment_generate_id(*booted), error);
+      auto bootedid_v = CXX_TRY_VAL(deployment_generate_id(*booted), error);
       booted_id = g_strdup(bootedid_v.c_str());
     }
   else

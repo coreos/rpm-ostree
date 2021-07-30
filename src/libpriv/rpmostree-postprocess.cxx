@@ -820,7 +820,7 @@ rpmostree_compose_commit (int            rootfs_fd,
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
-  auto n_bytes = CXX_TRY_VAL(uint64_t, directory_size(rootfs_fd, *cancellable), error);
+  auto n_bytes = CXX_TRY_VAL(directory_size(rootfs_fd, *cancellable), error);
 
   tdata.n_bytes = n_bytes;
   tdata.repo = repo;
