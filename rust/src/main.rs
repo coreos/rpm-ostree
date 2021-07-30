@@ -33,7 +33,7 @@ async fn inner_async_main(args: &[&str]) -> Result<i32> {
     // main().
     match args.get(1).copied() {
         // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
-        Some("countme") => rpmostree_rust::countme::entrypoint(args).map(|_| 0),
+        Some("countme") => rpmostree_rust::countme::entrypoint(args),
         Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
         Some("ex-container") => rpmostree_rust::container::entrypoint(args).await,
         // The `unlock` is a hidden alias for "ostree CLI compatibility"

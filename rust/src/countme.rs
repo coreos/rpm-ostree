@@ -35,7 +35,7 @@ fn send_countme(url: &str, ua: &str) -> Result<()> {
 }
 
 /// Main entrypoint for countme
-pub fn entrypoint(_args: &[&str]) -> Result<()> {
+pub fn entrypoint(_args: &[&str]) -> Result<i32> {
     // Skip if we are not run on an ostree booted system
     if !path::Path::new("/run/ostree-booted").exists() {
         bail!("Not running on an ostree based system");
@@ -53,7 +53,7 @@ pub fn entrypoint(_args: &[&str]) -> Result<()> {
         .collect();
     if repos.is_empty() {
         println!("No enabled repositories with countme=1");
-        return Ok(());
+        return Ok(0);
     }
 
     // Load timestamp cookie
@@ -62,7 +62,7 @@ pub fn entrypoint(_args: &[&str]) -> Result<()> {
     // Skip this run if we are not in a new counting window
     if cookie.existing_window() {
         println!("Skipping: Not in a new counting window");
-        return Ok(());
+        return Ok(0);
     }
 
     // Read /etc/os-release
@@ -102,15 +102,18 @@ pub fn entrypoint(_args: &[&str]) -> Result<()> {
         }
     });
 
-    // Update cookie timestamp only if at least one request is successful
-    if successful == 0 {
-        bail!("No request successful");
-    }
     println!("Successful requests: {}/{}", successful, repos.len());
+    if successful == 0 {
+        // Return a specific value to let systemd know we should be restarted
+        // later. See the rpm-ostree-countme.service unit.
+        eprintln!("No request successful");
+        return Ok(42);
+    }
+    // Update cookie timestamp only if at least one request is successful
     if let Err(e) = cookie.persist() {
         // Do not exit with a non zero code here as we have still made at least
         // one successful request thus we have been counted.
         eprintln!("Failed to persist cookie: {}", e);
     }
-    Ok(())
+    Ok(0)
 }
