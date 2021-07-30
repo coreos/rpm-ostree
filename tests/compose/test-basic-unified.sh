@@ -11,6 +11,13 @@ treefile_append "repos" '["test-repo"]'
 build_rpm foobar recommends foobar-rec
 build_rpm foobar-rec
 
+# check that even a modular version of a pinned pkg is ignored, even if it's
+# higher version
+build_rpm foobar version 99.9
+build_module foo \
+  stream foo \
+  rpm foobar-0:99.9-1.x86_64
+
 uinfo_cmd add TEST-SEC-LOW security low
 build_rpm vuln-pkg uinfo TEST-SEC-LOW
 uinfo_cmd add-ref TEST-SEC-LOW 1 http://example.com/vuln1 "CVE-12-34 vuln1"
