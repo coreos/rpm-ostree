@@ -97,6 +97,11 @@ pub(crate) fn prepare_filesystem_script_prep(rootfs: i32) -> CxxResult<Box<Files
     Ok(FilesystemScriptPrep::new(rootfs)?)
 }
 
+/// Using the Rust log infrastructure, print the treefile.
+pub(crate) fn log_treefile(tf: &crate::treefile::Treefile) {
+    tracing::debug!("Using treefile:\n{}", tf.get_json_string());
+}
+
 impl FilesystemScriptPrep {
     /// Filesystem paths that we rename out of the way if present
     const OPTIONAL_PATHS: &'static [&'static str] = &[SSS_CACHE_PATH];

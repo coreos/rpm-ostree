@@ -138,7 +138,7 @@ find_ensure_one_subdirectory (int            rootfs_dfd,
       if (ret_subdir)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Multiple subdirectories found in: %s", subpath);
+                       "Multiple subdirectories found in: %s: %s %s", subpath, glnx_basename (ret_subdir), dent->d_name);
           return FALSE;
         }
       ret_subdir = g_strconcat (subpath, "/", dent->d_name, NULL);

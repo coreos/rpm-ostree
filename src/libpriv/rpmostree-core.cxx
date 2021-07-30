@@ -473,6 +473,7 @@ enable_repos (RpmOstreeContext  *context,
 void 
 rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile &treefile)
 {
+  rpmostreecxx::log_treefile(treefile);
   self->treefile_rs = &treefile;
 }
 
