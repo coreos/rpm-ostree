@@ -190,7 +190,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
       GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
       GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
         {
-          auto cachebranch = CXX_TRY_VAL(rust::String, nevra_to_cache_branch (std::string(nevra)), error);
+          auto cachebranch = CXX_TRY_VAL(nevra_to_cache_branch (std::string(nevra)), error);
           g_hash_table_add (referenced_pkgs, g_strdup (cachebranch.c_str()));
         }
     }
@@ -413,7 +413,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
       OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
       if (booted)
         {
-          auto is_live = CXX_TRY_VAL(bool, has_live_apply_state(*sysroot, *booted), error);
+          auto is_live = CXX_TRY_VAL(has_live_apply_state(*sysroot, *booted), error);
           if (is_live)
             flags = static_cast<OstreeSysrootSimpleWriteDeploymentFlags>(flags | OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK);
         }

@@ -107,7 +107,7 @@ rpmostree_builtin_shlib_backend (int             argc,
       const char *src = argv[2];
       g_autoptr(DnfContext) ctx = dnf_context_new ();
       auto varsubsts = rpmostree_dnfcontext_get_varsubsts (ctx);
-      auto rets = CXX_TRY_VAL(rust::String, varsubstitute (src, *varsubsts), error);
+      auto rets = CXX_TRY_VAL(varsubstitute (src, *varsubsts), error);
       ret = g_variant_new_string (rets.c_str());
     }
    else if (g_str_equal (arg, "packagelist-from-commit"))
@@ -124,6 +124,6 @@ rpmostree_builtin_shlib_backend (int             argc,
     return glnx_throw (error, "unknown shlib-backend %s", arg);
 
   rust::Slice<const uint8_t> dataslice{(guint8*)g_variant_get_data (ret), g_variant_get_size (ret)};
-  glnx_fd_close int ret_memfd = CXX_TRY_VAL (int, sealed_memfd("rpm-ostree-shlib-backend", dataslice), error);
+  glnx_fd_close int ret_memfd = CXX_TRY_VAL (sealed_memfd("rpm-ostree-shlib-backend", dataslice), error);
   return send_memfd_result (ipc_sock, glnx_steal_fd (&ret_memfd), error);
 }

@@ -1035,7 +1035,7 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
   for (const char *const* pkgiter = pkgs; pkgiter && *pkgiter; pkgiter++)
     {
       auto pkg = *pkgiter;
-      auto fds = CXX_TRY_VAL(rust::Vec<int>, client_handle_fd_argument(pkg, basearch), error);
+      auto fds = CXX_TRY_VAL(client_handle_fd_argument(pkg, basearch), error);
       if (fds.size() > 0)
         {
           for (const auto & fd: fds)

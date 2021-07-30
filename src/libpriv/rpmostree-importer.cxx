@@ -454,7 +454,7 @@ build_metadata_variant (RpmOstreeImporter *self,
 
       /* include a checksum of the RPM as a whole; the actual algo used depends
        * on how the repodata was created, so just keep a repr */
-      auto chksum_repr = CXX_TRY_VAL(rust::String, get_repodata_chksum_repr(*self->pkg), error);
+      auto chksum_repr = CXX_TRY_VAL(get_repodata_chksum_repr(*self->pkg), error);
       g_variant_builder_add (&metadata_builder, "{sv}",
                              "rpmostree.repodata_checksum",
                              g_variant_new_string (chksum_repr.c_str()));

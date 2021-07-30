@@ -1810,7 +1810,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
                                                    booted_id, ot_repo, TRUE, &booted_variant, error))
         return FALSE;
       g_variant_ref_sink (booted_variant);
-      auto bootedid_v = CXX_TRY_VAL(rust::String, deployment_generate_id(*booted_deployment), error);
+      auto bootedid_v = CXX_TRY_VAL(deployment_generate_id(*booted_deployment), error);
       booted_id = g_strdup(bootedid_v.c_str());
     }
   else

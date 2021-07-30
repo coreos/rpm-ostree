@@ -1395,7 +1395,7 @@ rpmostree_ex_builtin_history (int             argc,
   /* initiate a history context, then iterate over each (boot time, deploy time), then print */
 
   /* XXX: enhance with option for going in reverse (oldest first) */
-  auto history_ctx = CXX_TRY_VAL(rust::Box<rpmostreecxx::HistoryCtx>, history_ctx_new (), error);
+  auto history_ctx = CXX_TRY_VAL(history_ctx_new (), error);
 
   /* XXX: use pager here */
 

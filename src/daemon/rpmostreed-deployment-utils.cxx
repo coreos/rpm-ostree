@@ -44,7 +44,7 @@ rpmostreed_deployment_get_for_id (OstreeSysroot     *sysroot,
   for (guint i = 0; i < deployments->len; i++)
     {
       auto deployment = static_cast<OstreeDeployment*>(deployments->pdata[i]);
-      auto id = CXX_TRY_VAL(rust::String, deployment_generate_id(*deployment), error);
+      auto id = CXX_TRY_VAL(deployment_generate_id(*deployment), error);
       if (g_strcmp0 (deploy_id, id.c_str()) == 0)
         {
           *out_deployment = (OstreeDeployment*)g_object_ref (deployment);
@@ -920,7 +920,7 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
 
   if (staged_deployment)
     {
-      auto id = CXX_TRY_VAL(rust::String, deployment_generate_id (*staged_deployment), error);
+      auto id = CXX_TRY_VAL(deployment_generate_id (*staged_deployment), error);
       g_variant_dict_insert (&dict, "deployment", "s", id.c_str());
     }
 

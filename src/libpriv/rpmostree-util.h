@@ -87,14 +87,14 @@ throw_gerror (GError *&error)
 // Also the constructor might be explicitly deleted (e.g. rust::Box). The C++ compiler
 // doesn't understand that the final value will always be initialized since we return in the
 // catch block.
-#define CXX_TRY_VAL(t, cxxfn, err)             \
-  ({ std::optional<t> v;                       \
-     try {                                     \
-       v.emplace(rpmostreecxx::cxxfn);         \
-     } catch (std::exception &e) {             \
-       return glnx_throw(err, "%s", e.what()); \
-     }                                         \
-     std::move(v.value());                     \
+#define CXX_TRY_VAL(cxxfn, err)                      \
+  ({ std::optional<decltype(rpmostreecxx::cxxfn)> v; \
+     try {                                           \
+       v.emplace(rpmostreecxx::cxxfn);               \
+     } catch (std::exception &e) {                   \
+       return glnx_throw(err, "%s", e.what());       \
+     }                                               \
+     std::move(v.value());                           \
   })
 
 // Duplicate a non-empty Rust Str to a NUL-terminated C string.
