@@ -608,7 +608,6 @@ typedef struct {
   char   *refspec; /* NULL for non-rebases */
   const char   *revision; /* NULL for upgrade; owned by @options */
   GUnixFDList *fd_list;
-  GUnixFDList *install_local_pkgs;
   char  **override_replace_pkgs; /* strv but strings owned by modifiers */
   GUnixFDList *override_replace_local_pkgs;
   char  **override_remove_pkgs; /* strv but strings owned by modifiers */
@@ -635,7 +634,6 @@ deploy_transaction_finalize (GObject *object)
   g_clear_pointer (&self->modifiers, g_variant_dict_unref);
   g_free (self->refspec);
   g_clear_pointer (&self->fd_list, g_object_unref);
-  g_clear_pointer (&self->install_local_pkgs, g_object_unref);
   g_free (self->override_replace_pkgs);
   g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
   g_free (self->override_remove_pkgs);
@@ -945,6 +943,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (expected_fdn != actual_fdn)
     return glnx_throw (error, "Expected %u fds but received %u", expected_fdn, actual_fdn);
 
+  g_autoptr(GUnixFDList) install_local_pkgs = NULL;
   /* split into two fd lists to make it easier for deploy_transaction_execute */
   if (self->fd_list)
     {
@@ -955,7 +954,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         {
           g_autofree gint *new_fds =
             get_fd_array_from_sparse (fds, nfds, install_local_pkgs_idxs);
-          self->install_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+          install_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
         }
 
       if (override_replace_local_pkgs_idxs)
@@ -1043,7 +1042,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                      no_overrides);
       if (!is_override)
         {
-          if (install_pkgs || self->install_local_pkgs || install_modules)
+          if (install_pkgs || install_local_pkgs || install_modules)
             is_install = TRUE;
           else
             is_uninstall = TRUE;
@@ -1103,9 +1102,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (install_pkgs)
         g_string_append_printf (txn_title, "; install: %u",
                                 g_strv_length (install_pkgs));
-      if (self->install_local_pkgs)
+      if (install_local_pkgs)
         g_string_append_printf (txn_title, "; localinstall: %u",
-                                g_unix_fd_list_get_length (self->install_local_pkgs));
+                                g_unix_fd_list_get_length (install_local_pkgs));
       if (enable_modules)
         g_string_append_printf (txn_title, "; module enable: %u",
                                 g_strv_length (enable_modules));
@@ -1334,10 +1333,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (!rpmostree_origin_add_modules (origin, install_modules, FALSE, &changed, error))
     return FALSE;
 
-  if (self->install_local_pkgs != NULL)
+  if (install_local_pkgs != NULL)
     {
       g_autoptr(GPtrArray) pkgs = NULL;
-      if (!import_many_local_rpms (repo, self->install_local_pkgs, &pkgs,
+      if (!import_many_local_rpms (repo, install_local_pkgs, &pkgs,
                                    cancellable, error))
         return FALSE;
 
