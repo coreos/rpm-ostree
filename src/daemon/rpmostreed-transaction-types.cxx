@@ -53,6 +53,11 @@ static inline char **
 vardict_lookup_strv_canonical (GVariantDict  *dict,
                                const char    *key);
 
+static gint*
+get_fd_array_from_sparse (gint     *fds,
+                          gint      nfds,
+                          GVariant *idxs);
+
 static gboolean
 change_origin_refspec (GVariantDict    *options,
                        OstreeSysroot *sysroot,
@@ -602,6 +607,7 @@ typedef struct {
   GVariantDict *modifiers;
   char   *refspec; /* NULL for non-rebases */
   const char   *revision; /* NULL for upgrade; owned by @options */
+  GUnixFDList *fd_list;
   GUnixFDList *install_local_pkgs;
   char  **override_replace_pkgs; /* strv but strings owned by modifiers */
   GUnixFDList *override_replace_local_pkgs;
@@ -629,6 +635,7 @@ deploy_transaction_finalize (GObject *object)
   g_clear_pointer (&self->options, g_variant_dict_unref);
   g_clear_pointer (&self->modifiers, g_variant_dict_unref);
   g_free (self->refspec);
+  g_clear_pointer (&self->fd_list, g_object_unref);
   g_clear_pointer (&self->install_local_pkgs, g_object_unref);
   g_free (self->override_replace_pkgs);
   g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
@@ -890,6 +897,107 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 {
   DeployTransaction *self = (DeployTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
+  auto refspec = (const char *)vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
+  if (refspec)
+    self->refspec = g_strdup (refspec);
+
+  const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
+
+  self->revision = (char*)vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
+  self->override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
+  self->override_remove_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-remove-packages");
+  self->override_reset_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-reset-packages");
+
+  /* default to allowing downgrades for rebases & deploys (without --disallow-downgrade) */
+  if (vardict_lookup_bool (self->options, "allow-downgrade", refspec_or_revision))
+    self->flags = static_cast<RpmOstreeTransactionDeployFlags>(self-> flags | RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE);
+
+  g_autoptr(GVariant) install_local_pkgs_idxs =
+    g_variant_dict_lookup_value (self->modifiers, "install-local-packages",
+                                 G_VARIANT_TYPE("ah"));
+  g_autoptr(GVariant) override_replace_local_pkgs_idxs =
+    g_variant_dict_lookup_value (self->modifiers, "override-replace-local-packages",
+                                 G_VARIANT_TYPE("ah"));
+  int local_repo_remote_idx = -1;
+  /* See related blurb in get_modifiers_variant() */
+  g_variant_dict_lookup (self->modifiers, "ex-local-repo-remote", "h", &local_repo_remote_idx);
+
+  /* First in the fd list is local RPM fds, which are relevant in the
+   * `install foo.rpm` case and the `override replace foo.rpm` case. Let's make sure that
+   * the actual number of fds passed is what we expect.
+   *
+   * A more recent addition is the local-repo-remote fd.
+   *
+   * Here we validate the number of fds provided against the arguments.
+   */
+  guint expected_fdn = 0;
+  if (install_local_pkgs_idxs)
+    expected_fdn += g_variant_n_children (install_local_pkgs_idxs);
+  if (override_replace_local_pkgs_idxs)
+    expected_fdn += g_variant_n_children (override_replace_local_pkgs_idxs);
+  if (local_repo_remote_idx != -1)
+    expected_fdn += 1;
+
+  guint actual_fdn = 0;
+  if (self->fd_list)
+    actual_fdn = g_unix_fd_list_get_length (self->fd_list);
+
+  if (expected_fdn != actual_fdn)
+    return glnx_throw (error, "Expected %u fds but received %u", expected_fdn, actual_fdn);
+
+  /* split into two fd lists to make it easier for deploy_transaction_execute */
+  if (self->fd_list)
+    {
+      gint nfds = 0; /* the strange constructions below allow us to avoid dup()s */
+      g_autofree gint *fds = g_unix_fd_list_steal_fds (self->fd_list, &nfds);
+
+      if (install_local_pkgs_idxs)
+        {
+          g_autofree gint *new_fds =
+            get_fd_array_from_sparse (fds, nfds, install_local_pkgs_idxs);
+          self->install_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+        }
+
+      if (override_replace_local_pkgs_idxs)
+        {
+          g_autofree gint *new_fds =
+            get_fd_array_from_sparse (fds, nfds, override_replace_local_pkgs_idxs);
+          self->override_replace_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+        }
+
+      if (local_repo_remote_idx != -1)
+        {
+          g_assert_cmpint (local_repo_remote_idx, >=, 0);
+          g_assert_cmpint (local_repo_remote_idx, <, nfds);
+          self->local_repo_remote_dfd = fds[local_repo_remote_idx];
+        }
+    }
+
+  /* Also check for conflicting options -- this is after all a public API. */
+
+  if (!self->refspec && vardict_lookup_bool (self->options, "skip-purge", FALSE))
+    return glnx_throw (error, "Can't specify skip-purge if not setting a new refspec");
+  if (refspec_or_revision &&
+      vardict_lookup_bool (self->options, "no-pull-base", FALSE))
+    return glnx_throw (error, "Can't specify no-pull-base if setting a new refspec or revision");
+  if (vardict_lookup_bool (self->options, "cache-only", FALSE) &&
+      vardict_lookup_bool (self->options, "download-only", FALSE))
+    return glnx_throw (error, "Can't specify cache-only and download-only");
+  if (vardict_lookup_bool (self->options, "dry-run", FALSE) &&
+      vardict_lookup_bool (self->options, "download-only", FALSE))
+    return glnx_throw (error, "Can't specify dry-run and download-only");
+  if (self->override_replace_pkgs)
+    return glnx_throw (error, "Non-local replacement overrides not implemented yet");
+
+  if (vardict_lookup_bool (self->options, "no-overrides", FALSE) &&
+      (self->override_remove_pkgs || self->override_reset_pkgs ||
+       self->override_replace_pkgs || override_replace_local_pkgs_idxs))
+    return glnx_throw (error, "Can't specify no-overrides if setting override modifiers");
+  if (!self->refspec && self->local_repo_remote_dfd != -1)
+    return glnx_throw (error, "Missing ref for transient local rebases");
+  if (self->revision && self->local_repo_remote_dfd != -1)
+    return glnx_throw (error, "Revision overrides for transient local rebases not implemented yet");
 
   const gboolean dry_run =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN) > 0);
@@ -1759,113 +1867,9 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   self->osname = g_strdup (osname);
   self->options = g_variant_dict_ref (options_dict);
   self->modifiers = g_variant_dict_new (modifiers);
+  self->fd_list = fd_list ? (GUnixFDList*)g_object_ref (fd_list) : NULL;
 
   self->flags = deploy_flags_from_options (self->options, default_flags);
-
-  auto refspec = (const char *)vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
-  if (refspec)
-    self->refspec = g_strdup (refspec);
-
-  const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
-
-  self->revision = (char*)vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
-  self->override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
-  self->override_remove_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-remove-packages");
-  self->override_reset_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-reset-packages");
-
-  /* default to allowing downgrades for rebases & deploys (without --disallow-downgrade) */
-  if (vardict_lookup_bool (self->options, "allow-downgrade", refspec_or_revision))
-    self->flags = static_cast<RpmOstreeTransactionDeployFlags>(self-> flags | RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE);
-
-  g_autoptr(GVariant) install_local_pkgs_idxs =
-    g_variant_dict_lookup_value (self->modifiers, "install-local-packages",
-                                 G_VARIANT_TYPE("ah"));
-  g_autoptr(GVariant) override_replace_local_pkgs_idxs =
-    g_variant_dict_lookup_value (self->modifiers, "override-replace-local-packages",
-                                 G_VARIANT_TYPE("ah"));
-  int local_repo_remote_idx = -1;
-  /* See related blurb in get_modifiers_variant() */
-  g_variant_dict_lookup (self->modifiers, "ex-local-repo-remote", "h", &local_repo_remote_idx);
-
-  /* First in the fd list is local RPM fds, which are relevant in the
-   * `install foo.rpm` case and the `override replace foo.rpm` case. Let's make sure that
-   * the actual number of fds passed is what we expect.
-   *
-   * A more recent addition is the local-repo-remote fd.
-   *
-   * Here we validate the number of fds provided against the arguments.
-   */
-  guint expected_fdn = 0;
-  if (install_local_pkgs_idxs)
-    expected_fdn += g_variant_n_children (install_local_pkgs_idxs);
-  if (override_replace_local_pkgs_idxs)
-    expected_fdn += g_variant_n_children (override_replace_local_pkgs_idxs);
-  if (local_repo_remote_idx != -1)
-    expected_fdn += 1;
-
-  guint actual_fdn = 0;
-  if (fd_list)
-    actual_fdn = g_unix_fd_list_get_length (fd_list);
-
-  if (expected_fdn != actual_fdn)
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Expected %u fds but received %u",
-                            expected_fdn, actual_fdn);
-
-  /* split into two fd lists to make it easier for deploy_transaction_execute */
-  if (fd_list)
-    {
-      gint nfds = 0; /* the strange constructions below allow us to avoid dup()s */
-      g_autofree gint *fds = g_unix_fd_list_steal_fds (fd_list, &nfds);
-
-      if (install_local_pkgs_idxs)
-        {
-          g_autofree gint *new_fds =
-            get_fd_array_from_sparse (fds, nfds, install_local_pkgs_idxs);
-          self->install_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
-        }
-
-      if (override_replace_local_pkgs_idxs)
-        {
-          g_autofree gint *new_fds =
-            get_fd_array_from_sparse (fds, nfds, override_replace_local_pkgs_idxs);
-          self->override_replace_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
-        }
-
-      if (local_repo_remote_idx != -1)
-        {
-          g_assert_cmpint (local_repo_remote_idx, >=, 0);
-          g_assert_cmpint (local_repo_remote_idx, <, nfds);
-          self->local_repo_remote_dfd = fds[local_repo_remote_idx];
-        }
-    }
-
-  /* Also check for conflicting options -- this is after all a public API. */
-
-  if (!self->refspec && vardict_lookup_bool (self->options, "skip-purge", FALSE))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify skip-purge if not setting a "
-                                   "new refspec");
-  if (refspec_or_revision &&
-      vardict_lookup_bool (self->options, "no-pull-base", FALSE))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify no-pull-base if setting a "
-                                   "new refspec or revision");
-  if (vardict_lookup_bool (self->options, "cache-only", FALSE) &&
-      vardict_lookup_bool (self->options, "download-only", FALSE))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify cache-only and download-only");
-  if (vardict_lookup_bool (self->options, "dry-run", FALSE) &&
-      vardict_lookup_bool (self->options, "download-only", FALSE))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify dry-run and download-only");
-  if (self->override_replace_pkgs)
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
-
-  if (vardict_lookup_bool (self->options, "no-overrides", FALSE) &&
-      (self->override_remove_pkgs || self->override_reset_pkgs ||
-       self->override_replace_pkgs || override_replace_local_pkgs_idxs))
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Can't specify no-overrides if setting "
-                                   "override modifiers");
-  if (!self->refspec && self->local_repo_remote_dfd != -1)
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Missing ref for transient local rebases");
-  if (self->revision && self->local_repo_remote_dfd != -1)
-    return (RpmostreedTransaction*)glnx_null_throw (error, "Revision overrides for transient local rebases not implemented yet");
 
   return (RpmostreedTransaction *) util::move_nullify (self);
 }
