@@ -608,10 +608,6 @@ typedef struct {
   char   *refspec; /* NULL for non-rebases */
   const char   *revision; /* NULL for upgrade; owned by @options */
   GUnixFDList *fd_list;
-  char  **override_replace_pkgs; /* strv but strings owned by modifiers */
-  GUnixFDList *override_replace_local_pkgs;
-  char  **override_remove_pkgs; /* strv but strings owned by modifiers */
-  char  **override_reset_pkgs; /* strv but strings owned by modifiers */
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -634,10 +630,6 @@ deploy_transaction_finalize (GObject *object)
   g_clear_pointer (&self->modifiers, g_variant_dict_unref);
   g_free (self->refspec);
   g_clear_pointer (&self->fd_list, g_object_unref);
-  g_free (self->override_replace_pkgs);
-  g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
-  g_free (self->override_remove_pkgs);
-  g_free (self->override_reset_pkgs);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
@@ -901,9 +893,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
 
   self->revision = (char*)vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
-  self->override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
-  self->override_remove_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-remove-packages");
-  self->override_reset_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-reset-packages");
+  g_autofree char **override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
+  g_autofree char **override_remove_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-remove-packages");
+  g_autofree char **override_reset_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-reset-packages");
 
   /* default to allowing downgrades for rebases & deploys (without --disallow-downgrade) */
   if (vardict_lookup_bool (self->options, "allow-downgrade", refspec_or_revision))
@@ -944,6 +936,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     return glnx_throw (error, "Expected %u fds but received %u", expected_fdn, actual_fdn);
 
   g_autoptr(GUnixFDList) install_local_pkgs = NULL;
+  g_autoptr(GUnixFDList) override_replace_local_pkgs = NULL;
   /* split into two fd lists to make it easier for deploy_transaction_execute */
   if (self->fd_list)
     {
@@ -961,7 +954,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         {
           g_autofree gint *new_fds =
             get_fd_array_from_sparse (fds, nfds, override_replace_local_pkgs_idxs);
-          self->override_replace_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+          override_replace_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
         }
 
       if (local_repo_remote_idx != -1)
@@ -985,12 +978,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (vardict_lookup_bool (self->options, "dry-run", FALSE) &&
       vardict_lookup_bool (self->options, "download-only", FALSE))
     return glnx_throw (error, "Can't specify dry-run and download-only");
-  if (self->override_replace_pkgs)
+  if (override_replace_pkgs)
     return glnx_throw (error, "Non-local replacement overrides not implemented yet");
 
   if (vardict_lookup_bool (self->options, "no-overrides", FALSE) &&
-      (self->override_remove_pkgs || self->override_reset_pkgs ||
-       self->override_replace_pkgs || override_replace_local_pkgs_idxs))
+      (override_remove_pkgs || override_reset_pkgs ||
+       override_replace_pkgs || override_replace_local_pkgs_idxs))
     return glnx_throw (error, "Can't specify no-overrides if setting override modifiers");
   if (!self->refspec && local_repo_remote_dfd != -1)
     return glnx_throw (error, "Missing ref for transient local rebases");
@@ -1035,10 +1028,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       /* this is a heuristic; by the end, once the proper switches are added, the two
        * commands can look indistinguishable at the D-Bus level */
-      is_override = (self->override_reset_pkgs ||
-                     self->override_remove_pkgs ||
-                     self->override_replace_pkgs ||
-                     self->override_replace_local_pkgs ||
+      is_override = (override_reset_pkgs ||
+                     override_remove_pkgs ||
+                     override_replace_pkgs ||
+                     override_replace_local_pkgs ||
                      no_overrides);
       if (!is_override)
         {
@@ -1155,10 +1148,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (no_overrides)
     {
-      g_assert (self->override_replace_pkgs == NULL);
-      g_assert (self->override_replace_local_pkgs == NULL);
-      g_assert (self->override_remove_pkgs == NULL);
-      g_assert (self->override_reset_pkgs == NULL);
+      g_assert (override_replace_pkgs == NULL);
+      g_assert (override_replace_local_pkgs == NULL);
+      g_assert (override_remove_pkgs == NULL);
+      g_assert (override_reset_pkgs == NULL);
     }
 
   if (self->refspec)
@@ -1355,7 +1348,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!rpmostree_origin_remove_all_overrides (origin, &changed, error))
         return FALSE;
     }
-  else if (self->override_reset_pkgs || self->override_replace_local_pkgs)
+  else if (override_reset_pkgs || override_replace_local_pkgs)
     {
       /* The origin stores removal overrides as pkgnames and replacement overrides as nevra.
        * To be nice, we support both name & nevra and do the translation here by just
@@ -1409,7 +1402,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_ptr_array_add (names_to_free, g_steal_pointer (&name));
         }
 
-      for (char **it = self->override_reset_pkgs; it && *it; it++)
+      for (char **it = override_reset_pkgs; it && *it; it++)
         {
           const char *name_or_nevra = *it;
           auto name = static_cast<const char *>(g_hash_table_lookup (nevra_to_name, name_or_nevra));
@@ -1444,10 +1437,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);
         }
 
-      if (self->override_replace_local_pkgs)
+      if (override_replace_local_pkgs)
         {
           g_autoptr(GPtrArray) pkgs = NULL;
-          if (!import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
+        if (!import_many_local_rpms (repo, override_replace_local_pkgs, &pkgs,
                                        cancellable, error))
             return FALSE;
 
@@ -1521,7 +1514,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
    * anyway in the common case even if there's an error with the overrides,
    * users will fix it and try again, so the second pull will be a no-op */
 
-  if (self->override_remove_pkgs)
+  if (override_remove_pkgs)
     {
       if (!base_rsack)
         {
@@ -1533,7 +1526,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       /* NB: the strings are owned by the sack pool */
       g_autoptr(GPtrArray) pkgnames = g_ptr_array_new ();
-      for (char **it = self->override_remove_pkgs; it && *it; it++)
+      for (char **it = override_remove_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
           g_autoptr(GPtrArray) pkgs =
