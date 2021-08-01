@@ -613,7 +613,6 @@ typedef struct {
   GUnixFDList *override_replace_local_pkgs;
   char  **override_remove_pkgs; /* strv but strings owned by modifiers */
   char  **override_reset_pkgs; /* strv but strings owned by modifiers */
-  int local_repo_remote_dfd;
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -641,7 +640,6 @@ deploy_transaction_finalize (GObject *object)
   g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
   g_free (self->override_remove_pkgs);
   g_free (self->override_reset_pkgs);
-  glnx_close_fd (&self->local_repo_remote_dfd);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
@@ -919,6 +917,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(GVariant) override_replace_local_pkgs_idxs =
     g_variant_dict_lookup_value (self->modifiers, "override-replace-local-packages",
                                  G_VARIANT_TYPE("ah"));
+  glnx_autofd int local_repo_remote_dfd = -1;
   int local_repo_remote_idx = -1;
   /* See related blurb in get_modifiers_variant() */
   g_variant_dict_lookup (self->modifiers, "ex-local-repo-remote", "h", &local_repo_remote_idx);
@@ -970,7 +969,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         {
           g_assert_cmpint (local_repo_remote_idx, >=, 0);
           g_assert_cmpint (local_repo_remote_idx, <, nfds);
-          self->local_repo_remote_dfd = fds[local_repo_remote_idx];
+          local_repo_remote_dfd = fds[local_repo_remote_idx];
         }
     }
 
@@ -994,9 +993,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       (self->override_remove_pkgs || self->override_reset_pkgs ||
        self->override_replace_pkgs || override_replace_local_pkgs_idxs))
     return glnx_throw (error, "Can't specify no-overrides if setting override modifiers");
-  if (!self->refspec && self->local_repo_remote_dfd != -1)
+  if (!self->refspec && local_repo_remote_dfd != -1)
     return glnx_throw (error, "Missing ref for transient local rebases");
-  if (self->revision && self->local_repo_remote_dfd != -1)
+  if (self->revision && local_repo_remote_dfd != -1)
     return glnx_throw (error, "Revision overrides for transient local rebases not implemented yet");
 
   const gboolean dry_run =
@@ -1187,7 +1186,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* Handle local repo remotes immediately; the idea is that the remote is "transient"
    * (otherwise, one should set up a proper file:/// remote), so we only support rebasing to
    * a checksum. We don't want to import a ref. */
-  if (self->local_repo_remote_dfd != -1)
+  if (local_repo_remote_dfd != -1)
     {
       /* self->refspec is the rev in the other local repo we'll rebase to */
       g_assert (self->refspec);
@@ -1197,7 +1196,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
 
       g_autoptr(OstreeRepo) local_repo_remote =
-        ostree_repo_open_at (self->local_repo_remote_dfd, ".", cancellable, error);
+        ostree_repo_open_at (local_repo_remote_dfd, ".", cancellable, error);
       if (!local_repo_remote)
         return glnx_prefix_error (error, "Failed to open local repo");
       g_autofree char *rev = NULL;
@@ -1210,7 +1209,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       /* pull-local into the system repo */
       const char *refs_to_fetch[] = { rev, NULL };
       g_autofree char *local_repo_uri =
-        g_strdup_printf ("file:///proc/self/fd/%d", self->local_repo_remote_dfd);
+        g_strdup_printf ("file:///proc/self/fd/%d", local_repo_remote_dfd);
       if (!ostree_repo_pull (repo, local_repo_uri, (char**)refs_to_fetch,
                              OSTREE_REPO_PULL_FLAGS_NONE, progress, cancellable, error))
         return glnx_prefix_error (error, "Pulling commit %s from local repo", rev);
@@ -1220,7 +1219,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       /* as far as the rest of the code is concerned, we're rebasing to :SHA256 now */
       g_clear_pointer (&self->refspec, g_free);
       self->refspec = g_strdup_printf (":%s", rev);
-      glnx_close_fd (&self->local_repo_remote_dfd);
+      glnx_close_fd (&local_repo_remote_dfd);
     }
 
   g_autofree gchar *new_refspec = NULL;
@@ -1724,7 +1723,6 @@ deploy_transaction_class_init (DeployTransactionClass *clazz)
 static void
 deploy_transaction_init (DeployTransaction *self)
 {
-  self->local_repo_remote_dfd = -1;
 }
 
 static char **
