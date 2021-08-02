@@ -111,9 +111,9 @@ dependencies = [
 
 [[package]]
 name = "camino"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4648c6d00a709aa069a236adcaae4f605a6241c72bf5bee79331a4b625921a9"
+checksum = "52d74260d9bf6944e2208aa46841b4b8f0d7ffc0849a06837b2f510337f86b2b"
 
 [[package]]
 name = "cc"
