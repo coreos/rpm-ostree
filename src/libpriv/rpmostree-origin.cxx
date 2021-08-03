@@ -725,6 +725,8 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                gboolean          *out_changed,
                                GError           **error)
 {
+  if (!packages)
+    return TRUE;
   gboolean changed = FALSE;
 
   for (char **it = packages; it && *it; it++)
