@@ -1898,14 +1898,8 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   /* All modules are opt-in, so start off with everything disabled. We'll
    * enable/install user-provided ones down below. */
-  {
-    // XXX: Replace with dnf_context_module_disable_all() once we have it:
-    // https://github.com/rpm-software-management/libdnf/pull/1303
-    // Until then, we have to ignore errors, because '*' won't expand to
-    // anything if no modules exist in the rpm-md.
-    const char *all_modules[] = {"*", NULL};
-    dnf_context_module_disable (dnfctx, all_modules, NULL);
-  }
+  if (!dnf_context_module_disable_all (dnfctx, error))
+    return FALSE;
 
   /* Now repo-packages; only supported during server composes for now. */
   g_autoptr(DnfPackageSet) pinned_pkgs = NULL;
