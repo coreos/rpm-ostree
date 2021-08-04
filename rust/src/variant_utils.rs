@@ -10,7 +10,7 @@ pub(crate) fn byteswap_be_to_native(v: &glib::Variant) -> Cow<glib::Variant> {
         Cow::Borrowed(v)
     } else {
         unsafe {
-            let r = glib_sys::g_variant_byteswap(v.to_glib_none().0);
+            let r = glib::ffi::g_variant_byteswap(v.to_glib_none().0);
             Cow::Owned(from_glib_full(r))
         }
     }

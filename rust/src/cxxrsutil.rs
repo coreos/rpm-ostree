@@ -102,7 +102,7 @@ cxxrs_bind!(
 );
 cxxrs_bind!(G, glib, glib::gobject_ffi, [Object]);
 cxxrs_bind!(G, gio, gio::ffi, [Cancellable, DBusConnection, FileInfo]);
-cxxrs_bind!(G, glib, glib_sys, [KeyFile, Variant, VariantDict]);
+cxxrs_bind!(G, glib, glib::ffi, [KeyFile, Variant, VariantDict]);
 
 // An error type helper; separate from the GObject bridging
 mod err {
