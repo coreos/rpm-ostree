@@ -1853,7 +1853,6 @@ dependencies = [
  "futures",
  "gio",
  "glib 0.14.2",
- "glib-sys 0.14.0",
  "indicatif",
  "indoc",
  "lazy_static",

@@ -64,7 +64,7 @@ pub(crate) fn ffi_view_openat_dir_option(fd: libc::c_int) -> Option<openat::Dir>
 
 /// Convert C results (int + GError convention) to anyhow.
 #[allow(dead_code)]
-pub(crate) fn int_gerror_to_result(res: i32, gerror: *mut glib_sys::GError) -> anyhow::Result<()> {
+pub(crate) fn int_gerror_to_result(res: i32, gerror: *mut glib::ffi::GError) -> anyhow::Result<()> {
     if res != 0 {
         Ok(())
     } else {
@@ -74,14 +74,14 @@ pub(crate) fn int_gerror_to_result(res: i32, gerror: *mut glib_sys::GError) -> a
     }
 }
 
-pub(crate) fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GError) {
+pub(crate) fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib::ffi::GError) {
     if gerror.is_null() {
         return;
     }
     unsafe {
         assert!((*gerror).is_null());
         let c_msg = CString::new(format!("{:#}", e)).unwrap();
-        *gerror = glib_sys::g_error_new_literal(
+        *gerror = glib::ffi::g_error_new_literal(
             gio::ffi::g_io_error_quark(),
             gio::ffi::G_IO_ERROR_FAILED,
             c_msg.as_ptr(),
@@ -92,7 +92,7 @@ pub(crate) fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GErro
 #[allow(dead_code)]
 pub(crate) fn int_glib_error<T, E>(
     res: Result<T, E>,
-    gerror: *mut *mut glib_sys::GError,
+    gerror: *mut *mut glib::ffi::GError,
 ) -> libc::c_int
 where
     E: Display,
@@ -109,7 +109,7 @@ where
 #[allow(dead_code)]
 pub(crate) fn ptr_glib_error<T, E>(
     res: Result<Box<T>, E>,
-    gerror: *mut *mut glib_sys::GError,
+    gerror: *mut *mut glib::ffi::GError,
 ) -> *mut T
 where
     E: Display,
@@ -142,7 +142,7 @@ mod tests {
     fn no_error_ptr() {
         let v = Box::new(Foo::new());
         let r: io::Result<Box<Foo>> = Ok(v);
-        let mut error: *mut glib_sys::GError = ptr::null_mut();
+        let mut error: *mut glib::ffi::GError = ptr::null_mut();
         let rawp = ptr_glib_error(r, &mut error);
         assert!(error.is_null());
         assert!(!rawp.is_null());
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn no_error_int() {
         let r: io::Result<()> = Ok(());
-        let mut error: *mut glib_sys::GError = ptr::null_mut();
+        let mut error: *mut glib::ffi::GError = ptr::null_mut();
         assert_eq!(int_glib_error(r, &mut error), 1);
         assert!(error.is_null());
     }
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn throw_error_int() {
         let r: io::Result<()> = Err(io::Error::new(io::ErrorKind::Other, "oops"));
-        let mut error: *mut glib_sys::GError = ptr::null_mut();
+        let mut error: *mut glib::ffi::GError = ptr::null_mut();
         assert_eq!(int_glib_error(r, &mut error), 0);
         unsafe {
             assert!(!error.is_null());
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn throw_error_ptr() {
         let r: io::Result<Box<Foo>> = Err(io::Error::new(io::ErrorKind::Other, "oops"));
-        let mut error: *mut glib_sys::GError = ptr::null_mut();
+        let mut error: *mut glib::ffi::GError = ptr::null_mut();
         assert_eq!(ptr_glib_error(r, &mut error), ptr::null_mut());
         unsafe {
             assert!(!error.is_null());
