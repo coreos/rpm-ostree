@@ -82,8 +82,8 @@ pub(crate) fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GErro
         assert!((*gerror).is_null());
         let c_msg = CString::new(format!("{:#}", e)).unwrap();
         *gerror = glib_sys::g_error_new_literal(
-            gio_sys::g_io_error_quark(),
-            gio_sys::G_IO_ERROR_FAILED,
+            gio::ffi::g_io_error_quark(),
+            gio::ffi::G_IO_ERROR_FAILED,
             c_msg.as_ptr(),
         )
     }
@@ -166,8 +166,8 @@ mod tests {
         assert_eq!(int_glib_error(r, &mut error), 0);
         unsafe {
             assert!(!error.is_null());
-            assert_eq!((*error).domain, gio_sys::g_io_error_quark());
-            assert_eq!((*error).code, gio_sys::G_IO_ERROR_FAILED);
+            assert_eq!((*error).domain, gio::ffi::g_io_error_quark());
+            assert_eq!((*error).code, gio::ffi::G_IO_ERROR_FAILED);
             let e: glib::Error = glib::translate::from_glib_full(error);
             assert_eq!(e.to_string(), "oops");
         }
@@ -180,8 +180,8 @@ mod tests {
         assert_eq!(ptr_glib_error(r, &mut error), ptr::null_mut());
         unsafe {
             assert!(!error.is_null());
-            assert_eq!((*error).domain, gio_sys::g_io_error_quark());
-            assert_eq!((*error).code, gio_sys::G_IO_ERROR_FAILED);
+            assert_eq!((*error).domain, gio::ffi::g_io_error_quark());
+            assert_eq!((*error).code, gio::ffi::G_IO_ERROR_FAILED);
             let e: glib::Error = glib::translate::from_glib_full(error);
             assert_eq!(e.to_string(), "oops");
         }
