@@ -76,7 +76,7 @@ macro_rules! impl_wrap {
 
 /// Custom macro to bind gtk-rs bridged types.
 macro_rules! cxxrs_bind {
-    ($ns:ident, $lowerns:ident, $sys:ident, [ $( $i:ident ),* ]) => {
+    ($ns:ident, $lowerns:ident, $sys:path, [ $( $i:ident ),* ]) => {
         paste! {
             $(
                 #[repr(transparent)]
@@ -100,7 +100,7 @@ cxxrs_bind!(
     ostree_sys,
     [Deployment, Repo, RepoTransactionStats, Sysroot]
 );
-cxxrs_bind!(G, glib, gobject_sys, [Object]);
+cxxrs_bind!(G, glib, glib::gobject_ffi, [Object]);
 cxxrs_bind!(G, gio, gio_sys, [Cancellable, DBusConnection, FileInfo]);
 cxxrs_bind!(G, glib, glib_sys, [KeyFile, Variant, VariantDict]);
 
