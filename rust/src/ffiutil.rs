@@ -32,6 +32,7 @@
 //! outlive the function call.
 
 use c_utf8::CUtf8;
+use ostree_ext::{gio, glib};
 use std::ffi::CString;
 use std::fmt::Display;
 use std::os::unix::io::{FromRawFd, IntoRawFd};

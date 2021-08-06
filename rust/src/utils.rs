@@ -13,6 +13,7 @@ use anyhow::{bail, Context, Result};
 use glib::translate::ToGlibPtr;
 use glib::Variant;
 use lazy_static::lazy_static;
+use ostree_ext::{glib, ostree};
 use regex::Regex;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};

@@ -6,6 +6,7 @@ use crate::cxxrsutil::*;
 use crate::utils;
 use anyhow::{anyhow, Result};
 use gio::prelude::*;
+use ostree_ext::gio;
 use std::os::unix::io::IntoRawFd;
 use std::process::Command;
 

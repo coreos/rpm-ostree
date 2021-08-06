@@ -4,8 +4,8 @@
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
-use gio::prelude::*;
 use openat::SimpleType;
+use ostree_ext::{gio, glib, prelude::*};
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::convert::TryInto;

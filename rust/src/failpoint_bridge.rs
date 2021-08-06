@@ -3,6 +3,6 @@
 
 /// Expose the `fail::fail_point` macro to C++.
 pub fn failpoint(p: &str) {
-    glib::g_debug!("rpm-ostree", "{}", p);
+    ostree_ext::glib::g_debug!("rpm-ostree", "{}", p);
     fail::fail_point!(p);
 }

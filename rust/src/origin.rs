@@ -11,6 +11,7 @@ use crate::treefile::Treefile;
 use anyhow::Result;
 use fn_error_context::context;
 use glib::KeyFile;
+use ostree_ext::glib;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::pin::Pin;

@@ -18,6 +18,7 @@ use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
 use ostree_ext::diff::FileTreeDiff;
 use ostree_ext::variant_utils::VariantDictExt;
+use ostree_ext::{gio, glib, ostree};
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;

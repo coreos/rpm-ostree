@@ -11,6 +11,7 @@ use fn_error_context::context;
 use gio::prelude::*;
 use nix::unistd::{Gid, Uid};
 use openat_ext::OpenatDirExt;
+use ostree_ext::{gio, ostree};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
