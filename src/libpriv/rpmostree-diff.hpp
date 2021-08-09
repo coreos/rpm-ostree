@@ -52,6 +52,9 @@ private:
     GPtrArray *modified_new_;
 };
 
-std::unique_ptr<RPMDiff> rpmdb_diff(OstreeRepo &repo, const std::string &src, const std::string &dest);
+std::unique_ptr<RPMDiff> rpmdb_diff(OstreeRepo &repo,
+                                    const std::string &src,
+                                    const std::string &dest,
+                                    bool allow_noent);
 
 } /* namespace */

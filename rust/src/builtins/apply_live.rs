@@ -88,7 +88,7 @@ pub(crate) fn applylive_finish(mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>)
         cxx::let_cxx_string!(from = booted_commit);
         cxx::let_cxx_string!(to = live_state.commit.as_str());
         let repo = repo.gobj_rewrap();
-        crate::ffi::rpmdb_diff(repo, &from, &to).map_err(anyhow::Error::msg)?
+        crate::ffi::rpmdb_diff(repo, &from, &to, false).map_err(anyhow::Error::msg)?
     };
     pkgdiff.print();
 

@@ -542,6 +542,7 @@ pub mod ffi {
             repo: Pin<&mut OstreeRepo>,
             src: &CxxString,
             dest: &CxxString,
+            allow_noent: bool,
         ) -> Result<UniquePtr<RPMDiff>>;
 
         fn print(&self);
