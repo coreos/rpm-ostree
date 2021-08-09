@@ -426,7 +426,7 @@ pub(crate) fn transaction_apply_live(
         cxx::let_cxx_string!(from = source_commit);
         cxx::let_cxx_string!(to = &*target_commit);
         let repo = repo.gobj_rewrap();
-        crate::ffi::rpmdb_diff(repo, &from, &to).map_err(anyhow::Error::msg)?
+        crate::ffi::rpmdb_diff(repo, &from, &to, false).map_err(anyhow::Error::msg)?
     };
     if !allow_replacement {
         if pkgdiff.n_removed() > 0 {
