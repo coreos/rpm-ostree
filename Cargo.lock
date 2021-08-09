@@ -1385,9 +1385,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48a6cf609ad8813677a8c830870ad2dd6452c7abc719bf3e85a568e2e185b5ab"
+checksum = "c271372230d01abd9b6b7862af4ef41c83c0344b436ce74822e953f381af6679"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1396,9 +1396,6 @@ dependencies = [
  "flate2",
  "fn-error-context",
  "futures",
- "gio",
- "glib 0.14.2",
- "glib-sys 0.14.0",
  "gvariant",
  "hex",
  "indicatif",
