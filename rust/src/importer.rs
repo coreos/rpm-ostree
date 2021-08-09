@@ -12,6 +12,7 @@ use anyhow::{bail, format_err, Result};
 use fn_error_context::context;
 use gio::{FileInfo, FileType};
 use ostree::RepoCommitFilterResult;
+use ostree_ext::{gio, ostree};
 use std::borrow::Cow;
 use std::fmt::Write;
 use std::pin::Pin;

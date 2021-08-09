@@ -4,6 +4,7 @@
 use std::borrow::Cow;
 
 use glib::translate::*;
+use ostree_ext::glib;
 
 pub(crate) fn byteswap_be_to_native(v: &glib::Variant) -> Cow<glib::Variant> {
     if cfg!(target_endian = "big") {

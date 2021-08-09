@@ -19,6 +19,7 @@ use gio::prelude::*;
 use gio::FileType;
 use nix::sys::stat::Mode;
 use openat_ext::OpenatDirExt;
+use ostree_ext::{gio, glib};
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::convert::TryInto;

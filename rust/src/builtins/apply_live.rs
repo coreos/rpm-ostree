@@ -4,8 +4,8 @@
 use crate::cxxrsutil::*;
 use crate::live;
 use anyhow::{anyhow, Result};
-use gio::prelude::*;
 use glib::Variant;
+use ostree_ext::{gio, glib, ostree, prelude::*};
 use std::pin::Pin;
 use structopt::StructOpt;
 

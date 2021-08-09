@@ -24,6 +24,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use c_utf8::CUtf8Buf;
 use nix::unistd::{Gid, Uid};
 use openat_ext::OpenatDirExt;
+use ostree_ext::{glib, ostree};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};

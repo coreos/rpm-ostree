@@ -11,6 +11,7 @@
 
 use cxx::{type_id, ExternType};
 use glib::translate::ToGlibPtr;
+use ostree_ext::{gio, glib, ostree};
 use paste::paste;
 use std::pin::Pin;
 
@@ -106,6 +107,7 @@ cxxrs_bind!(G, glib, glib::ffi, [KeyFile, Variant, VariantDict]);
 
 // An error type helper; separate from the GObject bridging
 mod err {
+    use ostree_ext::glib;
     use std::error::Error as StdError;
     use std::fmt::Display;
     use std::io::Error as IoError;

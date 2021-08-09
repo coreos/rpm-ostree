@@ -9,6 +9,7 @@ use anyhow::Result;
 use glib::prelude::*;
 use openat_ext::OpenatDirExt;
 use ostree_ext::variant_utils::VariantDictExt;
+use ostree_ext::{glib, ostree};
 use std::collections::BTreeMap;
 use std::pin::Pin;
 

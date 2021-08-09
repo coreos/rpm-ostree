@@ -5,6 +5,7 @@
 use anyhow::{anyhow, bail, Result};
 use gio::prelude::*;
 use glib::Variant;
+use ostree_ext::{gio, glib};
 use structopt::StructOpt;
 
 use crate::utils::print_treepkg_diff;

@@ -14,6 +14,7 @@ use anyhow::{Context, Result};
 use fn_error_context::context;
 use glib::{ToVariant, Variant};
 use openat_ext::{FileExt, OpenatDirExt};
+use ostree_ext::{gio, glib};
 use rand::Rng;
 use std::fs;
 use std::fs::File;
