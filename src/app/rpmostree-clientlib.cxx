@@ -1132,17 +1132,13 @@ get_modifiers_variant (const char   *set_refspec,
 
   if (local_repo_remote)
     {
-      /* Unfortunately, we can't pass an fd to a dir through D-Bus on el7 right now. So
-       * there, we just pass the path. Once that's fixed (or we no longer care about
-       * supporting this feature on el7), we can drop this buildopt. See:
-       * https://bugzilla.redhat.com/show_bug.cgi?id=1672404 */
       glnx_fd_close int repo_dfd = -1;
       if (!glnx_opendirat (AT_FDCWD, local_repo_remote, TRUE, &repo_dfd, error))
-        return FALSE;
+        return glnx_prefix_error (error, "Opening local repository as remote");
 
       int idx = g_unix_fd_list_append (fd_list, repo_dfd, error);
       if (idx < 0)
-        return FALSE;
+        return glnx_prefix_error (error, "Adding FD for local repository");
 
       g_variant_dict_insert (&dict, "ex-local-repo-remote", "h", idx);
     }
@@ -1176,7 +1172,7 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                               override_reset_pkgs,
                               local_repo_remote,
                               &modifiers, &fd_list, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Preparing D-Bus arguments");
 
   return rpmostree_os_call_update_deployment_sync (os_proxy,
                                                    modifiers,
