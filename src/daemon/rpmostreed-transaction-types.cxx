@@ -1342,8 +1342,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
         }
     }
-
-  if (no_overrides)
+  const gboolean ex_reset_overrides = vardict_lookup_bool (self->options, "ex-reset-overrides", FALSE);
+  if (no_overrides || (is_upgrade && ex_reset_overrides))
     {
       if (!rpmostree_origin_remove_all_overrides (origin, &changed, error))
         return FALSE;
@@ -1440,7 +1440,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (override_replace_local_pkgs)
         {
           g_autoptr(GPtrArray) pkgs = NULL;
-        if (!import_many_local_rpms (repo, override_replace_local_pkgs, &pkgs,
+          if (!import_many_local_rpms (repo, override_replace_local_pkgs, &pkgs,
                                        cancellable, error))
             return FALSE;
 
