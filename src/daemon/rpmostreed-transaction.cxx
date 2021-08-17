@@ -229,7 +229,7 @@ transaction_progress_changed_cb (OstreeAsyncProgress *progress,
 
   if (start_time)
     {
-      guint64 elapsed_secs = (g_get_monotonic_time () - start_time) / G_USEC_PER_SEC;
+      elapsed_secs = (g_get_monotonic_time () - start_time) / G_USEC_PER_SEC;
       if (elapsed_secs)
         bytes_sec = bytes_transferred / elapsed_secs;
     }
