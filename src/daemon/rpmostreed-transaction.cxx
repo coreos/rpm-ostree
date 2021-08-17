@@ -28,6 +28,7 @@
 #include "rpmostreed-errors.h"
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-daemon.h"
+#include "rpmostree-cxxrs.h"
 
 struct _RpmostreedTransactionPrivate {
   GDBusMethodInvocation *invocation;
@@ -45,6 +46,8 @@ struct _RpmostreedTransactionPrivate {
   char *client_description;
   char *agent_id;
   char *sd_unit;
+
+  gint64 last_progress_journal;
 
   gboolean redirect_output;
 
@@ -215,14 +218,30 @@ static void
 transaction_progress_changed_cb (OstreeAsyncProgress *progress,
                                  RPMOSTreeTransaction *transaction)
 {
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
+  // Write progress messages to the journal at this periodicity
+  // so that admins can watch progress of pulls via `journalctl`.
+  constexpr uint32_t PROGRESS_JOURNAL_PERIODIC_SECS = 15;
+
   guint64 start_time = ostree_async_progress_get_uint64 (progress, "start-time");
   guint64 bytes_transferred = ostree_async_progress_get_uint64 (progress, "bytes-transferred");
   guint64 elapsed_secs = 0;
   guint64 bytes_sec = 0;
 
+  gint64 current_monotonic = g_get_monotonic_time ();
+  gint64 elapsed = MAX(current_monotonic, priv->last_progress_journal) - priv->last_progress_journal;
+  bool emit_journal = (elapsed / G_USEC_PER_SEC) > PROGRESS_JOURNAL_PERIODIC_SECS;
+  if (emit_journal)
+    priv->last_progress_journal = current_monotonic;
+
   /* If there is a status that is all we output */
   g_autofree char *status = ostree_async_progress_get_status (progress);
   if (status) {
+    if (emit_journal)
+      {
+        g_print ("%s\n", status);
+      }
     rpmostree_transaction_emit_message (transaction, g_strdup (status));
     return;
   }
@@ -234,32 +253,40 @@ transaction_progress_changed_cb (OstreeAsyncProgress *progress,
         bytes_sec = bytes_transferred / elapsed_secs;
     }
 
-  GVariant *arg_time = g_variant_new ("(tt)",
+  g_autoptr(GVariant) arg_time = g_variant_ref_sink (g_variant_new ("(tt)",
                             start_time,
-                            elapsed_secs);
+                            elapsed_secs));
 
-  GVariant *arg_outstanding = g_variant_new ("(uu)",
+  g_autoptr(GVariant) arg_outstanding = g_variant_ref_sink (g_variant_new ("(uu)",
                                    ostree_async_progress_get_uint (progress, "outstanding-fetches"),
-                                   ostree_async_progress_get_uint (progress, "outstanding-writes"));
+                                   ostree_async_progress_get_uint (progress, "outstanding-writes")));
 
-  GVariant *arg_metadata = g_variant_new ("(uuu)",
+  g_autoptr(GVariant) arg_metadata = g_variant_ref_sink (g_variant_new ("(uuu)",
                                 ostree_async_progress_get_uint (progress, "scanned-metadata"),
                                 ostree_async_progress_get_uint (progress, "metadata-fetched"),
-                                ostree_async_progress_get_uint (progress, "outstanding-metadata-fetches"));
+                                ostree_async_progress_get_uint (progress, "outstanding-metadata-fetches")));
 
-  GVariant *arg_delta = g_variant_new ("(uuut)",
+  g_autoptr(GVariant) arg_delta = g_variant_ref_sink (g_variant_new ("(uuut)",
                              ostree_async_progress_get_uint (progress, "total-delta-parts"),
                              ostree_async_progress_get_uint (progress, "fetched-delta-parts"),
                              ostree_async_progress_get_uint (progress, "total-delta-superblocks"),
-                             ostree_async_progress_get_uint64 (progress, "total-delta-part-size"));
+                             ostree_async_progress_get_uint64 (progress, "total-delta-part-size")));
 
-  GVariant *arg_content = g_variant_new ("(uu)",
+  g_autoptr(GVariant) arg_content = g_variant_ref_sink (g_variant_new ("(uu)",
                                ostree_async_progress_get_uint (progress, "fetched"),
-                               ostree_async_progress_get_uint (progress, "requested"));
+                               ostree_async_progress_get_uint (progress, "requested")));
 
-  GVariant *arg_transfer = g_variant_new ("(tt)",
+  g_autoptr(GVariant) arg_transfer = g_variant_ref_sink (g_variant_new ("(tt)",
                                 bytes_transferred,
-                                bytes_sec);
+                                bytes_sec));
+
+  if (emit_journal)
+    {
+      g_autoptr(GVariant) progress = g_variant_ref_sink (g_variant_new ("(@(tt)@(uu)@(uuu)@(uuut)@(uu)@(tt))", 
+        arg_time, arg_outstanding, arg_metadata, arg_delta, arg_content, arg_transfer));
+      auto msg = rpmostreecxx::client_render_download_progress(*progress);
+      g_print ("%s\n", msg.c_str());
+    }
 
   /* This sinks the floating GVariant refs (I think...). */
   rpmostree_transaction_emit_download_progress (transaction,
