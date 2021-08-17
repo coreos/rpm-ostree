@@ -216,25 +216,9 @@ transaction_progress_changed_cb (OstreeAsyncProgress *progress,
                                  RPMOSTreeTransaction *transaction)
 {
   guint64 start_time = ostree_async_progress_get_uint64 (progress, "start-time");
-  guint64 elapsed_secs = 0;
-
-  guint outstanding_fetches = ostree_async_progress_get_uint (progress, "outstanding-fetches");
-  guint outstanding_writes = ostree_async_progress_get_uint (progress, "outstanding-writes");
-
-  guint n_scanned_metadata = ostree_async_progress_get_uint (progress, "scanned-metadata");
-  guint metadata_fetched = ostree_async_progress_get_uint (progress, "metadata-fetched");
-  guint outstanding_metadata_fetches = ostree_async_progress_get_uint (progress, "outstanding-metadata-fetches");
-
-  guint total_delta_parts = ostree_async_progress_get_uint (progress, "total-delta-parts");
-  guint fetched_delta_parts = ostree_async_progress_get_uint (progress, "fetched-delta-parts");
-  guint total_delta_superblocks = ostree_async_progress_get_uint (progress, "total-delta-superblocks");
-  guint64 total_delta_part_size = ostree_async_progress_get_uint64 (progress, "total-delta-part-size");
-
-  guint fetched = ostree_async_progress_get_uint (progress, "fetched");
-  guint requested = ostree_async_progress_get_uint (progress, "requested");
-
-  guint64 bytes_sec = 0;
   guint64 bytes_transferred = ostree_async_progress_get_uint64 (progress, "bytes-transferred");
+  guint64 elapsed_secs = 0;
+  guint64 bytes_sec = 0;
 
   /* If there is a status that is all we output */
   g_autofree char *status = ostree_async_progress_get_status (progress);
@@ -255,23 +239,23 @@ transaction_progress_changed_cb (OstreeAsyncProgress *progress,
                             elapsed_secs);
 
   GVariant *arg_outstanding = g_variant_new ("(uu)",
-                                   outstanding_fetches,
-                                   outstanding_writes);
+                                   ostree_async_progress_get_uint (progress, "outstanding-fetches"),
+                                   ostree_async_progress_get_uint (progress, "outstanding-writes"));
 
   GVariant *arg_metadata = g_variant_new ("(uuu)",
-                                n_scanned_metadata,
-                                metadata_fetched,
-                                outstanding_metadata_fetches);
+                                ostree_async_progress_get_uint (progress, "scanned-metadata"),
+                                ostree_async_progress_get_uint (progress, "metadata-fetched"),
+                                ostree_async_progress_get_uint (progress, "outstanding-metadata-fetches"));
 
   GVariant *arg_delta = g_variant_new ("(uuut)",
-                             total_delta_parts,
-                             fetched_delta_parts,
-                             total_delta_superblocks,
-                             total_delta_part_size);
+                             ostree_async_progress_get_uint (progress, "total-delta-parts"),
+                             ostree_async_progress_get_uint (progress, "fetched-delta-parts"),
+                             ostree_async_progress_get_uint (progress, "total-delta-superblocks"),
+                             ostree_async_progress_get_uint64 (progress, "total-delta-part-size"));
 
   GVariant *arg_content = g_variant_new ("(uu)",
-                               fetched,
-                               requested);
+                               ostree_async_progress_get_uint (progress, "fetched"),
+                               ostree_async_progress_get_uint (progress, "requested"));
 
   GVariant *arg_transfer = g_variant_new ("(tt)",
                                 bytes_transferred,
