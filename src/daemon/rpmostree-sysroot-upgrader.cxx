@@ -466,7 +466,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
           }
 
         rpmostree_output_message ("Pulling: %s", refspec);
-        auto import = CXX_TRY_VAL(import_container(*self->sysroot, std::string(refspec)), error);
+        auto import = CXX_TRY_VAL(import_container(*self->repo, std::string(refspec)), error);
 
         rpmostree_origin_set_container_image_reference_digest (self->original_origin, import->image_digest.c_str());
         new_base_rev = strdup (import->ostree_commit.c_str());

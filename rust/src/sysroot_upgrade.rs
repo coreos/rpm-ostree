@@ -10,12 +10,11 @@ use std::pin::Pin;
 
 /// Import ostree commit in container image using ostree-rs-ext's API.
 pub(crate) fn import_container(
-    mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
+    mut repo: Pin<&mut crate::FFIOstreeRepo>,
     imgref: String,
 ) -> CxxResult<Box<ContainerImport>> {
     // TODO: take a GCancellable and monitor it, and drop the import task (which is how async cancellation works in Rust).
-    let sysroot = &sysroot.gobj_wrap();
-    let repo = &sysroot.repo().unwrap();
+    let repo = repo.gobj_wrap();
     let imgref = imgref.as_str().try_into()?;
     let imported = build_runtime()?
         .block_on(async { ostree_ext::container::import(&repo, &imgref, None).await })?;
