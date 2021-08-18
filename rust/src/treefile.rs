@@ -820,6 +820,12 @@ impl Treefile {
         }
     }
 
+    /// Given a treefile, print notices about items which are experimental.
+    pub(crate) fn print_experimental_notices(&self) {
+        print_experimental_notice(self.parsed.modules.is_some(), "modules");
+        print_experimental_notice(self.parsed.lockfile_repos.is_some(), "lockfile-repos");
+    }
+
     pub(crate) fn get_checksum(
         &self,
         mut repo: Pin<&mut crate::ffi::OstreeRepo>,
@@ -881,6 +887,15 @@ impl Treefile {
         rootfs_dfd.ensure_dir_all(target.parent().unwrap(), 0o755)?;
         rootfs_dfd.write_file_contents(target, 0o644, self.serialized.as_bytes())?;
         Ok(())
+    }
+}
+
+fn print_experimental_notice(print: bool, key: &str) {
+    if print {
+        eprintln!(
+            "NOTICE: treefile key `{}` is experimental and subject to change\n",
+            key
+        );
     }
 }
 

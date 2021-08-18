@@ -365,6 +365,7 @@ pub mod ffi {
         fn clear_repo_packages(&mut self);
         fn prettyprint_json_stdout(&self);
         fn print_deprecation_warnings(&self);
+        fn print_experimental_notices(&self);
         fn sanitycheck_externals(&self) -> Result<()>;
     }
 
