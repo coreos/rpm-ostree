@@ -64,7 +64,6 @@ fn inner_main() -> Result<i32> {
         Some("countme") => rpmostree_rust::countme::entrypoint(&args).map(|_| 0),
         Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(&args).map(|_| 0),
         Some("ex-container") => rpmostree_rust::container::entrypoint(&args).map(|_| 0),
-        Some("module") => rpmostree_rust::modularity::entrypoint(&args).map(|_| 0),
         // The `unlock` is a hidden alias for "ostree CLI compatibility"
         Some("usroverlay") | Some("unlock") => usroverlay(&args).map(|_| 0),
         _ => {

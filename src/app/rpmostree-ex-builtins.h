@@ -34,6 +34,7 @@ BUILTINPROTO(unpack);
 BUILTINPROTO(apply_live);
 BUILTINPROTO(history);
 BUILTINPROTO(initramfs_etc);
+BUILTINPROTO(module);
 
 #undef BUILTINPROTO
 
