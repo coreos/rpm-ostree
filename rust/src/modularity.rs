@@ -34,8 +34,6 @@ struct InstallOpts {
     lock_finalization: bool,
     #[structopt(long)]
     dry_run: bool,
-    #[structopt(long)]
-    experimental: bool,
 }
 
 const OPT_KEY_ENABLE_MODULES: &str = "enable-modules";
@@ -43,8 +41,8 @@ const OPT_KEY_DISABLE_MODULES: &str = "disable-modules";
 const OPT_KEY_INSTALL_MODULES: &str = "install-modules";
 const OPT_KEY_UNINSTALL_MODULES: &str = "uninstall-modules";
 
-pub fn entrypoint(args: &[&str]) -> Result<()> {
-    match Opt::from_iter(args.iter().skip(1)) {
+pub(crate) fn modularity_entrypoint(args: &Vec<String>) -> Result<()> {
+    match Opt::from_iter(args.iter()) {
         Opt::Enable(ref opts) => enable(opts),
         Opt::Disable(ref opts) => disable(opts),
         Opt::Install(ref opts) => install(opts),
@@ -87,10 +85,6 @@ fn uninstall(opts: &InstallOpts) -> Result<()> {
 }
 
 fn modules_impl(key: &str, opts: &InstallOpts) -> Result<()> {
-    if !opts.experimental {
-        bail!("Modularity support is experimental and subject to change. Use --experimental.");
-    }
-
     if opts.modules.is_empty() {
         bail!("At least one module must be specified");
     }

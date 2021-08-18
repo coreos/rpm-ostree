@@ -33,6 +33,10 @@ static RpmOstreeCommand ex_subcommands[] = {
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
   { "initramfs-etc", (RpmOstreeBuiltinFlags)0,
     "Track initramfs configuration files", rpmostree_ex_builtin_initramfs_etc },
+  /* To graduate out of experimental, simply revert:
+   * https://github.com/coreos/rpm-ostree/pull/3078 */
+  { "module", static_cast<RpmOstreeBuiltinFlags>(0),
+    "Commands to install/uninstall modules", rpmostree_ex_builtin_module },
   { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
@@ -51,3 +55,16 @@ rpmostree_builtin_ex (int argc, char **argv,
                                       invocation, cancellable, error);
 }
 
+/* Commands that are pure Rust are proxied here. */
+
+gboolean
+rpmostree_ex_builtin_module (int argc, char **argv,
+                             RpmOstreeCommandInvocation *invocation,
+                             GCancellable *cancellable, GError **error)
+{
+  rust::Vec<rust::String> rustargv;
+  for (int i = 0; i < argc; i++)
+    rustargv.push_back(std::string(argv[i]));
+  CXX_TRY(modularity_entrypoint(rustargv), error);
+  return TRUE;
+}

@@ -303,6 +303,11 @@ pub mod ffi {
         fn history_prune() -> Result<()>;
     }
 
+    // modularity.rs
+    extern "Rust" {
+        fn modularity_entrypoint(args: &Vec<String>) -> Result<()>;
+    }
+
     // scripts.rs
     extern "Rust" {
         fn script_is_ignored(pkg: &str, script: &str) -> bool;
@@ -629,6 +634,7 @@ pub(crate) use self::lockfile::*;
 mod live;
 pub(crate) use self::live::*;
 pub mod modularity;
+pub(crate) use self::modularity::*;
 mod nameservice;
 mod origin;
 pub(crate) use self::origin::*;
