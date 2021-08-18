@@ -51,6 +51,7 @@ rpmostree_builtin_ex (int argc, char **argv,
                       RpmOstreeCommandInvocation *invocation,
                       GCancellable *cancellable, GError **error)
 {
+  g_printerr ("NOTICE: Experimental commands are subject to change.\n");
   return rpmostree_handle_subcommand (argc, argv, ex_subcommands,
                                       invocation, cancellable, error);
 }
