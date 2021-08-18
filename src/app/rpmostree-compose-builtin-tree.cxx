@@ -716,6 +716,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
 
   (*self->treefile_rs)->print_deprecation_warnings();
+  (*self->treefile_rs)->print_experimental_notices();
 
   self->treefile_rootval = json_parser_get_root (self->treefile_parser);
   if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
