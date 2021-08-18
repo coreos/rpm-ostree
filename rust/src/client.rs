@@ -6,8 +6,9 @@ use crate::cxxrsutil::*;
 use crate::utils;
 use anyhow::{anyhow, Result};
 use gio::prelude::*;
-use ostree_ext::gio;
+use ostree_ext::{gio, glib};
 use std::os::unix::io::IntoRawFd;
+use std::pin::Pin;
 use std::process::Command;
 
 /// The well-known bus name.
@@ -153,4 +154,66 @@ pub(crate) fn client_start_daemon() -> CxxResult<()> {
         return Err(anyhow!("{}", res).into());
     }
     Ok(())
+}
+
+/// Convert the GVariant parameters from the DownloadProgress DBus API to a human-readable English string.
+pub(crate) fn client_render_download_progress(
+    mut progress: Pin<&mut crate::ffi::GVariant>,
+) -> String {
+    let progress = progress.gobj_wrap();
+    let progress = progress
+        .get::<(
+            (u64, u64),
+            (u32, u32),
+            (u32, u32, u32),
+            (u32, u32, u32, u64),
+            (u32, u32),
+            (u64, u64),
+        )>()
+        .unwrap();
+    let (
+        (_start_time, _elapsed_secs),
+        (outstanding_fetches, outstanding_writes),
+        (n_scanned_metadata, metadata_fetched, outstanding_metadata_fetches),
+        (total_delta_parts, fetched_delta_parts, _total_delta_superblocks, total_delta_part_size),
+        (fetched, requested),
+        (bytes_transferred, bytes_sec),
+    ) = progress;
+    if outstanding_fetches > 0 {
+        let bytes_transferred_str =
+            glib::format_size_full(bytes_transferred, glib::FormatSizeFlags::empty());
+        let bytes_sec_str = glib::format_size(bytes_sec);
+        let bytes_sec_str = if bytes_sec == 0 {
+            "-"
+        } else {
+            bytes_sec_str.as_str()
+        };
+
+        if total_delta_parts > 0 {
+            let total_str = glib::format_size(total_delta_part_size);
+            format!(
+                "Receiving delta parts: {}/{} {}/s {}/{}",
+                fetched_delta_parts,
+                total_delta_parts,
+                bytes_sec_str,
+                bytes_transferred_str,
+                total_str
+            )
+        } else if outstanding_metadata_fetches > 0 {
+            format!(
+                "Receiving metadata objects: {}/(estimating) {}/s {}",
+                metadata_fetched, bytes_sec_str, bytes_transferred_str
+            )
+        } else {
+            let percent = (((fetched as f64) / requested as f64) * 100f64) as u32;
+            format!(
+                "Receiving objects; {}% ({}/{}) {}/s {}",
+                percent, fetched, requested, bytes_sec_str, bytes_transferred_str
+            )
+        }
+    } else if outstanding_writes > 0 {
+        format!("Writing objects: {}", outstanding_writes)
+    } else {
+        format!("Scanning metadata: {}", n_scanned_metadata)
+    }
 }

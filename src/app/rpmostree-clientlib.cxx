@@ -297,80 +297,6 @@ rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
                                     out_os_proxy, NULL, error);
 }
 
-
-/**
-* transaction_console_get_progress_line
-*
-* Similar to ostree_repo_pull_default_console_progress_changed
-*
-* Displays outstanding fetch progress in bytes/sec,
-* or else outstanding content or metadata writes to the repository in
-* number of objects.
-**/
-static gchar *
-transaction_get_progress_line (guint64 start_time,
-                               guint64 elapsed_secs,
-                               guint outstanding_fetches,
-                               guint outstanding_writes,
-                               guint n_scanned_metadata,
-                               guint metadata_fetched,
-                               guint outstanding_metadata_fetches,
-                               guint total_delta_parts,
-                               guint fetched_delta_parts,
-                               guint total_delta_superblocks,
-                               guint64 total_delta_part_size,
-                               guint fetched,
-                               guint requested,
-                               guint64 bytes_transferred,
-                               guint64 bytes_sec)
-{
-  GString *buf;
-
-  buf = g_string_new ("");
-
-  if (outstanding_fetches)
-    {
-      g_autofree gchar *formatted_bytes_transferred = g_format_size_full (bytes_transferred, static_cast<GFormatSizeFlags>(0));
-      g_autofree gchar *formatted_bytes_sec = NULL;
-
-      if (!bytes_sec)
-        formatted_bytes_sec = g_strdup ("-");
-      else
-        formatted_bytes_sec = g_format_size (bytes_sec);
-
-      if (total_delta_parts > 0)
-        {
-          g_autofree gchar *formatted_total = g_format_size (total_delta_part_size);
-          g_string_append_printf (buf, "Receiving delta parts: %u/%u %s/s %s/%s",
-                                  fetched_delta_parts, total_delta_parts,
-                                  formatted_bytes_sec, formatted_bytes_transferred,
-                                  formatted_total);
-        }
-      else if (outstanding_metadata_fetches)
-        {
-          g_string_append_printf (buf, "Receiving metadata objects: %u/(estimating) %s/s %s",
-                                  metadata_fetched, formatted_bytes_sec, formatted_bytes_transferred);
-        }
-      else
-        {
-          g_string_append_printf (buf, "Receiving objects: %u%% (%u/%u) %s/s %s",
-                                  (guint)((((double)fetched) / requested) * 100),
-                                  fetched, requested, formatted_bytes_sec, formatted_bytes_transferred);
-        }
-    }
-  else if (outstanding_writes)
-    {
-      g_string_append_printf (buf, "Writing objects: %u", outstanding_writes);
-    }
-  else
-    {
-      g_string_append_printf (buf, "Scanning metadata: %u", n_scanned_metadata);
-    }
-
-  return g_string_free (buf, FALSE);
-}
-
-
 typedef struct
 {
   gboolean progress;
@@ -473,52 +399,14 @@ on_transaction_progress (GDBusProxy *proxy,
     }
   else if (g_strcmp0 (signal_name, "DownloadProgress") == 0)
     {
-      guint64 start_time;
-      guint64 elapsed_secs;
-      guint outstanding_fetches;
-      guint outstanding_writes;
-      guint n_scanned_metadata;
-      guint metadata_fetched;
-      guint outstanding_metadata_fetches;
-      guint total_delta_parts;
-      guint fetched_delta_parts;
-      guint total_delta_superblocks;
-      guint64 total_delta_part_size;
-      guint fetched;
-      guint requested;
-      guint64 bytes_transferred;
-      guint64 bytes_sec;
-      g_variant_get (parameters, "((tt)(uu)(uuu)(uuut)(uu)(tt))",
-                     &start_time, &elapsed_secs,
-                     &outstanding_fetches, &outstanding_writes,
-                     &n_scanned_metadata, &metadata_fetched,
-                     &outstanding_metadata_fetches,
-                     &total_delta_parts, &fetched_delta_parts,
-                     &total_delta_superblocks, &total_delta_part_size,
-                     &fetched, &requested, &bytes_transferred, &bytes_sec);
-
-      g_autofree gchar *line =
-             transaction_get_progress_line (start_time, elapsed_secs,
-                                            outstanding_fetches,
-                                            outstanding_writes,
-                                            n_scanned_metadata,
-                                            metadata_fetched,
-                                            outstanding_metadata_fetches,
-                                            total_delta_parts,
-                                            fetched_delta_parts,
-                                            total_delta_superblocks,
-                                            total_delta_part_size,
-                                            fetched,
-                                            requested,
-                                            bytes_transferred,
-                                            bytes_sec);
+      auto line = rpmostreecxx::client_render_download_progress(*parameters);
       if (!tp->progress)
         {
           tp->progress = TRUE;
-          rpmostreecxx::console_progress_begin_task (line);
+          rpmostreecxx::console_progress_begin_task (line.c_str());
         }
       else
-        rpmostreecxx::console_progress_set_message (line);
+        rpmostreecxx::console_progress_set_message (line.c_str());
     }
   else if (g_strcmp0 (signal_name, "Finished") == 0)
     {
