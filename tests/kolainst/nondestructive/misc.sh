@@ -123,13 +123,20 @@ ldd /usr/lib64/librpmostree-1.so.1 > rpmostree-lib-deps.txt
 assert_not_file_has_content rpmostree-lib-deps.txt libdnf
 echo "ok lib deps"
 
-mv /etc/ostree/remotes.d{,.orig}
-systemctl restart rpm-ostreed
-rpm-ostree status > status.txt
-assert_file_has_content status.txt 'Remote.*not found'
-mv /etc/ostree/remotes.d{.orig,}
-rpm-ostree reload
-echo "ok remote not found"
+origin=$(rpm-ostree status --json | jq -r '.deployments[0].origin')
+# Only run this test if we have a remote configured; this won't
+# be the case for e.g. cosa build-fast.
+case "$origin" in
+    *:*) 
+    mv /etc/ostree/remotes.d{,.orig}
+    systemctl restart rpm-ostreed
+    rpm-ostree status > status.txt
+    assert_file_has_content status.txt 'Remote.*not found'
+    mv /etc/ostree/remotes.d{.orig,}
+    rpm-ostree reload
+    echo "ok remote not found"
+    ;;
+esac
 
 systemctl stop rpm-ostreed
 mv /var/lib/rpm{,.orig}
