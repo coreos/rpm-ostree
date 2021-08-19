@@ -602,7 +602,7 @@ impl_transaction_get_response_sync (GDBusConnection *connection,
                         tp);
     }
 
-  rpmostreecxx::failpoint("client::connect");
+  CXX_TRY(failpoint("client::connect"), error);
 
   transaction = transaction_connect (transaction_address, cancellable, error);
   if (!transaction)

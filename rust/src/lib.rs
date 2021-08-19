@@ -231,7 +231,7 @@ pub mod ffi {
 
     // failpoint_bridge.rs
     extern "Rust" {
-        fn failpoint(p: &str);
+        fn failpoint(p: &str) -> Result<()>;
     }
 
     // importer.rs

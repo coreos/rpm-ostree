@@ -105,10 +105,10 @@ rpm-ostree reload
 echo "ok reload"
 
 cursor=$(journalctl -o json -n 1 | jq -r '.["__CURSOR"]')
-if env FAILPOINTS=client::connect=panic rpm-ostree initramfs --enable 2>err.txt; then
+if env FAILPOINTS='client::connect=return(synthetic-error)' rpm-ostree initramfs --enable 2>err.txt; then
     fatal "should have errored"
 fi
-assert_file_has_content_literal err.txt "failpoint client::connect panic"
+assert_file_has_content_literal err.txt "error: synthetic-error"
 journalctl -u rpm-ostreed --after-cursor "${cursor}" > out.txt
 assert_file_has_content_literal out.txt 'client disconnected before calling Start'
 rpm-ostree status > out.txt
