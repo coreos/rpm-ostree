@@ -144,10 +144,11 @@ pub mod ffi {
     extern "Rust" {
         fn import_container(
             repo: Pin<&mut OstreeRepo>,
+            cancellable: Pin<&mut GCancellable>,
             imgref: String,
         ) -> Result<Box<ContainerImport>>;
 
-        fn fetch_digest(imgref: String) -> Result<String>;
+        fn fetch_digest(imgref: String, cancellable: Pin<&mut GCancellable>) -> Result<String>;
     }
 
     // core.rs

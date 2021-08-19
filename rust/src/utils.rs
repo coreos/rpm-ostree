@@ -13,6 +13,7 @@ use anyhow::{bail, Context, Result};
 use glib::translate::ToGlibPtr;
 use glib::Variant;
 use lazy_static::lazy_static;
+use ostree_ext::prelude::*;
 use ostree_ext::{glib, ostree};
 use regex::Regex;
 use std::borrow::Cow;
@@ -157,6 +158,27 @@ pub fn parent_dir(filename: &Path) -> Option<&Path> {
     filename
         .parent()
         .map(|p| if p.as_os_str() == "" { ".".as_ref() } else { p })
+}
+
+/// Call a faillible future, while monitoring `cancellable` and return an error if cancelled.
+pub(crate) async fn run_with_cancellable<F, R>(
+    f: F,
+    cancellable: &ostree_ext::gio::Cancellable,
+) -> Result<R>
+where
+    F: futures::Future<Output = Result<R>>,
+{
+    // Bridge GCancellable to a tokio notification
+    let notify = std::sync::Arc::new(tokio::sync::Notify::new());
+    let notify2 = notify.clone();
+    cancellable.connect_cancelled(move |_| notify2.notify_one());
+    cancellable.set_error_if_cancelled()?;
+    tokio::select! {
+       r = f => r,
+       _ = notify.notified() => {
+           Err(anyhow::anyhow!("Operation was cancelled"))
+       }
+    }
 }
 
 /// Parse the 2-tuple `<sha256>:<nevra>` string into a tuple of (nevra, sha256).
