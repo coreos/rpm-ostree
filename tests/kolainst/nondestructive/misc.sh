@@ -109,8 +109,7 @@ if env FAILPOINTS='client::connect=return(synthetic-error)' rpm-ostree initramfs
     fatal "should have errored"
 fi
 assert_file_has_content_literal err.txt "error: synthetic-error"
-journalctl -u rpm-ostreed --after-cursor "${cursor}" > out.txt
-assert_file_has_content_literal out.txt 'client disconnected before calling Start'
+journal_poll -u rpm-ostreed --after-cursor "${cursor}" --grep="client disconnected before calling Start"
 rpm-ostree status > out.txt
 assert_file_has_content_literal out.txt 'State: idle'
 echo "ok auto-cancel not-started transaction"

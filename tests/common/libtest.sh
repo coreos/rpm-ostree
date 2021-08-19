@@ -447,6 +447,21 @@ rpmostree_assert_status() {
     rm -f status.json
 }
 
+# Wait for a non-empty result from journalctl.
+# It's recommended to use arguments like this to search
+# for a message from a specific service `--after-cursor <cursor> --grep=message -u rpm-ostreed`.
+journal_poll() {
+    timeout=60
+    for x in $(seq $timeout); do
+      if journalctl -q -n 1 "$@"; then
+        return
+      fi
+      sleep 1
+    done
+    echo "timed out waiting $timeout seconds for journalctl $@" 1>&2
+    exit 1
+}
+
 # This function below was taken and adapted from coreos-assembler. We
 # should look into sharing this code more easily.
 
