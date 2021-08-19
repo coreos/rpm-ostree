@@ -24,6 +24,27 @@ fn usroverlay(args: &[&str]) -> Result<()> {
     .context("Failed to execute ostree admin unlock")
 }
 
+// And now we've done process global initialization, we have a tokio runtime setup; process the command line.
+async fn inner_async_main(args: &[&str]) -> Result<i32> {
+    // It is only recently that our main() function is in Rust, calling
+    // into C++ as a library.  As of right now, the only Rust commands
+    // are hidden, i.e. should not appear in --help.  So we just recognize
+    // those, and if there's something we don't know about, invoke the C++
+    // main().
+    match args.get(1).copied() {
+        // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
+        Some("countme") => rpmostree_rust::countme::entrypoint(&args).map(|_| 0),
+        Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(&args).map(|_| 0),
+        Some("ex-container") => rpmostree_rust::container::entrypoint(&args).await,
+        // The `unlock` is a hidden alias for "ostree CLI compatibility"
+        Some("usroverlay") | Some("unlock") => usroverlay(&args).map(|_| 0),
+        _ => {
+            // Otherwise fall through to C++ main().
+            Ok(rpmostree_rust::ffi::rpmostree_main(&args)?)
+        }
+    }
+}
+
 /// The real main function returns a `Result<>`.
 fn inner_main() -> Result<i32> {
     if std::env::var("RPMOSTREE_GDB_HOOK").is_ok() {
@@ -54,23 +75,11 @@ fn inner_main() -> Result<i32> {
         .collect();
     let args = args?;
     let args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    // It is only recently that our main() function is in Rust, calling
-    // into C++ as a library.  As of right now, the only Rust commands
-    // are hidden, i.e. should not appear in --help.  So we just recognize
-    // those, and if there's something we don't know about, invoke the C++
-    // main().
-    match args.get(1).copied() {
-        // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
-        Some("countme") => rpmostree_rust::countme::entrypoint(&args).map(|_| 0),
-        Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(&args).map(|_| 0),
-        Some("ex-container") => rpmostree_rust::container::entrypoint(&args).map(|_| 0),
-        // The `unlock` is a hidden alias for "ostree CLI compatibility"
-        Some("usroverlay") | Some("unlock") => usroverlay(&args).map(|_| 0),
-        _ => {
-            // Otherwise fall through to C++ main().
-            Ok(rpmostree_rust::ffi::rpmostree_main(&args)?)
-        }
-    }
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("Failed to build tokio runtime")?
+        .block_on(async { inner_async_main(&args).await })
 }
 
 fn print_error(e: anyhow::Error) {
