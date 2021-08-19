@@ -143,7 +143,7 @@ pub mod ffi {
     // sysroot_upgrade.rs
     extern "Rust" {
         fn import_container(
-            sysroot: Pin<&mut OstreeSysroot>,
+            repo: Pin<&mut OstreeRepo>,
             imgref: String,
         ) -> Result<Box<ContainerImport>>;
 
