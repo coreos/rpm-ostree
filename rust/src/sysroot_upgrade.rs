@@ -4,9 +4,9 @@
 
 use crate::cxxrsutil::*;
 use crate::ffi::ContainerImport;
-use anyhow::{Context, Result};
 use std::convert::TryInto;
 use std::pin::Pin;
+use tokio::runtime::Handle;
 
 /// Import ostree commit in container image using ostree-rs-ext's API.
 pub(crate) fn import_container(
@@ -16,7 +16,7 @@ pub(crate) fn import_container(
     // TODO: take a GCancellable and monitor it, and drop the import task (which is how async cancellation works in Rust).
     let repo = repo.gobj_wrap();
     let imgref = imgref.as_str().try_into()?;
-    let imported = build_runtime()?
+    let imported = Handle::current()
         .block_on(async { ostree_ext::container::import(&repo, &imgref, None).await })?;
     Ok(Box::new(ContainerImport {
         ostree_commit: imported.ostree_commit,
@@ -27,14 +27,7 @@ pub(crate) fn import_container(
 /// Fetch the image digest for `imgref` using ostree-rs-ext's API.
 pub(crate) fn fetch_digest(imgref: String) -> CxxResult<String> {
     let imgref = imgref.as_str().try_into()?;
-    let digest = build_runtime()?
+    let digest = Handle::current()
         .block_on(async { ostree_ext::container::fetch_manifest_info(&imgref).await })?;
     Ok(digest.manifest_digest)
-}
-
-fn build_runtime() -> Result<tokio::runtime::Runtime> {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .context("Failed to build tokio runtime")
 }

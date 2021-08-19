@@ -308,6 +308,15 @@ pub mod ffi {
         fn modularity_entrypoint(args: &Vec<String>) -> Result<()>;
     }
 
+    // tokio_ffi.rs
+    extern "Rust" {
+        type TokioHandle;
+        type TokioEnterGuard<'a>;
+
+        fn tokio_handle_get() -> Box<TokioHandle>;
+        unsafe fn enter<'a>(self: &'a TokioHandle) -> Box<TokioEnterGuard<'a>>;
+    }
+
     // scripts.rs
     extern "Rust" {
         fn script_is_ignored(pkg: &str, script: &str) -> bool;
@@ -644,6 +653,8 @@ use passwd::*;
 mod console_progress;
 pub(crate) use self::console_progress::*;
 mod progress;
+mod tokio_ffi;
+pub(crate) use self::tokio_ffi::*;
 mod scripts;
 pub(crate) use self::scripts::*;
 mod sysroot_upgrade;
