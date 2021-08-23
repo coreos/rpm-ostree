@@ -8,7 +8,6 @@ use crate::cxxrsutil::*;
 use anyhow::Result;
 use glib::prelude::*;
 use openat_ext::OpenatDirExt;
-use ostree_ext::variant_utils::VariantDictExt;
 use ostree_ext::{glib, ostree};
 use std::collections::BTreeMap;
 use std::pin::Pin;
@@ -202,7 +201,8 @@ pub(crate) fn deployment_layeredmeta_from_commit(
     // realistically will always be TRUE). For older versions, we just
     // rely on the treespec being present. */
     let is_layered = dict
-        .lookup_bool("rpmostree.clientlayer")
+        .lookup("rpmostree.clientlayer")
+        .map_err(anyhow::Error::msg)?
         .unwrap_or_else(|| dict.contains("rpmostree.spec"));
     if !is_layered {
         Ok(crate::ffi::DeploymentLayeredMeta {
