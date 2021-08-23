@@ -17,7 +17,6 @@ use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
 use ostree_ext::diff::FileTreeDiff;
-use ostree_ext::variant_utils::VariantDictExt;
 use ostree_ext::{gio, glib, ostree};
 use rayon::prelude::*;
 use std::borrow::Cow;
@@ -342,8 +341,13 @@ pub(crate) fn transaction_apply_live(
     let sysroot = &sysroot.gobj_wrap();
     let options = &options.gobj_wrap();
     let options = &glib::VariantDict::new(Some(options));
-    let target = &options.lookup_str(OPT_TARGET);
-    let allow_replacement = options.lookup_bool(OPT_REPLACE).unwrap_or_default();
+    let target = &options
+        .lookup::<String>(OPT_TARGET)
+        .map_err(anyhow::Error::msg)?;
+    let allow_replacement: bool = options
+        .lookup(OPT_REPLACE)
+        .map_err(anyhow::Error::msg)?
+        .unwrap_or_default();
     let repo = &sysroot.repo().expect("repo");
 
     let booted = sysroot.require_booted_deployment()?;
