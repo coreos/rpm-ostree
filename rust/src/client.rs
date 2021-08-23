@@ -158,7 +158,7 @@ pub(crate) fn client_start_daemon() -> CxxResult<()> {
         .status()?;
     if !res.success() {
         let _ = Command::new("systemctl")
-            .args(&["status", service])
+            .args(&["--no-pager", "status", service])
             .status();
         return Err(anyhow!("{}", res).into());
     }
