@@ -170,7 +170,8 @@ static gboolean
 osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
                                          GDBusMethodInvocation *invocation,
                                          GUnixFDList* fds,
-                                         const gchar * const *queries)
+                                         const gchar * const *queries,
+                                         const char * source)
 {
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GError *local_error = NULL;
@@ -193,7 +194,7 @@ osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
   g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_client (repo);
   rpmostree_context_set_dnf_caching (ctx, RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER);
-
+  g_autofree char * source_name = NULL;
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us
    * with the right semantics for install/source_root. */
@@ -207,30 +208,53 @@ osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
     goto out;
 
   sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
+  RpmOstreeOverrideSourceKind source_kind;
+  source_name = rpmostree_parse_override_source (source, &source_kind, &local_error);
 
-  for (const char* const* it = queries; it && *it; it++)
+  if (local_error)
+    goto out;
+
+  if (source_kind == RPM_OSTREE_OVERRIDE_SOURCE_KIND_REPO)
     {
-      auto query = static_cast<const char*> (*it);
-      g_autoptr(GPtrArray) pkglist = rpmostree_get_matching_packages (sack, query);
-
-      if (!pkglist || pkglist->len == 0)
+      for (const char* const* it = queries; it && *it; it++)
         {
-          glnx_throw (&local_error, "No matching packages for \"%s\"", query);
-          goto out;
+          auto pkg_name = static_cast<const char*> (*it);
+          g_autoptr(GPtrArray) pkglist = NULL;
+          HyNevra nevra = NULL;
+          g_auto(HySubject) subject = hy_subject_create(pkg_name);
+          hy_autoquery HyQuery query =
+            hy_subject_get_best_solution(subject, sack, NULL, &nevra, FALSE, TRUE, TRUE, TRUE, FALSE);
+          hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, source_name);
+          pkglist = hy_query_run (query);
+          if (!pkglist || pkglist->len == 0)
+            {
+              glnx_throw (&local_error, "No matches for \"%s\" in repo '%s'", pkg_name, source_name);
+              goto out;
+            }
+          g_ptr_array_add (dnf_pkgs, g_object_ref (pkglist->pdata[0]));
         }
-      g_ptr_array_add (dnf_pkgs, g_object_ref (pkglist->pdata[0]));
+    }
+  /* Future source kinds go here */
+  else
+    {
+       glnx_throw (&local_error, "Unsupported source type: %s", source);
+       goto out;
     }
 
+  if (!dnf_pkgs || dnf_pkgs->len == 0)
+    goto out;
   rpmostree_set_repos_on_packages (rpmostree_context_get_dnf (ctx), dnf_pkgs);
 
   if (!rpmostree_download_packages (dnf_pkgs, cancellable, &local_error))
     goto out;
+  
   out_fd_list = g_unix_fd_list_new ();
   for (unsigned int i = 0;  i < dnf_pkgs->len; i++)
     {
-      DnfPackage *pkg = (DnfPackage*)dnf_pkgs->pdata[i];
+      DnfPackage *pkg = static_cast<DnfPackage *>(dnf_pkgs->pdata[i]);
       const gchar *path = dnf_package_get_filename (pkg);
       gint fd = -1;
+
       if (!glnx_openat_rdonly (AT_FDCWD, path, TRUE, &fd, &local_error))
         goto out;
 
@@ -242,6 +266,7 @@ osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
     }
 
 out:
+
   if (local_error != NULL)
     {
       g_dbus_method_invocation_take_error (invocation, local_error);
