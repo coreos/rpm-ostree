@@ -30,6 +30,17 @@ extension packages and places them in an output directory.
 The format of the `extensions.yaml` file is as follow:
 
 ```yaml
+# Any additional repos to enable on top of treefile repos
+repos:
+  - myrepo
+
+# Any modules to enable/install
+modules:
+  enable:
+    - foo:bar
+  install:
+    - baz:boo/default
+
 # The top-level object is a dict. The only supported key
 # right now is `extensions`, which is a dict of extension
 # names to extension objects.
