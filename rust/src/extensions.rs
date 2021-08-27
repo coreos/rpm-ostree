@@ -25,6 +25,8 @@ pub struct Extensions {
     extensions: HashMap<String, Extension>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repos: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    modules: Option<crate::treefile::ModulesConfig>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -162,6 +164,7 @@ impl Extensions {
             repos: Some(repos),
             packages: Some(self.get_os_extension_packages()),
             releasever: src.parsed.releasever.clone(),
+            modules: self.modules.clone(),
             ..Default::default()
         };
         Ok(Box::new(Treefile::new_from_config(ret, None)?))

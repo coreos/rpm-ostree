@@ -1290,7 +1290,7 @@ pub(crate) struct RepoPackage {
     pub(crate) packages: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 pub(crate) struct ModulesConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) enable: Option<Vec<String>>,
