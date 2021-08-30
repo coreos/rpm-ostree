@@ -282,10 +282,10 @@ fn map_keyfile_optional<T>(res: StdResult<T, glib::Error>) -> StdResult<Option<T
             if let Some(t) = e.kind::<glib::KeyFileError>() {
                 match t {
                     glib::KeyFileError::GroupNotFound | glib::KeyFileError::KeyNotFound => Ok(None),
-                    _ => Err(e.into()),
+                    _ => Err(e),
                 }
             } else {
-                Err(e.into())
+                Err(e)
             }
         }
     }

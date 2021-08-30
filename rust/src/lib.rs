@@ -315,7 +315,7 @@ pub mod ffi {
         type TokioEnterGuard<'a>;
 
         fn tokio_handle_get() -> Box<TokioHandle>;
-        unsafe fn enter<'a>(self: &'a TokioHandle) -> Box<TokioEnterGuard<'a>>;
+        unsafe fn enter(self: &TokioHandle) -> Box<TokioEnterGuard>;
     }
 
     // scripts.rs

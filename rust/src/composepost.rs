@@ -862,12 +862,10 @@ fn workaround_selinux_cross_labeling_recurse(
             // New subdirectory discovered, recurse into it.
             *prefix = full_path.clone();
             workaround_selinux_cross_labeling_recurse(rootfs, prefix, cancellable)?;
-        } else {
-            if let Some(nonbin_name) = full_path.strip_suffix(".bin") {
-                rootfs
-                    .update_timestamps(nonbin_name)
-                    .with_context(|| format!("Updating timestamps of /{}", nonbin_name))?;
-            }
+        } else if let Some(nonbin_name) = full_path.strip_suffix(".bin") {
+            rootfs
+                .update_timestamps(nonbin_name)
+                .with_context(|| format!("Updating timestamps of /{}", nonbin_name))?;
         }
     }
     Ok(())

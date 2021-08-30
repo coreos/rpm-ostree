@@ -76,7 +76,7 @@ impl Deployment {
     pub fn get_base_commit(&self) -> &str {
         self.base_checksum
             .as_deref()
-            .unwrap_or(self.checksum.as_str())
+            .unwrap_or_else(|| self.checksum.as_str())
     }
 
     /// Find a given metadata key in the base commit, which must hold a non-empty string.

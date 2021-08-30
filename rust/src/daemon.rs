@@ -162,10 +162,10 @@ pub(crate) fn deployment_populate_variant(
 
     /* Staging status */
     dict.insert("staged", &deployment.is_staged());
-    if deployment.is_staged() {
-        if std::path::Path::new("/run/ostree/staged-deployment-locked").exists() {
-            dict.insert("finalization-locked", &true);
-        }
+    if deployment.is_staged()
+        && std::path::Path::new("/run/ostree/staged-deployment-locked").exists()
+    {
+        dict.insert("finalization-locked", &true);
     }
 
     dict.insert("pinned", &deployment.is_pinned());

@@ -315,7 +315,7 @@ fn passwd_compose_prep_impl(
 
     if !found_passwd_data {
         if let Some((repo, prev_rev)) = repo_previous_rev {
-            concat_fs_content(&rootfs, repo, prev_rev)?;
+            concat_fs_content(rootfs, repo, prev_rev)?;
         }
     }
 
@@ -350,7 +350,7 @@ fn data_from_json(
             CheckGroups::File(cfg) => cfg,
             _ => return Ok(false),
         };
-        treefile.externals.group_file_mut(&check_groups_file)?
+        treefile.externals.group_file_mut(check_groups_file)?
     } else {
         unreachable!("impossible merge target '{}'", target);
     };
@@ -383,10 +383,9 @@ fn concat_fs_content(
 
     let (prev_root, _name) = repo.read_commit(previous_checksum, gio::NONE_CANCELLABLE)?;
 
-    concat_files(&rootfs, &prev_root, "passwd")
+    concat_files(rootfs, &prev_root, "passwd")
         .context("failed to merge entries into /etc/passwd")?;
-    concat_files(&rootfs, &prev_root, "group")
-        .context("failed to merge entries into /etc/group")?;
+    concat_files(rootfs, &prev_root, "group").context("failed to merge entries into /etc/group")?;
 
     Ok(())
 }

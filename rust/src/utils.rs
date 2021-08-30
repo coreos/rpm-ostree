@@ -189,7 +189,7 @@ pub fn decompose_sha256_nevra(v: &str) -> Result<(&str, &str)> {
     match (parts.get(0), parts.get(1)) {
         (Some(_), None) => bail!("Missing : in {}", v),
         (Some(sha256), Some(nevra)) => {
-            ostree::validate_checksum_string(&sha256)?;
+            ostree::validate_checksum_string(sha256)?;
             Ok((nevra, sha256))
         }
         (_, _) => unreachable!(),
