@@ -540,4 +540,13 @@ rpmostree_process_global_teardown ()
   rpmostree_polkit_agent_close ();
 }
 
+// Execute all the C/C++ unit tests.
+void
+c_unit_tests ()
+{
+  // Add unit tests to a new C/C++ file here.
+  rpmostreed_utils_tests ();
+}
+
+
 } /* namespace */

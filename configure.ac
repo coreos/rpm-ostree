@@ -27,18 +27,52 @@ dnl if not set, which we definitely want; cmake doesn't do that.
 AC_PROG_CXX
 AM_PROG_CC_C_O
 
+RPM_OSTREE_FEATURES=""
+AC_SUBST([RPM_OSTREE_FEATURES])
+
+AC_MSG_CHECKING(whether to build in debug mode)
+debug_release=release
+if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
+  debug_release=debug
+fi
+AC_MSG_RESULT($debug_release)
+
+dnl These bits based on gnome:librsvg/configure.ac
+dnl By default, we build in release mode (but without LTO!)
+AC_ARG_ENABLE(rust-debug,
+  AC_HELP_STRING([--enable-rust-debug],
+    [Build Rust code with debugging information [default=no]]),
+    [rust_debug_release=$enableval],
+    [rust_debug_release=$debug_release])
+dnl Canonicalize yes/no to debug/release
+AS_IF([test x$rust_debug_release = xno ], [rust_debug_release=release])
+AS_IF([test x$rust_debug_release = xyes ], [rust_debug_release=debug])
+
 AC_ARG_ENABLE(sanitizers,
               AS_HELP_STRING([--enable-sanitizers],
                              [Enable ASAN and UBSAN (default: no)]),,
               [enable_sanitizers=no])
 AM_CONDITIONAL(BUILDOPT_ASAN, [test x$enable_sanitizers != xno])
 
+AC_ARG_ENABLE(bin-unit-tests,
+              AS_HELP_STRING([--enable-bin-unit-tests],
+                             [(default: yes if debug build, no for release build)]),,
+              [enable_bin_unit_tests=maybe])
+case "${enable_bin_unit_tests}-${debug_release}" in
+  maybe-debug) enable_bin_unit_tests=yes;;
+  maybe-*) enable_bin_unit_tests=no;;
+esac
+  
+AS_IF([test x$enable_bin_unit_tests = xyes], [
+  AC_DEFINE([BUILDOPT_BIN_UNIT_TESTS], 1, [Define if unit tests are injected into the binary])
+  RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES bin-unit-tests"
+])
+AM_CONDITIONAL(BUILDOPT_BIN_UNIT_TESTS, [test x$enable_bin_unit_tests = xyes])
+
 # Initialize libtool
 LT_PREREQ([2.2.4])
 LT_INIT([disable-static])
 
-RPM_OSTREE_FEATURES=""
-AC_SUBST([RPM_OSTREE_FEATURES])
 
 PKG_PROG_PKG_CONFIG
 
@@ -102,23 +136,6 @@ AS_IF([test -z "$rustc"], [AC_MSG_ERROR([rustc is required for --enable-rust])])
 dnl See comment in installdeps.sh
 AM_CONDITIONAL(BUILDOPT_PREBUILT_BINDINGS, [test -f rpmostree-cxxrs-prebuilt.h])
 
-AC_MSG_CHECKING(whether to build in debug mode)
-debug_release=release
-if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
-  debug_release=debug
-fi
-AC_MSG_RESULT($debug_release)
-
-dnl These bits based on gnome:librsvg/configure.ac
-dnl By default, we build in release mode (but without LTO!)
-AC_ARG_ENABLE(rust-debug,
-  AC_HELP_STRING([--enable-rust-debug],
-    [Build Rust code with debugging information [default=no]]),
-    [rust_debug_release=$enableval],
-    [rust_debug_release=$debug_release])
-dnl Canonicalize yes/no to debug/release
-AS_IF([test x$rust_debug_release = xno ], [rust_debug_release=release])
-AS_IF([test x$rust_debug_release = xyes ], [rust_debug_release=debug])
 
 RUST_TARGET_SUBDIR=${rust_debug_release}
 AC_SUBST([RUST_TARGET_SUBDIR])
@@ -137,6 +154,7 @@ AC_OUTPUT
 echo "
     $PACKAGE $VERSION
 
+    features:                                $RPM_OSTREE_FEATURES
     introspection:                           $found_introspection
     ASAN + UBSAN:                            ${enable_sanitizers:-no}
     gtk-doc:                                 $enable_gtk_doc

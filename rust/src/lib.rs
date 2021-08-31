@@ -540,6 +540,7 @@ pub mod ffi {
         fn early_main();
         fn rpmostree_main(args: &[&str]) -> Result<i32>;
         fn rpmostree_process_global_teardown();
+        fn c_unit_tests() -> Result<()>;
     }
 
     unsafe extern "C++" {

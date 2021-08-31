@@ -29,6 +29,7 @@ check-local:
 	@echo " \"make check\" only runs unit tests, which have limited coverage currently."
 	@echo " See HACKING.md for more information about VM-based integration testing."
 	@echo "  *** NOTE ***"
+	./rpm-ostree testutils c-units
 
 .PHONY: vmsync vmoverlay vmcheck testenv
 

@@ -368,4 +368,7 @@ rpmostree_variant_native_to_be (GVariant **v);
 char**
 rpmostree_cxx_string_vec_to_strv (rust::Vec<rust::String> &v);
 
+void 
+rpmostreed_utils_tests (void);
+
 G_END_DECLS
