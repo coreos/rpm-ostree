@@ -10,5 +10,5 @@ dn=$(dirname $0)
 # Hard fail on compiler warnings in CI.  We control our compiler
 # version as part of the coreos-assembler buildroot and expect
 # that to be clean.
-CONFIGOPTS="--enable-werror" ${dn}/build.sh
+CONFIGOPTS="--enable-werror --enable-bin-unit-tests" ${dn}/build.sh
 make check

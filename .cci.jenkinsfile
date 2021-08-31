@@ -29,13 +29,20 @@ parallel insttests: {
     def nhosts = 6
     def mem = (nhosts * 1024) + 512
     cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
-      stage("Build FCOS") {
+      stage("Unit tests") {
         checkout scm
         unstash 'rpms'
         // run this stage first without installing deps, so we match exactly the cosa pkgset
         // (+ our built rpm-ostree)
         shwrap("""
           dnf install -y *.rpm
+          # Cross check we enabled the unit tests
+          rpm-ostree --version | grep bin-unit-tests
+          rpm-ostree testutils c-units
+        """)
+      }
+      stage("Build FCOS") {
+        shwrap("""
           coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm

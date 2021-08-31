@@ -667,3 +667,26 @@ check_sd_inhibitor_locks (GCancellable    *cancellable,
     }
   return glnx_throw (error, "%s", error_msg->str);
 }
+
+#ifdef BUILDOPT_BIN_UNIT_TESTS
+static void
+test_refspec_parse_partial (void)
+{
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
+
+  g_autofree char *new_refspec = NULL;
+  rpmostreed_refspec_parse_partial ("baz:", "foo:bar", &new_refspec, error);
+  g_assert_no_error (local_error);
+  g_assert_cmpstr (new_refspec, ==, "baz:bar");
+  g_print ("ok %s\n", G_STRFUNC);
+}
+#endif
+
+void 
+rpmostreed_utils_tests (void)
+{
+#ifdef BUILDOPT_BIN_UNIT_TESTS
+  test_refspec_parse_partial ();
+#endif
+}

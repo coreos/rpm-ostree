@@ -24,6 +24,8 @@ BuildRequires: rust
 
 # Enable ASAN + UBSAN
 %bcond_with sanitizers
+# Embedded unit tests
+%bcond_with bin_unit_tests
 
 # RHEL8 doesn't ship zchunk today.  See also the comments
 # in configure.ac around this as libdnf/librepo need to be in
@@ -156,7 +158,7 @@ env NOCONFIGURE=1 ./autogen.sh
 %if 0%{?build_rustflags:1}
 export RUSTFLAGS="%{build_rustflags}"
 %endif
-%configure --disable-silent-rules --enable-gtk-doc %{?rpmdb_default} %{?with_sanitizers:--enable-sanitizers}
+%configure --disable-silent-rules --enable-gtk-doc %{?rpmdb_default} %{?with_sanitizers:--enable-sanitizers}  %{?with_bin_unit_tests:--enable-bin-unit-tests}
 
 %make_build
 

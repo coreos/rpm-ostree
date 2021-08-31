@@ -50,6 +50,8 @@ enum Opt {
     GenerateSyntheticUpgrade(SyntheticUpgradeOpts),
     /// Validate that we can parse the output of `rpm-ostree status --json`.
     ValidateParseStatus,
+    /// Run the C unit tests
+    CUnits,
     /// Test that we can 🐄
     Moo,
 }
@@ -266,6 +268,7 @@ pub(crate) fn testutils_entrypoint(args: Vec<String>) -> CxxResult<()> {
     match opt {
         Opt::GenerateSyntheticUpgrade(ref opts) => update_os_tree(opts)?,
         Opt::ValidateParseStatus => validate_parse_status()?,
+        Opt::CUnits => crate::ffi::c_unit_tests()?,
         Opt::Moo => test_moo()?,
     };
     Ok(())
