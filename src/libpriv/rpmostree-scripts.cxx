@@ -110,6 +110,10 @@ static const char glibc_langpacks_script[] =
   "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
   "fi\n";
 
+static const char glibc_post_script[] =
+  "libdir=" LIBDIR "\n"
+  "exec iconvconfig -o ${libdir}/gconv/gconv-modules.cache --nostdlib ${libdir}/gconv";
+
 static const RpmOstreeLuaReplacement lua_replacements[] = {
   /* This code only applies to Fedora <= 29, see:
    * https://src.fedoraproject.org/rpms/fedora-release/c/617b1bed348d92cba04443f8cce1486639a114f0?branch=master
@@ -167,8 +171,12 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
    */
   { "glibc.post",
     "/usr/bin/bash",
-    "libdir=" LIBDIR "\n"
-    "exec iconvconfig -o ${libdir}/gconv/gconv-modules.cache --nostdlib ${libdir}/gconv"
+    glibc_post_script
+  },
+  /* Code introduced in https://src.fedoraproject.org/rpms/glibc/c/ca0613665ce6e1b4e92dadd3660ad39cf3dc5f3e?branch=main */
+  { "glibc-gconv-extra.post",
+    "/usr/bin/bash",
+    glibc_post_script
   },
   /* See https://bugzilla.redhat.com/show_bug.cgi?id=1847454.
    * Code originally introduced in:
