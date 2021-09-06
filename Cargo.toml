@@ -73,7 +73,7 @@ termcolor = "1.1.2"
 
 [build-dependencies]
 anyhow = "1.0"
-system-deps = "3.2"
+system-deps = "4.0"
 
 [lib]
 name = "rpmostree_rust"
