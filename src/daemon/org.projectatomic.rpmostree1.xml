@@ -456,7 +456,7 @@
       <!-- time data, format is:
             start time, elapsed seconds
       -->
-    	<arg name="time" type="(tt)" direction="out"/>
+      <arg name="time" type="(tt)" direction="out"/>
 
       <!--
          outstanding data counts, format is:
@@ -468,34 +468,34 @@
          metadata counts, format is:
          (scanned, fetched, outstanding)
       -->
-    	<arg name="metadata" type="(uuu)" direction="out"/>
+      <arg name="metadata" type="(uuu)" direction="out"/>
 
       <!--
          delta data, format is:
          (total parts, fetched parts, total super blocks, total size)
       -->
-    	<arg name="delta" type="(uuut)" direction="out"/>
+      <arg name="delta" type="(uuut)" direction="out"/>
 
       <!--
          content data, format is:
          (fetched, requested)
       -->
-    	<arg name="content" type="(uu)" direction="out"/>
+      <arg name="content" type="(uu)" direction="out"/>
 
       <!--
          transfer data, format is:
          (bytes transfered, bytes/s)
       -->
-    	<arg name="transfer" type="(tt)" direction="out"/>
+      <arg name="transfer" type="(tt)" direction="out"/>
     </signal>
 
     <signal name="SignatureProgress">
       <!-- An ostree GVariant containing signature data
            see ostree_gpg_verify_result_get_all.
       -->
-    	<arg name="signature" type="av" direction="out"/>
+      <arg name="signature" type="av" direction="out"/>
       <!-- The signed commit -->
-    	<arg name="commit" type="s" direction="out"/>
+      <arg name="commit" type="s" direction="out"/>
     </signal>
 
     <!-- Indicates progress signals are done and subsequent
