@@ -24,7 +24,9 @@
     <property name="Path" type="s" access="read"/>
 
     <!-- The values are (method-name, sender-name, object path) -->
-    <property name="ActiveTransaction" type="(sss)" access="read"/>
+    <property name="ActiveTransaction" type="(sss)" access="read">
+      <annotation name="org.qtproject.QtDBus.QtTypeName" value="QStringList"/>
+    </property>
     <!-- A DBus address - connect to it to access its methods -->
     <property name="ActiveTransactionPath" type="s" access="read"/>
 
@@ -36,6 +38,7 @@
     -->
     <method name="RegisterClient">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
     </method>
 
     <!-- You must call this if your process is no longer interested in talking to
@@ -45,6 +48,7 @@
     -->
     <method name="UnregisterClient">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
     </method>
 
     <!-- Reload sysroot if changed. This can also be used as a way to sync with the daemon
@@ -65,13 +69,21 @@
     </method>
 
     <!-- Array of all deployments in boot order -->
-    <property name="Deployments" type="aa{sv}" access="read"/>
+    <property name="Deployments" type="aa{sv}" access="read">
+      <annotation name="org.qtproject.QtDBus.QtTypeName" value="QList&lt;QVariantMap>"/>
+    </property>
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.OS">
-    <property name="BootedDeployment" type="a{sv}" access="read"/>
-    <property name="DefaultDeployment" type="a{sv}" access="read"/>
-    <property name="RollbackDeployment" type="a{sv}" access="read"/>
+    <property name="BootedDeployment" type="a{sv}" access="read">
+      <annotation name="org.qtproject.QtDBus.QtTypeName" value="QVariantMap"/>
+    </property>
+    <property name="DefaultDeployment" type="a{sv}" access="read">
+      <annotation name="org.qtproject.QtDBus.QtTypeName" value="QVariantMap"/>
+    </property>
+    <property name="RollbackDeployment" type="a{sv}" access="read">
+      <annotation name="org.qtproject.QtDBus.QtTypeName" value="QVariantMap"/>
+    </property>
 
     <!-- CachedUpdate dictionary keys:
        'osname' (type 's')
@@ -90,7 +102,9 @@
           'added' (type 'a(usss)')
        'advisories' (type 'a(suuasa{sv})')
     -->
-    <property name="CachedUpdate" type="a{sv}" access="read"/>
+    <property name="CachedUpdate" type="a{sv}" access="read">
+      <annotation name="org.qtproject.QtDBus.QtTypeName" value="QVariantMap"/>
+    </property>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>
 
     <!-- Available options:
@@ -106,6 +120,7 @@
     -->
     <method name="AutomaticUpdateTrigger">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="b" name="enabled" direction="out"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
@@ -116,6 +131,7 @@
       <arg type="s" name="deployid0"/>
       <arg type="s" name="deployid1"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
     </method>
 
     <!-- Revision may be a full checksum or version string.
@@ -126,6 +142,7 @@
     <method name="Deploy">
       <arg type="s" name="revision" direction="in"/>
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In1" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
       <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
@@ -142,7 +159,9 @@
       <arg type="s" name="revision"/>
       <arg type="as" name="packages"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
       <arg type="a{sv}" name="details" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out1" value="QVariantMap"/>
     </method>
 
     <method name="DownloadDeployRpmDiff">
@@ -157,6 +176,7 @@
     -->
     <method name="Upgrade">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
       <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
@@ -172,7 +192,9 @@
     <method name="GetCachedUpdateRpmDiff">
       <arg type="s" name="deployid"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
       <arg type="a{sv}" name="details" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out1" value="QVariantMap"/>
     </method>
 
     <method name="DownloadUpdateRpmDiff">
@@ -184,6 +206,7 @@
     -->
     <method name="Rollback">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -192,6 +215,7 @@
     -->
     <method name="ClearRollbackTarget">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -202,6 +226,7 @@
     -->
     <method name="Rebase">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="s" name="refspec"/>
       <arg type="as" name="packages"/>
       <arg type="s" name="transaction_address" direction="out"/>
@@ -220,7 +245,9 @@
       <arg type="s" name="refspec"/>
       <arg type="as" name="packages"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
       <arg type="a{sv}" name="details" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out1" value="QVariantMap"/>
     </method>
 
     <method name="DownloadRebaseRpmDiff">
@@ -235,6 +262,7 @@
     -->
     <method name="PkgChange">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="as" name="packages_added"/>
       <arg type="as" name="packages_removed"/>
       <arg type="s" name="transaction_address" direction="out"/>
@@ -245,6 +273,7 @@
       <arg type="b" name="regenerate" direction="in"/>
       <arg type="as" name="args" direction="in"/>
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In2" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -254,6 +283,7 @@
       <arg type="b" name="untrack_all" direction="in"/>
       <arg type="b" name="force_sync" direction="in"/>
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In4" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -266,6 +296,7 @@
       <arg type="as" name="kernel_args_replaced" direction="in"/>
       <arg type="as" name="kernel_args_removed" direction="in"/>
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In4" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -273,6 +304,7 @@
       <arg type="s" name="deployid" />
       <arg type="b" name="is_pending" direction="in"/>
       <arg type="a{sv}" name="bootconfig" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantMap"/>
     </method>
 
     <method name="Cleanup">
@@ -282,6 +314,7 @@
 
     <method name="RefreshMd">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -289,6 +322,7 @@
     <method name="ModifyYumRepo">
       <arg type="s" name="repo_id" direction="in"/>
       <arg type="a{ss}" name="settings" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In1" value="QMap&lt;QString,QString>"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -365,7 +399,9 @@
     -->
     <method name="UpdateDeployment">
       <arg type="a{sv}" name="modifiers" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In1" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
       <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
@@ -382,6 +418,7 @@
     -->
     <method name="FinalizeDeployment">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
   </interface>
@@ -396,6 +433,7 @@
 
     <method name="LiveFs">
       <arg type="a{sv}" name="options" direction="in"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -457,36 +495,42 @@
             start time, elapsed seconds
       -->
       <arg name="time" type="(tt)" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QStringList"/>
 
       <!--
          outstanding data counts, format is:
          (outstanding fetches, outstanding writes)
       -->
       <arg name="outstanding" type="(uu)" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out1" value="QVariantList"/>
 
       <!--
          metadata counts, format is:
          (scanned, fetched, outstanding)
       -->
       <arg name="metadata" type="(uuu)" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out2" value="QVariantList"/>
 
       <!--
          delta data, format is:
          (total parts, fetched parts, total super blocks, total size)
       -->
       <arg name="delta" type="(uuut)" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out3" value="QVariantList"/>
 
       <!--
          content data, format is:
          (fetched, requested)
       -->
       <arg name="content" type="(uu)" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out4" value="QVariantList"/>
 
       <!--
          transfer data, format is:
          (bytes transfered, bytes/s)
       -->
       <arg name="transfer" type="(tt)" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out5" value="QVariantList"/>
     </signal>
 
     <signal name="SignatureProgress">
