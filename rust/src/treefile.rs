@@ -1453,7 +1453,7 @@ impl TreeComposeConfig {
 
     // we need to ensure that appended repo packages override earlier ones
     fn handle_repo_packages_overrides(&mut self) {
-        self.repo_packages.as_mut().map(|repo_packages| {
+        if let Some(repo_packages) = self.repo_packages.as_mut() {
             let mut seen_pkgs: HashSet<String> = HashSet::new();
             // Create a temporary new filtered vec; see
             // https://doc.rust-lang.org/std/iter/struct.Map.html#notes-about-side-effects for why
@@ -1470,7 +1470,7 @@ impl TreeComposeConfig {
             // Now replace the original, re-reversing.
             v.reverse();
             *repo_packages = v;
-        });
+        }
     }
 }
 

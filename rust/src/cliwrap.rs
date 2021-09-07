@@ -42,7 +42,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
     let name = args[0];
     let name = match std::path::Path::new(name).file_name() {
         Some(name) => name,
-        None => return Err(anyhow!("Invalid wrapped binary: {}", name).into()),
+        None => return Err(anyhow!("Invalid wrapped binary: {}", name)),
     };
     // We know we had a string from above
     let name = name.to_str().unwrap();
@@ -52,14 +52,14 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
 
     // If we're not booted into ostree, just run the child directly.
     if !cliutil::is_ostree_booted() {
-        Ok(cliutil::exec_real_binary(name, &args)?)
+        Ok(cliutil::exec_real_binary(name, args)?)
     } else {
         match name {
             "rpm" => Ok(self::rpm::main(args)?),
             "yum" | "dnf" => Ok(self::yumdnf::main(args)?),
             "dracut" => Ok(self::dracut::main(args)?),
             "grubby" => Ok(self::grubby::main(args)?),
-            _ => Err(anyhow!("Unknown wrapped binary: {}", name).into()),
+            _ => Err(anyhow!("Unknown wrapped binary: {}", name)),
         }
     }
 }

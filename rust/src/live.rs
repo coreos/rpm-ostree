@@ -175,7 +175,7 @@ fn apply_diff(
         .par_iter()
         .chain(diff.removed_dirs.par_iter())
         .try_for_each(|d| -> Result<()> {
-            let d = d.strip_prefix("/").expect("prefix");
+            let d = d.strip_prefix('/').expect("prefix");
             destdir
                 .remove_all(d)
                 .with_context(|| format!("Failed to remove {:?}", d))?;
