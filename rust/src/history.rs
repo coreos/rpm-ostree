@@ -295,8 +295,8 @@ impl HistoryCtx {
     /// Returns a marker of the appropriate kind for a given journal message.
     fn record_to_marker(&self, record: &JournalRecord) -> Result<Option<Marker>> {
         Ok(match record.get("MESSAGE_ID").unwrap() {
-            m if m == OSTREE_BOOT_MSG => self.boot_record_to_marker(&record)?,
-            m if m == RPMOSTREE_DEPLOY_MSG => self.deployment_record_to_marker(&record)?,
+            m if m == OSTREE_BOOT_MSG => self.boot_record_to_marker(record)?,
+            m if m == RPMOSTREE_DEPLOY_MSG => self.deployment_record_to_marker(record)?,
             m => panic!("matched an unwanted message: {:?}", m),
         })
     }

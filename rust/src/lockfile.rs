@@ -342,7 +342,7 @@ mod tests {
 }
 
 pub(crate) fn lockfile_read(filenames: &Vec<String>) -> CxxResult<Box<LockfileConfig>> {
-    Ok(Box::new(lockfile_parse_multiple(&filenames)?))
+    Ok(Box::new(lockfile_parse_multiple(filenames)?))
 }
 
 pub(crate) fn lockfile_write(

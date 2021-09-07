@@ -139,13 +139,13 @@ fn apply_diff(
     };
     // Check out new directories and files
     for d in diff.added_dirs.iter().map(Path::new) {
-        opts.subpath = subpath(diff, &d);
+        opts.subpath = subpath(diff, d);
         let t = d.strip_prefix("/")?;
         repo.checkout_at(Some(&opts), destdir.as_raw_fd(), t, commit, cancellable)
             .with_context(|| format!("Checking out added dir {:?}", d))?;
     }
     for d in diff.added_files.iter().map(Path::new) {
-        opts.subpath = subpath(diff, &d);
+        opts.subpath = subpath(diff, d);
         repo.checkout_at(
             Some(&opts),
             destdir.as_raw_fd(),
@@ -157,7 +157,7 @@ fn apply_diff(
     }
     // Changed files in existing directories
     for d in diff.changed_files.iter().map(Path::new) {
-        opts.subpath = subpath(diff, &d);
+        opts.subpath = subpath(diff, d);
         repo.checkout_at(
             Some(&opts),
             destdir.as_raw_fd(),
@@ -464,7 +464,7 @@ pub(crate) fn transaction_apply_live(
 
     // Record that we're targeting this commit
     state.inprogress = target_commit.to_string();
-    write_live_state(&repo, &booted, &state)?;
+    write_live_state(repo, &booted, &state)?;
 
     // Gather the current diff of /etc - we need to avoid changing
     // any files which are locally modified.
@@ -496,7 +496,7 @@ pub(crate) fn transaction_apply_live(
     // Success! Update the recorded state.
     state.commit = target_commit.to_string();
     state.inprogress = "".to_string();
-    write_live_state(&repo, &booted, &state)?;
+    write_live_state(repo, &booted, &state)?;
 
     Ok(())
 }
@@ -514,13 +514,13 @@ pub(crate) fn applylive_sync_ref(
     } else {
         return Ok(());
     };
-    if get_live_state(&repo, &booted)?.is_some() {
+    if get_live_state(repo, &booted)?.is_some() {
         return Ok(());
     }
 
     // Set the live state to empty
     let state = Default::default();
-    write_live_state(&repo, &booted, &state).context("apply-live: failed to write state")?;
+    write_live_state(repo, &booted, &state).context("apply-live: failed to write state")?;
     Ok(())
 }
 
@@ -546,7 +546,7 @@ pub(crate) fn get_live_apply_state(
     let sysroot = sysroot.gobj_wrap();
     let deployment = deployment.gobj_wrap();
     let repo = &sysroot.repo().unwrap();
-    if let Some(state) = get_live_state(&repo, &deployment)? {
+    if let Some(state) = get_live_state(repo, &deployment)? {
         Ok(state)
     } else {
         Ok(Default::default())

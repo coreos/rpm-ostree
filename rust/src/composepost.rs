@@ -428,9 +428,9 @@ pub fn compose_postprocess(
     }
 
     compose_postprocess_rpmdb(rootfs_dfd)?;
-    compose_postprocess_units(&rootfs_dfd, treefile)?;
+    compose_postprocess_units(rootfs_dfd, treefile)?;
     if let Some(t) = treefile.parsed.default_target.as_deref() {
-        compose_postprocess_default_target(&rootfs_dfd, t)?;
+        compose_postprocess_default_target(rootfs_dfd, t)?;
     }
 
     treefile.write_compose_json(rootfs_dfd)?;
@@ -636,7 +636,7 @@ fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>)
         0o644,
         |bufwr| -> Result<()> {
             let mut prefix = "var".to_string();
-            convert_path_to_tmpfiles_d_recurse(bufwr, &pwdb, &rootfs, &mut prefix, &cancellable)
+            convert_path_to_tmpfiles_d_recurse(bufwr, &pwdb, rootfs, &mut prefix, &cancellable)
                 .with_context(|| format!("Analyzing /{} content", prefix))?;
             Ok(())
         },

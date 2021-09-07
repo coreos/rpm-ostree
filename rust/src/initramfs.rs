@@ -38,7 +38,7 @@ fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
                 let e = e.context("readdir")?;
                 let name: &Utf8Path = Path::new(e.file_name()).try_into()?;
                 let subpath = format!("{}/{}", path, name);
-                list_files_recurse(&d, &subpath, filelist, cancellable)?;
+                list_files_recurse(d, &subpath, filelist, cancellable)?;
             }
         }
         _ => anyhow::bail!("Invalid non-regfile/symlink/directory: {}", path),
@@ -79,7 +79,7 @@ fn gather_filelist<P: glib::IsA<gio::Cancellable>>(
             }
         }
 
-        list_files_recurse(&d, file, &mut filelist, cancellable)
+        list_files_recurse(d, file, &mut filelist, cancellable)
             .with_context(|| format!("Adding {}", file))?;
     }
     Ok(filelist)

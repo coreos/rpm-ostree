@@ -99,7 +99,7 @@ impl Repo {
     pub fn metalink(&self, version_id: &str) -> String {
         self.meta_link
             .clone()
-            .replace("$releasever", &version_id)
+            .replace("$releasever", version_id)
             .replace("$basearch", &utils::get_rpm_basearch())
     }
 }

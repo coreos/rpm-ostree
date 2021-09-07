@@ -32,29 +32,29 @@ static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
 #[context("Parsing origin")]
 pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     let mut cfg: crate::treefile::TreeComposeConfig = Default::default();
-    let refspec_str = if let Some(r) = keyfile_get_optional_string(&kf, ORIGIN, "refspec")? {
+    let refspec_str = if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "refspec")? {
         Some(r)
-    } else if let Some(r) = keyfile_get_optional_string(&kf, ORIGIN, "baserefspec")? {
+    } else if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "baserefspec")? {
         Some(r)
     } else {
-        keyfile_get_optional_string(&kf, ORIGIN, "container-image-reference")?
+        keyfile_get_optional_string(kf, ORIGIN, "container-image-reference")?
     };
     let refspec_str = refspec_str.ok_or_else(|| {
         anyhow::anyhow!("Failed to find refspec/baserefspec/container-image-reference in origin")
     })?;
     cfg.derive.base_refspec = Some(refspec_str);
-    cfg.packages = parse_stringlist(&kf, PACKAGES, "requested")?;
-    cfg.derive.packages_local = parse_localpkglist(&kf, PACKAGES, "requested-local")?;
-    let modules_enable = parse_stringlist(&kf, MODULES, "enable")?;
-    let modules_install = parse_stringlist(&kf, MODULES, "install")?;
+    cfg.packages = parse_stringlist(kf, PACKAGES, "requested")?;
+    cfg.derive.packages_local = parse_localpkglist(kf, PACKAGES, "requested-local")?;
+    let modules_enable = parse_stringlist(kf, MODULES, "enable")?;
+    let modules_install = parse_stringlist(kf, MODULES, "install")?;
     if modules_enable.is_some() || modules_install.is_some() {
         cfg.modules = Some(crate::treefile::ModulesConfig {
             enable: modules_enable,
             install: modules_install,
         });
     }
-    cfg.derive.override_remove = parse_stringlist(&kf, OVERRIDES, "remove")?;
-    cfg.derive.override_replace_local = parse_localpkglist(&kf, OVERRIDES, "replace-local")?;
+    cfg.derive.override_remove = parse_stringlist(kf, OVERRIDES, "remove")?;
+    cfg.derive.override_replace_local = parse_localpkglist(kf, OVERRIDES, "replace-local")?;
 
     let regenerate_initramfs = kf
         .boolean(RPMOSTREE, "regenerate-initramfs")
@@ -70,8 +70,8 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
         cfg.derive.initramfs = Some(initramfs);
     }
 
-    if let Some(url) = keyfile_get_optional_string(&kf, ORIGIN, "custom-url")? {
-        let description = keyfile_get_optional_string(&kf, ORIGIN, "custom-description")?;
+    if let Some(url) = keyfile_get_optional_string(kf, ORIGIN, "custom-url")? {
+        let description = keyfile_get_optional_string(kf, ORIGIN, "custom-description")?;
         cfg.derive.custom = Some(crate::treefile::DeriveCustom { url, description })
     }
 

@@ -344,7 +344,7 @@ fn data_from_json(
             CheckPasswd::File(cfg) => cfg,
             _ => return Ok(false),
         };
-        treefile.externals.passwd_file_mut(&check_passwd_file)?
+        treefile.externals.passwd_file_mut(check_passwd_file)?
     } else if target == "group" {
         let check_groups_file = match treefile.parsed.get_check_groups() {
             CheckGroups::File(cfg) => cfg,
