@@ -199,9 +199,7 @@ fn take_archful_pkgs(
     }
 
     // and drop it from the map
-    treefile
-        .extra
-        .retain(|ref k, _| !k.starts_with("packages-"));
+    treefile.extra.retain(|k, _| !k.starts_with("packages-"));
 
     Ok(archful_pkgs)
 }
@@ -249,7 +247,7 @@ fn treefile_parse<P: AsRef<Path>>(
         None
     };
     let mut add_files: BTreeMap<String, fs::File> = BTreeMap::new();
-    if let Some(ref add_file_names) = tf.add_files.as_ref() {
+    if let Some(add_file_names) = tf.add_files.as_ref() {
         for (name, _) in add_file_names.iter() {
             add_files.insert(
                 name.clone(),
@@ -749,7 +747,7 @@ impl Treefile {
         // check add-files
         if let Some(files) = &config.add_files {
             for (_, dest) in files.iter() {
-                if !add_files_path_is_valid(&dest) {
+                if !add_files_path_is_valid(dest) {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
                         format!("Unsupported path in add-files: {}", dest),

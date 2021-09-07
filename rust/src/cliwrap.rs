@@ -55,10 +55,10 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
         Ok(cliutil::exec_real_binary(name, &args)?)
     } else {
         match name {
-            "rpm" => Ok(self::rpm::main(&args)?),
-            "yum" | "dnf" => Ok(self::yumdnf::main(&args)?),
-            "dracut" => Ok(self::dracut::main(&args)?),
-            "grubby" => Ok(self::grubby::main(&args)?),
+            "rpm" => Ok(self::rpm::main(args)?),
+            "yum" | "dnf" => Ok(self::yumdnf::main(args)?),
+            "dracut" => Ok(self::dracut::main(args)?),
+            "grubby" => Ok(self::grubby::main(args)?),
             _ => Err(anyhow!("Unknown wrapped binary: {}", name).into()),
         }
     }

@@ -77,33 +77,33 @@ fn deployment_populate_variant_origin(
 ) -> Result<()> {
     // Convert the origin to a treefile, and operate on that.
     // See https://github.com/coreos/rpm-ostree/issues/2326
-    let tf = crate::origin::origin_to_treefile_inner(&origin)?;
+    let tf = crate::origin::origin_to_treefile_inner(origin)?;
     let tf = &tf.parsed;
 
     // Package mappings.  Note these are inserted unconditionally, even if empty.
-    vdict_insert_optvec(&dict, "requested-packages", tf.packages.as_ref());
+    vdict_insert_optvec(dict, "requested-packages", tf.packages.as_ref());
     vdict_insert_optvec(
-        &dict,
+        dict,
         "requested-modules",
         tf.modules.as_ref().map(|m| m.install.as_ref()).flatten(),
     );
     vdict_insert_optvec(
-        &dict,
+        dict,
         "modules-enabled",
         tf.modules.as_ref().map(|m| m.enable.as_ref()).flatten(),
     );
     vdict_insert_optmap(
-        &dict,
+        dict,
         "requested-local-packages",
         tf.derive.packages_local.as_ref(),
     );
     vdict_insert_optvec(
-        &dict,
+        dict,
         "requested-base-removals",
         tf.derive.override_remove.as_ref(),
     );
     vdict_insert_optmap(
-        &dict,
+        dict,
         "requested-base-local-replacements",
         tf.derive.override_replace_local.as_ref(),
     );

@@ -24,8 +24,8 @@ fn send_countme(url: &str, ua: &str) -> Result<()> {
     let mut handle = Easy::new();
     handle.follow_location(true)?;
     handle.fail_on_error(true)?;
-    handle.url(&url)?;
-    handle.useragent(&ua)?;
+    handle.url(url)?;
+    handle.useragent(ua)?;
     {
         let mut transfer = handle.transfer();
         transfer.write_function(|new_data| Ok(new_data.len()))?;
