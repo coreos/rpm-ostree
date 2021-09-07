@@ -1460,7 +1460,7 @@ impl TreeComposeConfig {
             // Create a temporary new filtered vec; see
             // https://doc.rust-lang.org/std/iter/struct.Map.html#notes-about-side-effects for why
             // the reverse and re-reverse due to the side effect during `map()`.
-            let v: Vec<_> = repo_packages
+            let mut v: Vec<_> = repo_packages
                 .drain(..)
                 .rev()
                 .map(|mut rp| {
@@ -1470,7 +1470,8 @@ impl TreeComposeConfig {
                 .filter(|rp| !rp.packages.is_empty())
                 .collect();
             // Now replace the original, re-reversing.
-            repo_packages.extend(v.into_iter().rev());
+            v.reverse();
+            *repo_packages = v;
         });
     }
 }
