@@ -579,6 +579,7 @@ pub mod ffi {
         include!("rpmostree-libbuiltin.h");
         include!("rpmostree-util.h");
         type RpmOstreeDiffPrintFormat;
+        /// # Safety: ensure @cancellable is a valid pointer
         unsafe fn print_treepkg_diff_from_sysroot_path(
             sysroot_path: &str,
             format: RpmOstreeDiffPrintFormat,

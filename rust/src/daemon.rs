@@ -61,11 +61,7 @@ fn vdict_insert_optvec(dict: &glib::VariantDict, k: &str, v: Option<&Vec<String>
 }
 
 /// Insert keys from the provided map into the target `dict` with key `k`.
-fn vdict_insert_optmap(
-    dict: &glib::VariantDict,
-    k: &str,
-    v: Option<&BTreeMap<String, String>>,
-) {
+fn vdict_insert_optmap(dict: &glib::VariantDict, k: &str, v: Option<&BTreeMap<String, String>>) {
     let v = v.iter().map(|s| s.keys()).flatten().map(|s| s.as_str());
     vdict_insert_strv(dict, k, v);
 }

@@ -97,10 +97,7 @@ mod koji {
         }
     }
 
-    fn xmlrpc_require_str(
-        val: &BTreeMap<String, Value>,
-        k: impl AsRef<str>,
-    ) -> Result<&str> {
+    fn xmlrpc_require_str(val: &BTreeMap<String, Value>, k: impl AsRef<str>) -> Result<&str> {
         let k = k.as_ref();
         let s = val.get(k).ok_or_else(|| anyhow!("Missing key {}", k))?;
         s.as_str()
