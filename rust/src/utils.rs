@@ -460,6 +460,7 @@ pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> C
     Ok(varsubst(s, &m)?)
 }
 
+#[allow(clippy::vec_init_then_push)]
 pub(crate) fn get_features() -> Vec<String> {
     let mut r = Vec::new();
     #[cfg(feature = "fedora-integration")]
