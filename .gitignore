@@ -37,6 +37,8 @@
 /RpmOstree-1.0.typelib
 /TAGS
 /aclocal.m4
+/api-doc/Makefile
+/api-doc/Makefile.in
 /autom4te.cache
 /build-aux/
 /config.cache
