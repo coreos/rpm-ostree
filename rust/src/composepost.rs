@@ -197,7 +197,7 @@ fn postprocess_rpm_macro(rootfs_dfd: &openat::Dir) -> Result<()> {
     rpm_macros_dfd.write_file_with(&MACRO_FILENAME, 0o644, |w| -> Result<()> {
         w.write_all(b"%_dbpath /")?;
         w.write_all(RPMOSTREE_RPMDB_LOCATION.as_bytes())?;
-        w.write(b"\n")?;
+        w.write_all(b"\n")?;
         Ok(())
     })?;
     rpm_macros_dfd.set_mode(MACRO_FILENAME, 0o644)?;

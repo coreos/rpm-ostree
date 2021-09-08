@@ -53,7 +53,8 @@ fn legacy_prepare_dev(rootfs: &openat::Dir) -> Result<()> {
 fn smoketest_dev_null(devdir: &openat::Dir) -> Result<()> {
     let mut devnull = devdir.open_file("null")?;
     let mut buf = [0u8];
-    devnull.read(&mut buf)?;
+    let n = devnull.read(&mut buf)?;
+    assert_eq!(n, 0);
     Ok(())
 }
 
