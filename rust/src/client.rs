@@ -128,11 +128,9 @@ pub(crate) fn client_handle_fd_argument(arg: &str, arch: &str) -> CxxResult<Vec<
     if is_http_arg(arg) {
         Ok(utils::download_url_to_tmpfile(arg, true).map(|f| vec![f.into_raw_fd()])?)
     } else if is_rpm_arg(arg) {
-        if arg.starts_with("file://") {
-            let formatted_arg: &str = &arg[7..];
-            Ok(vec![std::fs::File::open(formatted_arg)?.into_raw_fd()])
-        } else {
-            Ok(vec![std::fs::File::open(arg)?.into_raw_fd()])
+        match arg.strip_prefix("file://") {
+            Some(rest) => Ok(vec![std::fs::File::open(rest)?.into_raw_fd()]),
+            None => Ok(vec![std::fs::File::open(arg)?.into_raw_fd()]),
         }
     } else {
         Ok(Vec::new())

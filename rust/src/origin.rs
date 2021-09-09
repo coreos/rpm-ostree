@@ -122,7 +122,7 @@ fn set_sha256_nevra_pkgs(
         .map(|(nevra, sha256)| format!("{}:{}", sha256, nevra))
         .collect();
     let pkgs = pkgs.iter().map(|s| s.as_str());
-    kf_set_string_list(&kf, group, k, pkgs)
+    kf_set_string_list(kf, group, k, pkgs)
 }
 
 /// Convert a treefile to an origin file.
@@ -270,9 +270,9 @@ fn origin_validate_roundtrip_inner(kf: &glib::KeyFile) -> Result<()> {
 /// is understood by the core.
 pub(crate) fn origin_validate_roundtrip(mut kf: Pin<&mut crate::ffi::GKeyFile>) {
     let kf = kf.gobj_wrap();
-    origin_validate_roundtrip_inner(&kf).err().map(|e| {
+    if let Some(e) = origin_validate_roundtrip_inner(&kf).err() {
         tracing::debug!("Failed to roundtrip origin: {}", e);
-    });
+    }
 }
 
 fn map_keyfile_optional<T>(res: StdResult<T, glib::Error>) -> StdResult<Option<T>, glib::Error> {

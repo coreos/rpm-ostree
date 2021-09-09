@@ -134,22 +134,22 @@ pub(crate) fn download_urls_to_tmpfiles<S: AsRef<str>>(
 
 /// Open file for reading and provide context containing filename on failures.
 pub fn open_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
-    Ok(fs::File::open(filename.as_ref()).with_context(|| {
+    fs::File::open(filename.as_ref()).with_context(|| {
         format!(
             "Can't open file {:?} for reading",
             filename.as_ref().display()
         )
-    })?)
+    })
 }
 
 /// Open file for writing and provide context containing filename on failures.
 pub fn create_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
-    Ok(fs::File::create(filename.as_ref()).with_context(|| {
+    fs::File::create(filename.as_ref()).with_context(|| {
         format!(
             "Can't open file {:?} for writing",
             filename.as_ref().display()
         )
-    })?)
+    })
 }
 
 // Surprising we need a wrapper for this... parent() returns a slice of its buffer, so doesn't
@@ -460,6 +460,7 @@ pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> C
     Ok(varsubst(s, &m)?)
 }
 
+#[allow(clippy::vec_init_then_push)]
 pub(crate) fn get_features() -> Vec<String> {
     let mut r = Vec::new();
     #[cfg(feature = "fedora-integration")]

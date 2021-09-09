@@ -97,14 +97,11 @@ mod koji {
         }
     }
 
-    fn xmlrpc_require_str<'a>(
-        val: &'a BTreeMap<String, Value>,
-        k: impl AsRef<str>,
-    ) -> Result<&'a str> {
+    fn xmlrpc_require_str(val: &BTreeMap<String, Value>, k: impl AsRef<str>) -> Result<&str> {
         let k = k.as_ref();
         let s = val.get(k).ok_or_else(|| anyhow!("Missing key {}", k))?;
-        Ok(s.as_str()
-            .ok_or_else(|| anyhow!("Key {} is not a string", k))?)
+        s.as_str()
+            .ok_or_else(|| anyhow!("Key {} is not a string", k))
     }
 
     pub(crate) fn rpm_path_from_koji_rpm(

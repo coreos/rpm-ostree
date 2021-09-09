@@ -24,6 +24,7 @@ pub(crate) use cxxrsutil::*;
 /// - While the return type here will be `Result<T>` on the implementation
 ///   side you currently *should* use `CxxResult`; see the docs of that for more information.
 #[cxx::bridge(namespace = "rpmostreecxx")]
+#[allow(clippy::needless_lifetimes)]
 pub mod ffi {
     // Types that are defined by gtk-rs generated bindings that
     // we want to pass across the cxx-rs boundary.  For more
@@ -579,6 +580,7 @@ pub mod ffi {
         include!("rpmostree-libbuiltin.h");
         include!("rpmostree-util.h");
         type RpmOstreeDiffPrintFormat;
+        /// # Safety: ensure @cancellable is a valid pointer
         unsafe fn print_treepkg_diff_from_sysroot_path(
             sysroot_path: &str,
             format: RpmOstreeDiffPrintFormat,

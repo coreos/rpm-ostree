@@ -159,7 +159,7 @@ impl Extensions {
     /// Create a treefile representing just what needs to be installed for extensions.
     pub(crate) fn generate_treefile(&self, src: &Treefile) -> CxxResult<Box<Treefile>> {
         let mut repos = src.parsed.repos.clone().unwrap_or_default();
-        repos.extend(self.repos.iter().flatten().map(|s| s.clone()));
+        repos.extend(self.repos.iter().flatten().cloned());
         let ret = TreeComposeConfig {
             repos: Some(repos),
             packages: Some(self.get_os_extension_packages()),
