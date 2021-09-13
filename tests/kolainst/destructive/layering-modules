@@ -1,10 +1,15 @@
 #!/bin/bash
+# kola: { "tags": "needs-internet" }
 set -euo pipefail
 
 . ${KOLA_EXT_DATA}/libtest.sh
 cd $(mktemp -d)
 
 set -x
+
+# Let's start by trying to install a bona fide module.
+rpm-ostree ex module install cri-o:1.20/default
+rpm-ostree cleanup -p
 
 rm -rf /etc/yum.repos.d/*
 cat > /etc/yum.repos.d/vmcheck.repo << EOF
