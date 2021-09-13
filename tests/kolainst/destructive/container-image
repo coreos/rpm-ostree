@@ -27,15 +27,16 @@ libtest_prepare_offline
 cd $(mktemp -d)
 
 image=containers-storage:localhost/fcos:latest
+image_pull=ostree-unverified-image:$image
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   "")
     # Test rebase
     checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
-    rpm-ostree ex-container export --repo=/ostree/repo ${checksum} containers-storage:localhost/fcos
-    rpm-ostree rebase "$image" --experimental | tee out.txt
-    assert_file_has_content_literal out.txt 'Pulling: '"$image"
-    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"containers-storage:localhost/fcos:latest\""
+    rpm-ostree ex-container export --repo=/ostree/repo ${checksum} "${image}"
+    rpm-ostree rebase "$image_pull" --experimental | tee out.txt
+    assert_file_has_content_literal out.txt 'Pulling: '"$image_pull"
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/fcos:latest\""
     rpmostree_assert_status ".deployments[0][\"checksum\"] == \"${checksum}\""
     echo "ok rebase to container image reference"
 
@@ -60,7 +61,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     # Test upgrade
     rpm-ostree upgrade | tee out.txt
-    assert_file_has_content_literal out.txt "Pulling manifest: ${image}"
+    assert_file_has_content_literal out.txt "Pulling manifest: ${image_pull}"
     assert_file_has_content out.txt "No upgrade available."
     echo "ok no upgrade available"
 
@@ -68,7 +69,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     with_foo_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
     ostree refs ${with_foo_commit} --create vmcheck_tmp/new_update
     new_commit=$(ostree commit -b vmcheck --tree=ref=vmcheck_tmp/new_update)
-    rpm-ostree ex-container export --repo=/ostree/repo ${new_commit} containers-storage:localhost/fcos
+    rpm-ostree ex-container export --repo=/ostree/repo ${new_commit} "$image"
 
     rpm-ostree uninstall foo
     rpm-ostree upgrade
@@ -77,7 +78,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     /tmp/autopkgtest-reboot 2
     ;;
   2)
-    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"containers-storage:localhost/fcos:latest\""
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"${image_pull}\""
     assert_streq $(rpm -q foo) foo-1.2-3.x86_64
     echo "ok upgrade"
     ;;

@@ -98,7 +98,7 @@ macro_rules! cxxrs_bind {
 cxxrs_bind!(
     Ostree,
     ostree,
-    ostree_sys,
+    ostree::ffi,
     [Deployment, Repo, RepoTransactionStats, Sysroot]
 );
 cxxrs_bind!(G, glib, glib::gobject_ffi, [Object]);
