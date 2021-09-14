@@ -3651,6 +3651,24 @@ rpmte_is_kernel (rpmte te)
   return FALSE;
 }
 
+/* Determine if a txn element should be treated as a fileoverride, i.e. its
+ * files always win over other RPMs shipping the same file. We use the
+ * 'fileoverride' naming to distinguish from regular RPM overrides i.e. from
+ * `override replace`.
+ */
+static gboolean
+rpmte_is_fileoverride (rpmte te)
+{
+  rpmds provides = rpmdsInit (rpmteDS (te, RPMTAG_PROVIDENAME));
+  while (rpmdsNext (provides) >= 0)
+   {
+     const char *provname = rpmdsN (provides);
+     if (g_str_equal (provname, "rpmostree(override)"))
+       return TRUE;
+   }
+  return FALSE;
+}
+
 /* TRUE if a package providing vmlinuz changed in this transaction;
  * normally this is for `override replace` operations.
  * The core will not handle things like initramfs regeneration,
@@ -3737,6 +3755,7 @@ write_rpmdb (RpmOstreeContext      *self,
              GPtrArray *overlays,
              GPtrArray *overrides_replace,
              GPtrArray *overrides_remove,
+             gboolean have_fileoverride,
              GCancellable *cancellable,
              GError **error)
 {
@@ -3817,15 +3836,26 @@ write_rpmdb (RpmOstreeContext      *self,
 
   rpmtsOrder (rpmdb_ts);
 
-  /* NB: Because we're using the real root here (see above for reason why), rpm
+  rpmprobFilterFlags flags = 0;
+
+  /* Because we're using the real root here (see above for reason why), rpm
    * will see the read-only /usr mount and think that there isn't any disk space
    * available for install. For now, we just tell rpm to ignore space
    * calculations, but then we lose that nice check. What we could do is set a
    * root dir at least if we have CAP_SYS_CHROOT, or maybe do the space req
    * check ourselves if rpm makes that information easily accessible (doesn't
    * look like it from a quick glance). */
-  /* Also enable OLDPACKAGE to allow replacement overrides to older version. */
-  int r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE | RPMPROB_FILTER_OLDPACKAGE);
+  flags |= RPMPROB_FILTER_DISKSPACE;
+
+  /* Enable OLDPACKAGE to allow replacement overrides to older version. */
+  flags |= RPMPROB_FILTER_OLDPACKAGE;
+
+  /* If there are fileoverrides, then allow replacing files. We don't unconditionally set
+   * this because it's nice as an extra check on top of what ostree already does. */
+  if (have_fileoverride)
+    flags |= RPMPROB_FILTER_REPLACEOLDFILES;
+
+  int r = rpmtsRun (rpmdb_ts, NULL, flags);
   if (r < 0)
     return glnx_throw (error, "Failed to update rpmdb (rpmtsRun code %d)", r);
   if (r > 0)
@@ -4080,6 +4110,9 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       if (rpmte_is_kernel (te))
         self->kernel_changed = TRUE;
+      else if (rpmte_is_fileoverride (te))
+        /* we checkout those last */
+        continue;
 
       /* The "setup" package currently contains /etc/passwd; in the treecompose
        * case we need to inject that beforehand, so use "add files" just for
@@ -4096,6 +4129,32 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
       n_rpmts_done++;
       progress->nitems_update(n_rpmts_done);
+    }
+
+  /* And last, any fileoverride RPMs. These *must* be done last. */
+  gboolean have_fileoverride = FALSE;
+  for (guint i = 0; i < n_rpmts_elements; i++)
+    {
+      rpmte te = rpmtsElement (ordering_ts, i);
+      rpmElementType type = rpmteType (te);
+
+      if (type == TR_REMOVED)
+        continue;
+      g_assert (type == TR_ADDED);
+      if (!rpmte_is_fileoverride (te))
+        continue;
+
+      DnfPackage *pkg = (DnfPackage*)rpmteKey (te);
+      progress->set_sub_message(dnf_package_get_name (pkg));
+      if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", self->devino_cache,
+                                       static_cast<const char*>(g_hash_table_lookup (pkg_to_ostree_commit, pkg)),
+                                       files_skip_add, OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES,
+                                       cancellable, error))
+        return FALSE;
+      n_rpmts_done++;
+      progress->nitems_update(n_rpmts_done);
+
+      have_fileoverride = TRUE;
     }
 
   progress->end("");
@@ -4295,7 +4354,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
-  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove, cancellable, error))
+  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove,
+                    have_fileoverride, cancellable, error))
     return glnx_prefix_error (error, "Writing rpmdb");
 
   return TRUE;
