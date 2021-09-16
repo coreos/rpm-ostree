@@ -82,23 +82,18 @@ To remove layered packages, use:
 # rpm-ostree uninstall <pkg>
 ```
 
-In order to uninstall a package that is a part of the base layer, use:
-
-```
-# rpm-ostree override remove <pkg>
-```
-
-For example:
-
-```
-# rpm-ostree override remove firefox
-```
-
 By default, every `rpm-ostree` operation is "offline" - it has no effect
 on your running system, and will only take effect when you reboot.  This "pending" state is
 called the "pending deployment".  Operations can be chained; for example,
 if you invoke `rpm-ostree upgrade` after installing a package, your new root
 will upgraded with the package also installed.
+
+As a special case, it is supported to live-apply just package additions, assuming
+that there are not other pending changes:
+
+```
+# rpm-ostree install -A <pkg>
+```
 
 ### Modularity
 
@@ -169,6 +164,65 @@ One of those is `rpm-ostree ex apply-live`, which offers the ability to apply
 changes from the pending deployment to the booted deployment.
 
 See `man rpm-ostree` for more information.
+
+## Using overrides and `usroverlay`
+
+While some people talk about "immutability" when referring to image-based
+systems like rpm-ostree, in fact a top level goal of rpm-ostree is
+to *empower* users and system administrators.  When something goes
+wrong, you are root on your own computer and should have the ability to apply
+overrides locally.
+
+First, there is the `rpm-ostree override replace` command, which
+will replace an RPM, and apply that change persistently for the *next*
+boot - this is symmetric with how `rpm-ostree install` works.
+
+For example, suppose you want to test a fix to `podman`.  You can pass
+both direct HTTP URLs as well as local files:
+
+```
+$ rpm-ostree override replace https://kojipkgs.fedoraproject.org//packages/podman/3.3.1/1.fc34/x86_64/podman-3.3.1-1.fc34.x86_64.rpm
+```
+
+### Resetting overrides
+
+Use e.g. `rpm-ostree override reset podman` to undo the previous change.
+If invoked now, nothing will have happened to the booted filesystem tree.
+
+### Applying overrides live
+
+Now, suppose that you want to test this change *live*.  There are two choices.
+The first choice is to run the `rpm-ostree override replace` command above to stage the deployment, and then run
+
+```
+$ rpm-ostree ex apply-live --allow-replacement
+```
+
+This is a currently experimental interface that will pull the pending
+changes and apply them live.  You can `rpm-ostree ex apply-live --reset`
+to revert back to the booted tree.
+
+### Using `usroverlay`
+
+The second choice is `rpm-ostree usroverlay` which creates a transient writable `overlayfs` over `/usr` where you
+can do anything, such as e.g. copying in a `podman` binary generated on a build
+server somewhere that may not be in an RPM even.
+
+The changes here will not persist across reboots, which makes this a great choice for
+testing.
+
+One downside though is there's no equivalent of `rpm-ostree ex apply-live --reset`
+today when `rpm-ostree usroverlay` is in place.  It's possible to find the original
+binaries in a previous deployment, or via `ostree checkout` of the base commit, etc.
+
+### Removing a base package
+
+You can also just simply remove a base package with `rpm-ostree override remove <pkg>`.
+It will still be present in the underlying OSTree repository in `/ostree/repo`, but
+it will not be visible in the generated derived commit.
+
+Similar to the `override replace` case, using `rpm-ostree override reset` will undo
+the change.
 
 ## Filesystem layout
 
