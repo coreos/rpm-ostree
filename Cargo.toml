@@ -5,7 +5,10 @@
 [package]
 name = "rpmostree-rust"
 version = "0.1.0"
-authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
+authors = [
+    "Colin Walters <walters@verbum.org>",
+    "Jonathan Lebon <jonathan@jlebon.com>",
+]
 edition = "2018"
 # See https://rust-lang.github.io/rfcs/2495-min-rust-version.html
 # Usually, we try to keep this to no newer than current RHEL8 rust-toolset version.
@@ -48,8 +51,7 @@ nix = "0.22.1"
 openat = "0.1.21"
 openat-ext = "^0.2.2"
 os-release = "0.1.0"
-ostree-sys = "0.8.2"
-ostree-ext = "0.2.2"
+ostree-ext = "0.3.0"
 paste = "1.0"
 phf = { version = "0.10", features = ["macros"] }
 rand = "0.8.4"

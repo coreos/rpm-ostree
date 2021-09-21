@@ -1308,9 +1308,9 @@ dependencies = [
 
 [[package]]
 name = "ostree"
-version = "0.12.2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f621aa3457c7013e3bead2a9b24c9b0682bc4ddd1a1f8fcbddc681dbe1abfeea"
+checksum = "9358905170a49b82e5baecb879bb944c42736a4b02074a40286a7b20665af381"
 dependencies = [
  "bitflags",
  "gio",
@@ -1325,9 +1325,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c271372230d01abd9b6b7862af4ef41c83c0344b436ce74822e953f381af6679"
+checksum = "f1e40c1a1b52ed5164b0fda610952438afff5162ff2dafa49e55c0a78698228d"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1335,11 +1335,12 @@ dependencies = [
  "cjson",
  "flate2",
  "fn-error-context",
- "futures",
+ "futures-util",
  "gvariant",
  "hex",
  "indicatif",
  "libc",
+ "maplit",
  "nix",
  "openat",
  "openat-ext",
@@ -1359,9 +1360,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-sys"
-version = "0.8.2"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bab9f0db43a053737bd575364a25f930bc46b24a367965a4671c13ec8dc4744"
+checksum = "46755b75b81ac66623ee86d6eee779a82acf495a8a6a94ab458a96ad3e6880d1"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -1835,7 +1836,6 @@ dependencies = [
  "openat-ext",
  "os-release",
  "ostree-ext",
- "ostree-sys",
  "paste",
  "phf 0.10.0",
  "rand 0.8.4",
