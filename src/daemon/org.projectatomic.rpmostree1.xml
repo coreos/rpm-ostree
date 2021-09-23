@@ -402,6 +402,7 @@
     <method name="DownloadPackages">
       <!-- array of package names -->
       <arg type="as" name="queries" direction="in"/>
+      <arg type="s" name="source" direction="in"/>
       <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
   </interface>
