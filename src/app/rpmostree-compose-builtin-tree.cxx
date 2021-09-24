@@ -83,8 +83,15 @@ static char *opt_parent;
 static char *opt_extensions_output_dir;
 static char *opt_extensions_base_rev;
 
-/* shared by both install & commit */
+/* shared by all subcommands */
 static GOptionEntry common_option_entries[] = {
+  { "ex-unified-core", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_unified_core, "Compat alias for --unified-core", NULL }, // Compat
+  { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core, "Use new \"unified core\" codepath", NULL },
+  { NULL }
+};
+
+/* shared by install & commit */
+static GOptionEntry repo_option_entries[] = {
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { NULL }
 };
@@ -95,8 +102,6 @@ static GOptionEntry install_option_entries[] = {
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download and import RPMs as well; requires --cachedir", NULL },
   { "download-only-rpms", 0, 0, G_OPTION_ARG_NONE, &opt_download_only_rpms, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
-  { "ex-unified-core", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_unified_core, "Compat alias for --unified-core", NULL }, // Compat
-  { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core, "Use new \"unified core\" codepath", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
@@ -1177,6 +1182,7 @@ rpmostree_compose_builtin_install (int             argc,
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE DESTDIR");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
+  g_option_context_add_main_entries (context, repo_option_entries, NULL);
 
   if (!rpmostree_option_context_parse (context,
                                        install_option_entries,
@@ -1256,6 +1262,8 @@ rpmostree_compose_builtin_postprocess (int             argc,
                                        GError        **error)
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("ROOTFS [TREEFILE]");
+  g_option_context_add_main_entries (context, common_option_entries, NULL);
+
   if (!rpmostree_option_context_parse (context,
                                        postprocess_option_entries,
                                        &argc, &argv,
@@ -1318,6 +1326,7 @@ rpmostree_compose_builtin_commit (int             argc,
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE ROOTFS");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
+  g_option_context_add_main_entries (context, repo_option_entries, NULL);
 
   if (!rpmostree_option_context_parse (context,
                                        commit_option_entries,
@@ -1363,6 +1372,7 @@ rpmostree_compose_builtin_tree (int             argc,
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
+  g_option_context_add_main_entries (context, repo_option_entries, NULL);
   g_option_context_add_main_entries (context, install_option_entries, NULL);
   g_option_context_add_main_entries (context, postprocess_option_entries, NULL);
 
@@ -1439,6 +1449,7 @@ rpmostree_compose_builtin_extensions (int             argc,
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE EXTYAML");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
+  g_option_context_add_main_entries (context, repo_option_entries, NULL);
   g_option_context_add_main_entries (context, extensions_option_entries, NULL);
 
   if (!rpmostree_option_context_parse (context,
