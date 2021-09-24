@@ -111,6 +111,12 @@ It supports the following parameters:
     library in the target filesystem tree understands.  However, this is
     a relatively new default, so the value `host` is provided as a fallback
 
+ * `rpmdb-normalize`: boolean, optional. Defaults to `false`.  If enabled,
+    this will perform various manipulations of the RPM database to, as much
+    as possible, guarantee a deterministic result for the on-disk RPM
+    database. Requires the `SOURCE_DATE_EPOCH` environment variable to be set
+    to the UNIX epoch time to be used as the build timestamp.
+
  * `cliwrap`: boolean, optional.  Defaults to `false`.  If enabled,
     rpm-ostree will replace binaries such as `/usr/bin/rpm` with
     wrappers that intercept unsafe operations, or adjust functionality.

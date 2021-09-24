@@ -199,7 +199,7 @@ pub mod ffi {
             cancellable: Pin<&mut GCancellable>,
         ) -> Result<()>;
         fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> Result<()>;
-        fn rewrite_rpmdb_for_target(rootfs_dfd: i32) -> Result<()>;
+        fn rewrite_rpmdb_for_target(rootfs_dfd: i32, normalize: bool) -> Result<()>;
         fn directory_size(dfd: i32, mut cancellable: Pin<&mut GCancellable>) -> Result<u64>;
     }
 
@@ -370,6 +370,7 @@ pub mod ffi {
         fn get_selinux(&self) -> bool;
         fn get_releasever(&self) -> &str;
         fn rpmdb_backend_is_target(&self) -> bool;
+        fn should_normalize_rpmdb(&self) -> bool;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
         fn get_ostree_ref(&self) -> String;

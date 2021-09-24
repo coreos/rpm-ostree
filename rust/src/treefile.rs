@@ -382,7 +382,8 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         preserve_passwd,
         check_passwd,
         check_groups,
-        postprocess_script
+        postprocess_script,
+        rpmdb_normalize
     );
     merge_hashsets!(ignore_removed_groups, ignore_removed_users);
     merge_maps!(add_commit_metadata);
@@ -730,6 +731,10 @@ impl Treefile {
             .rpmdb
             .as_ref()
             .map_or(true, |b| *b != RpmdbBackend::Host)
+    }
+
+    pub(crate) fn should_normalize_rpmdb(&self) -> bool {
+        self.parsed.rpmdb_normalize.unwrap_or(false)
     }
 
     pub(crate) fn get_files_remove_regex(&self, package: &str) -> Vec<String> {
@@ -1281,6 +1286,10 @@ pub(crate) struct TreeComposeConfig {
     // The database backend
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) rpmdb: Option<RpmdbBackend>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "rpmdb-normalize")]
+    pub(crate) rpmdb_normalize: Option<bool>,
 
     #[serde(flatten)]
     pub(crate) legacy_fields: LegacyTreeComposeConfigFields,

@@ -3944,7 +3944,7 @@ write_rpmdb (RpmOstreeContext      *self,
   if (self->treefile_rs && self->treefile_rs->rpmdb_backend_is_target())
     {
       g_print ("Regenerating rpmdb for target\n");
-      CXX_TRY(rewrite_rpmdb_for_target(tmprootfs_dfd), error);
+      CXX_TRY(rewrite_rpmdb_for_target(tmprootfs_dfd, self->treefile_rs->should_normalize_rpmdb()), error);
     }
   else
     {

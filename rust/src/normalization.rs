@@ -6,10 +6,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::nameservice::shadow::parse_shadow_content;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use fn_error_context::context;
 use lazy_static::lazy_static;
-use std::io::{BufReader, Seek, SeekFrom};
+use std::convert::TryInto;
+use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 
 lazy_static! {
     static ref SOURCE_DATE_EPOCH_RAW: Option<String> = std::env::var("SOURCE_DATE_EPOCH").ok();
@@ -42,6 +43,79 @@ pub(crate) fn normalize_etc_shadow(rootfs: &openat::Dir) -> Result<()> {
 
         entry.to_writer(&mut shadow)?;
     }
+
+    Ok(())
+}
+
+const RPM_HEADER_MAGIC: [u8; 8] = [0x8E, 0xAD, 0xE8, 0x01, 0x00, 0x00, 0x00, 0x00];
+const RPMTAG_INSTALLTIME: u32 = 1008;
+const RPMTAG_INSTALLTID: u32 = 1128;
+
+#[context("Normalizing rpmdb timestamps for build stability")]
+pub(crate) fn rewrite_rpmdb_timestamps<F: Read + Write + Seek>(rpmdb: &mut F) -> Result<()> {
+    let source_date_epoch = if let Some(source_date_epoch) = *SOURCE_DATE_EPOCH {
+        source_date_epoch as u32
+    } else {
+        return Ok(());
+    };
+
+    // Remember where we started
+    let pos = rpmdb.stream_position()?;
+
+    let mut buffer: [u8; 16] = [0; 16];
+    let install_tid = source_date_epoch;
+    let mut install_time = source_date_epoch;
+
+    loop {
+        // Read in a header record
+        match rpmdb.read_exact(&mut buffer) {
+            Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e.into()),
+            _ => (),
+        };
+
+        // Make sure things are sane
+        if buffer[..8] != RPM_HEADER_MAGIC {
+            return Err(anyhow!("Bad RPM header magic in RPM database"));
+        }
+
+        // Grab the count of index records and the size of the data blob
+        let record_count = u32::from_be_bytes(buffer[8..12].try_into()?);
+        let data_size = u32::from_be_bytes(buffer[12..].try_into()?);
+
+        // Loop through the records looking for ones that point at things
+        // that are, or are derived from, timestamps
+        let mut offsets = Vec::new();
+        for _ in 0..record_count {
+            rpmdb.read_exact(&mut buffer)?;
+
+            let tag = u32::from_be_bytes(buffer[..4].try_into()?);
+            if tag == RPMTAG_INSTALLTIME || tag == RPMTAG_INSTALLTID {
+                offsets.push((tag, u32::from_be_bytes(buffer[8..12].try_into()?)));
+            }
+        }
+
+        // Work through the data blob replacing the timestamp-derived values
+        // with the timestamp we want
+        offsets.sort_unstable_by_key(|(_, offset)| *offset);
+        let mut offset = 0;
+        for (tag, value_offset) in offsets {
+            rpmdb.seek(std::io::SeekFrom::Current((value_offset - offset) as i64))?;
+            if tag == RPMTAG_INSTALLTID {
+                rpmdb.write_all(&install_tid.to_be_bytes())?;
+            } else if tag == RPMTAG_INSTALLTIME {
+                rpmdb.write_all(&install_time.to_be_bytes())?;
+                install_time += 1;
+            }
+            offset = value_offset + std::mem::size_of::<u32>() as u32;
+        }
+
+        // Move to the next record
+        rpmdb.seek(std::io::SeekFrom::Current((data_size - offset) as i64))?;
+    }
+
+    // Seek back to where we were before
+    rpmdb.seek(std::io::SeekFrom::Start(pos))?;
 
     Ok(())
 }
