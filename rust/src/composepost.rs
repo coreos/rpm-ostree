@@ -9,6 +9,7 @@ use crate::bwrap::Bubblewrap;
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::ffiutil::ffi_view_openat_dir;
+use crate::normalization;
 use crate::passwd::PasswdDB;
 use crate::treefile::Treefile;
 use crate::{bwrap, importer};
@@ -951,7 +952,7 @@ fn hardlink_rpmdb_base_location(
 }
 
 #[context("Rewriting rpmdb for target native format")]
-fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir) -> Result<()> {
+fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> Result<()> {
     let tempetc = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
 
     let dbfd = Rc::new(
@@ -980,6 +981,12 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir) -> Result<()> {
     let mut dbfd = Rc::try_unwrap(dbfd).unwrap();
     dbfd.seek(std::io::SeekFrom::Start(0))?;
 
+    // In the interests of build stability, rewrite the INSTALLTIME and INSTALLTID tags
+    // to be deterministic and dervied from `SOURCE_DATE_EPOCH` if requested.
+    if normalize {
+        normalization::rewrite_rpmdb_timestamps(&mut dbfd)?;
+    }
+
     // Fork the target rpmdb to write the content from memory to disk
     let mut bwrap = Bubblewrap::new_with_mutability(rootfs_dfd, BubblewrapMutability::RoFiles)?;
     bwrap.append_child_argv(&["rpmdb", dbpath_arg.as_str(), "--importdb"]);
@@ -994,10 +1001,11 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn rewrite_rpmdb_for_target(rootfs_dfd: i32) -> CxxResult<()> {
-    Ok(rewrite_rpmdb_for_target_inner(&ffi_view_openat_dir(
-        rootfs_dfd,
-    ))?)
+pub(crate) fn rewrite_rpmdb_for_target(rootfs_dfd: i32, normalize: bool) -> CxxResult<()> {
+    Ok(rewrite_rpmdb_for_target_inner(
+        &ffi_view_openat_dir(rootfs_dfd),
+        normalize,
+    )?)
 }
 
 /// Recursively hard-link `source` hierarchy to `target` directory.
