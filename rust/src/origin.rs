@@ -37,12 +37,14 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
         Some(r)
     } else if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "baserefspec")? {
         Some(r)
+    } else if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "container-image-reference")? {
+        // TODO - consider this key deprecated and remove it
+        Some(r)
     } else {
-        keyfile_get_optional_string(kf, ORIGIN, "container-image-reference")?
+        keyfile_get_optional_string(kf, ORIGIN, ostree_ext::container::deploy::ORIGIN_CONTAINER)?
     };
-    let refspec_str = refspec_str.ok_or_else(|| {
-        anyhow::anyhow!("Failed to find refspec/baserefspec/container-image-reference in origin")
-    })?;
+    let refspec_str = refspec_str
+        .ok_or_else(|| anyhow::anyhow!("Failed to find refspec/baserefspec/container in origin"))?;
     cfg.derive.base_refspec = Some(refspec_str);
     cfg.packages = parse_stringlist(kf, PACKAGES, "requested")?;
     cfg.derive.packages_local = parse_localpkglist(kf, PACKAGES, "requested-local")?;
