@@ -27,17 +27,23 @@ set -x
 libtest_prepare_offline
 cd $(mktemp -d)
 
-image=containers-storage:localhost/fcos:latest
+# TODO: It'd be much better to test this via a registry
+image_dir=/var/tmp/fcos
+image=oci:$image_dir
 image_pull=ostree-unverified-image:$image
+tmp_imagedir=/var/tmp/fcos-tmp
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   "")
-    # Test rebase
+    # Take the existing ostree commit, and export it to a container image, then rebase to it.
+
     checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
-    rpm-ostree ex-container export --repo=/ostree/repo ${checksum} "${image}"
+    rm ${image_dir} -rf
+    
+    rpm-ostree ex-container 'export' --repo=/ostree/repo ${checksum} "${image}"
     rpm-ostree rebase "$image_pull" --experimental | tee out.txt
-    assert_file_has_content_literal out.txt 'Pulling: '"$image_pull"
-    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/fcos:latest\""
+    assert_file_has_content out.txt 'Importing.*'"$image_pull"
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:$image\""
     rpmostree_assert_status ".deployments[0][\"checksum\"] == \"${checksum}\""
     echo "ok rebase to container image reference"
 
@@ -47,6 +53,9 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     /tmp/autopkgtest-reboot 1
     ;;
   1)
+    # Add a new RPM via local layering, then export the new locally-generated commit as
+    # a base image, then test upgrading to that.
+
     if rpm-ostree deploy 42 2>err.txt; then
         fatal "unexpectedly deployed version from container image reference"
     fi
@@ -70,6 +79,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     with_foo_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
     ostree refs ${with_foo_commit} --create vmcheck_tmp/new_update
     new_commit=$(ostree commit -b vmcheck --tree=ref=vmcheck_tmp/new_update)
+    rm "${image_dir}" -rf
     rpm-ostree ex-container export --repo=/ostree/repo ${new_commit} "$image"
 
     rpm-ostree uninstall foo
@@ -79,9 +89,35 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     /tmp/autopkgtest-reboot 2
     ;;
   2)
+    # Export the booted image again, but this time test layered containers via a `podman build`.
+
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"${image_pull}\""
     assert_streq $(rpm -q foo) foo-1.2-3.x86_64
-    echo "ok upgrade"
+
+    checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    rm "${image_dir}" -rf
+    rpm-ostree ex-container 'export' --repo=/ostree/repo ${checksum} "${image}"
+    # https://github.com/ostreedev/ostree-rs-ext/issues/153
+    skopeo copy $image containers-storage:localhost/fcos
+    td=$(mktemp -d)
+    cd ${td}
+cat > Dockerfile << 'EOF'
+FROM localhost/fcos
+RUN echo some config file > /etc/someconfig.conf
+RUN echo somedata > /usr/share/somenewdata
+EOF
+    podman build -t localhost/fcos-derived --squash .
+    derived=oci:$image_dir:derived
+    skopeo copy containers-storage:localhost/fcos-derived $derived
+    rpm-ostree rebase --experimental ostree-unverified-image:$derived
+    rm $image_dir -rf
+    /tmp/autopkgtest-reboot 3
+    ;;
+  3) 
+    grep -qF 'some config file' /etc/someconfig.conf || (echo missing someconfig.conf; exit 1)
+    grep -qF somedata /usr/share/somenewdata || (echo missing somenewdata; exit 1)
+      
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:derived\""
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
 esac

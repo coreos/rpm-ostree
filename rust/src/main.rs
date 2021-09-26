@@ -25,26 +25,43 @@ fn usroverlay(args: &[&str]) -> Result<()> {
 }
 
 // And now we've done process global initialization, we have a tokio runtime setup; process the command line.
+// As of today, basically every function here is blocking, so we spawn a thread.
+// But the idea is that in the future, we could add async-native code here too.
+//
+// It is only recently that our main() function is in Rust, calling
+// into C++ as a library.  As of right now, the only Rust commands
+// are hidden, i.e. should not appear in --help.  So we just recognize
+// those, and if there's something we don't know about, invoke the C++
+// main().
 async fn inner_async_main(args: &[&str]) -> Result<i32> {
-    // It is only recently that our main() function is in Rust, calling
-    // into C++ as a library.  As of right now, the only Rust commands
-    // are hidden, i.e. should not appear in --help.  So we just recognize
-    // those, and if there's something we don't know about, invoke the C++
-    // main().
-    if let Some(&arg) = args.get(1) {
-        return match arg {
-            // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
-            "countme" => rpmostree_rust::countme::entrypoint(args).map(|_| 0),
-            "cliwrap" => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
-            "ex-container" => rpmostree_rust::container::entrypoint(args).await,
-            // The `unlock` is a hidden alias for "ostree CLI compatibility"
-            "usroverlay" | "unlock" => usroverlay(args).map(|_| 0),
-            // C++ main
-            _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
-        };
+    let arg = *args.get(1).unwrap_or(&"");
+    // Async-native code goes here
+    match arg {
+        "ex-container" => return rpmostree_rust::container::entrypoint(args).await,
+        _ => {}
     }
-    // Handle zero arguments too
-    Ok(rpmostree_rust::ffi::rpmostree_main(args)?)
+    // Convert the arguments into owned values to pass to the thread.
+    let args: Vec<String> = args.iter().map(|&s| s.to_string()).collect();
+    tokio::task::spawn_blocking(move || {
+        let args = args;
+        // Now re-borrow the strings since that's what these fucntions expect.
+        let args: Vec<_> = args.iter().map(|s| s.as_str()).collect();
+        let args = &args[..];
+        if let Some(arg) = args.get(1) {
+            match *arg {
+                // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
+                "countme" => rpmostree_rust::countme::entrypoint(args).map(|_| 0),
+                "cliwrap" => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
+                // The `unlock` is a hidden alias for "ostree CLI compatibility"
+                "usroverlay" | "unlock" => usroverlay(args).map(|_| 0),
+                // C++ main
+                _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
+            }
+        } else {
+            Ok(rpmostree_rust::ffi::rpmostree_main(args)?)
+        }
+    })
+    .await?
 }
 
 /// The real main function returns a `Result<>`.

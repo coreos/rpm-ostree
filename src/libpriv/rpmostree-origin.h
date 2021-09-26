@@ -58,9 +58,6 @@ void
 rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin);
 
 const char *
-rpmostree_origin_get_container_image_reference_digest (RpmOstreeOrigin *origin);
-
-const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
 
 void
@@ -145,10 +142,6 @@ void
 rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
                                            gboolean regenerate,
                                            char **args);
-
-void
-rpmostree_origin_set_container_image_reference_digest (RpmOstreeOrigin *origin,
-                                                       const char      *digest);
 
 void
 rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,

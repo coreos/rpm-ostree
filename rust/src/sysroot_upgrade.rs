@@ -3,48 +3,93 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
-use crate::ffi::ContainerImport;
-use std::convert::TryInto;
+use crate::ffi::{output_message, ContainerImageState};
+use anyhow::Result;
+use ostree::glib;
+use ostree_container::store::LayeredImageImporter;
+use ostree_container::store::PrepareResult;
+use ostree_container::OstreeImageReference;
+use ostree_ext::container as ostree_container;
+use ostree_ext::ostree;
+use std::convert::TryFrom;
 use std::pin::Pin;
 use tokio::runtime::Handle;
 
-/// Import ostree commit in container image using ostree-rs-ext's API.
-pub(crate) fn import_container(
-    mut repo: Pin<&mut crate::FFIOstreeRepo>,
-    mut cancellable: Pin<&mut crate::FFIGCancellable>,
-    imgref: String,
-) -> CxxResult<Box<ContainerImport>> {
-    let repo = repo.gobj_wrap();
-    let cancellable = cancellable.gobj_wrap();
-    let imgref = imgref.as_str().try_into()?;
-
-    let imported = Handle::current().block_on(async {
-        crate::utils::run_with_cancellable(
-            async { ostree_ext::container::import(&repo, &imgref, None).await },
-            &cancellable,
-        )
-        .await
-    })?;
-    Ok(Box::new(ContainerImport {
-        ostree_commit: imported.ostree_commit,
-        image_digest: imported.image_digest,
-    }))
+impl Into<crate::ffi::ContainerImageState> for ostree_container::store::LayeredImageState {
+    fn into(self) -> crate::ffi::ContainerImageState {
+        crate::ffi::ContainerImageState {
+            base_commit: self.base_commit,
+            merge_commit: self.merge_commit,
+            is_layered: self.is_layered,
+            image_digest: self.manifest_digest,
+        }
+    }
 }
 
-/// Fetch the image digest for `imgref` using ostree-rs-ext's API.
-pub(crate) fn fetch_digest(
-    imgref: String,
-    mut cancellable: Pin<&mut crate::FFIGCancellable>,
-) -> CxxResult<String> {
-    let imgref = imgref.as_str().try_into()?;
-    let cancellable = cancellable.gobj_wrap();
+async fn pull_container_async(
+    repo: &ostree::Repo,
+    imgref: &OstreeImageReference,
+) -> Result<ContainerImageState> {
+    output_message(&format!("Pulling manifest: {}", &imgref));
+    let mut imp = LayeredImageImporter::new(repo, imgref, Default::default()).await?;
+    let prep = match imp.prepare().await? {
+        PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
+        PrepareResult::Ready(r) => r,
+    };
+    let digest = prep.manifest_digest.clone();
+    output_message(&format!("Importing: {} (digest: {})", &imgref, &digest));
+    if prep.base_layer.commit.is_none() {
+        let size = glib::format_size(prep.base_layer.size());
+        output_message(&format!(
+            "Downloading base layer: {} ({})",
+            prep.base_layer.digest(),
+            size
+        ));
+    } else {
+        output_message(&format!("Using base: {}", prep.base_layer.digest()));
+    }
+    // TODO add nice download progress
+    for layer in prep.layers.iter() {
+        if layer.commit.is_some() {
+            output_message(&format!("Using layer: {}", layer.digest()));
+        } else {
+            let size = glib::format_size(layer.size());
+            output_message(&format!("Downloading layer: {} ({})", layer.digest(), size));
+        }
+    }
+    let import = imp.import(prep).await?;
+    // TODO log the discarded bits from import
+    Ok(import.into())
+}
 
-    let digest = Handle::current().block_on(async {
+/// Import ostree commit in container image using ostree-rs-ext's API.
+pub(crate) fn pull_container(
+    mut repo: Pin<&mut crate::FFIOstreeRepo>,
+    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+    imgref: &str,
+) -> CxxResult<Box<ContainerImageState>> {
+    let repo = &repo.gobj_wrap();
+    let cancellable = cancellable.gobj_wrap();
+    let imgref = &OstreeImageReference::try_from(imgref)?;
+
+    let r = Handle::current().block_on(async {
         crate::utils::run_with_cancellable(
-            async { ostree_ext::container::fetch_manifest_info(&imgref).await },
+            async { pull_container_async(repo, imgref).await },
             &cancellable,
         )
         .await
     })?;
-    Ok(digest.manifest_digest)
+    Ok(Box::new(r))
+}
+
+/// C++ wrapper for querying image state; requires a pulled image
+pub(crate) fn query_container_image(
+    mut repo: Pin<&mut crate::FFIOstreeRepo>,
+    imgref: &str,
+) -> CxxResult<Box<crate::ffi::ContainerImageState>> {
+    let repo = &repo.gobj_wrap();
+    let imgref = &OstreeImageReference::try_from(imgref)?;
+    let state = ostree_container::store::query_image(repo, imgref)?
+        .ok_or_else(|| anyhow::anyhow!("Failed to find image {}", imgref))?;
+    Ok(Box::new(state.into()))
 }

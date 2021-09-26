@@ -234,11 +234,6 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
 }
 
-const char *
-rpmostree_origin_get_container_image_reference_digest (RpmOstreeOrigin *origin)
-{
-  return origin->cached_digest;
-}
 
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
@@ -521,23 +516,6 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
 
   origin->cached_initramfs_args =
     g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
-}
-
-void
-rpmostree_origin_set_container_image_reference_digest (RpmOstreeOrigin *origin,
-                                                       const char      *digest)
-{
-  if (digest != NULL)
-    {
-      g_key_file_set_string (origin->kf, "origin", "container-image-reference-digest", digest);
-    }
-  else
-    {
-      g_key_file_remove_key (origin->kf, "origin", "container-image-reference-digest", NULL);
-    }
-
-  g_free (origin->cached_digest);
-  origin->cached_digest = g_strdup (digest);
 }
 
 void
