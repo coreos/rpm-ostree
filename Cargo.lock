@@ -54,6 +54,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4c527152e37cf757a3f78aae5a06fbeefdb07ccc535c980a3208ee3060dd544"
 
 [[package]]
+name = "async-compression"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5443ccbb270374a2b1055fc72da40e1f237809cd6bb0e97e66d264cd138473a6"
+dependencies = [
+ "flate2",
+ "futures-core",
+ "memchr",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1308,9 +1321,9 @@ dependencies = [
 
 [[package]]
 name = "ostree"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9358905170a49b82e5baecb879bb944c42736a4b02074a40286a7b20665af381"
+checksum = "c9ea1a013ad73775e461259248dc92de413577edcfabaaecb6ad6adba44acf78"
 dependencies = [
  "bitflags",
  "gio",
@@ -1325,11 +1338,12 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1e40c1a1b52ed5164b0fda610952438afff5162ff2dafa49e55c0a78698228d"
+version = "0.4.0-alpha.0"
+source = "git+https://github.com/cgwalters/ostree-rs-ext?branch=layered-import#17b5b80c9c7c91b3943cf3e16d4fa92eb25970d3"
 dependencies = [
  "anyhow",
+ "async-compression",
+ "bitflags",
  "bytes",
  "camino",
  "cjson",
@@ -1338,7 +1352,9 @@ dependencies = [
  "futures-util",
  "gvariant",
  "hex",
+ "hyper",
  "indicatif",
+ "lazy_static",
  "libc",
  "maplit",
  "nix",
@@ -1347,6 +1363,8 @@ dependencies = [
  "openssl",
  "ostree",
  "phf 0.9.0",
+ "pin-project",
+ "scopeguard",
  "serde",
  "serde_json",
  "structopt",
@@ -1494,6 +1512,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6796ad771acdc0123d2a88dc428b5e38ef24456743ddb1744ed628f9815c096"
 dependencies = [
  "siphasher",
+]
+
+[[package]]
+name = "pin-project"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "576bc800220cc65dac09e99e97b08b358cfab6e17078de8dc5fee223bd2d0c08"
+dependencies = [
+ "pin-project-internal",
+]
+
+[[package]]
+name = "pin-project-internal"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e8fe8163d14ce7f0cdac2e040116f22eac817edabff0be91e8aff7e9accf389"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

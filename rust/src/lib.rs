@@ -137,19 +137,19 @@ pub mod ffi {
     /// cxx.rs currently requires types used as extern Rust types to be defined by the same crate
     /// that contains the bridge using them, so we redefine an `ContainerImport` struct here.
     pub(crate) struct ContainerImport {
+        pub changed: bool,
         pub ostree_commit: String,
         pub image_digest: String,
     }
 
     // sysroot_upgrade.rs
     extern "Rust" {
-        fn import_container(
+        fn pull_container(
             repo: Pin<&mut OstreeRepo>,
             cancellable: Pin<&mut GCancellable>,
-            imgref: String,
+            imgref: &str,
+            current_digest: &str,
         ) -> Result<Box<ContainerImport>>;
-
-        fn fetch_digest(imgref: String, cancellable: Pin<&mut GCancellable>) -> Result<String>;
     }
 
     // core.rs
