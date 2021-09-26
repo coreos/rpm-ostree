@@ -450,26 +450,16 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         if (override_commit)
           return glnx_throw (error, "Specifying commit overrides for container-image-reference type refspecs is not supported");
 
-        if (strstr (refspec, "@"))
-          return glnx_throw (error, "Pinned to specific container image digest, cannot upgrade");
-
-        /* Check to see if the digest that `refspec` points to is the same before pulling a new container image. */
-        const char *cur_digest = rpmostree_origin_get_container_image_reference_digest (self->original_origin);
-        if (cur_digest)
+        auto refspec_s = std::string(refspec);
+        const char *cur_digest_c = rpmostree_origin_get_container_image_reference_digest (self->original_origin);
+        auto cur_digest = std::string(cur_digest_c ?: "");
+        auto import = rpmostreecxx::pull_container(*self->repo, *cancellable, refspec_s, cur_digest);
+        if (!import->changed) 
           {
-            rpmostree_output_message ("Pulling manifest: %s", refspec);
-            auto new_digest = CXX_TRY_VAL(fetch_digest(std::string(refspec), *cancellable), error);
-            if (strcmp (new_digest.c_str(), cur_digest) == 0)
-              {
-                /* No new digest. */
-                *out_changed = FALSE;
-                return TRUE;
-              }
+            /* No new digest. */
+            *out_changed = FALSE;
+            return TRUE;
           }
-
-        rpmostree_output_message ("Pulling: %s", refspec);
-        auto import = CXX_TRY_VAL(import_container(*self->repo, *cancellable, std::string(refspec)), error);
-
         rpmostree_origin_set_container_image_reference_digest (self->original_origin, import->image_digest.c_str());
         new_base_rev = strdup (import->ostree_commit.c_str());
         break;
