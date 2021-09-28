@@ -13,4 +13,4 @@ documentation = "http://docs.rs/rpmostree-client"
 anyhow = "1.0.44"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_derive = "1.0.118"
-serde_json = "1.0.67"
+serde_json = "1.0.68"
