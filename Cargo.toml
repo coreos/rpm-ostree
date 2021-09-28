@@ -85,6 +85,9 @@ path = "rust/src/lib.rs"
 name = "rpm-ostree"
 path = "rust/src/main.rs"
 
+[profile.dev]
+opt-level = 1 # No optimizations are too slow for us.
+
 [profile.release]
 # Unwinding across FFI boundaries is undefined behavior, and anyways, we're
 # [crash-only](https://en.wikipedia.org/wiki/Crash-only_software)
