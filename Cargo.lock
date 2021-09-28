@@ -988,9 +988,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.102"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2a5ac8f984bfcf3a823267e5fde638acc3325f6496633a5da6bb6eb2171e103"
+checksum = "dd8f7255a17a627354f321ef0055d63b898c6fb27eff628af4d1b66b7331edf6"
 
 [[package]]
 name = "libdnf-sys"
@@ -1000,7 +1000,7 @@ dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
- "system-deps 4.0.0",
+ "system-deps 5.0.0",
 ]
 
 [[package]]
@@ -1849,7 +1849,7 @@ dependencies = [
  "serde_yaml",
  "structopt",
  "subprocess",
- "system-deps 4.0.0",
+ "system-deps 5.0.0",
  "systemd",
  "tempfile",
  "termcolor",
@@ -2110,9 +2110,9 @@ dependencies = [
 
 [[package]]
 name = "system-deps"
-version = "4.0.0"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c1889ab44c2a423ba9ba4d64cd04989b25c0280ca7ade813f05368418722a04"
+checksum = "18db855554db7bd0e73e06cf7ba3df39f97812cb11d3f75e71c39bf45171797e"
 dependencies = [
  "cfg-expr 0.9.0",
  "heck",
