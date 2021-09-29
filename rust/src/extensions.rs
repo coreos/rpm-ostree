@@ -34,6 +34,10 @@ pub struct Extensions {
 pub struct Extension {
     packages: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    repos: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    modules: Option<crate::treefile::ModulesConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     architectures: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     match_base_evr: Option<String>,
@@ -74,6 +78,14 @@ fn extensions_load_stream(
         .collect();
 
     for (_, ext) in parsed.extensions.iter_mut() {
+        // Extend the global extension state with the per-extension repos and modules,
+        // after we've done architecture filtering.
+        if let Some(repos) = parsed.repos.as_mut() {
+            repos.extend(ext.repos.take().unwrap_or_default());
+        } else {
+            parsed.repos = ext.repos.take();
+        }
+        crate::treefile::merge_modules(&mut parsed.modules, &mut ext.modules);
         if ext.kind == ExtensionKind::OsExtension {
             for pkg in &ext.packages {
                 if base_pkgs.contains_key(pkg.as_str()) {
@@ -264,10 +276,17 @@ extensions:
     #[test]
     fn basearch_filter() {
         let buf = r###"
+repos:
+    - baserepo
+modules:
+    enable:
+        - virt:av
 extensions:
     bazboo:
         packages:
             - bazboo
+        repos:
+            - bazboo-repo
         architectures:
             - x86_64
     dodo:
@@ -276,13 +295,40 @@ extensions:
             - dada
         architectures:
             - s390x
+    foo:
+        modules:
+            enable:
+                - foo:stable
+        packages:
+            - foo
+        repos:
+            - foo-repo
+        architectures:
+            - ppc64le
 "###;
         let mut input = std::io::BufReader::new(buf.as_bytes());
         let extensions = extensions_load_stream(&mut input, "x86_64", &base_rpmdb()).unwrap();
         assert!(extensions.get_os_extension_packages() == vec!["bazboo"]);
+        assert_eq!(extensions.get_repos().len(), 2);
+        assert_eq!(extensions.get_repos()[1], "bazboo-repo");
+        let modules = extensions.modules.unwrap();
+        assert_eq!(modules.enable.unwrap(), vec!["virt:av"]);
+        assert!(modules.install.is_none());
+
         let mut input = std::io::BufReader::new(buf.as_bytes());
         let extensions = extensions_load_stream(&mut input, "s390x", &base_rpmdb()).unwrap();
         assert!(extensions.get_os_extension_packages() == vec!["dodo", "dada"]);
+        assert_eq!(extensions.get_repos().len(), 1);
+        assert_eq!(extensions.get_repos()[0], "baserepo");
+
+        let mut input = std::io::BufReader::new(buf.as_bytes());
+        let extensions = extensions_load_stream(&mut input, "ppc64le", &base_rpmdb()).unwrap();
+        assert_eq!(extensions.get_os_extension_packages(), vec!["foo"]);
+        assert_eq!(extensions.get_repos().len(), 2);
+        assert_eq!(extensions.get_repos()[1], "foo-repo");
+        let modules = extensions.modules.unwrap();
+        assert_eq!(modules.enable.unwrap(), vec!["foo:stable", "virt:av"]);
+        assert!(modules.install.is_none());
     }
 
     #[test]
