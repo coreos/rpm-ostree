@@ -39,7 +39,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 rpmostree_assert_status \
   '.deployments[0]["base-local-replacements"]|length == 0' \
   '.deployments[0]["requested-base-local-replacements"]|length == 0'
-rpm-ostree override replace zincati --ex-pin-from-repos
+rpm-ostree override replace zincati --experimental --freeze --from repo=test-repo
 rpm-ostree status > status.txt
 assert_file_has_content status.txt 'ReplacedBasePackages: zincati .* -> 99.99-3'
 rpmostree_assert_status \

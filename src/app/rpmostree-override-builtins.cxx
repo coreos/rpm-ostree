@@ -33,8 +33,10 @@ static const char *const *opt_remove_pkgs;
 static const char *const *opt_replace_pkgs;
 static const char *const *install_pkgs;
 static const char *const *uninstall_pkgs;
+static const gchar *opt_from;
 static gboolean opt_lock_finalization;
-static gboolean opt_ex_pin_from_repos;
+static gboolean opt_experimental;
+static gboolean opt_freeze;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -51,7 +53,9 @@ static GOptionEntry reset_option_entries[] = {
 
 static GOptionEntry replace_option_entries[] = {
   { "remove", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_remove_pkgs, "Remove a package", "PKG" },
-  { "ex-pin-from-repos", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_ex_pin_from_repos, "Allow fetching from repos", NULL},
+  { "experimental", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_experimental, "Allow experimental options such as --from or --freeze", NULL},
+  { "freeze", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_freeze, "Pin packages to versions found", NULL},
+  { "from", 'r', G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_from, "Source of override", "KIND=NAME" },
   { NULL }
 };
 
@@ -95,7 +99,11 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
   g_autoptr(GUnixFDList) fetched_rpms_fds = NULL;
   g_autoptr(GPtrArray) override_replace_final = NULL; 
-  if (override_replace && opt_ex_pin_from_repos)
+
+  if (!opt_experimental && (opt_freeze || opt_from))
+    return glnx_throw (error, "Must specify --experimental to use --freeze or --from");
+
+  if (override_replace && opt_experimental && opt_freeze && opt_from)
     {
       override_replace_final = g_ptr_array_new_with_free_func (free);
       g_autoptr(GPtrArray) queries = g_ptr_array_new ();
@@ -120,14 +128,14 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
           g_autofree char *refresh_transaction_address = NULL;
 
           if (!rpmostree_os_call_refresh_md_sync (os_proxy, options, &refresh_transaction_address,
-                                                 cancellable, error))
+                                                  cancellable, error))
             return FALSE;
           if (!rpmostree_transaction_get_response_sync (sysroot_proxy, (const char*)refresh_transaction_address,
                                                        cancellable, error))
             return FALSE;
           if (!rpmostree_osexperimental_call_download_packages_sync (osexperimental_proxy,
                                                                      (const char *const*)queries->pdata,
-                                                                     NULL, &fetched_rpms_fds,
+                                                                     opt_from, NULL, &fetched_rpms_fds,
                                                                      cancellable, error))
             return FALSE;
 
