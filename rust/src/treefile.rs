@@ -324,7 +324,7 @@ fn merge_hashset_field<T: Eq + std::hash::Hash>(
 }
 
 /// Merge modules fields.
-fn merge_modules(dest: &mut Option<ModulesConfig>, src: &mut Option<ModulesConfig>) {
+pub(crate) fn merge_modules(dest: &mut Option<ModulesConfig>, src: &mut Option<ModulesConfig>) {
     if let Some(mut srcv) = src.take() {
         if let Some(mut destv) = dest.take() {
             merge_vec_field(&mut destv.enable, &mut srcv.enable);

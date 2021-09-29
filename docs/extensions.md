@@ -55,6 +55,18 @@ extensions:
     packages:
         - strace
         - ltrace
+    # Optional additional repos (still added globally).
+    # The reason use per-extension `repos` and `modules`
+    # is that it more closely groups them (where relevant)
+    # and further these are only added after architecture conditionals
+    # apply, so one can use repositories that only exist
+    # on a particular architecture.
+    repos:
+      - sooper-repo
+    # Optional additional modules (this also affects global state)
+    modules:
+      enable:
+        - sooper:latest
     # Optional list of architectures on which this extension
     # is valid. These are RPM basearches. If omitted,
     # defaults to all architectures.
