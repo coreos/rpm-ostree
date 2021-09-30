@@ -27,6 +27,7 @@
 
 static char *opt_osname;
 static gboolean opt_reboot;
+static gboolean opt_cache_only;
 static gboolean opt_dry_run;
 static gboolean opt_reset_all;
 static const char *const *opt_remove_pkgs;
@@ -43,6 +44,7 @@ static GOptionEntry option_entries[] = {
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
   { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Only operate on cached data", NULL },
   { NULL }
 };
 
@@ -83,7 +85,7 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
    * note we might still need to fetch pkgs in the local replacement case (e.g. the
    * replacing pkg has an additional out-of-tree dep). */
-  const gboolean cache_only = (override_replace == NULL && install_pkgs == NULL);
+  const gboolean cache_only = opt_cache_only || (override_replace == NULL && install_pkgs == NULL);
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
