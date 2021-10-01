@@ -29,6 +29,7 @@ rpm = "4"
 
 [dependencies]
 anyhow = "1.0.44"
+binread = "2.2.0"
 c_utf8 = "0.1.0"
 camino = "1.0.5"
 chrono = { version = "0.4.19", features = ["serde"] }

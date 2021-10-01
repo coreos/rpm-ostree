@@ -996,6 +996,12 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
         .run(cancellable.gobj_rewrap())
         .context("Failed to run rpmdb --importdb")?;
 
+    // Sometimes we can end up with build-to-build variance in the underlying rpmdb
+    // files. Attempt to sort that out, if requested.
+    if normalize {
+        normalization::normalize_rpmdb(rootfs_dfd, RPMOSTREE_RPMDB_LOCATION)?;
+    }
+
     tempetc.undo()?;
 
     Ok(())
