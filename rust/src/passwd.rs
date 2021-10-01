@@ -5,6 +5,7 @@
 use crate::cxxrsutil::*;
 use crate::ffiutil;
 use crate::nameservice;
+use crate::normalization;
 use crate::treefile::{CheckGroups, CheckPasswd, Treefile};
 use anyhow::{anyhow, Context, Result};
 use fn_error_context::context;
@@ -67,6 +68,11 @@ pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResul
 pub fn complete_rpm_layering(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
     complete_pwgrp(&rootfs)?;
+
+    // /etc/shadow ends up with a timestamp in it thanks to the `lstchg`
+    // field. This can be made empty safely, especially for accounts that
+    // are locked.
+    normalization::normalize_etc_shadow(&rootfs)?;
 
     Ok(())
 }

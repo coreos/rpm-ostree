@@ -4,6 +4,7 @@
 
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
+use crate::normalization;
 use anyhow::{Context, Result};
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
@@ -175,7 +176,7 @@ impl Bubblewrap {
         let path_var = Path::new(PATH_VAR);
         launcher.set_environ(&[lang_var, path_var]);
 
-        if let Ok(source_date_epoch) = std::env::var("SOURCE_DATE_EPOCH") {
+        if let Some(source_date_epoch) = normalization::source_date_epoch_raw() {
             launcher.setenv("SOURCE_DATE_EPOCH", source_date_epoch, true);
         }
 
