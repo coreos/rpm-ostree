@@ -115,7 +115,8 @@ It supports the following parameters:
     this will perform various manipulations of the RPM database to, as much
     as possible, guarantee a deterministic result for the on-disk RPM
     database. Requires the `SOURCE_DATE_EPOCH` environment variable to be set
-    to the UNIX epoch time to be used as the build timestamp.
+    to the UNIX epoch time to be used as the build timestamp. Currently only
+    fully supports the `bdb` backend. Somewhat experimental.
 
  * `cliwrap`: boolean, optional.  Defaults to `false`.  If enabled,
     rpm-ostree will replace binaries such as `/usr/bin/rpm` with
