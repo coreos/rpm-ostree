@@ -197,10 +197,13 @@ rpmostree_kernel_remove (int rootfs_dfd,
       glnx_autofd int modversion_dfd = -1;
       if (!glnx_opendirat (rootfs_dfd, modversion_dir, TRUE, &modversion_dfd, error))
         return FALSE;
-      /* See `/usr/lib/kernel/install.d/50-depmod.install`
-       * which is run by `kernel-install remove` from RPM `%postun`.
+      /* Source of truth of file list is
+       * https://git.kernel.org/pub/scm/utils/kernel/kmod/kmod.git/tree/tools/depmod.c?id=43bdf97ce1298c8727effb470291ed884e1161e6#n2477
        *
        * TODO: Add a depmod --clean <kver> command.
+       *
+       * See also `/usr/lib/kernel/install.d/50-depmod.install`
+       * which is run by `kernel-install remove` from RPM `%postun`.
        */
       const char *depmod_files[] = {"modules.alias", "modules.alias.bin", "modules.builtin.alias.bin", "modules.builtin.bin",
                                     "modules.dep", "modules.dep.bin", "modules.devname",
