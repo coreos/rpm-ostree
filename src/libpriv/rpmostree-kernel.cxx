@@ -202,7 +202,7 @@ rpmostree_kernel_remove (int rootfs_dfd,
        *
        * TODO: Add a depmod --clean <kver> command.
        */
-      const char *depmod_files[] = {"modules.alias", "modules.alias.bin", "modules.builtin.bin",
+      const char *depmod_files[] = {"modules.alias", "modules.alias.bin", "modules.builtin.alias.bin", "modules.builtin.bin",
                                     "modules.dep", "modules.dep.bin", "modules.devname",
                                     "modules.softdep", "modules.symbols", "modules.symbols.bin" };
       for (guint i = 0; i < G_N_ELEMENTS (depmod_files); i++)
