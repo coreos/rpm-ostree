@@ -78,7 +78,7 @@ fn inner_main() -> Result<i32> {
         .enable_all()
         .build()
         .context("Failed to build tokio runtime")?
-        .block_on(async { inner_async_main(&args).await })
+        .block_on(inner_async_main(&args))
 }
 
 fn print_error(e: anyhow::Error) {
