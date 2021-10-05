@@ -15,13 +15,13 @@ There are two main contexts in which rpm-ostree is used: on compose servers to
 generate OSTree commits from RPMs, and on client systems, which consume these
 OSTree commits to provide transactional upgrades.
 
-The [core architecture](architecture-core) document describes in details the
+The [core architecture](architecture-core.md) document describes in details the
 process by which RPMs are converted into OSTrees on both the compose server and
 client systems in "hybrid mode".
 
 ## The rpm-ostree daemon
 
-As described in the [administration](administrator-handbook) page, rpm-ostree is
+As described in the [administration](administrator-handbook.md) page, rpm-ostree is
 the CLI program used on rpm-ostree-based systems to e.g. upgrade, rebase,
 install packages, etc...
 
