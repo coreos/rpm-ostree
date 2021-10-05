@@ -57,7 +57,7 @@ getting exactly what you asked for.
 It is possible to dynamically add more packages onto the system that are not
 part of the commit composed on the server. These additional "layered" packages
 are persistent across upgrades, rebases, and deploys (contrast with the
-ostree [unlocking](https://github.com/ostreedev/ostree/blob/main/man/ostree-admin-unlock.xml) mechanism).
+ostree [unlocking](https://manned.org/man/fedora/ostree-admin-unlock) mechanism).
 
 This is where the true hybrid image/package nature of rpm-ostree comes into
 play; you get a combination of the benefits of images and packages.  The

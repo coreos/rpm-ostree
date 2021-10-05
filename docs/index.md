@@ -57,7 +57,7 @@ ecosystem. Today it is the underlying update mechanism of
 CoreOS. It is also used by [Fedora IoT](https://iot.fedoraproject.org/) and
 [Fedora Silverblue](https://silverblue.fedoraproject.org/).
 
-Originally, it was productized as part of [Project Atomic](http://www.projectatomic.io/).
+Originally, it was productized as part of [Project Atomic].
 
 ## Getting started
 
@@ -114,27 +114,23 @@ additional packages.
 
 ## Why not implement these changes in an existing package manager?
 
-The [OSTree related projects](https://coreos.github.io/ostree/related-projects/)
-section covers this to a degree.  As soon as one starts taking
-"snapshots" or keeping track of multiple roots, it uncovers many
-issues.  For example, which content specifically is rolled forward or
-backwards?  If the package manager isn't deeply aware of a snapshot
-tool, it's easy to lose coherency.
+The [OSTree related projects](https://ostreedev.github.io/ostree/related-projects/)
+section covers this to a degree. As soon as one starts taking "snapshots" or
+keeping track of multiple roots, it uncovers many issues. For example, which
+content specifically is rolled forward or backwards?  If the package manager
+isn't deeply aware of a snapshot tool, it's easy to lose coherency.
 
 ### Filesystem layout
 
-A concrete example is that rpm-ostree moves the RPM database
-to `/usr/share/rpm`, since we want one per root `/usr`.  In contrast,
-the [snapper](http://snapper.io/) tool goes to some effort to
-include `/var/lib/rpm` in snapshots, but
-avoid rolling forward/back log files in `/var/log`.
+A concrete example is that rpm-ostree moves the RPM database to
+`/usr/share/rpm`, since we want one per root `/usr`. In contrast, the [snapper]
+tool goes to some effort to include `/var/lib/rpm` in snapshots, but avoid
+rolling forward/back log files in `/var/log`.
 
-OSTree requires clear rules around the semantics
-of directories like `/usr` and `/var` across upgrades, and
-while this requires changing some software, we believe the
-result is significantly more reliable than having two separate
-systems like yum and snapper glued together, or apt-get and BTRFS,
-etc.
+OSTree requires clear rules around the semantics of directories like `/usr` and
+`/var` across upgrades, and while this requires changing some software, we
+believe the result is significantly more reliable than having two separate
+systems like yum and [snapper] glued together, or apt-get and BTRFS, etc.
 
 ### User experience
 
@@ -173,7 +169,7 @@ is not a new source format either.
 
 ## Talks and media
 
-A number of Project Atomic talks are available; see for
+A number of [Project Atomic] talks are available; see for
 example [this post](https://lists.projectatomic.io/projectatomic-archives/atomic-devel/2018-January/msg00057.html)
 which has a bigger collection that also includes talks on containers.
 
@@ -189,3 +185,6 @@ rpm-ostree specific talks:
 
 rpm-ostree includes code licensed under GPLv2+, LGPLv2+, (Apache 2.0 OR MIT).
 For more information, see [LICENSE](https://github.com/coreos/rpm-ostree/blob/main/LICENSE).
+
+[Project Atomic]: https://www.projectatomic.io/
+[snapper]: https://documentation.suse.com/sles/15-GA/html/SLES-all/cha-snapper.html

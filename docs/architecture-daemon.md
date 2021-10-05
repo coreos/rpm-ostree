@@ -35,18 +35,16 @@ reason for this architecture is primarily:
    [Cockpit](https://cockpit-project.org/))
 3. to allow unprivileged users to make system mutations via polkit
 
-The D-Bus API is defined here:
-https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.xml
+The D-Bus API is defined in
+[`src/daemon/org.projectatomic.rpmostree1.xml`](https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.xml).
 
 The rpm-ostree daemon runs as a systemd service which owns the
-`org.projectatomic.rpmostree1` name on the system D-Bus:
-
-https://github.com/coreos/rpm-ostree/blob/main/src/daemon/rpm-ostreed.service.in
+`org.projectatomic.rpmostree1` name on the system D-Bus (see
+[`src/daemon/rpm-ostreed.service.in`](https://github.com/coreos/rpm-ostree/blob/main/src/daemon/rpm-ostreed.service.in)).
 
 When a client wants to talk to the daemon, the D-Bus daemon starts up the
-systemd service if it's not already running:
-
-https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.service.in
+systemd service if it's not already running (see
+[`src/daemon/org.projectatomic.rpmostree1.service.in`](https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.service.in)).
 
 ### Interacting with the daemon
 
@@ -99,15 +97,13 @@ into polkit actions in `os_authorize_method`. It then consults polkit to
 determine whether the client should be permitted to execute the requested
 actions.
 
-We ship a base policy file which provide actions which should be allowed:
-
-https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.policy
+We ship a base policy file which provide actions which should be allowed (see
+[`src/daemon/org.projectatomic.rpmostree1.policy`](https://github.com/coreos/rpm-ostree/blob/main/src/daemon/org.projectatomic.rpmostree1.policy)).
 
 Some distros may enhance this policy by shipping rules which dynamically
 calculate authorization based on e.g. group membership. For example, in
 Fedora:
-
-https://src.fedoraproject.org/rpms/fedora-release/blob/rawhide/f/org.projectatomic.rpmostree1.rules
+[`org.projectatomic.rpmostree1.rules`](https://src.fedoraproject.org/rpms/fedora-release/blob/rawhide/f/org.projectatomic.rpmostree1.rules).
 
 ### Modifying the D-Bus API
 
