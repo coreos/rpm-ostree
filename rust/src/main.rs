@@ -31,18 +31,20 @@ async fn inner_async_main(args: &[&str]) -> Result<i32> {
     // are hidden, i.e. should not appear in --help.  So we just recognize
     // those, and if there's something we don't know about, invoke the C++
     // main().
-    match args.get(1).copied() {
-        // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
-        Some("countme") => rpmostree_rust::countme::entrypoint(args).map(|_| 0),
-        Some("cliwrap") => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
-        Some("ex-container") => rpmostree_rust::container::entrypoint(args).await,
-        // The `unlock` is a hidden alias for "ostree CLI compatibility"
-        Some("usroverlay") | Some("unlock") => usroverlay(args).map(|_| 0),
-        _ => {
-            // Otherwise fall through to C++ main().
-            Ok(rpmostree_rust::ffi::rpmostree_main(args)?)
-        }
+    if let Some(&arg) = args.get(1) {
+        return match arg {
+            // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
+            "countme" => rpmostree_rust::countme::entrypoint(args).map(|_| 0),
+            "cliwrap" => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
+            "ex-container" => rpmostree_rust::container::entrypoint(args).await,
+            // The `unlock` is a hidden alias for "ostree CLI compatibility"
+            "usroverlay" | "unlock" => usroverlay(args).map(|_| 0),
+            // C++ main
+            _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
+        };
     }
+    // Handle zero arguments too
+    Ok(rpmostree_rust::ffi::rpmostree_main(args)?)
 }
 
 /// The real main function returns a `Result<>`.
@@ -78,7 +80,7 @@ fn inner_main() -> Result<i32> {
         .enable_all()
         .build()
         .context("Failed to build tokio runtime")?
-        .block_on(async { inner_async_main(&args).await })
+        .block_on(inner_async_main(&args))
 }
 
 fn print_error(e: anyhow::Error) {
