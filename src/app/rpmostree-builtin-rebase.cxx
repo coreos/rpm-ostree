@@ -132,6 +132,11 @@ rpmostree_builtin_rebase (int             argc,
     }
   (void)new_refspec_owned; /* Pacify static analysis */
 
+  // We previously supported prefixing with ostree:// - so continue to parse this for now.
+  // https://gitlab.gnome.org/GNOME/gnome-software/-/issues/1463#note_1279157
+  if (g_str_has_prefix (new_provided_refspec, "ostree://"))
+    new_provided_refspec += strlen ("ostree://");
+
   RpmOstreeRefspecType refspectype;
   if (!rpmostree_refspec_classify (new_provided_refspec, &refspectype, error))
     return FALSE;

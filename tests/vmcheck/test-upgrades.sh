@@ -45,7 +45,9 @@ vm_rpmostree reload
 vm_rpmostree rebase otherremote:
 vm_assert_status_jq ".deployments[0][\"origin\"] == \"otherremote:vmcheck\"" \
                     ".deployments[0][\"booted\"]|not"
-vm_rpmostree rebase vmcheckmote:
+# Also test with ostree://
+# https://gitlab.gnome.org/GNOME/gnome-software/-/issues/1463#note_1279157
+vm_rpmostree rebase ostree://vmcheckmote:
 vm_assert_status_jq ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
                     ".deployments[0][\"booted\"]|not"
 
