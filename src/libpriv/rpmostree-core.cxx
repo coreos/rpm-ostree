@@ -2469,6 +2469,18 @@ canonicalize_non_usrmove_path (RpmOstreeContext  *self,
   return g_build_filename (link, slash + 1, NULL);
 }
 
+static void
+ht_insert_path_for_nevra (GHashTable *ht, const char *nevra, char *path, gpointer v)
+{
+  auto paths = static_cast<GHashTable*>(g_hash_table_lookup (ht, nevra));
+  if (!paths)
+    {
+      paths = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+      g_hash_table_insert (ht, g_strdup (nevra), paths);
+    }
+  g_hash_table_insert (paths, path, v);
+}
+
 /* This is a lighter version of calculations that librpm calls "file disposition".
  * Essentially, we determine which file removals/installations should be skipped. The librpm
  * functions and APIs for these are unfortunately private since they're just run as part of
@@ -2486,11 +2498,12 @@ handle_file_dispositions (RpmOstreeContext *self,
   g_autoptr(GHashTable) pkgs_deleted = g_hash_table_new (g_direct_hash, g_direct_equal);
 
   /* note these entries are *not* canonicalized for ostree conventions */
-  g_autoptr(GHashTable) files_deleted =
+  g_autoptr(GHashTable) files_deleted = /* set{paths} */
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  g_autoptr(GHashTable) files_added =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_autoptr(GHashTable) files_added = /* map{nevra -> map{path -> color}} */
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_hash_table_unref);
 
+  /* first pass to just collect added and removed files */
   const guint n_rpmts_elements = (guint)rpmtsNElements (ts);
   for (guint i = 0; i < n_rpmts_elements; i++)
     {
@@ -2509,18 +2522,20 @@ handle_file_dispositions (RpmOstreeContext *self,
         }
       else
         {
+          DnfPackage *pkg = (DnfPackage*)rpmteKey (te);
+          const char *nevra = dnf_package_get_nevra (pkg);
           while (rpmfiNext (fi) >= 0)
             {
-              const char *fn = rpmfiFN (fi);
+              char *fn = g_strdup (rpmfiFN (fi));
               rpm_color_t color = rpmfiFColor (fi);
-              g_hash_table_insert (files_added, g_strdup (fn), GUINT_TO_POINTER (color));
+              ht_insert_path_for_nevra (files_added, nevra, fn, GUINT_TO_POINTER (color));
             }
         }
     }
 
   /* this we *do* canonicalize since we'll be comparing against ostree paths */
-  g_autoptr(GHashTable) files_skip_add =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_autoptr(GHashTable) files_skip_add = /* map{nevra -> set{files}} */
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_hash_table_unref);
   /* this one we *don't* canonicalize since we'll be comparing against rpmfi paths */
   g_autoptr(GHashTable) files_skip_delete =
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -2529,12 +2544,15 @@ handle_file_dispositions (RpmOstreeContext *self,
   rpm_color_t ts_color = rpmtsColor (ts);
   rpm_color_t ts_prefcolor = rpmtsPrefColor (ts);
 
-  /* ignore colored files not in our rainbow */
-  GLNX_HASH_TABLE_FOREACH_IT (files_added, it, const char*, fn, gpointer, colorp)
+  /* skip added files whose colors aren't in our rainbow */
+  GLNX_HASH_TABLE_FOREACH_KV (files_added, const char*, nevra, GHashTable*, paths)
     {
-      rpm_color_t color = GPOINTER_TO_UINT (colorp);
-      if (color && ts_color && !(ts_color & color))
-        g_hash_table_add (files_skip_add, canonicalize_rpmfi_path (fn));
+      GLNX_HASH_TABLE_FOREACH_KV (paths, const char*, path, gpointer, colorp)
+        {
+          rpm_color_t color = GPOINTER_TO_UINT (colorp);
+          if (color && ts_color && !(ts_color & color))
+            ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (path), NULL);
+        }
     }
 
   g_auto(rpmdbMatchIterator) it = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
@@ -2575,23 +2593,29 @@ handle_file_dispositions (RpmOstreeContext *self,
           if (!g_str_has_prefix (fn_rel, "usr/"))
             continue;
 
-          /* check if one of the pkgs to install wants to overwrite our file */
-          rpm_color_t other_color =
-            GPOINTER_TO_UINT (g_hash_table_lookup (files_added, fn));
-          other_color &= ts_color;
-
-          /* see handleColorConflict() */
-          if (color && other_color && (color != other_color))
+          /* check if any of the pkgs to install want to overwrite our file */
+          GLNX_HASH_TABLE_FOREACH_KV (files_added, const char*, nevra, GHashTable*, paths)
             {
-              /* do we already have the preferred color installed? */
-              if (color & ts_prefcolor)
-                g_hash_table_add (files_skip_add, canonicalize_rpmfi_path (fn));
-              else if (other_color & ts_prefcolor)
+              if (!g_hash_table_contains (paths, fn))
+                continue;
+
+              rpm_color_t other_color =
+                GPOINTER_TO_UINT (g_hash_table_lookup (paths, fn));
+              other_color &= ts_color;
+
+              /* see handleColorConflict() */
+              if (color && other_color && (color != other_color))
                 {
-                  /* the new pkg is bringing our favourite color, give way now so we let
-                   * checkout silently write into it */
-                  if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, fn_rel, cancellable, error))
-                    return FALSE;
+                  /* do we already have the preferred color installed? */
+                  if (color & ts_prefcolor)
+                    ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (fn), NULL);
+                  else if (other_color & ts_prefcolor)
+                    {
+                      /* the new pkg is bringing our favourite color, give way now so we let
+                       * checkout silently write into it */
+                      if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, fn_rel, cancellable, error))
+                        return FALSE;
+                    }
                 }
             }
         }
@@ -2725,8 +2749,11 @@ checkout_package_into_root (RpmOstreeContext *self,
         }
     }
 
+  GHashTable *pkg_files_skip = NULL;
+  if (files_skip != NULL)
+    pkg_files_skip = static_cast<GHashTable*>(g_hash_table_lookup (files_skip, dnf_package_get_nevra (pkg)));
   if (!checkout_package (pkgcache_repo, dfd, path,
-                         devino_cache, pkg_commit, files_skip, files_remove_regex, ovwmode,
+                         devino_cache, pkg_commit, pkg_files_skip, files_remove_regex, ovwmode,
                          !self->enable_rofiles,
                          cancellable, error))
     return glnx_prefix_error (error, "Checkout %s", dnf_package_get_nevra (pkg));
