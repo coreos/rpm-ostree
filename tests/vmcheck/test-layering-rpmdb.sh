@@ -141,6 +141,13 @@ check_bloop_color() {
 # we use -nostdlib so we don't pull in glibc.i686
 vm_build_rpm bloop arch i686 build 'echo "void main() {}" | gcc -m32 -nostdlib -o bloop -xc -'
 vm_build_rpm bloop arch x86_64 build 'echo "void main() {}" | gcc -m64 -nostdlib -o bloop -xc -'
+
+# first try to install both of them
+vm_rpmostree install bloop.i686 bloop.x86_64
+check_bloop_color 64-bit
+vm_rpmostree cleanup -p
+echo "ok coloring layered"
+
 # now embed the x86_64 version into it
 vm_rpmostree install bloop.x86_64
 vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_pending_csum) --fsync=no

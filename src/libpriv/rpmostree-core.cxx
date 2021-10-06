@@ -2596,11 +2596,11 @@ handle_file_dispositions (RpmOstreeContext *self,
           /* check if any of the pkgs to install want to overwrite our file */
           GLNX_HASH_TABLE_FOREACH_KV (files_added, const char*, nevra, GHashTable*, paths)
             {
-              if (!g_hash_table_contains (paths, fn))
+              gpointer other_colorp = NULL;
+              if (!g_hash_table_lookup_extended (paths, fn, NULL, &other_colorp))
                 continue;
 
-              rpm_color_t other_color =
-                GPOINTER_TO_UINT (g_hash_table_lookup (paths, fn));
+              rpm_color_t other_color = GPOINTER_TO_UINT (other_colorp);
               other_color &= ts_color;
 
               /* see handleColorConflict() */
@@ -2617,6 +2617,40 @@ handle_file_dispositions (RpmOstreeContext *self,
                         return FALSE;
                     }
                 }
+            }
+        }
+    }
+
+  /* and finally, iterate over added pkgs only to search for duplicate files of
+   * differing rpm colors for which we have to pick one */
+  g_autoptr(GHashTable) path_to_nevra = g_hash_table_new (g_str_hash, g_str_equal);
+  g_autoptr(GHashTable) path_to_color = g_hash_table_new (g_str_hash, g_str_equal);
+  GLNX_HASH_TABLE_FOREACH_KV (files_added, const char*, nevra, GHashTable*, paths)
+    {
+      GLNX_HASH_TABLE_FOREACH_KV (paths, const char*, path, gpointer, colorp)
+        {
+          if (!g_hash_table_contains (path_to_nevra, path))
+            {
+              g_hash_table_insert (path_to_nevra, (gpointer)path, (gpointer)nevra);
+              g_hash_table_insert (path_to_color, (gpointer)path, colorp);
+              continue;
+            }
+
+          rpm_color_t color = GPOINTER_TO_UINT (colorp) & ts_color;
+          const char *other_nevra = static_cast<const char*>(g_hash_table_lookup (path_to_nevra, path));
+          rpm_color_t other_color = GPOINTER_TO_UINT (g_hash_table_lookup (path_to_color, path)) & ts_color;
+
+          /* see handleColorConflict() */
+          if (color && other_color && (color != other_color))
+            {
+              if (color & ts_prefcolor)
+                {
+                  ht_insert_path_for_nevra (files_skip_add, other_nevra, canonicalize_rpmfi_path (path), NULL);
+                  g_hash_table_insert (path_to_nevra, (gpointer)path, (gpointer)nevra);
+                  g_hash_table_insert (path_to_color, (gpointer)path, colorp);
+                }
+              else if (other_color & ts_prefcolor)
+                ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (path), NULL);
             }
         }
     }
