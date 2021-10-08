@@ -26,6 +26,7 @@ const OVERRIDES: &str = "overrides";
 /// The set of keys that we parse as BTreeMap and need to ignore ordering changes.
 static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
     "packages/local",
+    "packages/local-fileoverride",
     "overrides/replace-local"
 };
 
@@ -45,6 +46,8 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     cfg.derive.base_refspec = Some(refspec_str);
     cfg.packages = parse_stringlist(kf, PACKAGES, "requested")?;
     cfg.derive.packages_local = parse_localpkglist(kf, PACKAGES, "requested-local")?;
+    cfg.derive.packages_local_fileoverride =
+        parse_localpkglist(kf, PACKAGES, "requested-local-fileoverride")?;
     let modules_enable = parse_stringlist(kf, MODULES, "enable")?;
     let modules_install = parse_stringlist(kf, MODULES, "install")?;
     if modules_enable.is_some() || modules_install.is_some() {
@@ -132,7 +135,9 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     let kf = glib::KeyFile::new();
 
     // refspec (note special handling right now for layering)
-    let deriving = tf.packages.is_some() || tf.derive.packages_local.is_some();
+    let deriving = tf.packages.is_some()
+        || tf.derive.packages_local.is_some()
+        || tf.derive.packages_local_fileoverride.is_some();
     if let Some(r) = tf.derive.base_refspec.as_deref() {
         let k = if deriving { "baserefspec" } else { "refspec" };
         kf.set_string(ORIGIN, k, r)
@@ -145,6 +150,9 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     }
     if let Some(pkgs) = tf.derive.packages_local.as_ref() {
         set_sha256_nevra_pkgs(&kf, PACKAGES, "requested-local", pkgs)
+    }
+    if let Some(pkgs) = tf.derive.packages_local_fileoverride.as_ref() {
+        set_sha256_nevra_pkgs(&kf, PACKAGES, "requested-local-fileoverride", pkgs)
     }
     if let Some(pkgs) = tf.derive.override_remove.as_deref() {
         let pkgs = pkgs.iter().map(|s| s.as_str());

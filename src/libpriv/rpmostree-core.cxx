@@ -112,6 +112,8 @@ rpmostree_context_finalize (GObject *object)
   g_clear_pointer (&rctx->pkgs_to_remove, g_hash_table_unref);
   g_clear_pointer (&rctx->pkgs_to_replace, g_hash_table_unref);
 
+  g_clear_pointer (&rctx->fileoverride_pkgs, g_hash_table_unref);
+
   (void)glnx_tmpdir_delete (&rctx->tmpdir, NULL, NULL);
   (void)glnx_tmpdir_delete (&rctx->repo_tmpdir, NULL, NULL);
 
@@ -1714,6 +1716,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   auto packages = self->treefile_rs->get_packages();
   auto packages_local = self->treefile_rs->get_packages_local();
+  auto packages_local_fileoverride = self->treefile_rs->get_packages_local_fileoverride();
   auto packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local();
   auto packages_override_remove = self->treefile_rs->get_packages_override_remove();
   auto exclude_packages = self->treefile_rs->get_exclude_packages ();
@@ -1724,6 +1727,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   if (self->lockfile)
     {
       g_assert_cmpint (packages_local.size(), ==, 0);
+      g_assert_cmpint (packages_local_fileoverride.size(), ==, 0);
       g_assert_cmpint (packages_override_replace_local.size(), ==, 0);
       g_assert_cmpint (packages_override_remove.size(), ==, 0);
     }
@@ -1786,6 +1790,23 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
 
       g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
+    }
+
+  /* Local fileoverride packages. XXX: dedupe */
+  self->fileoverride_pkgs = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  for (auto &nevra_v: packages_local_fileoverride)
+    {
+      const char *nevra = nevra_v.c_str();
+      g_autofree char *sha256 = NULL;
+      if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
+        return FALSE;
+
+      g_autoptr(DnfPackage) pkg = NULL;
+      if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
+        return FALSE;
+
+      g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
+      g_hash_table_add (self->fileoverride_pkgs, g_strdup (nevra));
     }
 
   /* If we're in cache-only mode, add all the remaining pkgs now. We do this *after* the
@@ -3737,6 +3758,7 @@ write_rpmdb (RpmOstreeContext      *self,
              GPtrArray *overlays,
              GPtrArray *overrides_replace,
              GPtrArray *overrides_remove,
+             gboolean have_fileoverride,
              GCancellable *cancellable,
              GError **error)
 {
@@ -3830,6 +3852,11 @@ write_rpmdb (RpmOstreeContext      *self,
 
   /* Enable OLDPACKAGE to allow replacement overrides to older version. */
   flags |= RPMPROB_FILTER_OLDPACKAGE;
+
+  /* If there are fileoverrides, then allow replacing files. We don't unconditionally set
+   * this because it's nice as an extra check on top of what ostree already does. */
+  if (have_fileoverride)
+    flags |= RPMPROB_FILTER_REPLACEOLDFILES;
 
   int r = rpmtsRun (rpmdb_ts, NULL, flags);
   if (r < 0)
@@ -4086,6 +4113,9 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       if (rpmte_is_kernel (te))
         self->kernel_changed = TRUE;
+      else if (g_hash_table_contains (self->fileoverride_pkgs, dnf_package_get_nevra (pkg)))
+        /* we checkout those last */
+        continue;
 
       /* The "setup" package currently contains /etc/passwd; in the treecompose
        * case we need to inject that beforehand, so use "add files" just for
@@ -4102,6 +4132,32 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
       n_rpmts_done++;
       progress->nitems_update(n_rpmts_done);
+    }
+
+  /* And last, any fileoverride RPMs. These *must* be done last. */
+  gboolean have_fileoverrides = FALSE;
+  for (guint i = 0; i < n_rpmts_elements; i++)
+    {
+      rpmte te = rpmtsElement (ordering_ts, i);
+      rpmElementType type = rpmteType (te);
+      DnfPackage *pkg = (DnfPackage*)rpmteKey (te);
+
+      if (type == TR_REMOVED)
+        continue;
+      g_assert (type == TR_ADDED);
+      if (!g_hash_table_contains (self->fileoverride_pkgs, dnf_package_get_nevra (pkg)))
+        continue;
+
+      progress->set_sub_message(dnf_package_get_name (pkg));
+      if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", self->devino_cache,
+                                       static_cast<const char*>(g_hash_table_lookup (pkg_to_ostree_commit, pkg)),
+                                       files_skip_add, OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES,
+                                       cancellable, error))
+        return FALSE;
+      n_rpmts_done++;
+      progress->nitems_update(n_rpmts_done);
+
+      have_fileoverrides = TRUE;
     }
 
   progress->end("");
@@ -4301,7 +4357,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
-  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove, cancellable, error))
+  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove,
+                    have_fileoverrides, cancellable, error))
     return glnx_prefix_error (error, "Writing rpmdb");
 
   return TRUE;

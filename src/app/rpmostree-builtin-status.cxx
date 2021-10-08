@@ -566,6 +566,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_autofree const gchar **origin_requested_packages = NULL;
   g_autofree const gchar **origin_requested_modules = NULL;
   g_autofree const gchar **origin_requested_local_packages = NULL;
+  g_autofree const gchar **origin_requested_local_fileoverride_packages = NULL;
   g_autoptr(GVariant) origin_base_removals = NULL;
   g_autofree const gchar **origin_requested_base_removals = NULL;
   g_autoptr(GVariant) origin_base_local_replacements = NULL;
@@ -585,6 +586,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         lookup_array_and_canonicalize (dict, "requested-modules");
       origin_requested_local_packages =
         lookup_array_and_canonicalize (dict, "requested-local-packages");
+      origin_requested_local_fileoverride_packages =
+        lookup_array_and_canonicalize (dict, "requested-local-fileoverride-packages");
       origin_base_removals =
         g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
       origin_requested_base_removals =
@@ -963,6 +966,9 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   if (origin_requested_local_packages)
     print_packages ("LocalPackages", max_key_len,
                     origin_requested_local_packages, NULL);
+  if (origin_requested_local_fileoverride_packages)
+    print_packages ("LocalForcedPackages", max_key_len,
+                    origin_requested_local_fileoverride_packages, NULL);
 
   if (regenerate_initramfs)
     {

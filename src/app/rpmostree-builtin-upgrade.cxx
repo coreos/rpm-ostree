@@ -183,6 +183,7 @@ rpmostree_builtin_upgrade (int             argc,
                                             NULL, /* refspec */
                                             NULL, /* revision */
                                             install_pkgs,
+                                            NULL, /* install_fileoverride_pkgs */
                                             uninstall_pkgs,
                                             NULL, /* override replace */
                                             NULL, /* override remove */

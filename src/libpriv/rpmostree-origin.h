@@ -90,6 +90,9 @@ GHashTable *
 rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin);
 
 GHashTable *
+rpmostree_origin_get_local_fileoverride_packages (RpmOstreeOrigin *origin);
+
+GHashTable *
 rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin);
 
 GHashTable *
@@ -172,6 +175,7 @@ gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                char             **packages,
                                gboolean           local,
+                               gboolean           fileoverride,
                                gboolean           allow_existing,
                                gboolean          *out_changed,
                                GError           **error);

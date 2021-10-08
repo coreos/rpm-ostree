@@ -190,6 +190,9 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
       g_autoptr(GVariant) install_local_pkgs =
         g_variant_dict_lookup_value (&modifiers_dict, "install-local-packages",
                                      G_VARIANT_TYPE("ah"));
+      g_autoptr(GVariant) install_local_fileoverride_pkgs =
+        g_variant_dict_lookup_value (&modifiers_dict, "install-local-fileoverride-packages",
+                                     G_VARIANT_TYPE("ah"));
       g_autoptr(GVariant) override_replace_local_pkgs =
         g_variant_dict_lookup_value (&modifiers_dict, "override-replace-local-packages",
                                      G_VARIANT_TYPE("ah"));
@@ -216,7 +219,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
           no_layering)
         g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.install-uninstall-packages");
 
-      if (install_local_pkgs != NULL && g_variant_n_children (install_local_pkgs) > 0)
+      if ((install_local_pkgs != NULL && g_variant_n_children (install_local_pkgs) > 0)
+          || (install_local_fileoverride_pkgs != NULL && g_variant_n_children (install_local_fileoverride_pkgs) > 0))
         g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.install-local-packages");
 
       if (override_replace_pkgs != NULL || override_remove_pkgs != NULL || override_reset_pkgs != NULL ||

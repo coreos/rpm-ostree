@@ -904,6 +904,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(GVariant) install_local_pkgs_idxs =
     g_variant_dict_lookup_value (self->modifiers, "install-local-packages",
                                  G_VARIANT_TYPE("ah"));
+  g_autoptr(GVariant) install_fileoverride_local_pkgs_idxs =
+    g_variant_dict_lookup_value (self->modifiers, "install-fileoverride-local-packages",
+                                 G_VARIANT_TYPE("ah"));
   g_autoptr(GVariant) override_replace_local_pkgs_idxs =
     g_variant_dict_lookup_value (self->modifiers, "override-replace-local-packages",
                                  G_VARIANT_TYPE("ah"));
@@ -923,6 +926,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   guint expected_fdn = 0;
   if (install_local_pkgs_idxs)
     expected_fdn += g_variant_n_children (install_local_pkgs_idxs);
+  if (install_fileoverride_local_pkgs_idxs)
+    expected_fdn += g_variant_n_children (install_fileoverride_local_pkgs_idxs);
   if (override_replace_local_pkgs_idxs)
     expected_fdn += g_variant_n_children (override_replace_local_pkgs_idxs);
   if (local_repo_remote_idx != -1)
@@ -936,6 +941,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     return glnx_throw (error, "Expected %u fds but received %u", expected_fdn, actual_fdn);
 
   g_autoptr(GUnixFDList) install_local_pkgs = NULL;
+  g_autoptr(GUnixFDList) install_fileoverride_local_pkgs = NULL;
   g_autoptr(GUnixFDList) override_replace_local_pkgs = NULL;
   /* split into two fd lists to make it easier for deploy_transaction_execute */
   if (self->fd_list)
@@ -948,6 +954,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_autofree gint *new_fds =
             get_fd_array_from_sparse (fds, nfds, install_local_pkgs_idxs);
           install_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+        }
+
+      if (install_fileoverride_local_pkgs_idxs)
+        {
+          g_autofree gint *new_fds =
+            get_fd_array_from_sparse (fds, nfds, install_fileoverride_local_pkgs_idxs);
+          install_fileoverride_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
         }
 
       if (override_replace_local_pkgs_idxs)
@@ -1010,6 +1023,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   g_autofree const char *update_driver = deploy_has_string_option (self, "register-driver");
 
   g_autofree char **install_pkgs = vardict_lookup_strv_canonical (self->modifiers, "install-packages");
+  g_autofree char **install_fileoverride_pkgs = vardict_lookup_strv_canonical (self->modifiers, "install-fileoverride-packages");
   g_autofree char **uninstall_pkgs = vardict_lookup_strv_canonical (self->modifiers, "uninstall-packages");
   g_autofree char **enable_modules = vardict_lookup_strv_canonical (self->modifiers, "enable-modules");
   g_autofree char **disable_modules = vardict_lookup_strv_canonical (self->modifiers, "disable-modules");
@@ -1022,6 +1036,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (deploy_has_bool_option (self, "apply-live") && deploy_has_bool_option (self, "reboot"))
     return glnx_throw (error, "Cannot specify `apply-live` and `reboot`");
+  if (install_fileoverride_pkgs)
+    return glnx_throw (error, "Non-local fileoverrides not implemented");
 
   /* In practice today */
   if (no_pull_base)
@@ -1035,7 +1051,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                      no_overrides);
       if (!is_override)
         {
-          if (install_pkgs || install_local_pkgs || install_modules)
+          if (install_pkgs || install_local_pkgs || install_fileoverride_local_pkgs || install_modules)
             is_install = TRUE;
           else
             is_uninstall = TRUE;
@@ -1098,6 +1114,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (install_local_pkgs)
         g_string_append_printf (txn_title, "; localinstall: %u",
                                 g_unix_fd_list_get_length (install_local_pkgs));
+      if (install_fileoverride_local_pkgs)
+        g_string_append_printf (txn_title, "; fileoverride localinstall: %u",
+                                g_unix_fd_list_get_length (install_fileoverride_local_pkgs));
       if (enable_modules)
         g_string_append_printf (txn_title, "; module enable: %u",
                                 g_strv_length (enable_modules));
@@ -1316,7 +1335,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             }
         }
 
-      if (!rpmostree_origin_add_packages (origin, install_pkgs, FALSE,
+      if (!rpmostree_origin_add_packages (origin, install_pkgs, FALSE, FALSE,
                                           idempotent_layering, &changed, error))
         return FALSE;
     }
@@ -1337,7 +1356,24 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         {
           g_ptr_array_add (pkgs, NULL);
 
-          if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE,
+          if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE, FALSE,
+                                              idempotent_layering, &changed, error))
+            return FALSE;
+        }
+    }
+
+  if (install_fileoverride_local_pkgs != NULL)
+    {
+      g_autoptr(GPtrArray) pkgs = NULL;
+      if (!import_many_local_rpms (repo, install_fileoverride_local_pkgs, &pkgs,
+                                   cancellable, error))
+        return FALSE;
+
+      if (pkgs->len > 0)
+        {
+          g_ptr_array_add (pkgs, NULL);
+
+          if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE, TRUE,
                                               idempotent_layering, &changed, error))
             return FALSE;
         }

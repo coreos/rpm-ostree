@@ -43,6 +43,7 @@ static gboolean opt_allow_inactive;
 static gboolean opt_uninstall_all;
 static gboolean opt_unchanged_exit_77;
 static gboolean opt_lock_finalization;
+static gboolean opt_force_replacefiles;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -66,6 +67,7 @@ static GOptionEntry install_option_entry[] = {
   { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
   { "apply-live", 'A', 0, G_OPTION_ARG_NONE, &opt_apply_live, "Apply changes to both pending deployment and running filesystem tree", NULL },
+  { "force-replacefiles", 0, 0, G_OPTION_ARG_NONE, &opt_force_replacefiles, "Allow package to replace files from other packages", NULL },
   { NULL }
 };
 
@@ -79,9 +81,12 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
 {
   const char *const strv_empty[] = { NULL };
   const char *const* install_pkgs = strv_empty;
+  const char *const* install_fileoverride_pkgs = strv_empty;
   const char *const* uninstall_pkgs = strv_empty;
 
-  if (packages_to_add)
+  if (packages_to_add && opt_force_replacefiles)
+    install_fileoverride_pkgs = packages_to_add;
+  else if (packages_to_add && !opt_force_replacefiles)
     install_pkgs = packages_to_add;
   if (packages_to_remove)
     uninstall_pkgs = packages_to_remove;
@@ -115,12 +120,13 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
 
   /* Use newer D-Bus API only if we have to. */
   g_autofree char *transaction_address = NULL;
-  if (met_local_pkg || opt_apply_live)
+  if (met_local_pkg || opt_apply_live || (install_fileoverride_pkgs && *install_fileoverride_pkgs))
     {
       if (!rpmostree_update_deployment (os_proxy,
                                         NULL, /* refspec */
                                         NULL, /* revision */
                                         install_pkgs,
+                                        install_fileoverride_pkgs,
                                         uninstall_pkgs,
                                         NULL, /* override replace */
                                         NULL, /* override remove */

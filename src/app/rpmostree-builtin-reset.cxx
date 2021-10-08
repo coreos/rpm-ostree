@@ -103,7 +103,7 @@ rpmostree_builtin_reset (int             argc,
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
-  if (!rpmostree_update_deployment (os_proxy, NULL, NULL, install_pkgs, uninstall_pkgs,
+  if (!rpmostree_update_deployment (os_proxy, NULL, NULL, install_pkgs, NULL, uninstall_pkgs,
                                     NULL, NULL, NULL, NULL, options, &transaction_address,
                                     cancellable, error))
     return FALSE;

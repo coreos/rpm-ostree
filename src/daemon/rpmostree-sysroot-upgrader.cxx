@@ -848,6 +848,9 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
   if (!add_local_pkgset_to_sack (self, local_pkgs, cancellable, error))
     return FALSE;
 
+  GHashTable *local_fileoverride_pkgs = rpmostree_origin_get_local_fileoverride_packages (self->computed_origin);
+  if (!add_local_pkgset_to_sack (self, local_fileoverride_pkgs, cancellable, error))
+    return FALSE;
 
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
 

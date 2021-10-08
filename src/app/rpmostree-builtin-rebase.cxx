@@ -201,6 +201,7 @@ rpmostree_builtin_rebase (int             argc,
                                         new_provided_refspec,
                                         revision,
                                         install_pkgs,
+                                        NULL, /* install_fileoverride_pkgs */
                                         uninstall_pkgs,
                                         NULL, /* override replace */
                                         NULL, /* override remove */

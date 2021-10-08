@@ -353,6 +353,7 @@ pub mod ffi {
         fn get_repos(&self) -> Vec<String>;
         fn get_packages(&self) -> Vec<String>;
         fn get_packages_local(&self) -> Vec<String>;
+        fn get_packages_local_fileoverride(&self) -> Vec<String>;
         fn get_packages_override_replace_local(&self) -> Vec<String>;
         fn get_packages_override_remove(&self) -> Vec<String>;
         fn get_modules_enable(&self) -> Vec<String>;
