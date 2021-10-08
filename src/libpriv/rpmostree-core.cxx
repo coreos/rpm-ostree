@@ -3817,15 +3817,21 @@ write_rpmdb (RpmOstreeContext      *self,
 
   rpmtsOrder (rpmdb_ts);
 
-  /* NB: Because we're using the real root here (see above for reason why), rpm
+  rpmprobFilterFlags flags = 0;
+
+  /* Because we're using the real root here (see above for reason why), rpm
    * will see the read-only /usr mount and think that there isn't any disk space
    * available for install. For now, we just tell rpm to ignore space
    * calculations, but then we lose that nice check. What we could do is set a
    * root dir at least if we have CAP_SYS_CHROOT, or maybe do the space req
    * check ourselves if rpm makes that information easily accessible (doesn't
    * look like it from a quick glance). */
-  /* Also enable OLDPACKAGE to allow replacement overrides to older version. */
-  int r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE | RPMPROB_FILTER_OLDPACKAGE);
+  flags |= RPMPROB_FILTER_DISKSPACE;
+
+  /* Enable OLDPACKAGE to allow replacement overrides to older version. */
+  flags |= RPMPROB_FILTER_OLDPACKAGE;
+
+  int r = rpmtsRun (rpmdb_ts, NULL, flags);
   if (r < 0)
     return glnx_throw (error, "Failed to update rpmdb (rpmtsRun code %d)", r);
   if (r > 0)
