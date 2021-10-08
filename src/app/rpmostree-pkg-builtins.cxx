@@ -111,7 +111,7 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
 
   gboolean met_local_pkg = FALSE;
   for (const char *const* it = packages_to_add; it && *it; it++)
-    met_local_pkg = met_local_pkg || g_str_has_suffix (*it, ".rpm");
+    met_local_pkg = met_local_pkg || g_str_has_suffix (*it, ".rpm") || g_str_has_prefix (*it, "file://");
 
   /* Use newer D-Bus API only if we have to. */
   g_autofree char *transaction_address = NULL;
