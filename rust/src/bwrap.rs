@@ -175,6 +175,10 @@ impl Bubblewrap {
         let path_var = Path::new(PATH_VAR);
         launcher.set_environ(&[lang_var, path_var]);
 
+        if let Ok(source_date_epoch) = std::env::var("SOURCE_DATE_EPOCH") {
+            launcher.setenv("SOURCE_DATE_EPOCH", source_date_epoch, true);
+        }
+
         // ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠
         let mut argv = vec![
             "bwrap",
