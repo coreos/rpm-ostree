@@ -776,10 +776,16 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
     }
 
   if (changed)
-    update_keyfile_pkgs_from_cache (origin, "packages",
-                                    local ? "requested-local" : "requested",
-                                    local ? origin->cached_local_packages
-                                          : origin->cached_packages, local);
+    {
+      const char *key = "requested";
+      GHashTable *ht = origin->cached_packages;
+      if (local)
+        {
+          key = "requested-local";
+          ht = origin->cached_local_packages;
+        }
+      update_keyfile_pkgs_from_cache (origin, "packages", key, ht, local);
+    }
 
   set_changed (out_changed, changed);
   return TRUE;
