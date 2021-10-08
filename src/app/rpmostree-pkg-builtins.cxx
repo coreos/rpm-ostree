@@ -78,11 +78,13 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
             GError       **error)
 {
   const char *const strv_empty[] = { NULL };
+  const char *const* install_pkgs = strv_empty;
+  const char *const* uninstall_pkgs = strv_empty;
 
-  if (!packages_to_add)
-    packages_to_add = strv_empty;
-  if (!packages_to_remove)
-    packages_to_remove = strv_empty;
+  if (packages_to_add)
+    install_pkgs = packages_to_add;
+  if (packages_to_remove)
+    uninstall_pkgs = packages_to_remove;
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
@@ -118,8 +120,8 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
       if (!rpmostree_update_deployment (os_proxy,
                                         NULL, /* refspec */
                                         NULL, /* revision */
-                                        packages_to_add,
-                                        packages_to_remove,
+                                        install_pkgs,
+                                        uninstall_pkgs,
                                         NULL, /* override replace */
                                         NULL, /* override remove */
                                         NULL, /* override reset */
@@ -134,8 +136,8 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
     {
       if (!rpmostree_os_call_pkg_change_sync (os_proxy,
                                               options,
-                                              packages_to_add,
-                                              packages_to_remove,
+                                              install_pkgs,
+                                              uninstall_pkgs,
                                               NULL,
                                               &transaction_address,
                                               NULL,
