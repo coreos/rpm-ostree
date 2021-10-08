@@ -170,6 +170,7 @@ rpmostree_builtin_deploy (int            argc,
                                             NULL, /* refspec */
                                             revision,
                                             install_pkgs,
+                                            NULL, /* install_fileoverride_pkgs */
                                             uninstall_pkgs,
                                             NULL, /* override replace */
                                             NULL, /* override remove */

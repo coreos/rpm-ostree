@@ -618,6 +618,16 @@ impl Treefile {
             .collect()
     }
 
+    pub(crate) fn get_packages_local_fileoverride(&self) -> Vec<String> {
+        self.parsed
+            .derive
+            .packages_local_fileoverride
+            .iter()
+            .flatten()
+            .map(|(k, v)| format!("{}:{}", v, k))
+            .collect()
+    }
+
     pub(crate) fn get_modules_enable(&self) -> Vec<String> {
         self.parsed
             .modules
@@ -1339,6 +1349,8 @@ pub(crate) struct DeriveConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) packages_local: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) packages_local_fileoverride: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_remove: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_replace_local: Option<BTreeMap<String, String>>,
@@ -1369,6 +1381,7 @@ impl DeriveConfigFields {
         }
         check!(base_refspec);
         check!(packages_local);
+        check!(packages_local_fileoverride);
         check!(override_remove);
         check!(override_replace_local);
         check!(initramfs);

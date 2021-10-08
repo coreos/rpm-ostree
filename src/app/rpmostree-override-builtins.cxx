@@ -158,6 +158,7 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
                                     NULL, /* set-refspec */
                                     NULL, /* set-revision */
                                     install_pkgs,
+                                    NULL, /* install_fileoverride_pkgs */
                                     uninstall_pkgs,
                                     override_replace,
                                     override_remove,

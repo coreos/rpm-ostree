@@ -230,6 +230,25 @@ assert_file_has_content err.txt "foo-1.0-1.x86_64"
 assert_file_has_content err.txt "foo-2.0-1.x86_64"
 echo "ok can't layer pkg that would upgrade base pkg"
 
+vm_build_rpm baz install "echo baz > %{buildroot}/usr/bin/foo" files "/usr/bin/foo"
+if vm_rpmostree install baz &> err.txt; then
+    assert_no_reached "successfully layered pkg with conflicting file?"
+fi
+assert_file_has_content err.txt "File exists"
+echo "ok can't layer pkg that would replace base files"
+
+vm_rpmostree install --force-replacefiles \
+  /var/tmp/vmcheck/yumrepo/packages/x86_64/baz-1.0-1.x86_64.rpm
+echo "ok can layer pkg that would replace base files with --force-replacefiles"
+
+vm_rpmostree uninstall baz
+echo "ok can uninstall forced pkg by name"
+
+vm_rpmostree install --force-replacefiles \
+  /var/tmp/vmcheck/yumrepo/packages/x86_64/baz-1.0-1.x86_64.rpm
+vm_rpmostree uninstall baz-1.0-1.x86_64
+echo "ok can uninstall forced pkg by nevra"
+
 # check that we can select a repo split pkg which matches the base version
 vm_build_rpm foo version 1.0
 vm_build_rpm foo-ext version 1.0 requires "foo = 1.0-1"

@@ -965,13 +965,13 @@ vardict_sort_and_insert_pkgs (GVariantDict *dict,
   if (!rpmostree_sort_pkgs_strv (pkgs, fd_list, &repo_pkgs, &fd_idxs, error))
     return FALSE;
 
-  /* for grep: here we insert install-packages/override-replace-packages */
+  /* for grep: here we insert install-packages/install-fileoverride-packages/override-replace-packages */
   if (repo_pkgs != NULL && repo_pkgs->len > 0)
     g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-packages"),
       g_variant_new_strv ((const char *const*)repo_pkgs->pdata,
                                               repo_pkgs->len));
 
-  /* for grep: here we insert install-local-packages/override-replace-local-packages */
+  /* for grep: here we insert install-local-packages/install-fileoverride-local-packages/override-replace-local-packages */
   if (fd_idxs != NULL)
     g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-local-packages"),
                                  fd_idxs);
@@ -982,6 +982,7 @@ static gboolean
 get_modifiers_variant (const char   *set_refspec,
                        const char   *set_revision,
                        const char *const* install_pkgs,
+                       const char *const* install_fileoverride_pkgs,
                        const char *const* uninstall_pkgs,
                        const char *const* override_replace_pkgs,
                        const char *const* override_remove_pkgs,
@@ -999,6 +1000,13 @@ get_modifiers_variant (const char   *set_refspec,
     {
       if (!vardict_sort_and_insert_pkgs (&dict, "install", fd_list,
                                          install_pkgs, error))
+        return FALSE;
+    }
+
+  if (install_fileoverride_pkgs)
+    {
+      if (!vardict_sort_and_insert_pkgs (&dict, "install-fileoverride", fd_list,
+                                         install_fileoverride_pkgs, error))
         return FALSE;
     }
 
@@ -1041,6 +1049,7 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                              const char   *set_refspec,
                              const char   *set_revision,
                              const char *const* install_pkgs,
+                             const char *const* install_fileoverride_pkgs,
                              const char *const* uninstall_pkgs,
                              const char *const* override_replace_pkgs,
                              const char *const* override_remove_pkgs,
@@ -1054,7 +1063,9 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
   g_autoptr(GVariant) modifiers = NULL;
   glnx_unref_object GUnixFDList *fd_list = NULL;
   if (!get_modifiers_variant (set_refspec, set_revision,
-                              install_pkgs, uninstall_pkgs,
+                              install_pkgs,
+                              install_fileoverride_pkgs,
+                              uninstall_pkgs,
                               override_replace_pkgs,
                               override_remove_pkgs,
                               override_reset_pkgs,

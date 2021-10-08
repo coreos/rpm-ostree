@@ -93,6 +93,11 @@ fn deployment_populate_variant_origin(
         "requested-local-packages",
         tf.derive.packages_local.as_ref(),
     );
+    vdict_insert_optmap(
+        dict,
+        "requested-local-fileoverride-packages",
+        tf.derive.packages_local_fileoverride.as_ref(),
+    );
     vdict_insert_optvec(
         dict,
         "requested-base-removals",
