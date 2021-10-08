@@ -2495,6 +2495,13 @@ handle_file_dispositions (RpmOstreeContext *self,
                           GCancellable *cancellable,
                           GError      **error)
 {
+  /* we deal with color similarly to librpm (compare with skipInstallFiles()) */
+  rpm_color_t ts_color = rpmtsColor (ts);
+  rpm_color_t ts_prefcolor = rpmtsPrefColor (ts);
+
+  if (ts_color == 0)
+    return TRUE; /* this architecture doesn't do colours; done */
+
   g_autoptr(GHashTable) pkgs_deleted = g_hash_table_new (g_direct_hash, g_direct_equal);
 
   /* note these entries are *not* canonicalized for ostree conventions */
@@ -2528,7 +2535,8 @@ handle_file_dispositions (RpmOstreeContext *self,
             {
               char *fn = g_strdup (rpmfiFN (fi));
               rpm_color_t color = rpmfiFColor (fi);
-              ht_insert_path_for_nevra (files_added, nevra, fn, GUINT_TO_POINTER (color));
+              if (color)
+                ht_insert_path_for_nevra (files_added, nevra, fn, GUINT_TO_POINTER (color));
             }
         }
     }
@@ -2540,17 +2548,13 @@ handle_file_dispositions (RpmOstreeContext *self,
   g_autoptr(GHashTable) files_skip_delete =
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
-  /* we deal with color similarly to librpm (compare with skipInstallFiles()) */
-  rpm_color_t ts_color = rpmtsColor (ts);
-  rpm_color_t ts_prefcolor = rpmtsPrefColor (ts);
-
   /* skip added files whose colors aren't in our rainbow */
   GLNX_HASH_TABLE_FOREACH_KV (files_added, const char*, nevra, GHashTable*, paths)
     {
       GLNX_HASH_TABLE_FOREACH_KV (paths, const char*, path, gpointer, colorp)
         {
           rpm_color_t color = GPOINTER_TO_UINT (colorp);
-          if (color && ts_color && !(ts_color & color))
+          if (!(ts_color & color))
             ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (path), NULL);
         }
     }
@@ -2581,6 +2585,8 @@ handle_file_dispositions (RpmOstreeContext *self,
             g_hash_table_add (files_skip_delete, g_strdup (fn));
 
           rpm_color_t color = (rpmfiFColor (fi) & ts_color);
+          if (!color)
+            continue;
 
           /* let's make the safe assumption that the color mess is only an issue for /usr */
           const char *fn_rel = fn + strspn (fn, "/");
@@ -2899,7 +2905,7 @@ delete_package_from_root (RpmOstreeContext *self,
             S_ISDIR (mode)))
         continue;
 
-      if (g_hash_table_contains (files_skip, fn))
+      if (files_skip && g_hash_table_contains (files_skip, fn))
         continue;
 
       g_assert (fn != NULL);
