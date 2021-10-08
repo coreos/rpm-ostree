@@ -4159,6 +4159,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       n_rpmts_done++;
       progress->nitems_update(n_rpmts_done);
     }
+  g_clear_pointer (&files_skip_add, g_hash_table_unref);
 
   progress->end("");
 
