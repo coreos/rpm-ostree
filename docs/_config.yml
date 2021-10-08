@@ -6,6 +6,10 @@ url: "https://coreos.github.io"
 # url: "http://localhost:4000"
 permalink: /:title/
 markdown: kramdown
+kramdown:
+  typographic_symbols:
+    ndash: "--"
+    mdash: "---"
 
 remote_theme: coreos/just-the-docs
 plugins:
