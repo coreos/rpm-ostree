@@ -779,6 +779,47 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self,
       && finalize_replacement_overrides (self, cancellable, error);
 }
 
+static gboolean
+add_local_pkgset_to_sack (RpmOstreeSysrootUpgrader *self,
+                          GHashTable               *pkgset,
+                          GCancellable             *cancellable,
+                          GError                  **error)
+{
+  if (g_hash_table_size (pkgset) == 0)
+    return TRUE; /* nothing to do! */
+
+  if (!initialize_metatmpdir (self, error))
+    return FALSE;
+
+  GLNX_HASH_TABLE_FOREACH_KV (pkgset, const char*, nevra, const char*, sha256)
+    {
+      g_autoptr(GVariant) header = NULL;
+      g_autofree char *path =
+        g_strdup_printf ("%s/%s.rpm", self->metatmpdir.path, nevra);
+
+      if (!rpmostree_pkgcache_find_pkg_header (self->repo, nevra, sha256,
+                                               &header, cancellable, error))
+        return FALSE;
+
+      if (!glnx_file_replace_contents_at (AT_FDCWD, path,
+                                          static_cast<const guint8*>(g_variant_get_data (header)),
+                                          g_variant_get_size (header),
+                                          GLNX_FILE_REPLACE_NODATASYNC,
+                                          cancellable, error))
+        return FALSE;
+
+      /* Also check if that exact NEVRA is already in the root (if the pkg
+       * exists, but is a different EVR, depsolve will catch that). In the
+       * future, we'll allow packages to replace base pkgs. */
+      if (rpmostree_sack_has_subject (self->rsack->sack, nevra))
+        return glnx_throw (error, "Package '%s' is already in the base", nevra);
+
+      dnf_sack_add_cmdline_package (self->rsack->sack, path);
+    }
+
+  return TRUE;
+}
+
 /* Go through rpmdb and jot down the missing pkgs from the given set. Really, we
  * don't *have* to do this: we could just give everything to libdnf and let it
  * figure out what is already installed. The advantage of doing it ourselves is
@@ -804,37 +845,9 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
    * you can have foo-1.0-1.x86_64 layered, and foo or /usr/bin/foo as dormant.
    * */
   GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->computed_origin);
-  if (g_hash_table_size (local_pkgs) > 0)
-    {
-      if (!initialize_metatmpdir (self, error))
-        return FALSE;
+  if (!add_local_pkgset_to_sack (self, local_pkgs, cancellable, error))
+    return FALSE;
 
-      GLNX_HASH_TABLE_FOREACH_KV (local_pkgs, const char*, nevra, const char*, sha256)
-        {
-          g_autoptr(GVariant) header = NULL;
-          g_autofree char *path =
-            g_strdup_printf ("%s/%s.rpm", self->metatmpdir.path, nevra);
-
-          if (!rpmostree_pkgcache_find_pkg_header (self->repo, nevra, sha256,
-                                                   &header, cancellable, error))
-            return FALSE;
-
-          if (!glnx_file_replace_contents_at (AT_FDCWD, path,
-                                              static_cast<const guint8*>(g_variant_get_data (header)),
-                                              g_variant_get_size (header),
-                                              GLNX_FILE_REPLACE_NODATASYNC,
-                                              cancellable, error))
-            return FALSE;
-
-          /* Also check if that exact NEVRA is already in the root (if the pkg
-           * exists, but is a different EVR, depsolve will catch that). In the
-           * future, we'll allow packages to replace base pkgs. */
-          if (rpmostree_sack_has_subject (self->rsack->sack, nevra))
-            return glnx_throw (error, "Package '%s' is already in the base", nevra);
-
-          dnf_sack_add_cmdline_package (self->rsack->sack, path);
-        }
-    }
 
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
 
