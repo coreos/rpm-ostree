@@ -93,6 +93,9 @@ GHashTable *
 rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin);
 
 GHashTable *
+rpmostree_origin_get_overrides_replace (RpmOstreeOrigin *origin);
+
+GHashTable *
 rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin);
 
 const char *
@@ -199,7 +202,7 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin  *origin,
                                  GError         **error);
 
 typedef enum {
-  /* RPMOSTREE_ORIGIN_OVERRIDE_REPLACE, */
+  RPMOSTREE_ORIGIN_OVERRIDE_REPLACE,
   RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL,
   RPMOSTREE_ORIGIN_OVERRIDE_REMOVE
 } RpmOstreeOriginOverrideType;

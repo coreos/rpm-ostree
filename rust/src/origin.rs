@@ -27,7 +27,8 @@ const OVERRIDES: &str = "overrides";
 static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
     "packages/local",
     "packages/local-fileoverride",
-    "overrides/replace-local"
+    "overrides/replace-local",
+    "override/replace"
 };
 
 #[context("Parsing origin")]
@@ -60,6 +61,7 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     }
     cfg.derive.override_remove = parse_stringlist(kf, OVERRIDES, "remove")?;
     cfg.derive.override_replace_local = parse_localpkglist(kf, OVERRIDES, "replace-local")?;
+    cfg.derive.override_replace = parse_localpkglist(kf, OVERRIDES, "replace")?;
 
     let regenerate_initramfs = kf
         .boolean(RPMOSTREE, "regenerate-initramfs")
@@ -162,6 +164,9 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     }
     if let Some(pkgs) = tf.derive.override_replace_local.as_ref() {
         set_sha256_nevra_pkgs(&kf, OVERRIDES, "replace-local", pkgs)
+    }
+    if let Some(pkgs) = tf.derive.override_replace.as_ref() {
+        set_sha256_nevra_pkgs(&kf, OVERRIDES, "replace", pkgs)
     }
     if let Some(ref modcfg) = tf.modules {
         if let Some(modules) = modcfg.enable.as_deref() {

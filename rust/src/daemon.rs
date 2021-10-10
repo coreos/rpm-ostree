@@ -112,6 +112,11 @@ fn deployment_populate_variant_origin(
         "requested-base-local-replacements",
         tf.derive.override_replace_local.as_ref(),
     );
+    vdict_insert_optmap(
+        dict,
+        "requested-base-replacements",
+        tf.derive.override_replace.as_ref(),
+    );
 
     // Initramfs data.
     if let Some(initramfs) = tf.derive.initramfs.as_ref() {
