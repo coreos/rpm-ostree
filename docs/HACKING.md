@@ -89,7 +89,7 @@ from the build environment and include those binaries when syncing to the VM.
 So make sure to have the latest ostree installed or built. This allows you to
 not have to worry about using libostree APIs that are not yet released.
 
-For more details on how tests are structured, see [tests/README.md](tests/README.md).
+For more details on how tests are structured, see [tests/README.md](https://github.com/coreos/rpm-ostree/blob/main/tests/README.md).
 
 ## Testing with a custom libdnf
 
@@ -151,7 +151,7 @@ like to install into the VM (e.g. bubblewrap, libsolv, etc...).
 ## Using GDB with the rpm-ostree daemon
 
 If you're new to rpm-ostree, before using GDB, it may be helpful to review the
-[daemon architecture doc](../architecture-daemon.md) for an architecture recap.
+[daemon architecture doc](architecture-daemon.md) for an architecture recap.
 
 ### Server-side (composes)
 
