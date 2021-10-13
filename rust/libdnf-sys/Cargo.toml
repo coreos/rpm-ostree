@@ -13,7 +13,7 @@ name = "libdnf_sys"
 path = "lib.rs"
 
 [build-dependencies]
-cmake = "0.1.45"
+cmake = "0.1.46"
 system-deps = "5.0"
 anyhow = "1.0"
 cxx-build = "1.0.56"
