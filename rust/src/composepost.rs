@@ -22,10 +22,10 @@ use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib};
 use rayon::prelude::*;
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::fmt::Write as FmtWrite;
-use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Seek, Write};
+use std::io::{BufRead, BufReader, Seek, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::IntoRawFd;
@@ -636,8 +636,19 @@ fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>)
         0o644,
         |bufwr| -> Result<()> {
             let mut prefix = "var".to_string();
-            convert_path_to_tmpfiles_d_recurse(bufwr, &pwdb, rootfs, &mut prefix, &cancellable)
-                .with_context(|| format!("Analyzing /{} content", prefix))?;
+            let mut entries = BTreeSet::new();
+            convert_path_to_tmpfiles_d_recurse(
+                &mut entries,
+                &pwdb,
+                rootfs,
+                &mut prefix,
+                &cancellable,
+            )
+            .with_context(|| format!("Analyzing /{} content", prefix))?;
+            for line in entries {
+                bufwr.write_all(line.as_bytes())?;
+                writeln!(bufwr)?;
+            }
             Ok(())
         },
     )?;
@@ -651,7 +662,7 @@ fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>)
 /// `prefix` is updated at each recursive step, so that in case of errors it can be
 /// used to pinpoint the faulty path.
 fn convert_path_to_tmpfiles_d_recurse(
-    tmpfiles_bufwr: &mut BufWriter<File>,
+    out_entries: &mut BTreeSet<String>,
     pwdb: &PasswdDB,
     rootfs: &openat::Dir,
     prefix: &mut String,
@@ -710,18 +721,16 @@ fn convert_path_to_tmpfiles_d_recurse(
             let groupname = pwdb.lookup_group(meta.stat().st_gid)?;
             importer::translate_to_tmpfiles_d(&abs_path, &file_info, &username, &groupname)?
         };
-        tmpfiles_bufwr.write_all(entry.as_bytes())?;
-        writeln!(tmpfiles_bufwr)?;
+        out_entries.insert(entry);
 
         if path_type == SimpleType::Dir {
             // New subdirectory discovered, recurse into it.
             *prefix = full_path.clone();
-            convert_path_to_tmpfiles_d_recurse(tmpfiles_bufwr, pwdb, rootfs, prefix, cancellable)?;
+            convert_path_to_tmpfiles_d_recurse(out_entries, pwdb, rootfs, prefix, cancellable)?;
         }
 
         rootfs.remove_all(&full_path)?;
     }
-    tmpfiles_bufwr.flush()?;
     Ok(())
 }
 
@@ -1069,7 +1078,6 @@ fn hardlink_recurse(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
 
     #[test]
     fn stripany() {
@@ -1215,25 +1223,22 @@ OSTREE_VERSION='33.4'
         let autovar_path = "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf";
         assert!(!rootfs.exists("var/lib").unwrap());
         assert!(rootfs.exists(autovar_path).unwrap());
-        let entries: HashSet<String> = rootfs
+        let entries: Vec<String> = rootfs
             .read_to_string(autovar_path)
             .unwrap()
             .lines()
             .map(|s| s.to_owned())
             .collect();
         let expected = &[
+            "L /var/lib/test/nested/symlink - - - - ../",
             "d /var/lib 0755 test-user test-group - -",
             "d /var/lib/nfs 0755 test-user test-group - -",
             "d /var/lib/systemd 0755 test-user test-group - -",
             "d /var/lib/test 0777 test-user test-group - -",
             "d /var/lib/test/nested 0777 test-user test-group - -",
             "f /var/lib/nfs/etab 0770 test-user test-group - -",
-            "L /var/lib/test/nested/symlink - - - - ../",
         ];
-        for line in expected {
-            assert!(entries.contains(*line), "{:#?}", entries);
-        }
-        assert_eq!(entries.len(), expected.len(), "{:#?}", entries);
+        assert_eq!(entries, expected, "{:#?}", entries);
     }
 
     #[test]
