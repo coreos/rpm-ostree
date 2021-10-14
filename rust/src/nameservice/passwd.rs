@@ -1,4 +1,4 @@
-//! Helpers for [user group file](https://man7.org/linux/man-pages/man5/group.5.html).
+//! Helpers for [password file](https://man7.org/linux/man-pages/man5/passwd.5.html).
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{anyhow, Context, Result};
@@ -67,7 +67,7 @@ pub(crate) fn parse_passwd_content(content: impl BufRead) -> Result<Vec<PasswdEn
 
         let entry = PasswdEntry::parse_line(&input).ok_or_else(|| {
             anyhow!(
-                "failed to parse group entry at line {}, content: {}",
+                "failed to parse passwd entry at line {}, content: {}",
                 line_num,
                 &input
             )
