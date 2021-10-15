@@ -651,6 +651,7 @@ pub(crate) use self::live::*;
 pub mod modularity;
 pub(crate) use self::modularity::*;
 mod nameservice;
+mod normalization;
 mod origin;
 pub(crate) use self::origin::*;
 mod passwd;

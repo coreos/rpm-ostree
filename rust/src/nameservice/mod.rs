@@ -4,3 +4,4 @@
 
 pub(crate) mod group;
 pub(crate) mod passwd;
+pub(crate) mod shadow;
