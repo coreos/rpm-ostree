@@ -2042,9 +2042,9 @@ checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "structopt"
-version = "0.3.23"
+version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf9d950ef167e25e0bdb073cf1d68e9ad2795ac826f2f3f59647817cf23c0bfa"
+checksum = "6780d7e33b913daa7eb6d3675bf706351e88cc7d19cc173bdd19ab3cac6d2a46"
 dependencies = [
  "clap",
  "lazy_static",
@@ -2053,9 +2053,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.16"
+version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "134d838a2c9943ac3125cf6df165eda53493451b719f3255b2a26b85f772d0ba"
+checksum = "13319edf4ebc516438ef39e03f7fb3d8c1c964163525d47eba3d8e4ba6b5074f"
 dependencies = [
  "heck",
  "proc-macro-error",
