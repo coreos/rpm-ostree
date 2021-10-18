@@ -43,7 +43,7 @@ futures = "0.3.17"
 indoc = "1.0.3"
 indicatif = "0.16.2"
 lazy_static = "1.4.0"
-libc = "0.2.103"
+libc = "0.2.104"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 memfd = "0.4.1"
