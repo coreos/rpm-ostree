@@ -27,7 +27,8 @@ ls -al ${TARFILE_TMP}
     tar -A -f ${TARFILE_TMP} submodule.tar
     rm submodule.tar
 done
-tmpd=${TOP}/.dist-tmp
+disttmp=.dist-tmp
+tmpd=${TOP}/$disttmp
 trap cleanup EXIT
 function cleanup () {
     if test -f ${tmpd}/.tmp; then
@@ -40,9 +41,8 @@ mkdir ${tmpd} && touch ${tmpd}/.tmp
 
 (cd ${tmpd}
  mkdir -p .cargo vendor
- (cd ${TOP} && cargo vendor ${tmpd}/vendor)
+ (cd ${TOP} && cargo vendor ${tmpd}/vendor | sed -e "s,^directory *=.*,directory = './vendor',") > .cargo/config
  cp ${TOP}/Cargo.lock .
- cp ${TOP}/cargo-vendor-config .cargo/config
  # Filter out bundled libcurl and systemd; we always want the pkgconfig ones
  for crate_subdir in curl-sys/curl \
                      libz-sys/src/zlib \
