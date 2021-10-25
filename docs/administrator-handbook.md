@@ -100,6 +100,39 @@ called the "pending deployment".  Operations can be chained; for example,
 if you invoke `rpm-ostree upgrade` after installing a package, your new root
 will upgraded with the package also installed.
 
+### Modularity
+
+rpm-ostree provides experimental support for modules, a way for the distribution
+to ship multiple versions (or "streams") of the same software.
+
+A module can have multiple streams, and each stream can have multiple profiles.
+A profile is a set of packages for common use cases (e.g. you can have a
+"client" and "server" profile, each installing different packages).
+
+`rpm-ostree ex module enable` enables a module stream and allow you to
+individually pick packages to `rpm-ostree install` from that stream.
+`rpm-ostree ex module install` installs module stream profiles directly.
+
+For example, to enable the `cri-o:1.20` module stream, use:
+
+```
+# rpm-ostree ex module enable cri-o:1.20
+```
+
+You can then `rpm-ostree install` individual packages from the enabled module.
+
+Or to install a predefined profile, use e.g.:
+
+```
+# rpm-ostree ex module install cri-o:1.20/default
+```
+
+For more information about modularity, see
+[the Fedora documentation](https://docs.fedoraproject.org/en-US/modularity). In
+particular,
+[this page](https://docs.fedoraproject.org/en-US/modularity/installing-modules/#_installing_packages)
+provides sample syntax invocations.
+
 ### Rebasing
 
 ```
