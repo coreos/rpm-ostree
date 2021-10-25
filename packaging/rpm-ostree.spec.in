@@ -72,6 +72,11 @@ BuildRequires: pkgconfig(check)
 # but duplicating to be clear)
 BuildRequires: pkgconfig(libsolv)
 
+# These are build deps which aren't strictly required in Koji/Brew builds, but
+# are required for git builds. Since they're few and tiny, we just add it here
+# to keep it part of `dnf builddep`.
+BuildRequires: jq
+
 #########################################################################
 #                         libdnf build deps                             #
 #                                                                       #
