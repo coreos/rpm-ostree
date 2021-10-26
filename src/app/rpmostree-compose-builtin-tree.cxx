@@ -1093,9 +1093,17 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     g_print ("Network filesystem detected for repo; disabling transaction\n");
   const gboolean use_txn = !(txn_explicitly_disabled || using_netfs);
 
+  g_autoptr(OstreeRepoAutoLock) lock = NULL;
   if (use_txn)
     {
       if (!ostree_repo_prepare_transaction (self->build_repo, NULL, cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      /* if we're not using transactions, then get a shared lock ourselves */
+      lock = ostree_repo_auto_lock_push (self->build_repo, OSTREE_REPO_LOCK_SHARED, cancellable, error);
+      if (!lock)
         return FALSE;
     }
 
