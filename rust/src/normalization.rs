@@ -119,3 +119,71 @@ pub(crate) fn rewrite_rpmdb_timestamps<F: Read + Write + Seek>(rpmdb: &mut F) ->
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use openssl::sha::sha256;
+    use std::io::Cursor;
+
+    #[test]
+    fn rpmdb_timestamp_rewrite() -> Result<()> {
+        // This is a pretty simple smoke test. We have a dummy RPM database
+        // dump that contains a specific initial timestamp in several tags:
+        //
+        //  - RPMTAG_INSTALLTID
+        //  - RPMTAG_INSTALLTIME
+        //  - RPMTAG_BUILDTIME
+        //
+        // The first two are the ones we want changed, the latter is a canary
+        // to ensure we don't get overzealous.
+        //
+        // We know the checksums of both the unrewritten and rewritten dumps
+        // so all we need to do is make sure that the initial database matches
+        // what we expect, and then run the rewrite, and ensure the new
+        // checksum matches what we expect.
+        //
+        // More complicated testing is left to other test cycles.
+
+        let rpmdb = include_bytes!("../test/dummy-rpm-database.bin").to_vec();
+
+        const REWRITE_TIMESTAMP: u32 = 1445437680;
+        const INITIAL_CHECKSUM: [u8; 32] = [
+            0x66, 0xac, 0x68, 0x75, 0xe7, 0x40, 0x99, 0x64, 0xd0, 0x04, 0xde, 0xff, 0x09, 0x80,
+            0x22, 0x77, 0xb0, 0xeb, 0x63, 0x7a, 0xa9, 0x14, 0x62, 0x4e, 0xda, 0x52, 0x36, 0x06,
+            0x8b, 0x23, 0x39, 0xec,
+        ];
+        const REWRITE_CHECKSUM: [u8; 32] = [
+            0xac, 0x79, 0xb9, 0xa9, 0x9b, 0x95, 0x73, 0x81, 0x5f, 0x7c, 0x90, 0xbb, 0x27, 0x49,
+            0x55, 0xba, 0x1a, 0x77, 0xcd, 0xfc, 0xde, 0x6e, 0xa0, 0xf9, 0xc4, 0x9c, 0x6e, 0xea,
+            0x88, 0x31, 0x15, 0x43,
+        ];
+
+        // Calculate and check initial checksum.
+        let checksum = sha256(&rpmdb);
+        assert_eq!(checksum[..], INITIAL_CHECKSUM[..]);
+
+        // Override SOURCE_DATE_EPOCH, retaining original value for later.
+        let source_date = std::env::var_os("SOURCE_DATE_EPOCH");
+        std::env::set_var("SOURCE_DATE_EPOCH", REWRITE_TIMESTAMP.to_string());
+
+        // Actually do the rewrite.
+        let mut cursor = Cursor::new(rpmdb);
+        rewrite_rpmdb_timestamps(&mut cursor)?;
+        let rpmdb = cursor.into_inner();
+
+        // Restore or remove the original SOURCE_DATE_EPOCH.
+        if let Some(value) = source_date {
+            std::env::set_var("SOURCE_DATE_EPOCH", value);
+        } else {
+            std::env::remove_var("SOURCE_DATE_EPOCH");
+        }
+
+        // Calculate and check checksum of rewritten data.
+        let checksum = sha256(&rpmdb);
+        assert_eq!(checksum[..], REWRITE_CHECKSUM[..]);
+
+        Ok(())
+    }
+}
