@@ -68,6 +68,11 @@ change_origin_refspec (GVariantDict    *options,
                        gchar **out_new_refspec,
                        GError **error)
 {
+  // We previously supported prefixing with ostree:// - so continue to parse this for now.
+  // https://gitlab.gnome.org/GNOME/gnome-software/-/issues/1463#note_1279157
+  if (g_str_has_prefix (refspec, "ostree://"))
+    refspec += strlen ("ostree://");
+
   RpmOstreeRefspecType refspectype;
   if (!rpmostree_refspec_classify (refspec, &refspectype, error))
     return FALSE;
