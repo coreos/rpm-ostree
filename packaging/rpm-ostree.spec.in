@@ -3,7 +3,7 @@
 
 Summary: Hybrid image/package system
 Name: rpm-ostree
-Version: 2021.12
+Version: 2021.13
 Release: 1%{?dist}
 License: LGPLv2+
 URL: https://github.com/coreos/rpm-ostree
@@ -86,7 +86,7 @@ BuildRequires: jq
 
 
 %global libsolv_version 0.7.17
-%global libmodulemd_version 2.11.2-2
+%global libmodulemd_version 2.13.0
 %global librepo_version 1.13.1
 
 BuildRequires:  cmake
