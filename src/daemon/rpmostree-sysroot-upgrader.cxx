@@ -1070,10 +1070,11 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       if (!rpmostree_context_assemble (self->ctx, cancellable, error))
         return FALSE;
     }
-
-  // TODO Unify with treefile origin handling in core
-  if (rpmostree_origin_get_cliwrap (self->computed_origin))
-    CXX_TRY(cliwrap_write_wrappers (self->tmprootfs_dfd), error);
+  else
+    {
+      if (!rpmostree_context_assemble_end (self->ctx, cancellable, error))
+        return FALSE;
+    }
 
   if (!rpmostree_rootfs_postprocess_common (self->tmprootfs_dfd, cancellable, error))
     return FALSE;
