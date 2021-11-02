@@ -3958,22 +3958,29 @@ write_rpmdb (RpmOstreeContext      *self,
   return TRUE;
 }
 
+static gboolean
+ensure_tmprootfs_dfd (RpmOstreeContext      *self,
+                      GError               **error)
+{
+  /* Synthesize a tmpdir if we weren't provided a base */
+  if (self->tmprootfs_dfd != -1)
+    return TRUE;
+  g_assert (!self->repo_tmpdir.initialized);
+  int repo_dfd = ostree_repo_get_dfd (self->ostreerepo); /* Borrowed */
+  if (!glnx_mkdtempat (repo_dfd, "tmp/rpmostree-assemble-XXXXXX", 0700,
+                       &self->repo_tmpdir, error))
+    return FALSE;
+  self->tmprootfs_dfd = self->repo_tmpdir.fd;
+  return TRUE;
+}
+
 gboolean
 rpmostree_context_assemble (RpmOstreeContext      *self,
                             GCancellable          *cancellable,
                             GError               **error)
 {
-  /* Synthesize a tmpdir if we weren't provided a base */
-  if (self->tmprootfs_dfd == -1)
-    {
-      g_assert (!self->repo_tmpdir.initialized);
-      int repo_dfd = ostree_repo_get_dfd (self->ostreerepo); /* Borrowed */
-      if (!glnx_mkdtempat (repo_dfd, "tmp/rpmostree-assemble-XXXXXX", 0700,
-                           &self->repo_tmpdir, error))
-        return FALSE;
-      self->tmprootfs_dfd = self->repo_tmpdir.fd;
-    }
-
+  if (!ensure_tmprootfs_dfd (self, error))
+    return FALSE;
   int tmprootfs_dfd = self->tmprootfs_dfd; /* Alias to avoid bigger diff */
 
   /* In e.g. removing a package we walk librpm which doesn't have canonical
@@ -4412,8 +4419,6 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
     }
 
-  if (self->treefile_rs->get_cliwrap())
-    rpmostreecxx::cliwrap_write_wrappers (tmprootfs_dfd);
 
   /* Undo the /etc move above */
   etc_guard->undo();
@@ -4431,6 +4436,19 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                     have_fileoverrides, cancellable, error))
     return glnx_prefix_error (error, "Writing rpmdb");
 
+  return rpmostree_context_assemble_end (self, cancellable, error);
+}
+
+// Perform any final transformations independent of rpm, such as cliwrap.
+gboolean
+rpmostree_context_assemble_end (RpmOstreeContext      *self,
+                                GCancellable          *cancellable,
+                                GError               **error)
+{
+  if (!ensure_tmprootfs_dfd (self, error))
+    return FALSE;
+  if (self->treefile_rs->get_cliwrap())
+    CXX_TRY(cliwrap_write_wrappers (self->tmprootfs_dfd), error);
   return TRUE;
 }
 

@@ -205,6 +205,9 @@ gboolean rpmostree_context_get_kernel_changed (RpmOstreeContext *self);
 gboolean rpmostree_context_assemble (RpmOstreeContext      *self,
                                      GCancellable          *cancellable,
                                      GError               **error);
+gboolean rpmostree_context_assemble_end (RpmOstreeContext      *self,
+                                         GCancellable          *cancellable,
+                                         GError               **error);
 gboolean rpmostree_context_commit (RpmOstreeContext      *self,
                                    const char            *parent,
                                    RpmOstreeAssembleType  assemble_type,
