@@ -8,19 +8,19 @@
 use crate::nameservice::shadow::parse_shadow_content;
 use anyhow::{anyhow, Result};
 use fn_error_context::context;
-use lazy_static::lazy_static;
 use std::convert::TryInto;
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 
-lazy_static! {
-    static ref SOURCE_DATE_EPOCH_RAW: Option<String> = std::env::var("SOURCE_DATE_EPOCH").ok();
-    static ref SOURCE_DATE_EPOCH: Option<i64> = SOURCE_DATE_EPOCH_RAW
-        .as_ref()
-        .map(|s| s.parse::<i64>().expect("bad number in SOURCE_DATE_EPOCH"));
+pub(crate) fn source_date_epoch() -> Option<i64> {
+    if let Some(raw) = source_date_epoch_raw() {
+        raw.parse().ok()
+    } else {
+        None
+    }
 }
 
-pub(crate) fn source_date_epoch_raw() -> Option<&'static str> {
-    SOURCE_DATE_EPOCH_RAW.as_ref().map(|s| s.as_str())
+pub(crate) fn source_date_epoch_raw() -> Option<String> {
+    std::env::var("SOURCE_DATE_EPOCH").ok()
 }
 
 #[context("Rewriting /etc/shadow to remove lstchg field")]
@@ -53,8 +53,8 @@ const RPMTAG_INSTALLTID: u32 = 1128;
 
 #[context("Normalizing rpmdb timestamps for build stability")]
 pub(crate) fn rewrite_rpmdb_timestamps<F: Read + Write + Seek>(rpmdb: &mut F) -> Result<()> {
-    let source_date_epoch = if let Some(source_date_epoch) = *SOURCE_DATE_EPOCH {
-        source_date_epoch as u32
+    let source_date = if let Some(source_date) = source_date_epoch() {
+        source_date as u32
     } else {
         return Ok(());
     };
@@ -63,8 +63,8 @@ pub(crate) fn rewrite_rpmdb_timestamps<F: Read + Write + Seek>(rpmdb: &mut F) ->
     let pos = rpmdb.stream_position()?;
 
     let mut buffer: [u8; 16] = [0; 16];
-    let install_tid = source_date_epoch;
-    let mut install_time = source_date_epoch;
+    let install_tid = source_date;
+    let mut install_time = source_date;
 
     loop {
         // Read in a header record
