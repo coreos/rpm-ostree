@@ -53,8 +53,8 @@ if [ ! -d compose-cache ]; then
   ostree init --repo=repo --mode=archive
   rpm-ostree compose tree --unified-core --download-only-rpms --repo=repo \
     config/manifest.json --cachedir cachedir \
-    --ex-lockfile config/manifest-lock.x86_64.json \
-    --ex-lockfile config/manifest-lock.overrides.yaml
+    --lockfile config/manifest-lock.x86_64.json \
+    --lockfile config/manifest-lock.overrides.yaml
   rm -rf repo
   (cd cachedir && createrepo_c .)
   echo -e "[cache]\nbaseurl=$(pwd)/cachedir\ngpgcheck=0" > config/cache.repo

@@ -109,9 +109,13 @@ static GOptionEntry install_option_entries[] = {
   { "previous-commit", 0, 0, G_OPTION_ARG_STRING, &opt_previous_commit, "Use this commit for change detection", "COMMIT" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
-  { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile_to, "Write lockfile to FILE", "FILE" },
-  { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_lockfiles, "Read lockfile from FILE", "FILE" },
-  { "ex-lockfile-strict", 0, 0, G_OPTION_ARG_NONE, &opt_lockfile_strict, "With --ex-lockfile, only allow installing locked packages", NULL },
+  // Now stabilized, but we keep the ex- options for backcompat
+  { "ex-write-lockfile-to", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_write_lockfile_to, "Write lockfile to FILE", "FILE" },
+  { "ex-lockfile", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING_ARRAY, &opt_lockfiles, "Read lockfile from FILE", "FILE" },
+  { "ex-lockfile-strict", G_OPTION_FLAG_HIDDEN, 0, G_OPTION_ARG_NONE, &opt_lockfile_strict, "With --ex-lockfile, only allow installing locked packages", NULL },
+  { "write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile_to, "Write lockfile to FILE", "FILE" },
+  { "lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_lockfiles, "Read lockfile from FILE", "FILE" },
+  { "lockfile-strict", 0, 0, G_OPTION_ARG_NONE, &opt_lockfile_strict, "With --lockfile, only allow installing locked packages", NULL },
   { NULL }
 };
 
