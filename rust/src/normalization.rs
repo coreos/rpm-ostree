@@ -279,6 +279,124 @@ mod bdb_normalize {
         static ref PROC_SELF_FD: PathBuf = PathBuf::from("/proc/self/fd");
     }
 
+    pub(super) fn normalize_one(
+        rootfs: &openat::Dir,
+        path: &Path,
+        entry: openat::Entry,
+        timestamp: u32,
+    ) -> Result<()> {
+        // Construct a new, deterministic file ID.
+        let mut file_id = Sha256::new();
+        file_id.update(&timestamp.to_be_bytes());
+        file_id.update(format!("bdb/{}", entry.file_name().to_str().unwrap()).as_bytes());
+        let file_id = &file_id.finish()[..20];
+
+        // Open the file for update.
+        let mut db = rootfs.update_file(path, 0o644)?;
+
+        // Get the metadata header and make sure we're working on one of the
+        // types of file we care about.
+        let meta_header: MetaHeader = db.read_le()?;
+        match (meta_header.magic, meta_header.page_type) {
+            (BTREE_MAGIC, PageType::BTreeMeta) => (),
+            (HASH_MAGIC, PageType::HashMeta) => (),
+            _ => return Ok(()),
+        };
+
+        // Seek to where the file ID lives and replace it.
+        db.seek(SeekFrom::Start(PAGE_HEADER_FILE_ID_OFFSET))?;
+        db.write_all(file_id)?;
+
+        for pageno in 1..meta_header.last_pgno + 1 {
+            // Seek to the next page.
+            db.seek(SeekFrom::Start((pageno * meta_header.pagesize) as u64))?;
+
+            // Read in the page header.
+            let header: PageHeader = db.read_le()?;
+
+            // If this is an overflow page then all we need to do is seek to the start
+            // of free space and zero out the rest of the page.
+            if header.page_type == PageType::Overflow {
+                db.seek(SeekFrom::Current(header.hf_offset as i64))?;
+                let fill_length = meta_header
+                    .pagesize
+                    .saturating_sub((PAGE_HEADER_SIZE + header.hf_offset) as u32);
+                write_zeros(&mut db, fill_length)?;
+                continue;
+            }
+
+            // For the other page types we have a series of 16-bit item offsets immediately
+            // after the page header. We need to collect those up.
+            let mut offsets: Vec<u16> = Vec::new();
+            for _ in 0..header.entries {
+                offsets.push(db.read_le()?);
+            }
+            offsets.sort_unstable();
+
+            // Zero out the unused space after the item offsets. This will either be the
+            // entire rest of the page if there aren't any or the space from the end of
+            // the offset list to the start of the first item.
+            let empty = if offsets.is_empty() {
+                meta_header.pagesize - PAGE_HEADER_SIZE as u32
+            } else {
+                *offsets.first().unwrap() as u32 - (PAGE_HEADER_SIZE + header.entries * 2) as u32
+            };
+            write_zeros(&mut db, empty)?;
+
+            let mut offset_iter = offsets.into_iter().peekable();
+            while let Some(offset) = offset_iter.next() {
+                // Seek to the next item offset.
+                db.seek(SeekFrom::Start(
+                    (pageno * meta_header.pagesize + offset as u32) as u64,
+                ))?;
+
+                if matches!(header.page_type, PageType::IBTree | PageType::LBTree) {
+                    // BTree items consist of at least a 16-bit length and an 8-bit type.
+                    let item: BTreeItem = db.read_le()?;
+                    if header.page_type == PageType::IBTree {
+                        // If this is an internal page (`IBTree`) then the byte immediately
+                        // following the type field is unused. Zero it.
+                        db.write_all(b"\x00")?;
+                    } else if header.page_type == PageType::LBTree {
+                        if let BTreeItemType::Overflow = item.item_type {
+                            // BTree overflow entries don't use their length fields. Zero it.
+                            db.seek(SeekFrom::Current(-3))?;
+                            db.write_all(b"\x00\x00")?;
+                        } else if let BTreeItemType::KeyData = item.item_type {
+                            // Work out where the next item starts or if we're at the end of
+                            // the page.
+                            let next_offset = if let Some(next) = offset_iter.peek() {
+                                *next
+                            } else {
+                                meta_header.pagesize as u16
+                            };
+
+                            // Zero out the space between the end of this item and the start
+                            // of the next (or the end of the page).
+                            let remainder = next_offset - (offset + 3 + item.len);
+                            if remainder != 0 {
+                                db.seek(SeekFrom::Current(item.len as i64))?;
+                                write_zeros(&mut db, remainder)?;
+                            }
+                        }
+                    }
+                } else if header.page_type == PageType::Hash {
+                    // Offpage (aka overflow) Hash entries have three unused bytes immediately
+                    // after the 8-bit item type field. Zero them.
+                    let item_type: HashItemType = db.read_le()?;
+
+                    if let HashItemType::Offpage = item_type {
+                        db.write_all(b"\x00\x00\x00")?;
+                    }
+                }
+            }
+        }
+
+        db.flush()?;
+
+        Ok(())
+    }
+
     pub(super) fn normalize(
         rootfs: &openat::Dir,
         db_path: impl AsRef<Path>,
@@ -311,117 +429,8 @@ mod bdb_normalize {
             let old_digest = database_contents_digest(&path, rootfs)
                 .context("pre-normalization contents check")?;
 
-            {
-                // Construct a new, deterministic file ID.
-                let mut file_id = Sha256::new();
-                file_id.update(&timestamp.to_be_bytes());
-                file_id.update(format!("bdb/{}", entry.file_name().to_str().unwrap()).as_bytes());
-                let file_id = &file_id.finish()[..20];
-
-                // Open the file for update.
-                let mut db = rootfs.update_file(&path, 0o644)?;
-
-                // Get the metadata header and make sure we're working on one of the
-                // types of file we care about.
-                let meta_header: MetaHeader = db.read_le()?;
-                match (meta_header.magic, meta_header.page_type) {
-                    (BTREE_MAGIC, PageType::BTreeMeta) => (),
-                    (HASH_MAGIC, PageType::HashMeta) => (),
-                    _ => continue,
-                };
-
-                // Seek to where the file ID lives and replace it.
-                db.seek(SeekFrom::Start(PAGE_HEADER_FILE_ID_OFFSET))?;
-                db.write_all(file_id)?;
-
-                for pageno in 1..meta_header.last_pgno + 1 {
-                    // Seek to the next page.
-                    db.seek(SeekFrom::Start((pageno * meta_header.pagesize) as u64))?;
-
-                    // Read in the page header.
-                    let header: PageHeader = db.read_le()?;
-
-                    // If this is an overflow page then all we need to do is seek to the start
-                    // of free space and zero out the rest of the page.
-                    if header.page_type == PageType::Overflow {
-                        db.seek(SeekFrom::Current(header.hf_offset as i64))?;
-                        let fill_length = meta_header
-                            .pagesize
-                            .saturating_sub((PAGE_HEADER_SIZE + header.hf_offset) as u32);
-                        write_zeros(&mut db, fill_length)?;
-                        continue;
-                    }
-
-                    // For the other page types we have a series of 16-bit item offsets immediately
-                    // after the page header. We need to collect those up.
-                    let mut offsets: Vec<u16> = Vec::new();
-                    for _ in 0..header.entries {
-                        offsets.push(db.read_le()?);
-                    }
-                    offsets.sort_unstable();
-
-                    // Zero out the unused space after the item offsets. This will either be the
-                    // entire rest of the page if there aren't any or the space from the end of
-                    // the offset list to the start of the first item.
-                    let empty = if offsets.is_empty() {
-                        meta_header.pagesize - PAGE_HEADER_SIZE as u32
-                    } else {
-                        *offsets.first().unwrap() as u32
-                            - (PAGE_HEADER_SIZE + header.entries * 2) as u32
-                    };
-                    write_zeros(&mut db, empty)?;
-
-                    let mut offset_iter = offsets.into_iter().peekable();
-                    while let Some(offset) = offset_iter.next() {
-                        // Seek to the next item offset.
-                        db.seek(SeekFrom::Start(
-                            (pageno * meta_header.pagesize + offset as u32) as u64,
-                        ))?;
-
-                        if matches!(header.page_type, PageType::IBTree | PageType::LBTree) {
-                            // BTree items consist of at least a 16-bit length and an 8-bit type.
-                            let item: BTreeItem = db.read_le()?;
-                            if header.page_type == PageType::IBTree {
-                                // If this is an internal page (`IBTree`) then the byte immediately
-                                // following the type field is unused. Zero it.
-                                db.write_all(b"\x00")?;
-                            } else if header.page_type == PageType::LBTree {
-                                if let BTreeItemType::Overflow = item.item_type {
-                                    // BTree overflow entries don't use their length fields. Zero it.
-                                    db.seek(SeekFrom::Current(-3))?;
-                                    db.write_all(b"\x00\x00")?;
-                                } else if let BTreeItemType::KeyData = item.item_type {
-                                    // Work out where the next item starts or if we're at the end of
-                                    // the page.
-                                    let next_offset = if let Some(next) = offset_iter.peek() {
-                                        *next
-                                    } else {
-                                        meta_header.pagesize as u16
-                                    };
-
-                                    // Zero out the space between the end of this item and the start
-                                    // of the next (or the end of the page).
-                                    let remainder = next_offset - (offset + 3 + item.len);
-                                    if remainder != 0 {
-                                        db.seek(SeekFrom::Current(item.len as i64))?;
-                                        write_zeros(&mut db, remainder)?;
-                                    }
-                                }
-                            }
-                        } else if header.page_type == PageType::Hash {
-                            // Offpage (aka overflow) Hash entries have three unused bytes immediately
-                            // after the 8-bit item type field. Zero them.
-                            let item_type: HashItemType = db.read_le()?;
-
-                            if let HashItemType::Offpage = item_type {
-                                db.write_all(b"\x00\x00\x00")?;
-                            }
-                        }
-                    }
-                }
-
-                db.flush()?;
-            }
+            // Perform normalization
+            normalize_one(rootfs, &path, entry, timestamp)?;
 
             // Ensure that we haven't changed (or trashed) the database contents.
             let new_digest = database_contents_digest(&path, rootfs)
