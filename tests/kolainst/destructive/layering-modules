@@ -7,8 +7,18 @@ cd $(mktemp -d)
 
 set -x
 
+versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
+versionid=${versionid:11} # trim off VERSION_ID=
+
 # Let's start by trying to install a bona fide module.
-rpm-ostree ex module install cri-o:1.20/default
+case $versionid in
+  34) module=cri-o:1.20/default;;
+  # yes, this is going backwards, see:
+  # https://github.com/coreos/fedora-coreos-tracker/issues/767#issuecomment-917191270
+  35) module=cri-o:1.19/default;;
+  *) assert_not_reached "Unsupported Fedora version: $versionid";;
+esac
+rpm-ostree ex module install "${module}"
 rpm-ostree cleanup -p
 
 rm -rf /etc/yum.repos.d/*
