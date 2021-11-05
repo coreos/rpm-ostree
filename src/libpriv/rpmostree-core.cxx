@@ -2503,10 +2503,14 @@ ht_insert_path_for_nevra (GHashTable *ht, const char *nevra, char *path, gpointe
 }
 
 /* This is a lighter version of calculations that librpm calls "file disposition".
- * Essentially, we determine which file removals/installations should be skipped. The librpm
- * functions and APIs for these are unfortunately private since they're just run as part of
- * rpmtsRun(). XXX: see if we can make the rpmfs APIs public, but we'd still need to support
- * RHEL/CentOS anyway. */
+ * Essentially, we determine which file removals/installations should be skipped. For
+ * example:
+ * - if removing a pkg owning a file shared with another pkg, the file should not be deleted
+ * - if adding a pkg owning a file that already exists in the base (or another added pkg),
+ *   and they are both "coloured", we need to pick the preferred one
+ *
+ * The librpm functions and APIs for these are unfortunately private since they're just run
+ * as part of rpmtsRun(). XXX: see if we can make the rpmfs APIs public. */
 static gboolean
 handle_file_dispositions (RpmOstreeContext *self,
                           int           tmprootfs_dfd,
@@ -2519,9 +2523,6 @@ handle_file_dispositions (RpmOstreeContext *self,
   /* we deal with color similarly to librpm (compare with skipInstallFiles()) */
   rpm_color_t ts_color = rpmtsColor (ts);
   rpm_color_t ts_prefcolor = rpmtsPrefColor (ts);
-
-  if (ts_color == 0)
-    return TRUE; /* this architecture doesn't do colours; done */
 
   g_autoptr(GHashTable) pkgs_deleted = g_hash_table_new (g_direct_hash, g_direct_equal);
 
@@ -2575,7 +2576,7 @@ handle_file_dispositions (RpmOstreeContext *self,
       GLNX_HASH_TABLE_FOREACH_KV (paths, const char*, path, gpointer, colorp)
         {
           rpm_color_t color = GPOINTER_TO_UINT (colorp);
-          if (!(ts_color & color))
+          if (ts_color && !(ts_color & color))
             ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (path), NULL);
         }
     }
