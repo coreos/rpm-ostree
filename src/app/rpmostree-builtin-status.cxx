@@ -101,10 +101,20 @@ get_active_txn (RPMOSTreeSysroot *sysroot_proxy)
   return NULL;
 }
 
+static gint
+sort_by_name (gconstpointer a, gconstpointer b)
+{
+  const char *entry1 = *(const char **) a;
+  const char *entry2 = *(const char **) b;
+
+  return g_ascii_strcasecmp (entry1, entry2);
+}
+
 static void
 print_packages (const char *k, guint max_key_len,
                 const char *const* pkgs,
-                const char *const* omit_pkgs)
+                const char *const* omit_pkgs,
+                gboolean quote)
 {
   g_autoptr(GPtrArray) packages_sorted = g_ptr_array_new_with_free_func (g_free);
   for (char **iter = (char**) pkgs; iter && *iter; iter++)
@@ -113,13 +123,22 @@ print_packages (const char *k, guint max_key_len,
       if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, pkg))
         continue;
 
-      auto quoted = rpmostreecxx::maybe_shell_quote (pkg);
-      g_ptr_array_add (packages_sorted, g_strdup(quoted.c_str()));
+      if (quote)
+        {
+          auto quoted = rpmostreecxx::maybe_shell_quote (pkg);
+          g_ptr_array_add (packages_sorted, g_strdup(quoted.c_str()));
+        }
+      else
+        {
+          g_ptr_array_add (packages_sorted, g_strdup(pkg));
+        }
     }
 
   const guint n_packages = packages_sorted->len;
   if (n_packages == 0)
     return;
+
+  g_ptr_array_sort(packages_sorted, sort_by_name);
 
   rpmostree_print_kv_no_newline (k, max_key_len, "");
 
@@ -811,9 +830,9 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
 
   /* print base overrides before overlays */
   g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr(GPtrArray) active_removals_grouped = g_ptr_array_new_with_free_func (g_free);
   if (origin_base_removals)
     {
-      g_autoptr(GString) str = g_string_new ("");
       g_autoptr(GHashTable) grouped_evrs =
         g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                (GDestroyNotify)g_ptr_array_unref);
@@ -821,14 +840,15 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
       const guint n = g_variant_n_children (origin_base_removals);
       for (guint i = 0; i < n; i++)
         {
+          g_autoptr(GString) buf = g_string_new ("");
           g_autoptr(GVariant) gv_nevra;
           g_variant_get_child (origin_base_removals, i, "v", &gv_nevra);
           const char *name;
           g_variant_get_child (gv_nevra, 1, "&s", &name);
           g_ptr_array_add (active_removals, g_strdup (name));
 
-          gv_nevra_to_evr (str, gv_nevra);
-          const char *evr = str->str;
+          gv_nevra_to_evr (buf, gv_nevra);
+          const char *evr = buf->str;
           auto pkgs = static_cast<GPtrArray *>(g_hash_table_lookup (grouped_evrs, evr));
           if (!pkgs)
             {
@@ -836,39 +856,45 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
               g_hash_table_insert (grouped_evrs, g_strdup (evr), pkgs);
             }
           g_ptr_array_add (pkgs, g_strdup (name));
-          g_string_erase (str, 0, -1);
         }
       g_ptr_array_add (active_removals, NULL);
 
       GLNX_HASH_TABLE_FOREACH_KV (grouped_evrs, const char*, evr, GPtrArray*, pkgs)
         {
-          if (str->len)
-            g_string_append (str, ", ");
-
+          g_autoptr(GString) pkggroup_buf = g_string_new ("");
           for (guint i = 0, n = pkgs->len; i < n; i++)
             {
               auto pkgname = static_cast<const char *>(g_ptr_array_index (pkgs, i));
               if (i > 0)
-                g_string_append_c (str, ' ');
-              g_string_append (str, pkgname);
+                g_string_append_c (pkggroup_buf, ' ');
+              g_string_append (pkggroup_buf, pkgname);
             }
-          g_string_append_printf (str, " %s", evr);
+          g_string_append_printf (pkggroup_buf, " %s", evr);
+
+          g_ptr_array_add (active_removals_grouped, g_strdup (pkggroup_buf->str));
         }
 
-      if (str->len)
-        rpmostree_print_kv ("RemovedBasePackages", max_key_len, str->str);
+      g_ptr_array_add (active_removals_grouped, NULL);
+
+      if (active_removals_grouped->len > 1)
+        print_packages("RemovedBasePackages", max_key_len,
+                       (const char *const*)active_removals_grouped->pdata,
+                       NULL,
+                       FALSE);
     }
 
   /* only print inactive base removal requests in verbose mode */
   if (origin_requested_base_removals && opt_verbose)
     print_packages ("InactiveBaseRemovals", max_key_len,
                     origin_requested_base_removals,
-                    (const char *const*)active_removals->pdata);
+                    (const char *const*)active_removals->pdata,
+                    TRUE);
 
   g_autoptr(GPtrArray) active_replacements = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr(GPtrArray) active_replacements_grouped = g_ptr_array_new_with_free_func (g_free);
   if (origin_base_local_replacements)
     {
-      g_autoptr(GString) str = g_string_new ("");
+      g_autoptr(GString) buf = g_string_new ("");
       g_autoptr(GHashTable) grouped_diffs =
         g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                (GDestroyNotify)g_ptr_array_unref);
@@ -888,13 +914,13 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
           /* if pkgnames match, print a nicer version like treediff */
           if (g_str_equal (name_new, name_old))
             {
-              /* let's just use str as a scratchpad to avoid excessive mallocs; the str
+              /* let's just use buf as a scratchpad to avoid excessive mallocs; the buf
                * needs to be stretched anyway for the final output */
-              gsize original_size = str->len;
-              gv_nevra_to_evr (str, gv_nevra_old);
-              g_string_append (str, " -> ");
-              gv_nevra_to_evr (str, gv_nevra_new);
-              const char *diff = str->str + original_size;
+              gsize original_size = buf->len;
+              gv_nevra_to_evr (buf, gv_nevra_old);
+              g_string_append (buf, " -> ");
+              gv_nevra_to_evr (buf, gv_nevra_new);
+              const char *diff = buf->str + original_size;
               auto pkgs = static_cast<GPtrArray *>(g_hash_table_lookup (grouped_diffs, diff));
               if (!pkgs)
                 {
@@ -902,73 +928,84 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                   g_hash_table_insert (grouped_diffs, g_strdup (diff), pkgs);
                 }
               g_ptr_array_add (pkgs, g_strdup (name_new));
-              g_string_truncate (str, original_size);
+              g_string_truncate (buf, original_size);
             }
           else
             {
-              if (str->len)
-                g_string_append (str, ", ");
+              if (buf->len)
+                g_string_append (buf, ", ");
 
               const char *nevra_old;
               g_variant_get_child (gv_nevra_old, 0, "&s", &nevra_old);
-              g_string_append_printf (str, "%s -> %s", nevra_old, nevra_new);
+              g_string_append_printf (buf, "%s -> %s", nevra_old, nevra_new);
             }
           g_ptr_array_add (active_replacements, g_strdup (nevra_new));
         }
 
       GLNX_HASH_TABLE_FOREACH_KV (grouped_diffs, const char*, diff, GPtrArray*, pkgs)
         {
-          if (str->len)
-            g_string_append (str, ", ");
+          g_autoptr(GString) pkggroup_buf = g_string_new ("");
           for (guint i = 0, n = pkgs->len; i < n; i++)
             {
               auto pkgname = static_cast<const char *>(g_ptr_array_index (pkgs, i));
               if (i > 0)
-                g_string_append_c (str, ' ');
-              g_string_append (str, pkgname);
+                g_string_append_c (pkggroup_buf, ' ');
+              g_string_append (pkggroup_buf, pkgname);
             }
-          g_string_append_c (str, ' ');
-          g_string_append (str, diff);
+          g_string_append_c (pkggroup_buf, ' ');
+          g_string_append (pkggroup_buf, diff);
+
+          g_ptr_array_add (active_replacements_grouped, g_strdup (pkggroup_buf->str));
         }
 
       g_ptr_array_add (active_replacements, NULL);
+      g_ptr_array_add (active_replacements_grouped, NULL);
 
-      if (str->len)
-        rpmostree_print_kv ("ReplacedBasePackages", max_key_len, str->str);
+
+      g_ptr_array_add (active_replacements_grouped, NULL);
+
+      if (active_replacements_grouped->len > 1)
+        print_packages("ReplacedBasePackages", max_key_len,
+                  (const char *const*)active_replacements_grouped->pdata,
+                  NULL,
+                  FALSE);
     }
 
   if (origin_requested_base_local_replacements && opt_verbose)
     print_packages ("InactiveBaseReplacements", max_key_len,
                     origin_requested_base_local_replacements,
-                    (const char *const*)active_replacements->pdata);
+                    (const char *const*)active_replacements->pdata,
+                    TRUE);
 
   /* only print inactive layering requests in verbose mode */
   if (origin_requested_packages && opt_verbose)
     /* requested-packages - packages = inactive (i.e. dormant requests) */
     print_packages ("InactiveRequests", max_key_len,
-                    origin_requested_packages, origin_packages);
+                    origin_requested_packages, origin_packages,
+                    TRUE);
   if (origin_requested_modules && opt_verbose)
     /* requested-modules - modules = inactive (i.e. dormant requests) */
     /* note the core doesn't support inactive modules yet, but could in the future */
     print_packages ("InactiveModuleRequests", max_key_len,
-                    origin_requested_modules, origin_modules);
+                    origin_requested_modules, origin_modules,
+                    TRUE);
 
   if (origin_packages)
     print_packages ("LayeredPackages", max_key_len,
-                    origin_packages, NULL);
+                    origin_packages, NULL, TRUE);
   if (origin_modules)
     print_packages ("LayeredModules", max_key_len,
-                    origin_modules, NULL);
+                    origin_modules, NULL, TRUE);
   if (origin_modules_enabled)
     print_packages ("EnabledModules", max_key_len,
-                    origin_modules_enabled, NULL);
+                    origin_modules_enabled, NULL, TRUE);
 
   if (origin_requested_local_packages)
     print_packages ("LocalPackages", max_key_len,
-                    origin_requested_local_packages, NULL);
+                    origin_requested_local_packages, NULL, TRUE);
   if (origin_requested_local_fileoverride_packages)
     print_packages ("LocalForcedPackages", max_key_len,
-                    origin_requested_local_fileoverride_packages, NULL);
+                    origin_requested_local_fileoverride_packages, NULL, TRUE);
 
   if (regenerate_initramfs)
     {
@@ -997,7 +1034,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_variant_dict_lookup (dict, "initramfs-etc", "^a&s", &initramfs_etc_files);
   if (initramfs_etc_files && *initramfs_etc_files)
     /* XXX: not really packages but it works... should just rename that function */
-    print_packages ("InitramfsEtc", max_key_len, (const char**)initramfs_etc_files, NULL);
+    print_packages ("InitramfsEtc", max_key_len, (const char**)initramfs_etc_files, NULL, TRUE);
 
   gboolean pinned = FALSE;
   g_variant_dict_lookup (dict, "pinned", "b", &pinned);
