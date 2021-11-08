@@ -1,4 +1,5 @@
 #!/bin/bash
+# kola: { "timeoutMin": 20 }
 #
 # Copyright (C) 2021 Red Hat, Inc.
 #
