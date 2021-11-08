@@ -85,13 +85,14 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
     }
   g_autofree char* filtered_input = ostree_kernel_args_to_string (temp_kargs);
 
-  g_autofree char *input_string = g_strdup_printf ("\n"
-      "# Please enter the kernel arguments. Each kernel argument"
-      "# should be in the form of key=value.\n"
-      "# Lines starting with '#' will be ignored. Each key=value pair should be \n"
-      "# separated by spaces, and multiple value associated with one key is allowed. \n"
-      "# Also, please note that any changes to the ostree argument will not be \n"
-      "# effective as they are usually regenerated when bootconfig changes. \n"
+  g_autofree char *input_string = g_strdup_printf (
+      "# Current kernel arguments are shown below, and can be directly edited.\n"
+      "# Empty or commented lines (starting with '#') will be ignored.\n"
+      "# Individual kernel arguments should be separated by spaces, and the order \n"
+      "# is relevant.\n"
+      "# Also, please note that any changes to the 'ostree=' argument will not be \n"
+      "# effective as they are usually regenerated when bootconfig changes.\n"
+      "\n"
       "%s", filtered_input);
 
   /* Note: the repo here is NULL, as we don't really require it
