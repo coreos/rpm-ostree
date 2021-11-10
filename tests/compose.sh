@@ -45,6 +45,14 @@ if [ ! -d compose-cache ]; then
   rm manifest.yaml
   mv manifests/{passwd,group} .
   rm -rf manifests/
+  # also make sure to download glibc-all-langpacks which is no longer in FCOS by
+  # default; we'll want it to test `install-langs`
+  python3 -c '
+import sys, json
+y = json.load(sys.stdin)
+y["packages"] += ["glibc-all-langpacks"]
+json.dump(y, sys.stdout)' < manifest.json > manifest.json.new
+  mv manifest.json{.new,}
   popd # config
 
   mkdir cachedir
