@@ -1,5 +1,6 @@
 /***
   This file was originally part of systemd.
+  https://github.com/systemd/systemd/blob/8b212f3596d03f8e1025cd151d17f9a82433844a/src/basic/time-util.c
 
   Copyright 2010 Lennart Poettering
 
@@ -80,48 +81,66 @@ char *libsd_format_timestamp_relative(char *buf, size_t l, usec_t t) {
                 s = "left";
         }
 
-        if (d >= USEC_PER_YEAR)
-                snprintf(buf, l, USEC_FMT " years " USEC_FMT " months %s",
-                         d / USEC_PER_YEAR,
-                         (d % USEC_PER_YEAR) / USEC_PER_MONTH, s);
-        else if (d >= USEC_PER_MONTH)
-                snprintf(buf, l, USEC_FMT " months " USEC_FMT " days %s",
-                         d / USEC_PER_MONTH,
-                         (d % USEC_PER_MONTH) / USEC_PER_DAY, s);
-        else if (d >= USEC_PER_WEEK)
-                snprintf(buf, l, USEC_FMT " weeks " USEC_FMT " days %s",
-                         d / USEC_PER_WEEK,
-                         (d % USEC_PER_WEEK) / USEC_PER_DAY, s);
-        else if (d >= 2*USEC_PER_DAY)
-                snprintf(buf, l, USEC_FMT " days %s", d / USEC_PER_DAY, s);
+        if (d >= USEC_PER_YEAR) {
+                usec_t years = d / USEC_PER_YEAR;
+                usec_t months = (d % USEC_PER_YEAR) / USEC_PER_MONTH;
+
+                (void) snprintf(buf, l, USEC_FMT " %s " USEC_FMT " %s %s",
+                                years,
+                                years == 1 ? "year" : "years",
+                                months,
+                                months == 1 ? "month" : "months",
+                                s);
+        } else if (d >= USEC_PER_MONTH) {
+                usec_t months = d / USEC_PER_MONTH;
+                usec_t days = (d % USEC_PER_MONTH) / USEC_PER_DAY;
+
+                (void) snprintf(buf, l, USEC_FMT " %s " USEC_FMT " %s %s",
+                                months,
+                                months == 1 ? "month" : "months",
+                                days,
+                                days == 1 ? "day" : "days",
+                                s);
+        } else if (d >= USEC_PER_WEEK) {
+                usec_t weeks = d / USEC_PER_WEEK;
+                usec_t days = (d % USEC_PER_WEEK) / USEC_PER_DAY;
+
+                (void) snprintf(buf, l, USEC_FMT " %s " USEC_FMT " %s %s",
+                                weeks,
+                                weeks == 1 ? "week" : "weeks",
+                                days,
+                                days == 1 ? "day" : "days",
+                                s);
+        } else if (d >= 2*USEC_PER_DAY)
+                (void) snprintf(buf, l, USEC_FMT " days %s", d / USEC_PER_DAY, s);
         else if (d >= 25*USEC_PER_HOUR)
-                snprintf(buf, l, "1 day " USEC_FMT "h %s",
-                         (d - USEC_PER_DAY) / USEC_PER_HOUR, s);
+                (void) snprintf(buf, l, "1 day " USEC_FMT "h %s",
+                                (d - USEC_PER_DAY) / USEC_PER_HOUR, s);
         else if (d >= 6*USEC_PER_HOUR)
-                snprintf(buf, l, USEC_FMT "h %s",
-                         d / USEC_PER_HOUR, s);
+                (void) snprintf(buf, l, USEC_FMT "h %s",
+                                d / USEC_PER_HOUR, s);
         else if (d >= USEC_PER_HOUR)
-                snprintf(buf, l, USEC_FMT "h " USEC_FMT "min %s",
-                         d / USEC_PER_HOUR,
-                         (d % USEC_PER_HOUR) / USEC_PER_MINUTE, s);
+                (void) snprintf(buf, l, USEC_FMT "h " USEC_FMT "min %s",
+                                d / USEC_PER_HOUR,
+                                (d % USEC_PER_HOUR) / USEC_PER_MINUTE, s);
         else if (d >= 5*USEC_PER_MINUTE)
-                snprintf(buf, l, USEC_FMT "min %s",
-                         d / USEC_PER_MINUTE, s);
+                (void) snprintf(buf, l, USEC_FMT "min %s",
+                                d / USEC_PER_MINUTE, s);
         else if (d >= USEC_PER_MINUTE)
-                snprintf(buf, l, USEC_FMT "min " USEC_FMT "s %s",
-                         d / USEC_PER_MINUTE,
-                         (d % USEC_PER_MINUTE) / USEC_PER_SEC, s);
+                (void) snprintf(buf, l, USEC_FMT "min " USEC_FMT "s %s",
+                                d / USEC_PER_MINUTE,
+                                (d % USEC_PER_MINUTE) / USEC_PER_SEC, s);
         else if (d >= USEC_PER_SEC)
-                snprintf(buf, l, USEC_FMT "s %s",
-                         d / USEC_PER_SEC, s);
+                (void) snprintf(buf, l, USEC_FMT "s %s",
+                                d / USEC_PER_SEC, s);
         else if (d >= USEC_PER_MSEC)
-                snprintf(buf, l, USEC_FMT "ms %s",
-                         d / USEC_PER_MSEC, s);
+                (void) snprintf(buf, l, USEC_FMT "ms %s",
+                                d / USEC_PER_MSEC, s);
         else if (d > 0)
-                snprintf(buf, l, USEC_FMT"us %s",
-                         d, s);
+                (void) snprintf(buf, l, USEC_FMT"us %s",
+                                d, s);
         else
-                snprintf(buf, l, "now");
+                (void) snprintf(buf, l, "now");
 
         buf[l-1] = 0;
         return buf;

@@ -2,6 +2,7 @@
 
 /***
   This file was originally part of systemd.
+  https://github.com/systemd/systemd/blob/8b212f3596d03f8e1025cd151d17f9a82433844a/src/basic/time-util.h
 
   Copyright 2010 Lennart Poettering
 
@@ -25,7 +26,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
-#include <glib.h>
 
 G_BEGIN_DECLS
 
@@ -37,8 +37,8 @@ typedef uint64_t nsec_t;
 #define NSEC_FMT "%" PRI_NSEC
 #define USEC_FMT "%" PRI_USEC
 
-#define USEC_INFINITY ((usec_t) -1)
-#define NSEC_INFINITY ((nsec_t) -1)
+#define USEC_INFINITY ((usec_t) UINT64_MAX)
+#define NSEC_INFINITY ((nsec_t) UINT64_MAX)
 
 #define MSEC_PER_SEC  1000ULL
 #define USEC_PER_SEC  ((usec_t) 1000000ULL)
@@ -62,10 +62,10 @@ typedef uint64_t nsec_t;
 
 /* We assume a maximum timezone length of 6. TZNAME_MAX is not defined on Linux, but glibc internally initializes this
  * to 6. Let's rely on that. */
-#define FORMAT_TIMESTAMP_MAX (3+1+10+1+8+1+6+1+6+1)
-#define FORMAT_TIMESTAMP_WIDTH 28 /* when outputting, assume this width */
-#define FORMAT_TIMESTAMP_RELATIVE_MAX 256
-#define FORMAT_TIMESPAN_MAX 64
+#define FORMAT_TIMESTAMP_MAX (3U+1U+10U+1U+8U+1U+6U+1U+6U+1U)
+#define FORMAT_TIMESTAMP_WIDTH 28U /* when outputting, assume this width */
+#define FORMAT_TIMESTAMP_RELATIVE_MAX 256U
+#define FORMAT_TIMESPAN_MAX 64U
 
 char *libsd_format_timestamp_relative(char *buf, size_t l, usec_t t);
 
