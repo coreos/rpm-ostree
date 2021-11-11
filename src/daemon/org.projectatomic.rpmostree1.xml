@@ -288,6 +288,11 @@
     </method>
 
    <!-- Available options:
+        "append-if-missing" (type 'as')
+        "delete-if-present" (type 'as')
+        "final-kernel-args" (type 's')
+        "initiating-command-line" (type 's')
+        "lock-finalization" (type 'b')
         "reboot" (type 'b')
     -->
     <method name="KernelArgs">

@@ -167,19 +167,33 @@ vm_rpmostree kargs > if_not_present.txt
 diff kargs.txt if_not_present.txt
 echo "ok kargs deleted with delete-if-present only if present"
 
-#Test for rpm-ostree kargs unchanged-exit-77
+# Test for rpm-ostree kargs unchanged-exit-77
+vm_rpmostree kargs --append-if-missing=PACKAGE3=TEST3 --unchanged-exit-77
 rc=0
-vm_rpmostree kargs --append-if-missing=PACKAGE3=TEST3 --unchanged-exit-77 || rc=$?
-assert_streq $rc 0
 vm_rpmostree kargs --append-if-missing=PACKAGE3=TEST3 --unchanged-exit-77 || rc=$?
 assert_streq $rc 77
+vm_rpmostree kargs --delete-if-present=PACKAGE3=TEST3 --unchanged-exit-77
 rc=0
-vm_rpmostree kargs --delete-if-present=PACKAGE3=TEST3 --unchanged-exit-77 || rc=$?
-assert_streq $rc 0
 vm_rpmostree kargs --delete-if-present=PACKAGE3=TEST3 --unchanged-exit-77 || rc=$?
 assert_streq $rc 77
 echo "ok exit 77 when unchanged kargs with unchanged-exit-77"
 
+# Test for 'rpm-ostree kargs --editor'.
+vm_rpmostree kargs > kargs.txt
+assert_not_file_has_content_literal kargs.txt 'nonexisting'
+rc=0
+EDITOR="sed -i 's/nonexisting//'" vm_rpmostree kargs --editor || rc=$?
+assert_streq $rc 1
+rc=0
+EDITOR="sed -i 's/nonexisting//'" vm_rpmostree kargs --editor --unchanged-exit-77 || rc=$?
+assert_streq $rc 77
+vm_rpmostree kargs > kargs.txt
+assert_not_file_has_content_literal kargs.txt 'nonexisting'
+assert_not_file_has_content_literal kargs.txt 'editorkey=editorvalue'
+EDITOR="sed -i 's/$/ editorkey=editorvalue/'" vm_rpmostree kargs --editor
+vm_rpmostree kargs > kargs.txt
+assert_file_has_content_literal kargs.txt 'editorkey=editorvalue'
+echo "ok kargs editor"
 
 # XXX: uncomment this when we migrate CI to FCOS
 # # And reset this bit

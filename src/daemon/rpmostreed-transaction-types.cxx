@@ -2781,35 +2781,75 @@ kernel_arg_transaction_finalize (GObject *object)
 }
 
 static gboolean
-kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
-                                GCancellable *cancellable,
-                                GError **error)
+kernel_arg_apply(KernelArgTransaction *self,
+                 RpmOstreeSysrootUpgrader *upgrader,
+                 OstreeKernelArgs *kargs,
+                 gboolean changed,
+                 GCancellable *cancellable,
+                 GError **error)
 {
-  KernelArgTransaction *self = (KernelArgTransaction *) transaction;
-  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
-  int upgrader_flags = 0;
-  auto command_line = static_cast<const char *>(vardict_lookup_ptr (self->options, "initiating-command-line", "&s"));
+  g_return_val_if_fail (self != NULL, FALSE);
+  g_return_val_if_fail (upgrader != NULL, FALSE);
+  g_return_val_if_fail (kargs != NULL, FALSE);
+
+  if (!changed)
+    {
+      rpmostree_output_message ("No changes.");
+      return TRUE;
+    }
+
+  g_auto(GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);
+  rpmostree_sysroot_upgrader_set_kargs (upgrader, kargs_strv);
+
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
+    return FALSE;
+
+  if (vardict_lookup_bool (self->options, "reboot", FALSE))
+    {
+      if (!check_sd_inhibitor_locks (cancellable, error))
+        return FALSE;
+      rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
+    }
+
+  return TRUE;
+}
+
+static gboolean
+kernel_arg_apply_final_str(KernelArgTransaction *self,
+                           RpmOstreeSysrootUpgrader *upgrader,
+                           const char *final_kernel_args,
+                           GCancellable *cancellable,
+                           GError **error)
+{
+  g_return_val_if_fail (self != NULL, FALSE);
+  g_return_val_if_fail (upgrader != NULL, FALSE);
+  g_return_val_if_fail (final_kernel_args != NULL, FALSE);
+  g_return_val_if_fail (self->existing_kernel_args != NULL, FALSE);
+
+  gboolean changed = (!g_str_equal (self->existing_kernel_args, final_kernel_args));
+  g_autoptr(OstreeKernelArgs) kargs = ostree_kernel_args_from_string (final_kernel_args);
+  if (!kernel_arg_apply (self, upgrader, kargs, changed, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+kernel_arg_apply_patching(KernelArgTransaction *self,
+                          RpmOstreeSysrootUpgrader *upgrader,
+                          OstreeKernelArgs *kargs,
+                          GCancellable *cancellable,
+                          GError **error)
+{
+  g_return_val_if_fail (self != NULL, FALSE);
+  g_return_val_if_fail (upgrader != NULL, FALSE);
+  g_return_val_if_fail (kargs != NULL, FALSE);
+  g_return_val_if_fail (self->existing_kernel_args != NULL, FALSE);
+
   g_autofree char **append_if_missing = static_cast<char **>(vardict_lookup_strv_canonical (self->options, "append-if-missing"));
   g_autofree char **delete_if_present = static_cast<char **>(vardict_lookup_strv_canonical (self->options, "delete-if-present"));
-  gboolean changed = FALSE;
-
-  /* don't want to pull new content for this */
-  upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
-  upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
-  if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
-    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
-
-  /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
-  g_autoptr(OstreeKernelArgs) kargs = ostree_kernel_args_from_string (self->existing_kernel_args);
-  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags),
-                                    cancellable, error);
-  if (upgrader == NULL)
-    return FALSE;
-  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line, 
-                                              rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
-                                              rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
   g_auto(GStrv) existing_kargs = g_strsplit (self->existing_kernel_args, " ", -1);
+  gboolean changed = FALSE;
 
   /* Delete all the entries included in the kernel args */
   for (char **iter = self->kernel_args_deleted; iter && *iter; iter++)
@@ -2855,27 +2895,52 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
         }
     }
 
-  if (!changed)
-    {
-      rpmostree_output_message ("No changes.");
-      return TRUE;
-    }
-
-  /* After all the arguments are processed earlier, we convert it to a string list*/
-  g_auto(GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);
-  rpmostree_sysroot_upgrader_set_kargs (upgrader, kargs_strv);
-
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
+  if (!kernel_arg_apply(self, upgrader, kargs, changed, cancellable, error))
     return FALSE;
 
-  if (vardict_lookup_bool (self->options, "reboot", FALSE))
-    {
-      if (!check_sd_inhibitor_locks (cancellable, error))
-        return FALSE;
-      rpmostreed_daemon_reboot (rpmostreed_daemon_get ());
-    }
-
   return TRUE;
+}
+
+static gboolean
+kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
+                                GCancellable *cancellable,
+                                GError **error)
+{
+  g_return_val_if_fail (transaction != NULL, FALSE);
+
+  KernelArgTransaction *self = (KernelArgTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  auto command_line = static_cast<const char *>(vardict_lookup_ptr (self->options, "initiating-command-line", "&s"));
+
+  /* don't want to pull new content for this */
+  int upgrader_flags = 0;
+  upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
+  upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
+  if (vardict_lookup_bool (self->options, "lock-finalization", FALSE))
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
+
+  /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
+  g_autoptr(OstreeKernelArgs) kargs = ostree_kernel_args_from_string (self->existing_kernel_args);
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, static_cast<RpmOstreeSysrootUpgraderFlags>(upgrader_flags),
+                                    cancellable, error);
+  if (upgrader == NULL)
+    return FALSE;
+  rpmostree_sysroot_upgrader_set_caller_info (upgrader, command_line,
+                                              rpmostreed_transaction_get_agent_id (RPMOSTREED_TRANSACTION(self)),
+                                              rpmostreed_transaction_get_sd_unit (RPMOSTREED_TRANSACTION(self)));
+
+  auto final_kernel_args = static_cast<const char *>(vardict_lookup_ptr (self->options, "final-kernel-args", "&s"));
+  if (final_kernel_args != NULL)
+    {
+      /* Pre-assembled kargs string (e.g. coming from --editor) */
+      return kernel_arg_apply_final_str(self, upgrader, final_kernel_args, cancellable, error);
+    }
+  else
+    {
+      /* Arguments patching via append/replace/delete */
+      return kernel_arg_apply_patching(self, upgrader, kargs, cancellable, error);
+    }
 }
 
 static void

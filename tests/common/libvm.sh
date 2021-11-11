@@ -202,7 +202,8 @@ vm_clean_caches() {
 # run rpm-ostree in vm
 # - $@    args
 vm_rpmostree() {
-    vm_cmd env ASAN_OPTIONS=detect_leaks=false rpm-ostree "$@"
+    TESTEDITOR="${EDITOR:-}"
+    vm_cmd -- env \"EDITOR=${TESTEDITOR}\" ASAN_OPTIONS=detect_leaks=false rpm-ostree "$@"
 }
 
 # copy the test repo to the vm
