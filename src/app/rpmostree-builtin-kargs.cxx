@@ -65,12 +65,14 @@ static GOptionEntry option_entries[] = {
 static gboolean
 kernel_arg_handle_editor (const char     *input_kernel_arg,
                           const char    **out_kernel_arg,
+                          gboolean       *out_kargs_changed,
                           GCancellable   *cancellable,
                           GError        **error)
 {
   g_autofree char *chomped_input = g_strchomp (g_strdup (input_kernel_arg));
-
   g_autoptr(OstreeKernelArgs) temp_kargs = ostree_kernel_args_from_string (chomped_input);
+
+  *out_kargs_changed = FALSE;
 
   /* We check existance of ostree argument, if it
    * exists, we directly remove it. Also Note, since the current kernel
@@ -133,9 +135,11 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
   g_autofree char *kernel_args_str = g_string_free (util::move_nullify (kernel_arg_buf), FALSE);
   g_strchomp (kernel_args_str);
 
-  g_autoptr(OstreeKernelArgs) input_kargs = ostree_kernel_args_from_string (kernel_args_str);
+  /* Compare input and user content, in order to signal whether there was any real change */
+  *out_kargs_changed = !g_str_equal (filtered_input, kernel_args_str);
 
   /* We check again to see if the ostree argument got added by the user */
+  g_autoptr(OstreeKernelArgs) input_kargs = ostree_kernel_args_from_string (kernel_args_str);
   if (ostree_kernel_args_get_last_value (input_kargs, "ostree") != NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
@@ -148,14 +152,6 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "The kernel arguments can not be empty");
-      return FALSE;
-    }
-
-  /* Notify the user that nothing has been changed */
-  if (g_str_equal (filtered_input, kernel_args_str))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "The kernel arguments remained the same");
       return FALSE;
     }
 
@@ -266,6 +262,8 @@ rpmostree_builtin_kargs (int            argc,
       return TRUE;
     }
 
+  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+
   g_autofree char *transaction_address = NULL;
   char *empty_strv[] = {NULL};
 
@@ -274,12 +272,6 @@ rpmostree_builtin_kargs (int            argc,
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
-  if (opt_kernel_append_if_missing_strings && *opt_kernel_append_if_missing_strings)
-    g_variant_dict_insert (&dict, "append-if-missing", "^as", opt_kernel_append_if_missing_strings);
-  if (opt_kernel_delete_if_present_strings && *opt_kernel_delete_if_present_strings)
-    g_variant_dict_insert (&dict, "delete-if-present", "^as", opt_kernel_delete_if_present_strings);
-  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   if (opt_editor)
     {
@@ -291,33 +283,55 @@ rpmostree_builtin_kargs (int            argc,
         return FALSE;
 
       const char* current_kernel_arg_string = NULL;
+      gboolean kargs_changed = FALSE;
       if (!kernel_arg_handle_editor (old_kernel_arg_string, &current_kernel_arg_string,
-                                     cancellable, error))
+                                     &kargs_changed, cancellable, error))
         return FALSE;
-      gboolean out_changed = FALSE;
+      if (!kargs_changed)
+        {
+          if (opt_unchanged_exit_77)
+            {
+              g_print("No changes.\n");
+              invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+              return TRUE;
+            }
+          else
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                           "The kernel arguments remained the same");
+              return FALSE;
+            }
+        }
 
       /* Here we load the sysroot again, if the sysroot
        * has been changed since then, we directly error
        * out.
        */
+      gboolean sysroot_changed = FALSE;
       if (!ostree_sysroot_load_if_changed (before_sysroot,
-                                           &out_changed,
+                                           &sysroot_changed,
                                            cancellable,
                                            error))
         return FALSE;
-      if (out_changed)
+      if (sysroot_changed)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                        "Conflict: bootloader configuration changed. Saved kernel arguments: \n%s", current_kernel_arg_string);
 
           return FALSE;
         }
-      /* We use the user defined kernel args as existing arguments here
-       * and kept other strvs empty, because the existing kernel arguments
-       * is already enough for the update
-       */
+
+      /* By default, the daemon performs change detection and can short-circuit
+       * if nothing has been appended/replace/deleted.
+       * When going through the editor flow, pre-filtering logic is applied
+       * client-side and the final command-line is directly passed to the daemon.
+       * TODO(lucab): switch all flows to perform client-side assembling, like the
+       * editor currently does: https://github.com/coreos/rpm-ostree/issues/2712 */
+      g_variant_dict_insert (&dict, "final-kernel-args", "s", current_kernel_arg_string);
+      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+
       if (!rpmostree_os_call_kernel_args_sync (os_proxy,
-                                               current_kernel_arg_string,
+                                               old_kernel_arg_string,
                                                (const char* const*) empty_strv,
                                                (const char* const*) empty_strv,
                                                (const char* const*) empty_strv,
@@ -330,8 +344,7 @@ rpmostree_builtin_kargs (int            argc,
   else
     {
       /* dbus does not allow NULL to mean the empty string array,
-       * assign them to be empty string array here to prevent erroring out
-       */
+       * assign them to be empty string array here to prevent erroring out. */
       if (!opt_kernel_replace_strings)
         opt_kernel_replace_strings = empty_strv;
       if (!opt_kernel_append_strings)
@@ -339,7 +352,13 @@ rpmostree_builtin_kargs (int            argc,
       if (!opt_kernel_delete_strings)
         opt_kernel_delete_strings = empty_strv;
 
-      /* call the generearted dbus-function */
+      if (opt_kernel_append_if_missing_strings && *opt_kernel_append_if_missing_strings)
+        g_variant_dict_insert (&dict, "append-if-missing", "^as", opt_kernel_append_if_missing_strings);
+      if (opt_kernel_delete_if_present_strings && *opt_kernel_delete_if_present_strings)
+        g_variant_dict_insert (&dict, "delete-if-present", "^as", opt_kernel_delete_if_present_strings);
+      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+
+      /* call the generated dbus-function */
       if (!rpmostree_os_call_kernel_args_sync (os_proxy,
                                                old_kernel_arg_string,
                                                (const char* const*) opt_kernel_append_strings,
