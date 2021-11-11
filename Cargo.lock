@@ -2624,9 +2624,9 @@ checksum = "b07db065a5cf61a7e4ba64f29e67db906fb1787316516c4e6e5ff0fea1efcd8a"
 
 [[package]]
 name = "xmlrpc"
-version = "0.15.0"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0cddf2b9a501435417d7d90076c89f9d19e6b9e0f2e9e9fcf8747a39577c198"
+checksum = "8b36cd2e86a412f0ba73d808f17f5c8e0eeb90e22990b82602841366f4e471f7"
 dependencies = [
  "base64",
  "iso8601",
