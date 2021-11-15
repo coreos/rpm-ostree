@@ -451,8 +451,8 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       /* Now reload the policy from the tmproot, and relabel the pkgcache - this
        * is the same thing done in rpmostree_context_commit().
        */
-      g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
-      if (sepolicy == NULL)
+      g_autoptr(OstreeSePolicy) sepolicy = NULL;
+      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, &sepolicy, cancellable, error))
         return FALSE;
 
       rpmostree_context_set_sepolicy (self->corectx, sepolicy);
