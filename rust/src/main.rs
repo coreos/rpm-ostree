@@ -33,20 +33,21 @@ fn usroverlay(args: &[&str]) -> Result<()> {
 // are hidden, i.e. should not appear in --help.  So we just recognize
 // those, and if there's something we don't know about, invoke the C++
 // main().
-async fn inner_async_main(args: &[&str]) -> Result<i32> {
-    let arg = *args.get(1).unwrap_or(&"");
+async fn inner_async_main(args: Vec<String>) -> Result<i32> {
+    let args_borrowed: Vec<_> = args.iter().map(|s| s.as_str()).collect();
+    let arg = args_borrowed.get(1).map(|s| *s).unwrap_or(&"");
     // Async-native code goes here
     match arg {
-        "ex-container" => return rpmostree_rust::container::entrypoint(args).await,
+        "ex-container" => {
+            return rpmostree_rust::container::entrypoint(&args_borrowed).await;
+        }
         _ => {}
     }
-    // Convert the arguments into owned values to pass to the thread.
-    let args: Vec<String> = args.iter().map(|&s| s.to_string()).collect();
+    // Everything below here is a blocking API, and run on a worker thread so
+    // that the main thread is dedicated to the Tokio reactor.
     tokio::task::spawn_blocking(move || {
-        let args = args;
-        // Now re-borrow the strings since that's what these fucntions expect.
-        let args: Vec<_> = args.iter().map(|s| s.as_str()).collect();
-        let args = &args[..];
+        let args_borrowed: Vec<_> = args.iter().map(|s| s.as_str()).collect();
+        let args = &args_borrowed[..];
         if let Some(arg) = args.get(1) {
             match *arg {
                 // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
@@ -92,12 +93,11 @@ fn inner_main() -> Result<i32> {
         })
         .collect();
     let args = args?;
-    let args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("Failed to build tokio runtime")?
-        .block_on(inner_async_main(&args))
+        .block_on(inner_async_main(args))
 }
 
 fn print_error(e: anyhow::Error) {
