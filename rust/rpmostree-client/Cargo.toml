@@ -10,7 +10,7 @@ documentation = "http://docs.rs/rpmostree-client"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.45"
+anyhow = "1.0.47"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.71"
