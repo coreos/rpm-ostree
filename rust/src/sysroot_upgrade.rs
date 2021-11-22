@@ -10,7 +10,7 @@ use ostree_container::store::ImageImporter;
 use ostree_container::store::PrepareResult;
 use ostree_container::OstreeImageReference;
 use ostree_ext::container as ostree_container;
-use ostree_ext::container::store::{ImportProgress, ManifestLayerState};
+use ostree_ext::container::store::{ImageProxyConfig, ImportProgress, ManifestLayerState};
 use ostree_ext::ostree;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::Receiver;
@@ -48,12 +48,34 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
     }
 }
 
+// By default, we isolate skopeo (and the whole containers/image stack)
+// by running it as a new unprivileged user.
+// This will suppress things like reading `/root/.docker` by default which
+// we don't want, as well as potentially reading (or writing!) to
+// the system `/var/lib/containers`.
+//
+// This also paves the way to running it in a separate cgroup for resource
+// restrictions etc.
+fn default_container_pull_config() -> ostree_container::store::ImageProxyConfig {
+    let isolation_config = crate::isolation::UnitConfig {
+        name: Some("rpm-ostree-skopeo"),
+        properties: &["DynamicUser=yes", "User=rpm-ostree"],
+        exec_args: &["skopeo"],
+    };
+    let cmd = isolation_config.command();
+    dbg!(&cmd);
+    ImageProxyConfig {
+        skopeo_cmd: Some(cmd),
+        ..Default::default()
+    }
+}
+
 async fn pull_container_async(
     repo: &ostree::Repo,
     imgref: &OstreeImageReference,
 ) -> Result<ContainerImageState> {
     output_message(&format!("Pulling manifest: {}", &imgref));
-    let mut imp = ImageImporter::new(repo, imgref, Default::default()).await?;
+    let mut imp = ImageImporter::new(repo, imgref, default_container_pull_config()).await?;
     let layer_progress = imp.request_progress();
     let prep = match imp.prepare().await? {
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
