@@ -16,6 +16,10 @@ MountFlags=slave
 # and have a system rpm-ostreed-transaction.service that runs privileged
 # but as a subprocess.
 ProtectHome=true
+# Explicitly list paths here which we should never access.  The initial
+# entry here ensures that the skopeo process we fork won't interact with
+# application containers.
+InaccessiblePaths=/var/lib/containers
 NotifyAccess=main
 @SYSTEMD_ENVIRON@
 ExecStart=@bindir@/rpm-ostree start-daemon
