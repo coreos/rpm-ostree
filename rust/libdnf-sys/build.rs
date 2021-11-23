@@ -52,8 +52,7 @@ fn main() -> Result<()> {
         .flag("-std=c++17")
         .include("cxx") // this is needed for cxx.rs' `include!("libdnf.hxx")` to work
         .include("../../libdnf");
-    // until https://github.com/gdesmott/system-deps/pull/32
-    libdnfcxx.includes(libs.iter().flat_map(|lib| lib.1.include_paths.iter()));
+    libdnfcxx.includes(libs.all_include_paths());
     libdnfcxx.compile("libdnfcxx.a");
 
     Ok(())
