@@ -4,12 +4,11 @@ Documentation=man:rpm-ostree-countme.timer(8)
 ConditionPathExists=/run/ostree-booted
 
 [Timer]
-# Trigger weekly with a random delay
-OnCalendar=weekly UTC
-AccuracySec=1s
-RandomizedDelaySec=1w
+# Trigger shortly after boot and bi-weekly with a random delay of one day
 OnBootSec=5m
-Persistent=yes
+OnUnitInactiveSec=3d
+AccuracySec=1h
+RandomizedDelaySec=1d
 
 [Install]
 WantedBy=timers.target
