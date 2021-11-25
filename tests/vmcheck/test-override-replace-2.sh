@@ -81,12 +81,20 @@ vm_status_watch_start
 vm_rpmostree install {foo,bar}-ext-{1,2}
 vm_status_watch_check "Transaction: install foo-ext-1 foo-ext-2 bar-ext-1 bar-ext-2"
 
+# also install a pkg whose /var will change to verify that we delete our
+# generated tmpfiles.d entry (https://github.com/coreos/rpm-ostree/pull/3228)
+vm_build_rpm pkg-with-var \
+  files "/var/pkg-with-var" \
+  install "mkdir -p '%{buildroot}/var/pkg-with-var'"
+
+vm_rpmostree install pkg-with-var
+
 vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
-  --create vmcheck_tmp/with_foo_and_bar
+  --create vmcheck_tmp/with_foo_and_bar_and_pkg_with_var
 vm_rpmostree cleanup -p
 
 # upgrade to new commit with foo in the base layer
-vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar_and_pkg_with_var vmcheck
 vm_rpmostree upgrade
 vm_reboot
 echo "ok setup"
@@ -121,4 +129,17 @@ new_root=$(vm_get_deployment_root 0)
 vm_cmd /bin/sh -c "cd ${new_root} && find . -print" > new-list.txt
 diff -u {prev,new}-list.txt
 rm -f *-list.txt
+vm_rpmostree cleanup -p
 echo "ok override replace both"
+
+# And now verify https://github.com/coreos/rpm-ostree/pull/3228
+prev_root=$(vm_get_deployment_root 0)
+vm_cmd grep ' /var/pkg-with-var ' "${prev_root}/usr/lib/tmpfiles.d/pkg-pkg-with-var.conf"
+vm_build_rpm pkg-with-var version 2 \
+  files "/var/pkg-with-different-var" \
+  install "mkdir -p '%{buildroot}/var/pkg-with-different-var'"
+vm_rpmostree override replace $YUMREPO/pkg-with-var-2-1.x86_64.rpm
+new_root=$(vm_get_deployment_root 0)
+vm_cmd grep ' /var/pkg-with-different-var ' "${new_root}/usr/lib/tmpfiles.d/pkg-pkg-with-var.conf"
+vm_rpmostree cleanup -p
+echo "ok override replace deletes tmpfiles.d dropin"

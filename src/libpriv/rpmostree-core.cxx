@@ -2964,6 +2964,16 @@ delete_package_from_root (RpmOstreeContext *self,
         }
     }
 
+  /* And finally, delete any automatically generated tmpfiles.d dropin. Though
+   * ideally we'd have a way to be sure that this was the rpm-ostree generated
+   * one. */
+  glnx_autofd int tmpfiles_dfd = -1;
+  if (!glnx_opendirat (rootfs_dfd, "usr/lib/tmpfiles.d", TRUE, &tmpfiles_dfd, error))
+    return FALSE;
+  g_autofree char *dropin = g_strdup_printf ("pkg-%s.conf", rpmteN(pkg));
+  if (!glnx_shutil_rm_rf_at (tmpfiles_dfd, dropin, cancellable, error))
+    return FALSE;
+
   return TRUE;
 }
 
