@@ -73,10 +73,10 @@ vm_shell_inline_sysroot_rw <<EOF
 test -L ${OLD_PKGCACHE_DIR}
 rm ${OLD_PKGCACHE_DIR}
 mkdir ${OLD_PKGCACHE_DIR}
-EOF
-vm_cmd ostree init --repo ${OLD_PKGCACHE_DIR} --mode=bare
-vm_cmd ostree pull-local --repo ${OLD_PKGCACHE_DIR} /ostree/repo \
+ostree init --repo ${OLD_PKGCACHE_DIR} --mode=bare
+ostree pull-local --repo ${OLD_PKGCACHE_DIR} /ostree/repo \
   rpmostree/pkg/test-pkgcache-migrate-pkg{1,2}/1.0-1.x86__64
+EOF
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
 cursor=$(vm_get_journal_cursor)
 vm_rpmostree upgrade | tee output.txt
