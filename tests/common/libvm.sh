@@ -684,10 +684,10 @@ vm_ostreeupdate_lift_commit() {
   checksum=$1; shift
   # ostree doesn't support tags, so just shove it in a branch
   branch=vmcheck_tmp/$1; shift
-  vm_cmd ostree pull-local --repo=$REMOTE_OSTREE --disable-fsync \
+  vm_cmd_sysroot_rw ostree pull-local --repo=$REMOTE_OSTREE --disable-fsync \
     /ostree/repo $checksum
-  vm_cmd ostree --repo=$REMOTE_OSTREE refs $branch --delete
-  vm_cmd ostree --repo=$REMOTE_OSTREE refs $checksum --create=$branch
+  vm_cmd_sysroot_rw ostree --repo=$REMOTE_OSTREE refs $branch --delete
+  vm_cmd_sysroot_rw ostree --repo=$REMOTE_OSTREE refs $checksum --create=$branch
 }
 
 _commit_and_inject_pkglist() {
