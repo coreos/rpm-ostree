@@ -27,11 +27,9 @@ BuildRequires: rust
 # Embedded unit tests
 %bcond_with bin_unit_tests
 
-# RHEL8 doesn't ship zchunk today.  See also the comments
-# in configure.ac around this as libdnf/librepo need to be in
-# sync, and today we bundle libdnf but not librepo.  Also
-# flip the rpmdb default to be bdb.
-%if 0%{?rhel} && 0%{?rhel} <= 8
+# RHEL (8,9) doesn't ship zchunk today.  Keep this in sync
+# with libdnf: https://gitlab.com/redhat/centos-stream/rpms/libdnf/-/blob/762f631e36d1e42c63a794882269d26c156b68c1/libdnf.spec#L45
+%if 0%{?rhel}
 %bcond_with zchunk
 %else
 %bcond_without zchunk
