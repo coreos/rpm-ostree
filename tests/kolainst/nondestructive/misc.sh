@@ -9,6 +9,7 @@ cd $(mktemp -d)
 # Validate there's no live state by default.
 rpm-ostree status --json > status.json
 assert_jq status.json \
+  '.version' \
   '.deployments[0]["packages"]' \
   '.deployments[0]["requested-packages"]' \
   '.deployments[0]["requested-local-packages"]' \

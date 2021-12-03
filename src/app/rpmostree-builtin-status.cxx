@@ -1194,6 +1194,9 @@ rpmostree_builtin_status (int             argc,
       glnx_unref_object JsonBuilder *builder = json_builder_new ();
       json_builder_begin_object (builder);
 
+      json_builder_set_member_name (builder, "version");
+      json_builder_add_string_value (builder, PACKAGE_VERSION);
+
       json_builder_set_member_name (builder, "deployments");
       json_builder_add_value (builder, json_gvariant_serialize (deployments));
       json_builder_set_member_name (builder, "transaction");
