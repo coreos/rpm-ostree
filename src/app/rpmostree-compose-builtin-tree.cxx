@@ -71,6 +71,7 @@ static char *opt_repo;
 static char *opt_touch_if_changed;
 static char *opt_previous_commit;
 static gboolean opt_dry_run;
+static gboolean opt_disable_repo_locking;
 static gboolean opt_print_only;
 static char *opt_write_commitid_to;
 static char *opt_write_composejson_to;
@@ -104,6 +105,7 @@ static GOptionEntry install_option_entries[] = {
   { "download-only-rpms", 0, 0, G_OPTION_ARG_NONE, &opt_download_only_rpms, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
+  { "disable-repo-locking", 0, 0, G_OPTION_ARG_NONE, &opt_disable_repo_locking, "Do not acquire a shared lock on the target OSTree repository", NULL },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
   { "previous-commit", 0, 0, G_OPTION_ARG_STRING, &opt_previous_commit, "Use this commit for change detection", "COMMIT" },
@@ -1101,10 +1103,19 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     }
   else
     {
-      /* if we're not using transactions, then get a shared lock ourselves */
-      lock = ostree_repo_auto_lock_push (self->build_repo, OSTREE_REPO_LOCK_SHARED, cancellable, error);
-      if (!lock)
-        return FALSE;
+      /* If we're not using transactions, then get a shared lock ourselves unless it was explicitly disabled.
+       * We originally tried to make this the default, but are now supporting an opt-out for now due to
+       * https://pagure.io/fedora-iot/issue/48
+       * where it was discovered that `ostree summary -u` is trying to acquire an exclusive
+       * lock, which breaks multiple concurrent writers to a repo, then running `ostree summary -u` after.
+       * See also https://github.com/ostreedev/ostree/pull/2493
+       */
+      if (!opt_disable_repo_locking)
+        {
+          lock = ostree_repo_auto_lock_push (self->build_repo, OSTREE_REPO_LOCK_SHARED, cancellable, error);
+          if (!lock)
+            return FALSE;
+        }
     }
 
   g_autofree char *parent_revision = NULL;
