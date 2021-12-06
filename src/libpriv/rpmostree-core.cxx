@@ -2555,10 +2555,13 @@ handle_file_dispositions (RpmOstreeContext *self,
           const char *nevra = dnf_package_get_nevra (pkg);
           while (rpmfiNext (fi) >= 0)
             {
-              char *fn = g_strdup (rpmfiFN (fi));
               rpm_color_t color = rpmfiFColor (fi);
               if (color)
-                ht_insert_path_for_nevra (files_added, nevra, fn, GUINT_TO_POINTER (color));
+                {
+                  // Ownership is passed to the hash table
+                  char *fn = g_strdup (rpmfiFN (fi));
+                  ht_insert_path_for_nevra (files_added, nevra, fn, GUINT_TO_POINTER (color));
+                }
             }
         }
     }
