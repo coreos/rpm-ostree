@@ -465,8 +465,12 @@ pub(crate) fn get_features() -> Vec<String> {
     // These constant features were originally set in configure.ac, but have migrated to
     // Rust in the interest in having less logic in autoconf.
     let mut r: Vec<_> = ["rust", "compose"].iter().map(|&x| x.to_string()).collect();
-    #[cfg(feature = "fedora-integration")]
-    r.push("fedora-integration".to_string());
+    if cfg!(feature = "fedora-integration") {
+        r.push("fedora-integration".to_string());
+    }
+    if cfg!(feature = "bin-unit-tests") {
+        r.push("bin-unit-tests".to_string());
+    }
     r
 }
 

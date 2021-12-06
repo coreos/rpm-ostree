@@ -27,10 +27,6 @@ dnl if not set, which we definitely want; cmake doesn't do that.
 AC_PROG_CXX
 AM_PROG_CC_C_O
 
-dnl Note this is non-exhaustive; see also the get_features() function in Rust
-RPM_OSTREE_FEATURES=""
-AC_SUBST([RPM_OSTREE_FEATURES])
-
 AC_MSG_CHECKING(whether to build in debug mode)
 debug_release=release
 if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
@@ -66,7 +62,6 @@ esac
   
 AS_IF([test x$enable_bin_unit_tests = xyes], [
   AC_DEFINE([BUILDOPT_BIN_UNIT_TESTS], 1, [Define if unit tests are injected into the binary])
-  RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES bin-unit-tests"
 ])
 AM_CONDITIONAL(BUILDOPT_BIN_UNIT_TESTS, [test x$enable_bin_unit_tests = xyes])
 
@@ -150,7 +145,6 @@ AC_OUTPUT
 echo "
     $PACKAGE $VERSION
 
-    features:                                $RPM_OSTREE_FEATURES
     introspection:                           $found_introspection
     ASAN + UBSAN:                            ${enable_sanitizers:-no}
     gtk-doc:                                 $enable_gtk_doc

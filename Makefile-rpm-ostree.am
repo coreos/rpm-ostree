@@ -91,7 +91,9 @@ cargo_build = $(cargo) build $(if $(subst 0,,$(V)),--verbose,)
 if BUILDOPT_PREBUILT_BINDINGS
 cargo_build += "--offline"
 endif
-
+if BUILDOPT_BIN_UNIT_TESTS
+cargo_build += --features bin-unit-tests
+endif
 if BUILDOPT_ASAN
 cargo_build += --features sanitizers
 endif
