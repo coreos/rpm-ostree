@@ -27,6 +27,7 @@ dnl if not set, which we definitely want; cmake doesn't do that.
 AC_PROG_CXX
 AM_PROG_CC_C_O
 
+dnl Note this is non-exhaustive; see also the get_features() function in Rust
 RPM_OSTREE_FEATURES=""
 AC_SUBST([RPM_OSTREE_FEATURES])
 
@@ -121,9 +122,6 @@ AC_ARG_ENABLE(werror,
               [enable_werror=no])
 AM_CONDITIONAL(BUILDOPT_WERROR, [test x$enable_werror != xno])
 
-dnl always have the compose feature now
-RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"
-
 PKG_CHECK_VAR(BASH_COMPLETIONSDIR, [bash-completion], [completionsdir],,
   BASH_COMPLETIONSDIR="${datadir}/bash-completion/completions")
 AC_SUBST(BASH_COMPLETIONSDIR)
@@ -140,8 +138,6 @@ AM_CONDITIONAL(BUILDOPT_PREBUILT_BINDINGS, [test -f rpmostree-cxxrs-prebuilt.h])
 RUST_TARGET_SUBDIR=${rust_debug_release}
 AC_SUBST([RUST_TARGET_SUBDIR])
 AM_CONDITIONAL(RUST_DEBUG, [test "x$rust_debug_release" = "xdebug"])
-dnl Unconditional now.
-RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rust"
 
 AC_CONFIG_FILES([
 Makefile
