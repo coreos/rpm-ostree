@@ -16,7 +16,7 @@ path = "lib.rs"
 cmake = "0.1.46"
 system-deps = "6.0"
 anyhow = "1.0"
-cxx-build = "1.0.56"
+cxx-build = "1.0.57"
 
 # This currently needs to duplicate the libraries from libdnf
 [package.metadata.system-deps]
