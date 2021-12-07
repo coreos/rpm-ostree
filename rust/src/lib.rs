@@ -7,9 +7,9 @@
  *
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
-
 // See https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html
 #![deny(missing_debug_implementations)]
+#![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unused_must_use)]
 #![allow(clippy::ptr_arg)]
 
@@ -27,6 +27,7 @@ pub(crate) use cxxrsutil::*;
 ///   side you currently *should* use `CxxResult`; see the docs of that for more information.
 #[cxx::bridge(namespace = "rpmostreecxx")]
 #[allow(clippy::needless_lifetimes)]
+#[allow(unsafe_op_in_unsafe_fn)]
 pub mod ffi {
     // Types that are defined by gtk-rs generated bindings that
     // we want to pass across the cxx-rs boundary.  For more
