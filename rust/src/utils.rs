@@ -26,7 +26,7 @@ use std::{fs, io};
 
 use curl::easy::Easy;
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 /// Supported config serialization used by treefile and lockfile
 pub enum InputFormat {
     YAML,
