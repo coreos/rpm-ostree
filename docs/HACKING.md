@@ -61,7 +61,19 @@ rpm-ostree has some tests that use the [coreos-assembler/kola framework](https:/
 
 You will want to [build a custom image](https://coreos.github.io/coreos-assembler/working/#using-overrides), then run `make install` in the `${topsrcdir}/tests/kolainst/` directory, and finally `kola run --qemu-image path/to/custom-rpm-ostree-qemu.qcow2 'ext.rpm-ostree.*'`. See the [kola external tests documentation](https://coreos.github.io/coreos-assembler/kola/external-tests/#using-kola-run-with-externally-defined-tests) for more information and also how to filter tests.
 
-There's also a `vmcheck` test suite. This model always operates on an immutable base image. It takes that image and dynamically launches a separate VM for each test using `kola spawn`. For example, using the [CoreOS Assembler](https://coreos.github.io/coreos-assembler/building-fcos/), you can build a FCOS image that contains the version of rpm-ostree that you would like to test.
+
+#### Iteration on kola external tests
+
+```
+make                                 # To build
+cosa build-fast                      # Generate a local FCOS VM
+sudo make -C tests/kolainst install  # Run this only when you change the test suite
+kola run ext.rpm-ostree.destructive.container-image  # Or any other test you want
+```
+
+#### vmcheck
+
+There's also a `vmcheck` test suite, which predates Fedora CoreOS, coreos-assembler and the external test suite integration.
 
 One approach for (somewhat) fast iteration is `cosa build-fast`, then run e.g. `./tests/vmcheck.sh`.
 
