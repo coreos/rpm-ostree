@@ -246,14 +246,11 @@ rpmostree_option_context_parse (GOptionContext *context,
        * possible to parse.  The canonical implementation of this is in
        * ostree/ot-main.c.
        */
-      g_auto(GStrv) features = g_strsplit (RPM_OSTREE_FEATURES, " ", -1);
       g_print ("%s:\n", PACKAGE_NAME);
       g_print (" Version: '%s'\n", PACKAGE_VERSION);
       if (strlen (RPM_OSTREE_GITREV) > 0)
         g_print (" Git: %s\n", RPM_OSTREE_GITREV);
       g_print (" Features:\n");
-      for (char **iter = features; iter && *iter; iter++)
-        g_print ("  - %s\n", *iter);
       auto featuresrs = rpmostreecxx::get_features();
       for (auto & s : featuresrs)
         {

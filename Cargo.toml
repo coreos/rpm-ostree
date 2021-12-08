@@ -102,6 +102,7 @@ lto = "thin"
 
 [features]
 fedora-integration = []
+bin-unit-tests = []
 # ASAN+UBSAN
 sanitizers = []
 

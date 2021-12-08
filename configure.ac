@@ -27,9 +27,6 @@ dnl if not set, which we definitely want; cmake doesn't do that.
 AC_PROG_CXX
 AM_PROG_CC_C_O
 
-RPM_OSTREE_FEATURES=""
-AC_SUBST([RPM_OSTREE_FEATURES])
-
 AC_MSG_CHECKING(whether to build in debug mode)
 debug_release=release
 if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
@@ -65,7 +62,6 @@ esac
   
 AS_IF([test x$enable_bin_unit_tests = xyes], [
   AC_DEFINE([BUILDOPT_BIN_UNIT_TESTS], 1, [Define if unit tests are injected into the binary])
-  RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES bin-unit-tests"
 ])
 AM_CONDITIONAL(BUILDOPT_BIN_UNIT_TESTS, [test x$enable_bin_unit_tests = xyes])
 
@@ -121,9 +117,6 @@ AC_ARG_ENABLE(werror,
               [enable_werror=no])
 AM_CONDITIONAL(BUILDOPT_WERROR, [test x$enable_werror != xno])
 
-dnl always have the compose feature now
-RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"
-
 PKG_CHECK_VAR(BASH_COMPLETIONSDIR, [bash-completion], [completionsdir],,
   BASH_COMPLETIONSDIR="${datadir}/bash-completion/completions")
 AC_SUBST(BASH_COMPLETIONSDIR)
@@ -140,8 +133,6 @@ AM_CONDITIONAL(BUILDOPT_PREBUILT_BINDINGS, [test -f rpmostree-cxxrs-prebuilt.h])
 RUST_TARGET_SUBDIR=${rust_debug_release}
 AC_SUBST([RUST_TARGET_SUBDIR])
 AM_CONDITIONAL(RUST_DEBUG, [test "x$rust_debug_release" = "xdebug"])
-dnl Unconditional now.
-RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rust"
 
 AC_CONFIG_FILES([
 Makefile
@@ -154,7 +145,6 @@ AC_OUTPUT
 echo "
     $PACKAGE $VERSION
 
-    features:                                $RPM_OSTREE_FEATURES
     introspection:                           $found_introspection
     ASAN + UBSAN:                            ${enable_sanitizers:-no}
     gtk-doc:                                 $enable_gtk_doc

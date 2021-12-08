@@ -462,9 +462,15 @@ pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> C
 
 #[allow(clippy::vec_init_then_push)]
 pub(crate) fn get_features() -> Vec<String> {
-    let mut r = Vec::new();
-    #[cfg(feature = "fedora-integration")]
-    r.push("fedora-integration".to_string());
+    // These constant features were originally set in configure.ac, but have migrated to
+    // Rust in the interest in having less logic in autoconf.
+    let mut r: Vec<_> = ["rust", "compose"].iter().map(|&x| x.to_string()).collect();
+    if cfg!(feature = "fedora-integration") {
+        r.push("fedora-integration".to_string());
+    }
+    if cfg!(feature = "bin-unit-tests") {
+        r.push("bin-unit-tests".to_string());
+    }
     r
 }
 
