@@ -48,7 +48,7 @@ const COMPOSE_JSON_PATH: &str = "usr/share/rpm-ostree/treefile.json";
 
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct TreefileExternals {
     postprocess_script: Option<fs::File>,
     add_files: collections::BTreeMap<String, fs::File>,
@@ -57,6 +57,7 @@ pub(crate) struct TreefileExternals {
 }
 
 // This type name is exposed through ffi.
+#[derive(Debug)]
 pub struct Treefile {
     // This one isn't used today, but we may do more in the future.
     _workdir: Option<openat::Dir>,

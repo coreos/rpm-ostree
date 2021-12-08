@@ -59,6 +59,8 @@ static RPMOSTREE_DEPLOY_MSG: &str = "9bddbda177cd44d891b1b561a8a0ce9e";
 static RPMOSTREE_HISTORY_DIR: &str = "/var/lib/rpm-ostree/history";
 
 /// Context object used to iterate through `HistoryEntry` events.
+// TODO use https://crates.io/crates/derivative to skip journal field
+#[allow(missing_debug_implementations)]
 pub struct HistoryCtx {
     journal: journal::Journal,
     marker_queue: VecDeque<Marker>,
@@ -425,6 +427,7 @@ mod mock_journal {
     use super::Result;
     pub use systemd::journal::{JournalRecord, JournalSeek};
 
+    #[derive(Debug)]
     pub struct Journal {
         pub entries: Vec<(u64, JournalRecord)>,
         pub current_timestamp: Option<u64>,

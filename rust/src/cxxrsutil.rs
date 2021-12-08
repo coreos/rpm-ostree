@@ -81,6 +81,7 @@ macro_rules! cxxrs_bind {
         paste! {
             $(
                 #[repr(transparent)]
+                #[derive(Debug)]
                 pub struct [<FFI $ns $i>](pub(crate) $sys::[<$ns $i>]);
 
                 unsafe impl ExternType for [<FFI $ns $i>] {

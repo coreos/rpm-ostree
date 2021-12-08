@@ -7,8 +7,10 @@
  *
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
-
-#![deny(unused_must_use)]
+// See https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html
+#![deny(missing_debug_implementations)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unused_must_use)]
 #![allow(clippy::ptr_arg)]
 
 // pub(crate) utilities
@@ -25,6 +27,7 @@ pub(crate) use cxxrsutil::*;
 ///   side you currently *should* use `CxxResult`; see the docs of that for more information.
 #[cxx::bridge(namespace = "rpmostreecxx")]
 #[allow(clippy::needless_lifetimes)]
+#[allow(unsafe_op_in_unsafe_fn)]
 pub mod ffi {
     // Types that are defined by gtk-rs generated bindings that
     // we want to pass across the cxx-rs boundary.  For more
@@ -136,6 +139,7 @@ pub mod ffi {
     /// `ContainerImageState` is currently identical to ostree-rs-ext's `LayeredImageState` struct, because
     /// cxx.rs currently requires types used as extern Rust types to be defined by the same crate
     /// that contains the bridge using them, so we redefine an `ContainerImport` struct here.
+    #[derive(Debug)]
     pub(crate) struct ContainerImageState {
         pub base_commit: String,
         pub merge_commit: String,
@@ -209,7 +213,7 @@ pub mod ffi {
 
     // A grab-bag of metadata from the deployment's ostree commit
     // around layering/derivation
-    #[derive(Default)]
+    #[derive(Debug, Default)]
     struct DeploymentLayeredMeta {
         is_layered: bool,
         base_commit: String,
@@ -408,7 +412,7 @@ pub mod ffi {
         ) -> Result<*mut GVariant>;
     }
 
-    #[derive(Default)]
+    #[derive(Debug, Default)]
     /// A copy of LiveFsState that is bridged to C++; the main
     /// change here is we can't use Option<> yet, so empty values
     /// are represented by the empty string.
@@ -490,6 +494,7 @@ pub mod ffi {
         fn generate_treefile(&self, src: &Treefile) -> Result<Box<Treefile>>;
     }
 
+    #[derive(Debug)]
     struct LockedPackage {
         name: String,
         evr: String,
@@ -525,6 +530,7 @@ pub mod ffi {
 
     unsafe extern "C++" {
         include!("rpmostree-cxxrsutil.hpp");
+        #[allow(missing_debug_implementations)]
         type CxxGObjectArray;
         fn length(self: Pin<&mut CxxGObjectArray>) -> u32;
         fn get(self: Pin<&mut CxxGObjectArray>, i: u32) -> &mut GObject;
@@ -553,6 +559,7 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("rpmostree-clientlib.h");
         fn client_require_root() -> Result<()>;
+        #[allow(missing_debug_implementations)]
         type ClientConnection;
         fn new_client_connection() -> Result<UniquePtr<ClientConnection>>;
         fn get_connection<'a>(self: Pin<&'a mut ClientConnection>) -> Pin<&'a mut GDBusConnection>;
@@ -561,6 +568,7 @@ pub mod ffi {
 
     unsafe extern "C++" {
         include!("rpmostree-diff.hpp");
+        #[allow(missing_debug_implementations)]
         type RPMDiff;
         fn n_removed(&self) -> i32;
         fn n_added(&self) -> i32;
@@ -576,6 +584,7 @@ pub mod ffi {
     }
 
     // https://cxx.rs/shared.html#extern-enums
+    #[derive(Debug)]
     enum RpmOstreeDiffPrintFormat {
         RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY,
         RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED,
@@ -585,6 +594,7 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("rpmostree-libbuiltin.h");
         include!("rpmostree-util.h");
+        #[allow(missing_debug_implementations)]
         type RpmOstreeDiffPrintFormat;
         /// # Safety: ensure @cancellable is a valid pointer
         unsafe fn print_treepkg_diff_from_sysroot_path(
@@ -597,6 +607,7 @@ pub mod ffi {
 
     unsafe extern "C++" {
         include!("rpmostree-output.h");
+        #[allow(missing_debug_implementations)]
         type Progress;
 
         fn progress_begin_task(msg: &str) -> UniquePtr<Progress>;
