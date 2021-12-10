@@ -9,6 +9,7 @@
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::utils;
 use anyhow::{bail, format_err, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use fn_error_context::context;
 use gio::{FileInfo, FileType};
 use ostree::RepoCommitFilterResult;
@@ -16,6 +17,23 @@ use ostree_ext::{gio, ostree};
 use std::borrow::Cow;
 use std::fmt::Write;
 use std::pin::Pin;
+
+/// Canonicalize a path, e.g. replace `//` with `/` and `././` with `./`.
+// For some background behind this, see https://github.com/alexcrichton/tar-rs/pull/274
+// The specific problem case was:
+// # rpm -qf /usr/lib/systemd/systemd-sysv-install
+// chkconfig-1.13-2.el8.x86_64
+// # ll /usr/lib/systemd/systemd-sysv-install
+// lrwxrwxrwx. 2 root root 24 Nov 29 18:08 /usr/lib/systemd/systemd-sysv-install -> ../../..//sbin/chkconfig
+// #
+fn canonicalize_path(p: &str) -> String {
+    let p = Utf8Path::new(p);
+    let mut r = Utf8PathBuf::new();
+    for part in p.components() {
+        r.push(part);
+    }
+    r.into_string()
+}
 
 /// Adjust mode for specific file entries.
 pub fn tweak_imported_file_info(
@@ -42,6 +60,18 @@ pub fn tweak_imported_file_info(
         if (mode & (libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH)) != 0 {
             mode &= !(libc::S_IWUSR | libc::S_IWGRP | libc::S_IWOTH);
             file_info.set_attribute_uint32("unix::mode", mode);
+        }
+    }
+
+    if filetype == FileType::SymbolicLink {
+        if let Some(target) = file_info.symlink_target() {
+            // See above, this is a special case hack until
+            // https://github.com/fedora-sysv/chkconfig/pull/67 propagates everywhere
+            // and/or https://github.com/ostreedev/ostree-rs-ext/pull/182 merges.
+            if target.ends_with("//sbin/chkconfig") {
+                let canonicalized = &canonicalize_path(&target);
+                file_info.set_symlink_target(canonicalized);
+            }
         }
     }
 }
@@ -185,6 +215,21 @@ fn fix_tmpfiles_path(abs_path: Cow<str>) -> Cow<str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_canonicalize_path() {
+        let canonical = &["/", "/usr", "../usr/share", "../../usr/lib/systemd/system"];
+        for &k in canonical {
+            assert_eq!(k, canonicalize_path(k));
+        }
+        let noncanonical = &[
+            ("./././foo", "./foo"),
+            ("../../..//sbin/chkconfig", "../../../sbin/chkconfig"),
+        ];
+        for k in noncanonical {
+            assert_eq!(canonicalize_path(k.0), k.1);
+        }
+    }
 
     #[test]
     fn test_path_is_compliant() {
