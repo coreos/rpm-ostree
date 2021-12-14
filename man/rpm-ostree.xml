@@ -492,9 +492,15 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            <command>replace</command> to replace base packages.
-            Currently, only local RPM replacements are supported:
-            one must directly provide the RPMs to substitute in.
+            <command>replace</command> to replace base packages. 
+            Requires explicitly specifying a set of RPMs to install via
+            HTTP or local file paths. On Fedora systems, it is also 
+            supported to pull from the Fedora Koji/Bodhi systems.
+            For example,
+            <command>rpm-ostree override replace https://objstore.int.example.com/hotfixes/kernel.rpm</command>,
+            <command>rpm-ostree override replace ./podman.rpm</command>,
+            <command>rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2020-XXXXXXX</command> or
+            <command>rpm-ostree override replace https://koji.fedoraproject.org/koji/buildinfo?buildID=XXXXXXX</command>
           </para>
 
           <para>
@@ -522,11 +528,66 @@ Boston, MA 02111-1307, USA.
         <listitem>
           <para>
             Without options, display current default kernel arguments. Modify
-            arguments using <option>--append</option>,
-            <option>--replace</option>, <option>--delete</option>, or
-            <option>--editor</option>. This will create a new deployment with
-            the modified kernel arguments. Previous deployments are never
-            changed.
+            arguments using the following parameters which will create a new 
+            deployment with the modified kernel arguments. Previous deployments
+            are never changed.
+          </para>
+
+          <para>
+            <command>
+              --editor
+            </command>
+              to use an editor to modify the kernel arguments.
+          </para>
+
+          <para>
+            <command>
+              --append
+            </command>
+              to append a kernel argument. For example, 
+              <command>--append=panic=1</command>.
+          </para>
+
+          <para>
+            <command>
+              --append-if-missing
+            </command>
+              to append a kernel argument if it is not present.
+          </para>
+
+          <para>
+            <command>
+              --delete
+            </command>
+              to delete a kernel argument. For example, 
+              <command>--delete=panic=1</command>.
+          </para>
+
+          <para>
+            <command>
+              --delete-if-present
+            </command>
+              to delete a kernel argument if it is already present. For example, 
+              <command>--delete-if-present=panic=1</command>.
+          </para>
+
+          <para>
+            <command>
+              --replace
+            </command>
+              to replace an existing kernel argument, it allows you to pass a 
+              KEY=VALUE. Also, it supports "KEY=VALUE=NEWVALUE" to replace the
+              value of an argumnet only if one value exist for that argument. 
+              For example, <command>--replace=panic=1</command>. or 
+              <command>--replace=panic=1=0</command>.
+          </para>
+
+          <para>
+            <command>
+              --unchanged-exit-77
+            </command>
+              to exit status 77 to indicate that the kernel arguments have
+              not changed. 
           </para>
 
           <para>
