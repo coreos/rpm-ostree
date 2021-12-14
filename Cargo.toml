@@ -44,7 +44,7 @@ futures = "0.3.18"
 indoc = "1.0.3"
 indicatif = "0.16.2"
 lazy_static = "1.4.0"
-libc = "0.2.109"
+libc = "0.2.112"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 memfd = "0.4.1"
@@ -61,13 +61,13 @@ rayon = "1.5.1"
 regex = "1.5"
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 rust-ini = "0.17.0"
-serde = { version = "1.0.130", features = ["derive"] }
+serde = { version = "1.0.131", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.72"
 serde_yaml = "0.8.21"
 structopt = "0.3.25"
 subprocess = "0.2.8"
-systemd = "0.9.0"
+systemd = "0.10.0"
 tempfile = "3.2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
