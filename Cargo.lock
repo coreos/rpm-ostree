@@ -2270,9 +2270,9 @@ dependencies = [
 
 [[package]]
 name = "systemd"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe03808323f01aefb68591de263b994ffeb671af1fe040858dc820ed7b681996"
+checksum = "afec0101d9ae8ab26aedf0840109df689938ea7e538aa03df4369f1854f11562"
 dependencies = [
  "cstr-argument",
  "foreign-types 0.5.0",
