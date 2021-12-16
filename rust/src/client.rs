@@ -8,6 +8,7 @@ use anyhow::{anyhow, Result};
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
 use std::os::unix::io::IntoRawFd;
+use std::path::Path;
 use std::pin::Pin;
 use std::process::Command;
 
@@ -235,6 +236,41 @@ pub(crate) fn client_render_download_progress(
     }
 }
 
+/// Install packages live into the running root filesystem.
+/// This is only intended for use as part of a container builds.
+/// For now, we fork/exec microdnf because this is exactly what its
+/// main use case is, but in the future we may change the rpm-ostree code
+/// to handle this more directly.
+pub(crate) fn microdnf_install(args: Vec<String>) -> Result<()> {
+    let mut microdnf_command = "microdnf";
+    let alt_microdnf_location = "/usr/lib/rpm-ostree/microdnf";
+    if Path::new(alt_microdnf_location).exists() {
+        microdnf_command = alt_microdnf_location;
+    }
+
+    let microdnf_status = Command::new(microdnf_command)
+        .arg("install")
+        .args(&args)
+        .arg("-y")
+        .status()?;
+    if !microdnf_status.success() {
+        return Err(anyhow!(
+            "Failure installing {:?}, microdnf failed with: {:?}",
+            args,
+            microdnf_status
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn running_in_container() -> bool {
+    ostree_ext::container_utils::running_in_container()
+}
+
+pub(crate) fn ostree_path_exists() -> bool {
+    Path::new("/ostree/repo/").exists()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,5 +281,13 @@ mod tests {
         let src_rpm = "file://linux-kernel-2.2.2.src.rpm";
         assert!(!is_src_rpm_arg(rpm));
         assert!(is_src_rpm_arg(src_rpm));
+    }
+
+    #[test]
+    fn test_running_in_container() {
+        assert_eq!(
+            Path::new("/run/.containerenv").exists(),
+            running_in_container()
+        );
     }
 }

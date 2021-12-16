@@ -194,6 +194,14 @@ rpmostree_builtin_install (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
+  if (rpmostreecxx::running_in_container() && rpmostreecxx::ostree_path_exists()) {
+    auto argv_rust = rust::Vec<rust::String>();
+      for (int i = 0; i < argc; i++)
+        argv_rust.push_back(rust::String(argv[i]));
+    rpmostreecxx::microdnf_install(argv_rust);
+    return TRUE;
+  }
+
   return pkg_change (invocation, sysroot_proxy,
                      (const char *const*)argv,
                      (const char *const*)opt_uninstall,
