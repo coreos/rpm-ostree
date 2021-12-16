@@ -3,6 +3,7 @@
 
 use anyhow::{Context, Result};
 use nix::sys::signal;
+use std::ffi::OsString;
 use std::io::Write;
 use std::os::unix::prelude::CommandExt;
 use termcolor::WriteColor;
@@ -38,6 +39,7 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
     let arg = args_borrowed.get(1).map(|s| *s).unwrap_or(&"");
     // Async-native code goes here
     match arg {
+        // TODO(lucab): move consumers to the multicall entrypoint, then drop this.
         "ex-container" => {
             return rpmostree_rust::container::entrypoint(&args_borrowed).await;
         }
@@ -65,6 +67,57 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
     .await?
 }
 
+/// Multicall entrypoint for `ostree-container`.
+async fn multicall_ostree_container(args: Vec<String>) -> Result<i32> {
+    ostree_ext::cli::run_from_iter(args).await?;
+    Ok(0)
+}
+
+/// Dispatch multicall binary to relevant logic, based on callname from `argv[0]`.
+async fn dispatch_multicall(callname: String, args: Vec<String>) -> Result<i32> {
+    match callname.as_str() {
+        // TODO(lucab): fix the final callname for this after ostree side at
+        // https://github.com/ostreedev/ostree/issues/2480 is settled.
+        "ostree-container" => multicall_ostree_container(args).await,
+        "rpm-ostree" | _ => inner_async_main(args).await,
+    }
+}
+
+/// Process a string from `argv[0]` into a clean callname.
+fn callname_from_argv0(argv0: &str) -> &str {
+    let callname = argv0.rsplit_once('/').map(|t| t.1).unwrap_or(argv0);
+    if callname.is_empty() {
+        "rpm-ostree"
+    } else {
+        callname
+    }
+}
+
+/// Gather arguments from command-line, and clean up `argv[0]` for multicall.
+fn gather_cli_args(argv: impl IntoIterator<Item = OsString>) -> Result<(String, Vec<String>)> {
+    let args: Result<Vec<String>> = argv
+        .into_iter()
+        .map(|s| {
+            s.into_string()
+                .map_err(|s| anyhow::anyhow!("Argument is invalid UTF-8: {}", s.to_string_lossy()))
+        })
+        .collect();
+    let mut args = args?;
+
+    // NOTE: `args` is guaranteed non-empty from here on.
+    if args.is_empty() {
+        args.push("rpm-ostree".to_string());
+    }
+
+    if args[0] == "" {
+        args[0] = "rpm-ostree".to_string();
+    }
+
+    let callname = callname_from_argv0(&args[0]).to_string();
+
+    Ok((callname, args))
+}
+
 /// The real main function returns a `Result<>`.
 fn inner_main() -> Result<i32> {
     if std::env::var("RPMOSTREE_GDB_HOOK").is_ok() {
@@ -78,26 +131,22 @@ fn inner_main() -> Result<i32> {
     // Call this early on; it invokes e.g. setenv() so must be done
     // before we create threads.
     rpmostree_rust::ffi::early_main();
-    // We need to write to stderr, because some of our commands write to stdout
-    // like `rpm-ostree compose tree --print-json`.
+    // Logging goes to stderr, because stdout is used for output by some of
+    // our commands like `rpm-ostree compose tree --print-json`.
     tracing_subscriber::fmt::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
         .init();
     tracing::trace!("starting");
-    // Gather our arguments.
-    let args: Result<Vec<String>> = std::env::args_os()
-        .map(|s| -> Result<String> {
-            s.into_string()
-                .map_err(|s| anyhow::anyhow!("Argument is invalid UTF-8: {}", s.to_string_lossy()))
-        })
-        .collect();
-    let args = args?;
-    tokio::runtime::Builder::new_multi_thread()
+
+    // Gather and pre-process command-line arguments.
+    let (callname, args) = gather_cli_args(std::env::args_os())?;
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .context("Failed to build tokio runtime")?
-        .block_on(inner_async_main(args))
+        .context("Failed to build tokio runtime")?;
+    runtime.block_on(dispatch_multicall(callname, args))
 }
 
 fn print_error(e: anyhow::Error) {
@@ -128,6 +177,50 @@ fn main() {
         Err(e) => {
             print_error(e);
             std::process::exit(1)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_callname_from_argv0() {
+        let testcases = [
+            ("foo", "foo"),
+            ("/usr/bin/foo", "foo"),
+            ("", "rpm-ostree"),
+            ("/usr/bin/", "rpm-ostree"),
+        ];
+
+        for (input, expected) in testcases {
+            let output = callname_from_argv0(input);
+            assert_eq!(output, expected);
+        }
+    }
+
+    #[test]
+    fn test_gather_cli_args() {
+        let testcases = [
+            (vec![], ("rpm-ostree", vec!["rpm-ostree"])),
+            (vec![""], ("rpm-ostree", vec!["rpm-ostree"])),
+            (vec!["foo"], ("foo", vec!["foo"])),
+            (
+                vec!["/usr/bin/foo", "bar"],
+                ("foo", vec!["/usr/bin/foo", "bar"]),
+            ),
+            (
+                vec!["/usr/bin/", "bar"],
+                ("rpm-ostree", vec!["/usr/bin/", "bar"]),
+            ),
+        ];
+        for (input, expected) in testcases {
+            let (exp_callname, exp_args) = expected;
+            let argv = input.into_iter().map(|s| s.into());
+            let (callname, args) = gather_cli_args(argv).unwrap();
+            assert_eq!(callname, exp_callname);
+            assert_eq!(args, exp_args);
         }
     }
 }
