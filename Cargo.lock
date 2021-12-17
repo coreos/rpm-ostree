@@ -263,8 +263,7 @@ dependencies = [
 [[package]]
 name = "containers-image-proxy"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "612d1c462d0d7e94720bff7896ee22d3162937de2362b0f09637fdb0c9689527"
+source = "git+https://github.com/containers/containers-image-proxy-rs#2080323d97a5bf9db160fe677a187838258b81cc"
 dependencies = [
  "anyhow",
  "capctl",
@@ -1458,9 +1457,8 @@ dependencies = [
 
 [[package]]
 name = "ostree"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed97148d69c9822e948d9c1d2e288e3efd11592814981f46fce6f47cb7837d4e"
+version = "0.13.4-alpha.0"
+source = "git+https://github.com/ostreedev/ostree-rs#7ede363bb738e9872b8fbca6a28c0610e0e2dce0"
 dependencies = [
  "bitflags",
  "gio",
@@ -1476,13 +1474,11 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "942f0ba250af236c6d9b275a305f06676c917cd7857a6bcdfd96aca2791cf920"
+source = "git+https://github.com/ostreedev/ostree-rs-ext#2d1805c1c8a2939e435963c8c1a4181f47959f17"
 dependencies = [
  "anyhow",
  "async-compression",
  "bitflags",
- "bytes",
  "camino",
  "cjson",
  "containers-image-proxy",
@@ -1494,13 +1490,13 @@ dependencies = [
  "indicatif",
  "lazy_static",
  "libc",
- "nix 0.22.0",
+ "nix 0.23.0",
  "oci-spec",
  "openat",
  "openat-ext",
  "openssl",
  "ostree",
- "phf 0.9.0",
+ "phf",
  "pin-project",
  "serde",
  "serde_json",
@@ -1515,14 +1511,13 @@ dependencies = [
 [[package]]
 name = "ostree-sys"
 version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f21a33d095678ef9b32503ce042d4101477ab9a20c971d5f27e7f42d5a2bc79"
+source = "git+https://github.com/ostreedev/ostree-rs#7ede363bb738e9872b8fbca6a28c0610e0e2dce0"
 dependencies = [
  "gio-sys",
  "glib-sys",
  "gobject-sys",
  "libc",
- "system-deps 3.2.0",
+ "system-deps 6.0.0",
 ]
 
 [[package]]
@@ -1564,34 +1559,13 @@ checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
 name = "phf"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2ac8b67553a7ca9457ce0e526948cad581819238f4a9d1ea74545851fa24f37"
-dependencies = [
- "phf_macros 0.9.0",
- "phf_shared 0.9.0",
- "proc-macro-hack",
-]
-
-[[package]]
-name = "phf"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9fc3db1018c4b59d7d582a739436478b6035138b6aecbce989fc91c3e98409f"
 dependencies = [
- "phf_macros 0.10.0",
- "phf_shared 0.10.0",
+ "phf_macros",
+ "phf_shared",
  "proc-macro-hack",
-]
-
-[[package]]
-name = "phf_generator"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fc1437ada0f3a97d538f0bb608137bf53c53969028cab74c89893e1e9a12f0e"
-dependencies = [
- "phf_shared 0.9.0",
- "rand",
 ]
 
 [[package]]
@@ -1600,22 +1574,8 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d5285893bb5eb82e6aaf5d59ee909a06a16737a8970984dd7746ba9283498d6"
 dependencies = [
- "phf_shared 0.10.0",
+ "phf_shared",
  "rand",
-]
-
-[[package]]
-name = "phf_macros"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b706f5936eb50ed880ae3009395b43ed19db5bff2ebd459c95e7bf013a89ab86"
-dependencies = [
- "phf_generator 0.9.0",
- "phf_shared 0.9.0",
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1624,21 +1584,12 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58fdf3184dd560f160dd73922bea2d5cd6e8f064bf4b13110abd81b03697b4e0"
 dependencies = [
- "phf_generator 0.10.0",
- "phf_shared 0.10.0",
+ "phf_generator",
+ "phf_shared",
  "proc-macro-hack",
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "phf_shared"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a68318426de33640f02be62b4ae8eb1261be2efbc337b60c54d845bf4484e0d9"
-dependencies = [
- "siphasher",
 ]
 
 [[package]]
@@ -1966,7 +1917,7 @@ dependencies = [
  "os-release",
  "ostree-ext",
  "paste",
- "phf 0.10.0",
+ "phf",
  "rand",
  "rayon",
  "regex",
@@ -2285,9 +2236,9 @@ dependencies = [
 
 [[package]]
 name = "tar"
-version = "0.4.35"
+version = "0.4.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d779dc6aeff029314570f666ec83f19df7280bb36ef338442cfa8c604021b80"
+checksum = "4b55807c0344e1e6c04d7c965f5289c39a8d94ae23ed5c0b57aabac549f871c6"
 dependencies = [
  "filetime",
  "libc",
