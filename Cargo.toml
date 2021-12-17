@@ -53,7 +53,7 @@ openat = "0.1.21"
 openat-ext = "^0.2.2"
 openssl = "0.10.38"
 os-release = "0.1.0"
-ostree-ext = "0.5.0"
+ostree-ext = { git = "https://github.com/ostreedev/ostree-rs-ext" }
 paste = "1.0"
 phf = { version = "0.10", features = ["macros"] }
 rand = "0.8.4"
