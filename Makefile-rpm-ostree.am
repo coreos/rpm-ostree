@@ -124,6 +124,7 @@ rust/cxx.h:
 	ln -sfr rust/cxx-prebuilt.h $@
 else
 include Makefile.bindings
+CLEANFILES += rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
 endif
 
 noinst_LTLIBRARIES += librpmostreecxxrs.la
