@@ -5,7 +5,7 @@ binding_rust_sources = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.loc
 rust/cxx.h: Makefile.bindings
 	./target/cxxbridge/bin/cxxbridge --header >$@.tmp && mv $@.tmp $@
 
-rpmostree-cxxrs.h: $(binding_rust_sources)
+rpmostree-cxxrs.h: $(binding_rust_sources) ./target/cxxbridge/bin/cxxbridge
 	$(AM_V_GEN) if ./target/cxxbridge/bin/cxxbridge rust/src/lib.rs --header > $@.tmp; then \
 	  if test -f $@ && cmp $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else \
 	    mv $@.tmp $@; \
