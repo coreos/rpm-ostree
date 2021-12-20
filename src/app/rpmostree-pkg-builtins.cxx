@@ -194,7 +194,8 @@ rpmostree_builtin_install (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
-  if (rpmostreecxx::running_in_container() && rpmostreecxx::ostree_path_exists()) {
+  auto is_bare_split_xattrs = CXX_TRY_VAL(is_bare_split_xattrs(), error);
+  if (rpmostreecxx::running_in_container() && is_bare_split_xattrs) {
     auto argv_rust = rust::Vec<rust::String>();
       for (int i = 0; i < argc; i++)
         argv_rust.push_back(rust::String(argv[i]));

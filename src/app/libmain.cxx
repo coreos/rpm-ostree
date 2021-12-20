@@ -262,7 +262,8 @@ rpmostree_option_context_parse (GOptionContext *context,
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0)
     CXX_TRY(client_require_root(), error);
 
-  if (use_daemon && !(rpmostreecxx::running_in_container() && rpmostreecxx::ostree_path_exists()))
+  auto is_bare_split_xattrs = CXX_TRY_VAL(is_bare_split_xattrs(), error);
+  if (use_daemon && !(rpmostreecxx::running_in_container() && is_bare_split_xattrs))
     {
       /* More gracefully handle the case where
        * no --sysroot option was specified and we're not booted via ostree

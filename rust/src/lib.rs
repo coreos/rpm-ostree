@@ -78,6 +78,7 @@ pub mod ffi {
 
     // client.rs
     extern "Rust" {
+        fn is_bare_split_xattrs() -> Result<bool>;
         fn is_http_arg(arg: &str) -> bool;
         fn is_rpm_arg(arg: &str) -> bool;
         fn client_start_daemon() -> Result<()>;
@@ -85,7 +86,6 @@ pub mod ffi {
         fn client_render_download_progress(progress: Pin<&mut GVariant>) -> String;
         fn microdnf_install(args: Vec<String>) -> Result<()>;
         fn running_in_container() -> bool;
-        fn ostree_path_exists() -> bool;
     }
 
     #[derive(Debug)]
