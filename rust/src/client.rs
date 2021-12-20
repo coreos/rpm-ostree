@@ -267,8 +267,8 @@ pub(crate) fn running_in_container() -> bool {
     ostree_ext::container_utils::running_in_container()
 }
 
-pub(crate) fn ostree_path_exists() -> bool {
-    Path::new("/ostree/repo/").exists()
+pub(crate) fn is_bare_split_xattrs() -> CxxResult<bool> {
+    Ok(ostree_ext::container_utils::is_bare_split_xattrs()?)
 }
 
 #[cfg(test)]
