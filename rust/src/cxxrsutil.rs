@@ -106,7 +106,15 @@ cxxrs_bind!(G, glib, glib::gobject_ffi, [Object]);
 cxxrs_bind!(G, gio, gio::ffi, [Cancellable, DBusConnection, FileInfo]);
 cxxrs_bind!(G, glib, glib::ffi, [KeyFile, Variant, VariantDict]);
 
-// An error type helper; separate from the GObject bridging
+/// Error type helpers; separate from the GObject bridging.
+///
+/// # Use CxxResult in cxx.rs-bridged APIs (i.e. in `lib.rs`)
+///
+/// The `CxxResult<T>` type is necessarily primarily because
+/// we want to change the default error formatting.  It
+/// implements `From<T>` for many other error types, such as
+/// `anyhow::Error` and `glib::Error`, so the default conversion
+/// from `?` should work.
 mod err {
     use ostree_ext::glib;
     use std::error::Error as StdError;
