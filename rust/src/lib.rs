@@ -20,11 +20,22 @@ pub(crate) use cxxrsutil::*;
 
 /// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
 ///
-/// Usage guidelines:
+/// # File layout
 ///
-/// - Keep this content roughly ordered alphabetically
-/// - While the return type here will be `Result<T>` on the implementation
-///   side you currently *should* use `CxxResult`; see the docs of that for more information.
+/// Try to keep APIs defined here roughly alphabetical.  When adding a new file,
+/// add a comment with the filename so that it shows up in searches too.
+///
+/// # Error handling
+///
+/// For falliable APIs that return a `Result<T>`:
+///
+/// - Use `Result<T>` inside `lib.rs` below
+/// - On the Rust *implementation* side, use `CxxResult<T>` which does error
+///   formatting in a more preferred way
+/// - On the C++ side, use our custom `CXX_TRY` API which converts the C++ exception
+///   into a GError.  In the future, we might try a hard switch to C++ exceptions
+///   instead, but at the moment having two is problematic, so we prefer `GError`.
+///
 #[cxx::bridge(namespace = "rpmostreecxx")]
 #[allow(clippy::needless_lifetimes)]
 #[allow(unsafe_op_in_unsafe_fn)]
