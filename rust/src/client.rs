@@ -250,8 +250,8 @@ pub(crate) fn microdnf_install(args: Vec<String>) -> Result<()> {
 
     let microdnf_status = Command::new(microdnf_command)
         .arg("install")
-        .args(&args)
         .arg("-y")
+        .args(&args)
         .status()?;
     if !microdnf_status.success() {
         return Err(anyhow!(
