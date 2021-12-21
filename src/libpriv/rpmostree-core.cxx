@@ -1829,6 +1829,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_autoptr(GPtrArray) locked_pkgs = NULL;
       if (!find_locked_packages (self, &locked_pkgs, error))
         return FALSE;
+      g_assert (locked_pkgs);
 
       /* build a packageset from it */
       DnfPackageSet *locked_pset = dnf_packageset_new (sack);
