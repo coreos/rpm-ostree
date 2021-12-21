@@ -76,8 +76,6 @@ async fn multicall_ostree_container(args: Vec<String>) -> Result<i32> {
 /// Dispatch multicall binary to relevant logic, based on callname from `argv[0]`.
 async fn dispatch_multicall(callname: String, args: Vec<String>) -> Result<i32> {
     match callname.as_str() {
-        // TODO(lucab): fix the final callname for this after ostree side at
-        // https://github.com/ostreedev/ostree/issues/2480 is settled.
         "ostree-container" => multicall_ostree_container(args).await,
         "rpm-ostree" | _ => inner_async_main(args).await,
     }
