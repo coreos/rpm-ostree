@@ -4,6 +4,17 @@ set -xeuo pipefail
 . ${KOLA_EXT_DATA}/libtest.sh
 cd $(mktemp -d)
 
+# Ensure multicall is correctly set up and working.
+R_O_DIGEST=$(sha512sum $(which rpm-ostree) | cut -d' ' -f1)
+O_C_DIGEST=$(sha512sum $(which ostree-container) | cut -d' ' -f1)
+if test "${R_O_DIGEST}" != "${O_C_DIGEST}" ; then
+    assert_not_reached "rpm-ostree and ostree-container are not the same binary"
+fi
+ostree-container container --help > cli_help.txt
+assert_file_has_content_literal cli_help.txt 'ostree-container container <SUBCOMMAND>'
+rm cli_help.txt
+echo "ok multicall corectly set up and working"
+
 # make sure that package-related entries are always present,
 # even when they're empty.
 # Validate there's no live state by default.
