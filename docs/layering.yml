@@ -1,0 +1,81 @@
+#Applying a new package using CoreOS layering.
+
+
+This guide assumes a running FCOS environment
+
+Assuming there is a need for debugging on your environment and you need strace and a custom binary, we are going to rebase your running FCOS deployment to include them.
+This would be helful when IT needs to provide the images or you need to add the same package to multiple hosts. 
+Instead of making the changes on each host you can create a image which then you can rebase you systems on.
+
+Let's clonse our code and enter the directory.
+```
+git clone git@github.com:coreos/fcos-derivation-example.git && cd fcos-derivation-example
+```
+
+2. Examine the Dockerfile and notice the custom binary and where we are installing strace.
+
+```
+vi Dockerfile
+```
+
+3. Feel free to add another tool like `htop`.
+
+That would make the last line look like:
+```
+RUN rpm-ostree install strace htop && rm -rf /var/cache
+```
+
+4. Build it, on this example we are using podman.
+```
+podman build -t localhost/my-custom-fcos .
+```
+
+5. At this point you will have an oci image. You can test to see if it actually has the app. Let's get into the container.
+```
+ podman run -it localhost/my-custom-fcos /bin/bash
+```
+
+6. Run stace inside the container
+```
+strace --version
+```
+
+You should see:
+```
+bash-5.1# strace --version
+strace -- version 5.15
+Copyright (c) 1991-2021 The strace developers <https://strace.io>.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Optional features enabled: stack-trace=libdw stack-demangle m32-mpers mx32-mpers secontext
+```
+
+Which tells us we have successfully installed strace on Fedora CoreOS. We can get out of the container now:
+```
+exit
+```
+
+7. Next, we need to push our image to a image repository that is accessible to my hosts. 
+In this example I will use `quay.io`. But this can be any comaptible container image repository.
+
+```
+podman push localhost/my-custom-fcos quay.io/<YOURUSER>/my-custom-fcos
+```
+
+8. Next steps are borrowed from: https://coreos.github.io/rpm-ostree/container/#rebasing-a-client-system
+
+
+----
+**Needs to be expanded**vvv
+
+Now your host should have your custom binary and extra packages ready to use.
+
+
+
+
+Next, we are configuring httpd ? with ignition and adding the package thru this process. 
+
+1. Deploy with ignition configs.
+2. Notice that service is not up becase there is no package.
+3. Install httpd and see it working.
