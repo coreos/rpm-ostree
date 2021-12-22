@@ -194,14 +194,15 @@ rpmostree_builtin_install (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
-  auto is_bare_split_xattrs = CXX_TRY_VAL(is_bare_split_xattrs(), error);
-  if (rpmostreecxx::running_in_container() && is_bare_split_xattrs) {
-    auto argv_rust = rust::Vec<rust::String>();
-      for (int i = 0; i < argc; i++)
-        argv_rust.push_back(rust::String(argv[i]));
-    rpmostreecxx::microdnf_install(argv_rust);
-    return TRUE;
-  }
+  auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
+  if (is_ostree_container)
+    {
+      auto argv_rust = rust::Vec<rust::String>();
+        for (int i = 0; i < argc; i++)
+          argv_rust.push_back(rust::String(argv[i]));
+      CXX_TRY(microdnf_install(argv_rust), error);
+      return TRUE;
+    }
 
   return pkg_change (invocation, sysroot_proxy,
                      (const char *const*)argv,

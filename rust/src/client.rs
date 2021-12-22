@@ -242,13 +242,7 @@ pub(crate) fn client_render_download_progress(
 /// main use case is, but in the future we may change the rpm-ostree code
 /// to handle this more directly.
 pub(crate) fn microdnf_install(args: Vec<String>) -> Result<()> {
-    let mut microdnf_command = "microdnf";
-    let alt_microdnf_location = "/usr/lib/rpm-ostree/microdnf";
-    if Path::new(alt_microdnf_location).exists() {
-        microdnf_command = alt_microdnf_location;
-    }
-
-    let microdnf_status = Command::new(microdnf_command)
+    let microdnf_status = Command::new(microdnf_location())
         .arg("install")
         .arg("-y")
         .args(&args)
@@ -263,12 +257,47 @@ pub(crate) fn microdnf_install(args: Vec<String>) -> Result<()> {
     Ok(())
 }
 
+/// Clean up /var/cache/yum/ which so it's not attemped to be
+/// copied to the next container layer. Without calling this
+/// we would see various non-fatal errors during a container build.
+/// This is only intended for use as part of a container builds.
+pub(crate) fn microdnf_clean_all() -> Result<()> {
+    let microdnf_status = Command::new(microdnf_location())
+        .arg("clean")
+        .arg("all")
+        .status()?;
+    if !microdnf_status.success() {
+        return Err(anyhow!(
+            "Failure running clean up, microdnf failed with: {:?}",
+            microdnf_status
+        ));
+    }
+    Ok(())
+}
+
+// On CoreOS environment we expect microdnf to be on
+// /usr/lib/rpm-ostree/microdnf as this is not intended
+// be used outside as a container. However we will work
+// with the default location too.
+pub(crate) fn microdnf_location() -> String {
+    let mut microdnf_command = "microdnf";
+    let alt_microdnf_location = "/usr/lib/rpm-ostree/microdnf";
+    if Path::new(alt_microdnf_location).exists() {
+        microdnf_command = alt_microdnf_location;
+    }
+    return microdnf_command.to_string();
+}
+
 pub(crate) fn running_in_container() -> bool {
     ostree_ext::container_utils::running_in_container()
 }
 
 pub(crate) fn is_bare_split_xattrs() -> CxxResult<bool> {
     Ok(ostree_ext::container_utils::is_bare_split_xattrs()?)
+}
+
+pub(crate) fn is_ostree_container() -> CxxResult<bool> {
+    Ok(ostree_ext::container_utils::is_ostree_container()?)
 }
 
 #[cfg(test)]
