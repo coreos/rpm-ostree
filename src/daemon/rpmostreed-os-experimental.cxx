@@ -118,50 +118,63 @@ osexperimental_handle_moo (RPMOSTreeOSExperimental *interface,
 }
 
 static gboolean
+prepare_live_fs_txn(RPMOSTreeOSExperimental *interface,
+                    GDBusMethodInvocation *invocation,
+                    GVariant *arg_options,
+                    RpmostreedTransaction **out_txn,
+                    GError    **error)
+{
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+
+  /* Try to merge with an existing transaction, otherwise start a new one. */
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, error))
+    return glnx_prefix_error_null (error, "Preparing sysroot for transaction");
+
+  if (transaction == NULL)
+    {
+      g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+      glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                          cancellable,
+                                          &ot_sysroot,
+                                          NULL,
+                                          error))
+        return glnx_prefix_error (error, "Loading sysroot state");
+
+      transaction = rpmostreed_transaction_new_apply_live (invocation,
+                                                           ot_sysroot,
+                                                           arg_options,
+                                                           cancellable,
+                                                           error);
+      if (transaction == NULL)
+        return glnx_prefix_error (error, "Starting live fs transaction");
+    }
+  g_assert (transaction != NULL);
+
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+  *out_txn = util::move_nullify (transaction);
+  return TRUE;
+}
+
+static gboolean
 osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
                                GDBusMethodInvocation *invocation,
                                GVariant *arg_options)
 {
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GError *local_error = NULL;
-
-  /* try to merge with an existing transaction, otherwise start a new one */
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
-  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
-  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
-  if (transaction)
-    goto out;
 
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
-                                      cancellable,
-                                      &ot_sysroot,
-                                      NULL,
-                                      &local_error))
-    goto out;
-
-  transaction = rpmostreed_transaction_new_apply_live (invocation,
-                                                       ot_sysroot,
-                                                       arg_options,
-                                                       cancellable,
-                                                       &local_error);
-  if (transaction == NULL)
-    goto out;
-
-  rpmostreed_sysroot_set_txn (rsysroot, transaction);
-
-out:
+  gboolean is_ok = prepare_live_fs_txn (interface, invocation, arg_options, &transaction, &local_error);
   if (local_error != NULL)
-    {
       g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_osexperimental_complete_live_fs (interface, invocation, client_address);
-    }
+  if (!is_ok)
+      return TRUE;  /* 🔚 Early return */
+
+  g_assert (transaction != NULL);
+  const char *client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_osexperimental_complete_live_fs (interface, invocation, client_address);
 
   return TRUE;
 }
