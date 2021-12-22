@@ -81,7 +81,15 @@ rpmostree_builtin_cleanup (int             argc,
   if (opt_rollback)
     g_ptr_array_add (cleanup_types, (char*)"rollback-deploy");
   if (opt_repomd)
-    g_ptr_array_add (cleanup_types, (char*)"repomd");
+    {
+      auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
+      if (is_ostree_container) 
+        {
+          CXX_TRY(microdnf_clean_all(), error);
+          return TRUE;
+        }
+      g_ptr_array_add (cleanup_types, (char*)"repomd");
+    }
   if (cleanup_types->len == 0)
     {
       glnx_throw (error, "At least one cleanup option must be specified");

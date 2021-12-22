@@ -1474,7 +1474,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.5.1"
-source = "git+https://github.com/ostreedev/ostree-rs-ext#1fdc84efede475a8c9ff0eab599bf021047fc266"
+source = "git+https://github.com/ostreedev/ostree-rs-ext#4aa8de5a67a256f9ac8709ffd50d5d2e74af58f9"
 dependencies = [
  "anyhow",
  "async-compression",
