@@ -35,7 +35,7 @@ camino = "1.0.5"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "2.34.0"
 curl = "0.4.41"
-cxx = "1.0.60"
+cxx = "1.0.62"
 envsubst = "0.2.0"
 env_logger = "0.9.0"
 fail = { version = "0.5", features = ["failpoints"] }
