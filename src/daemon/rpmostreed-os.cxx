@@ -1587,50 +1587,40 @@ out:
 }
 
 static gboolean
-os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
-                                      GDBusMethodInvocation *invocation,
-                                      const char *arg_revision,
-                                      const char * const *arg_packages)
+get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
+                            const char *arg_revision,
+                            GVariant **out_value,
+                            GVariant **out_details,
+                            GError    **error)
 {
-  const char *base_checksum;
-  const char *osname;
-  OstreeSysroot *ot_sysroot = NULL;
-  OstreeRepo *ot_repo = NULL;
-  glnx_unref_object OstreeDeployment *base_deployment = NULL;
-  g_autoptr(RpmOstreeOrigin) origin = NULL;
-  g_autofree char *checksum = NULL;
-  g_autofree char *version = NULL;
   g_autoptr(GCancellable) cancellable = NULL;
   g_autoptr(GVariant) value = NULL;
   g_autoptr(GVariant) details = NULL;
-  GError *local_error = NULL;
-  GError **error = &local_error;
 
-  /* XXX Ignoring arg_packages for now. */
+  if (arg_revision == NULL)
+    return glnx_throw (error, "Missing revision");
 
-  ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
-  ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
+  OstreeSysroot *ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
+  OstreeRepo *ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
 
-  osname = rpmostree_os_get_name (interface);
-  base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, osname);
+  const char *osname = rpmostree_os_get_name (interface);
+  glnx_unref_object OstreeDeployment *base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, osname);
   if (base_deployment == NULL)
-    {
-      local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
-                                 "No deployments found for os %s", osname);
-      goto out;
-    }
+    return glnx_throw (error, "No deployments found for OS '%s'", osname);
 
-  origin = rpmostree_origin_parse_deployment (base_deployment, error);
-  if (!origin)
-    goto out;
+  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (base_deployment, error);
+  if (origin == NULL)
+    return glnx_prefix_error (error, "Parsing origin for deployment");
 
-  base_checksum = ostree_deployment_get_csum (base_deployment);
+  const char *base_checksum = ostree_deployment_get_csum (base_deployment);
 
+  g_autofree char *checksum = NULL;
+  g_autofree char *version = NULL;
   if (!rpmostreed_parse_revision (arg_revision,
                                   &checksum,
                                   &version,
-                                  &local_error))
-    goto out;
+                                  error))
+    return glnx_prefix_error (error, "Parsing revision");
 
   if (version != NULL)
     {
@@ -1639,32 +1629,51 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
                                                   version,
                                                   cancellable,
                                                   &checksum,
-                                                  &local_error))
-        goto out;
+                                                  error))
+        return glnx_prefix_error (error, "Looking up cached version");
     }
 
   if (!rpm_ostree_db_diff_variant (ot_repo, base_checksum, checksum, FALSE, &value,
-                                   cancellable, &local_error))
-    goto out;
+                                   cancellable, error))
+    return glnx_prefix_error (error, "Assembling diff");
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
                                                                rpmostree_origin_get_refspec (origin),
                                                                checksum,
-                                                               &local_error);
-  if (!details)
-    goto out;
+                                                               error);
+  if (details == NULL)
+    return glnx_prefix_error (error, "Generating cached details");
 
-out:
-  if (local_error != NULL)
+  *out_value = util::move_nullify (value);
+  *out_details = util::move_nullify (details);
+  return TRUE;
+}
+
+static gboolean
+os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
+                                      GDBusMethodInvocation *invocation,
+                                      const char *arg_revision,
+                                      const char * const *arg_packages)
+{
+  GError *local_error = NULL;
+  g_autoptr(GVariant) value = NULL;
+  g_autoptr(GVariant) details = NULL;
+
+  /* XXX Ignoring arg_packages for now. */
+  gboolean is_ok = get_cached_deploy_rpm_diff (interface, arg_revision,
+                                               &value, &details, &local_error);
+  if (!is_ok)
     {
+      g_assert (local_error != NULL);
       g_dbus_method_invocation_take_error (invocation, local_error);
+      return TRUE;  /* 🔚 Early return */
     }
-  else
-    {
-      g_dbus_method_invocation_return_value (invocation,
-                                             new_variant_diff_result (value, details));
-    }
+
+  g_assert (value != NULL);
+  g_assert (details != NULL);
+  g_dbus_method_invocation_return_value (invocation,
+                                         new_variant_diff_result (value, details));
 
   return TRUE;
 }
