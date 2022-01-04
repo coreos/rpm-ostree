@@ -192,6 +192,11 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
     "  ln -sf $f " SYSCONFDIR "/crypto-policies/back-ends/$(basename $f .txt).config\n"
     "done"
   },
+  // Replicating https://src.fedoraproject.org/rpms/authselect/blob/e597fee6295c4334214b306acbbf8dabff67c4da/f/authselect.spec#_284
+  { "authselect-libs.prein",
+    "/usr/bin/bash",
+    "touch /var/lib/rpm-state/authselect.force"
+  },
   /* Just for the tests */
   { "rpmostree-lua-override-test.post",
     "/usr/bin/sh",
