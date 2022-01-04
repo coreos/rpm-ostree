@@ -167,10 +167,12 @@ osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
 
   gboolean is_ok = prepare_live_fs_txn (interface, invocation, arg_options, &transaction, &local_error);
-  if (local_error != NULL)
-      g_dbus_method_invocation_take_error (invocation, local_error);
   if (!is_ok)
+    {
+      g_assert (local_error != NULL);
+      g_dbus_method_invocation_take_error (invocation, local_error);
       return TRUE;  /* 🔚 Early return */
+    }
 
   g_assert (transaction != NULL);
   const char *client_address = rpmostreed_transaction_get_client_address (transaction);
@@ -180,20 +182,21 @@ osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
 }
 
 static gboolean
-osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
-                                         GDBusMethodInvocation *invocation,
-                                         GUnixFDList* fds,
-                                         const gchar * const *queries,
-                                         const char * source)
+prepare_download_pkgs_txn(const gchar * const *queries,
+                          const char * source,
+                          GUnixFDList **out_fd_list,
+                          GError    **error)
 {
-  GError *local_error = NULL;
+  GUnixFDList *fd_list = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+
+  if (!queries || !*queries)
+      return glnx_throw (error, "No queries passed");
+
   OstreeSysroot *sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
   const char *osname = ostree_deployment_get_osname (booted_deployment);
-  GUnixFDList *out_fd_list = NULL;
   g_autoptr(GPtrArray) dnf_pkgs = g_ptr_array_new_with_free_func (g_object_unref);
-  DnfSack *sack = NULL;
 
   g_autoptr(OstreeDeployment) cfg_merge_deployment =
     ostree_sysroot_get_merge_deployment (sysroot, osname);
@@ -207,32 +210,25 @@ osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
   g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_client (repo);
   rpmostree_context_set_dnf_caching (ctx, RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER);
-  g_autofree char * source_name = NULL;
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us
    * with the right semantics for install/source_root. */
 
-  if (!queries || !*queries)
-    {
-      glnx_throw (&local_error, "No queries passed");
-      goto out;
-    }
+  if (!rpmostree_context_setup (ctx, NULL, origin_deployment_root, cancellable, error))
+    return glnx_prefix_error (error, "Setting up dnf context");
 
-  if (!rpmostree_context_setup (ctx, NULL, origin_deployment_root, cancellable, &local_error))
-    goto out;
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
 
   if (!rpmostree_context_download_metadata (ctx, DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB,
-                                            cancellable, &local_error))
-    goto out;
+                                            cancellable, error))
+    return glnx_prefix_error (error, "Downloading metadata");
 
-  sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
+  DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
   RpmOstreeOverrideSourceKind source_kind;
-  source_name = rpmostree_parse_override_source (source, &source_kind, &local_error);
-
-  if (local_error)
-    goto out;
+  g_autofree char * source_name = rpmostree_parse_override_source (source, &source_kind, error);
+  if (source_name == NULL)
+    return glnx_prefix_error (error, "Parsing override source kind");
 
   if (source_kind == RPM_OSTREE_OVERRIDE_SOURCE_KIND_REPO)
     {
@@ -247,52 +243,62 @@ osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
           hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, source_name);
           pkglist = hy_query_run (query);
           if (!pkglist || pkglist->len == 0)
-            {
-              glnx_throw (&local_error, "No matches for \"%s\" in repo '%s'", pkg_name, source_name);
-              goto out;
-            }
+            return glnx_prefix_error (error, "No matches for \"%s\" in repo '%s'", pkg_name, source_name);
+
           g_ptr_array_add (dnf_pkgs, g_object_ref (pkglist->pdata[0]));
         }
     }
   /* Future source kinds go here */
   else
-    {
-       glnx_throw (&local_error, "Unsupported source type: %s", source);
-       goto out;
-    }
+    return glnx_throw (error, "Unsupported source type: %s", source);
 
   rpmostree_set_repos_on_packages (rpmostree_context_get_dnf (ctx), dnf_pkgs);
 
-  if (!rpmostree_download_packages (dnf_pkgs, cancellable, &local_error))
-    goto out;
+  if (!rpmostree_download_packages (dnf_pkgs, cancellable, error))
+    return glnx_prefix_error (error, "Downloading packages");
 
-  out_fd_list = g_unix_fd_list_new ();
+  fd_list = g_unix_fd_list_new ();
   for (unsigned int i = 0;  i < dnf_pkgs->len; i++)
     {
       DnfPackage *pkg = static_cast<DnfPackage *>(dnf_pkgs->pdata[i]);
       const gchar *path = dnf_package_get_filename (pkg);
       gint fd = -1;
 
-      if (!glnx_openat_rdonly (AT_FDCWD, path, TRUE, &fd, &local_error))
-        goto out;
+      if (!glnx_openat_rdonly (AT_FDCWD, path, TRUE, &fd, error))
+        return FALSE;
 
-      if (g_unix_fd_list_append (out_fd_list, fd, &local_error) < 0)
-        goto out; 
+      if (g_unix_fd_list_append (fd_list, fd, error) < 0)
+        return FALSE;
 
-      if (!glnx_unlinkat (AT_FDCWD, path, 0, &local_error))
-        goto out;
+      if (!glnx_unlinkat (AT_FDCWD, path, 0, error))
+        return FALSE;
     }
 
-out:
+  *out_fd_list = util::move_nullify (fd_list);
+  return TRUE;
+}
 
-  if (local_error != NULL)
+static gboolean
+osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
+                                         GDBusMethodInvocation *invocation,
+                                         GUnixFDList* _fds,
+                                         const gchar * const *queries,
+                                         const char * source)
+{
+  GError *local_error = NULL;
+  GUnixFDList *fd_list = NULL;
+
+  gboolean is_ok = prepare_download_pkgs_txn (queries, source, &fd_list, &local_error);
+  if (!is_ok)
     {
+      g_assert (local_error != NULL);
       g_dbus_method_invocation_take_error (invocation, local_error);
+      return TRUE;  /* 🔚 Early return */
     }
-  else
-    {
-      rpmostree_osexperimental_complete_download_packages (interface, invocation, out_fd_list);
-    }
+
+  g_assert (fd_list != NULL);
+  rpmostree_osexperimental_complete_download_packages (interface, invocation, fd_list);
+
   return TRUE;
 }
 
