@@ -371,8 +371,4 @@ rpmostree_cxx_string_vec_to_strv (rust::Vec<rust::String> &v);
 void 
 rpmostreed_utils_tests (void);
 
-char*
-rpmostree_parse_override_source (const char *source,
-                                 RpmOstreeOverrideSourceKind *out_source_kind,
-                                 GError **error);
 G_END_DECLS

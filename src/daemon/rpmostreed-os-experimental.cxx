@@ -225,13 +225,12 @@ prepare_download_pkgs_txn(const gchar * const *queries,
     return glnx_prefix_error (error, "Downloading metadata");
 
   DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
-  RpmOstreeOverrideSourceKind source_kind;
-  g_autofree char * source_name = rpmostree_parse_override_source (source, &source_kind, error);
-  if (source_name == NULL)
-    return glnx_prefix_error (error, "Parsing override source kind");
+  auto parsed_source = CXX_TRY_VAL(parse_override_source(source), error);
+  auto source_kind = CXX_TRY_VAL(parse_override_source_kind(parsed_source[0]), error);
 
-  if (source_kind == RPM_OSTREE_OVERRIDE_SOURCE_KIND_REPO)
+  if (source_kind == rpmostreecxx::PackageOverrideSourceKind::Repo)
     {
+      const char *source_name = parsed_source[1].c_str();
       for (const char* const* it = queries; it && *it; it++)
         {
           auto pkg_name = static_cast<const char*> (*it);
@@ -250,7 +249,7 @@ prepare_download_pkgs_txn(const gchar * const *queries,
     }
   /* Future source kinds go here */
   else
-    return glnx_throw (error, "Unsupported source type: %s", source);
+    return glnx_throw (error, "Unsupported source type: %s", parsed_source[0].c_str());
 
   rpmostree_set_repos_on_packages (rpmostree_context_get_dnf (ctx), dnf_pkgs);
 
