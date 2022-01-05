@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
-use anyhow::Result;
+use anyhow::{anyhow, format_err, Result};
+use fn_error_context::context;
 use glib::prelude::*;
 use openat_ext::OpenatDirExt;
 use ostree_ext::{glib, ostree};
@@ -242,6 +243,32 @@ pub(crate) fn deployment_layeredmeta_load(
     deployment_layeredmeta_from_commit(deployment.gobj_rewrap(), commit.gobj_rewrap())
 }
 
+/// Parse kind and name for a source of package overrides.
+#[context("Parsing override source '{}'", source)]
+pub fn parse_override_source(source: &str) -> CxxResult<[String; 2]> {
+    let (kind_label, name) = source
+        .split_once('=')
+        .ok_or_else(|| format_err!("Not in KIND=NAME format"))?;
+
+    let _kind = parse_override_source_kind(kind_label)?;
+
+    if name.is_empty() {
+        return Err(anyhow!("Empty name").into());
+    }
+
+    Ok([kind_label.to_string(), name.to_string()])
+}
+
+/// Convert an override source kind label into the corresponding enum variant.
+pub fn parse_override_source_kind(
+    kind_label: &str,
+) -> CxxResult<crate::ffi::PackageOverrideSourceKind> {
+    match kind_label {
+        "repo" => Ok(crate::ffi::PackageOverrideSourceKind::Repo),
+        x => return Err(anyhow!("Invalid kind '{}'", x).into()),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -260,5 +287,20 @@ mod test {
         // that a value exists as a start.  It's *much* better in glib 0.14, but
         // porting to that is a ways away.
         assert!(vdict.lookup_value("requested-packages", None).is_some());
+    }
+
+    #[test]
+    fn test_parse_override_source() {
+        let ok_cases = [("repo=custom", ("repo", "custom"))];
+        for (input, expected) in ok_cases {
+            let out = parse_override_source(input).unwrap();
+            assert_eq!(out[0], expected.0);
+            assert_eq!(out[1], expected.1);
+        }
+
+        let err_cases = ["", "repo", "repo=", "foo=bar"];
+        for input in err_cases {
+            parse_override_source(input).unwrap_err();
+        }
     }
 }

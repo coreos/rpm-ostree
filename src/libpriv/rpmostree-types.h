@@ -43,10 +43,6 @@ typedef enum {
   RPM_OSTREE_ADVISORY_SEVERITY_LAST,
 } RpmOstreeAdvisorySeverity;
 
-typedef enum {
-  RPM_OSTREE_OVERRIDE_SOURCE_KIND_REPO,
-} RpmOstreeOverrideSourceKind;
-
 /**
  * RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT:
  *

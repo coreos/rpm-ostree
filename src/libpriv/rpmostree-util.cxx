@@ -1186,24 +1186,3 @@ rpmostree_cxx_string_vec_to_strv (rust::Vec<rust::String> &v)
   g_ptr_array_add (r, NULL);
   return (char**)g_ptr_array_free (util::move_nullify(r), FALSE);
 }
-
-/* Take a KIND=NAME string and returns the kind of kind side and
-+ * errors if the source type is unsupported */
-char*
-rpmostree_parse_override_source (const char *source,
-                                 RpmOstreeOverrideSourceKind *out_source_kind,
-                                 GError **error)
-{
-  const char *eq = strchr (source, '=');
-  if (!eq)
-    return (char*)glnx_null_throw (error, "Missing '=' in KIND=NAME source '%s'", source);
-  g_autofree char * source_kind = g_strndup (source, eq - source);
-  if (g_str_equal (source_kind, "repo"))
-    *out_source_kind = RPM_OSTREE_OVERRIDE_SOURCE_KIND_REPO;
-/* Place for future supported sources */
-  else
-    return (char*)glnx_null_throw (error, "Unsupported source type: %s", source_kind);
-  if (strlen (eq + 1) <= 0)
-    return (char*)glnx_null_throw (error, "Missing 'NAME' in KIND=NAME source '%s'", source);
-  return g_strdup (eq + 1);
-}
