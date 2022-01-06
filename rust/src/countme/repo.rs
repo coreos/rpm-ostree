@@ -16,7 +16,8 @@ pub const YUM_REPOS_D: &str = "/etc/yum.repos.d";
 /// Not exhaustive and only includes the options needed for Count Me support.
 #[derive(Debug)]
 pub struct Repo {
-    name: String,
+    // Not needed right now
+    // name: String,
     enabled: bool,
     count_me: bool,
     meta_link: String,
@@ -58,8 +59,7 @@ fn parse_repo_file(path: &PathBuf) -> Result<Vec<Repo>> {
             None => {
                 continue;
             }
-            Some(s) => Repo {
-                name: String::from(s),
+            Some(_s) => Repo {
                 enabled: false,
                 count_me: false,
                 meta_link: "".to_string(),
