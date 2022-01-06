@@ -670,6 +670,7 @@ pub mod countme;
 pub(crate) use composepost::*;
 mod core;
 use crate::core::*;
+mod capstdext;
 mod daemon;
 mod dirdiff;
 pub mod failpoint_bridge;
