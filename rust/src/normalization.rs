@@ -199,6 +199,7 @@ mod bdb_normalize {
     // Database metadata header.
     #[derive(BinRead, Debug)]
     #[br(little)]
+    #[allow(dead_code)]
     struct MetaHeader {
         lsn: u64,            // Log sequence number
         pgno: u32,           // Number of this page
@@ -233,6 +234,7 @@ mod bdb_normalize {
     // The per-header page used in both BTree and Hash databases.
     #[derive(BinRead, Debug)]
     #[br(little)]
+    #[allow(dead_code)]
     struct PageHeader {
         lsn: u64,            // Log sequence number
         pgno: u32,           // Number of this page

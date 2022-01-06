@@ -51,11 +51,13 @@ enum Opt {
     /// Perform a search of packages.
     Search {
         /// Search terms
+        #[allow(dead_code)]
         terms: Vec<String>,
     },
     /// Will return an error suggesting other approaches.
     Install {
         /// Set of packages to install
+        #[allow(dead_code)]
         packages: Vec<String>,
     },
 }
