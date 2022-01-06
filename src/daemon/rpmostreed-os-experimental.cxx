@@ -226,11 +226,10 @@ prepare_download_pkgs_txn(const gchar * const *queries,
 
   DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
   auto parsed_source = CXX_TRY_VAL(parse_override_source(source), error);
-  auto source_kind = CXX_TRY_VAL(parse_override_source_kind(parsed_source[0]), error);
 
-  if (source_kind == rpmostreecxx::PackageOverrideSourceKind::Repo)
+  if (parsed_source.kind == rpmostreecxx::PackageOverrideSourceKind::Repo)
     {
-      const char *source_name = parsed_source[1].c_str();
+      const char *source_name = parsed_source.name.c_str();
       for (const char* const* it = queries; it && *it; it++)
         {
           auto pkg_name = static_cast<const char*> (*it);
@@ -249,7 +248,7 @@ prepare_download_pkgs_txn(const gchar * const *queries,
     }
   /* Future source kinds go here */
   else
-    return glnx_throw (error, "Unsupported source type: %s", parsed_source[0].c_str());
+    return glnx_throw (error, "Unsupported source type");
 
   rpmostree_set_repos_on_packages (rpmostree_context_get_dnf (ctx), dnf_pkgs);
 
