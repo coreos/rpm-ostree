@@ -262,8 +262,9 @@ dependencies = [
 
 [[package]]
 name = "containers-image-proxy"
-version = "0.3.2"
-source = "git+https://github.com/containers/containers-image-proxy-rs#2080323d97a5bf9db160fe677a187838258b81cc"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30f3f6da50fb18bec30d07c2727edb90512512d74f97f53aa1ece0178fef7f01"
 dependencies = [
  "anyhow",
  "capctl",
@@ -548,6 +549,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87bf9e478f69f88f589c11ddc017e4ddfcfd196ee2c9a4249074c83ddf544162"
 dependencies = [
  "thiserror",
+]
+
+[[package]]
+name = "errno"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f639046355ee4f37944e44f60642c6f3a7efa3cf6b78c78a0d989a8ce6c396a1"
+dependencies = [
+ "errno-dragonfly",
+ "libc",
+ "winapi",
+]
+
+[[package]]
+name = "errno-dragonfly"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
@@ -1059,6 +1081,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-lifetimes"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6ef6787e7f0faedc040f95716bdd0e62bcfcf4ba93da053b62dea2691c13864"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1163,6 +1194,12 @@ name = "linked-hash-map"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fb9b38af92608140b86b693604b9ffcc5824240a484d1ecd4795bacb2fe88f3"
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.0.36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a261afc61b7a5e323933b402ca6a1765183687c614789b1e4db7762ed4230bca"
 
 [[package]]
 name = "lock_api"
@@ -1378,9 +1415,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
+checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
 
 [[package]]
 name = "openat"
@@ -1457,8 +1494,9 @@ dependencies = [
 
 [[package]]
 name = "ostree"
-version = "0.13.4-alpha.0"
-source = "git+https://github.com/ostreedev/ostree-rs#7ede363bb738e9872b8fbca6a28c0610e0e2dce0"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc5d16335f66a870ffe07c0c8dc0c67e4d530de3b58b08d631563bf56cb135ce"
 dependencies = [
  "bitflags",
  "gio",
@@ -1473,8 +1511,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.5.1"
-source = "git+https://github.com/ostreedev/ostree-rs-ext#4aa8de5a67a256f9ac8709ffd50d5d2e74af58f9"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1c5b5f4077b34661b3187f2517d5c7aed8d90f0433d969ce20a37955e723b9f"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1488,16 +1527,16 @@ dependencies = [
  "gvariant",
  "hex",
  "indicatif",
- "lazy_static",
  "libc",
- "nix 0.23.1",
  "oci-spec",
+ "once_cell",
  "openat",
  "openat-ext",
  "openssl",
  "ostree",
  "phf",
  "pin-project",
+ "rustix",
  "serde",
  "serde_json",
  "structopt",
@@ -1511,13 +1550,14 @@ dependencies = [
 [[package]]
 name = "ostree-sys"
 version = "0.9.1"
-source = "git+https://github.com/ostreedev/ostree-rs#7ede363bb738e9872b8fbca6a28c0610e0e2dce0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f21a33d095678ef9b32503ce042d4101477ab9a20c971d5f27e7f42d5a2bc79"
 dependencies = [
  "gio-sys",
  "glib-sys",
  "gobject-sys",
  "libc",
- "system-deps 6.0.0",
+ "system-deps 3.2.0",
 ]
 
 [[package]]
@@ -1947,6 +1987,20 @@ checksum = "63471c4aa97a1cf8332a5f97709a79a4234698de6a1f5087faf66f2dae810e22"
 dependencies = [
  "cfg-if 1.0.0",
  "ordered-multimap",
+]
+
+[[package]]
+name = "rustix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2dcfc2778a90e38f56a708bfc90572422e11d6c7ee233d053d1f782cf9df6d2"
+dependencies = [
+ "bitflags",
+ "errno",
+ "io-lifetimes",
+ "libc",
+ "linux-raw-sys",
+ "winapi",
 ]
 
 [[package]]
