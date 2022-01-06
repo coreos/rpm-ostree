@@ -241,6 +241,12 @@ pub mod ffi {
         Repo,
     }
 
+    #[derive(Debug)]
+    struct PackageOverrideSource {
+        kind: PackageOverrideSourceKind,
+        name: String,
+    }
+
     // daemon.rs
     extern "Rust" {
         fn daemon_sanitycheck_environment(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
@@ -258,8 +264,7 @@ pub mod ffi {
             mut repo: Pin<&mut OstreeRepo>,
             mut deployment: Pin<&mut OstreeDeployment>,
         ) -> Result<DeploymentLayeredMeta>;
-        fn parse_override_source(source: &str) -> Result<[String; 2]>;
-        fn parse_override_source_kind(kind_label: &str) -> Result<PackageOverrideSourceKind>;
+        fn parse_override_source(source: &str) -> Result<PackageOverrideSource>;
     }
 
     // failpoint_bridge.rs

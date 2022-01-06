@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
+use crate::ffi::{PackageOverrideSource, PackageOverrideSourceKind};
 use anyhow::{anyhow, format_err, Result};
 use fn_error_context::context;
 use glib::prelude::*;
@@ -245,28 +246,24 @@ pub(crate) fn deployment_layeredmeta_load(
 
 /// Parse kind and name for a source of package overrides.
 #[context("Parsing override source '{}'", source)]
-pub fn parse_override_source(source: &str) -> CxxResult<[String; 2]> {
+pub fn parse_override_source(source: &str) -> CxxResult<PackageOverrideSource> {
     let (kind_label, name) = source
         .split_once('=')
         .ok_or_else(|| format_err!("Not in KIND=NAME format"))?;
 
-    let _kind = parse_override_source_kind(kind_label)?;
+    let kind = match kind_label {
+        "repo" => PackageOverrideSourceKind::Repo,
+        x => return Err(anyhow!("Invalid kind '{}'", x).into()),
+    };
 
     if name.is_empty() {
         return Err(anyhow!("Empty name").into());
     }
 
-    Ok([kind_label.to_string(), name.to_string()])
-}
-
-/// Convert an override source kind label into the corresponding enum variant.
-pub fn parse_override_source_kind(
-    kind_label: &str,
-) -> CxxResult<crate::ffi::PackageOverrideSourceKind> {
-    match kind_label {
-        "repo" => Ok(crate::ffi::PackageOverrideSourceKind::Repo),
-        x => return Err(anyhow!("Invalid kind '{}'", x).into()),
-    }
+    Ok(PackageOverrideSource {
+        kind,
+        name: name.to_string(),
+    })
 }
 
 #[cfg(test)]
@@ -291,11 +288,11 @@ mod test {
 
     #[test]
     fn test_parse_override_source() {
-        let ok_cases = [("repo=custom", ("repo", "custom"))];
+        let ok_cases = [("repo=custom", (PackageOverrideSourceKind::Repo, "custom"))];
         for (input, expected) in ok_cases {
             let out = parse_override_source(input).unwrap();
-            assert_eq!(out[0], expected.0);
-            assert_eq!(out[1], expected.1);
+            assert_eq!(out.kind, expected.0);
+            assert_eq!(out.name, expected.1);
         }
 
         let err_cases = ["", "repo", "repo=", "foo=bar"];
