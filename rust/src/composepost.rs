@@ -6,9 +6,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::bwrap::Bubblewrap;
+use crate::capstdext::{dirbuilder_from_mode, perms_from_mode, CapStdDirExt};
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
-use crate::ffiutil::ffi_view_openat_dir;
+use crate::ffiutil::{ffi_dirfd, ffi_view_openat_dir};
 use crate::normalization;
 use crate::passwd::PasswdDB;
 use crate::treefile::Treefile;
@@ -18,7 +19,6 @@ use camino::Utf8Path;
 use fn_error_context::context;
 use gio::prelude::*;
 use gio::FileType;
-use nix::sys::stat::Mode;
 use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib};
 use rayon::prelude::*;
@@ -42,9 +42,9 @@ const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
 pub(crate) const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
 
 #[context("Moving {}", name)]
-fn dir_move_if_exists(src: &openat::Dir, dest: &openat::Dir, name: &str) -> Result<()> {
-    if src.exists(name)? {
-        openat::rename(src, name, dest, name)?;
+fn dir_move_if_exists(src: &cap_std::fs::Dir, dest: &cap_std::fs::Dir, name: &str) -> Result<()> {
+    if src.symlink_metadata(name).is_ok() {
+        src.rename(name, dest, name)?;
     }
     Ok(())
 }
@@ -54,15 +54,12 @@ fn dir_move_if_exists(src: &openat::Dir, dest: &openat::Dir, name: &str) -> Resu
 /// This is hardcoded; in the future we may make more things configurable,
 /// but the goal is for all state to be in `/etc` and `/var`.
 #[context("Initializing rootfs")]
-fn compose_init_rootfs(rootfs_dfd: &openat::Dir, tmp_is_dir: bool) -> Result<()> {
-    use nix::fcntl::OFlag;
+fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Result<()> {
     println!("Initializing rootfs");
 
-    let default_dirmode = Mode::from_bits(0o755).unwrap();
-
-    // Unfortunately fchmod() doesn't operate on an O_PATH descriptor
-    let flag = OFlag::O_DIRECTORY | OFlag::O_CLOEXEC;
-    let nix_rootfs = nix::dir::Dir::openat(rootfs_dfd.as_raw_fd(), ".", flag, default_dirmode)?;
+    let default_dirmode: u32 = 0o755;
+    let default_dirbuilder = &dirbuilder_from_mode(default_dirmode);
+    let default_dirmode = perms_from_mode(default_dirmode);
 
     const TOPLEVEL_DIRS: &[&str] = &["dev", "proc", "run", "sys", "var", "sysroot"];
     const TOPLEVEL_SYMLINKS: &[(&str, &str)] = &[
@@ -75,26 +72,32 @@ fn compose_init_rootfs(rootfs_dfd: &openat::Dir, tmp_is_dir: bool) -> Result<()>
         ("sysroot/ostree", "ostree"),
     ];
 
-    nix::sys::stat::fchmod(nix_rootfs.as_raw_fd(), default_dirmode).context("rootfs chmod")?;
+    rootfs_dfd
+        .set_permissions(".", default_dirmode.clone())
+        .context("Setting rootdir permissions")?;
 
-    TOPLEVEL_DIRS
-        .par_iter()
-        .try_for_each(|&d| rootfs_dfd.ensure_dir(d, default_dirmode.bits()))?;
-    TOPLEVEL_SYMLINKS
-        .par_iter()
-        .try_for_each(|&(dest, src)| rootfs_dfd.symlink(src, dest))?;
+    TOPLEVEL_DIRS.par_iter().try_for_each(|&d| {
+        rootfs_dfd
+            .ensure_dir_with(d, default_dirbuilder)
+            .with_context(|| format!("Creating {}", d))
+            .map(|_: bool| ())
+    })?;
+    TOPLEVEL_SYMLINKS.par_iter().try_for_each(|&(dest, src)| {
+        rootfs_dfd
+            .symlink(dest, src)
+            .with_context(|| format!("Creating {}", src))
+    })?;
 
     if tmp_is_dir {
         let tmp_mode = 0o1777;
-        rootfs_dfd.ensure_dir("tmp", tmp_mode)?;
-        nix::sys::stat::fchmodat(
-            Some(nix_rootfs.as_raw_fd()),
-            "tmp",
-            Mode::from_bits(tmp_mode).unwrap(),
-            nix::sys::stat::FchmodatFlags::FollowSymlink,
-        )?;
+        rootfs_dfd
+            .ensure_dir_with("tmp", &dirbuilder_from_mode(tmp_mode))
+            .context("tmp")?;
+        rootfs_dfd
+            .set_permissions("tmp", perms_from_mode(tmp_mode))
+            .with_context(|| format!("Setting permissions for tmp"))?;
     } else {
-        rootfs_dfd.symlink("tmp", "sysroot/tmp")?;
+        rootfs_dfd.symlink("sysroot/tmp", "tmp")?;
     }
 
     Ok(())
@@ -112,14 +115,14 @@ pub fn compose_prepare_rootfs(
     target_rootfs_dfd: i32,
     treefile: &mut Treefile,
 ) -> CxxResult<()> {
-    let src_rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(src_rootfs_dfd);
-    let target_rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(target_rootfs_dfd);
+    let src_rootfs_dfd = unsafe { &ffi_dirfd(src_rootfs_dfd)? };
+    let target_rootfs_dfd = unsafe { &ffi_dirfd(target_rootfs_dfd)? };
 
     let tmp_is_dir = treefile.parsed.tmp_is_dir.unwrap_or_default();
     compose_init_rootfs(target_rootfs_dfd, tmp_is_dir)?;
 
     println!("Moving /usr to target");
-    openat::rename(src_rootfs_dfd, "usr", target_rootfs_dfd, "usr")?;
+    src_rootfs_dfd.rename("usr", target_rootfs_dfd, "usr")?;
     /* The kernel may be in the source rootfs /boot; to handle that, we always
      * rename the source /boot to the target, and will handle everything after
      * that in the target root.
@@ -1163,19 +1166,17 @@ OSTREE_VERSION='33.4'
     #[test]
     fn test_init_rootfs() -> Result<()> {
         {
-            let t = tempfile::tempdir()?;
-            let rootfs = &openat::Dir::open(t.path())?;
-            compose_init_rootfs(rootfs, false)?;
+            let rootfs = cap_tempfile::tempdir(cap_tempfile::ambient_authority())?;
+            compose_init_rootfs(&rootfs, false)?;
             let target = rootfs.read_link("tmp").unwrap();
             assert_eq!(target, Path::new("sysroot/tmp"));
         }
         {
-            let t = tempfile::tempdir()?;
-            let rootfs = &openat::Dir::open(t.path())?;
-            compose_init_rootfs(rootfs, true)?;
+            let rootfs = cap_tempfile::tempdir(cap_tempfile::ambient_authority())?;
+            compose_init_rootfs(&rootfs, true)?;
             let tmpdir_meta = rootfs.metadata("tmp").unwrap();
             assert!(tmpdir_meta.is_dir());
-            assert_eq!(tmpdir_meta.stat().st_mode & 0o7777, 0o1777);
+            assert_eq!(tmpdir_meta.permissions().mode() & 0o7777, 0o1777);
         }
         Ok(())
     }
