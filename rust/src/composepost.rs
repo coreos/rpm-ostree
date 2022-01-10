@@ -1184,7 +1184,7 @@ OSTREE_VERSION='33.4'
     #[test]
     fn test_tmpfiles_d_translation() {
         use nix::sys::stat::{umask, Mode};
-        use nix::unistd::{getegid, geteuid};
+        use rustix::process::{getegid, geteuid};
 
         // Prepare a minimal rootfs as playground.
         umask(Mode::empty());
@@ -1201,14 +1201,18 @@ OSTREE_VERSION='33.4'
                 .write_file_contents(
                     "usr/etc/passwd",
                     0o755,
-                    format!("test-user:x:{}:{}:::", geteuid(), getegid()),
+                    format!(
+                        "test-user:x:{}:{}:::",
+                        geteuid().as_raw(),
+                        getegid().as_raw()
+                    ),
                 )
                 .unwrap();
             rootfs
                 .write_file_contents(
                     "usr/etc/group",
                     0o755,
-                    format!("test-group:x:{}:", getegid()),
+                    format!("test-group:x:{}:", getegid().as_raw()),
                 )
                 .unwrap();
         }

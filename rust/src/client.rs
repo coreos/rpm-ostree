@@ -159,7 +159,7 @@ pub(crate) fn client_handle_fd_argument(arg: &str, arch: &str) -> CxxResult<Vec<
 pub(crate) fn client_start_daemon() -> CxxResult<()> {
     let service = "rpm-ostreed.service";
     // Assume non-root can't use systemd right now.
-    if !nix::unistd::getuid().is_root() {
+    if rustix::process::getuid().as_raw() != 0 {
         return Ok(());
     }
     let res = Command::new("systemctl")

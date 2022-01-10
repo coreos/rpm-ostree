@@ -4,7 +4,6 @@
 
 use anyhow::{bail, Context, Result};
 use curl::easy::Easy;
-use nix::unistd::geteuid;
 use os_release::OsRelease;
 use std::path;
 
@@ -42,7 +41,7 @@ pub fn entrypoint(_args: &[&str]) -> Result<()> {
     }
 
     // Skip if we are not running with an unprivileged user
-    if geteuid().is_root() {
+    if rustix::process::geteuid().as_raw() == 0 {
         bail!("Must run under an unprivileged user");
     }
 
