@@ -584,6 +584,16 @@ pub fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
     Ok(())
 }
 
+/// Go over `/var` in the rootfs and convert them to tmpfiles.d entries. Only directories and
+/// symlinks are handled. rpm-ostree itself creates some symlinks for various reasons.
+///
+/// In the non-unified core path, conversion is necessary to ensure that (1) any subdirs/symlinks
+/// from the RPM itself and (2) any subdirs/symlinks from scriptlets will be created on first boot.
+/// In the unified core path, (1) is handled by the importer, and (2) is blocked by bwrap, so it's
+/// really just for rpm-ostree-created bits itself.
+///
+/// In theory, once we drop non-unified core support, we should be able to drop this and make those
+/// few rpm-ostree compat symlinks just directly write tmpfiles.d dropins.
 pub fn convert_var_to_tmpfiles_d(
     rootfs_dfd: i32,
     mut cancellable: Pin<&mut crate::FFIGCancellable>,
@@ -660,7 +670,8 @@ fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>)
     Ok(())
 }
 
-/// Recursively explore target directory and translate content to tmpfiles.d entries.
+/// Recursively explore target directory and translate content to tmpfiles.d entries. See
+/// `convert_var_to_tmpfiles_d` for more background.
 ///
 /// This proceeds depth-first and progressively deletes translated subpaths as it goes.
 /// `prefix` is updated at each recursive step, so that in case of errors it can be
