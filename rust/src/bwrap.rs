@@ -229,7 +229,7 @@ impl Bubblewrap {
          *
          * Also this way we drop out any new capabilities that appear.
          */
-        if nix::unistd::getuid() == nix::unistd::Uid::from_raw(0) {
+        if rustix::process::getuid().as_raw() == 0 {
             argv.extend(&["--cap-drop", "ALL"]);
             for cap in ADDED_CAPABILITIES {
                 argv.push("--cap-add");

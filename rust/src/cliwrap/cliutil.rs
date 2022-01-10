@@ -21,7 +21,7 @@ pub fn is_unlocked() -> Result<bool> {
 
 /// Returns true if the current process is running as root.
 pub fn am_privileged() -> bool {
-    nix::unistd::getuid() == nix::unistd::Uid::from_raw(0)
+    rustix::process::getuid().as_raw() == 0
 }
 
 /// Return the absolute path to the underlying wrapped binary
