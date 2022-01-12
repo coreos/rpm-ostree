@@ -8,7 +8,7 @@ dn=$(cd "$(dirname "$0")" && pwd)
 # Add a local rpm-md repo so we can mutate local test packages
 treefile_append "repos" '["test-repo"]'
 # test `recommends: false` (test-misc-tweaks tests the true path)
-build_rpm foobar recommends foobar-rec
+build_rpm foobar recommends foobar-rec post "test -f /run/ostree-booted"
 build_rpm foobar-rec
 
 # check that even a modular version of a pinned pkg is ignored, even if it's
