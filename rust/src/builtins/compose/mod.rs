@@ -11,11 +11,15 @@ use openat_ext::OpenatDirExt;
 use std::ffi::{CStr, CString};
 use std::io::{self, Read};
 
-/// Prepare /dev in the target root with the API devices.
+use crate::core::OSTREE_BOOTED;
+
+/// Prepare /dev and /run in the target root with the API devices.
 // TODO: delete this when we implement https://github.com/projectatomic/rpm-ostree/issues/729
-pub fn composeutil_legacy_prep_dev(rootfs_dfd: i32) -> CxxResult<()> {
+pub fn composeutil_legacy_prep_dev_and_run(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
     legacy_prepare_dev(&rootfs)?;
+    rootfs.create_dir("run", 0o755)?;
+    rootfs.write_file(&OSTREE_BOOTED[1..], 0o755)?;
     Ok(())
 }
 

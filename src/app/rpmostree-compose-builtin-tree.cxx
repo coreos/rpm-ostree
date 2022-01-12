@@ -492,7 +492,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
       glnx_console_lock (&console);
 
-      CXX_TRY(composeutil_legacy_prep_dev(rootfs_dfd), error);
+      CXX_TRY(composeutil_legacy_prep_dev_and_run(rootfs_dfd), error);
 
       if (!dnf_transaction_commit (dnf_context_get_transaction (dnfctx),
                                    dnf_context_get_goal (dnfctx),
