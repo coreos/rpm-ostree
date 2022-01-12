@@ -72,7 +72,7 @@ serde_yaml = "0.8.23"
 structopt = "0.3.25"
 subprocess = "0.2.8"
 systemd = "0.10.0"
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1.15.0", features = ["full"] }
