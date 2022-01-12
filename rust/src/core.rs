@@ -27,6 +27,8 @@ const SSS_CACHE_PATH: &str = "usr/sbin/sss_cache";
 const SYSTEMCTL_PATH: &str = "usr/bin/systemctl";
 const SYSTEMCTL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/systemctl-wrapper.sh");
 
+pub(crate) const OSTREE_BOOTED: &str = "/run/ostree-booted";
+
 /// Guard for running logic in a context with temporary /etc.
 ///
 /// We have a messy dance in dealing with /usr/etc and /etc; the

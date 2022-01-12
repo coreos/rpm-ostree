@@ -7,9 +7,11 @@ use std::{path, thread, time};
 
 use crate::cliwrap;
 
+use crate::core::OSTREE_BOOTED;
+
 /// Returns true if the current process is booted via ostree.
 pub fn is_ostree_booted() -> bool {
-    path::Path::new("/run/ostree-booted").exists()
+    path::Path::new(OSTREE_BOOTED).exists()
 }
 
 /// Returns true if /usr is not a read-only bind mount
