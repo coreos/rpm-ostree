@@ -1688,15 +1688,33 @@ find_locked_packages (RpmOstreeContext *self,
         }
       if (!at_least_one)
         {
+          // Cast our net wider to find all packages matching the name and architecture
+          hy_autoquery HyQuery query = hy_query_create (sack);
+          hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg.name.c_str());
+          if (pkg.arch.length() > 0)
+            hy_query_filter (query, HY_PKG_ARCH, HY_EQ, pkg.arch.c_str());
+          g_autoptr(GPtrArray) other_matches = hy_query_run (query);
+          g_autoptr(GString) other_matches_txt = g_string_new ("");
+          if (other_matches->len > 0)
+            {
+              g_string_append_printf (other_matches_txt, "  Packages matching name and arch (%u):\n", other_matches->len);
+            }
+          else
+            g_string_append_printf (other_matches_txt, "  No packages matched name: %s arch: %s", pkg.name.c_str(), pkg.arch.c_str());
+          for (guint i = 0; i < other_matches->len; i++)
+            {
+              auto match = static_cast<DnfPackage *>(other_matches->pdata[i]);
+              g_string_append_printf (other_matches_txt, "  %s (%s)\n", dnf_package_get_nevra (match), dnf_package_get_reponame (match));
+            }
           g_autofree char *spec =
             g_strdup_printf ("%s-%s%s%s", pkg.name.c_str(), pkg.evr.c_str(),
                              pkg.arch.length() > 0 ? "." : "",
                              pkg.arch.length() > 0 ? pkg.arch.c_str() : "");
           return glnx_throw (error, "Couldn't find locked package '%s'%s%s "
-                                    "(pkgs matching NEVRA: %d; mismatched checksums: %d)",
+                                    "(pkgs matching NEVRA: %d; mismatched checksums: %d)\n%s",
                              spec, pkg.digest.length() > 0 ? " with checksum " : "",
                              pkg.digest.length() > 0 ? pkg.digest.c_str() : "",
-                             matches->len, n_checksum_mismatches);
+                             matches->len, n_checksum_mismatches, other_matches_txt->str);
         }
     }
 
