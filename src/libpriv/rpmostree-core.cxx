@@ -1696,15 +1696,14 @@ find_locked_packages (RpmOstreeContext *self,
           g_autoptr(GPtrArray) other_matches = hy_query_run (query);
           g_autoptr(GString) other_matches_txt = g_string_new ("");
           if (other_matches->len > 0)
-            {
-              g_string_append_printf (other_matches_txt, "  Packages matching name and arch (%u):\n", other_matches->len);
-            }
+            g_string_append_printf (other_matches_txt, "  Packages matching name and arch (%u):\n", other_matches->len);
           else
             g_string_append_printf (other_matches_txt, "  No packages matched name: %s arch: %s", pkg.name.c_str(), pkg.arch.c_str());
           for (guint i = 0; i < other_matches->len; i++)
             {
               auto match = static_cast<DnfPackage *>(other_matches->pdata[i]);
-              g_string_append_printf (other_matches_txt, "  %s (%s)\n", dnf_package_get_nevra (match), dnf_package_get_reponame (match));
+              g_string_append_printf (other_matches_txt, "  %s (%s)\n",
+                dnf_package_get_nevra (match), dnf_package_get_reponame (match));
             }
           g_autofree char *spec =
             g_strdup_printf ("%s-%s%s%s", pkg.name.c_str(), pkg.evr.c_str(),
