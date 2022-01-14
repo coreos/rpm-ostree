@@ -4,7 +4,7 @@
 
 use crate::cxxrsutil::*;
 use crate::utils;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
 use std::os::unix::io::IntoRawFd;
@@ -246,7 +246,8 @@ pub(crate) fn microdnf_install(args: Vec<String>) -> Result<()> {
         .arg("install")
         .arg("-y")
         .args(&args)
-        .status()?;
+        .status()
+        .context("Failed to spawn `microdnf`")?;
     if !microdnf_status.success() {
         return Err(anyhow!(
             "Failure installing {:?}, microdnf failed with: {:?}",
