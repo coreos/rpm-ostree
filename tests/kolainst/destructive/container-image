@@ -32,6 +32,7 @@ image_dir=/var/tmp/fcos
 image=oci:$image_dir
 image_pull=ostree-unverified-image:$image
 tmp_imagedir=/var/tmp/fcos-tmp
+arch=$(arch)
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   "")
@@ -99,10 +100,23 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     rpm-ostree ex-container 'export' --repo=/ostree/repo ${checksum} "${image}"
     # https://github.com/ostreedev/ostree-rs-ext/issues/153
     skopeo copy $image containers-storage:localhost/fcos
+    rm "${image_dir}" -rf
     td=$(mktemp -d)
     cd ${td}
+    arch=$(arch)
+    # TODO close race here around webserver readiness
+    (cd ${KOLA_EXT_DATA}/rpm-repos/0 && ~core/kolet httpd) &
+    while !curl -q http://127.0.0.1; do sleep 1; done
+    cat >local.repo << 'EOF'
+[local]
+gpgcheck=0
+baseurl=http://127.0.0.1
+EOF
 cat > Dockerfile << 'EOF'
 FROM localhost/fcos
+RUN rm -rf /etc/yum.repos.d/*  # Ensure we work offline
+ADD local.repo /etc/yum.repos.d/
+RUN rpm-ostree install bar
 RUN echo some config file > /etc/someconfig.conf
 RUN echo somedata > /usr/share/somenewdata
 EOF
@@ -116,7 +130,8 @@ EOF
   3) 
     grep -qF 'some config file' /etc/someconfig.conf || (echo missing someconfig.conf; exit 1)
     grep -qF somedata /usr/share/somenewdata || (echo missing somenewdata; exit 1)
-      
+    assert_streq $(rpm -q bar) bar-1.0-1.${arch}
+    test -f /usr/bin/bar
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:derived\""
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
