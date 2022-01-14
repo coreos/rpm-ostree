@@ -148,6 +148,50 @@ set_rpm_macro_define (const char *key, const char *value)
   free (rpmExpand (buf, NULL));
 }
 
+// Wrapper which creates a DnfContext with our cache paths and configuration.
+DnfContext *
+rpmostree_core_new_dnfctx (void)
+{
+  DnfContext *dnfctx = dnf_context_new ();
+  /* We can always be control-c'd at any time; this is new API,
+   * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
+   * various places.
+   */
+  rpmsqSetInterruptSafety (FALSE);
+
+  DECLARE_RPMSIGHANDLER_RESET;
+  dnf_context_set_http_proxy (dnfctx, g_getenv ("http_proxy"));
+
+  dnf_context_set_repo_dir (dnfctx, "/etc/yum.repos.d");
+  dnf_context_set_cache_dir (dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
+  dnf_context_set_solv_dir (dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
+  dnf_context_set_lock_dir (dnfctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
+  dnf_context_set_user_agent (dnfctx, PACKAGE_NAME "/" PACKAGE_VERSION);
+  /* don't need SWDB: https://github.com/rpm-software-management/libdnf/issues/645 */
+  dnf_context_set_write_history (dnfctx, FALSE);
+
+  dnf_context_set_check_disk_space (dnfctx, FALSE);
+  dnf_context_set_check_transaction (dnfctx, FALSE);
+
+  /* we don't need any plugins */
+  dnf_context_set_plugins_dir (dnfctx, NULL);
+
+  /* Force disable internal libdnf Count Me logic */
+  dnf_conf_add_setopt("*.countme", DNF_CONF_COMMANDLINE, "false", NULL);
+
+  /* Hack until libdnf+librepo know how to better negotaiate zchunk.
+   * see also the bits in configure.ac that define HAVE_ZCHUNK
+   **/
+#ifndef HAVE_ZCHUNK
+  dnf_context_set_zchunk (dnfctx, FALSE);
+#endif
+
+  /* The rpmdb is at /usr/share/rpm */
+  dnf_context_set_rpm_macro (dnfctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
+
+  return dnfctx;
+}
+
 /* Low level API to create a context.  Avoid this in preference
  * to creating a client or compose context unless necessary.
  */
@@ -158,43 +202,7 @@ rpmostree_context_new_base (OstreeRepo   *repo)
 
   auto self = static_cast<RpmOstreeContext*>(g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL));
   self->ostreerepo = static_cast<OstreeRepo*>(g_object_ref (repo));
-
-  /* We can always be control-c'd at any time; this is new API,
-   * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
-   * various places.
-   */
-  rpmsqSetInterruptSafety (FALSE);
-
-  self->dnfctx = dnf_context_new ();
-  DECLARE_RPMSIGHANDLER_RESET;
-  dnf_context_set_http_proxy (self->dnfctx, g_getenv ("http_proxy"));
-
-  dnf_context_set_repo_dir (self->dnfctx, "/etc/yum.repos.d");
-  dnf_context_set_cache_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
-  dnf_context_set_solv_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
-  dnf_context_set_lock_dir (self->dnfctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
-  dnf_context_set_user_agent (self->dnfctx, PACKAGE_NAME "/" PACKAGE_VERSION);
-  /* don't need SWDB: https://github.com/rpm-software-management/libdnf/issues/645 */
-  dnf_context_set_write_history (self->dnfctx, FALSE);
-
-  dnf_context_set_check_disk_space (self->dnfctx, FALSE);
-  dnf_context_set_check_transaction (self->dnfctx, FALSE);
-
-  /* we don't need any plugins */
-  dnf_context_set_plugins_dir (self->dnfctx, NULL);
-
-  /* Force disable internal libdnf Count Me logic */
-  dnf_conf_add_setopt("*.countme", DNF_CONF_COMMANDLINE, "false", NULL);
-
-  /* Hack until libdnf+librepo know how to better negotaiate zchunk.
-   * see also the bits in configure.ac that define HAVE_ZCHUNK
-   **/
-#ifndef HAVE_ZCHUNK
-  dnf_context_set_zchunk (self->dnfctx, FALSE);
-#endif
-
-  /* The rpmdb is at /usr/share/rpm */
-  dnf_context_set_rpm_macro (self->dnfctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
+  self->dnfctx = rpmostree_core_new_dnfctx ();
 
   return self;
 }

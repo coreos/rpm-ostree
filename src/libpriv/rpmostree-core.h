@@ -74,6 +74,8 @@ namespace rpmostreecxx {
 void core_libdnf_process_global_init();
 }
 
+DnfContext * rpmostree_core_new_dnfctx (void);
+
 RpmOstreeContext *rpmostree_context_new_base (OstreeRepo   *repo);
 
 RpmOstreeContext *rpmostree_context_new_client (OstreeRepo   *repo);

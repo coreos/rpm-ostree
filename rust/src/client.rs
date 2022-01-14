@@ -236,27 +236,6 @@ pub(crate) fn client_render_download_progress(
     }
 }
 
-/// Install packages live into the running root filesystem.
-/// This is only intended for use as part of a container builds.
-/// For now, we fork/exec microdnf because this is exactly what its
-/// main use case is, but in the future we may change the rpm-ostree code
-/// to handle this more directly.
-pub(crate) fn microdnf_install(args: Vec<String>) -> Result<()> {
-    let microdnf_status = Command::new(microdnf_location())
-        .arg("install")
-        .arg("-y")
-        .args(&args)
-        .status()?;
-    if !microdnf_status.success() {
-        return Err(anyhow!(
-            "Failure installing {:?}, microdnf failed with: {:?}",
-            args,
-            microdnf_status
-        ));
-    }
-    Ok(())
-}
-
 /// Clean up /var/cache/yum/ which so it's not attemped to be
 /// copied to the next container layer. Without calling this
 /// we would see various non-fatal errors during a container build.

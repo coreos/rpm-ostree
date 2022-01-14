@@ -24,6 +24,7 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-core.h"
 #include "rpmostree-clientlib.h"
 
 #include <libglnx.h>
@@ -70,6 +71,27 @@ static GOptionEntry install_option_entry[] = {
   { "force-replacefiles", 0, 0, G_OPTION_ARG_NONE, &opt_force_replacefiles, "Allow package to replace files from other packages", NULL },
   { NULL }
 };
+
+static gboolean
+install_in_container (int argc, char **argv, GError **error)
+{
+  DnfContext *ctx = rpmostree_core_new_dnfctx ();
+  g_autoptr(DnfState) hifstate = dnf_state_new ();
+  if (!dnf_context_setup (ctx, NULL, error))
+     return FALSE;
+  for (int i = 0; i < argc; i++)
+    {
+      const char *pkg = argv[i];
+      if (!dnf_context_install (ctx, pkg, error))
+        return FALSE;
+    }
+  if (!dnf_goal_depsolve (dnf_context_get_goal (ctx), DNF_INSTALL, error))
+    return FALSE;
+  rpmostree_print_transaction (ctx);
+  if (!dnf_context_run (ctx, NULL, error))
+    return FALSE;
+  return TRUE;
+}
 
 static gboolean
 pkg_change (RpmOstreeCommandInvocation *invocation,
@@ -194,15 +216,11 @@ rpmostree_builtin_install (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
+  // Special case `rpm-ostree install` in an ostree-native container.
+  // xref https://fedoraproject.org/wiki/Changes/OstreeNativeContainer
   auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
   if (is_ostree_container)
-    {
-      auto argv_rust = rust::Vec<rust::String>();
-        for (int i = 0; i < argc; i++)
-          argv_rust.push_back(rust::String(argv[i]));
-      CXX_TRY(microdnf_install(argv_rust), error);
-      return TRUE;
-    }
+    return install_in_container (argc, argv, error);
 
   return pkg_change (invocation, sysroot_proxy,
                      (const char *const*)argv,
