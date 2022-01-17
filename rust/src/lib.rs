@@ -247,6 +247,18 @@ pub mod ffi {
         name: String,
     }
 
+    #[derive(Debug)]
+    enum ParsedRevisionKind {
+        Version,
+        Checksum,
+    }
+
+    #[derive(Debug)]
+    struct ParsedRevision {
+        kind: ParsedRevisionKind,
+        value: String,
+    }
+
     // daemon.rs
     extern "Rust" {
         fn daemon_sanitycheck_environment(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
@@ -265,6 +277,7 @@ pub mod ffi {
             mut deployment: Pin<&mut OstreeDeployment>,
         ) -> Result<DeploymentLayeredMeta>;
         fn parse_override_source(source: &str) -> Result<PackageOverrideSource>;
+        fn parse_revision(source: &str) -> Result<ParsedRevision>;
     }
 
     // failpoint_bridge.rs
