@@ -5,7 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
-use crate::ffi::{PackageOverrideSource, PackageOverrideSourceKind};
+use crate::ffi::{
+    PackageOverrideSource, PackageOverrideSourceKind, ParsedRevision, ParsedRevisionKind,
+};
 use anyhow::{anyhow, format_err, Result};
 use fn_error_context::context;
 use glib::prelude::*;
@@ -266,6 +268,51 @@ pub fn parse_override_source(source: &str) -> CxxResult<PackageOverrideSource> {
     })
 }
 
+/// Parse a revision (either a SHA256 checksum or a version metadata value).
+///
+/// This determines `revision` to either be a SHA256 checksum or a version
+/// metadata value, and then returns the parsed value.
+///
+/// The input string may have a "revision=" prefix to denote a SHA256
+/// checksum, or a "version=" prefix to denote a version metadata value.  If
+/// the `revision` string lacks either prefix, the function attempts to infer
+/// the type of revision. The prefixes are case-insensitive.
+#[context("Parsing revision '{}'", revision)]
+pub fn parse_revision(revision: &str) -> CxxResult<ParsedRevision> {
+    // Check for an explicit prefix first.
+    if let Some((key, value)) = revision.split_once('=') {
+        let prefix = key.to_ascii_lowercase();
+        if prefix == "revision" {
+            // Since this claims to be a checksum, fail if it isn't.
+            ostree::validate_checksum_string(value)?;
+
+            return Ok(ParsedRevision {
+                kind: ParsedRevisionKind::Checksum,
+                value: value.to_string(),
+            });
+        } else if prefix == "version" {
+            return Ok(ParsedRevision {
+                kind: ParsedRevisionKind::Version,
+                value: value.to_string(),
+            });
+        }
+    };
+
+    // If it looks like a checksum, assume it is.
+    if ostree::validate_checksum_string(revision).is_ok() {
+        return Ok(ParsedRevision {
+            kind: ParsedRevisionKind::Checksum,
+            value: revision.to_string(),
+        });
+    };
+
+    // Treat anything else as a version metadata value.
+    Ok(ParsedRevision {
+        kind: ParsedRevisionKind::Version,
+        value: revision.to_string(),
+    })
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -296,6 +343,47 @@ mod test {
         }
 
         let err_cases = ["", "repo", "repo=", "foo=bar"];
+        for input in err_cases {
+            parse_override_source(input).unwrap_err();
+        }
+    }
+
+    #[test]
+    fn test_parse_revision() {
+        let ok_cases = [
+            (
+                "revision=078eea7e710630c0c8aec1071d3529fc307d8772f2ca3435fdc947a39c5a12bf",
+                (
+                    ParsedRevisionKind::Checksum,
+                    "078eea7e710630c0c8aec1071d3529fc307d8772f2ca3435fdc947a39c5a12bf",
+                ),
+            ),
+            (
+                "078eea7e710630c0c8aec1071d3529fc307d8772f2ca3435fdc947a39c5a12bf",
+                (
+                    ParsedRevisionKind::Checksum,
+                    "078eea7e710630c0c8aec1071d3529fc307d8772f2ca3435fdc947a39c5a12bf",
+                ),
+            ),
+            (
+                "version=078eea7e710630c0c8aec1071d3529fc307d8772f2ca3435fdc947a39c5a12bf",
+                (
+                    ParsedRevisionKind::Version,
+                    "078eea7e710630c0c8aec1071d3529fc307d8772f2ca3435fdc947a39c5a12bf",
+                ),
+            ),
+            ("version=foo", (ParsedRevisionKind::Version, "foo")),
+            ("version=", (ParsedRevisionKind::Version, "")),
+            ("foo", (ParsedRevisionKind::Version, "foo")),
+            ("", (ParsedRevisionKind::Version, "")),
+        ];
+        for (input, expected) in ok_cases {
+            let out = parse_revision(input).unwrap();
+            assert_eq!(out.kind, expected.0);
+            assert_eq!(out.value, expected.1);
+        }
+
+        let err_cases = ["revision=", "revision=bar"];
         for input in err_cases {
             parse_override_source(input).unwrap_err();
         }

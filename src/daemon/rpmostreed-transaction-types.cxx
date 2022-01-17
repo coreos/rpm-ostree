@@ -190,6 +190,9 @@ apply_revision_override (RpmostreedTransaction    *transaction,
   RpmOstreeRefspecType refspectype;
   rpmostree_origin_classify_refspec (origin, &refspectype, NULL);
 
+  if (revision == NULL)
+    return glnx_throw (error, "Missing revision");
+
   if (refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
     return glnx_throw (error, "Cannot look up version while pinned to commit");
 
@@ -198,43 +201,29 @@ apply_revision_override (RpmostreedTransaction    *transaction,
      * possibly be a tag or digest */
     return glnx_throw (error, "Cannot look up version while tracking a container image reference");
 
-  g_autofree char *checksum = NULL;
-  g_autofree char *version = NULL;
-  if (!rpmostreed_parse_revision (revision, &checksum, &version, error))
-    return FALSE;
+  if (refspectype != RPMOSTREE_REFSPEC_TYPE_OSTREE)
+    return glnx_throw (error, "Invalid refspec type");
 
-  if (version != NULL)
+  auto parsed_revision = CXX_TRY_VAL(parse_revision(revision), error);
+  switch (parsed_revision.kind)
     {
-      switch (refspectype)
+      case rpmostreecxx::ParsedRevisionKind::Version:
         {
-        case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
-          g_assert_not_reached ();  /* Handled above */
-        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-          {
-            /* Perhaps down the line we'll drive history traversal into libostree */
-            rpmostree_output_message ("Resolving version '%s'", version);
+          g_autofree char *checksum = NULL;
+          const char *version = parsed_revision.value.c_str();
+          /* Perhaps down the line we'll drive history traversal into libostree */
+          rpmostree_output_message ("Resolving version '%s'", version);
+          if (!rpmostreed_repo_lookup_version (repo, rpmostree_origin_get_refspec (origin),
+                                               version, progress,
+                                               cancellable, &checksum, error))
+            return FALSE;
 
-            if (!rpmostreed_repo_lookup_version (repo, rpmostree_origin_get_refspec (origin),
-                                                 version, progress,
-                                                 cancellable, &checksum, error))
-              return FALSE;
-
-            rpmostree_origin_set_override_commit (origin, checksum, version);
-          }
-          break;
-        case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-          g_assert_not_reached ();  /* Handled above */
+          rpmostree_origin_set_override_commit (origin, checksum, version);
         }
-    }
-  else
-    {
-      g_assert (checksum != NULL);
-
-      switch (refspectype)
+        break;
+      case rpmostreecxx::ParsedRevisionKind::Checksum:
         {
-        case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
-          g_assert_not_reached ();  /* Handled above */
-        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+          const char *checksum = parsed_revision.value.c_str();
           if (!skip_branch_check)
             {
               rpmostree_output_message ("Validating checksum '%s'", checksum);
@@ -242,13 +231,12 @@ apply_revision_override (RpmostreedTransaction    *transaction,
                                                     checksum, progress, cancellable, error))
                 return FALSE;
             }
-          break;
-        case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-          g_assert_not_reached ();  /* Handled above */
+          rpmostree_origin_set_override_commit (origin, checksum, NULL);
         }
-
-      rpmostree_origin_set_override_commit (origin, checksum, version);
-    }
+        break;
+      default:
+        return glnx_throw (error, "Invalid revision kind");
+   }
 
   return TRUE;
 }

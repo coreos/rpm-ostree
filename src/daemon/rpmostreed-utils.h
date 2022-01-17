@@ -78,11 +78,6 @@ gboolean   rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
                                                   char         **out_checksum,
                                                   GError       **error);
 
-gboolean   rpmostreed_parse_revision (const char  *revision,
-                                      char       **out_checksum,
-                                      char       **out_version,
-                                      GError     **error);
-
 gboolean   check_sd_inhibitor_locks (GCancellable    *cancellable,
                                      GError         **error);
 

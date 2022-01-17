@@ -1614,23 +1614,28 @@ get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
 
   const char *base_checksum = ostree_deployment_get_csum (base_deployment);
 
+  auto parsed_revision = CXX_TRY_VAL(parse_revision(arg_revision), error);
   g_autofree char *checksum = NULL;
-  g_autofree char *version = NULL;
-  if (!rpmostreed_parse_revision (arg_revision,
-                                  &checksum,
-                                  &version,
-                                  error))
-    return glnx_prefix_error (error, "Parsing revision");
-
-  if (version != NULL)
+  switch (parsed_revision.kind)
     {
-      if (!rpmostreed_repo_lookup_cached_version (ot_repo,
-                                                  rpmostree_origin_get_refspec (origin),
-                                                  version,
-                                                  cancellable,
-                                                  &checksum,
-                                                  error))
-        return glnx_prefix_error (error, "Looking up cached version");
+      case rpmostreecxx::ParsedRevisionKind::Checksum:
+        {
+          checksum = g_strdup (parsed_revision.value.c_str());
+        }
+        break;
+      case rpmostreecxx::ParsedRevisionKind::Version:
+        {
+          if (!rpmostreed_repo_lookup_cached_version (ot_repo,
+                                                      rpmostree_origin_get_refspec (origin),
+                                                      parsed_revision.value.c_str(),
+                                                      cancellable,
+                                                      &checksum,
+                                                      error))
+            return glnx_prefix_error (error, "Looking up cached version");
+        }
+        break;
+      default:
+        return glnx_throw (error, "Invalid revision kind");
     }
 
   if (!rpm_ostree_db_diff_variant (ot_repo, base_checksum, checksum, FALSE, &value,
