@@ -154,10 +154,8 @@ set_rpm_macro_define (const char *key, const char *value)
 RpmOstreeContext *
 rpmostree_context_new_base (OstreeRepo   *repo)
 {
-  g_assert (repo != NULL);
-
   auto self = static_cast<RpmOstreeContext*>(g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL));
-  self->ostreerepo = static_cast<OstreeRepo*>(g_object_ref (repo));
+  self->ostreerepo = repo ? static_cast<OstreeRepo*>(g_object_ref (repo)) : NULL;
 
   /* We can always be control-c'd at any time; this is new API,
    * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
@@ -205,8 +203,21 @@ rpmostree_context_new_base (OstreeRepo   *repo)
 RpmOstreeContext *
 rpmostree_context_new_client (OstreeRepo   *repo)
 {
+  g_assert_nonnull (repo);
   auto ret = rpmostree_context_new_base (repo);
   ret->is_system = TRUE;
+  return ret;
+}
+
+/* Create a context intended for use in container layering. See:
+ * https://github.com/coreos/enhancements/blob/main/os/coreos-layering.md
+ */
+RpmOstreeContext *
+rpmostree_context_new_container ()
+{
+  auto ret = rpmostree_context_new_base (NULL);
+  ret->is_system = TRUE;
+  ret->is_container = TRUE;
   return ret;
 }
 
@@ -220,6 +231,7 @@ rpmostree_context_new_compose (int               userroot_dfd,
                                OstreeRepo       *repo,
                                rpmostreecxx::Treefile &treefile_rs)
 {
+  g_assert_nonnull (repo);
   auto ret = rpmostree_context_new_base (repo);
   /* Compose contexts always have a treefile */
   ret->treefile_rs = &treefile_rs;

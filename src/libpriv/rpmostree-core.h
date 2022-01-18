@@ -78,6 +78,8 @@ RpmOstreeContext *rpmostree_context_new_base (OstreeRepo   *repo);
 
 RpmOstreeContext *rpmostree_context_new_client (OstreeRepo   *repo);
 
+RpmOstreeContext * rpmostree_context_new_container ();
+
 RpmOstreeContext *rpmostree_context_new_compose (int basedir_dfd,
                                                  OstreeRepo  *repo,
                                                  rpmostreecxx::Treefile &treefile_rs);
