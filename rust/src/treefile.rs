@@ -791,11 +791,6 @@ impl Treefile {
                 }
             }
         }
-        if config.base.repos.is_none() && config.base.lockfile_repos.is_none() {
-            return Err(anyhow!(
-                r#"Treefile has neither "repos" nor "lockfile-repos""#
-            ));
-        }
         if let Some(version_suffix) = config.base.automatic_version_suffix.as_ref() {
             if !(version_suffix.len() == 1 && version_suffix.is_ascii()) {
                 return Err(io::Error::new(
@@ -811,6 +806,16 @@ impl Treefile {
         Ok(())
     }
 
+    /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
+    fn validate_base_config(config: &TreeComposeConfig) -> Result<()> {
+        if config.base.repos.is_none() && config.base.lockfile_repos.is_none() {
+            return Err(anyhow!(
+                r#"Treefile has neither "repos" nor "lockfile-repos""#
+            ));
+        }
+        Ok(())
+    }
+
     fn serialize_json_string(config: &TreeComposeConfig) -> Result<CUtf8Buf> {
         let output = serde_json::to_string_pretty(config)?;
         Ok(CUtf8Buf::from_string(output))
@@ -819,6 +824,11 @@ impl Treefile {
     /// Throw an error if any derive fields are set.
     pub(crate) fn error_if_deriving(&self) -> Result<()> {
         self.parsed.derive.error_if_nonempty()
+    }
+
+    /// Throw an error if any base fields are set.
+    pub(crate) fn error_if_base(&self) -> Result<()> {
+        self.parsed.base.error_if_nonempty()
     }
 
     /// Pretty-print treefile content as JSON to stdout.
@@ -1415,6 +1425,21 @@ pub(crate) struct DeriveConfigFields {
 
     // Misc
     pub(crate) override_commit: Option<String>,
+}
+
+impl BaseComposeConfigFields {
+    pub(crate) fn error_if_nonempty(&self) -> Result<()> {
+        // exemption for `basearch`, which we set to the current arch during parsing
+        let s = Self {
+            basearch: self.basearch.clone(),
+            ..Default::default()
+        };
+        if &s != self {
+            let j = serde_json::to_string_pretty(self)?;
+            bail!("the following base fields are not supported:\n{}", j);
+        }
+        Ok(())
+    }
 }
 
 impl DeriveConfigFields {
@@ -2208,6 +2233,18 @@ pub(crate) fn treefile_new_compose(
     workdir: i32,
 ) -> CxxResult<Box<Treefile>> {
     let r = treefile_new(filename, basearch, workdir)?;
+    Treefile::validate_base_config(&r.parsed)?;
     r.error_if_deriving()?;
+    Ok(r)
+}
+
+/// Create a new treefile, returning an error if any (currently) compose-side options are set.
+pub(crate) fn treefile_new_client(
+    filename: &str,
+    basearch: &str,
+    workdir: i32,
+) -> CxxResult<Box<Treefile>> {
+    let r = treefile_new(filename, basearch, workdir)?;
+    r.error_if_base()?;
     Ok(r)
 }
