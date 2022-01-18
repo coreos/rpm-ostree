@@ -1298,6 +1298,8 @@ pub(crate) struct TreeComposeConfig {
     #[serde(flatten)]
     pub(crate) derive: DeriveConfigFields,
 
+    // This is used to support `packages-${arch}` keys. For YAML files, any other keys cause an
+    // error. For JSON files, unknown keys are silently ignored.
     #[serde(flatten)]
     pub(crate) extra: HashMap<String, serde_json::Value>,
 }
