@@ -76,7 +76,7 @@ rpm-ostree compose tree --print-only "${treefile}" > treefile.json
 if runcompose --dry-run &>err.txt; then
   fatal "ran a compose with derivation"
 fi
-assert_file_has_content_literal err.txt 'Cannot currently use derivation field'
+assert_file_has_content_literal err.txt 'the following derivation fields are not supported'
 rm -f err.txt
 treefile_pyedit "del tf['base-refspec']"
 echo "ok cannot use derivation for composes yet"

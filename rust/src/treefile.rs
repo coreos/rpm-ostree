@@ -1419,23 +1419,10 @@ pub(crate) struct DeriveConfigFields {
 
 impl DeriveConfigFields {
     pub(crate) fn error_if_nonempty(&self) -> Result<()> {
-        macro_rules! check {
-            ( $field:ident ) => {{
-                if self.$field.is_some() {
-                    return Err(anyhow!(
-                        "Cannot currently use derivation field '{}' for composes",
-                        stringify!($field)
-                    ));
-                }
-            }};
+        if &Self::default() != self {
+            let j = serde_json::to_string_pretty(self)?;
+            bail!("the following derivation fields are not supported:\n{}", j);
         }
-        check!(base_refspec);
-        check!(packages_local);
-        check!(packages_local_fileoverride);
-        check!(override_remove);
-        check!(override_replace_local);
-        check!(initramfs);
-        check!(custom);
         Ok(())
     }
 }
