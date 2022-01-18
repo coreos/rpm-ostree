@@ -32,8 +32,10 @@ G_BEGIN_DECLS
 struct _RpmOstreeContext {
   GObject parent;
 
-  /* Whether we were created with new_system() */
+  /* Whether we were created with new_system() or new_container() */
   gboolean is_system;
+  /* Whether we were created with new_container() */
+  gboolean is_container;
   std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_owned;
   rpmostreecxx::Treefile *treefile_rs; /* For composes for now */
   gboolean empty;
