@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use crate::cxxrsutil::*;
 use crate::ffi::StringMapping;
 use crate::utils;
-use crate::TreeComposeConfig;
 use crate::Treefile;
+use crate::{BaseComposeConfigFields, TreeComposeConfig};
 
 const RPMOSTREE_EXTENSIONS_STATE_FILE: &str = ".rpm-ostree-state-chksum";
 
@@ -170,12 +170,15 @@ impl Extensions {
 
     /// Create a treefile representing just what needs to be installed for extensions.
     pub(crate) fn generate_treefile(&self, src: &Treefile) -> CxxResult<Box<Treefile>> {
-        let mut repos = src.parsed.repos.clone().unwrap_or_default();
+        let mut repos = src.parsed.base.repos.clone().unwrap_or_default();
         repos.extend(self.repos.iter().flatten().cloned());
         let ret = TreeComposeConfig {
-            repos: Some(repos),
+            base: BaseComposeConfigFields {
+                repos: Some(repos),
+                releasever: src.parsed.base.releasever.clone(),
+                ..Default::default()
+            },
             packages: Some(self.get_os_extension_packages()),
-            releasever: src.parsed.releasever.clone(),
             modules: self.modules.clone(),
             ..Default::default()
         };
@@ -224,6 +227,7 @@ extensions:
 
         let allrepos: Vec<_> = tf
             .parsed
+            .base
             .repos
             .as_ref()
             .unwrap()
@@ -239,8 +243,8 @@ extensions:
             "bazboo"
         );
         // Other bits shouldn't be there.
-        assert!(src_tf.parsed.treeref.is_some());
-        assert!(tf.parsed.treeref.is_none());
+        assert!(src_tf.parsed.base.treeref.is_some());
+        assert!(tf.parsed.base.treeref.is_none());
     }
 
     #[test]

@@ -288,7 +288,7 @@ fn passwd_compose_prep_impl(
     repo_previous_rev: Option<(&ostree::Repo, &str)>,
     unified_core: bool,
 ) -> Result<()> {
-    let generate_from_previous = treefile.parsed.preserve_passwd.unwrap_or(true);
+    let generate_from_previous = treefile.parsed.base.preserve_passwd.unwrap_or(true);
     if !generate_from_previous {
         // Nothing to do
         return Ok(());
@@ -562,7 +562,7 @@ pub fn check_passwd_group_entries(
     new_entities.validate_treefile_check_passwd(
         &old_entities,
         rootfs.as_raw_fd(),
-        &treefile.parsed.ignore_removed_users,
+        &treefile.parsed.base.ignore_removed_users,
     )?;
 
     // See "man 5 group". We just need to make sure the name and gid match,
@@ -570,7 +570,7 @@ pub fn check_passwd_group_entries(
     new_entities.validate_treefile_check_groups(
         &old_entities,
         rootfs.as_raw_fd(),
-        &treefile.parsed.ignore_removed_groups,
+        &treefile.parsed.base.ignore_removed_groups,
     )?;
 
     Ok(())

@@ -118,7 +118,7 @@ pub fn compose_prepare_rootfs(
     let src_rootfs_dfd = unsafe { &ffi_dirfd(src_rootfs_dfd)? };
     let target_rootfs_dfd = unsafe { &ffi_dirfd(target_rootfs_dfd)? };
 
-    let tmp_is_dir = treefile.parsed.tmp_is_dir.unwrap_or_default();
+    let tmp_is_dir = treefile.parsed.base.tmp_is_dir.unwrap_or_default();
     compose_init_rootfs(target_rootfs_dfd, tmp_is_dir)?;
 
     println!("Moving /usr to target");
@@ -254,7 +254,7 @@ pub fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
 
 #[context("Handling treefile 'units'")]
 fn compose_postprocess_units(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
-    let units = if let Some(u) = treefile.parsed.units.as_ref() {
+    let units = if let Some(u) = treefile.parsed.base.units.as_ref() {
         u
     } else {
         return Ok(());
@@ -303,7 +303,14 @@ fn compose_postprocess_scripts(
     unified_core: bool,
 ) -> Result<()> {
     // Execute the anonymous (inline) scripts.
-    for (i, script) in treefile.parsed.postprocess.iter().flatten().enumerate() {
+    for (i, script) in treefile
+        .parsed
+        .base
+        .postprocess
+        .iter()
+        .flatten()
+        .enumerate()
+    {
         let binpath = format!("/usr/bin/rpmostree-postprocess-inline-{}", i);
         let target_binpath = &binpath[1..];
 
@@ -345,7 +352,7 @@ pub fn compose_postprocess_remove_files(
     rootfs_dfd: &openat::Dir,
     treefile: &mut Treefile,
 ) -> CxxResult<()> {
-    for name in treefile.parsed.remove_files.iter().flatten() {
+    for name in treefile.parsed.base.remove_files.iter().flatten() {
         let p = Path::new(name);
         if p.is_absolute() {
             return Err(anyhow!("Invalid absolute path: {}", name).into());
@@ -364,6 +371,7 @@ fn compose_postprocess_add_files(rootfs_dfd: &openat::Dir, treefile: &mut Treefi
     // reference.
     let add_files: Vec<_> = treefile
         .parsed
+        .base
         .add_files
         .iter()
         .flatten()
@@ -433,7 +441,7 @@ pub fn compose_postprocess(
 
     compose_postprocess_rpmdb(rootfs_dfd)?;
     compose_postprocess_units(rootfs_dfd, treefile)?;
-    if let Some(t) = treefile.parsed.default_target.as_deref() {
+    if let Some(t) = treefile.parsed.base.default_target.as_deref() {
         compose_postprocess_default_target(rootfs_dfd, t)?;
     }
 
@@ -458,7 +466,8 @@ fn compose_postprocess_mutate_os_release(
     treefile: &mut Treefile,
     next_version: &str,
 ) -> Result<()> {
-    let base_version = if let Some(base_version) = treefile.parsed.mutate_os_release.as_deref() {
+    let base_version = if let Some(base_version) = treefile.parsed.base.mutate_os_release.as_deref()
+    {
         base_version
     } else {
         return Ok(());

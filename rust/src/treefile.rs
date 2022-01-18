@@ -83,7 +83,7 @@ fn treefile_parse_stream<R: io::Read>(
 ) -> Result<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = utils::parse_stream(&fmt, input)?;
 
-    treefile.basearch = match (treefile.basearch, basearch) {
+    treefile.base.basearch = match (treefile.base.basearch, basearch) {
         (Some(treearch), Some(arch)) => {
             if treearch != arch {
                 return Err(io::Error::new(
@@ -106,8 +106,8 @@ fn treefile_parse_stream<R: io::Read>(
     // remove from packages-${arch} keys from the extra keys
     let mut archful_pkgs: Option<Vec<String>> = take_archful_pkgs(basearch, &mut treefile)?;
 
-    if fmt == utils::InputFormat::YAML && !treefile.extra.is_empty() {
-        let keys: Vec<&str> = treefile.extra.keys().map(|k| k.as_str()).collect();
+    if fmt == utils::InputFormat::YAML && !treefile.base.extra.is_empty() {
+        let keys: Vec<&str> = treefile.base.extra.keys().map(|k| k.as_str()).collect();
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("Unknown fields: {}", keys.join(", ")),
@@ -123,7 +123,7 @@ fn treefile_parse_stream<R: io::Read>(
         if let Some(base_pkgs) = treefile.packages.take() {
             pkgs.extend_from_slice(&whitespace_split_packages(&base_pkgs)?);
         }
-        if let Some(bootstrap_pkgs) = treefile.bootstrap_packages.take() {
+        if let Some(bootstrap_pkgs) = treefile.base.bootstrap_packages.take() {
             pkgs.extend_from_slice(&whitespace_split_packages(&bootstrap_pkgs)?);
         }
         if let Some(archful_pkgs) = archful_pkgs.take() {
@@ -142,8 +142,8 @@ fn treefile_parse_stream<R: io::Read>(
         treefile.modules = Some(modules);
     }
 
-    if let Some(repo_packages) = treefile.repo_packages.take() {
-        treefile.repo_packages = Some(
+    if let Some(repo_packages) = treefile.base.repo_packages.take() {
+        treefile.base.repo_packages = Some(
             repo_packages
                 .into_iter()
                 .map(|rp| -> Result<RepoPackage> {
@@ -169,9 +169,14 @@ fn take_archful_pkgs(
 ) -> Result<Option<Vec<String>>> {
     let mut archful_pkgs: Option<Vec<String>> = None;
 
-    for key in treefile.extra.keys().filter(|k| k.starts_with("packages-")) {
-        if !treefile.extra[key].is_array()
-            || treefile.extra[key]
+    for key in treefile
+        .base
+        .extra
+        .keys()
+        .filter(|k| k.starts_with("packages-"))
+    {
+        if !treefile.base.extra[key].is_array()
+            || treefile.base.extra[key]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -188,7 +193,7 @@ fn take_archful_pkgs(
             if basearch == &key["packages-".len()..] {
                 assert!(archful_pkgs == None);
                 archful_pkgs = Some(
-                    treefile.extra[key]
+                    treefile.base.extra[key]
                         .as_array()
                         .unwrap()
                         .iter()
@@ -200,7 +205,10 @@ fn take_archful_pkgs(
     }
 
     // and drop it from the map
-    treefile.extra.retain(|k, _| !k.starts_with("packages-"));
+    treefile
+        .base
+        .extra
+        .retain(|k, _| !k.starts_with("packages-"));
 
     Ok(archful_pkgs)
 }
@@ -242,13 +250,13 @@ fn treefile_parse<P: AsRef<Path>>(
             format!("Parsing {}: {}", filename.to_string_lossy(), e.to_string()),
         )
     })?;
-    let postprocess_script = if let Some(ref postprocess) = tf.postprocess_script.as_ref() {
+    let postprocess_script = if let Some(ref postprocess) = tf.base.postprocess_script.as_ref() {
         Some(utils::open_file(filename.with_file_name(postprocess))?)
     } else {
         None
     };
     let mut add_files: BTreeMap<String, fs::File> = BTreeMap::new();
-    if let Some(add_file_names) = tf.add_files.as_ref() {
+    if let Some(add_file_names) = tf.base.add_files.as_ref() {
         for (name, _) in add_file_names.iter() {
             add_files.insert(
                 name.clone(),
@@ -340,22 +348,22 @@ pub(crate) fn merge_modules(dest: &mut Option<ModulesConfig>, src: &mut Option<M
 fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     macro_rules! merge_basics {
         ( $($field:ident),* ) => {{
-            $( merge_basic_field(&mut dest.$field, &mut src.$field); )*
+            $( merge_basic_field(&mut dest.base.$field, &mut src.base.$field); )*
         }};
     }
     macro_rules! merge_hashsets {
         ( $($field:ident),* ) => {{
-            $( merge_hashset_field(&mut dest.$field, &mut src.$field); )*
+            $( merge_hashset_field(&mut dest.base.$field, &mut src.base.$field); )*
         }};
     }
     macro_rules! merge_maps {
         ( $($field:ident),* ) => {{
-            $( merge_map_field(&mut dest.$field, &mut src.$field); )*
+            $( merge_map_field(&mut dest.base.$field, &mut src.base.$field); )*
         }};
     }
     macro_rules! merge_vecs {
         ( $($field:ident),* ) => {{
-            $( merge_vec_field(&mut dest.$field, &mut src.$field); )*
+            $( merge_vec_field(&mut dest.base.$field, &mut src.base.$field); )*
         }};
     }
 
@@ -368,7 +376,6 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         include,
         container,
         recommends,
-        cliwrap,
         readonly_executables,
         documentation,
         boot_location,
@@ -391,7 +398,6 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     merge_vecs!(
         repos,
         lockfile_repos,
-        packages,
         bootstrap_packages,
         exclude_packages,
         ostree_layers,
@@ -407,6 +413,8 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         repo_packages
     );
 
+    merge_vec_field(&mut dest.packages, &mut src.packages);
+    merge_basic_field(&mut dest.cliwrap, &mut src.cliwrap);
     merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
     merge_modules(&mut dest.modules, &mut src.modules);
 }
@@ -442,6 +450,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     let mut parsed = treefile_parse(filename, basearch, seen_includes)?;
     let include = parsed
         .config
+        .base
         .include
         .take()
         .unwrap_or_else(|| Include::Multiple(Vec::new()));
@@ -449,7 +458,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
         Include::Single(v) => vec![v],
         Include::Multiple(v) => v,
     };
-    if let Some(mut arch_includes) = parsed.config.arch_include.take() {
+    if let Some(mut arch_includes) = parsed.config.base.arch_include.take() {
         if let Some(basearch) = basearch {
             if let Some(arch_include_value) = arch_includes.remove(basearch) {
                 match arch_include_value {
@@ -573,7 +582,7 @@ impl Treefile {
 
     /// Returns the "ref" entry in treefile, or the empty string if unset.
     pub(crate) fn get_ostree_ref(&self) -> String {
-        self.parsed.treeref.clone().unwrap_or_default()
+        self.parsed.base.treeref.clone().unwrap_or_default()
     }
 
     pub(crate) fn get_passwd_fd(&mut self) -> i32 {
@@ -589,11 +598,12 @@ impl Treefile {
     }
 
     pub(crate) fn get_ostree_layers(&self) -> Vec<String> {
-        self.parsed.ostree_layers.clone().unwrap_or_default()
+        self.parsed.base.ostree_layers.clone().unwrap_or_default()
     }
 
     pub(crate) fn get_ostree_override_layers(&self) -> Vec<String> {
         self.parsed
+            .base
             .ostree_override_layers
             .clone()
             .unwrap_or_default()
@@ -673,17 +683,21 @@ impl Treefile {
     }
 
     pub(crate) fn get_exclude_packages(&self) -> Vec<String> {
-        self.parsed.exclude_packages.clone().unwrap_or_default()
+        self.parsed
+            .base
+            .exclude_packages
+            .clone()
+            .unwrap_or_default()
     }
 
     pub(crate) fn get_install_langs(&self) -> Vec<String> {
-        self.parsed.install_langs.clone().unwrap_or_default()
+        self.parsed.base.install_langs.clone().unwrap_or_default()
     }
 
     /// If install_langs is set, generate a value suitable for the RPM macro `_install_langs`;
     /// otherwise return the empty string.
     pub(crate) fn format_install_langs_macro(&self) -> String {
-        if let Some(langs) = self.parsed.install_langs.as_ref() {
+        if let Some(langs) = self.parsed.base.install_langs.as_ref() {
             langs.join(":")
         } else {
             "".to_string()
@@ -691,15 +705,15 @@ impl Treefile {
     }
 
     pub(crate) fn get_repos(&self) -> Vec<String> {
-        self.parsed.repos.clone().unwrap_or_default()
+        self.parsed.base.repos.clone().unwrap_or_default()
     }
 
     pub(crate) fn get_lockfile_repos(&self) -> Vec<String> {
-        self.parsed.lockfile_repos.clone().unwrap_or_default()
+        self.parsed.base.lockfile_repos.clone().unwrap_or_default()
     }
 
     pub(crate) fn get_ref(&self) -> &str {
-        self.parsed.treeref.as_deref().unwrap_or_default()
+        self.parsed.base.treeref.as_deref().unwrap_or_default()
     }
 
     pub(crate) fn get_cliwrap(&self) -> bool {
@@ -707,40 +721,41 @@ impl Treefile {
     }
 
     pub(crate) fn get_readonly_executables(&self) -> bool {
-        self.parsed.readonly_executables.unwrap_or(false)
+        self.parsed.base.readonly_executables.unwrap_or(false)
     }
 
     pub(crate) fn get_documentation(&self) -> bool {
-        self.parsed.documentation.unwrap_or(true)
+        self.parsed.base.documentation.unwrap_or(true)
     }
 
     pub(crate) fn get_recommends(&self) -> bool {
-        self.parsed.recommends.unwrap_or(true)
+        self.parsed.base.recommends.unwrap_or(true)
     }
 
     pub(crate) fn get_selinux(&self) -> bool {
-        self.parsed.selinux.unwrap_or(true)
+        self.parsed.base.selinux.unwrap_or(true)
     }
 
     pub(crate) fn get_releasever(&self) -> &str {
-        self.parsed.releasever.as_deref().unwrap_or_default()
+        self.parsed.base.releasever.as_deref().unwrap_or_default()
     }
 
     /// Returns true if the database backend must be regenerated using the target system.
     pub(crate) fn rpmdb_backend_is_target(&self) -> bool {
         self.parsed
+            .base
             .rpmdb
             .as_ref()
             .map_or(true, |b| *b != RpmdbBackend::Host)
     }
 
     pub(crate) fn should_normalize_rpmdb(&self) -> bool {
-        self.parsed.rpmdb_normalize.unwrap_or(false)
+        self.parsed.base.rpmdb_normalize.unwrap_or(false)
     }
 
     pub(crate) fn get_files_remove_regex(&self, package: &str) -> Vec<String> {
         let mut files_to_remove: Vec<String> = Vec::new();
-        if let Some(ref packages) = self.parsed.remove_from_packages {
+        if let Some(ref packages) = self.parsed.base.remove_from_packages {
             for pkg in packages {
                 if pkg[0] == package {
                     files_to_remove.extend_from_slice(&pkg[1..]);
@@ -751,17 +766,21 @@ impl Treefile {
     }
 
     pub(crate) fn get_repo_packages(&self) -> &[RepoPackage] {
-        self.parsed.repo_packages.as_deref().unwrap_or_default()
+        self.parsed
+            .base
+            .repo_packages
+            .as_deref()
+            .unwrap_or_default()
     }
 
     pub(crate) fn clear_repo_packages(&mut self) {
-        self.parsed.repo_packages.take();
+        self.parsed.base.repo_packages.take();
     }
 
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
     fn validate_config(config: &TreeComposeConfig) -> Result<()> {
         // check add-files
-        if let Some(files) = &config.add_files {
+        if let Some(files) = &config.base.add_files {
             for (_, dest) in files.iter() {
                 if !add_files_path_is_valid(dest) {
                     return Err(io::Error::new(
@@ -772,12 +791,12 @@ impl Treefile {
                 }
             }
         }
-        if config.repos.is_none() && config.lockfile_repos.is_none() {
+        if config.base.repos.is_none() && config.base.lockfile_repos.is_none() {
             return Err(anyhow!(
                 r#"Treefile has neither "repos" nor "lockfile-repos""#
             ));
         }
-        if let Some(version_suffix) = config.automatic_version_suffix.as_ref() {
+        if let Some(version_suffix) = config.base.automatic_version_suffix.as_ref() {
             if !(version_suffix.len() == 1 && version_suffix.is_ascii()) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -814,6 +833,7 @@ impl Treefile {
         let mut deprecated = false;
         match self
             .parsed
+            .base
             .boot_location
             .as_ref()
             .copied()
@@ -837,7 +857,7 @@ impl Treefile {
     /// Given a treefile, print notices about items which are experimental.
     pub(crate) fn print_experimental_notices(&self) {
         print_experimental_notice(self.parsed.modules.is_some(), "modules");
-        print_experimental_notice(self.parsed.lockfile_repos.is_some(), "lockfile-repos");
+        print_experimental_notice(self.parsed.base.lockfile_repos.is_some(), "lockfile-repos");
     }
 
     pub(crate) fn get_checksum(
@@ -853,9 +873,10 @@ impl Treefile {
         self.parsed.hasher_update(&mut hasher)?;
         self.externals.hasher_update(&mut hasher)?;
 
-        let it = self.parsed.ostree_layers.iter().flat_map(|x| x.iter());
+        let it = self.parsed.base.ostree_layers.iter().flat_map(|x| x.iter());
         let it = it.chain(
             self.parsed
+                .base
                 .ostree_override_layers
                 .iter()
                 .flat_map(|x| x.iter()),
@@ -884,8 +905,13 @@ impl Treefile {
         }
 
         let parsed = &self.parsed;
-        let machineid_compat = parsed.machineid_compat.unwrap_or(true);
-        let n_units = parsed.units.as_ref().map(|v| v.len()).unwrap_or_default();
+        let machineid_compat = parsed.base.machineid_compat.unwrap_or(true);
+        let n_units = parsed
+            .base
+            .units
+            .as_ref()
+            .map(|v| v.len())
+            .unwrap_or_default();
         if !machineid_compat && n_units > 0 {
             return Err(anyhow!(
                 "'units' directive is incompatible with machineid-compat = false"
@@ -1142,8 +1168,29 @@ pub(crate) enum RpmdbBackend {
 // Because of how we handle includes, *everything* here has to be
 // Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
 // to `true`).
+/// Things that live *directly* in this struct are in common to both the base compose and derive
+/// cases. Everything else is specific to either case and so lives in their respective flattened
+/// field.
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub(crate) struct TreeComposeConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) packages: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) modules: Option<ModulesConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) cliwrap: Option<bool>,
+
+    #[serde(flatten)]
+    pub(crate) base: BaseComposeConfigFields,
+
+    #[serde(flatten)]
+    pub(crate) derive: DeriveConfigFields,
+}
+
+/// These fields are only useful when composing a new ostree commit.
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct BaseComposeConfigFields {
     // Compose controls
     #[serde(rename = "ref")]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1171,12 +1218,8 @@ pub(crate) struct TreeComposeConfig {
 
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) packages: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "repo-packages")]
     pub(crate) repo_packages: Option<Vec<RepoPackage>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) modules: Option<ModulesConfig>,
     // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bootstrap_packages: Option<Vec<String>>,
@@ -1203,8 +1246,6 @@ pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "initramfs-args")]
     pub(crate) initramfs_args: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) cliwrap: Option<bool>,
     #[serde(rename = "readonly-executables")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) readonly_executables: Option<bool>,
@@ -1294,9 +1335,6 @@ pub(crate) struct TreeComposeConfig {
 
     #[serde(flatten)]
     pub(crate) legacy_fields: LegacyTreeComposeConfigFields,
-
-    #[serde(flatten)]
-    pub(crate) derive: DeriveConfigFields,
 
     // This is used to support `packages-${arch}` keys. For YAML files, any other keys cause an
     // error. For JSON files, unknown keys are silently ignored.
@@ -1407,14 +1445,14 @@ impl TreeComposeConfig {
     fn migrate_legacy_fields(mut self) -> Result<Self> {
         macro_rules! migrate_field {
             ( $field:ident ) => {{
-                if self.legacy_fields.$field.is_some() && self.$field.is_some() {
+                if self.base.legacy_fields.$field.is_some() && self.base.$field.is_some() {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
                         format!("Cannot use new and legacy forms of {}", stringify!($field)),
                     )
                     .into());
                 }
-                self.$field = self.$field.or(self.legacy_fields.$field.take());
+                self.base.$field = self.base.$field.or(self.base.legacy_fields.$field.take());
             }};
         }
 
@@ -1430,18 +1468,18 @@ impl TreeComposeConfig {
     fn substitute_vars(mut self) -> Result<Self> {
         let mut substvars: collections::HashMap<String, String> = collections::HashMap::new();
         // Substitute ${basearch} and ${releasever}
-        if let Some(arch) = &self.basearch {
+        if let Some(arch) = &self.base.basearch {
             substvars.insert("basearch".to_string(), arch.clone());
         }
-        if let Some(releasever) = &self.releasever {
+        if let Some(releasever) = &self.base.releasever {
             substvars.insert("releasever".to_string(), releasever.clone());
         }
         envsubst::validate_vars(&substvars)?;
 
         macro_rules! substitute_field {
             ( $field:ident ) => {{
-                if let Some(value) = self.$field.take() {
-                    self.$field = if envsubst::is_templated(&value) {
+                if let Some(value) = self.base.$field.take() {
+                    self.base.$field = if envsubst::is_templated(&value) {
                         match envsubst::substitute(value, &substvars) {
                             Ok(s) => Some(s),
                             Err(e) => return Err(anyhow!(e.to_string())),
@@ -1468,17 +1506,17 @@ impl TreeComposeConfig {
 
     pub(crate) fn get_check_passwd(&self) -> &CheckPasswd {
         static DEFAULT: CheckPasswd = CheckPasswd::Previous;
-        self.check_passwd.as_ref().unwrap_or(&DEFAULT)
+        self.base.check_passwd.as_ref().unwrap_or(&DEFAULT)
     }
 
     pub(crate) fn get_check_groups(&self) -> &CheckGroups {
         static DEFAULT: CheckGroups = CheckGroups::Previous;
-        self.check_groups.as_ref().unwrap_or(&DEFAULT)
+        self.base.check_groups.as_ref().unwrap_or(&DEFAULT)
     }
 
     // we need to ensure that appended repo packages override earlier ones
     fn handle_repo_packages_overrides(&mut self) {
-        if let Some(repo_packages) = self.repo_packages.as_mut() {
+        if let Some(repo_packages) = self.base.repo_packages.as_mut() {
             let mut seen_pkgs: HashSet<String> = HashSet::new();
             // Create a temporary new filtered vec; see
             // https://doc.rust-lang.org/std/iter/struct.Map.html#notes-about-side-effects for why
@@ -1556,10 +1594,10 @@ pub(crate) mod tests {
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
-        assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
+        assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 7);
         assert_eq!(
-            treefile.repo_packages,
+            treefile.base.repo_packages,
             Some(vec![RepoPackage {
                 repo: "baserepo".into(),
                 packages: vec!["blah".into(), "bloo".into()],
@@ -1584,8 +1622,8 @@ pub(crate) mod tests {
         let mut input = io::BufReader::new(buf);
         let treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
-        assert!(treefile.add_files.unwrap().len() == 2);
-        assert!(treefile.remove_files.unwrap().len() == 2);
+        assert!(treefile.base.add_files.unwrap().len() == 2);
+        assert!(treefile.base.remove_files.unwrap().len() == 2);
     }
 
     #[test]
@@ -1617,7 +1655,7 @@ pub(crate) mod tests {
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::JSON, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
-        assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
+        assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
     }
 
@@ -1627,7 +1665,7 @@ pub(crate) mod tests {
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, None).unwrap();
         treefile = treefile.substitute_vars().unwrap();
-        assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
+        assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
     }
 
@@ -1655,7 +1693,7 @@ pub(crate) mod tests {
     fn basic_valid_releasever() {
         let buf = indoc! {r#"
             ref: "exampleos/${basearch}/${releasever}"
-            releasever: 30
+            releasever: "30"
             automatic-version-prefix: ${releasever}
             mutate-os-release: ${releasever}
         "#};
@@ -1663,18 +1701,18 @@ pub(crate) mod tests {
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
-        assert!(treefile.treeref.unwrap() == "exampleos/x86_64/30");
-        assert!(treefile.releasever.unwrap() == "30");
-        assert!(treefile.automatic_version_prefix.unwrap() == "30");
-        assert!(treefile.mutate_os_release.unwrap() == "30");
-        assert!(treefile.rpmdb.is_none());
+        assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/30");
+        assert!(treefile.base.releasever.unwrap() == "30");
+        assert!(treefile.base.automatic_version_prefix.unwrap() == "30");
+        assert!(treefile.base.mutate_os_release.unwrap() == "30");
+        assert!(treefile.base.rpmdb.is_none());
     }
 
     #[test]
     fn test_valid_no_releasever() {
         let treefile = append_and_parse("automatic_version_prefix: ${releasever}");
-        assert!(treefile.releasever == None);
-        assert!(treefile.automatic_version_prefix.unwrap() == "${releasever}");
+        assert!(treefile.base.releasever == None);
+        assert!(treefile.base.automatic_version_prefix.unwrap() == "${releasever}");
     }
 
     #[test]
@@ -1686,11 +1724,11 @@ pub(crate) mod tests {
             automatic_version_prefix: baz
             rpmdb: sqlite
         "});
-        assert!(treefile.gpg_key.unwrap() == "foo");
-        assert!(treefile.boot_location.unwrap() == BootLocation::New);
-        assert!(treefile.default_target.unwrap() == "bar");
-        assert!(treefile.automatic_version_prefix.unwrap() == "baz");
-        assert!(treefile.rpmdb.unwrap() == RpmdbBackend::Sqlite);
+        assert!(treefile.base.gpg_key.unwrap() == "foo");
+        assert!(treefile.base.boot_location.unwrap() == BootLocation::New);
+        assert!(treefile.base.default_target.unwrap() == "bar");
+        assert!(treefile.base.automatic_version_prefix.unwrap() == "baz");
+        assert!(treefile.base.rpmdb.unwrap() == RpmdbBackend::Sqlite);
     }
 
     #[test]
@@ -1702,11 +1740,11 @@ pub(crate) mod tests {
             automatic-version-prefix: baz
             rpmdb: b-d-b
         "});
-        assert!(treefile.gpg_key.unwrap() == "foo");
-        assert!(treefile.boot_location.unwrap() == BootLocation::New);
-        assert!(treefile.default_target.unwrap() == "bar");
-        assert!(treefile.automatic_version_prefix.unwrap() == "baz");
-        assert!(treefile.rpmdb.unwrap() == RpmdbBackend::Bdb);
+        assert!(treefile.base.gpg_key.unwrap() == "foo");
+        assert!(treefile.base.boot_location.unwrap() == BootLocation::New);
+        assert!(treefile.base.default_target.unwrap() == "bar");
+        assert!(treefile.base.automatic_version_prefix.unwrap() == "baz");
+        assert!(treefile.base.rpmdb.unwrap() == RpmdbBackend::Bdb);
     }
 
     #[test]
@@ -1778,8 +1816,8 @@ pub(crate) mod tests {
     fn test_treefile_new() {
         let workdir = tempfile::tempdir().unwrap();
         let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
-        assert!(tf.parsed.rojig.is_none());
-        assert!(tf.parsed.machineid_compat.is_none());
+        assert!(tf.parsed.base.rojig.is_none());
+        assert!(tf.parsed.base.machineid_compat.is_none());
     }
 
     const ROJIG_YAML: &'static str = indoc! {r#"
@@ -1796,7 +1834,7 @@ pub(crate) mod tests {
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(ROJIG_YAML);
         let tf = new_test_treefile(workdir.path(), buf.as_str(), None).unwrap();
-        let rojig = tf.parsed.rojig.as_ref().unwrap();
+        let rojig = tf.parsed.base.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
     }
 
@@ -1838,7 +1876,7 @@ pub(crate) mod tests {
         let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
         assert!(tf.parsed.packages.unwrap().len() == 6);
         assert_eq!(
-            tf.parsed.repo_packages,
+            tf.parsed.base.repo_packages,
             Some(vec![
                 RepoPackage {
                     repo: "foo2".into(),
@@ -1928,15 +1966,15 @@ arch-include:
         let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
         let mut top =
             treefile_parse_stream(utils::InputFormat::YAML, &mut top_input, basearch).unwrap();
-        assert!(top.add_commit_metadata.is_none());
+        assert!(top.base.add_commit_metadata.is_none());
         treefile_merge(&mut mid, &mut base);
         treefile_merge(&mut top, &mut mid);
         let tf = &top;
         assert!(tf.packages.as_ref().unwrap().len() == 10);
-        assert!(tf.etc_group_members.as_ref().unwrap().len() == 2);
-        let rojig = tf.rojig.as_ref().unwrap();
+        assert!(tf.base.etc_group_members.as_ref().unwrap().len() == 2);
+        let rojig = tf.base.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
-        let data = tf.add_commit_metadata.as_ref().unwrap();
+        let data = tf.base.add_commit_metadata.as_ref().unwrap();
         assert!(data.get("my-first-key").unwrap().as_str().unwrap() == "please don't override me");
         assert!(data.get("my-second-key").unwrap().as_str().unwrap() == "something better");
         assert!(data.get("my-third-key").unwrap().as_i64().unwrap() == 1000);
@@ -2023,7 +2061,7 @@ arch-include:
         }
         let mut src = std::io::BufReader::new(rootdir.open_file(COMPOSE_JSON_PATH)?);
         let cfg = treefile_parse_stream(utils::InputFormat::JSON, &mut src, None)?;
-        assert_eq!(cfg.treeref.unwrap(), "exampleos/x86_64/blah");
+        assert_eq!(cfg.base.treeref.unwrap(), "exampleos/x86_64/blah");
         Ok(())
     }
 
