@@ -58,6 +58,18 @@ rpmostree_ex_builtin_initramfs_etc (int             argc,
                                     GCancellable   *cancellable,
                                     GError        **error)
 {
+  g_printerr ("NOTICE: This command is now stable and no longer requires `ex`.\n");
+  g_printerr ("NOTICE: Please update scripts; support for this alias will be removed.\n");
+  return rpmostree_builtin_initramfs_etc (argc, argv, invocation, cancellable, error);
+}
+
+gboolean
+rpmostree_builtin_initramfs_etc (int             argc,
+                                 char          **argv,
+                                 RpmOstreeCommandInvocation *invocation,
+                                 GCancellable   *cancellable,
+                                 GError        **error)
+{
   g_autoptr(GOptionContext) context = g_option_context_new ("");
 
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;

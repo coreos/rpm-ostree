@@ -93,6 +93,8 @@ static RpmOstreeCommand commands[] = {
   { "kargs", static_cast<RpmOstreeBuiltinFlags>(0),
     "Query or modify kernel arguments",
     rpmostree_builtin_kargs },
+  { "initramfs-etc", (RpmOstreeBuiltinFlags)0,
+    "Track initramfs configuration files", rpmostree_builtin_initramfs_etc },
   /* Rust-implemented commands; they're here so that they show up in `rpm-ostree
    * --help` alongside the other commands, but the command itself is fully
    *  handled Rust side. */

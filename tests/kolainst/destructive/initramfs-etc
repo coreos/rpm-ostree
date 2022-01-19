@@ -15,7 +15,7 @@ check_for_dracut_karg() {
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   "")
     for f in / /var /usr/bin; do
-      if rpm-ostree ex initramfs-etc --track ${f} 2>out.txt; then
+      if rpm-ostree initramfs-etc --track ${f} 2>out.txt; then
         fatal "should have failed with path ${f}"
       fi
       assert_file_has_content_literal out.txt "Path outside /etc forbidden: ${f}"
@@ -25,7 +25,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     mkdir -p /etc/cmdline.d
     echo 'foobar' > /etc/cmdline.d/foobar.conf
 
-    rpm-ostree ex initramfs-etc --track /etc/cmdline.d/foobar.conf
+    rpm-ostree initramfs-etc --track /etc/cmdline.d/foobar.conf
     rpm-ostree status > status.txt
     assert_file_has_content_literal status.txt "InitramfsEtc: /etc/cmdline.d/foobar.conf"
     rpm-ostree status --json > status.json
@@ -37,17 +37,17 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     ;;
   1)
     check_for_dracut_karg foobar
-    rpm-ostree ex initramfs-etc --track /etc/cmdline.d/foobar.conf > out.txt
+    rpm-ostree initramfs-etc --track /etc/cmdline.d/foobar.conf > out.txt
     assert_file_has_content_literal out.txt "No changes."
 
     # right now we don't rechecksum all the files so changing the file alone
     # isn't noticed, but we could in the future
     echo 'barbaz' > /etc/cmdline.d/foobar.conf
-    rpm-ostree ex initramfs-etc --track /etc/cmdline.d/foobar.conf > out.txt
+    rpm-ostree initramfs-etc --track /etc/cmdline.d/foobar.conf > out.txt
     assert_file_has_content_literal out.txt "No changes."
 
     # but --force-sync should also plow through
-    rpm-ostree ex initramfs-etc --force-sync > out.txt
+    rpm-ostree initramfs-etc --force-sync > out.txt
     assert_file_has_content_literal out.txt "Staging deployment"
 
     # test that we can created parent dirs and we don't include other files in
@@ -58,7 +58,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     mkdir /etc/foo/bar/this
     touch /etc/foo/bar/this/neither
     ln -sf /etc/foo/bar/baz/boo/nested.conf /etc/cmdline.d/
-    rpm-ostree ex initramfs-etc --track /etc/cmdline.d/nested.conf --track /etc/foo/bar/baz/boo
+    rpm-ostree initramfs-etc --track /etc/cmdline.d/nested.conf --track /etc/foo/bar/baz/boo
 
     /tmp/autopkgtest-reboot 2
     ;;
@@ -76,7 +76,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     # let's try tracking a whole directory instead
     echo 'bazboo' > /etc/cmdline.d/bazboo.conf
     # and for fun, let's use the the locked finalization flow
-    rpm-ostree ex initramfs-etc --lock-finalization \
+    rpm-ostree initramfs-etc --lock-finalization \
       --untrack /etc/cmdline.d/foobar.conf \
       --untrack /etc/cmdline.d/nested.conf \
       --track /etc/cmdline.d
@@ -97,6 +97,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     check_for_dracut_karg supernested
 
     # finally, check that passing no args prints the tracked files
+    # also verify that the `ex` alias still works for now
     rpm-ostree ex initramfs-etc > out.txt
     assert_file_has_content_literal out.txt "Tracked files:"
     assert_file_has_content_literal out.txt "/etc/cmdline.d"
