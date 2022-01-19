@@ -57,6 +57,7 @@ BUILTINPROTO(coreos_rootfs);
 BUILTINPROTO(testutils);
 BUILTINPROTO(ex);
 BUILTINPROTO(finalize_deployment);
+BUILTINPROTO(initramfs_etc);
 
 #undef BUILTINPROTO
 
