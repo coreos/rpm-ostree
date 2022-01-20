@@ -25,6 +25,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-clientlib.h"
+#include "rpmostree-container.h"
 
 #include <libglnx.h>
 
@@ -196,13 +197,7 @@ rpmostree_builtin_install (int            argc,
 
   auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
   if (is_ostree_container)
-    {
-      auto argv_rust = rust::Vec<rust::String>();
-        for (int i = 0; i < argc; i++)
-          argv_rust.push_back(rust::String(argv[i]));
-      CXX_TRY(microdnf_install(argv_rust), error);
-      return TRUE;
-    }
+    return rpmostree_container_install_packages (argv, cancellable, error);
 
   return pkg_change (invocation, sysroot_proxy,
                      (const char *const*)argv,
