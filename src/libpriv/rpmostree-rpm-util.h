@@ -38,6 +38,7 @@ namespace rpmostreecxx
 {
 rust::String nevra_to_cache_branch (const std::string &nevra);
 rust::String get_repodata_chksum_repr (DnfPackage &pkg);
+std::unique_ptr<RpmTs> rpmts_for_commit (OstreeRepo &repo, rust::Str rev);
 }
 
 // C code follows

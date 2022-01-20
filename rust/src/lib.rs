@@ -726,14 +726,28 @@ pub mod ffi {
 
         fn output_message(msg: &str);
     }
-
     // rpmostree-rpm-util.h
     unsafe extern "C++" {
         include!("rpmostree-rpm-util.h");
+        #[allow(missing_debug_implementations)]
+        type RpmTs;
+        #[allow(missing_debug_implementations)]
+        type PackageMeta;
+
         // Currently only used in unit tests
         #[allow(dead_code)]
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<String>;
         fn get_repodata_chksum_repr(pkg: &mut DnfPackage) -> Result<String>;
+        fn rpmts_for_commit(repo: Pin<&mut OstreeRepo>, rev: &str) -> Result<UniquePtr<RpmTs>>;
+
+        // Methods on RpmTs
+        fn packages_providing_file(self: &RpmTs, path: &str) -> Result<Vec<String>>;
+        fn package_meta(self: &RpmTs, name: &str) -> Result<UniquePtr<PackageMeta>>;
+
+        // Methods on PackageMeta
+        fn size(self: &PackageMeta) -> u64;
+        fn buildtime(self: &PackageMeta) -> u64;
+        fn src_pkg(self: &PackageMeta) -> &CxxString;
     }
 
     // rpmostree-package-variants.h

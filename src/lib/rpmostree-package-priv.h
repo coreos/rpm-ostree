@@ -23,6 +23,9 @@
 
 #include "rpmostree-package.h"
 #include <ostree.h>
+#ifdef __cplusplus
+#include "rust/cxx.h"
+#endif
 
 G_BEGIN_DECLS
 

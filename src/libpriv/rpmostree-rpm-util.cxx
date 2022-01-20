@@ -954,6 +954,7 @@ get_refts_for_rootfs (const char *rootfs, GLnxTmpDir *tmpdir)
 gboolean
 rpmostree_get_refts_for_commit (OstreeRepo *repo, const char *ref, RpmOstreeRefTs **out_ts,
                                 GCancellable *cancellable, GError **error)
+
 {
   ROSCXX_TRY (core_libdnf_process_global_init (), error);
   g_auto (GLnxTmpDir) tmpdir = {
@@ -1597,4 +1598,21 @@ rpmostree_advisories_variant (DnfSack *sack, GPtrArray *pkgs)
   GLNX_HASH_TABLE_FOREACH_KV (advisories, DnfAdvisory *, advisory, GPtrArray *, pkgs)
   g_variant_builder_add_value (&builder, advisory_variant_new (advisory, pkgs));
   return g_variant_ref_sink (g_variant_builder_end (&builder));
+}
+
+namespace rpmostreecxx
+{
+
+std::unique_ptr<RpmTs>
+rpmts_for_commit (OstreeRepo &repo, rust::Str rev)
+{
+  g_autoptr (GError) local_error = NULL;
+  RpmOstreeRefTs *refts = NULL;
+  auto rev_c = std::string (rev);
+  if (!rpmostree_get_refts_for_commit (&repo, rev_c.c_str (), &refts, NULL, &local_error))
+    util::throw_gerror (local_error);
+
+  return std::make_unique<RpmTs> (refts);
+}
+
 }
