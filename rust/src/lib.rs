@@ -27,7 +27,7 @@ pub(crate) use cxxrsutil::*;
 ///
 /// # Error handling
 ///
-/// For falliable APIs that return a `Result<T>`:
+/// For fallible APIs that return a `Result<T>`:
 ///
 /// - Use `Result<T>` inside `lib.rs` below
 /// - On the Rust *implementation* side, use `CxxResult<T>` which does error
@@ -385,7 +385,7 @@ pub mod ffi {
 
         fn treefile_new(filename: &str, basearch: &str, workdir: i32) -> Result<Box<Treefile>>;
         fn treefile_new_empty() -> Result<Box<Treefile>>;
-        fn treefile_new_from_string(buf: &str) -> Result<Box<Treefile>>;
+        fn treefile_new_from_string(buf: &str, client: bool) -> Result<Box<Treefile>>;
         fn treefile_new_compose(
             filename: &str,
             basearch: &str,

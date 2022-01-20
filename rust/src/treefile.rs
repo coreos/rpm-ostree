@@ -2227,8 +2227,14 @@ pub(crate) fn treefile_new(
 }
 
 /// Create a new treefile from a string.
-pub(crate) fn treefile_new_from_string(buf: &str) -> CxxResult<Box<Treefile>> {
-    Ok(Treefile::new_from_string(buf).context("Parsing treefile from string")?)
+// Make `client` into an enum?
+pub(crate) fn treefile_new_from_string(buf: &str, client: bool) -> CxxResult<Box<Treefile>> {
+    let r = Treefile::new_from_string(buf).context("Parsing treefile from string")?;
+    match client {
+        true => r.error_if_base()?,
+        false => r.error_if_deriving()?,
+    }
+    Ok(r)
 }
 
 /// Create a new empty treefile.
