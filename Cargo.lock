@@ -327,9 +327,9 @@ dependencies = [
 
 [[package]]
 name = "containers-image-proxy"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b6139635005aca6a2f7ef7f623bfc7f2f447e78174321088f7b4ef81c2e188e"
+checksum = "1181da40ec6d2001179ba396b3860f14a95229731e80f45c459975fd1fe7ffb2"
 dependencies = [
  "anyhow",
  "capctl",
@@ -337,6 +337,7 @@ dependencies = [
  "futures-util",
  "libc",
  "nix",
+ "oci-spec",
  "once_cell",
  "semver",
  "serde",
@@ -1500,9 +1501,9 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "oci-spec"
-version = "0.5.4"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b409d52fff741f330914aa6b8ab73e9113607bb13fbc09f95cdb04d16c8dd5d"
+checksum = "71a85b9f9654fe5c3eab8907369250c05aeda9d807b76bd06c740601f881dc02"
 dependencies = [
  "derive_builder",
  "getset",
@@ -1611,9 +1612,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.6.5"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e6d186573b7713d0794d2aa34c32ea5fa45a4f7fe77127c89815029ccc0bf3d"
+checksum = "0feb85eda4aa146654a73bad0d2a31282a8e83ca85ffa2ae1a52e696e8df0664"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1638,11 +1639,13 @@ dependencies = [
  "openssl",
  "ostree",
  "pin-project",
+ "regex",
  "serde",
  "serde_json",
  "structopt",
  "tar",
  "tempfile",
+ "term_size",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -2396,6 +2399,16 @@ dependencies = [
  "libc",
  "redox_syscall",
  "remove_dir_all",
+ "winapi",
+]
+
+[[package]]
+name = "term_size"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e4129646ca0ed8f45d09b929036bafad5377103edd06e50bf574b353d2b08d9"
+dependencies = [
+ "libc",
  "winapi",
 ]
 

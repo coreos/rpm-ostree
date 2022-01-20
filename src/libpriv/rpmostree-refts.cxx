@@ -22,6 +22,9 @@
 
 #include "rpmostree-refts.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-util.h"
+#include <rpm/header.h>
+#include <rpm/rpmtag.h>
 #include <string.h>
 
 /*
@@ -60,4 +63,74 @@ rpmostree_refts_unref (RpmOstreeRefTs *rts)
   rpmtsFree (rts->ts);
   (void)glnx_tmpdir_delete (&rts->tmpdir, NULL, NULL);
   g_free (rts);
+}
+
+namespace rpmostreecxx
+{
+
+RpmTs::RpmTs (RpmOstreeRefTs *ts) { _ts = ts; }
+
+RpmTs::~RpmTs () { rpmostree_refts_unref (_ts); }
+
+rust::Vec<rust::String>
+RpmTs::packages_providing_file (const rust::Str path) const
+{
+  auto path_c = std::string (path);
+  g_auto (rpmdbMatchIterator) mi
+      = rpmtsInitIterator (_ts->ts, RPMDBI_INSTFILENAMES, path_c.c_str (), 0);
+  if (mi == NULL)
+    mi = rpmtsInitIterator (_ts->ts, RPMDBI_PROVIDENAME, path_c.c_str (), 0);
+  rust::Vec<rust::String> ret;
+  if (mi != NULL)
+    {
+      Header h;
+      while ((h = rpmdbNextIterator (mi)) != NULL)
+        {
+          g_autofree char *name = headerGetAsString (h, RPMTAG_NEVRA);
+          ret.push_back (rust::String (name));
+        }
+    }
+  return ret;
+}
+
+std::unique_ptr<PackageMeta>
+RpmTs::package_meta (const rust::Str name) const
+{
+  auto name_c = std::string (name);
+  g_auto (rpmdbMatchIterator) mi = rpmtsInitIterator (_ts->ts, RPMDBI_NAME, name_c.c_str (), 0);
+  if (mi == NULL)
+    {
+      g_autofree char *err = g_strdup_printf ("Package not found: %s", name_c.c_str ());
+      throw std::runtime_error (err);
+    }
+  Header h;
+  g_autofree char *previous = NULL;
+  auto retval = std::make_unique<PackageMeta> ();
+  while ((h = rpmdbNextIterator (mi)) != NULL)
+    {
+      g_autofree char *nevra = headerGetAsString (h, RPMTAG_NEVRA);
+      if (previous == NULL)
+        {
+          previous = util::move_nullify (nevra);
+          retval->_size = headerGetNumber (h, RPMTAG_LONGARCHIVESIZE);
+          retval->_buildtime = headerGetNumber (h, RPMTAG_BUILDTIME);
+          retval->_src_pkg = headerGetString (h, RPMTAG_SOURCERPM);
+        }
+      else
+        {
+          // TODO: Somehow we get two `libgcc-8.5.0-10.el8.x86_64` in current RHCOS, I don't
+          // understand that.
+          if (!g_str_equal (previous, nevra))
+            {
+              g_autofree char *buf = g_strdup_printf ("Multiple installed '%s' (%s, %s)",
+                                                      name_c.c_str (), previous, nevra);
+              throw std::runtime_error (buf);
+            }
+        }
+    }
+  if (!previous)
+    g_assert_not_reached ();
+  return retval;
+}
+
 }

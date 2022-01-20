@@ -22,8 +22,11 @@
 #pragma once
 
 #include "libglnx.h"
+#include "rpmostree-util.h"
+#include "rust/cxx.h"
 #include <gio/gio.h>
 #include <libdnf/libdnf.h>
+#include <memory>
 
 G_BEGIN_DECLS
 
@@ -41,5 +44,47 @@ RpmOstreeRefTs *rpmostree_refts_ref (RpmOstreeRefTs *rts);
 void rpmostree_refts_unref (RpmOstreeRefTs *rts);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeRefTs, rpmostree_refts_unref);
+
+namespace rpmostreecxx
+{
+
+struct PackageMeta
+{
+  uint64_t _size;
+  uint64_t _buildtime;
+  std::string _src_pkg;
+
+  uint64_t
+  size () const
+  {
+    return _size;
+  };
+  uint64_t
+  buildtime () const
+  {
+    return _buildtime;
+  };
+  const std::string &
+  src_pkg () const
+  {
+    return _src_pkg;
+  };
+};
+
+// A simple C++ wrapper for a librpm C type, so we can expose it to Rust via cxx.rs.
+class RpmTs
+{
+public:
+  RpmTs (::RpmOstreeRefTs *ts);
+  ~RpmTs ();
+  rpmts get_ts () const;
+  rust::Vec<rust::String> packages_providing_file (const rust::Str path) const;
+  std::unique_ptr<PackageMeta> package_meta (const rust::Str package) const;
+
+private:
+  ::RpmOstreeRefTs *_ts;
+};
+
+}
 
 G_END_DECLS

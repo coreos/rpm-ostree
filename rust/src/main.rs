@@ -44,6 +44,11 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
         "ex-container" => {
             return rpmostree_rust::container::entrypoint(&args_borrowed).await;
         }
+        // This is a custom wrapper for
+        "container-encapsulate" => {
+            rpmostree_rust::container::container_encapsulate(&args_borrowed).await?;
+            return Ok(0);
+        }
         _ => {}
     }
     // Everything below here is a blocking API, and run on a worker thread so
