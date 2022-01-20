@@ -4,11 +4,10 @@
 
 use crate::cxxrsutil::*;
 use crate::utils;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
 use std::os::unix::io::IntoRawFd;
-use std::path::Path;
 use std::pin::Pin;
 use std::process::Command;
 
@@ -236,37 +235,6 @@ pub(crate) fn client_render_download_progress(
     }
 }
 
-/// Clean up /var/cache/yum/ which so it's not attemped to be
-/// copied to the next container layer. Without calling this
-/// we would see various non-fatal errors during a container build.
-/// This is only intended for use as part of a container builds.
-pub(crate) fn microdnf_clean_all() -> Result<()> {
-    let microdnf_status = Command::new(microdnf_location())
-        .arg("clean")
-        .arg("all")
-        .status()?;
-    if !microdnf_status.success() {
-        return Err(anyhow!(
-            "Failure running clean up, microdnf failed with: {:?}",
-            microdnf_status
-        ));
-    }
-    Ok(())
-}
-
-// On CoreOS environment we expect microdnf to be on
-// /usr/lib/rpm-ostree/microdnf as this is not intended
-// be used outside as a container. However we will work
-// with the default location too.
-pub(crate) fn microdnf_location() -> String {
-    let mut microdnf_command = "microdnf";
-    let alt_microdnf_location = "/usr/lib/rpm-ostree/microdnf";
-    if Path::new(alt_microdnf_location).exists() {
-        microdnf_command = alt_microdnf_location;
-    }
-    return microdnf_command.to_string();
-}
-
 pub(crate) fn running_in_container() -> bool {
     ostree_ext::container_utils::running_in_container()
 }
@@ -282,6 +250,7 @@ pub(crate) fn is_ostree_container() -> CxxResult<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_is_src_rpm() {
