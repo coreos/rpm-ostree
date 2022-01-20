@@ -20,6 +20,7 @@ mkdir ${test_tmpdir}/rpm-repos/${repover}
 # The obligatory `foo` and `bar` packages
 build_rpm foo version 1.2 release 3
 build_rpm bar
+build_rpm baz
 # And from here we lose our creativity and name things starting
 # with `testpkg` and grow more content.
 # This one has various files in /etc

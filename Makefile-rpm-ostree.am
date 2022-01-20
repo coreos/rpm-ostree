@@ -59,6 +59,7 @@ librpmostreeinternals_la_SOURCES = \
 	src/app/rpmostree-composeutil.cxx \
 	src/app/rpmostree-composeutil.h \
 	src/app/rpmostree-builtin-compose.cxx \
+	src/app/rpmostree-builtin-rebuild.cxx \
 	$(librpmostreed_sources) \
 	$(librpmostreepriv_sources) \
 	$(librpmostree_1_la_SOURCES) \

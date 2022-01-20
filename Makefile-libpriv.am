@@ -25,6 +25,8 @@ librpmostreepriv_sources = \
 	src/libpriv/rpmostree-types.h \
 	src/libpriv/rpmostree-refts.h \
 	src/libpriv/rpmostree-refts.cxx \
+	src/libpriv/rpmostree-container.cxx \
+	src/libpriv/rpmostree-container.h \
 	src/libpriv/rpmostree-core.cxx \
 	src/libpriv/rpmostree-core.h \
 	src/libpriv/rpmostree-core-private.h \
