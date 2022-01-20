@@ -148,6 +148,60 @@ set_rpm_macro_define (const char *key, const char *value)
   free (rpmExpand (buf, NULL));
 }
 
+/* Taken and slightly adapted from microdnf. This is only used if using any of the libdnf
+ * APIs directly instead of passing through the core. */
+static void
+state_action_changed_cb (DnfState       *state,
+                         DnfStateAction  action,
+                         const gchar    *action_hint)
+{
+  switch (action)
+    {
+      case DNF_STATE_ACTION_DOWNLOAD_METADATA:
+        g_print ("Downloading metadata...\n");
+        break;
+      case DNF_STATE_ACTION_TEST_COMMIT:
+        g_print ("Running transaction test...\n");
+        break;
+      case DNF_STATE_ACTION_INSTALL:
+        if (action_hint)
+          {
+            g_auto(GStrv) split = g_strsplit (action_hint, ";", 0);
+            if (g_strv_length (split) == 4)
+              g_print ("Installing: %s-%s.%s (%s)\n", split[0], split[1], split[2], split[3]);
+            else
+              g_print ("Installing: %s\n", action_hint);
+          }
+        break;
+      case DNF_STATE_ACTION_REMOVE:
+        if (action_hint)
+          g_print ("Removing: %s\n", action_hint);
+        break;
+      case DNF_STATE_ACTION_UPDATE:
+        if (action_hint)
+          g_print ("Updating: %s\n", action_hint);
+        break;
+      case DNF_STATE_ACTION_OBSOLETE:
+        if (action_hint)
+          g_print ("Obsoleting: %s\n", action_hint);
+        break;
+      case DNF_STATE_ACTION_REINSTALL:
+        if (action_hint)
+          g_print ("Reinstalling: %s\n", action_hint);
+        break;
+      case DNF_STATE_ACTION_DOWNGRADE:
+        if (action_hint)
+          g_print ("Downgrading: %s\n", action_hint);
+        break;
+      case DNF_STATE_ACTION_CLEANUP:
+        if (action_hint)
+          g_print ("Cleanup: %s\n", action_hint);
+        break;
+      default:
+        break;
+    }
+}
+
 /* Low level API to create a context.  Avoid this in preference
  * to creating a client or compose context unless necessary.
  */
@@ -193,6 +247,11 @@ rpmostree_context_new_base (OstreeRepo   *repo)
 
   /* The rpmdb is at /usr/share/rpm */
   dnf_context_set_rpm_macro (self->dnfctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
+
+  DnfState *state = dnf_context_get_state (self->dnfctx);
+  g_signal_connect (state, "action-changed",
+                    G_CALLBACK (state_action_changed_cb),
+                    NULL);
 
   return self;
 }
