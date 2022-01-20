@@ -391,11 +391,7 @@ pub mod ffi {
             basearch: &str,
             workdir: i32,
         ) -> Result<Box<Treefile>>;
-        fn treefile_new_client(
-            filename: &str,
-            basearch: &str,
-            workdir: i32,
-        ) -> Result<Box<Treefile>>;
+        fn treefile_new_client(filename: &str, basearch: &str) -> Result<Box<Treefile>>;
 
         fn get_workdir(&self) -> i32;
         fn get_passwd_fd(&mut self) -> i32;

@@ -2255,12 +2255,8 @@ pub(crate) fn treefile_new_compose(
 }
 
 /// Create a new treefile, returning an error if any (currently) compose-side options are set.
-pub(crate) fn treefile_new_client(
-    filename: &str,
-    basearch: &str,
-    workdir: i32,
-) -> CxxResult<Box<Treefile>> {
-    let r = treefile_new(filename, basearch, workdir)?;
+pub(crate) fn treefile_new_client(filename: &str, basearch: &str) -> CxxResult<Box<Treefile>> {
+    let r = treefile_new(filename, basearch, -1)?;
     r.error_if_base()?;
     Ok(r)
 }
