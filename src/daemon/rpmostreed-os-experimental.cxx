@@ -241,7 +241,7 @@ prepare_download_pkgs_txn(const gchar * const *queries,
           hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, source_name);
           pkglist = hy_query_run (query);
           if (!pkglist || pkglist->len == 0)
-            return glnx_prefix_error (error, "No matches for \"%s\" in repo '%s'", pkg_name, source_name);
+            return glnx_throw (error, "No matches for \"%s\" in repo '%s'", pkg_name, source_name);
 
           g_ptr_array_add (dnf_pkgs, g_object_ref (pkglist->pdata[0]));
         }
