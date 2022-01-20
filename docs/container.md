@@ -3,7 +3,7 @@ parent: Experimental features
 nav_order: 1
 ---
 
-# ex-container
+# ostree native containers
 
 For more information on this, see [CoreOS layering](https://github.com/coreos/enhancements/pull/7).
 
