@@ -33,6 +33,10 @@ static RpmOstreeCommand ex_subcommands[] = {
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
   { "initramfs-etc", (RpmOstreeBuiltinFlags)0,
     "Track initramfs configuration files", rpmostree_ex_builtin_initramfs_etc },
+  /* This is currently only for CoreOS layering; so hide it to not confuse
+   * users. */
+  { "rebuild", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
+    "Rebuild system based on configuration", rpmostree_ex_builtin_rebuild },
   /* To graduate out of experimental, simply revert:
    * https://github.com/coreos/rpm-ostree/pull/3078 */
   { "module", static_cast<RpmOstreeBuiltinFlags>(0),

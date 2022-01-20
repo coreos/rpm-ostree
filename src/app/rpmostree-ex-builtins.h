@@ -35,6 +35,7 @@ BUILTINPROTO(apply_live);
 BUILTINPROTO(history);
 BUILTINPROTO(initramfs_etc);
 BUILTINPROTO(module);
+BUILTINPROTO(rebuild);
 
 #undef BUILTINPROTO
 

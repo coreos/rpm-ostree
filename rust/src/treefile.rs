@@ -2305,3 +2305,11 @@ pub(crate) fn treefile_new_client_from_etc(basearch: &str) -> CxxResult<Box<Tree
     r.error_if_base()?;
     Ok(Box::new(r))
 }
+
+pub(crate) fn treefile_delete_client_etc() -> CxxResult<()> {
+    // To be nice we don't delete the directory itself; just matching files.
+    for tf in iter_etc_treefiles()? {
+        std::fs::remove_file(&tf?)?;
+    }
+    Ok(())
+}
