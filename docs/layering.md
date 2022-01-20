@@ -165,10 +165,10 @@ We are assuming there is a need for debugging on your environment and you need s
 This would be helpful when IT needs to provide the images or there is a need to add the same system image to multiple hosts. 
 Instead of making the changes on each host which will have different versions of software or configs you can create an image which then you can rebase your systems on. We are using the [fcos-derivation-example](https://github.com/coreos/fcos-derivation-example) to start this process.
 
-Let's clone our example code and enter the directory.
+Let's clone our example code on your local system and enter the directory.
 
 ```bash
-[core@tutorial ~]$ git clone git@github.com:coreos/fcos-derivation-example.git && cd fcos-derivation-example
+$ git clone git@github.com:coreos/fcos-derivation-example.git && cd fcos-derivation-example
 ```
 
 Examine the Dockerfile and notice the custom binary and where we are installing strace.
@@ -199,8 +199,8 @@ $ podman run -it localhost/my-custom-fcos /bin/bash
 
 Run stace inside the container. You should see the following:
 ```bash
-$ strace -- version 5.15
-
+$ strace --version
+strace -- version 5.15
 Copyright (c) 1991-2021 The strace developers <https://strace.io>.
 This is free software; see the source for copying conditions.  There is NO
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -244,6 +244,8 @@ Push the previously built image:
 $ podman push localhost/my-custom-fcos quay.io/<YOURUSER>/my-custom-fcos
 ```
 
+Note that by default, Quay marks the repository as private. Please follow the
+[Quay documentation](https://docs.quay.io/guides/repo-view.html) to mark the repository as public.
 ### Rebase the OS to the derived image
 
 For this step we go back to our Fedora CoreOS VM console.
@@ -272,7 +274,7 @@ We should see a new deployment staged like this:
 ```
 State: idle
 AutomaticUpdatesDriver: Zincati
-  DriverState: active; periodically polling for updates (last checked Wed 2021-12-22 21:28:08 UTC)
+  DriverState: inactive
 Deployments:
   ostree-unverified-registry:quay.io/<YOURUSER>/my-custom-fcos
                     Digest: sha256:506f0924d117af1d16fe81264d531faad1a96af8c1590ba4782b0e8bf0020d1a
