@@ -486,6 +486,21 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     Ok(parsed)
 }
 
+/// Recursively parse a treefile, merging along the way, and finally postprocess it (e.g. collapse
+/// repo-packages duplicates, substitute variables, validate the config).
+fn treefile_parse_and_process<P: AsRef<Path>>(
+    filename: P,
+    basearch: Option<&str>,
+) -> Result<ConfigAndExternals> {
+    let mut seen_includes = collections::BTreeMap::new();
+    let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
+    event!(Level::DEBUG, "parsed successfully");
+    parsed.config.handle_repo_packages_overrides();
+    parsed.config = parsed.config.substitute_vars()?;
+    Treefile::validate_config(&parsed.config)?;
+    Ok(parsed)
+}
+
 // Similar to the importer check but just checks for prefixes since
 // they're files, and also allows /etc since it's before conversion
 fn add_files_path_is_valid(path: &str) -> bool {
@@ -506,12 +521,7 @@ impl Treefile {
         basearch: Option<&str>,
         workdir: Option<openat::Dir>,
     ) -> Result<Box<Treefile>> {
-        let mut seen_includes = collections::BTreeMap::new();
-        let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
-        event!(Level::DEBUG, "parsed successfully");
-        parsed.config.handle_repo_packages_overrides();
-        parsed.config = parsed.config.substitute_vars()?;
-        Treefile::validate_config(&parsed.config)?;
+        let parsed = treefile_parse_and_process(filename, basearch)?;
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
