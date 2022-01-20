@@ -28,11 +28,11 @@ use ostree_ext::{glib, ostree};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs::File;
+use std::fs::{read_dir, File};
 use std::io::prelude::*;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::{collections, fs, io};
 use tracing::{event, instrument, Level};
@@ -45,6 +45,9 @@ const INCLUDE_MAXDEPTH: u32 = 50;
 /// filesystem.  Nothing actually parses this by default client side today,
 /// it's intended to be informative.
 const COMPOSE_JSON_PATH: &str = "usr/share/rpm-ostree/treefile.json";
+
+/// Path to client-side treefiles.
+const CLIENT_TREEFILES_DIR: &str = "/etc/rpm-ostree/origin.d";
 
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
@@ -1020,6 +1023,14 @@ impl TreefileExternals {
             hash_file(hasher, f)?;
         }
         Ok(())
+    }
+
+    fn assert_nonempty(&self) {
+        // can't use the Default trick here because we can't auto-derive Eq because of `File`
+        assert!(self.postprocess_script.is_none());
+        assert!(self.add_files.is_empty());
+        assert!(self.passwd.is_none());
+        assert!(self.group.is_none());
     }
 }
 
@@ -2259,4 +2270,38 @@ pub(crate) fn treefile_new_client(filename: &str, basearch: &str) -> CxxResult<B
     let r = treefile_new(filename, basearch, -1)?;
     r.error_if_base()?;
     Ok(r)
+}
+
+fn iter_etc_treefiles() -> Result<impl Iterator<Item = Result<PathBuf>>> {
+    Ok(read_dir(CLIENT_TREEFILES_DIR)?.filter_map(|res| match res {
+        Ok(e) => {
+            let path = e.path();
+            if let Some(ext) = path.extension() {
+                if ext == "yaml" {
+                    return Some(anyhow::Result::Ok(path));
+                }
+            }
+            None
+        }
+        Err(err) => Some(Err(anyhow::Error::msg(err))),
+    }))
+}
+
+/// Create a new client treefile using the treefile dropins in /etc/rpm-ostree/origin.d/.
+pub(crate) fn treefile_new_client_from_etc(basearch: &str) -> CxxResult<Box<Treefile>> {
+    let basearch = opt_string(basearch);
+    let mut cfg = TreeComposeConfig::default();
+    let mut tfs = iter_etc_treefiles()?.collect::<Result<Vec<PathBuf>>>()?;
+    tfs.sort(); // sort because order matters; later treefiles override earlier ones
+    for tf in tfs {
+        let new_cfg = treefile_parse_and_process(tf, basearch)?;
+        new_cfg.config.base.error_if_nonempty()?;
+        new_cfg.externals.assert_nonempty();
+        let mut new_cfg = new_cfg.config;
+        treefile_merge(&mut new_cfg, &mut cfg);
+        cfg = new_cfg;
+    }
+    let r = Treefile::new_from_config(cfg, None)?;
+    r.error_if_base()?;
+    Ok(Box::new(r))
 }
