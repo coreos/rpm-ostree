@@ -85,7 +85,6 @@ pub mod ffi {
         fn client_start_daemon() -> Result<()>;
         fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
         fn client_render_download_progress(progress: Pin<&mut GVariant>) -> String;
-        fn microdnf_clean_all() -> Result<()>;
         fn running_in_container() -> bool;
     }
 

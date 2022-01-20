@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 
 #include "rpmostree-builtins.h"
+#include "rpmostree-core.h"
 #include "rpmostree-util.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-clientlib.h"
@@ -83,10 +84,11 @@ rpmostree_builtin_cleanup (int             argc,
   if (opt_repomd)
     {
       auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
-      if (is_ostree_container) 
+      if (is_ostree_container)
         {
-          CXX_TRY(microdnf_clean_all(), error);
-          return TRUE;
+          /* just directly nuke the cachedir */
+          if (!glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error))
+            return FALSE;
         }
       g_ptr_array_add (cleanup_types, (char*)"repomd");
     }
