@@ -2230,11 +2230,7 @@ pub(crate) fn treefile_new(
     } else {
         None
     };
-    Ok(Treefile::new_boxed(
-        filename.as_ref(),
-        basearch.as_deref(),
-        workdir,
-    )?)
+    Ok(Treefile::new_boxed(filename.as_ref(), basearch, workdir)?)
 }
 
 /// Create a new treefile from a string.

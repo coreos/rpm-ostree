@@ -73,7 +73,7 @@ fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Resul
     ];
 
     rootfs_dfd
-        .set_permissions(".", default_dirmode.clone())
+        .set_permissions(".", default_dirmode)
         .context("Setting rootdir permissions")?;
 
     TOPLEVEL_DIRS.par_iter().try_for_each(|&d| {
@@ -95,7 +95,7 @@ fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Resul
             .context("tmp")?;
         rootfs_dfd
             .set_permissions("tmp", perms_from_mode(tmp_mode))
-            .with_context(|| format!("Setting permissions for tmp"))?;
+            .context("Setting permissions for tmp")?;
     } else {
         rootfs_dfd.symlink("sysroot/tmp", "tmp")?;
     }
