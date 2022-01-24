@@ -197,6 +197,7 @@ mod bdb_normalize {
     }
 
     // Database metadata header.
+    #[allow(dead_code)]
     #[derive(BinRead, Debug)]
     #[br(little)]
     #[allow(dead_code)]
@@ -232,6 +233,7 @@ mod bdb_normalize {
     const PAGE_HEADER_FILE_ID_OFFSET: u64 = 0x34;
 
     // The per-header page used in both BTree and Hash databases.
+    #[allow(dead_code)]
     #[derive(BinRead, Debug)]
     #[br(little)]
     #[allow(dead_code)]
