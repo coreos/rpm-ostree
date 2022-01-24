@@ -124,6 +124,10 @@ Requires: ostree
 Requires: bubblewrap
 Requires: fuse
 
+# For container functionality
+# https://github.com/coreos/rpm-ostree/issues/3286
+Recommends: skopeo
+
 Requires: %{name}-libs%{?_isa} = %{version}-%{release}
 
 %description
