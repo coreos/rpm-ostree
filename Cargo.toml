@@ -64,7 +64,7 @@ rayon = "1.5.1"
 regex = "1.5"
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 rust-ini = "0.17.0"
-rustix = "0.31.3"
+rustix = "0.32.1"
 serde = { version = "1.0.133", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.75"

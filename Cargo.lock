@@ -160,7 +160,7 @@ dependencies = [
  "io-lifetimes",
  "ipnet",
  "maybe-owned",
- "rustix",
+ "rustix 0.31.3",
  "winapi",
  "winapi-util",
  "winx",
@@ -176,7 +176,7 @@ dependencies = [
  "io-extras",
  "io-lifetimes",
  "ipnet",
- "rustix",
+ "rustix 0.31.3",
 ]
 
 [[package]]
@@ -742,7 +742,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34ebf75299c070b6b4da3c9da0be01fee7388fb919fd4e6bad5b4f94923d08f1"
 dependencies = [
  "io-lifetimes",
- "rustix",
+ "rustix 0.31.3",
  "winapi",
 ]
 
@@ -1281,6 +1281,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a261afc61b7a5e323933b402ca6a1765183687c614789b1e4db7762ed4230bca"
 
 [[package]]
+name = "linux-raw-sys"
+version = "0.0.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95f5690fef754d905294c56f7ac815836f2513af966aa47f2e07ac79be07827f"
+
+[[package]]
 name = "lock_api"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1621,7 +1627,7 @@ dependencies = [
  "ostree",
  "phf",
  "pin-project",
- "rustix",
+ "rustix 0.31.3",
  "serde",
  "serde_json",
  "structopt",
@@ -2051,7 +2057,7 @@ dependencies = [
  "regex",
  "rpmostree-client",
  "rust-ini",
- "rustix",
+ "rustix 0.32.1",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2089,8 +2095,22 @@ dependencies = [
  "io-lifetimes",
  "itoa 1.0.1",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.0.36",
  "once_cell",
+ "winapi",
+]
+
+[[package]]
+name = "rustix"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cee647393af53c750e15dcbf7781cdd2e550b246bde76e46c326e7ea3c73773"
+dependencies = [
+ "bitflags",
+ "errno",
+ "io-lifetimes",
+ "libc",
+ "linux-raw-sys 0.0.37",
  "winapi",
 ]
 
