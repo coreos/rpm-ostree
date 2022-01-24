@@ -36,7 +36,7 @@ cap-primitives = "0.22.0"
 cap-std = "0.22.0"
 cap-tempfile = "0.22.0"
 chrono = { version = "0.4.19", features = ["serde"] }
-clap = "2.34.0"
+clap = "3.0.10"
 curl = "0.4.42"
 cxx = "1.0.62"
 envsubst = "0.2.0"
