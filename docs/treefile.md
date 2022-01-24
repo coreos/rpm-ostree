@@ -325,6 +325,16 @@ It supports the following parameters:
    `/usr/lib/systemd/system-presets/XX-example.preset` file as part of a package
    or in the postprocess script.
 
+ * `platform-module`: string, optional.  For the very rare case where you need
+   to either provide or override the platform module.  When using RPM modules
+   libdnf will attempt to derive the appropriate platform module by inspecting
+   various virtual provide entries on the available packages.  If this fails it
+   will fall back to parsing `/etc/os-release` or `/usr/lib/os-release` in that
+   order.  If the first mechanism fails and we are running a compose, we will not
+   have the necessary files to allow the fall back to work.  If you find yourself
+   in this situation you can provide the platform module name yourself using this
+   option. You can also use this to override the platform module if needed.
+
 ## Experimental options
 
 All options listed here are subject to change or removal in a future
