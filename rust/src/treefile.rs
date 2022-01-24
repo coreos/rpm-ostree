@@ -704,7 +704,7 @@ impl Treefile {
     }
 
     pub(crate) fn get_platform_module(&self) -> String {
-        self.parsed.platform_module.clone().unwrap_or_default()
+        self.parsed.base.platform_module.clone().unwrap_or_default()
     }
 
     pub(crate) fn get_install_langs(&self) -> Vec<String> {
