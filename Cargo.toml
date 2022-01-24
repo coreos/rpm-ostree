@@ -33,7 +33,7 @@ binread = "2.2.0"
 c_utf8 = "0.1.0"
 camino = "1.0.7"
 cap-primitives = "0.22.0"
-cap-std = "0.22.0"
+cap-std = "0.23.0"
 cap-tempfile = "0.22.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "2.34.0"
