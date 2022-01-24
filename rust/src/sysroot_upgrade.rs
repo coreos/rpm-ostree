@@ -15,13 +15,13 @@ use std::convert::TryFrom;
 use std::pin::Pin;
 use tokio::runtime::Handle;
 
-impl Into<crate::ffi::ContainerImageState> for ostree_container::store::LayeredImageState {
-    fn into(self) -> crate::ffi::ContainerImageState {
+impl From<ostree_container::store::LayeredImageState> for crate::ffi::ContainerImageState {
+    fn from(s: ostree_container::store::LayeredImageState) -> crate::ffi::ContainerImageState {
         crate::ffi::ContainerImageState {
-            base_commit: self.base_commit,
-            merge_commit: self.merge_commit,
-            is_layered: self.is_layered,
-            image_digest: self.manifest_digest,
+            base_commit: s.base_commit,
+            merge_commit: s.merge_commit,
+            is_layered: s.is_layered,
+            image_digest: s.manifest_digest,
         }
     }
 }

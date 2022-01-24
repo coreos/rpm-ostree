@@ -86,10 +86,10 @@ fn file_content_changed(
     let bufsize = srcbuf.len();
     while remaining > 0 {
         let readlen = std::cmp::min(usize::try_from(remaining).unwrap_or(bufsize), bufsize);
-        let mut srcbuf = &mut srcbuf[0..readlen];
-        let mut destbuf = &mut destbuf[0..readlen];
-        srcf.read_exact(&mut srcbuf)?;
-        destf.read_exact(&mut destbuf)?;
+        let srcbuf = &mut srcbuf[0..readlen];
+        let destbuf = &mut destbuf[0..readlen];
+        srcf.read_exact(srcbuf)?;
+        destf.read_exact(destbuf)?;
         if srcbuf != destbuf {
             return Ok(true);
         }

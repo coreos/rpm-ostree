@@ -36,8 +36,9 @@ fn usroverlay(args: &[&str]) -> Result<()> {
 // main().
 async fn inner_async_main(args: Vec<String>) -> Result<i32> {
     let args_borrowed: Vec<_> = args.iter().map(|s| s.as_str()).collect();
-    let arg = args_borrowed.get(1).map(|s| *s).unwrap_or(&"");
+    let arg = args_borrowed.get(1).copied().unwrap_or("");
     // Async-native code goes here
+    #[allow(clippy::single_match)]
     match arg {
         // TODO(lucab): move consumers to the multicall entrypoint, then drop this.
         "ex-container" => {
@@ -77,7 +78,7 @@ async fn multicall_ostree_container(args: Vec<String>) -> Result<i32> {
 async fn dispatch_multicall(callname: String, args: Vec<String>) -> Result<i32> {
     match callname.as_str() {
         "ostree-container" => multicall_ostree_container(args).await,
-        "rpm-ostree" | _ => inner_async_main(args).await,
+        _ => inner_async_main(args).await, // implicitly includes "rpm-ostree"
     }
 }
 
@@ -107,7 +108,7 @@ fn gather_cli_args(argv: impl IntoIterator<Item = OsString>) -> Result<(String, 
         args.push("rpm-ostree".to_string());
     }
 
-    if args[0] == "" {
+    if args[0].is_empty() {
         args[0] = "rpm-ostree".to_string();
     }
 
