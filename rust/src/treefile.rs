@@ -703,6 +703,10 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    pub(crate) fn get_platform_module(&self) -> String {
+        self.parsed.platform_module.clone().unwrap_or_default()
+    }
+
     pub(crate) fn get_install_langs(&self) -> Vec<String> {
         self.parsed.base.install_langs.clone().unwrap_or_default()
     }
@@ -1263,6 +1267,9 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "exclude-packages")]
     pub(crate) exclude_packages: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "platform-module")]
+    pub(crate) platform_module: Option<String>,
 
     // Content installation opts
     #[serde(skip_serializing_if = "Option::is_none")]

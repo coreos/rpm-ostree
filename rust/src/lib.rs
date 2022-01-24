@@ -409,6 +409,7 @@ pub mod ffi {
         fn get_modules_enable(&self) -> Vec<String>;
         fn get_modules_install(&self) -> Vec<String>;
         fn get_exclude_packages(&self) -> Vec<String>;
+        fn get_platform_module(&self) -> String;
         fn get_install_langs(&self) -> Vec<String>;
         fn format_install_langs_macro(&self) -> String;
         fn get_lockfile_repos(&self) -> Vec<String>;

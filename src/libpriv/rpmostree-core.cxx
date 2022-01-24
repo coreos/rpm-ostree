@@ -297,6 +297,11 @@ rpmostree_context_new_compose (int               userroot_dfd,
 
   rpmostree_context_set_cache_root (ret, userroot_dfd);
 
+  auto platform_module = treefile_rs.get_platform_module();
+  if (!platform_module.empty()) {
+    dnf_context_set_platform_module(ret->dnfctx, platform_module.c_str());
+  }
+
   // The ref needs special handling as it gets variable-substituted.
   auto ref = ret->treefile_rs->get_ref();
   if (ref.length() > 0)
