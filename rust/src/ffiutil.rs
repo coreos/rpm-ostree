@@ -51,13 +51,8 @@ pub(crate) fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
 /// This creates a new file descriptor, because we can't guarantee they are
 /// interchangable; for example right now openat uses `O_PATH`
 pub(crate) unsafe fn ffi_dirfd(fd: libc::c_int) -> std::io::Result<cap_std::fs::Dir> {
-    // TODO replace this with https://github.com/bytecodealliance/cap-std/pull/212
-    let src = unsafe { std::fs::File::from_raw_fd(fd) };
-    // Then convert into a cap-std file
-    let r = cap_primitives::fs::open_dir(&src, std::path::Path::new("."))?;
-    // Now, drop the std wrapper for the fd - we don't want to close it!
-    let _ = src.into_raw_fd();
-    Ok(cap_std::fs::Dir::from_std_file(r))
+    let fd = unsafe { rustix::fd::BorrowedFd::borrow_raw_fd(fd) };
+    cap_std::fs::Dir::reopen_dir(&fd)
 }
 
 // View `fd` as an `Option<openat::Dir>` instance.  Lifetime of return value
