@@ -35,6 +35,7 @@ many of the benefits of both together.
  - OS rollback without affecting user data (`/usr` but not `/etc`, `/var`) via libostree
  - Client-side package layering (and overrides)
  - Easily make your own: `rpm-ostree compose tree` and [CoreOS Assembler](https://github.com/coreos/coreos-assembler)
+   as well as https://fedoraproject.org/wiki/Changes/OstreeNativeContainer
 
 ## Documentation
 
