@@ -1215,10 +1215,10 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) cliwrap: Option<bool>,
 
     #[serde(flatten)]
-    pub(crate) base: BaseComposeConfigFields,
+    pub(crate) derive: DeriveConfigFields,
 
     #[serde(flatten)]
-    pub(crate) derive: DeriveConfigFields,
+    pub(crate) base: BaseComposeConfigFields,
 }
 
 /// These fields are only useful when composing a new ostree commit.
@@ -1801,6 +1801,19 @@ pub(crate) mod tests {
             automatic-version-prefix: foo
             automatic_version_prefix: bar
         "});
+    }
+
+    #[test]
+    fn basic_derive() {
+        let treefile = append_and_parse(indoc! {"
+            override-remove:
+              - foo
+              - bar
+        "});
+        let v = treefile.derive.override_remove.unwrap();
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0], "foo");
+        assert_eq!(v[1], "bar");
     }
 
     #[test]
