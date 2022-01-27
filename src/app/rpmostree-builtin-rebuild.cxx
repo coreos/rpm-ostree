@@ -71,7 +71,11 @@ rpmostree_ex_builtin_rebuild (int             argc,
 
       /* In the container flow, we effectively "consume" the treefiles after
        * modifying the rootfs. */
-      CXX_TRY(treefile_delete_client_etc (), error);
+      auto n = CXX_TRY_VAL(treefile_delete_client_etc (), error);
+      if (n == 0)
+        {
+          g_print ("No changes to apply.\n");
+        } 
     }
   else
     {

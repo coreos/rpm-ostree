@@ -2316,10 +2316,12 @@ pub(crate) fn treefile_new_client_from_etc(basearch: &str) -> CxxResult<Box<Tree
     Ok(Box::new(r))
 }
 
-pub(crate) fn treefile_delete_client_etc() -> CxxResult<()> {
+pub(crate) fn treefile_delete_client_etc() -> CxxResult<u32> {
     // To be nice we don't delete the directory itself; just matching files.
+    let mut n = 0u32;
     for tf in iter_etc_treefiles()? {
         std::fs::remove_file(&tf?)?;
+        n = n.saturating_add(1);
     }
-    Ok(())
+    Ok(n)
 }
