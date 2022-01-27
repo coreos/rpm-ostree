@@ -2272,18 +2272,25 @@ pub(crate) fn treefile_new_client(filename: &str, basearch: &str) -> CxxResult<B
 }
 
 fn iter_etc_treefiles() -> Result<impl Iterator<Item = Result<PathBuf>>> {
-    Ok(read_dir(CLIENT_TREEFILES_DIR)?.filter_map(|res| match res {
-        Ok(e) => {
-            let path = e.path();
-            if let Some(ext) = path.extension() {
-                if ext == "yaml" {
-                    return Some(anyhow::Result::Ok(path));
+    // TODO use cap-std-ext's https://docs.rs/cap-std-ext/latest/cap_std_ext/dirext/trait.CapStdExtDirExt.html#tymethod.open_dir_optional
+    let p = Path::new(CLIENT_TREEFILES_DIR);
+    if !p.exists() {
+        return Ok(either::Left(std::iter::empty()));
+    }
+    Ok(either::Right(read_dir(CLIENT_TREEFILES_DIR)?.filter_map(
+        |res| match res {
+            Ok(e) => {
+                let path = e.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "yaml" {
+                        return Some(anyhow::Result::Ok(path));
+                    }
                 }
+                None
             }
-            None
-        }
-        Err(err) => Some(Err(anyhow::Error::msg(err))),
-    }))
+            Err(err) => Some(Err(anyhow::Error::msg(err))),
+        },
+    )))
 }
 
 /// Create a new client treefile using the treefile dropins in /etc/rpm-ostree/origin.d/.

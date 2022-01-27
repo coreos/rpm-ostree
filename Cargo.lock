@@ -2037,6 +2037,7 @@ dependencies = [
  "clap",
  "curl",
  "cxx",
+ "either",
  "env_logger",
  "envsubst",
  "fail",
