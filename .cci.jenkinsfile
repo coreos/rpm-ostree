@@ -43,7 +43,7 @@ parallel insttests: {
       }
       stage("Build FCOS") {
         shwrap("""
-          coreos-assembler init --force https://github.com/coreos/fedora-coreos-config -b next
+          coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm
           mv *.rpm overrides/rpm

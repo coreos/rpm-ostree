@@ -8,7 +8,7 @@ export COSA_SUPPRESS_DEPCHECK=1
 ls -al /usr/bin/rpm-ostree
 rpm-ostree --version
 cd $(mktemp -d)
-cosa init https://github.com/coreos/fedora-coreos-config/ -b next-devel
+cosa init https://github.com/coreos/fedora-coreos-config/
 rsync -rlv /cosa/component-install/ overrides/rootfs/
 /ci/cosa-overrides.sh
 cosa fetch
