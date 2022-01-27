@@ -184,6 +184,17 @@ both direct HTTP URLs as well as local files:
 $ rpm-ostree override replace https://kojipkgs.fedoraproject.org//packages/podman/3.3.1/1.fc34/x86_64/podman-3.3.1-1.fc34.x86_64.rpm
 ```
 
+Another example with the kernel package; note you need to override exactly the set of installed packages:
+
+```
+$ ls -al kernel*.rpm
+-rw-r--r--. 1 root root  8085596 Jan 27 22:02 kernel-4.18.0-123.el8.x86_64.rpm
+-rw-r--r--. 1 root root 40709632 Jan 27 22:02 kernel-core-4.18.0-123.el8.x86_64.rpm
+-rw-r--r--. 1 root root 32533504 Jan 27 22:02 kernel-modules-4.18.0-123.el8.x86_64.rpm
+-rw-r--r--. 1 root root  8790996 Jan 27 22:02 kernel-modules-extra-4.18.0-123.el8.x86_64.rpm
+$ rpm-ostree override replace ./kernel*.rpm
+```
+
 ### Resetting overrides
 
 Use e.g. `rpm-ostree override reset podman` to undo the previous change.
