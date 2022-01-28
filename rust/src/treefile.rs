@@ -145,8 +145,8 @@ fn treefile_parse_stream<R: io::Read>(
         treefile.modules = Some(modules);
     }
 
-    if let Some(repo_packages) = treefile.base.repo_packages.take() {
-        treefile.base.repo_packages = Some(
+    if let Some(repo_packages) = treefile.repo_packages.take() {
+        treefile.repo_packages = Some(
             repo_packages
                 .into_iter()
                 .map(|rp| -> Result<RepoPackage> {
@@ -412,11 +412,11 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         postprocess,
         add_files,
         remove_files,
-        remove_from_packages,
-        repo_packages
+        remove_from_packages
     );
 
     merge_vec_field(&mut dest.packages, &mut src.packages);
+    merge_vec_field(&mut dest.repo_packages, &mut src.repo_packages);
     merge_basic_field(&mut dest.cliwrap, &mut src.cliwrap);
     merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
     merge_modules(&mut dest.modules, &mut src.modules);
@@ -783,15 +783,11 @@ impl Treefile {
     }
 
     pub(crate) fn get_repo_packages(&self) -> &[RepoPackage] {
-        self.parsed
-            .base
-            .repo_packages
-            .as_deref()
-            .unwrap_or_default()
+        self.parsed.repo_packages.as_deref().unwrap_or_default()
     }
 
     pub(crate) fn clear_repo_packages(&mut self) {
-        self.parsed.base.repo_packages.take();
+        self.parsed.repo_packages.take();
     }
 
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
@@ -1211,6 +1207,9 @@ pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) packages: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "repo-packages")]
+    pub(crate) repo_packages: Option<Vec<RepoPackage>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) modules: Option<ModulesConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) cliwrap: Option<bool>,
@@ -1252,9 +1251,6 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) arch_include: Option<BTreeMap<String, Include>>,
 
     // Core content
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "repo-packages")]
-    pub(crate) repo_packages: Option<Vec<RepoPackage>>,
     // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bootstrap_packages: Option<Vec<String>>,
@@ -1556,7 +1552,7 @@ impl TreeComposeConfig {
 
     // we need to ensure that appended repo packages override earlier ones
     fn handle_repo_packages_overrides(&mut self) {
-        if let Some(repo_packages) = self.base.repo_packages.as_mut() {
+        if let Some(repo_packages) = self.repo_packages.as_mut() {
             let mut seen_pkgs: HashSet<String> = HashSet::new();
             // Create a temporary new filtered vec; see
             // https://doc.rust-lang.org/std/iter/struct.Map.html#notes-about-side-effects for why
@@ -1637,7 +1633,7 @@ pub(crate) mod tests {
         assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 7);
         assert_eq!(
-            treefile.base.repo_packages,
+            treefile.repo_packages,
             Some(vec![RepoPackage {
                 repo: "baserepo".into(),
                 packages: vec!["blah".into(), "bloo".into()],
@@ -1916,7 +1912,7 @@ pub(crate) mod tests {
         let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
         assert!(tf.parsed.packages.unwrap().len() == 6);
         assert_eq!(
-            tf.parsed.base.repo_packages,
+            tf.parsed.repo_packages,
             Some(vec![
                 RepoPackage {
                     repo: "foo2".into(),
