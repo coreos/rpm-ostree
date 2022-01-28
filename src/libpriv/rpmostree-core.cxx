@@ -1478,6 +1478,7 @@ gv_nevra_hash (gconstpointer v)
 static gboolean
 check_goal_solution (RpmOstreeContext *self,
                      GPtrArray        *removed_pkgnames,
+                     GPtrArray        *replaced_pkgnames,
                      GPtrArray        *replaced_nevras,
                      GError          **error)
 {
@@ -1557,7 +1558,8 @@ check_goal_solution (RpmOstreeContext *self,
         auto old_pkg = static_cast<DnfPackage *>(old->pdata[0]);
 
         /* did we expect this nevra to replace a base pkg? */
-        if (rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
+        if (rpmostree_str_ptrarray_contains (replaced_nevras, nevra) || 
+            rpmostree_str_ptrarray_contains (replaced_pkgnames, dnf_package_get_name (pkg)))
           g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
                                                       gv_nevra_from_pkg (old_pkg));
         else
@@ -1601,7 +1603,9 @@ check_goal_solution (RpmOstreeContext *self,
       {
         g_autoptr(GVariant) nevra_v = g_variant_get_child_value (newv, 0);
         const char *nevra = g_variant_get_string (nevra_v, NULL);
-        if (!rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
+        const char *name = NULL;
+        g_variant_get_child (newv, 1, "&s", &name);
+        if (!(rpmostree_str_ptrarray_contains (replaced_nevras, nevra) || rpmostree_str_ptrarray_contains (replaced_pkgnames, name)))
           g_ptr_array_add (forbidden, g_strdup (nevra));
       }
 
@@ -1997,14 +2001,50 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     }
 
   /* First, handle packages to remove */
-  g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
+  g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new_with_free_func (g_free);
   for (auto &pkgname_v: packages_override_remove)
     {
       const char *pkgname = pkgname_v.c_str();
       if (!dnf_context_remove (dnfctx, pkgname, error))
         return FALSE;
 
-      g_ptr_array_add (removed_pkgnames, (gpointer)pkgname);
+      g_ptr_array_add (removed_pkgnames, g_strdup(pkgname));
+    }
+
+  // Then, repo packages to remove and replace
+  g_autoptr(DnfPackageSet) pinned_pkgs = dnf_packageset_new (sack);
+  Map *pinned_pkgs_map = dnf_packageset_get_map (pinned_pkgs);
+  auto override_packages_query = self->treefile_rs->get_override_replace_query();
+  for (auto & repo_pkg : override_packages_query)
+    {
+      auto repo = std::string(repo_pkg.get_repo());
+      auto pkgs = repo_pkg.get_packages();
+      for (auto & pkg_r : pkgs)
+        {
+          // We need to copy here because we only have an immutable reference to Rust
+          auto pkg = std::string(pkg_r);
+          const char *pkgname = pkg.c_str();
+          if (!dnf_context_remove (dnfctx, pkgname, error))
+            return FALSE;
+          // Then copy here *again*; TODO: switch this to a vec which owns the string
+          char *copied = g_strdup (pkgname);
+          g_ptr_array_add (replaced_pkgnames, copied);
+
+          g_auto(HySubject) subject = hy_subject_create(pkg.c_str());
+          /* this is basically like a slightly customized dnf_context_install() */
+          HyNevra nevra = NULL;
+          hy_autoquery HyQuery query =
+            hy_subject_get_best_solution(subject, sack, NULL, &nevra, FALSE, TRUE, TRUE, TRUE, FALSE);
+          hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo.c_str());
+          g_autoptr(DnfPackageSet) pset = hy_query_run_set (query);
+          if (dnf_packageset_count (pset) == 0)
+            return glnx_throw (error, "No matches for '%s' in repo '%s'", pkg.c_str(), repo.c_str());
+          g_auto(HySelector) selector = hy_selector_create (sack);
+          hy_selector_pkg_set (selector, pset);
+          if (!hy_goal_install_selector (goal, selector, error))
+            return FALSE;
+          map_or (pinned_pkgs_map, dnf_packageset_get_map (pset));
+        }
     }
 
   /* Then, handle local packages to install */
@@ -2017,8 +2057,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     return FALSE;
 
   /* Now repo-packages */
-  g_autoptr(DnfPackageSet) pinned_pkgs = dnf_packageset_new (sack);
-  Map *pinned_pkgs_map = dnf_packageset_get_map (pinned_pkgs);
   auto repo_pkgs = self->treefile_rs->get_repo_packages();
   for (auto & repo_pkg : repo_pkgs)
     {
@@ -2123,7 +2161,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   auto task = rpmostreecxx::progress_begin_task("Resolving dependencies");
   /* XXX: consider a --allow-uninstall switch? */
   if (!dnf_goal_depsolve (goal, actions, error) ||
-      !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
+      !check_goal_solution (self, removed_pkgnames, replaced_pkgnames, replaced_nevras, error))
     return FALSE;
   g_clear_pointer (&self->pkgs, (GDestroyNotify)g_ptr_array_unref);
   self->pkgs = dnf_goal_get_packages (goal,

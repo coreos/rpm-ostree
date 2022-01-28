@@ -426,6 +426,7 @@ pub mod ffi {
         fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
         fn get_ostree_ref(&self) -> String;
         fn get_repo_packages(&self) -> &[RepoPackage];
+        fn get_override_replace_query(&self) -> &[RepoPackage];
         fn clear_repo_packages(&mut self);
         fn prettyprint_json_stdout(&self);
         fn print_deprecation_warnings(&self);

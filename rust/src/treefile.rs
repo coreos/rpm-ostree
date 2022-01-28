@@ -786,6 +786,13 @@ impl Treefile {
         self.parsed.repo_packages.as_deref().unwrap_or_default()
     }
 
+    pub(crate) fn get_override_replace_query(&self) -> &[RepoPackage] {
+        self.parsed
+            .override_replace_query
+            .as_deref()
+            .unwrap_or_default()
+    }
+
     pub(crate) fn clear_repo_packages(&mut self) {
         self.parsed.repo_packages.take();
     }
@@ -1204,16 +1211,18 @@ pub(crate) enum RpmdbBackend {
 /// cases. Everything else is specific to either case and so lives in their respective flattened
 /// field.
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) packages: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "repo-packages")]
     pub(crate) repo_packages: Option<Vec<RepoPackage>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) modules: Option<ModulesConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) cliwrap: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) override_replace_query: Option<Vec<RepoPackage>>,
 
     #[serde(flatten)]
     pub(crate) derive: DeriveConfigFields,
@@ -1824,11 +1833,18 @@ pub(crate) mod tests {
             override-remove:
               - foo
               - bar
+            override-replace-query:
+              - repo: foo
+                packages:
+                  - bar
+                  - baz
         "});
         let v = treefile.derive.override_remove.unwrap();
         assert_eq!(v.len(), 2);
         assert_eq!(v[0], "foo");
         assert_eq!(v[1], "bar");
+        let q = &treefile.override_replace_query.unwrap()[0];
+        assert_eq!(q.repo, "foo");
     }
 
     #[test]
@@ -2296,6 +2312,7 @@ pub(crate) fn treefile_new_compose(
 pub(crate) fn treefile_new_client(filename: &str, basearch: &str) -> CxxResult<Box<Treefile>> {
     let r = treefile_new(filename, basearch, -1)?;
     r.error_if_base()?;
+    dbg!(&r);
     Ok(r)
 }
 
