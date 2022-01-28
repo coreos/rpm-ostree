@@ -1221,6 +1221,20 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) base: BaseComposeConfigFields,
 }
 
+impl std::ops::Deref for TreeComposeConfig {
+    type Target = BaseComposeConfigFields;
+
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
+}
+
+impl std::ops::DerefMut for TreeComposeConfig {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.base
+    }
+}
+
 /// These fields are only useful when composing a new ostree commit.
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -1504,7 +1518,7 @@ impl TreeComposeConfig {
     fn substitute_vars(mut self) -> Result<Self> {
         let mut substvars: collections::HashMap<String, String> = collections::HashMap::new();
         // Substitute ${basearch} and ${releasever}
-        if let Some(arch) = &self.base.basearch {
+        if let Some(arch) = &self.basearch {
             substvars.insert("basearch".to_string(), arch.clone());
         }
         if let Some(releasever) = &self.base.releasever {
