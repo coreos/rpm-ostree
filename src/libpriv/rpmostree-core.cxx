@@ -2016,37 +2016,31 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   if (!dnf_context_module_disable_all (dnfctx, error))
     return FALSE;
 
-  /* Now repo-packages; only supported during server composes for now. */
-  g_autoptr(DnfPackageSet) pinned_pkgs = NULL;
-  if (!self->is_system)
+  /* Now repo-packages */
+  g_autoptr(DnfPackageSet) pinned_pkgs = dnf_packageset_new (sack);
+  Map *pinned_pkgs_map = dnf_packageset_get_map (pinned_pkgs);
+  auto repo_pkgs = self->treefile_rs->get_repo_packages();
+  for (auto & repo_pkg : repo_pkgs)
     {
-      pinned_pkgs = dnf_packageset_new (sack);
-      Map *pinned_pkgs_map = dnf_packageset_get_map (pinned_pkgs);
-      auto repo_pkgs = self->treefile_rs->get_repo_packages();
-      for (auto & repo_pkg : repo_pkgs)
+      auto repo = std::string(repo_pkg.get_repo());
+      auto pkgs = repo_pkg.get_packages();
+      for (auto & pkg_str : pkgs)
         {
-          auto repo = std::string(repo_pkg.get_repo());
-          auto pkgs = repo_pkg.get_packages();
-          for (auto & pkg_str : pkgs)
-            {
-              auto pkg = std::string(pkg_str);
-              g_auto(HySubject) subject = hy_subject_create(pkg.c_str());
-              /* this is basically like a slightly customized dnf_context_install() */
-              HyNevra nevra = NULL;
-              hy_autoquery HyQuery query =
-                hy_subject_get_best_solution(subject, sack, NULL, &nevra, FALSE, TRUE, TRUE, TRUE, FALSE);
-              hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo.c_str());
-              g_autoptr(DnfPackageSet) pset = hy_query_run_set (query);
-              if (dnf_packageset_count (pset) == 0)
-                return glnx_throw (error, "No matches for '%s' in repo '%s'", pkg.c_str(), repo.c_str());
-
-              g_auto(HySelector) selector = hy_selector_create (sack);
-              hy_selector_pkg_set (selector, pset);
-              if (!hy_goal_install_selector (goal, selector, error))
-                return FALSE;
-
-              map_or (pinned_pkgs_map, dnf_packageset_get_map (pset));
-            }
+          auto pkg = std::string(pkg_str);
+          g_auto(HySubject) subject = hy_subject_create(pkg.c_str());
+          /* this is basically like a slightly customized dnf_context_install() */
+          HyNevra nevra = NULL;
+          hy_autoquery HyQuery query =
+            hy_subject_get_best_solution(subject, sack, NULL, &nevra, FALSE, TRUE, TRUE, TRUE, FALSE);
+          hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo.c_str());
+          g_autoptr(DnfPackageSet) pset = hy_query_run_set (query);
+          if (dnf_packageset_count (pset) == 0)
+            return glnx_throw (error, "No matches for '%s' in repo '%s'", pkg.c_str(), repo.c_str());
+          g_auto(HySelector) selector = hy_selector_create (sack);
+          hy_selector_pkg_set (selector, pset);
+          if (!hy_goal_install_selector (goal, selector, error))
+            return FALSE;
+          map_or (pinned_pkgs_map, dnf_packageset_get_map (pset));
         }
     }
 
