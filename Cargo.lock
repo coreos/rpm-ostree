@@ -149,9 +149,9 @@ checksum = "6f3132262930b0522068049f5870a856ab8affc80c70d08b6ecb785771a6fc23"
 
 [[package]]
 name = "cap-primitives"
-version = "0.22.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2737eb174c9482c865789a428bfbddfdf284317d466ebbc637eee2e1242bfaa"
+checksum = "6a443c65e406bcce3edd5023bc37a6e2eade7ff65f21f1a9fc71b58824f47e13"
 dependencies = [
  "ambient-authority",
  "errno",
@@ -168,9 +168,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "0.22.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a9ba199282865f3e3c3e7afc6907a3a27896435e24209e035c8a24d4fbcf43a"
+checksum = "5a73f60ac353e0f593708a8cc069e4412ac31b644a403c90d3c77888a484d8bd"
 dependencies = [
  "cap-primitives",
  "io-extras",
@@ -180,10 +180,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "cap-tempfile"
-version = "0.22.0"
+name = "cap-std-ext"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c472ee35e2073a74a3d882c21745e7db2d573825e2e0a754dbffaeef97f4458"
+checksum = "54a112ff00b6dc34598e32fb0e956b419f005e8d74c43ffa704b07ca4311298f"
+dependencies = [
+ "cap-std",
+ "rustix",
+ "uuid",
+]
+
+[[package]]
+name = "cap-tempfile"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c426e0191f9964890296f592181ab26a5713bfb9794569225edd2d49958c3ca"
 dependencies = [
  "cap-std",
  "rand",
@@ -737,9 +748,9 @@ dependencies = [
 
 [[package]]
 name = "fs-set-times"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ebf75299c070b6b4da3c9da0be01fee7388fb919fd4e6bad5b4f94923d08f1"
+checksum = "40c496df0e588acbc672c912b4eb48ca7912164e89498ffad89969492f8e958f"
 dependencies = [
  "io-lifetimes",
  "rustix",
@@ -1165,6 +1176,7 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6ef6787e7f0faedc040f95716bdd0e62bcfcf4ba93da053b62dea2691c13864"
 dependencies = [
+ "libc",
  "winapi",
 ]
 
@@ -1276,9 +1288,9 @@ checksum = "7fb9b38af92608140b86b693604b9ffcc5824240a484d1ecd4795bacb2fe88f3"
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.0.36"
+version = "0.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a261afc61b7a5e323933b402ca6a1765183687c614789b1e4db7762ed4230bca"
+checksum = "95f5690fef754d905294c56f7ac815836f2513af966aa47f2e07ac79be07827f"
 
 [[package]]
 name = "lock_api"
@@ -1487,9 +1499,9 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "oci-spec"
-version = "0.5.2"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63f0f82a50257e72a6f13616dc093f3d0874294629bf8b7d0bc2a098e3db324f"
+checksum = "6b409d52fff741f330914aa6b8ab73e9113607bb13fbc09f95cdb04d16c8dd5d"
 dependencies = [
  "derive_builder",
  "getset",
@@ -1596,14 +1608,15 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.6.0"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1c5b5f4077b34661b3187f2517d5c7aed8d90f0433d969ce20a37955e723b9f"
+checksum = "3db217fe88452a77bdf9eb8bbb04e2c8ea0088c43b137e447e3102826d5bda5a"
 dependencies = [
  "anyhow",
  "async-compression",
  "bitflags",
  "camino",
+ "cap-std-ext",
  "cjson",
  "containers-image-proxy",
  "flate2",
@@ -1612,6 +1625,7 @@ dependencies = [
  "gvariant",
  "hex",
  "indicatif",
+ "io-lifetimes",
  "libc",
  "oci-spec",
  "once_cell",
@@ -1619,9 +1633,7 @@ dependencies = [
  "openat-ext",
  "openssl",
  "ostree",
- "phf",
  "pin-project",
- "rustix",
  "serde",
  "serde_json",
  "structopt",
@@ -2019,7 +2031,6 @@ dependencies = [
  "binread",
  "c_utf8",
  "camino",
- "cap-primitives",
  "cap-std",
  "cap-tempfile",
  "chrono",
@@ -2080,9 +2091,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.31.3"
+version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2dcfc2778a90e38f56a708bfc90572422e11d6c7ee233d053d1f782cf9df6d2"
+checksum = "7cee647393af53c750e15dcbf7781cdd2e550b246bde76e46c326e7ea3c73773"
 dependencies = [
  "bitflags",
  "errno",
@@ -2489,9 +2500,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbbf1c778ec206785635ce8ad57fe52b3009ae9e0c9f574a728f3049d3e55838"
+checksum = "95e99d373042c30406d317cfc5bfad7b5d604bdd31dab72cf8739abebaa64aee"
 dependencies = [
  "bytes",
  "libc",
