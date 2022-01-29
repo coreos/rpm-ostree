@@ -16,11 +16,10 @@ be natively supported as a transport mechanism for bootable operating systems.
 Use this to switch to booting from a container image:
 
 ```
-$ rpm-ostree rebase --experimental ostree-unverified-registry:quay.io/cgwalters/fcos
+$ rpm-ostree rebase --experimental ostree-unverified-registry:quay.io/coreos-assembler/fcos:testing-devel
 ```
 
-In the near future, the idea is to push an official container image as e.g.
-`quay.io/fedora/coreos:stable`.
+In the near future, we hope to push this more officially to `quay.io/fedora/coreos:stable`.
 
 However, this model would just be using Docker/OCI transport "on the wire"
 for content that already exists today.  This would aid things like mirroring
@@ -30,7 +29,7 @@ is more interesting:
 ## Using custom builds
 
 The ostree container functionality supports layered container images.
-See [fcos-derivation-example](https://github.com/cgwalters/fcos-derivation-example)
+See [fcos-derivation-example](https://github.com/coreos/fcos-derivation-example)
 for an example.
 
 This functionality is explicitly experimental; it is unlikely to break booting
@@ -47,13 +46,13 @@ accepts RPMs (and other content) and outputs an OSTree commit.
 This output can be converted into a base image via e.g.:
 
 ```
-$ rpm-ostree ex-container encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue docker://quay.io/myuser/fedora-silverblue:35
+$ ostree container encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue docker://quay.io/myuser/fedora-silverblue:35
 ```
 
 or:
 
 ```
-$ rpm-ostree ex-container encapsulate --repo=/path/to/repo fedora/x86_64/coreos/stable oci:/var/tmp/fcos
+$ ostree container encapsulate --repo=/path/to/repo fedora/x86_64/coreos/stable oci:/var/tmp/fcos
 ```
 
 In the first case, we are pushing to a remote Docker registry, and
@@ -62,8 +61,4 @@ The `encapsulate` command accepts all the same "transport prefixes" as the `skop
 CLI.  For more information, see `man skopeo`.
 
 It is likely at some point that we add `rpm-ostree compose container` or so
-which would natively input and output a container image.
-
-Note that `rpm-ostree ex-container encapsulate` is just exposing the underlying
-`ostree` functionality here; you can encapsulate an ostree commit generated via
-any tool, not just `rpm-ostree compose tree`.
+which would natively input and output a (base) container image.
