@@ -16,6 +16,7 @@ use crate::treefile::Treefile;
 use crate::{bwrap, importer};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::Utf8Path;
+use cap_std::fs::Dir;
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
@@ -29,7 +30,7 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::fmt::Write as FmtWrite;
 use std::io::{BufRead, BufReader, Read, Seek, Write};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::IntoRawFd;
 use std::path::Path;
@@ -152,22 +153,26 @@ pub fn compose_prepare_rootfs(
 // https://pagure.io/workstation-ostree-config/pull-request/121
 // https://discussion.fedoraproject.org/t/adapting-user-home-in-etc-passwd/487/6
 // https://github.com/justjanne/powerline-go/issues/94
-fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Result<()> {
-    let path = Path::new("usr/etc/default/useradd");
-    if let Some(f) = rootfs_dfd.open_file_optional(path)? {
-        rootfs_dfd.write_file_with(&path, 0o644, |bufw| -> Result<_> {
-            let f = BufReader::new(&f);
-            for line in f.lines() {
-                let line = line?;
-                if !line.starts_with("HOME=") {
-                    bufw.write_all(line.as_bytes())?;
-                } else {
-                    bufw.write_all(b"HOME=/var/home")?;
+#[context("Postprocessing useradd")]
+fn postprocess_useradd(rootfs_dfd: &cap_std::fs::Dir) -> Result<()> {
+    let path = Utf8Path::new("usr/etc/default/useradd");
+    let perms = cap_std::fs::Permissions::from_mode(0o644);
+    if let Some(f) = rootfs_dfd.open_optional(path).context("opening")? {
+        rootfs_dfd
+            .replace_file_with_perms(&path, perms, |bufw| -> Result<_> {
+                let f = BufReader::new(&f);
+                for line in f.lines() {
+                    let line = line?;
+                    if !line.starts_with("HOME=") {
+                        bufw.write_all(line.as_bytes())?;
+                    } else {
+                        bufw.write_all(b"HOME=/var/home")?;
+                    }
+                    bufw.write_all(b"\n")?;
                 }
-                bufw.write_all(b"\n")?;
-            }
-            Ok(())
-        })?;
+                Ok(())
+            })
+            .with_context(|| format!("Replacing {}", path))?;
     }
     Ok(())
 }
@@ -175,38 +180,45 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Result<()> {
 // We keep hitting issues with the ostree-remount preset not being
 // enabled; let's just do this rather than trying to propagate the
 // preset everywhere.
-fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Result<()> {
+#[context("Postprocessing presets")]
+fn postprocess_presets(rootfs_dfd: &Dir) -> Result<()> {
     let wantsdir = "usr/lib/systemd/system/multi-user.target.wants";
-    rootfs_dfd.ensure_dir_all(wantsdir, 0o755)?;
+    let mut db = cap_std::fs::DirBuilder::new();
+    db.recursive(true);
+    db.mode(0o755);
+    rootfs_dfd.create_dir_with(wantsdir, &db)?;
     for service in &["ostree-remount.service", "ostree-finalize-staged.path"] {
         let target = format!("../{}", service);
         let loc = Path::new(wantsdir).join(service);
-        rootfs_dfd.symlink(&loc, target)?;
+        rootfs_dfd.symlink(target, &loc)?;
     }
     Ok(())
 }
 
 /// Write an RPM macro file to ensure the rpmdb path is set on the client side.
 pub fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> CxxResult<()> {
-    let rootfs = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     postprocess_rpm_macro(rootfs)?;
     Ok(())
 }
 
 /// Ensure our own `_dbpath` macro exists in the tree.
 #[context("Writing _dbpath RPM macro")]
-fn postprocess_rpm_macro(rootfs_dfd: &openat::Dir) -> Result<()> {
+fn postprocess_rpm_macro(rootfs_dfd: &Dir) -> Result<()> {
     static RPM_MACROS_DIR: &str = "usr/lib/rpm/macros.d";
     static MACRO_FILENAME: &str = "macros.rpm-ostree";
-    rootfs_dfd.ensure_dir_all(RPM_MACROS_DIR, 0o755)?;
-    let rpm_macros_dfd = rootfs_dfd.sub_dir(RPM_MACROS_DIR)?;
-    rpm_macros_dfd.write_file_with(&MACRO_FILENAME, 0o644, |w| -> Result<()> {
+    let mut db = cap_std::fs::DirBuilder::new();
+    db.recursive(true);
+    db.mode(0o755);
+    rootfs_dfd.create_dir_with(RPM_MACROS_DIR, &db)?;
+    let rpm_macros_dfd = rootfs_dfd.open_dir(RPM_MACROS_DIR)?;
+    let perms = cap_std::fs::Permissions::from_mode(0o644);
+    rpm_macros_dfd.replace_file_with_perms(&MACRO_FILENAME, perms, |w| -> Result<()> {
         w.write_all(b"%_dbpath /")?;
         w.write_all(RPMOSTREE_RPMDB_LOCATION.as_bytes())?;
         w.write_all(b"\n")?;
         Ok(())
     })?;
-    rpm_macros_dfd.set_mode(MACRO_FILENAME, 0o644)?;
     Ok(())
 }
 
@@ -214,10 +226,12 @@ fn postprocess_rpm_macro(rootfs_dfd: &openat::Dir) -> Result<()> {
 // and (2) make sure there *isn't* a /var/home -> /home substition rule. The latter check won't
 // technically be needed once downstreams have:
 // https://src.fedoraproject.org/rpms/selinux-policy/pull-request/14
-fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
+#[context("Postprocessing subs_dist")]
+fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
     let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
-    if let Some(f) = rootfs_dfd.open_file_optional(path)? {
-        rootfs_dfd.write_file_with(&path, 0o644, |w| -> Result<()> {
+    if let Some(f) = rootfs_dfd.open_optional(path)? {
+        let perms = cap_std::fs::Permissions::from_mode(0o644);
+        rootfs_dfd.replace_file_with_perms(&path, perms, |w| -> Result<()> {
             let f = BufReader::new(&f);
             for line in f.lines() {
                 let line = line?;
@@ -244,14 +258,14 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Result<()> {
 /// It takes care of all things that are really required to use rpm-ostree
 /// on the target host.
 pub fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
-    let rootfs_dfd = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let tasks = [
         postprocess_useradd,
         postprocess_presets,
         postprocess_subs_dist,
         postprocess_rpm_macro,
     ];
-    Ok(tasks.par_iter().try_for_each(|f| f(&rootfs_dfd))?)
+    Ok(tasks.par_iter().try_for_each(|f| f(rootfs_dfd))?)
 }
 
 #[context("Handling treefile 'units'")]
@@ -1398,15 +1412,14 @@ OSTREE_VERSION='33.4'
     fn test_postprocess_rpm_macro() {
         static MACRO_PATH: &str = "usr/lib/rpm/macros.d/macros.rpm-ostree";
         let expected_content = format!("%_dbpath /{}\n", RPMOSTREE_RPMDB_LOCATION);
-        let temp_rootfs = tempfile::tempdir().unwrap();
-        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+        let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
         {
             postprocess_rpm_macro(&rootfs).unwrap();
 
-            assert_eq!(rootfs.exists(MACRO_PATH).unwrap(), true);
+            assert_eq!(rootfs.exists(MACRO_PATH), true);
             let macrofile = rootfs.metadata(MACRO_PATH).unwrap();
             assert_eq!(macrofile.is_file(), true);
-            assert_eq!(macrofile.stat().st_mode & 0o777, 0o644);
+            assert_eq!(macrofile.permissions().mode(), 0o644);
             let content = rootfs.read_to_string(MACRO_PATH).unwrap();
             assert_eq!(content, expected_content);
         }
