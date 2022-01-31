@@ -151,6 +151,12 @@ mod err {
         }
     }
 
+    impl From<String> for CxxError {
+        fn from(v: String) -> Self {
+            Self(v)
+        }
+    }
+
     impl From<cxx::Exception> for CxxError {
         fn from(v: cxx::Exception) -> Self {
             Self(format!("{:#}", v))
