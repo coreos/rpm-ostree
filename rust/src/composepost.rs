@@ -586,11 +586,16 @@ fn add_altfiles(buf: &str) -> Result<String> {
 #[context("Adding altfiles to /etc/nsswitch.conf")]
 pub fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
-    let path = "usr/etc/nsswitch.conf";
+    let mut path = "usr/etc/nsswitch.conf";
+    // We are currently replicating https://src.fedoraproject.org/rpms/authselect/blob/rawhide/f/authselect.spec#_321
+    let authselect_path = "usr/etc/authselect/nsswitch.conf";
+    if rootfs_dfd.exists(authselect_path)? {
+        path = authselect_path;
+    }
     if let Some(meta) = rootfs_dfd.metadata_optional(path)? {
         // If it's a symlink, then something else e.g. authselect must own it.
-        if meta.simple_type() == openat::SimpleType::Symlink {
-            return Ok(());
+        if meta.simple_type() != openat::SimpleType::File {
+            return Err(format!("Expected a regular file for {}", path).into());
         }
         let fd = rootfs_dfd.open_file(path)?;
         let mut fd = std::io::BufReader::new(fd);
