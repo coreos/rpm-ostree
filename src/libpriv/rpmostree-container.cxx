@@ -33,12 +33,6 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile,
                              GCancellable           *cancellable,
                              GError                **error)
 {
-  auto packages = treefile.get_packages();
-
-  /* for now, we only support package installs */
-  if (packages.empty())
-    return TRUE;
-
   g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_container ();
   rpmostree_context_set_treefile (ctx, treefile);
 
