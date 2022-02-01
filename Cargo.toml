@@ -32,8 +32,8 @@ anyhow = "1.0.52"
 binread = "2.2.0"
 c_utf8 = "0.1.0"
 camino = "1.0.7"
-cap-std = "0.23.0"
-cap-tempfile = "0.23.0"
+cap-std-ext = "0.24.0"
+cap-tempfile = "0.24.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "2.34.0"
 curl = "0.4.42"
@@ -64,7 +64,6 @@ rayon = "1.5.1"
 regex = "1.5"
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 rust-ini = "0.17.0"
-rustix = "0.32.0"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.78"

@@ -10,6 +10,7 @@
 use crate::cxxrsutil::*;
 use crate::variant_utils;
 use anyhow::{bail, Context, Result};
+use cap_std_ext::cap_std;
 use glib::translate::ToGlibPtr;
 use glib::Variant;
 use lazy_static::lazy_static;

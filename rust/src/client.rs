@@ -5,6 +5,7 @@
 use crate::cxxrsutil::*;
 use crate::utils;
 use anyhow::{anyhow, Result};
+use cap_std_ext::rustix;
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
 use std::os::unix::io::IntoRawFd;
