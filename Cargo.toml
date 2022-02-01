@@ -67,7 +67,7 @@ rust-ini = "0.17.0"
 rustix = "0.32.0"
 serde = { version = "1.0.133", features = ["derive"] }
 serde_derive = "1.0.118"
-serde_json = "1.0.75"
+serde_json = "1.0.78"
 serde_yaml = "0.8.23"
 structopt = "0.3.26"
 subprocess = "0.2.8"
