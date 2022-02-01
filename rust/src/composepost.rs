@@ -6,7 +6,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::bwrap::Bubblewrap;
-use crate::capstdext::{dirbuilder_from_mode, perms_from_mode, CapStdDirExt};
+use crate::capstdext::dirbuilder_from_mode;
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::ffiutil::{ffi_dirfd, ffi_view_openat_dir};
@@ -16,6 +16,8 @@ use crate::treefile::Treefile;
 use crate::{bwrap, importer};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::Utf8Path;
+use cap_std_ext::cap_std;
+use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use gio::prelude::*;
 use gio::FileType;
@@ -59,7 +61,7 @@ fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Resul
 
     let default_dirmode: u32 = 0o755;
     let default_dirbuilder = &dirbuilder_from_mode(default_dirmode);
-    let default_dirmode = perms_from_mode(default_dirmode);
+    let default_dirmode = cap_std::fs::Permissions::from_mode(default_dirmode);
 
     const TOPLEVEL_DIRS: &[&str] = &["dev", "proc", "run", "sys", "var", "sysroot"];
     const TOPLEVEL_SYMLINKS: &[(&str, &str)] = &[
@@ -94,7 +96,7 @@ fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Resul
             .ensure_dir_with("tmp", &dirbuilder_from_mode(tmp_mode))
             .context("tmp")?;
         rootfs_dfd
-            .set_permissions("tmp", perms_from_mode(tmp_mode))
+            .set_permissions("tmp", cap_std::fs::Permissions::from_mode(tmp_mode))
             .context("Setting permissions for tmp")?;
     } else {
         rootfs_dfd.symlink("sysroot/tmp", "tmp")?;
@@ -1125,6 +1127,7 @@ fn hardlink_recurse(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cap_std_ext::rustix;
 
     #[test]
     fn stripany() {

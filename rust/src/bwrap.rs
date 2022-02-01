@@ -6,6 +6,7 @@ use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::normalization;
 use anyhow::{Context, Result};
+use cap_std_ext::rustix;
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib};
