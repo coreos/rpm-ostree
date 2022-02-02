@@ -1025,7 +1025,8 @@ impl TreefileExternals {
         Ok(())
     }
 
-    fn assert_nonempty(&self) {
+    // Panic if there is externally referenced data.
+    fn assert_empty(&self) {
         // can't use the Default trick here because we can't auto-derive Eq because of `File`
         assert!(self.postprocess_script.is_none());
         assert!(self.add_files.is_empty());
@@ -2329,7 +2330,8 @@ pub(crate) fn treefile_new_client_from_etc(basearch: &str) -> CxxResult<Box<Tree
     for tf in tfs {
         let new_cfg = treefile_parse_and_process(tf, basearch)?;
         new_cfg.config.base.error_if_nonempty()?;
-        new_cfg.externals.assert_nonempty();
+        new_cfg.config.derive.error_if_nonempty()?;
+        new_cfg.externals.assert_empty();
         let mut new_cfg = new_cfg.config;
         treefile_merge(&mut new_cfg, &mut cfg);
         cfg = new_cfg;
