@@ -4371,7 +4371,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                            &var_lib_rpm_statedir, error))
         return FALSE;
       /* We need to pre-create this dir */
-      if (!glnx_ensure_dir (tmprootfs_dfd, "var/lib/rpm-state", 0755, error))
+      if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "var/lib/rpm-state", 0755,
+                                   cancellable, error))
         return FALSE;
 
       /* Workaround for https://github.com/projectatomic/rpm-ostree/issues/1804 */
