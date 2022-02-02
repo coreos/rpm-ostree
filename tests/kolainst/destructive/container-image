@@ -133,7 +133,19 @@ RUN rpm-ostree ex rebuild
 RUN echo some config file > /etc/someconfig.conf
 RUN echo somedata > /usr/share/somenewdata
 EOF
+    # Older podman found in RHEL8 blows up without /etc/resolv.conf
+    # which happens in our qemu path.
+    touched_resolv_conf=0
+    if test '!' -f /etc/resolv.conf; then
+      podmanv=$(podman --version)
+      case "${podmanv#podman version }" in
+        3.*) touched_resolv_conf=1; touch /etc/resolv.conf;;
+      esac
+    fi
     podman build -t localhost/fcos-derived --squash .
+    if test "${touched_resolv_conf}" -eq 1; then
+      rm -vf /etc/resolv.conf
+    fi
     derived=oci:$image_dir:derived
     skopeo copy containers-storage:localhost/fcos-derived $derived
     rpm-ostree rebase --experimental ostree-unverified-image:$derived
