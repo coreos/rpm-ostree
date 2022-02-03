@@ -44,3 +44,10 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
                             GError **error);
 
 G_END_DECLS
+
+#ifdef __cplusplus
+#include "rust/cxx.h"
+namespace rpmostreecxx {
+   GVariant *package_variant_list_for_commit (OstreeRepo &repo, rust::Str rev, GCancellable &cancellable);
+}
+#endif

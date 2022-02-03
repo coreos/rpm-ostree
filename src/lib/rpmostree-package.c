@@ -220,16 +220,11 @@ get_commit_rpmdb_pkglist (GVariant *commit)
                                       G_VARIANT_TYPE ("a(sssss)"));
 }
 
-/* Opportunistically try to use the new rpmostree.rpmdb.pkglist metadata, otherwise fall
- * back to commit rpmdb if available.
- *
- * Let's keep this private for now.
- */
 gboolean
-_rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
+_rpm_ostree_package_variant_list_for_commit (OstreeRepo   *repo,
                                      const char   *rev,
                                      gboolean      allow_noent,
-                                     GPtrArray   **out_pkglist,
+                                     GVariant    **out_pkglist,
                                      GCancellable *cancellable,
                                      GError      **error)
 {
@@ -261,10 +256,31 @@ _rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
         {
           if (!allow_noent)
             return glnx_throw (error, "No package database found");
-          *out_pkglist = NULL;
-          return TRUE; /* Note early return */
         }
     }
+  *out_pkglist = g_steal_pointer (&pkglist_v);
+  return TRUE;
+}
+
+
+
+/* Opportunistically try to use the new rpmostree.rpmdb.pkglist metadata, otherwise fall
+ * back to commit rpmdb if available.
+ *
+ * Let's keep this private for now.
+ */
+gboolean
+_rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
+                                     const char   *rev,
+                                     gboolean      allow_noent,
+                                     GPtrArray   **out_pkglist,
+                                     GCancellable *cancellable,
+                                     GError      **error)
+{
+
+  g_autoptr(GVariant) pkglist_v = NULL;
+  if (!_rpm_ostree_package_variant_list_for_commit (repo, rev, allow_noent, &pkglist_v, cancellable, error))
+    return FALSE;
 
   g_autoptr(GPtrArray) pkglist = g_ptr_array_new_with_free_func (g_object_unref);
   const guint n = g_variant_n_children (pkglist_v);
