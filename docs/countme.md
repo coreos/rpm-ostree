@@ -16,9 +16,10 @@ However, this does not work for `rpm-ostree` based systems as in the default
 case (no package overlayed on top of the base commit), `rpm-ostree` will not
 fetch any RPM repository metadata at all.
 
-Thus `rpm-ostree` includes a distinct timer (`rpm-ostree-countme.timer`),
-triggered weekly, that implement the DNF Count Me functionality in a
-standalone way.
+Thus `rpm-ostree` includes a distinct timer (`rpm-ostree-countme.timer`) that
+implements the [DNF Count Me functionality][countme] in a standalone way. This
+timer is triggered on boot after 5 minutes and bi-weekly, in both cases with a
+random delay.
 
 ## Disabling DNF Count Me on a system
 
@@ -29,4 +30,10 @@ mask the corresponding unit as a precaution:
 $ systemctl mask --now rpm-ostree-countme.timer
 ```
 
-[countme]: https://fedoraproject.org/wiki/Changes/DNF_Better_Counting
+## References
+
+- DNF Configuration Reference: [countme option][countme]
+- Change Request for Fedora 32: [DNF Better Counting][change]
+
+[countme]: https://dnf.readthedocs.io/en/latest/conf_ref.html#countme-label
+[change]: https://fedoraproject.org/wiki/Changes/DNF_Better_Counting
