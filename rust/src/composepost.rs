@@ -981,6 +981,8 @@ fn hardlink_rpmdb_base_location(
 
     // And write a symlink from the proposed standard /usr/lib/sysimage/rpm
     // to our /usr/share/rpm - eventually we will invert this.
+    // Temporarily remove the directory if it exists until then.
+    rootfs.remove_dir_optional(RPMOSTREE_SYSIMAGE_RPMDB)?;
     rootfs.symlink(RPMOSTREE_SYSIMAGE_RPMDB, "../../share/rpm")?;
 
     Ok(true)
