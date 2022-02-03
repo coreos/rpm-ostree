@@ -515,6 +515,7 @@ compose_filter_cb (OstreeRepo         *repo,
         case G_FILE_TYPE_SYMBOLIC_LINK:
           break;
         default:
+          g_debug ("Not importing spurious content at %s", path);
           return OSTREE_REPO_COMMIT_FILTER_SKIP;
         }
 
