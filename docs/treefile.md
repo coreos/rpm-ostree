@@ -87,6 +87,10 @@ It supports the following parameters:
     files present in packages and prior layers will be silently overriden.
     This is useful for development builds to replace parts of the base tree.
 
+ * `container-cmd`: array of strings, optional: This maps to the `CMD` Dockerfile
+   instruction, and is currently only meaningful when encapsulating/exporting
+   an ostree commit as a Docker/OCI container.
+
  * `bootstrap_packages`: Array of strings, optional: Deprecated; you should
     now just include this set in the main `packages` array.
 

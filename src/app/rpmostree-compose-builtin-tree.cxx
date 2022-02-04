@@ -761,6 +761,18 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         return FALSE;
     }
 
+  auto cmd = (*self->treefile_rs)->get_container_cmd();
+  if (cmd.size() > 0)
+    {
+      g_auto(GVariantBuilder) builder;
+      g_variant_builder_init (&builder, G_VARIANT_TYPE ("as"));
+      for (auto s: cmd)
+        {
+          g_variant_builder_add (&builder, "s", s.c_str());
+        }
+      g_hash_table_insert (self->metadata, g_strdup ("ostree.container-cmd"), g_variant_ref_sink (g_variant_builder_end (&builder)));
+    }
+
   auto layers = (*self->treefile_rs)->get_all_ostree_layers();
   if (layers.size() > 0 && !opt_unified_core)
     return glnx_throw (error, "ostree-layers requires unified-core mode");

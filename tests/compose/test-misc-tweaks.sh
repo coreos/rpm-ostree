@@ -35,6 +35,8 @@ EOF
 cat > config/other.yaml <<'EOF'
 recommends: true
 readonly-executables: true
+container-cmd:
+  - /usr/bin/bash
 EOF
 treefile_append "include" '["documentation.yaml", "other.yaml"]'
 for x in 'recommends' 'documentation' 'readonly-executables'; do

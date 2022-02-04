@@ -415,6 +415,7 @@ pub mod ffi {
         fn get_lockfile_repos(&self) -> Vec<String>;
         fn get_ref(&self) -> &str;
         fn get_cliwrap(&self) -> bool;
+        fn get_container_cmd(&self) -> Vec<String>;
         fn get_readonly_executables(&self) -> bool;
         fn get_documentation(&self) -> bool;
         fn get_recommends(&self) -> bool;
