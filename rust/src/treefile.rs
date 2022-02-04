@@ -380,6 +380,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         container,
         recommends,
         readonly_executables,
+        container_cmd,
         documentation,
         boot_location,
         tmp_is_dir,
@@ -755,6 +756,10 @@ impl Treefile {
 
     pub(crate) fn get_releasever(&self) -> &str {
         self.parsed.base.releasever.as_deref().unwrap_or_default()
+    }
+
+    pub(crate) fn get_container_cmd(&self) -> Vec<String> {
+        self.parsed.base.container_cmd.clone().unwrap_or_default()
     }
 
     /// Returns true if the database backend must be regenerated using the target system.
@@ -1381,6 +1386,9 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "rpmdb-normalize")]
     pub(crate) rpmdb_normalize: Option<bool>,
+
+    // Container related bits
+    pub(crate) container_cmd: Option<Vec<String>>,
 
     #[serde(flatten)]
     pub(crate) legacy_fields: LegacyTreeComposeConfigFields,
