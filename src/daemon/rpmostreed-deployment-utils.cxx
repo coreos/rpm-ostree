@@ -34,6 +34,8 @@
 #include "rpmostree-cxxrs.h"
 #include "rpmostreed-errors.h"
 
+#define RPM_OSTREED_COMMIT_VERIFICATION_CACHE "/run/rpm-ostree/gpgcheck-cache"
+
 gboolean
 rpmostreed_deployment_get_for_id (OstreeSysroot     *sysroot,
                                   const gchar       *deploy_id,
@@ -103,6 +105,77 @@ rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
   return (OstreeDeployment*)g_object_ref (deployments->pdata[deployment_index]);
 }
 
+static char*
+get_path_for_cached_signatures_variant (const gchar *remote,
+                                        const gchar *checksum)
+{
+  if (remote == NULL)
+    return g_build_filename (RPM_OSTREED_COMMIT_VERIFICATION_CACHE, "local", checksum, NULL);
+  return g_build_filename (RPM_OSTREED_COMMIT_VERIFICATION_CACHE, "remote", remote, checksum, NULL);
+}
+
+static GVariant*
+get_cached_signatures_variant (OstreeRepo  *repo,
+                               const gchar *remote,
+                               const gchar *checksum,
+                               GError     **error)
+{
+  gboolean cache_hit = FALSE;
+
+  struct stat stbuf;
+  g_autofree char *path = get_path_for_cached_signatures_variant (remote, checksum);
+  if (!glnx_fstatat_allow_noent (AT_FDCWD, path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+    return (GVariant*)glnx_prefix_error_null (error, "querying cached signature variant");
+  else if (errno == 0)
+    {
+      if (stbuf.st_mode == (S_IFREG | 0600) && stbuf.st_uid == 0 && stbuf.st_gid == 0)
+        cache_hit = TRUE;
+    }
+  else if (errno != ENOENT)
+    {
+      g_assert_not_reached ();
+    }
+
+  if (!cache_hit)
+    {
+      if (!glnx_shutil_mkdir_p_at (AT_FDCWD, dirname (strdupa (path)), 0700, NULL, error))
+        return NULL;
+      if (TEMP_FAILURE_RETRY (unlink (path)) && errno != ENOENT)
+        return (GVariant*)glnx_null_throw_errno_prefix (error, "unlink(%s)", path);
+
+      g_autoptr(OstreeGpgVerifyResult) verify_result =
+        ostree_repo_verify_commit_for_remote (repo, checksum, remote, NULL, error);
+      if (!verify_result)
+        return NULL;
+
+      g_auto(GVariantBuilder) builder;
+      g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
+      guint n_sigs = ostree_gpg_verify_result_count_all (verify_result);
+      for (guint i = 0; i < n_sigs; i++)
+        g_variant_builder_add (&builder, "v", ostree_gpg_verify_result_get_all (verify_result, i));
+
+      g_autoptr(GVariant) v = g_variant_builder_end (&builder); /* keep floating */
+      if (!glnx_file_replace_contents_with_perms_at (AT_FDCWD, path,
+                                          static_cast<const guint8*>(g_variant_get_data (v)),
+                                          g_variant_get_size (v), 0600, 0, 0,
+                                          (GLnxFileReplaceFlags)0, NULL, error))
+        return NULL;
+
+      g_debug ("successfully cached signatures for %s", checksum);
+      return util::move_nullify(v);
+    }
+
+  glnx_autofd int fd = -1;
+  if (!glnx_openat_rdonly (AT_FDCWD, path, FALSE, &fd, error))
+    return NULL;
+  g_autoptr(GBytes) data = glnx_fd_readall_bytes (fd, NULL, error);
+  if (!data)
+    return NULL;
+
+  g_debug ("signature cache hit for %s", checksum);
+  return g_variant_new_from_bytes (G_VARIANT_TYPE ("av"), data, FALSE);
+}
+
 static gboolean
 variant_add_remote_status (OstreeRepo  *repo,
                            const gchar *origin_refspec,
@@ -138,24 +211,18 @@ variant_add_remote_status (OstreeRepo  *repo,
   if (!gpg_verify)
     return TRUE; /* Note early return; no need to verify signatures! */
 
-  g_autoptr(OstreeGpgVerifyResult) verify_result =
-    ostree_repo_verify_commit_for_remote (repo, checksum, remote, NULL, NULL);
-  if (!verify_result)
+  GVariant *signatures = get_cached_signatures_variant (repo, remote, checksum, &local_error); /* floating */
+
+  if (signatures)
+    g_variant_dict_insert_value (dict, "signatures", signatures);
+  else
     {
-      /* Somehow, we have a deployment which has gpg-verify=true, but *doesn't* have a valid
-       * signature. Let's not just bomb out here. We need to return this in the variant so
-       * that `status` can show the appropriate msg. */
-      return TRUE;
+      /* Somehow, we have a deployment which has gpg-verify=true, but we couldn't
+       * verify its signature. Let's not just bomb out here. We need to return this
+       * in the variant so that `status` can show the appropriate msg. */
+      g_debug ("failed to get cached signature variant: %s", local_error->message);
     }
 
-  g_auto(GVariantBuilder) builder;
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
-
-  guint n_sigs = ostree_gpg_verify_result_count_all (verify_result);
-  for (guint i = 0; i < n_sigs; i++)
-    g_variant_builder_add (&builder, "v", ostree_gpg_verify_result_get_all (verify_result, i));
-
-  g_variant_dict_insert_value (dict, "signatures", g_variant_builder_end (&builder));
   return TRUE;
 }
 
