@@ -12,7 +12,7 @@
  */
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 
@@ -41,9 +41,8 @@ struct ProgressState {
 // We only have one stdout, so we can really only print one progress
 // bar at a time.  I understand why indicatif didn't want to commit
 // to having static data, but still.
-lazy_static! {
-    static ref PROGRESS: Mutex<Option<ProgressState>> = Mutex::new(None);
-}
+
+static PROGRESS: Lazy<Mutex<Option<ProgressState>>> = Lazy::new(|| Mutex::new(None));
 
 impl ProgressState {
     /// Create a new progress bar.  Should really only be stored
