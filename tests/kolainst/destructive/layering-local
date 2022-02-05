@@ -57,6 +57,10 @@ echo "ok pkg foo added locally"
 
 booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
 
+if ostree ls "${booted_commit}" /run/ostree-booted 2>/dev/null; then
+  fatal "Found /run/ostree-booted committed in tree"
+fi
+
 ostree show --print-metadata-key=ostree.bootable ${booted_commit} >out.txt
 assert_file_has_content_literal out.txt 'true'
 echo "ok bootable metadata"
