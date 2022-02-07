@@ -4,23 +4,22 @@
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
-use openat::SimpleType;
+use cap_std_ext::cap_std;
 use ostree_ext::{gio, glib, prelude::*};
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::fs;
-use std::io;
 use std::io::prelude::*;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::IntoRawFd;
 use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
 use std::rc;
+use std::{fs, io};
 use subprocess::Exec;
 
 fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
-    d: &openat::Dir,
+    d: &cap_std::fs::Dir,
     path: &str,
     filelist: &mut BTreeSet<String>,
     cancellable: Option<&P>,
@@ -30,18 +29,17 @@ fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
     if let Some(c) = cancellable {
         let _ = c.set_error_if_cancelled()?;
     }
-    let meta = d.metadata(path).context("stat")?;
-    match meta.simple_type() {
-        SimpleType::Symlink | SimpleType::File => {}
-        SimpleType::Dir => {
-            for e in d.list_dir(path).context("readdir")? {
-                let e = e.context("readdir")?;
-                let name: &Utf8Path = Path::new(e.file_name()).try_into()?;
-                let subpath = format!("{}/{}", path, name);
-                list_files_recurse(d, &subpath, filelist, cancellable)?;
-            }
+    let meta = d.symlink_metadata(path).context("stat")?;
+    if meta.is_dir() {
+        for e in d.read_dir(path).context("readdir")? {
+            let e = e.context("readdir")?;
+            let name = e.file_name();
+            let name: &Utf8Path = Path::new(&name).try_into()?;
+            let subpath = format!("{}/{}", path, name);
+            list_files_recurse(d, &subpath, filelist, cancellable)?;
         }
-        _ => anyhow::bail!("Invalid non-regfile/symlink/directory: {}", path),
+    } else if !(meta.is_file() || meta.is_symlink()) {
+        anyhow::bail!("Invalid non-regfile/symlink/directory: {}", path);
     }
     if !filelist.contains(path) {
         filelist.insert(path.to_string());
@@ -50,7 +48,7 @@ fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
 }
 
 fn gather_filelist<P: glib::IsA<gio::Cancellable>>(
-    d: &openat::Dir,
+    d: &cap_std::fs::Dir,
     input: &HashSet<String>,
     cancellable: Option<&P>,
 ) -> Result<BTreeSet<String>> {
@@ -86,12 +84,12 @@ fn gather_filelist<P: glib::IsA<gio::Cancellable>>(
 }
 
 fn generate_initramfs_overlay<P: glib::IsA<gio::Cancellable>>(
-    root: &openat::Dir,
+    root: &cap_std::fs::Dir,
     files: &HashSet<String>,
     cancellable: Option<&P>,
 ) -> Result<fs::File> {
     let filelist = {
-        let etcd = root.sub_dir("etc")?;
+        let etcd = root.open_dir("etc")?;
         gather_filelist(&etcd, files, cancellable)?
     };
     let out_tmpf = std::rc::Rc::new(tempfile::tempfile()?);
@@ -138,8 +136,8 @@ fn generate_initramfs_overlay_etc<P: glib::IsA<gio::Cancellable>>(
     files: &HashSet<String>,
     cancellable: Option<&P>,
 ) -> Result<fs::File> {
-    let root = openat::Dir::open("/")?;
-    generate_initramfs_overlay(&root, files, cancellable)
+    let root = &cap_std::fs::Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
+    generate_initramfs_overlay(root, files, cancellable)
 }
 
 pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
@@ -161,22 +159,20 @@ pub(crate) fn initramfs_overlay_generate(
 #[cfg(test)]
 mod test {
     use super::*;
-    use openat_ext::FileExt;
 
     #[test]
     fn test_initramfs_overlay() -> Result<()> {
         let cancellable = gio::NONE_CANCELLABLE;
-        let tmpd = tempfile::tempdir()?;
-        std::fs::create_dir_all(tmpd.path().join("etc/foo"))?;
-        std::fs::write(tmpd.path().join("etc/foo/somefile"), "somecontents")?;
-        std::fs::write(tmpd.path().join("etc/foo/otherfile"), "othercontents")?;
-        let tmpd = openat::Dir::open(tmpd.path())?;
+        let tmpd = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        tmpd.create_dir_all("etc/foo")?;
+        tmpd.write("etc/foo/somefile", "somecontents")?;
+        tmpd.write("etc/foo/otherfile", "othercontents")?;
         let mut h = HashSet::new();
         h.insert("/etc/foo".to_string());
         {
-            let f = generate_initramfs_overlay(&tmpd, &h, cancellable)?;
-            let o = tmpd.new_file("initramfs", 0o644)?;
-            f.copy_to(&o)?;
+            let mut f = generate_initramfs_overlay(&tmpd, &h, cancellable)?;
+            let mut o = tmpd.create("initramfs")?;
+            std::io::copy(&mut f, &mut o)?;
         }
         let _ = tmpd.metadata("initramfs").context("stat")?;
         Ok(())
