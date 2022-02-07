@@ -377,7 +377,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "run", 0755, cancellable, error))
     return FALSE;
   bwrap->append_bwrap_arg("--tmpfs");
-  bwrap->append_bwrap_arg("/tmp");
+  bwrap->append_bwrap_arg("/run");
 
   bwrap->take_fd(glnx_steal_fd (&devnull_fd), devnull_target_fd);
   bwrap->append_bwrap_arg("--ro-bind-data");
