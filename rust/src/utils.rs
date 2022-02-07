@@ -13,7 +13,7 @@ use anyhow::{bail, Context, Result};
 use cap_std_ext::cap_std;
 use glib::translate::ToGlibPtr;
 use glib::Variant;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use ostree_ext::prelude::*;
 use ostree_ext::{glib, ostree};
 use regex::Regex;
@@ -228,12 +228,12 @@ fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
     Ok(s)
 }
 
-lazy_static! {
-    static ref RUNNING_IN_SYSTEMD: bool = {
-        // See https://www.freedesktop.org/software/systemd/man/systemd.exec.html#%24INVOCATION_ID
-        std::env::var_os("INVOCATION_ID").filter(|s| !s.is_empty()).is_some()
-    };
-}
+static RUNNING_IN_SYSTEMD: Lazy<bool> = Lazy::new(|| {
+    // See https://www.freedesktop.org/software/systemd/man/systemd.exec.html#%24INVOCATION_ID
+    std::env::var_os("INVOCATION_ID")
+        .filter(|s| !s.is_empty())
+        .is_some()
+});
 
 /// Checks if the current process is (apparently at least)
 /// running under systemd.  We use this in various places
@@ -247,9 +247,7 @@ pub fn maybe_shell_quote(input: &str) -> String {
 }
 
 pub(crate) fn shellsafe_quote(input: Cow<str>) -> Cow<str> {
-    lazy_static! {
-        static ref SHELLSAFE: Regex = Regex::new("^[[:alnum:]-._/=:]+$").unwrap();
-    }
+    static SHELLSAFE: Lazy<Regex> = Lazy::new(|| Regex::new("^[[:alnum:]-._/=:]+$").unwrap());
 
     if SHELLSAFE.is_match(&input) {
         input
@@ -528,11 +526,8 @@ pub fn get_rpm_basearch() -> String {
 // oddly, AFAICT there isn't an easy way to use GV_ADVISORIES_TYPE_STR in this definition
 const GV_ADVISORIES_TYPE_STR: &str = "a(suuasa{sv})";
 
-lazy_static::lazy_static! {
-    static ref GV_ADVISORIES_TYPE: &'static glib::VariantTy = {
-        glib::VariantTy::new(GV_ADVISORIES_TYPE_STR).unwrap()
-    };
-}
+static GV_ADVISORIES_TYPE: Lazy<&'static glib::VariantTy> =
+    Lazy::new(|| glib::VariantTy::new(GV_ADVISORIES_TYPE_STR).unwrap());
 
 fn get_commit_advisories(repo: &mut ostree::Repo, checksum: &str) -> Result<Option<glib::Variant>> {
     let (commit, _) = repo.load_commit(checksum)?;

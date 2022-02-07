@@ -176,7 +176,7 @@ mod bdb_normalize {
     use crate::bwrap::Bubblewrap;
     use anyhow::{anyhow, Context, Result};
     use binread::{BinRead, BinReaderExt};
-    use lazy_static::lazy_static;
+    use once_cell::sync::Lazy;
     use openat::SimpleType;
     use openssl::sha::{sha256, Sha256};
     use ostree_ext::gio;
@@ -276,10 +276,7 @@ mod bdb_normalize {
         OffDup = 4,    // Off-page duplicate
     }
 
-    lazy_static! {
-        static ref PROC_SELF_CWD: PathBuf = PathBuf::from("/proc/self/cwd");
-        static ref PROC_SELF_FD: PathBuf = PathBuf::from("/proc/self/fd");
-    }
+    static PROC_SELF_CWD: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("/proc/self/cwd"));
 
     pub(super) fn normalize_one(
         rootfs: &openat::Dir,
