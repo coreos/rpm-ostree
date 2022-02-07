@@ -370,12 +370,14 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
   /* Don't let scripts see the base rpm database by default */
   bwrap->bind_read("usr/share/empty", "usr/share/rpm");
 
-  /* Add ostree-booted API; some scriptlets may work differently on OSTree systems; e.g.
+  /* Also a tmpfs for /run.
+   * Add ostree-booted API; some scriptlets may work differently on OSTree systems; e.g.
    * akmods. Just create it manually; /run is usually tmpfs, but scriptlets shouldn't be
    * adding stuff there anyway. */
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "run", 0755, cancellable, error))
     return FALSE;
-  bwrap->bind_readwrite("./run", "/run");
+  bwrap->append_bwrap_arg("--tmpfs");
+  bwrap->append_bwrap_arg("/tmp");
 
   bwrap->take_fd(glnx_steal_fd (&devnull_fd), devnull_target_fd);
   bwrap->append_bwrap_arg("--ro-bind-data");
