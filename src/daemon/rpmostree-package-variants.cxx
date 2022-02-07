@@ -22,6 +22,8 @@
 
 #include <rpmostree.h>
 #include "rpmostree-package-variants.h"
+#include "rpmostree-package-priv.h"
+#include "rpmostree-util.h"
 #include <libglnx.h>
 
 /**
@@ -197,4 +199,17 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   *out_variant = g_variant_builder_end (&builder);
   g_variant_ref_sink (*out_variant);
   return TRUE;
+}
+
+namespace rpmostreecxx {
+GVariant *
+package_variant_list_for_commit (OstreeRepo &repo, rust::Str rev, GCancellable &cancellable)
+{
+  g_autoptr(GError) local_error = NULL;
+  auto rev_c = std::string(rev);
+  g_autoptr(GVariant) ret_v = NULL;
+  if (!_rpm_ostree_package_variant_list_for_commit (&repo, rev_c.c_str(), FALSE, &ret_v, &cancellable, &local_error))
+    util::throw_gerror (local_error);
+  return util::move_nullify(ret_v);
+}
 }

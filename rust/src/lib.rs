@@ -668,6 +668,16 @@ pub mod ffi {
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<String>;
         fn get_repodata_chksum_repr(pkg: &mut DnfPackage) -> Result<String>;
     }
+
+    // rpmostree-package-variants.h
+    unsafe extern "C++" {
+        include!("rpmostree-package-variants.h");
+        fn package_variant_list_for_commit(
+            repo: Pin<&mut OstreeRepo>,
+            rev: &str,
+            cancellable: Pin<&mut GCancellable>,
+        ) -> Result<*mut GVariant>;
+    }
 }
 
 mod builtins;

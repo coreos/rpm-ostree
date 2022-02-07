@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use fn_error_context::context;
 use glib::{ToVariant, Variant};
 use openat_ext::{FileExt, OpenatDirExt};
-use ostree_ext::{gio, glib};
+use ostree_ext::{gio, glib, ostree};
 use rand::Rng;
 use std::fs;
 use std::fs::File;
@@ -48,8 +48,8 @@ struct SyntheticUpgradeOpts {
 enum Opt {
     /// Generate an OS update by changing ELF files
     GenerateSyntheticUpgrade(SyntheticUpgradeOpts),
-    /// Validate that we can parse the output of `rpm-ostree status --json`.
-    ValidateParseStatus,
+    /// All integration tests that require a booted machine, run as root, but are nondestructive
+    IntegrationReadOnly,
     /// Run the C unit tests
     CUnits,
     /// Test that we can 🐄
@@ -267,9 +267,42 @@ pub(crate) fn testutils_entrypoint(args: Vec<String>) -> CxxResult<()> {
     let opt = Opt::from_iter(args.iter());
     match opt {
         Opt::GenerateSyntheticUpgrade(ref opts) => update_os_tree(opts)?,
-        Opt::ValidateParseStatus => validate_parse_status()?,
+        Opt::IntegrationReadOnly => integration_read_only()?,
         Opt::CUnits => crate::ffi::c_unit_tests()?,
         Opt::Moo => test_moo()?,
     };
+    Ok(())
+}
+
+fn test_pkg_variants(repo: &ostree::Repo, booted_commit: &str) -> Result<()> {
+    let repo = repo.gobj_rewrap();
+    let cancellable = gio::Cancellable::new();
+    let cancellable = cancellable.gobj_rewrap();
+    // This returns an a(sssss) as a raw value
+    let v = crate::ffi::package_variant_list_for_commit(repo, booted_commit, cancellable)?;
+    let v: glib::Variant = unsafe { glib::translate::from_glib_full(v as *mut _) };
+    for p in v.iter() {
+        let n = p.child_value(0);
+        let n = n.str().unwrap();
+        if n == "ostree" {
+            return Ok(());
+        }
+    }
+
+    anyhow::bail!("Failed to find ostree package")
+}
+
+fn integration_read_only() -> Result<()> {
+    let cancellable = gio::NONE_CANCELLABLE;
+    let sysroot = &ostree::Sysroot::new_default();
+    sysroot.load(cancellable)?;
+    let repo = &sysroot.repo().unwrap();
+    let booted = &sysroot.require_booted_deployment()?;
+    let booted_commit = &booted.csum().expect("csum");
+    let booted_commit = booted_commit.as_str();
+    sysroot.load(cancellable)?;
+    validate_parse_status()?;
+    test_pkg_variants(repo, booted_commit)?;
+    println!("ok integration read only");
     Ok(())
 }
