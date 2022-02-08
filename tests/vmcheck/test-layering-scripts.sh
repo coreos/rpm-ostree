@@ -115,6 +115,18 @@ vm_cmd cat /usr/lib/prefixtest.txt > prefixtest.txt
 assert_file_has_content prefixtest.txt "/usr"
 echo "ok script expansion"
 
+vm_build_rpm testpkg-touch-run \
+             post "touch /{run,tmp,var/tmp}/should-not-persist"
+vm_rpmostree install testpkg-touch-run
+current=$(vm_get_booted_csum)
+pending=$(vm_get_pending_csum)
+for f in /{run,tmp,var/tmp}/should-not-persist; do
+  if vm_cmd ostree ls ${pending} ${f} 2>err.txt; then
+    fatal "Found ${f} in commit"
+  fi
+  assert_file_has_content_literal err.txt "No such file or directory"
+done
+
 # script overrides (also one that expands)
 vm_build_rpm rpmostree-lua-override-test \
              post_args "-p <lua>" \

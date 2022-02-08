@@ -57,6 +57,8 @@ build_rpm testdaemon \
 # Will be useful for testing cancellation
 build_rpm testpkg-post-infinite-loop \
              post "echo entering testpkg-post-infinite-loop 1>&2; while true; do sleep 1h; done"
+build_rpm testpkg-touch-run \
+             post "touch /{run,tmp,var/tmp}/should-not-persist"
 # Test module
 build_rpm foomodular
 build_module foomodular \
