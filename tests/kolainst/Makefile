@@ -15,6 +15,7 @@ install: all
 	rsync -prlv ./destructive $(KOLA_TESTDIR)/
 	rsync -prlv ../common/*.sh $(KOLA_TESTDIR)/nondestructive/data/
 	rsync -prlv ../common/*.sh $(KOLA_TESTDIR)/destructive/data/
+	rsync -prlv ../gpghome $(KOLA_TESTDIR)/destructive/data/
 	rsync -prlv rpm-repos/ $(KOLA_TESTDIR)/destructive/data/rpm-repos/
 
 localinstall: all

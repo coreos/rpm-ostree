@@ -1,0 +1,44 @@
+#!/bin/bash
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+set -x
+
+libtest_prepare_offline
+cd "$(mktemp -d)"
+
+# For this test we want a signed OSTree commit deployed. Check if a sig already
+# exists, otherwise let's self-sign it.
+booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+if ! rpm-ostree status --json | jq -e '.deployments[0].signatures' > /dev/null; then
+  ostree gpg-sign --gpg-homedir "${KOLA_EXT_DATA}/gpghome" "$booted_commit" "${TEST_GPG_KEYID_1}"
+  cp "${KOLA_EXT_DATA}/gpghome/key1.asc" /etc/pki/rpm-gpg/
+fi
+
+systemctl stop rpm-ostreed
+
+# Turn on logging
+mkdir -p /etc/systemd/system/rpm-ostreed.service.d
+cat > /etc/systemd/system/rpm-ostreed.service.d/debug.conf <<EOF
+[Service]
+Environment=RUST_LOG=rpmostree_rust::daemon=debug
+EOF
+systemctl daemon-reload
+
+cursor=$(journalctl -o json -n 1 | jq -r '.["__CURSOR"]')
+rm -rf /run/rpm-ostree
+systemctl start rpm-ostreed
+# first time a cache miss is expected
+journal_poll -u rpm-ostreed --after-cursor "${cursor}" --grep="signature variant cache miss"
+test -f /run/rpm-ostree/gpgcheck-cache/*/$booted_commit
+echo "ok signature variant cache miss"
+
+systemctl stop rpm-ostreed
+cursor=$(journalctl -o json -n 1 | jq -r '.["__CURSOR"]')
+systemctl start rpm-ostreed
+# no cache miss is expected now
+journal_poll -u rpm-ostreed --after-cursor "${cursor}" --grep="signature variant cache hit"
+! journal -q -n 1 -u rpm-ostreed --after-cursor "${cursor}" --grep="signature variant cache miss"
+test -f /run/rpm-ostree/gpgcheck-cache/*/$booted_commit
+echo "ok signature variant cache hit"
