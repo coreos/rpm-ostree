@@ -20,6 +20,8 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     // We take over depmod/dracut etc.  It's `kernel` in C7 and kernel-core in F25+
     "kernel.posttrans",
     "kernel-core.posttrans",
+    // Additionally ignore posttrans scripts for the Oracle Linux `kernel-uek` package
+    "kernel-uek.posttrans",
     // Legacy workaround
     "glibc-headers.prein",
     // workaround for old bug?
