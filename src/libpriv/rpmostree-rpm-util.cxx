@@ -431,11 +431,8 @@ rpmhdrs_rpmdbv (struct RpmHeaders *l1,
                 GCancellable   *cancellable,
                 GError        **error)
 {
-  GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA1);
-  g_autofree char *checksum_cstr = NULL;
-  char *ret = NULL;
+  g_autoptr(GChecksum) checksum = g_checksum_new (G_CHECKSUM_SHA256);
   int num = 0;
-
   while (num < l1->hs->len)
     {
       auto pkg = static_cast<Header>(l1->hs->pdata[num++]);
@@ -444,13 +441,7 @@ rpmhdrs_rpmdbv (struct RpmHeaders *l1,
       g_checksum_update (checksum, (guint8*)envra, strlen(envra));
     }
 
-  checksum_cstr = g_strdup (g_checksum_get_string (checksum));
-
-  ret = g_strdup_printf ("%u:%s", num, checksum_cstr);
-
-  g_checksum_free (checksum);
-
-  return ret;
+  return g_strdup_printf ("%u:%s", num, g_checksum_get_string (checksum));
 }
 
 /* glib? */
