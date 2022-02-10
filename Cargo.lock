@@ -1597,9 +1597,9 @@ dependencies = [
 
 [[package]]
 name = "ostree"
-version = "0.13.4"
+version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc5d16335f66a870ffe07c0c8dc0c67e4d530de3b58b08d631563bf56cb135ce"
+checksum = "46874597dc208031d680eeb1d445a9d408dfa3ba972f5f97f015b01dd0b7c021"
 dependencies = [
  "bitflags",
  "gio",
