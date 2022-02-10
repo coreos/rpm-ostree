@@ -82,20 +82,18 @@ rpmostree_builtin_cleanup (int             argc,
   if (opt_rollback)
     g_ptr_array_add (cleanup_types, (char*)"rollback-deploy");
   if (opt_repomd)
-    {
-      auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
-      if (is_ostree_container)
-        {
-          /* just directly nuke the cachedir */
-          if (!glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error))
-            return FALSE;
-        }
-      g_ptr_array_add (cleanup_types, (char*)"repomd");
-    }
+    g_ptr_array_add (cleanup_types, (char*)"repomd");
   if (cleanup_types->len == 0)
     {
       glnx_throw (error, "At least one cleanup option must be specified");
       return FALSE;
+    }
+
+  auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
+  if (is_ostree_container && cleanup_types->len == 1 && opt_repomd)
+    {
+      /* just directly nuke the cachedir */
+      return glnx_shutil_rm_rf_at(AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error);
     }
 
   g_ptr_array_add (cleanup_types, NULL);
