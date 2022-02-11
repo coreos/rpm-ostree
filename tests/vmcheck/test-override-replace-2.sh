@@ -143,3 +143,27 @@ new_root=$(vm_get_deployment_root 0)
 vm_cmd grep ' /var/pkg-with-different-var ' "${new_root}/usr/lib/tmpfiles.d/pkg-pkg-with-var.conf"
 vm_rpmostree cleanup -p
 echo "ok override replace deletes tmpfiles.d dropin"
+
+# https://github.com/coreos/rpm-ostree/issues/3421
+# Test that we can override selinux; we use the "gold"
+# selinux because we know it won't be GC'd.  Use e.g.
+# `koji latest-pkg f38 selinux-policy`
+# to find this.  (In contrast, koji latest-pkg f38-updates selinux-policy
+# will get the latest updates).
+versionid=$(vm_cmd grep -E '^VERSION_ID=' /etc/os-release)
+versionid=${versionid:11} # trim off VERSION_ID=
+vm_cmd rpm-ostree db list "$(vm_get_deployment_info 0 checksum)" > current-dblist.txt
+case $versionid in
+  # XXX: this isn't actually the gold selinux; that one is too old for
+  # container-selinux and moby-engine. rather than trying to change multiple
+  # packages, we use one that's in coreos-pool since that also prevents GC
+  38)
+    evr=38.25-1.fc38
+    koji_url='https://koji.fedoraproject.org/koji/buildinfo?buildID=2274128'
+    ;;
+  *) assert_not_reached "Unsupported Fedora version: $versionid";;
+esac
+assert_not_file_has_content current-dblist.txt selinux-policy-$evr
+vm_rpmostree override replace "${koji_url}"
+vm_rpmostree cleanup -p
+echo "ok override replace selinux-policy-targeted"
