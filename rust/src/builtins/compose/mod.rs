@@ -6,12 +6,31 @@ pub(crate) mod commit;
 
 use crate::cxxrsutil::CxxResult;
 use anyhow::{Context, Result};
+use cap_std_ext::rustix;
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use std::ffi::{CStr, CString};
 use std::io::{self, Read};
 
 use crate::core::OSTREE_BOOTED;
+
+/// Display information about the target filesystem.
+pub fn composeutil_print_target_info(rootfs_dfd: i32) -> CxxResult<()> {
+    let rootfs_dfd = unsafe { rustix::fd::BorrowedFd::borrow_raw_fd(rootfs_dfd) };
+    let statfs = rustix::fs::fstatfs(&rootfs_dfd)?;
+    // Or https://github.com/uutils/coreutils/blob/64f3cd748d5a188d5123790110d1d8ca7b33f18d/src/uucore/src/lib/features/fsext.rs#L748
+    println!(
+        "Target filesystem metadata:
+  Type: {}
+  Blocks: Total: {} Free: {} Available: {}
+    ",
+        crate::fstype::pretty_fstype(statfs.f_type),
+        statfs.f_blocks,
+        statfs.f_bfree,
+        statfs.f_bavail
+    );
+    Ok(())
+}
 
 /// Prepare /dev and /run in the target root with the API devices.
 // TODO: delete this when we implement https://github.com/projectatomic/rpm-ostree/issues/729
