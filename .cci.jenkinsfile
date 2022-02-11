@@ -86,7 +86,6 @@ compose: {
         stage("Install Deps") {
           shwrap("""
             ci/install-test-deps.sh
-            dnf install -y *.rpm  # install our built rpm-ostree
           """)
         }
         stage("Run") {
