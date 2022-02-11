@@ -29,6 +29,14 @@ parallel insttests: {
     def nhosts = 6
     def mem = (nhosts * 1024) + 512
     cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
+      stage("Revert kernel") {
+        shwrap("""
+          current=\$(rpm -q --qf '%{VERSION}' kernel-core)
+          rpm -q kernel-core kernel-modules | grep \$current > current.txt
+          dnf install -y https://kojipkgs.fedoraproject.org//packages/kernel/5.15.18/200.fc35/x86_64/kernel{-core,-modules}-5.15.18-200.fc35.x86_64.rpm
+          xargs dnf remove -y --setopt protect_running_kernel=0 < current.txt
+        """)
+      }
       stage("Unit tests") {
         checkout scm
         unstash 'rpms'
@@ -83,6 +91,14 @@ compose: {
     cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${jobs}") {
         checkout scm
         unstash 'rpms'
+        stage("Revert kernel") {
+          shwrap("""
+            current=\$(rpm -q --qf '%{VERSION}' kernel-core)
+            rpm -q kernel-core kernel-modules | grep \$current > current.txt
+            dnf install -y https://kojipkgs.fedoraproject.org//packages/kernel/5.15.18/200.fc35/x86_64/kernel{-core,-modules}-5.15.18-200.fc35.x86_64.rpm
+            xargs dnf remove -y --setopt protect_running_kernel=0 < current.txt
+          """)
+        }
         stage("Install Deps") {
           shwrap("""
             ci/install-test-deps.sh
