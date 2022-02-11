@@ -3050,18 +3050,16 @@ delete_package_from_root (RpmOstreeContext *self, rpmte pkg, int rootfs_dfd, GHa
       fn += strspn (fn, "/");
       g_assert (fn[0]);
 
-      g_autofree char *fn_owned = NULL;
-      /* Handle ostree's /usr/etc */
-      if (g_str_has_prefix (fn, "etc/"))
-        fn = fn_owned = g_strconcat ("usr/", fn, NULL);
-      else
-        {
-          /* Otherwise be sure we've canonicalized usr/ */
-          fn_owned = canonicalize_non_usrmove_path (self, fn);
-          if (fn_owned)
-            fn = fn_owned;
-        }
+      /* Be sure we've canonicalized usr/ */
+      g_autofree char *fn_owned = canonicalize_non_usrmove_path (self, fn);
+      if (fn_owned)
+        fn = fn_owned;
       (void)fn_owned; /* Pacify static analysis */
+
+      /* Convert to ostree convention. */
+      auto translated = rpmostreecxx::translate_path_for_ostree (fn);
+      if (translated.size () != 0)
+        fn = translated.c_str ();
 
       /* for now, we only remove files from /usr */
       if (!g_str_has_prefix (fn, "usr/"))
