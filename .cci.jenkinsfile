@@ -107,12 +107,20 @@ compose: {
         }
         stage("Run") {
           try {
-            timeout(time: 60, unit: 'MINUTES') {
               shwrap("""
                 mkdir -p compose-logs /srv/tmpdir
                 TMPDIR=/srv/tmpdir JOBS=${jobs} ./tests/compose.sh
               """)
-            }
+              shwrap("""
+                rm -rf compose-logs /srv/tmpdir
+                mkdir -p compose-logs /srv/tmpdir
+                TMPDIR=/srv/tmpdir JOBS=${jobs} ./tests/compose.sh
+              """)
+              shwrap("""
+                rm -rf compose-logs /srv/tmpdir
+                mkdir -p compose-logs /srv/tmpdir
+                TMPDIR=/srv/tmpdir JOBS=${jobs} ./tests/compose.sh
+              """)
           } finally {
             shwrap("""
               if [ -d compose-logs ]; then
