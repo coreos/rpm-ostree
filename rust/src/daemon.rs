@@ -350,7 +350,7 @@ fn get_cached_signatures_variant(
 
     let v = glib::Variant::from_array::<glib::Variant>(&sigs);
     let perms = cap_std::fs::Permissions::from_mode(0o600);
-    cachedir.replace_file_with_perms(&cached_relpath, perms, |f| f.write(&v.data_as_bytes()))?;
+    cachedir.replace_contents_with_perms(&cached_relpath, &v.data_as_bytes(), perms)?;
     return Ok(v);
 }
 
