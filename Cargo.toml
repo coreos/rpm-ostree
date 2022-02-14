@@ -59,7 +59,7 @@ os-release = "0.1.0"
 ostree-ext = "0.6.2"
 paste = "1.0"
 phf = { version = "0.10", features = ["macros"] }
-rand = "0.8.4"
+rand = "0.8.5"
 rayon = "1.5.1"
 regex = "1.5"
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
