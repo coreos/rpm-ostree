@@ -64,7 +64,7 @@
     <property name="AutomaticUpdatePolicy" type="s" access="read"/>
 
     <method name="GetOS">
-      <arg name="name" type="s"/>
+      <arg name="name" type="s" direction="in"/>
       <arg name="object_path" type="o" direction="out"/>
     </method>
 
@@ -128,8 +128,8 @@
     <property name="Name" type="s" access="read"/>
 
     <method name="GetDeploymentsRpmDiff">
-      <arg type="s" name="deployid0"/>
-      <arg type="s" name="deployid1"/>
+      <arg type="s" name="deployid0" direction="in"/>
+      <arg type="s" name="deployid1" direction="in"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
     </method>
@@ -156,8 +156,8 @@
        'signatures' (type 'av')
     -->
     <method name="GetCachedDeployRpmDiff">
-      <arg type="s" name="revision"/>
-      <arg type="as" name="packages"/>
+      <arg type="s" name="revision" direction="in"/>
+      <arg type="as" name="packages" direction="in"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
       <arg type="a{sv}" name="details" direction="out"/>
@@ -165,8 +165,8 @@
     </method>
 
     <method name="DownloadDeployRpmDiff">
-      <arg type="s" name="revision"/>
-      <arg type="as" name="packages"/>
+      <arg type="s" name="revision" direction="in"/>
+      <arg type="as" name="packages" direction="in"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -190,7 +190,7 @@
        'signatures' (type 'av')
     -->
     <method name="GetCachedUpdateRpmDiff">
-      <arg type="s" name="deployid"/>
+      <arg type="s" name="deployid" direction="in"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
       <arg type="a{sv}" name="details" direction="out"/>
@@ -227,8 +227,8 @@
     <method name="Rebase">
       <arg type="a{sv}" name="options" direction="in"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
-      <arg type="s" name="refspec"/>
-      <arg type="as" name="packages"/>
+      <arg type="s" name="refspec" direction="in"/>
+      <arg type="as" name="packages" direction="in"/>
       <arg type="s" name="transaction_address" direction="out"/>
       <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
@@ -242,8 +242,8 @@
        'signatures' (type 'av')
     -->
     <method name="GetCachedRebaseRpmDiff">
-      <arg type="s" name="refspec"/>
-      <arg type="as" name="packages"/>
+      <arg type="s" name="refspec" direction="in"/>
+      <arg type="as" name="packages" direction="in"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
       <arg type="a{sv}" name="details" direction="out"/>
@@ -251,8 +251,8 @@
     </method>
 
     <method name="DownloadRebaseRpmDiff">
-      <arg type="s" name="refspec"/>
-      <arg type="as" name="packages"/>
+      <arg type="s" name="refspec" direction="in"/>
+      <arg type="as" name="packages" direction="in"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
@@ -263,8 +263,8 @@
     <method name="PkgChange">
       <arg type="a{sv}" name="options" direction="in"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
-      <arg type="as" name="packages_added"/>
-      <arg type="as" name="packages_removed"/>
+      <arg type="as" name="packages_added" direction="in"/>
+      <arg type="as" name="packages_removed" direction="in"/>
       <arg type="s" name="transaction_address" direction="out"/>
       <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
@@ -296,7 +296,7 @@
         "reboot" (type 'b')
     -->
     <method name="KernelArgs">
-      <arg type="s" name="existing_kernel_arg_string"/>
+      <arg type="s" name="existing_kernel_arg_string" direction="in"/>
       <arg type="as" name="kernel_args_added" direction="in"/>
       <arg type="as" name="kernel_args_replaced" direction="in"/>
       <arg type="as" name="kernel_args_removed" direction="in"/>
@@ -306,7 +306,7 @@
     </method>
 
     <method name="GetDeploymentBootConfig">
-      <arg type="s" name="deployid" />
+      <arg type="s" name="deployid" direction="in"/>
       <arg type="b" name="is_pending" direction="in"/>
       <arg type="a{sv}" name="bootconfig" direction="out"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantMap"/>
