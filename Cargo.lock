@@ -181,9 +181,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std-ext"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0ae6a293d08473437dd15c64e53fd7166b7689455c0d10eb2dc0319691cbdc3"
+checksum = "374e427554ef23d91b535e4cb15a75e9323c6f2ce22923ea792b06621442316b"
 dependencies = [
  "cap-std",
  "rustix",
@@ -2197,9 +2197,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.78"
+version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d23c1ba4cf0efd44be32017709280b32d1cea5c3f1275c3b6d9e8bc54f758085"
+checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
 dependencies = [
  "itoa 1.0.1",
  "ryu",
