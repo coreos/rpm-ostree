@@ -4,10 +4,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{anyhow, Result};
+use cap_std::fs::{Dir, DirBuilder, Permissions};
+use cap_std_ext::cap_std;
+use cap_std_ext::prelude::CapStdExtDirExt;
 use fn_error_context::context;
-use openat_ext::OpenatDirExt;
 use rayon::prelude::*;
 use std::io::prelude::*;
+use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 mod cliutil;
 mod dracut;
@@ -65,18 +69,19 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
 }
 
 #[context("Writing wrapper for {:?}", binpath)]
-fn write_one_wrapper(rootfs_dfd: &openat::Dir, binpath: &Path, allow_noent: bool) -> Result<()> {
-    let exists = rootfs_dfd.exists(binpath)?;
+fn write_one_wrapper(rootfs_dfd: &Dir, binpath: &Path, allow_noent: bool) -> Result<()> {
+    let exists = rootfs_dfd.exists(binpath);
     if !exists && allow_noent {
         return Ok(());
     }
 
     let name = binpath.file_name().unwrap().to_str().unwrap();
 
+    let perms = Permissions::from_mode(0o755);
     if exists {
         let destpath = format!("{}/{}", CLIWRAP_DESTDIR, name);
-        rootfs_dfd.local_rename(binpath, destpath.as_str())?;
-        rootfs_dfd.write_file_with(binpath, 0o755, |w| {
+        rootfs_dfd.rename(binpath, rootfs_dfd, destpath.as_str())?;
+        rootfs_dfd.replace_file_with_perms(binpath, perms, |w| {
             indoc::writedoc! {w, r#"
 #!/bin/sh
 # Wrapper created by rpm-ostree to override
@@ -87,7 +92,7 @@ exec /usr/bin/rpm-ostree cliwrap $0 "$@"
 "#,  destpath }
         })?;
     } else {
-        rootfs_dfd.write_file_with(binpath, 0o755, |w| {
+        rootfs_dfd.replace_file_with_perms(binpath, perms, |w| {
             indoc::writedoc! {w, r#"
 #!/bin/sh
 # Wrapper created by rpm-ostree to implement this CLI interface.
@@ -101,10 +106,12 @@ exec /usr/bin/rpm-ostree cliwrap $0 "$@"
 
 /// Move the real binaries to a subdir, and replace them with
 /// a shell script that calls our wrapping code.
-fn write_wrappers(rootfs_dfd: &openat::Dir) -> Result<()> {
+fn write_wrappers(rootfs_dfd: &Dir) -> Result<()> {
     let destdir = std::path::Path::new(CLIWRAP_DESTDIR);
-    rootfs_dfd.ensure_dir(destdir.parent().unwrap(), 0o755)?;
-    rootfs_dfd.ensure_dir(destdir, 0o755)?;
+    let mut dirbuilder = DirBuilder::new();
+    dirbuilder.mode(0o755);
+    rootfs_dfd.ensure_dir_with(destdir.parent().unwrap(), &dirbuilder)?;
+    rootfs_dfd.ensure_dir_with(destdir, &dirbuilder)?;
 
     WRAPPED_BINARIES
         .par_iter()
@@ -114,7 +121,7 @@ fn write_wrappers(rootfs_dfd: &openat::Dir) -> Result<()> {
 }
 
 pub(crate) fn cliwrap_write_wrappers(rootfs_dfd: i32) -> CxxResult<()> {
-    Ok(write_wrappers(&ffi_view_openat_dir(rootfs_dfd))?)
+    Ok(write_wrappers(unsafe { &ffi_dirfd(rootfs_dfd)? })?)
 }
 
 pub(crate) fn cliwrap_destdir() -> String {
@@ -128,7 +135,7 @@ mod tests {
     use anyhow::Context;
 
     fn file_contains(
-        d: &openat::Dir,
+        d: &Dir,
         p: impl AsRef<Path>,
         expected_contents: impl AsRef<str>,
     ) -> Result<bool> {
@@ -142,19 +149,21 @@ mod tests {
 
     #[test]
     fn test_write_wrappers() -> Result<()> {
-        let td = tempfile::tempdir()?;
-        let td = &openat::Dir::open(td.path())?;
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        let mut db = DirBuilder::new();
+        db.mode(0o755);
+        db.recursive(true);
         for &d in &["usr/bin", "usr/libexec"] {
-            td.ensure_dir_all(d, 0o755)?;
+            td.ensure_dir_with(d, &db)?;
         }
-        td.write_file_contents("usr/bin/rpm", 0o755, "this is rpm")?;
+        td.write("usr/bin/rpm", "this is rpm")?;
         write_wrappers(td)?;
         assert!(file_contains(
             td,
             "usr/bin/rpm",
             "binary is now located at: usr/libexec/rpm-ostree/wrapped/rpm"
         )?);
-        assert!(!td.exists("usr/sbin/grubby")?);
+        assert!(!td.exists("usr/sbin/grubby"));
         assert!(file_contains(
             td,
             "usr/bin/yum",
