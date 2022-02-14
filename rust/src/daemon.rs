@@ -127,6 +127,9 @@ fn deployment_populate_variant_origin(
     if tf.cliwrap.unwrap_or_default() {
         dict.insert("cliwrap", &true);
     }
+    if tf.nosetuid.unwrap_or_default() {
+        dict.insert("nosetuid", &true);
+    }
 
     Ok(())
 }

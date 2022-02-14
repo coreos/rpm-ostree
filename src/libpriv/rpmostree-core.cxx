@@ -4541,7 +4541,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   return rpmostree_context_assemble_end (self, cancellable, error);
 }
 
-// Perform any final transformations independent of rpm, such as cliwrap.
+// Perform any final transformations independent of rpm, such as cliwrap and
+// nosetuid.
 gboolean
 rpmostree_context_assemble_end (RpmOstreeContext      *self,
                                 GCancellable          *cancellable,
@@ -4551,6 +4552,8 @@ rpmostree_context_assemble_end (RpmOstreeContext      *self,
     return FALSE;
   if (self->treefile_rs->get_cliwrap())
     CXX_TRY(cliwrap_write_wrappers (self->tmprootfs_dfd), error);
+  if (self->treefile_rs->get_nosetuid())
+    CXX_TRY(nosetuid_remove_setuid (self->tmprootfs_dfd), error);
   return TRUE;
 }
 

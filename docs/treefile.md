@@ -128,6 +128,9 @@ It supports the following parameters:
 
     The default is `false` out of conservatism; you likely want to enable this.
 
+ * `nosetuid`: boolean, optional.  Defaults to `false`.  If enabled,
+    rpm-ostree will remove the SetUID and SetGID bits from all executables.
+
  * `readonly-executables`: boolean, optional.  Defaults to `false` (for backcompat).
     If enabled, rpm-ostree will remove the write bit from all executables.
 

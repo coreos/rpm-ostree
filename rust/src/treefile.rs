@@ -419,6 +419,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     merge_vec_field(&mut dest.packages, &mut src.packages);
     merge_vec_field(&mut dest.repo_packages, &mut src.repo_packages);
     merge_basic_field(&mut dest.cliwrap, &mut src.cliwrap);
+    merge_basic_field(&mut dest.nosetuid, &mut src.nosetuid);
     merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
     merge_modules(&mut dest.modules, &mut src.modules);
 }
@@ -736,6 +737,10 @@ impl Treefile {
 
     pub(crate) fn get_cliwrap(&self) -> bool {
         self.parsed.cliwrap.unwrap_or(false)
+    }
+
+    pub(crate) fn get_nosetuid(&self) -> bool {
+        self.parsed.nosetuid.unwrap_or(false)
     }
 
     pub(crate) fn get_readonly_executables(&self) -> bool {
@@ -1219,6 +1224,7 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) modules: Option<ModulesConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) cliwrap: Option<bool>,
+    pub(crate) nosetuid: Option<bool>,
 
     #[serde(flatten)]
     pub(crate) derive: DeriveConfigFields,
