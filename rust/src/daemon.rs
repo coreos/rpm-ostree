@@ -18,7 +18,7 @@ use libc;
 use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib, ostree};
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::pin::Pin;
