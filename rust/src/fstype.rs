@@ -1,3 +1,5 @@
+//! Helpers for filesystem metadata.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 use std::borrow::Cow;
 
 // This function was copied from https://github.com/uutils/coreutils/blob/64f3cd748d5a188d5123790110d1d8ca7b33f18d/src/uucore/src/lib/features/fsext.rs#L748
