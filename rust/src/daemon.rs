@@ -9,12 +9,21 @@ use crate::ffi::{
     PackageOverrideSource, PackageOverrideSourceKind, ParsedRevision, ParsedRevisionKind,
 };
 use anyhow::{anyhow, format_err, Result};
+use cap_std_ext::cap_std;
+use cap_std_ext::dirext::CapStdExtDirExt;
+use cap_std_ext::rustix::fs::MetadataExt;
 use fn_error_context::context;
 use glib::prelude::*;
+use libc;
 use openat_ext::OpenatDirExt;
-use ostree_ext::{glib, ostree};
+use ostree_ext::{gio, glib, ostree};
 use std::collections::BTreeMap;
+use std::io::{Read, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::pin::Pin;
+
+const RPM_OSTREED_COMMIT_VERIFICATION_CACHE: &str = "rpm-ostree/gpgcheck-cache";
 
 /// Validate basic assumptions on daemon startup.
 pub(crate) fn daemon_sanitycheck_environment(
@@ -244,6 +253,105 @@ pub(crate) fn deployment_layeredmeta_load(
         deployment.csum().unwrap().as_str(),
     )?;
     deployment_layeredmeta_from_commit(deployment.gobj_rewrap(), commit.gobj_rewrap())
+}
+
+#[context("Loading origin status")]
+pub(crate) fn variant_add_remote_status(
+    mut repo: Pin<&mut crate::FFIOstreeRepo>,
+    refspec: &str,
+    base_checksum: &str,
+    mut dict: Pin<&mut crate::FFIGVariantDict>,
+) -> CxxResult<()> {
+    let repo = &repo.gobj_wrap();
+    let dict = &dict.gobj_wrap();
+
+    let (maybe_remote, _) = ostree::parse_refspec(refspec)?;
+    let gpg_verify = if let Some(ref remote) = maybe_remote {
+        match repo.remote_get_gpg_verify(remote.as_str()) {
+            Ok(b) => b,
+            Err(err) => {
+                if let Some(ioerr) = err.kind::<gio::IOErrorEnum>() {
+                    // If the remote doesn't exist, let's note that so that status can render it
+                    // specially.
+                    if ioerr == gio::IOErrorEnum::NotFound {
+                        let msg = format!("{}", err);
+                        dict.insert("remote-error", &msg);
+                        return Ok(());
+                    }
+                }
+                return Err(err.into());
+            }
+        }
+    } else {
+        false
+    };
+
+    dict.insert("gpg-enabled", &gpg_verify);
+    if !gpg_verify {
+        return Ok(()); // note early return; no need to verify signatures!
+    }
+
+    // there must a remote if GPG checking is enabled
+    let remote = maybe_remote.unwrap();
+
+    match get_cached_signatures_variant(repo, remote.as_str(), base_checksum) {
+        Ok(sigs) => dict.insert_value("signatures", &sigs),
+        Err(err) => {
+            // Somehow, we have a deployment which has gpg-verify=true, but we couldn't verify its
+            // signature. Let's not just bomb out here. We need to return this in the variant so
+            // that `status` can show the appropriate msg.
+            tracing::debug!("failed to get cached signature variant: {}", err);
+        }
+    };
+
+    Ok(())
+}
+
+fn get_cached_signatures_variant(
+    repo: &ostree::Repo,
+    remote: &str,
+    checksum: &str,
+) -> Result<glib::Variant> {
+    let run = cap_std::fs::Dir::open_ambient_dir("/run", cap_std::ambient_authority())?;
+    run.create_dir_all(RPM_OSTREED_COMMIT_VERIFICATION_CACHE)?;
+    let cachedir = run.open_dir(RPM_OSTREED_COMMIT_VERIFICATION_CACHE)?;
+
+    let remote_dir = Path::new(remote);
+    let cached_relpath = remote_dir.join(checksum);
+
+    if let Some(mut f) = cachedir.open_optional(&cached_relpath)? {
+        let m = f.metadata()?;
+        if m.mode() == (libc::S_IFREG | 0o600) && m.uid() == 0 && m.gid() == 0 {
+            tracing::debug!("signature variant cache hit for ({}, {})", remote, checksum);
+            let bytes = {
+                let mut buf: Vec<u8> = Vec::new();
+                f.read_to_end(&mut buf)?;
+                glib::Bytes::from_owned(buf)
+            };
+            let v = glib::Variant::from_bytes::<Vec<glib::Variant>>(&bytes);
+            return Ok(v);
+        }
+    }
+
+    tracing::debug!(
+        "signature variant cache miss for ({}, {})",
+        remote,
+        checksum
+    );
+
+    cachedir.create_dir_all(remote_dir)?;
+    cachedir.remove_file_optional(&cached_relpath)?;
+    let verify_result = repo.verify_commit_for_remote(checksum, remote, gio::NONE_CANCELLABLE)?;
+    let n = verify_result.count_all();
+    let mut sigs: Vec<glib::Variant> = Vec::with_capacity(n as usize);
+    for i in 0..n {
+        sigs.push(glib::Variant::from_variant(&verify_result.all(i).unwrap())); // we know index is in range
+    }
+
+    let v = glib::Variant::from_array::<glib::Variant>(&sigs);
+    let perms = cap_std::fs::Permissions::from_mode(0o600);
+    cachedir.replace_file_with_perms(&cached_relpath, perms, |f| f.write(&v.data_as_bytes()))?;
+    return Ok(v);
 }
 
 /// Parse kind and name for a source of package overrides.

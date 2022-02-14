@@ -103,62 +103,6 @@ rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
   return (OstreeDeployment*)g_object_ref (deployments->pdata[deployment_index]);
 }
 
-static gboolean
-variant_add_remote_status (OstreeRepo  *repo,
-                           const gchar *origin_refspec,
-                           const gchar *checksum,
-                           GVariantDict *dict,
-                           GError     **error)
-{
-  GLNX_AUTO_PREFIX_ERROR ("Loading origin status", error);
-
-  g_autofree gchar *remote = NULL;
-  if (!ostree_parse_refspec (origin_refspec, &remote, NULL, error))
-    return FALSE;
-
-  g_autoptr(GError) local_error = NULL;
-  gboolean gpg_verify = FALSE;
-  if (remote)
-    {
-      if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, &local_error))
-        {
-          /* If the remote doesn't exist, let's note that so that status can
-           * render it specially.
-           */
-          if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-            {
-              g_variant_dict_insert (dict, "remote-error", "s", local_error->message);
-              return TRUE;
-            }
-          g_propagate_error (error, util::move_nullify (local_error));
-          return FALSE;
-        }
-    }
-  g_variant_dict_insert (dict, "gpg-enabled", "b", gpg_verify);
-  if (!gpg_verify)
-    return TRUE; /* Note early return; no need to verify signatures! */
-
-  g_autoptr(OstreeGpgVerifyResult) verify_result =
-    ostree_repo_verify_commit_for_remote (repo, checksum, remote, NULL, NULL);
-  if (!verify_result)
-    {
-      /* Somehow, we have a deployment which has gpg-verify=true, but *doesn't* have a valid
-       * signature. Let's not just bomb out here. We need to return this in the variant so
-       * that `status` can show the appropriate msg. */
-      return TRUE;
-    }
-
-  g_auto(GVariantBuilder) builder;
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
-
-  guint n_sigs = ostree_gpg_verify_result_count_all (verify_result);
-  for (guint i = 0; i < n_sigs; i++)
-    g_variant_builder_add (&builder, "v", ostree_gpg_verify_result_get_all (verify_result, i));
-
-  g_variant_dict_insert_value (dict, "signatures", g_variant_builder_end (&builder));
-  return TRUE;
-}
-
 GVariant *
 rpmostreed_deployment_generate_blank_variant (void)
 {
@@ -322,8 +266,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
         g_variant_dict_insert (dict, "origin", "s", refspec);
-        if (!variant_add_remote_status (repo, refspec, base_checksum, dict, error))
-          return FALSE;
+        CXX_TRY (variant_add_remote_status (*repo, refspec, base_checksum, *dict), error);
 
         g_autofree char *pending_base_commitrev = NULL;
         if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
@@ -426,8 +369,7 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
 
   if (refspec_is_ostree)
     {
-      if (!variant_add_remote_status (repo, refspec, checksum, dict, error))
-        return FALSE;
+      CXX_TRY (variant_add_remote_status (*repo, refspec, checksum, *dict), error);
     }
 
   if (osname != NULL)
