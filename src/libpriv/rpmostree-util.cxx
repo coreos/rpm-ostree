@@ -141,6 +141,11 @@ rpmostree_translate_path_for_ostree (const char *path)
     return g_strconcat ("usr/etc/selinux/targeted/", path + strlen (VAR_SELINUX_TARGETED_PATH), NULL);
   else if (g_str_has_prefix (path, "opt/"))
     return g_strconcat ("usr/lib/", path, NULL);
+  else if ((strcmp (path, "var/lib/alternatives/") == 0) ||
+           g_str_has_prefix (path, "var/lib/alternatives") ||
+           (strcmp (path, "var/lib/vagrant/") == 0) ||
+           g_str_has_prefix (path, "var/lib/vagrant"))
+    return g_strconcat ("usr/", path + strlen ("var/"), NULL);
 
   return NULL;
 }
