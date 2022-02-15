@@ -128,13 +128,20 @@ It supports the following parameters:
 
     The default is `false` out of conservatism; you likely want to enable this.
 
- * `nosetuid`: boolean, optional.  Defaults to `false`.  If enabled,
-    rpm-ostree will remove the SetUID and SetGID bits from all executables.
-
  * `readonly-executables`: boolean, optional.  Defaults to `false` (for backcompat).
     If enabled, rpm-ostree will remove the write bit from all executables.
 
     The default is `false` out of conservatism; you likely want to enable this.
+
+ * `setuid`: Array of strings, optional. If specified, rpm-ostree will remove
+    the SetUID bit from all files and folders not listed in this option. Use a
+    single empty path ("") to instruct rpm-ostree to remove the SetUID bits from
+    all files and directories indiscriminately.
+
+ * `setgid`: Array of strings, optional. If specified, rpm-ostree will remove
+    the SetGID bit from all files and folders not listed in this option. Use a
+    single empty path ("") to instruct rpm-ostree to remove the SetGID bits from
+    all files and directories indiscriminately.
 
  * `remove-files`: Array of files to delete from the generated tree.
 

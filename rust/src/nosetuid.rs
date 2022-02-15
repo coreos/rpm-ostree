@@ -5,7 +5,6 @@
 
 use anyhow::Result;
 use fn_error_context::context;
-use walkdir::WalkDir;
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
 
@@ -18,23 +17,26 @@ const SetGID: u32 = 0o2000;
 
 /// Remove SetUID and SetGID bits from all executables.
 #[context("Removing SetUID & SetGID bits from all executables")]
-fn remove_setuid(_rootfs_dfd: &openat::Dir) -> Result<()> {
-    for e in WalkDir::new("usr") {
-        let entry = e?;
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let mode = entry.path().metadata()?.permissions().mode();
-        if (mode & Executable) == 0 {
-            continue;
-        }
-        let new_mode = (mode & !SetUID) & !SetGID;
-        if mode != new_mode {
-            println!("Stripping '{}': {:#o} -> {:#o}", entry.path().display(), mode, new_mode);
-            let file = File::open(entry.path())?;
-            let mut perms = file.metadata()?.permissions();
-            perms.set_mode(new_mode);
-            file.set_permissions(perms)?;
+fn remove_setuid(rootfs_dfd: &openat::Dir) -> Result<()> {
+    for entry in rootfs_dfd.list_self() {
+        match entry.file_type() {
+            Symlink => continue,
+            Other => continue,
+            Dir => remove_setuid(entry),
+            File => {
+                let mode = entry.path().metadata()?.permissions().mode();
+                if (mode & Executable) == 0 {
+                    continue;
+                }
+                let new_mode = (mode & !SetUID) & !SetGID;
+                if mode != new_mode {
+                    println!("Stripping '{}': {:#o} -> {:#o}", entry.path().display(), mode, new_mode);
+                    let file = File::open(entry.path())?;
+                    let mut perms = file.metadata()?.permissions();
+                    perms.set_mode(new_mode);
+                    file.set_permissions(perms)?;
+                }
+            }
         }
     }
     Ok(())
