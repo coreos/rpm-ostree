@@ -5,18 +5,16 @@ use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use cap_std_ext::cap_std;
+use cap_std_ext::prelude::CapStdExtCommandExt;
 use ostree_ext::{gio, glib, prelude::*};
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::io::prelude::*;
-use std::os::unix::io::AsRawFd;
 use std::os::unix::io::IntoRawFd;
 use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
-use std::rc;
 use std::{fs, io};
-use subprocess::Exec;
 
 fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
     d: &cap_std::fs::Dir,
@@ -88,46 +86,42 @@ fn generate_initramfs_overlay<P: glib::IsA<gio::Cancellable>>(
     files: &HashSet<String>,
     cancellable: Option<&P>,
 ) -> Result<fs::File> {
+    use std::process::Stdio;
     let filelist = {
         let etcd = root.open_dir("etc")?;
         gather_filelist(&etcd, files, cancellable)?
     };
-    let out_tmpf = std::rc::Rc::new(tempfile::tempfile()?);
-    {
-        let cmd = Exec::cmd("cpio")
-            .args(&[
-                "--create",
-                "--format",
-                "newc",
-                "--quiet",
-                "--reproducible",
-                "--null",
-            ])
-            .cwd(format!("/proc/self/fd/{}", root.as_raw_fd()))
-            | Exec::cmd("gzip").arg("-1");
-        let mut children = cmd
-            .stdin(subprocess::Redirection::Pipe)
-            .stdout(subprocess::Redirection::RcFile(out_tmpf.clone()))
-            .popen()
-            .context("spawn")?;
-        {
-            let mut cstdin = std::io::BufWriter::new(children[0].stdin.take().expect("stdin"));
-            for f in filelist {
-                cstdin.write_all(b"etc/")?;
-                cstdin.write_all(f.as_bytes())?;
-                let nul = [0u8];
-                cstdin.write_all(&nul)?;
-            }
-            cstdin.flush()?;
+    let mut out_tmpf = tempfile::tempfile()?;
+    // Yeah, we need an initramfs-making crate.  See also
+    // https://github.com/dracutdevs/dracut/commit/a9c6704
+    let mut cmd = std::process::Command::new("/bin/bash");
+    cmd.args(&[
+        "-c",
+        "set -euo pipefail; cpio --create --format newc --quiet --reproducible --null | gzip -1",
+    ]);
+    cmd.cwd_dir_owned(root.try_clone()?);
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::from(out_tmpf.try_clone()?))
+        .spawn()
+        .context("spawn")?;
+    let mut stdin = std::io::BufWriter::new(child.stdin.take().unwrap());
+    // We could make this asynchronous too, but eh
+    let inputwriter = std::thread::spawn(move || -> Result<()> {
+        for f in filelist {
+            stdin.write_all(b"etc/")?;
+            stdin.write_all(f.as_bytes())?;
+            let nul = [0u8];
+            stdin.write_all(&nul)?;
         }
-        for mut child in children {
-            let status = child.wait()?;
-            if !status.success() {
-                anyhow::bail!("Failed to generate cpio archive");
-            }
-        }
+        stdin.flush()?;
+        Ok(())
+    });
+    let status = child.wait()?;
+    if !status.success() {
+        anyhow::bail!("Failed to generate cpio archive");
     }
-    let mut out_tmpf = rc::Rc::try_unwrap(out_tmpf).expect("initramfs rc unexpected count");
+    inputwriter.join().unwrap()?;
     out_tmpf.seek(io::SeekFrom::Start(0)).context("seek")?;
     Ok(out_tmpf)
 }
