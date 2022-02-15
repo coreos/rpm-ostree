@@ -70,6 +70,9 @@ struct RpmOstreeImporter
   // Hashset of filepath entries which are direct children of /opt;
   // each key is a plain path fragment, e.g. 'foo' for '/opt/foo/bar'.
   GHashTable *opt_direntries;
+  // Hashset of directories which got moved from '/var/lib' to '/usr/lib';
+  // each key is a plain directory name, e.g. 'foo' for '/var/lib/foo/'.
+  GHashTable *varlib_direntries;
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
   DnfPackage *pkg;
@@ -99,6 +102,7 @@ rpmostree_importer_finalize (GObject *object)
   g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->opt_direntries, (GDestroyNotify)g_hash_table_unref);
+  g_clear_pointer (&self->varlib_direntries, (GDestroyNotify)g_hash_table_unref);
 
   g_free (self->hdr_sha256);
 
@@ -271,6 +275,7 @@ rpmostree_importer_new_take_fd (int                     *fd,
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage*)(pkg ? g_object_ref (pkg) : NULL);
   ret->opt_direntries = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  ret->varlib_direntries = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -608,6 +613,10 @@ handle_translate_pathname (OstreeRepo   *repo,
   if (g_str_has_prefix (path, "opt/"))
     g_hash_table_add (self->opt_direntries,
                       get_first_path_element (path + strlen("opt/")));
+  else if ((strcmp (path, "var/lib/alternatives") == 0) ||
+           (strcmp (path, "var/lib/vagrant") == 0))
+    g_hash_table_add (self->varlib_direntries,
+                      g_strdup (path + strlen("var/lib/")));
 
   return rpmostree_translate_path_for_ostree (path);
 }
@@ -652,13 +661,22 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   GLNX_HASH_TABLE_FOREACH (self->opt_direntries, const char*, filename)
     {
       g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
-      auto opt_quoted = rpmostreecxx::maybe_shell_quote (opt);
+      auto quoted = rpmostreecxx::maybe_shell_quote (opt);
       /* Note that the destination can't be quoted as systemd just
        * parses the remainder of the line, and doesn't expand quotes.
        **/
       g_string_append_printf (self->tmpfiles_d,
                               "L %s - - - - /usr/lib/opt/%s\n",
-                              opt_quoted.c_str(), filename);
+                              quoted.c_str(), filename);
+    }
+
+  GLNX_HASH_TABLE_FOREACH (self->varlib_direntries, const char*, dirname)
+    {
+      g_autofree char *linkpath = g_strconcat ("/var/lib/", dirname, NULL);
+      auto quoted = rpmostreecxx::maybe_shell_quote (linkpath);
+      g_string_append_printf (self->tmpfiles_d,
+                              "L %s - - - - ../../usr/lib/%s\n",
+                              quoted.c_str(), dirname);
     }
 
   /* Handle any data we've accumulated to write to tmpfiles.d.

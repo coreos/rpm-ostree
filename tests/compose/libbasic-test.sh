@@ -124,13 +124,10 @@ assert_file_has_content parent.txt 01ba4719c80b6fe911b091a7c05124b64eeece964e09c
 echo "ok --parent"
 
 # Check symlinks injected into the rootfs.
-ostree --repo="${repo}" ls "${treeref}" /usr/lib/alternatives /usr/lib/vagrant | grep '^d00755'> symlinks.txt
-assert_file_has_content_literal symlinks.txt '/usr/lib/alternatives'
-assert_file_has_content_literal symlinks.txt '/usr/lib/vagrant'
-ostree --repo="${repo}" ls "${treeref}" /var/lib/alternatives /var/lib/vagrant /usr/local | grep '^l00777' > symlinks.txt
+ostree --repo="${repo}" ls "${treeref}" /usr/lib/alternatives | grep '^d00755'> dirs.txt
+assert_file_has_content_literal dirs.txt '/usr/lib/alternatives'
+ostree --repo="${repo}" ls "${treeref}" /usr/local | grep '^l00777' > symlinks.txt
 assert_file_has_content_literal symlinks.txt '/usr/local -> ../var/usrlocal'
-assert_file_has_content_literal symlinks.txt '/var/lib/alternatives -> ../../usr/lib/alternatives'
-assert_file_has_content_literal symlinks.txt '/var/lib/vagrant -> ../../usr/lib/vagrant'
 echo "ok symlinks"
 }
 

@@ -467,9 +467,9 @@ rpmostree_postprocess_final (int            rootfs_dfd,
         return glnx_prefix_error (error, "SELinux postprocess");
     }
 
-  CXX_TRY(convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
-
   CXX_TRY(rootfs_prepare_links(rootfs_dfd), error);
+
+  CXX_TRY(convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
 
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;

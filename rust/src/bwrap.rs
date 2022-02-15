@@ -372,9 +372,25 @@ impl Bubblewrap {
     }
 
     /// Set /var to be read-only, but with a transient writable /var/tmp
-    pub(crate) fn var_tmp_tmpfs(&mut self) {
+    /// and compat symlinks for scripts.
+    pub(crate) fn setup_compat_var(&mut self) -> CxxResult<()> {
+        let content_dirs = &["alternatives", "vagrant"];
+        for entry in content_dirs {
+            let varlib_path = format!("var/lib/{}", &entry);
+            if !self.rootfs_fd.exists(&varlib_path)? {
+                let target = format!("../../usr/lib/{}", &entry);
+                self.rootfs_fd
+                    .symlink(&varlib_path, &target)
+                    .with_context(|| {
+                        format!("Creating compatibility symlink at /var/lib/{}", &entry)
+                    })?;
+            };
+        }
+
         self.bind_read("./var", "/var");
         self.append_bwrap_argv(&["--tmpfs", "/var/tmp"]);
+
+        Ok(())
     }
 
     /// Launch the process, returning a handle as well as a description for argv0
