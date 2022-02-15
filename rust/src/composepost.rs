@@ -35,8 +35,7 @@ use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::IntoRawFd;
 use std::path::Path;
 use std::pin::Pin;
-use std::rc::Rc;
-use subprocess::{Exec, Redirection};
+use std::process::Stdio;
 
 /* See rpmostree-core.h */
 const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
@@ -1006,20 +1005,18 @@ fn hardlink_rpmdb_base_location(
 fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> Result<()> {
     let tempetc = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
 
-    let dbfd = Rc::new(
-        memfd::MemfdOptions::default()
-            .allow_sealing(true)
-            .create("rpmdb")?
-            .into_file(),
-    );
+    let mut dbfd = memfd::MemfdOptions::default()
+        .allow_sealing(true)
+        .create("rpmdb")?
+        .into_file();
 
     let dbpath_arg = format!("--dbpath=/proc/self/cwd/{}", RPMOSTREE_RPMDB_LOCATION);
     // Fork rpmdb from the *host* rootfs to read the rpmdb back into memory
-    let r = Exec::cmd("rpmdb")
+    let r = std::process::Command::new("rpmdb")
         .args(&[dbpath_arg.as_str(), "--exportdb"])
-        .cwd(format!("/proc/self/fd/{}", rootfs_dfd.as_raw_fd()))
-        .stdout(Redirection::RcFile(Rc::clone(&dbfd)))
-        .join()?;
+        .current_dir(format!("/proc/self/fd/{}", rootfs_dfd.as_raw_fd()))
+        .stdout(Stdio::from(dbfd.try_clone()?))
+        .status()?;
     if !r.success() {
         return Err(anyhow!("Failed to execute rpmdb --exportdb: {:?}", r));
     }
@@ -1029,7 +1026,6 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
     rootfs_dfd.create_dir(RPMOSTREE_RPMDB_LOCATION, 0o755)?;
 
     // Only one owner now
-    let mut dbfd = Rc::try_unwrap(dbfd).unwrap();
     dbfd.seek(std::io::SeekFrom::Start(0))?;
 
     // In the interests of build stability, rewrite the INSTALLTIME and INSTALLTID tags
