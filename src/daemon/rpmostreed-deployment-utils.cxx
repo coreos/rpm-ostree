@@ -152,13 +152,13 @@ variant_add_commit_details (GVariantDict *dict,
                            "t", timestamp);
 }
 
-/* Returns floating GVariant equivalent of `commit_meta` minus blacklisted keys. */
+/* Returns floating GVariant equivalent of `commit_meta` minus keys we don't want. */
 static GVariant*
 filter_commit_meta (GVariant *commit_meta)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, commit_meta);
-  /* for now we just blacklist, but we may want to whitelist in the future */
+  /* just remove keys for now, later we may want to define a specific list of keys to keep */
   g_variant_dict_remove (&dict, "rpmostree.rpmdb.pkglist");
   g_variant_dict_remove (&dict, "rpmostree.advisories");
   return g_variant_dict_end (&dict);

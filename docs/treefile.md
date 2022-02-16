@@ -69,9 +69,9 @@ It supports the following parameters:
    which will be filtered out.  If a package listed in the manifest ("manifest package") indirectly hard depends
    on one of these packages, it will be a fatal error.  If a manifest package recommends one
    of these packages, the recommended package will simply be omitted.  It is also a fatal
-   error to include a package both as a manifest package and in the blacklist.
+   error to include a package both as a manifest package and in the exclusion list.
 
-   An example use case for this is for Fedora CoreOS, which will blacklist the `python` and `python3`
+   An example use case for this is for Fedora CoreOS, which will exclude the `python` and `python3`
    packages to ensure that nothing included in the OS starts depending on it in the future.
 
  * `repo-packages`: Array of objects, optional: Set of packages to install from

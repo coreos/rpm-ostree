@@ -43,7 +43,7 @@ for x in 'recommends' 'documentation' 'readonly-executables'; do
   treefile_del "$x"
 done
 
-# Test blacklists
+# Test package exclusion
 treefile_append "exclude-packages" '["somenonexistent-package", "gnome-shell"]'
 
 # Note this overrides:
