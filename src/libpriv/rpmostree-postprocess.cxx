@@ -779,6 +779,7 @@ rpmostree_compose_commit (int            rootfs_fd,
                           OstreeRepo    *repo,
                           const char    *parent_revision,
                           GVariant      *src_metadata,
+                          GVariant      *src_detached_metadata,
                           const char    *gpg_keyid,
                           gboolean       enable_selinux,
                           OstreeRepoDevInoCache *devino_cache,
@@ -866,6 +867,14 @@ rpmostree_compose_commit (int            rootfs_fd,
                                  (OstreeRepoFile*)root_tree, &new_revision,
                                  cancellable, error))
     return glnx_prefix_error (error, "While writing commit");
+
+  if (src_detached_metadata != NULL)
+    {
+      g_autoptr(GVariantDict) detached_metadata_dict = g_variant_dict_new (src_detached_metadata);
+      g_autoptr(GVariant) detached_metadata = g_variant_dict_end (detached_metadata_dict);
+      if (!ostree_repo_write_commit_detached_metadata (repo, new_revision, detached_metadata, cancellable, error))
+        return glnx_prefix_error (error, "While writing detached metadata");
+    }
 
   if (gpg_keyid)
     {

@@ -4574,9 +4574,11 @@ rpmostree_context_commit (RpmOstreeContext      *self,
   { glnx_unref_object OstreeMutableTree *mtree = NULL;
     g_autoptr(GFile) root = NULL;
     g_auto(GVariantBuilder) metadata_builder;
+    g_auto(GVariantBuilder) detached_metadata_builder;
     g_autofree char *state_checksum = NULL;
 
     g_variant_builder_init (&metadata_builder, (GVariantType*)"a{sv}");
+    g_variant_builder_init (&detached_metadata_builder, (GVariantType*)"a{sv}");
 
     if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING)
       {
@@ -4602,7 +4604,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
 
         /* Record the rpm-md information on the client just like we do on the server side */
         g_autoptr(GVariant) rpmmd_meta = rpmostree_context_get_rpmmd_repo_commit_metadata (self);
-        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.rpmmd-repos", rpmmd_meta);
+        g_variant_builder_add (&detached_metadata_builder, "{sv}", "rpmostree.rpmmd-repos", rpmmd_meta);
 
         /* embed packages (really, "patterns") layered */
         auto pkgs = self->treefile_rs->get_packages();
@@ -4728,12 +4730,18 @@ rpmostree_context_commit (RpmOstreeContext      *self,
     if (!ostree_commit_metadata_for_bootable (root, metadata_dict, cancellable, error))
       return FALSE;
     g_autoptr(GVariant) metadata = g_variant_dict_end (metadata_dict);
+    g_autoptr(GVariant) detached_metadata = g_variant_ref_sink(g_variant_builder_end(&detached_metadata_builder));
 
     { 
       if (!ostree_repo_write_commit (self->ostreerepo, parent, "", "",
                                      metadata,
                                      OSTREE_REPO_FILE (root),
                                      &ret_commit_checksum, cancellable, error))
+      return FALSE;
+      if (!ostree_repo_write_commit_detached_metadata (self->ostreerepo,
+                                                       ret_commit_checksum,
+                                                       detached_metadata,
+                                                       cancellable, error))
       return FALSE;
     }
 
