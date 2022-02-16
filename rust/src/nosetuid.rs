@@ -7,6 +7,8 @@ use anyhow::Result;
 use fn_error_context::context;
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
+use openat_ext::OpenatDirExt;
+use openat::SimpleType;
 
 use crate::cxxrsutil::CxxResult;
 use crate::ffiutil::*;
@@ -18,23 +20,22 @@ const SetGID: u32 = 0o2000;
 /// Remove SetUID and SetGID bits from all executables.
 #[context("Removing SetUID & SetGID bits from all executables")]
 fn remove_setuid(rootfs_dfd: &openat::Dir) -> Result<()> {
-    for entry in rootfs_dfd.list_self() {
-        match entry.file_type() {
-            Symlink => continue,
-            Other => continue,
-            Dir => remove_setuid(entry),
-            File => {
-                let mode = entry.path().metadata()?.permissions().mode();
+    let dir = rootfs_dfd;
+    for e in rootfs_dfd.list_self()? {
+        let entry = e?;
+        match rootfs_dfd.get_file_type(&entry)? {
+            SimpleType::Symlink => continue,
+            SimpleType::Other => continue,
+            SimpleType::Dir => remove_setuid(&dir.sub_dir(entry.file_name())?)?,
+            SimpleType::File => {
+                let mode = dir.open_file(entry.file_name())?.metadata()?.permissions().mode();
                 if (mode & Executable) == 0 {
                     continue;
                 }
                 let new_mode = (mode & !SetUID) & !SetGID;
                 if mode != new_mode {
-                    println!("Stripping '{}': {:#o} -> {:#o}", entry.path().display(), mode, new_mode);
-                    let file = File::open(entry.path())?;
-                    let mut perms = file.metadata()?.permissions();
-                    perms.set_mode(new_mode);
-                    file.set_permissions(perms)?;
+                    println!("Stripping '{:?}': {:#o} -> {:#o}", entry.file_name(), mode, new_mode);
+                    dir.set_mode(entry.file_name(), new_mode)?;
                 }
             }
         }
