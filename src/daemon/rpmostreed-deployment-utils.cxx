@@ -152,15 +152,36 @@ variant_add_commit_details (GVariantDict *dict,
                            "t", timestamp);
 }
 
-/* Returns floating GVariant equivalent of `commit_meta` minus keys we don't want. */
+
+
+/* Returns floating GVariant equivalent of `commit_meta`, combined with any
+ * entries from `detached_meta`, minus keys we don't want. */
 static GVariant*
-filter_commit_meta (GVariant *commit_meta)
+collect_commit_meta (GVariant *commit_meta, GVariant *detached_meta, gboolean filter)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, commit_meta);
-  /* just remove keys for now, later we may want to define a specific list of keys to keep */
-  g_variant_dict_remove (&dict, "rpmostree.rpmdb.pkglist");
-  g_variant_dict_remove (&dict, "rpmostree.advisories");
+
+  if (detached_meta != NULL)
+    {
+      GVariantIter iter;
+      GVariant *value;
+      gchar *key;
+
+      g_variant_iter_init(&iter, detached_meta);
+      while (g_variant_iter_next (&iter, "{sv}", &key, &value))
+        {
+          g_variant_dict_insert_value(&dict, key, value);
+        }
+    }
+
+  if (filter)
+    {
+      /* just remove keys for now, later we may want to define a specific list of keys to keep */
+      g_variant_dict_remove (&dict, "rpmostree.rpmdb.pkglist");
+      g_variant_dict_remove (&dict, "rpmostree.advisories");
+    }
+
   return g_variant_dict_end (&dict);
 }
 
@@ -221,9 +242,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
       /* See below for base commit metadata */
       g_autoptr(GVariant) layered_metadata = g_variant_get_child_value (commit, 0);
+      g_autoptr(GVariant) detached_meta = NULL;
+      if (!ostree_repo_read_commit_detached_metadata (repo, base_checksum, &detached_meta, NULL, error))
+        return FALSE;
+
       g_variant_dict_insert (dict, "layered-commit-meta", "@a{sv}",
-                             filter ? filter_commit_meta (layered_metadata)
-                                    : layered_metadata);
+                             collect_commit_meta (layered_metadata, detached_meta, filter));
     }
   else
     {
@@ -236,8 +260,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
    * of the commit metadata that are actually relevant.
    */
   { g_autoptr(GVariant) base_meta = g_variant_get_child_value (base_commit, 0);
+    g_autoptr(GVariant) detached_meta = NULL;
+    if (!ostree_repo_read_commit_detached_metadata (repo, base_checksum, &detached_meta, NULL, error))
+      return FALSE;
     g_variant_dict_insert (dict, "base-commit-meta", "@a{sv}",
-                           filter ? filter_commit_meta (base_meta) : base_meta);
+                           collect_commit_meta (base_meta, detached_meta, filter));
   }
   variant_add_commit_details (dict, NULL, commit);
 
