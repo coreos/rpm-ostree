@@ -228,7 +228,7 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
           no_overrides)
         g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.override");
       /* If we couldn't figure out what's going on, count it as an override.  This occurs
-       * right now with `deploy --ex-cliwrap=true`.
+       * right now with `deploy --ex-cliwrap=true` or `deploy --ex-nosetuid=true`.
        */
       if (actions->len == 0)
         g_ptr_array_add (actions, (void*)"org.projectatomic.rpmostree1.override");

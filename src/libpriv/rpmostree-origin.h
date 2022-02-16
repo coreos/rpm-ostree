@@ -154,6 +154,11 @@ void
 rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap);
 
 gboolean
+rpmostree_origin_get_nosetuid (RpmOstreeOrigin *origin);
+void
+rpmostree_origin_set_nosetuid (RpmOstreeOrigin *origin, gboolean nosetuid);
+
+gboolean
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,
                              GError         **error);

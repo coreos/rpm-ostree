@@ -84,6 +84,10 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
         cfg.cliwrap = Some(true)
     }
 
+    if map_keyfile_optional(kf.boolean(RPMOSTREE, "ex-nosetuid"))?.unwrap_or_default() {
+        cfg.nosetuid = Some(true)
+    }
+
     cfg.derive.override_commit = keyfile_get_optional_string(kf, ORIGIN, "override-commit")?;
 
     Ok(Box::new(Treefile::new_from_config(cfg, None)?))
@@ -199,6 +203,9 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
 
     if tf.cliwrap.unwrap_or_default() {
         kf.set_boolean(RPMOSTREE, "ex-cliwrap", true)
+    }
+    if tf.nosetuid.unwrap_or_default() {
+        kf.set_boolean(RPMOSTREE, "ex-nosetuid", true)
     }
 
     if let Some(c) = tf.derive.override_commit.as_deref() {
