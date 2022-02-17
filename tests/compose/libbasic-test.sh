@@ -129,5 +129,13 @@ assert_file_has_content_literal dirs.txt '/usr/lib/alternatives'
 ostree --repo="${repo}" ls "${treeref}" /usr/local | grep '^l00777' > symlinks.txt
 assert_file_has_content_literal symlinks.txt '/usr/local -> ../var/usrlocal'
 echo "ok symlinks"
+
+# Check iptables setup through alternatives.
+ostree --repo="${repo}" ls "${treeref}" '/usr/lib/alternatives/iptables' | grep '^-' > alternatives.txt
+assert_file_has_content_literal alternatives.txt '/usr/lib/alternatives/iptables'
+ostree --repo="${repo}" ls "${treeref}" '/usr/etc/alternatives/iptables' | grep '^l00777' > symlinks.txt
+# NOTE: this does not check the whole symlink target, but only a reasonably-stable leading portion of it.
+assert_file_has_content_literal symlinks.txt '/usr/etc/alternatives/iptables -> /usr/sbin/ip'
+echo "ok alternatives"
 }
 
