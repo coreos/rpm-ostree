@@ -149,9 +149,9 @@ checksum = "6f3132262930b0522068049f5870a856ab8affc80c70d08b6ecb785771a6fc23"
 
 [[package]]
 name = "cap-primitives"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1fc128b736b17903e7cdfa753073bdf27e0c6fce26bc098205128550bfc2eac"
+checksum = "defd283f080043a702c362203c2646a4e0a2fff99baede1eea1416239f0af220"
 dependencies = [
  "ambient-authority",
  "errno",
@@ -168,9 +168,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2b8c96d0db4735e144eeb51e04fb4d6cb2477c47d023822e84a98e5cdf77881"
+checksum = "7cbe56c8ed4cdf8360deb80dcced538968d3bac45e71befee65e95a0e262caf2"
 dependencies = [
  "cap-primitives",
  "io-extras",
@@ -192,9 +192,9 @@ dependencies = [
 
 [[package]]
 name = "cap-tempfile"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b2cc4af777567ad4932df16056906a0bc0c7a7b1e6d7b94e5f7e6cfc648758a"
+checksum = "f92b21a6075b9e31c8eefe76c6985392a00c5cd2f2d466e45e1eba90ea029c0c"
 dependencies = [
  "cap-std",
  "rand",
