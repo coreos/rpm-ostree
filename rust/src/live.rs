@@ -12,6 +12,9 @@ use crate::ffi::LiveApplyState;
 use crate::isolation;
 use crate::progress::progress_task;
 use anyhow::{anyhow, Context, Result};
+use cap_std::fs::{Dir, Permissions};
+use cap_std_ext::cap_std;
+use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use nix::sys::statvfs;
 use openat_ext::OpenatDirExt;
@@ -21,6 +24,7 @@ use ostree_ext::{gio, glib, ostree};
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
+use std::os::unix::prelude::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
@@ -32,7 +36,7 @@ pub(crate) const OPT_REPLACE: &str = "replace";
 /// The directory where ostree stores transient per-deployment state.
 /// This is currently semi-private to ostree; we should add an API to
 /// access it.
-const OSTREE_RUNSTATE_DIR: &str = "/run/ostree/deployment-state";
+const OSTREE_RUNSTATE_DIR: &str = "ostree/deployment-state";
 /// Stamp file used to signal deployment was live-applied, stored in the above directory
 const LIVE_STATE_NAME: &str = "rpmostree-is-live.stamp";
 /// OSTree ref that follows the live state
@@ -59,8 +63,8 @@ pub(crate) fn get_live_state(
     repo: &ostree::Repo,
     deploy: &ostree::Deployment,
 ) -> Result<Option<LiveApplyState>> {
-    let root = openat::Dir::open("/")?;
-    if !root.exists(&get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
+    let run = Dir::open_ambient_dir("/run", cap_std::ambient_authority())?;
+    if !run.exists(&get_runstate_dir(deploy).join(LIVE_STATE_NAME)) {
         return Ok(None);
     }
     let live_commit = repo.resolve_rev(LIVE_REF, true)?;
@@ -77,14 +81,14 @@ fn write_live_state(
     deploy: &ostree::Deployment,
     state: &LiveApplyState,
 ) -> Result<()> {
-    let root = openat::Dir::open("/")?;
-    let rundir = if let Some(d) = root.sub_dir_optional(&get_runstate_dir(deploy))? {
+    let run = Dir::open_ambient_dir("/run", cap_std::ambient_authority())?;
+    let rundir = if let Some(d) = run.open_dir_optional(&get_runstate_dir(deploy))? {
         d
     } else {
         return Ok(());
     };
 
-    let found_live_stamp = rundir.exists(LIVE_STATE_NAME)?;
+    let found_live_stamp = rundir.exists(LIVE_STATE_NAME);
 
     let commit = Some(state.commit.as_str()).filter(|s| !s.is_empty());
     repo.set_ref_immediate(None, LIVE_REF, commit, gio::NONE_CANCELLABLE)?;
@@ -98,7 +102,8 @@ fn write_live_state(
 
     // Ensure the stamp file exists
     if !found_live_stamp && commit.or(inprogress_commit).is_some() {
-        rundir.write_file_contents(LIVE_STATE_NAME, 0o644, b"")?;
+        let perms = Permissions::from_mode(0o644);
+        rundir.replace_contents_with_perms(LIVE_STATE_NAME, b"", perms)?;
     }
 
     Ok(())
