@@ -312,6 +312,53 @@ It supports the following parameters:
        - tweaks-s390x.yaml
     ```
 
+ * `conditional-include`: array of objects, optional: This is like `include`,
+    but supports conditions based on variables defined in `variables`. The
+    syntax is:
+
+    ```yaml
+    conditional-include:
+      - if: <var> <op> <value>
+        include: <include>
+    ```
+
+    `<var>` is a variable name previously defined via `variables`. `<op>` must
+    be one of `==`, `!=`, `<`, `<=`, `>`, `>=`. `<value>` has the same sematics
+    as variable values: it can be a boolean, number, or string (in quotes).
+    `<include>` functions the same as the `include` key above - it can be either
+    a string or an array of strings.
+
+    Multiple conditions may be provided:
+
+    ```yaml
+    conditional-include:
+      - if:
+        - <var> <op> <value>
+        - <var> <op> <value>
+        - <var> <op> <value>
+        include: <include>
+    ```
+
+    In that case, *all* conditions must be met for the inclusion to happen.
+
+    Example:
+
+    ```yaml
+   variables:
+     devpackages: true
+     stream: "development"
+   releasever: 35
+   conditional-include:
+     - if: devpackages == true
+       include: dev-packages.yaml
+   conditional-include:
+     - if: stream != "development"
+       include: delete-dev-files.yaml
+   conditional-include:
+     - if: releasever >= 35
+       include: f35-selinux-workaround.yaml
+    ```
+
  * `container`: boolean, optional: Defaults to `false`.  If `true`, then
    rpm-ostree will not do any special handling of kernel, initrd or the
    /boot directory. This is useful if the target for the tree is some kind
@@ -361,8 +408,9 @@ It supports the following parameters:
    field supports variable substitution.
 
  * `variables`: object (`Map<String, value>`), optional: Define new variables
-   which could then be substituted into the value of various fields. Supported
-   value types are booleans, numbers, and strings.
+   which could then be substituted into the value of various fields and used in
+   conditional includes described above. Supported value types are booleans,
+   numbers, and strings.
 
    The `releasever` variable is reserved and automatically populated to the same
    value as the `releasever` key. The `basearch` variable is reserved and
@@ -376,6 +424,9 @@ It supports the following parameters:
      stream: "development"
    releasever: 35
    ref: "cool-os/${releasever}/${stream}"
+   conditional-include:
+     - if: devpackages == true
+       include: dev-packages.yaml
    ```
 
 ## Experimental options
