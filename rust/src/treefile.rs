@@ -1081,10 +1081,9 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Copy, Clone)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) enum BootLocation {
-    #[serde(rename = "new")]
     New,
-    #[serde(rename = "modules")]
     Modules,
 }
 
@@ -1095,15 +1094,12 @@ impl Default for BootLocation {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 #[serde(tag = "type")]
 pub(crate) enum CheckGroups {
-    #[serde(rename = "none")]
     None,
-    #[serde(rename = "previous")]
     Previous,
-    #[serde(rename = "file")]
     File(CheckFile),
-    #[serde(rename = "data")]
     Data(CheckGroupsData),
 }
 
@@ -1118,15 +1114,12 @@ pub(crate) struct CheckGroupsData {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 #[serde(tag = "type")]
 pub(crate) enum CheckPasswd {
-    #[serde(rename = "none")]
     None,
-    #[serde(rename = "previous")]
     Previous,
-    #[serde(rename = "file")]
     File(CheckFile),
-    #[serde(rename = "data")]
     Data(CheckPasswdData),
 }
 
@@ -1209,11 +1202,11 @@ pub(crate) enum RpmdbBackend {
 /// cases. Everything else is specific to either case and so lives in their respective flattened
 /// field.
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) packages: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "repo-packages")]
     pub(crate) repo_packages: Option<Vec<RepoPackage>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) modules: Option<ModulesConfig>,
@@ -1257,17 +1250,14 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "lockfile-repos")]
     pub(crate) lockfile_repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) selinux: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "gpg-key")]
     pub(crate) gpg_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) include: Option<Include>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "arch-include")]
     pub(crate) arch_include: Option<BTreeMap<String, Include>>,
 
     // Core content
@@ -1275,16 +1265,12 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bootstrap_packages: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "ostree-layers")]
     pub(crate) ostree_layers: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "ostree-override-layers")]
     pub(crate) ostree_override_layers: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "exclude-packages")]
     pub(crate) exclude_packages: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "platform-module")]
     pub(crate) platform_module: Option<String>,
 
     // Content installation opts
@@ -1295,31 +1281,24 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) documentation: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "install-langs")]
     pub(crate) install_langs: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "initramfs-args")]
     pub(crate) initramfs_args: Option<Vec<String>>,
-    #[serde(rename = "readonly-executables")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) readonly_executables: Option<bool>,
 
     // Tree layout options
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "boot-location")]
     pub(crate) boot_location: Option<BootLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "tmp-is-dir")]
     pub(crate) tmp_is_dir: Option<bool>,
 
     // systemd
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) units: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "default-target")]
     pub(crate) default_target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "machineid-compat")]
     // Defaults to `true`
     pub(crate) machineid_compat: Option<bool>,
 
@@ -1327,64 +1306,49 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) releasever: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "automatic-version-prefix")]
     pub(crate) automatic_version_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "automatic-version-suffix")]
     pub(crate) automatic_version_suffix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "mutate-os-release")]
     pub(crate) mutate_os_release: Option<String>,
 
     // passwd-related bits
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "etc-group-members")]
     pub(crate) etc_group_members: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "preserve-passwd")]
     pub(crate) preserve_passwd: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "check-passwd")]
     pub(crate) check_passwd: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "check-groups")]
     pub(crate) check_groups: Option<CheckGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "ignore-removed-users")]
     pub(crate) ignore_removed_users: Option<HashSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "ignore-removed-groups")]
     pub(crate) ignore_removed_groups: Option<HashSet<String>>,
 
     // Content manipulation
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "postprocess-script")]
     // This one references an external filename
     pub(crate) postprocess_script: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     // This one is inline, and supports multiple (hence is useful for inheritance)
     pub(crate) postprocess: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "add-files")]
     pub(crate) add_files: Option<Vec<(String, String)>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "remove-files")]
     pub(crate) remove_files: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "remove-from-packages")]
     pub(crate) remove_from_packages: Option<Vec<Vec<String>>>,
     // The BTreeMap here is on purpose; it ensures we always re-serialize in sorted order so that
     // checksumming is deterministic across runs. (And serde itself uses BTreeMap for child objects
     // as well).
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "add-commit-metadata")]
     pub(crate) add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
     // The database backend
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) rpmdb: Option<RpmdbBackend>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "rpmdb-normalize")]
     pub(crate) rpmdb_normalize: Option<bool>,
 
     // Container related bits
@@ -1609,6 +1573,15 @@ pub(crate) mod tests {
         ref: "exampleos/x86_64/blah"
         repos:
          - baserepo
+        lockfile-repos:
+         - lockrepo
+        ostree-layers:
+         - foo
+        ostree-override-layers:
+         - bar
+        exclude-packages:
+         - mypkg
+        platform-module: platform:f36
         packages:
          - foo bar
          - baz
