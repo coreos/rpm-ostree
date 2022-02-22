@@ -201,10 +201,14 @@ It supports the following parameters:
 
    Example: `ignore-removed-groups: ["avahi"]`
 
- * `releasever`: String, optional: Used to set the librepo `$releasever` variable,
-   commonly used in yum repo files.
+ * `releasever`: String or integer, optional: Used to set the librepo
+   `$releasever` variable, commonly used in yum repo files.
 
    Example: `releasever: "26"`
+   Example: `releasever: 35`
+
+   When defined, it is automatically also added to the `variable` map described
+   below. Thus, it can be used for substitutions and conditional includes.
 
  * `automatic-version-prefix` (or `automatic_version_prefix`): String, optional:
    Set the prefix for versions on the commits. The idea is that if the previous
@@ -359,6 +363,10 @@ It supports the following parameters:
  * `variables`: object (`Map<String, value>`), optional: Define new variables
    which could then be substituted into the value of various fields. Supported
    value types are booleans, numbers, and strings.
+
+   The `releasever` variable is reserved and automatically populated to the same
+   value as the `releasever` key. The `basearch` variable is reserved and
+   automatically populated to the base architecture of the compose.
 
    Example:
 
