@@ -23,17 +23,21 @@ use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Context, Result};
 use c_utf8::CUtf8Buf;
 use nix::unistd::{Gid, Uid};
+use once_cell::sync::Lazy;
 use openat_ext::OpenatDirExt;
 use ostree_ext::{glib, ostree};
+use regex::Regex;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::{TryFrom, TryInto};
 use std::fs::{read_dir, File};
 use std::io::prelude::*;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::str::FromStr;
 use std::{fs, io};
 use tracing::{event, instrument, Level};
 
@@ -496,6 +500,24 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
         if let Some(basearch) = basearch {
             if let Some(arch_include_value) = arch_includes.remove(basearch) {
                 match arch_include_value {
+                    Include::Single(v) => includes.push(v),
+                    Include::Multiple(v) => includes.extend(v),
+                }
+            }
+        }
+    }
+    if let Some(conditional_includes) = parsed.config.base.conditional_include.take() {
+        for conditional_include in conditional_includes {
+            let matches = match conditional_include.condition {
+                IncludeConditions::Single(c) => c.evaluate(variables)?,
+                IncludeConditions::Multiple(v) => v
+                    .iter()
+                    // note we always evaluate because we always want to report semantic errors
+                    // like type mismatches, even if the condition already would've evaluated false
+                    .try_fold(true, |prev, c| c.evaluate(variables).map(|b| prev && b))?,
+            };
+            if matches {
+                match conditional_include.include {
                     Include::Single(v) => includes.push(v),
                     Include::Multiple(v) => includes.extend(v),
                 }
@@ -1221,6 +1243,133 @@ pub(crate) enum Include {
     Multiple(Vec<String>),
 }
 
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+pub(crate) struct ConditionalInclude {
+    #[serde(rename = "if")]
+    pub(crate) condition: IncludeConditions,
+    pub(crate) include: Include,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(untagged)]
+pub(crate) enum IncludeConditions {
+    Single(IncludeCondition),
+    Multiple(Vec<IncludeCondition>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct IncludeCondition {
+    pub(crate) variable: String,
+    pub(crate) op: IncludeConditionOp,
+    pub(crate) value: VarValue,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum IncludeConditionOp {
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterOrEqual,
+    Less,
+    LessOrEqual,
+}
+
+impl IncludeCondition {
+    fn evaluate(&self, vars: &BTreeMap<String, VarValue>) -> Result<bool> {
+        let val = vars
+            .get(&self.variable)
+            .ok_or_else(|| anyhow::anyhow!("undefined variable '{}'", &self.variable))?;
+        if !val.type_matches(&self.value) {
+            bail!("{} is not same type as {}", &self.variable, &self.value);
+        }
+        Ok(match &self.op {
+            IncludeConditionOp::Equal => val == &self.value,
+            IncludeConditionOp::NotEqual => val != &self.value,
+            numeric_op => match (val, &self.value) {
+                (VarValue::Number(a), VarValue::Number(b)) => match numeric_op {
+                    IncludeConditionOp::Greater => a > b,
+                    IncludeConditionOp::GreaterOrEqual => a >= b,
+                    IncludeConditionOp::Less => a < b,
+                    IncludeConditionOp::LessOrEqual => a <= b,
+                    _ => unreachable!(),
+                },
+                // we know they're the same type from type_matches(), and both invalid
+                _ => bail!("invalid op for values '{}' and '{}'", val, self.value),
+            },
+        })
+    }
+}
+
+impl TryFrom<&str> for IncludeConditionOp {
+    type Error = anyhow::Error;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        Ok(match s {
+            "==" => Self::Equal,
+            "!=" => Self::NotEqual,
+            ">" => Self::Greater,
+            ">=" => Self::GreaterOrEqual,
+            "<" => Self::Less,
+            "<=" => Self::LessOrEqual,
+            x => bail!("expected one of ==, !=, >, >=, <, <= but got {}", x),
+        })
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for IncludeCondition {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        static COND: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(
+                r#"(?x)^
+                \s*
+                (?P<var>[[:alnum:]_]+)     # variable name
+                \s*
+                (?P<op>\S+)                # operator
+                \s*
+                ((?P<true>true)|           # value; we let regex do all the hard work here
+                 (?P<false>false)|         # and use named groups to know which one matched
+                 (?P<number>[[:digit:]]+)|
+                 "(?P<string>.*)")
+                \s*
+                $"#,
+            )
+            .unwrap()
+        });
+        let s: String = String::deserialize(deserializer)?;
+        if let Some(caps) = COND.captures(&s) {
+            let value = {
+                if caps.name("true").is_some() {
+                    VarValue::Bool(true)
+                } else if caps.name("false").is_some() {
+                    VarValue::Bool(false)
+                } else if let Some(number) = caps.name("number") {
+                    VarValue::Number(u64::from_str(number.as_str()).map_err(D::Error::custom)?)
+                } else if let Some(s) = caps.name("string") {
+                    VarValue::String(s.as_str().into())
+                } else {
+                    unreachable!()
+                }
+            };
+            return Ok(IncludeCondition {
+                variable: caps.name("var").unwrap().as_str().into(),
+                op: caps
+                    .name("op")
+                    .unwrap()
+                    .as_str()
+                    .try_into()
+                    .map_err(D::Error::custom)?,
+                value,
+            });
+        }
+        Err(D::Error::custom(format!("invalid condition: {}", &s)))
+    }
+}
+
 // this is like a subset of serde_json::Value
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(untagged)]
@@ -1237,6 +1386,17 @@ impl std::fmt::Display for VarValue {
             VarValue::Number(u) => write!(f, "{}", u),
             VarValue::String(s) => write!(f, "{}", s),
         }
+    }
+}
+
+impl VarValue {
+    fn type_matches(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (VarValue::Bool(_), VarValue::Bool(_))
+                | (VarValue::Number(_), VarValue::Number(_))
+                | (VarValue::String(_), VarValue::String(_))
+        )
     }
 }
 
@@ -1348,6 +1508,13 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) include: Option<Include>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) arch_include: Option<BTreeMap<String, Include>>,
+    // Skip serializing for now; it's consumed during parsing anyway. It does
+    // mean though that we can't construct a treefile with it and render it to
+    // disk, which is unlikely we'll ever need. Still, for consistency we
+    // should either implement serialization for this or also skip serializing
+    // the other include knobs above.
+    #[serde(skip_serializing)]
+    pub(crate) conditional_include: Option<Vec<ConditionalInclude>>,
 
     // Core content
     // Deprecated option
@@ -1530,9 +1697,12 @@ pub(crate) struct DeriveConfigFields {
 
 impl BaseComposeConfigFields {
     pub(crate) fn error_if_nonempty(&self) -> Result<()> {
-        // exemption for `basearch`, which we set to the current arch during parsing
+        // Exemption for `basearch`, which we set to the current arch during parsing. Also mask
+        // `variables`, which can have `basearch` be auto-added but doesn't matter in this context
+        // since it's not used during the actual compose, only during treefile processing itself.
         let s = Self {
             basearch: self.basearch.clone(),
+            variables: self.variables.clone(),
             ..Default::default()
         };
         if &s != self {
@@ -2116,6 +2286,17 @@ pub(crate) mod tests {
         Ok(())
     }
 
+    fn assert_package(tf: &Treefile, pkg: &str) {
+        assert!(tf
+            .parsed
+            .packages
+            .as_ref()
+            .unwrap()
+            .iter()
+            .find(|&p| p == pkg)
+            .is_some());
+    }
+
     #[test]
     fn test_treefile_arch_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
@@ -2140,13 +2321,222 @@ arch-include:
         );
         // Note foo-s390x.yaml doesn't exist
         let tf = new_test_treefile(workdir.path(), buf.as_str(), Some(ARCH_X86_64))?;
-        assert!(tf
-            .parsed
-            .packages
-            .unwrap()
-            .iter()
-            .find(|&p| p == "foo-x86_64-include")
-            .is_some());
+        assert_package(&tf, "foo-x86_64-include");
+        Ok(())
+    }
+
+    #[test]
+    fn test_treefile_conditional_includes() -> Result<()> {
+        let workdir = tempfile::tempdir()?;
+        let workdir_d = openat::Dir::open(workdir.path())?;
+        workdir_d.write_file_contents(
+            "foo-x86_64.yaml",
+            0o644,
+            "packages: [foo-x86_64-include]",
+        )?;
+        workdir_d.write_file_contents("foo-le.yaml", 0o644, "packages: [foo-le]")?;
+        workdir_d.write_file_contents("foo-ge.yaml", 0o644, "packages: [foo-ge]")?;
+        workdir_d.write_file_contents("foo-eq.yaml", 0o644, "packages: [foo-eq]")?;
+        workdir_d.write_file_contents("foo-true.yaml", 0o644, "packages: [foo-true]")?;
+        workdir_d.write_file_contents("foo-false.yaml", 0o644, "packages: [foo-false]")?;
+        workdir_d.write_file_contents("foo-str.yaml", 0o644, "packages: [foo-str]")?;
+        workdir_d.write_file_contents("foo-multi-a.yaml", 0o644, "packages: [foo-multi-a]")?;
+        workdir_d.write_file_contents("foo-multi-b.yaml", 0o644, "packages: [foo-multi-b]")?;
+        workdir_d.write_file_contents(
+            "nested.yaml",
+            0o644,
+            r#"
+conditional-include:
+  - if: releasever == 35
+    include: foo-nested.yaml"#,
+        )?;
+        workdir_d.write_file_contents(
+            "foo-nested.yaml",
+            0o644,
+            r#"
+packages:
+  - foo-nested
+conditional-include:
+  - if: releasever == 35
+    include: foo-more-nested.yaml"#,
+        )?;
+        workdir_d.write_file_contents(
+            "foo-more-nested.yaml",
+            0o644,
+            "packages: [foo-more-nested]",
+        )?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+releasever: 35
+variables:
+  mynum: 5
+  myfalse: false
+  mytrue: true
+  mystr: ""
+  mystr2: "dodo"
+  mystr3: "dada"
+include: nested.yaml
+conditional-include:
+  - if: basearch == "x86_64"
+    include: foo-x86_64.yaml
+  - if: basearch == "s390x"
+    include: enoent1.yaml
+  - if: releasever < 35
+    include: enoent2.yaml
+  - if: releasever > 35
+    include: enoent3.yaml
+  - if: releasever <= 35
+    include: foo-le.yaml
+  - if: releasever == 35
+    include: foo-eq.yaml
+  - if: releasever != 35
+    include: enoent4.yaml
+  - if: releasever >= 35
+    include: foo-ge.yaml
+  - if: myfalse == false
+    include: foo-false.yaml
+  - if: mytrue == true
+    include: foo-true.yaml
+  - if: myfalse != false
+    include: enoent5.yaml
+  - if: mytrue != true
+    include: enoent6.yaml
+  - if:
+      - mystr == ""
+      - mystr2 == "dodo"
+      - mystr3 == "dada"
+    include: foo-str.yaml
+  - if:
+      - mystr == "x"
+      - mystr2 == "dodo"
+      - mystr3 == "dada"
+    include: enoent7.yaml
+  - if:
+      - mynum == 5
+      - mystr == ""
+      - releasever == 35
+      - myfalse == false
+    include:
+      - foo-multi-a.yaml
+      - foo-multi-b.yaml
+"#,
+        );
+        let tf = new_test_treefile(workdir.path(), buf.as_str(), Some(ARCH_X86_64))?;
+        assert_package(&tf, "foo-x86_64-include");
+        assert_package(&tf, "foo-le");
+        assert_package(&tf, "foo-eq");
+        assert_package(&tf, "foo-ge");
+        assert_package(&tf, "foo-false");
+        assert_package(&tf, "foo-true");
+        assert_package(&tf, "foo-str");
+        assert_package(&tf, "foo-multi-a");
+        assert_package(&tf, "foo-multi-b");
+        assert_package(&tf, "foo-nested");
+        assert_package(&tf, "foo-more-nested");
+        Ok(())
+    }
+
+    #[test]
+    fn test_treefile_conditional_releasever_str() -> Result<()> {
+        let workdir = tempfile::tempdir()?;
+        let workdir_d = openat::Dir::open(workdir.path())?;
+        workdir_d.write_file_contents("foo.yaml", 0o644, "packages: [foo]")?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+releasever: "35"
+conditional-include:
+    - if: releasever == "35"
+      include: foo.yaml
+"#,
+        );
+        let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
+        assert_package(&tf, "foo");
+        Ok(())
+    }
+
+    #[test]
+    fn test_treefile_conditional_include_errors() -> Result<()> {
+        let workdir = tempfile::tempdir()?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+conditional-include:
+    - if: garbage
+      include: enoent.yaml
+"#,
+        );
+        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+conditional-include:
+    - if: 5
+      include: enoent.yaml
+"#,
+        );
+        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+conditional-include:
+    - if: myvar garbage true
+      include: enoent.yaml
+"#,
+        );
+        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+conditional-include:
+    - if: myvar == garbage
+      include: enoent.yaml
+"#,
+        );
+        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+variables:
+    mystr: "str"
+conditional-include:
+    - if: mystr > 8
+      include: enoent.yaml
+"#,
+        );
+        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+variables:
+    mybool: true
+conditional-include:
+    - if: mybool <= 5
+      include: enoent.yaml
+"#,
+        );
+        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+variables:
+    mystr: "str"
+conditional-include:
+    - if: mystr > "asd"
+      include: enoent.yaml
+"#,
+        );
+        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+conditional-include:
+    - if: enoent > "asd"
+      include: enoent.yaml
+"#,
+        );
+        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
         Ok(())
     }
 
