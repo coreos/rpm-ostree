@@ -17,7 +17,7 @@ It supports the following parameters:
  * `ref`: string, mandatory: Holds a string which will be the name of
    the branch for the content. This field supports variable substitution.
 
-   Example: `ref: "cool-os/${releasever}"`
+   Example: `ref: "cool-os/${releasever}/${stream}"`
 
  * `gpg-key` (or `gpg_key`): string, optional: Key ID for GPG signing; the
    secret key must be in the home directory of the building user.  Defaults to
@@ -251,7 +251,7 @@ It supports the following parameters:
    ```yaml
    add-commit-metadata:
      cool-os.is-production: false
-     cool-os.git-snapshot: "${releasever}"
+     cool-os.git-snapshot: "${git_snapshot}"
    ```
 
  * `postprocess-script`: String, optional: Full filesystem path to a script
@@ -353,7 +353,22 @@ It supports the following parameters:
    order.  If the first mechanism fails and we are running a compose, we will not
    have the necessary files to allow the fall back to work.  If you find yourself
    in this situation you can provide the platform module name yourself using this
-   option. You can also use this to override the platform module if needed.
+   option. You can also use this to override the platform module if needed. This
+   field supports variable substitution.
+
+ * `variables`: object (`Map<String, value>`), optional: Define new variables
+   which could then be substituted into the value of various fields. Supported
+   value types are booleans, numbers, and strings.
+
+   Example:
+
+   ```yaml
+   variables:
+     devpackages: true
+     stream: "development"
+   releasever: 35
+   ref: "cool-os/${releasever}/${stream}"
+   ```
 
 ## Experimental options
 

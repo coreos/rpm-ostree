@@ -398,7 +398,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         rpmdb_normalize
     );
     merge_hashsets!(ignore_removed_groups, ignore_removed_users);
-    merge_maps!(add_commit_metadata);
+    merge_maps!(add_commit_metadata, variables);
     merge_vecs!(
         repos,
         lockfile_repos,
@@ -1181,6 +1181,25 @@ pub(crate) enum Include {
     Multiple(Vec<String>),
 }
 
+// this is like a subset of serde_json::Value
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(untagged)]
+pub(crate) enum VarValue {
+    Bool(bool),
+    Number(u64),
+    String(String),
+}
+
+impl std::fmt::Display for VarValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VarValue::Bool(b) => write!(f, "{}", b),
+            VarValue::Number(u) => write!(f, "{}", u),
+            VarValue::String(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
@@ -1244,6 +1263,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) treeref: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) basearch: Option<String>,
+    #[serde(skip_serializing)]
+    pub(crate) variables: Option<BTreeMap<String, VarValue>>,
     // Optional rojig data
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) rojig: Option<Rojig>,
@@ -1508,6 +1529,11 @@ impl TreeComposeConfig {
     /// Look for use of ${variable} and replace it by its proper value
     fn substitute_vars(mut self) -> Result<Self> {
         let mut substvars: HashMap<String, String> = HashMap::new();
+        if let Some(ref variables) = self.base.variables {
+            for (k, v) in variables.iter() {
+                substvars.insert(k.clone(), v.to_string());
+            }
+        }
         // Substitute ${basearch} and ${releasever}
         if let Some(arch) = &self.basearch {
             substvars.insert("basearch".to_string(), arch.clone());
@@ -1767,7 +1793,11 @@ pub(crate) mod tests {
     #[test]
     fn test_variables() {
         let buf = indoc! {r#"
-            ref: "exampleos/${basearch}/${releasever}"
+            variables:
+                foo: bar
+                baz: 5
+                boo: false
+            ref: "exampleos/${basearch}/${releasever}/${foo}/${baz}/${boo}"
             releasever: "30"
             automatic-version-prefix: ${releasever}
             mutate-os-release: ${releasever}
@@ -1776,7 +1806,7 @@ pub(crate) mod tests {
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
-        assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/30");
+        assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/30/bar/5/false");
         assert!(treefile.base.releasever.unwrap() == "30");
         assert!(treefile.base.automatic_version_prefix.unwrap() == "30");
         assert!(treefile.base.mutate_os_release.unwrap() == "30");
@@ -2025,6 +2055,13 @@ arch-include:
     fn test_treefile_merge() {
         let basearch = Some(ARCH_X86_64);
         let mut base = append_and_parse(indoc! {r#"
+            variables:
+                mystr: "don't override me"
+                mystr_override: "override me"
+                mynum: 4
+                mynum_override: 5
+                mybool: true
+                mybool_override: false
             add-commit-metadata:
                 my-first-key: "please don't override me"
                 my-second-key: "override me"
@@ -2034,6 +2071,10 @@ arch-include:
         "#});
         let mut mid_input = io::BufReader::new(
             indoc! {r#"
+            variables:
+              mystr_override: "overridden"
+              mynum_override: 6
+              mybool_override: true
             packages:
               - some layered packages
             add-commit-metadata:
@@ -2077,6 +2118,19 @@ arch-include:
                 .unwrap()
                 == "table"
         );
+        let data = tf.base.variables.as_ref().unwrap();
+        assert_eq!(
+            data.get("mystr").unwrap(),
+            &VarValue::String("don't override me".into())
+        );
+        assert_eq!(
+            data.get("mystr_override").unwrap(),
+            &VarValue::String("overridden".into())
+        );
+        assert_eq!(data.get("mynum").unwrap(), &VarValue::Number(4));
+        assert_eq!(data.get("mynum_override").unwrap(), &VarValue::Number(6));
+        assert_eq!(data.get("mybool").unwrap(), &VarValue::Bool(true));
+        assert_eq!(data.get("mybool_override").unwrap(), &VarValue::Bool(true));
     }
 
     #[test]
