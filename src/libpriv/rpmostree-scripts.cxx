@@ -163,6 +163,17 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
     "/usr/bin/sh",
     glibc_langpacks_script
   },
+  /* See https://src.fedoraproject.org/rpms/glibc/pull-request/54, which converts this to
+   * Lua as part of https://bugzilla.redhat.com/show_bug.cgi?id=2018913.
+   */
+  { "glibc-common.transfiletriggerin",
+    "/usr/bin/sh",
+    "/sbin/ldconfig"
+  },
+  { "glibc-common.transfiletriggerpostun",
+    "/usr/bin/sh",
+    "/sbin/ldconfig"
+  },
   /* See https://src.fedoraproject.org/rpms/glibc/pull-request/12
    * Code originally introduced in https://src.fedoraproject.org/rpms/glibc/c/34927af202deb7d97dbb211a3cb13b1c53b496d3?branch=master
    * Most of that script is about working around bugs from a traditional RPM in-place update,
