@@ -759,7 +759,7 @@ impl Treefile {
             .base
             .releasever
             .as_ref()
-            .map(|rv| rv.clone())
+            .map(|rv| rv.to_string())
             .unwrap_or_else(|| "".to_string())
     }
 
@@ -1205,6 +1205,34 @@ impl std::fmt::Display for VarValue {
     }
 }
 
+// Ughh awkward; this is *almost* VarValue, but we don't want to support `bool` in this
+// case. Really tempting to use derive_more for #[derive(Display)]...
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(untagged)]
+pub(crate) enum ReleaseVer {
+    Number(u64),
+    String(String),
+}
+
+impl std::fmt::Display for ReleaseVer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReleaseVer::Number(u) => write!(f, "{}", u),
+            ReleaseVer::String(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+impl From<ReleaseVer> for VarValue {
+    fn from(r: ReleaseVer) -> Self {
+        match r {
+            ReleaseVer::Number(u) => VarValue::Number(u),
+            ReleaseVer::String(s) => VarValue::String(s),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
@@ -1330,7 +1358,7 @@ pub(crate) struct BaseComposeConfigFields {
 
     // versioning
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) releasever: Option<String>,
+    pub(crate) releasever: Option<ReleaseVer>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) automatic_version_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1544,7 +1572,7 @@ impl TreeComposeConfig {
             substvars.insert("basearch".to_string(), arch.clone());
         }
         if let Some(releasever) = &self.base.releasever {
-            substvars.insert("releasever".to_string(), releasever.clone());
+            substvars.insert("releasever".to_string(), releasever.to_string());
         }
         envsubst::validate_vars(&substvars)?;
 
@@ -1782,7 +1810,26 @@ pub(crate) mod tests {
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/30");
-        assert!(treefile.base.releasever.unwrap() == "30");
+        assert!(treefile.base.releasever.unwrap() == ReleaseVer::String("30".into()));
+        assert!(treefile.base.automatic_version_prefix.unwrap() == "30");
+        assert!(treefile.base.mutate_os_release.unwrap() == "30");
+        assert!(treefile.base.rpmdb.is_none());
+    }
+
+    #[test]
+    fn basic_valid_releasever_number() {
+        let buf = indoc! {r#"
+            ref: "exampleos/${basearch}/${releasever}"
+            releasever: 30
+            automatic-version-prefix: ${releasever}
+            mutate-os-release: ${releasever}
+        "#};
+        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut treefile =
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+        treefile = treefile.substitute_vars().unwrap();
+        assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/30");
+        assert!(treefile.base.releasever.unwrap() == ReleaseVer::Number(30));
         assert!(treefile.base.automatic_version_prefix.unwrap() == "30");
         assert!(treefile.base.mutate_os_release.unwrap() == "30");
         assert!(treefile.base.rpmdb.is_none());
@@ -1812,7 +1859,7 @@ pub(crate) mod tests {
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/30/bar/5/false");
-        assert!(treefile.base.releasever.unwrap() == "30");
+        assert!(treefile.base.releasever.unwrap() == ReleaseVer::String("30".into()));
         assert!(treefile.base.automatic_version_prefix.unwrap() == "30");
         assert!(treefile.base.mutate_os_release.unwrap() == "30");
         assert!(treefile.base.rpmdb.is_none());
@@ -2067,6 +2114,7 @@ arch-include:
                 mynum_override: 5
                 mybool: true
                 mybool_override: false
+            releasever: "3"
             add-commit-metadata:
                 my-first-key: "please don't override me"
                 my-second-key: "override me"
@@ -2080,6 +2128,8 @@ arch-include:
               mystr_override: "overridden"
               mynum_override: 6
               mybool_override: true
+            # this overrides base, but is overridden by top
+            releasever: 1
             packages:
               - some layered packages
             add-commit-metadata:
@@ -2101,12 +2151,14 @@ arch-include:
         top = top.substitute_vars().unwrap();
         assert!(top.base.add_commit_metadata.is_none());
         treefile_merge(&mut mid, &mut base);
+        assert_eq!(mid.base.releasever, Some(ReleaseVer::Number(1)));
         treefile_merge(&mut top, &mut mid);
         let tf = &top;
         assert!(tf.packages.as_ref().unwrap().len() == 10);
         assert!(tf.base.etc_group_members.as_ref().unwrap().len() == 2);
         let rojig = tf.base.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos 35");
+        assert_eq!(tf.base.releasever, Some(ReleaseVer::String("35".into())));
         let data = tf.base.add_commit_metadata.as_ref().unwrap();
         assert!(data.get("my-arch").unwrap().as_str().unwrap() == "my arch is x86_64");
         assert!(data.get("my-first-key").unwrap().as_str().unwrap() == "please don't override me");
