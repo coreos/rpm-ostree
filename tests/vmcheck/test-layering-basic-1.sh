@@ -106,7 +106,7 @@ assert_file_has_content refdata.txt 'id.*test-repo'
 assert_file_has_content refdata.txt 'timestamp'
 rm -f refs.txt refdata.txt
 # And that we have rpmmd-repos on the layered commit
-vm_cmd ostree show --print-metadata-key rpmostree.rpmmd-repos $(vm_get_deployment_info 0 checksum) > rpmmd-meta.txt
+vm_cmd ostree show --print-detached-metadata-key rpmostree.rpmmd-repos $(vm_get_deployment_info 0 checksum) > rpmmd-meta.txt
 assert_file_has_content rpmmd-meta.txt 'id.*test-repo'
 assert_file_has_content rpmmd-meta.txt 'timestamp'
 rm -f rpmmd-meta.txt

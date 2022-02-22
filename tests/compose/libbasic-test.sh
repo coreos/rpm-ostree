@@ -51,7 +51,7 @@ assert_file_has_content meta.txt 'rev.*97ec21c614689e533d294cdae464df607b526ab9'
 assert_file_has_content meta.txt 'src.*https://gitlab.com/exampleos/custom-atomic-host'
 ostree --repo=${repo} show --print-metadata-key exampleos.tests ${treeref} > meta.txt
 assert_file_has_content meta.txt 'smoketested.*e2e'
-ostree --repo=${repo} show --print-metadata-key rpmostree.rpmmd-repos ${treeref} > meta.txt
+ostree --repo=${repo} show --print-detached-metadata-key rpmostree.rpmmd-repos ${treeref} > meta.txt
 assert_file_has_content meta.txt 'id.*cache.*timestamp'
 ostree --repo=${repo} show --print-metadata-key foobar  ${treeref} > meta.txt
 assert_file_has_content meta.txt 'bazboo'
