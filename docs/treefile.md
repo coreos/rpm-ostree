@@ -15,7 +15,9 @@ Jenkins to operate on them as it changes.
 It supports the following parameters:
 
  * `ref`: string, mandatory: Holds a string which will be the name of
-   the branch for the content.
+   the branch for the content. This field supports variable substitution.
+
+   Example: `ref: "cool-os/${releasever}"`
 
  * `gpg-key` (or `gpg_key`): string, optional: Key ID for GPG signing; the
    secret key must be in the home directory of the building user.  Defaults to
@@ -52,7 +54,9 @@ It supports the following parameters:
     version, and adds a specific `OSTREE_VERSION` key that can be easier
     for processes to query than looking via ostree. The actual value of
     this key represents the baked string that gets substituted out for
-    the final OSTree version.
+    the final OSTree version. This field supports variable substitution.
+
+    Example: `mutate-os-release: "${releasever}"`
 
  * `documentation`: boolean, optional. If this is set to false it sets the RPM
    transaction flag "nodocs" which makes yum/rpm not install files marked as
@@ -228,7 +232,10 @@ It supports the following parameters:
    | `22.<date:%Y>`             | 22.2019.0, 22.2019.1, 22.2020.0, ...       |
    | `22.<date:%Y>.1`           | 22.2019.1.0, 22.2019.1.1, 22.2020.1.0, ... |
 
+   This field supports variable substitution.
+
    Example: `automatic-version-prefix: "22.0"`
+   Example: `automatic-version-prefix: "${releasever}.<date:%Y%m%d>.dev"`
 
  * `automatic-version-suffix`: String, optional: This must be a single ASCII
    character.  The default value is `.`.  Used by `automatic-version-prefix`.
@@ -236,7 +243,16 @@ It supports the following parameters:
 
  * `add-commit-metadata`: Map<String, Object>, optional: Metadata to inject as
    part of composed commits. Keys inserted here can still be overridden at the
-   command line with `--add-metadata-string` or `--add-metadata-from-json`.
+   command line with `--add-metadata-string` or `--add-metadata-from-json`. All
+   objects of type string support variable substitution.
+
+   Example:
+
+   ```yaml
+   add-commit-metadata:
+     cool-os.is-production: false
+     cool-os.git-snapshot: "${releasever}"
+   ```
 
  * `postprocess-script`: String, optional: Full filesystem path to a script
    that will be executed in the context of the target tree.  The script
