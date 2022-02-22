@@ -228,9 +228,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.9.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edae0b9625d1fce32f7d64b71784d9b1bf8469ec1a9c417e44aaf16a9cbd7571"
+checksum = "295b6eb918a60a25fec0b23a5e633e74fddbaf7bb04411e65a10c366aca4b5cd"
 dependencies = [
  "smallvec",
 ]
@@ -1251,7 +1251,7 @@ dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
- "system-deps 6.0.1",
+ "system-deps 6.0.2",
 ]
 
 [[package]]
@@ -2065,7 +2065,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "structopt",
- "system-deps 6.0.1",
+ "system-deps 6.0.2",
  "systemd",
  "tempfile",
  "termcolor",
@@ -2350,11 +2350,11 @@ dependencies = [
 
 [[package]]
 name = "system-deps"
-version = "6.0.1"
+version = "6.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad3a97fdef3daf935d929b3e97e5a6a680cd4622e40c2941ca0875d6566416f8"
+checksum = "a1a45a1c4c9015217e12347f2a411b57ce2c4fc543913b14b6fe40483328e709"
 dependencies = [
- "cfg-expr 0.9.0",
+ "cfg-expr 0.10.1",
  "heck 0.4.0",
  "pkg-config",
  "toml",
