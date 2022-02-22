@@ -106,6 +106,30 @@ fn treefile_parse_stream<R: io::Read>(
         (_, None) => None,
     };
 
+    if let Some(ref vars) = treefile.base.variables {
+        for reserved in ["releasever", "basearch"] {
+            if vars.contains_key(reserved) {
+                bail!("cannot define reserved variable '{}'", reserved);
+            }
+        }
+    }
+
+    // auto-mirror basearch and releasever to variables
+    if let Some(ref mut basearch) = treefile.base.basearch {
+        treefile
+            .base
+            .variables
+            .get_or_insert_with(BTreeMap::new)
+            .insert("basearch".into(), VarValue::String(basearch.clone()));
+    }
+    if let Some(ref mut releasever) = treefile.base.releasever {
+        treefile
+            .base
+            .variables
+            .get_or_insert_with(BTreeMap::new)
+            .insert("releasever".into(), releasever.clone().into());
+    }
+
     // remove from packages-${arch} keys from the extra keys
     let mut archful_pkgs: Option<Vec<String>> = take_archful_pkgs(basearch, &mut treefile)?;
 
@@ -1561,19 +1585,14 @@ impl TreeComposeConfig {
 
     /// Look for use of ${variable} and replace it by its proper value
     fn substitute_vars(mut self) -> Result<Self> {
-        let mut substvars: HashMap<String, String> = HashMap::new();
-        if let Some(ref variables) = self.base.variables {
-            for (k, v) in variables.iter() {
-                substvars.insert(k.clone(), v.to_string());
-            }
-        }
-        // Substitute ${basearch} and ${releasever}
-        if let Some(arch) = &self.basearch {
-            substvars.insert("basearch".to_string(), arch.clone());
-        }
-        if let Some(releasever) = &self.base.releasever {
-            substvars.insert("releasever".to_string(), releasever.to_string());
-        }
+        // convert to strings for envsubst
+        let substvars: HashMap<String, String> = self
+            .base
+            .variables
+            .iter()
+            .flatten()
+            .map(|(k, v)| (k.clone(), v.to_string()))
+            .collect();
         envsubst::validate_vars(&substvars)?;
 
         substitute_string_option(&substvars, &mut self.base.treeref)?;
@@ -1863,6 +1882,23 @@ pub(crate) mod tests {
         assert!(treefile.base.automatic_version_prefix.unwrap() == "30");
         assert!(treefile.base.mutate_os_release.unwrap() == "30");
         assert!(treefile.base.rpmdb.is_none());
+        let buf = indoc! {r#"
+            variables:
+                releasever: foo
+            releasever: 30
+        "#};
+        let mut input = io::BufReader::new(buf.as_bytes());
+        assert!(
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).is_err()
+        );
+        let buf = indoc! {r#"
+            variables:
+                basearch: foo
+        "#};
+        let mut input = io::BufReader::new(buf.as_bytes());
+        assert!(
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).is_err()
+        );
     }
 
     #[test]
