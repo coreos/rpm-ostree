@@ -754,8 +754,13 @@ impl Treefile {
         self.parsed.base.selinux.unwrap_or(true)
     }
 
-    pub(crate) fn get_releasever(&self) -> &str {
-        self.parsed.base.releasever.as_deref().unwrap_or_default()
+    pub(crate) fn get_releasever(&self) -> String {
+        self.parsed
+            .base
+            .releasever
+            .as_ref()
+            .map(|rv| rv.clone())
+            .unwrap_or_else(|| "".to_string())
     }
 
     pub(crate) fn get_container_cmd(&self) -> Vec<String> {

@@ -613,7 +613,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       self->treefile_rs = &**self->treefile_owned;
     }
 
-  auto releasever = std::string(self->treefile_rs->get_releasever());
+  auto releasever = self->treefile_rs->get_releasever();
 
   if (!install_root)
     install_root = emptydir_path;
