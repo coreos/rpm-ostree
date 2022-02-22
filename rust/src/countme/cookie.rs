@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{bail, Result};
+use cap_std::fs::Dir;
+use cap_std_ext::cap_std;
+use cap_std_ext::cap_std::fs::Permissions;
+use cap_std_ext::dirext::CapStdExtDirExt;
 use chrono::prelude::*;
-use openat_ext::OpenatDirExt;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
+use std::os::unix::prelude::PermissionsExt;
 
 /// State directory used to store the countme cookie
-const STATE_DIR: &str = "/var/lib/rpm-ostree-countme";
+const STATE_DIR: &str = "var/lib/rpm-ostree-countme";
 /// Cookie file name
 const COUNTME_COOKIE: &str = "countme";
 
@@ -76,7 +80,8 @@ impl Cookie {
 
         // Read cookie values from the state persisted on the filesystem
         let mut content = String::new();
-        match openat::Dir::open(STATE_DIR)?.open_file_optional(COUNTME_COOKIE)? {
+        let statedir = cap_std::fs::Dir::open_ambient_dir(STATE_DIR, cap_std::ambient_authority())?;
+        match statedir.open_optional(COUNTME_COOKIE)? {
             Some(mut f) => f.read_to_string(&mut content)?,
             None => return Ok(c),
         };
@@ -140,10 +145,11 @@ impl Cookie {
             epoch: self.epoch,
             window: self.now,
         };
-        openat::Dir::open(STATE_DIR)?.write_file_with(COUNTME_COOKIE, 0o644, |w| -> Result<_> {
+        let statedir = Dir::open_ambient_dir(STATE_DIR, cap_std::ambient_authority())?;
+        let perms = Permissions::from_mode(0o644);
+        statedir.replace_file_with_perms(COUNTME_COOKIE, perms, |w| -> Result<_> {
             Ok(serde_json::to_writer(w, &cookie)?)
-        })?;
-        Ok(())
+        })
     }
 }
 

@@ -202,7 +202,7 @@ pub fn decompose_sha256_nevra(v: &str) -> Result<(&str, &str)> {
 /// not possible to have a literal `${` in the string.
 fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String> {
     let mut buf = instr;
-    let mut s = "".to_string();
+    let mut s = String::with_capacity(instr.len());
     while !buf.is_empty() {
         if let Some(start) = buf.find("${") {
             let (prefix, rest) = buf.split_at(start);
