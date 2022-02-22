@@ -34,7 +34,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::{collections, fs, io};
+use std::{fs, io};
 use tracing::{event, instrument, Level};
 
 use crate::utils;
@@ -54,7 +54,7 @@ const CLIENT_TREEFILES_DIR: &str = "/etc/rpm-ostree/origin.d";
 #[derive(Debug, Default)]
 pub(crate) struct TreefileExternals {
     postprocess_script: Option<fs::File>,
-    add_files: collections::BTreeMap<String, fs::File>,
+    add_files: BTreeMap<String, fs::File>,
     passwd: Option<fs::File>,
     group: Option<fs::File>,
 }
@@ -223,7 +223,7 @@ fn load_passwd_file<P: AsRef<Path>>(basedir: P, cfg: &CheckFile) -> Result<Optio
     Ok(Some(file))
 }
 
-type IncludeMap = collections::BTreeMap<(u64, u64), String>;
+type IncludeMap = BTreeMap<(u64, u64), String>;
 
 /// Given a treefile filename and an architecture, parse it and also
 /// open its external files.
@@ -496,7 +496,7 @@ fn treefile_parse_and_process<P: AsRef<Path>>(
     filename: P,
     basearch: Option<&str>,
 ) -> Result<ConfigAndExternals> {
-    let mut seen_includes = collections::BTreeMap::new();
+    let mut seen_includes = BTreeMap::new();
     let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
     event!(Level::DEBUG, "parsed successfully");
     parsed.config.handle_repo_packages_overrides();
@@ -1525,7 +1525,7 @@ impl TreeComposeConfig {
 
     /// Look for use of ${variable} and replace it by its proper value
     fn substitute_vars(mut self) -> Result<Self> {
-        let mut substvars: collections::HashMap<String, String> = collections::HashMap::new();
+        let mut substvars: HashMap<String, String> = HashMap::new();
         // Substitute ${basearch} and ${releasever}
         if let Some(arch) = &self.basearch {
             substvars.insert("basearch".to_string(), arch.clone());
