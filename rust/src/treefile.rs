@@ -1518,8 +1518,21 @@ impl TreeComposeConfig {
         envsubst::validate_vars(&substvars)?;
 
         substitute_string_option(&substvars, &mut self.base.treeref)?;
+        if let Some(ref mut rojig) = self.base.rojig {
+            substitute_string(&substvars, &mut rojig.name)?;
+            substitute_string(&substvars, &mut rojig.summary)?;
+            substitute_string_option(&substvars, &mut rojig.description)?;
+        }
+        if let Some(ref mut add_commit_metadata) = self.base.add_commit_metadata {
+            for val in add_commit_metadata.values_mut() {
+                if let serde_json::Value::String(ref mut s) = val {
+                    substitute_string(&substvars, s)?;
+                }
+            }
+        }
         substitute_string_option(&substvars, &mut self.base.automatic_version_prefix)?;
         substitute_string_option(&substvars, &mut self.base.mutate_os_release)?;
+        substitute_string_option(&substvars, &mut self.base.platform_module)?;
 
         Ok(self)
     }
@@ -1752,6 +1765,25 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_variables() {
+        let buf = indoc! {r#"
+            ref: "exampleos/${basearch}/${releasever}"
+            releasever: "30"
+            automatic-version-prefix: ${releasever}
+            mutate-os-release: ${releasever}
+        "#};
+        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut treefile =
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+        treefile = treefile.substitute_vars().unwrap();
+        assert!(treefile.base.treeref.unwrap() == "exampleos/x86_64/30");
+        assert!(treefile.base.releasever.unwrap() == "30");
+        assert!(treefile.base.automatic_version_prefix.unwrap() == "30");
+        assert!(treefile.base.mutate_os_release.unwrap() == "30");
+        assert!(treefile.base.rpmdb.is_none());
+    }
+
+    #[test]
     fn basic_valid_legacy() {
         let treefile = append_and_parse(indoc! {"
             gpg_key: foo
@@ -1870,10 +1902,11 @@ pub(crate) mod tests {
     }
 
     const ROJIG_YAML: &'static str = indoc! {r#"
+        releasever: "35"
         rojig:
-            name: "exampleos"
+            name: "exampleos ${releasever}"
             license: "MIT"
-            summary: "ExampleOS rojig base image"
+            summary: "ExampleOS rojig base image ${releasever} ${basearch}"
     "#};
 
     // We need to support rojig: for a long time because it's used by fedora-coreos-config/coreos-assembler at least.
@@ -1882,9 +1915,11 @@ pub(crate) mod tests {
         let workdir = tempfile::tempdir().unwrap();
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(ROJIG_YAML);
-        let tf = new_test_treefile(workdir.path(), buf.as_str(), None).unwrap();
+        let mut tf = new_test_treefile(workdir.path(), buf.as_str(), Some("x86_64")).unwrap();
+        tf.parsed = tf.parsed.substitute_vars().unwrap();
         let rojig = tf.parsed.base.rojig.as_ref().unwrap();
-        assert!(rojig.name == "exampleos");
+        assert!(rojig.name == "exampleos 35");
+        assert!(rojig.summary == "ExampleOS rojig base image 35 x86_64");
     }
 
     #[test]
@@ -1993,6 +2028,7 @@ arch-include:
             add-commit-metadata:
                 my-first-key: "please don't override me"
                 my-second-key: "override me"
+                my-arch: "my arch is ${basearch}"
             etc-group-members:
                 - sudo
         "#});
@@ -2012,9 +2048,11 @@ arch-include:
         );
         let mut mid =
             treefile_parse_stream(utils::InputFormat::YAML, &mut mid_input, basearch).unwrap();
+        mid = mid.substitute_vars().unwrap();
         let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
         let mut top =
             treefile_parse_stream(utils::InputFormat::YAML, &mut top_input, basearch).unwrap();
+        top = top.substitute_vars().unwrap();
         assert!(top.base.add_commit_metadata.is_none());
         treefile_merge(&mut mid, &mut base);
         treefile_merge(&mut top, &mut mid);
@@ -2022,8 +2060,9 @@ arch-include:
         assert!(tf.packages.as_ref().unwrap().len() == 10);
         assert!(tf.base.etc_group_members.as_ref().unwrap().len() == 2);
         let rojig = tf.base.rojig.as_ref().unwrap();
-        assert!(rojig.name == "exampleos");
+        assert!(rojig.name == "exampleos 35");
         let data = tf.base.add_commit_metadata.as_ref().unwrap();
+        assert!(data.get("my-arch").unwrap().as_str().unwrap() == "my arch is x86_64");
         assert!(data.get("my-first-key").unwrap().as_str().unwrap() == "please don't override me");
         assert!(data.get("my-second-key").unwrap().as_str().unwrap() == "something better");
         assert!(data.get("my-third-key").unwrap().as_i64().unwrap() == 1000);
