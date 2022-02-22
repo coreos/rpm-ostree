@@ -1463,6 +1463,23 @@ impl DeriveConfigFields {
     }
 }
 
+fn substitute_string(vars: &HashMap<String, String>, s: &mut String) -> Result<()> {
+    if envsubst::is_templated(&s) {
+        *s = envsubst::substitute(s.clone(), vars).map_err(anyhow::Error::msg)?
+    }
+    Ok(())
+}
+
+fn substitute_string_option(
+    vars: &HashMap<String, String>,
+    field: &mut Option<String>,
+) -> Result<()> {
+    if let Some(ref mut s) = field {
+        substitute_string(vars, s)?;
+    }
+    Ok(())
+}
+
 impl TreeComposeConfig {
     /// Look for use of legacy/renamed fields and migrate them to the new field.
     fn migrate_legacy_fields(mut self) -> Result<Self> {
@@ -1499,23 +1516,9 @@ impl TreeComposeConfig {
         }
         envsubst::validate_vars(&substvars)?;
 
-        macro_rules! substitute_field {
-            ( $field:ident ) => {{
-                if let Some(value) = self.base.$field.take() {
-                    self.base.$field = if envsubst::is_templated(&value) {
-                        match envsubst::substitute(value, &substvars) {
-                            Ok(s) => Some(s),
-                            Err(e) => return Err(anyhow!(e.to_string())),
-                        }
-                    } else {
-                        Some(value)
-                    }
-                }
-            }};
-        }
-        substitute_field!(treeref);
-        substitute_field!(automatic_version_prefix);
-        substitute_field!(mutate_os_release);
+        substitute_string_option(&substvars, &mut self.base.treeref)?;
+        substitute_string_option(&substvars, &mut self.base.automatic_version_prefix)?;
+        substitute_string_option(&substvars, &mut self.base.mutate_os_release)?;
 
         Ok(self)
     }
