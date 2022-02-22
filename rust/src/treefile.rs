@@ -473,6 +473,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     basearch: Option<&str>,
     depth: u32,
     seen_includes: &mut IncludeMap,
+    variables: &mut BTreeMap<String, VarValue>,
 ) -> Result<ConfigAndExternals> {
     let filename = filename.as_ref();
     let mut parsed = treefile_parse(filename, basearch, seen_includes)?;
@@ -486,6 +487,11 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
         Include::Single(v) => vec![v],
         Include::Multiple(v) => v,
     };
+    // fold in all new variables
+    if let Some(mut new_vars) = parsed.config.base.variables.take() {
+        new_vars.append(variables);
+        *variables = new_vars;
+    }
     if let Some(mut arch_includes) = parsed.config.base.arch_include.take() {
         if let Some(basearch) = basearch {
             if let Some(arch_include_value) = arch_includes.remove(basearch) {
@@ -507,7 +513,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
         let parent = utils::parent_dir(filename).unwrap();
         let include_path = parent.join(include_path);
         let mut included =
-            treefile_parse_recurse(include_path, basearch, depth + 1, seen_includes)?;
+            treefile_parse_recurse(include_path, basearch, depth + 1, seen_includes, variables)?;
         treefile_merge(&mut parsed.config, &mut included.config);
         treefile_merge_externals(&mut parsed.externals, &mut included.externals);
     }
@@ -521,9 +527,14 @@ fn treefile_parse_and_process<P: AsRef<Path>>(
     basearch: Option<&str>,
 ) -> Result<ConfigAndExternals> {
     let mut seen_includes = BTreeMap::new();
-    let mut parsed = treefile_parse_recurse(filename, basearch, 0, &mut seen_includes)?;
+    let mut variables = BTreeMap::new();
+    let mut parsed =
+        treefile_parse_recurse(filename, basearch, 0, &mut seen_includes, &mut variables)?;
     event!(Level::DEBUG, "parsed successfully");
     parsed.config.handle_repo_packages_overrides();
+    if !variables.is_empty() {
+        parsed.config.base.variables = Some(variables);
+    }
     parsed.config = parsed.config.substitute_vars()?;
     Treefile::validate_config(&parsed.config)?;
     Ok(parsed)
