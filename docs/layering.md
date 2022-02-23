@@ -27,16 +27,13 @@ For the purpose of this tutorial we are using QEMU, but you can use a cloud envi
 ```bash
 # This is the 'next' image we will be using.
 # Anything newer than this should work too.
-$ RELEASE="35.20211215.1.0"
+$ RELEASE_URL=$(curl https://builds.coreos.fedoraproject.org/streams/next.json | jq -r '.architectures.x86_64.artifacts.qemu.formats."qcow2.xz".disk.location')
 
 # Download the image.
-$ curl -O https://builds.coreos.fedoraproject.org/prod/streams/next/builds/$RELEASE/x86_64/fedora-coreos-$RELEASE-qemu.x86_64.qcow2.xz
+$ curl -o fedora-coreos.qcow2.xz "$RELEASE_URL"
 
 # Uncompress the qemu image.
-$ unxz fedora-coreos-$RELEASE-qemu.x86_64.qcow2.xz
-
-# Rename the file for easier handling.
-$ mv fedora-coreos-$RELEASE-qemu.x86_64.qcow2.xz fedora-coreos.qcow2
+$ unxz fedora-coreos.qcow2.xz
 ```
 
 ### First Ignition config via Butane
