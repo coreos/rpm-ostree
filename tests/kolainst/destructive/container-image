@@ -106,7 +106,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     arch=$(arch)
     # TODO close race here around webserver readiness
     (cd ${KOLA_EXT_DATA}/rpm-repos/0 && ~core/kolet httpd) &
-    while !curl -q http://127.0.0.1; do sleep 1; done
+    while ! curl -q http://127.0.0.1; do sleep 1; done
     cat >local.repo << 'EOF'
 [local]
 gpgcheck=0
