@@ -1352,6 +1352,7 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) rpmdb_normalize: Option<bool>,
 
     // Container related bits
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) container_cmd: Option<Vec<String>>,
 
     #[serde(flatten)]
