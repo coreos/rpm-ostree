@@ -107,26 +107,21 @@ rpmostree_composeutil_read_json_metadata_from_file (const char *path,
   return rpmostree_composeutil_read_json_metadata (metarootval, metadata, error);
 }
 
-/* Convert hash table of metadata into finalized GVariant */
-GVariant *
-rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
-                                         int         rootfs_dfd,
-                                         GError    **error)
+static GVariantBuilder *
+metadata_conversion_start(GHashTable *metadata)
 {
-  g_autoptr(GVariantBuilder) metadata_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+  GVariantBuilder *builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+
   GLNX_HASH_TABLE_FOREACH_KV (metadata, const char*, strkey, GVariant*, v)
-    g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
+    g_variant_builder_add (builder, "{sv}", strkey, v);
 
-  /* include list of packages in rpmdb; this is used client-side for easily previewing
-   * pending updates. once we only support unified core composes, this can easily be much
-   * more readily injected during assembly */
-  g_autoptr(GVariant) rpmdb_v = NULL;
-  if (!rpmostree_create_rpmdb_pkglist_variant (rootfs_dfd, ".", &rpmdb_v,
-                                               NULL, error))
-    return FALSE;
-  g_variant_builder_add (metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist", rpmdb_v);
+  return builder;
+}
 
-  g_autoptr(GVariant) ret = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
+static GVariant *
+metadata_conversion_end(GVariantBuilder *builder)
+{
+  g_autoptr(GVariant) ret = g_variant_ref_sink (g_variant_builder_end (builder));
   /* Canonicalize to big endian, like OSTree does. Without this, any numbers
    * we place in the metadata will be unreadable since clients won't know
    * their endianness.
@@ -135,6 +130,35 @@ rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
 
   return util::move_nullify (ret);
 }
+
+/* Convert hash table of metadata into finalized GVariant */
+GVariant *
+rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
+                                         int         rootfs_dfd,
+                                         GError    **error)
+{
+  g_autoptr(GVariantBuilder) builder = metadata_conversion_start(metadata);
+
+  /* include list of packages in rpmdb; this is used client-side for easily previewing
+   * pending updates. once we only support unified core composes, this can easily be much
+   * more readily injected during assembly */
+  g_autoptr(GVariant) rpmdb_v = NULL;
+  if (!rpmostree_create_rpmdb_pkglist_variant (rootfs_dfd, ".", &rpmdb_v,
+                                               NULL, error))
+    return FALSE;
+  g_variant_builder_add (builder, "{sv}", "rpmostree.rpmdb.pkglist", rpmdb_v);
+
+  return metadata_conversion_end (builder);
+}
+
+/* Convert hash table of metadata into finalized GVariant */
+GVariant *
+rpmostree_composeutil_finalize_detached_metadata (GHashTable *detached_metadata)
+{
+  g_autoptr(GVariantBuilder) builder = metadata_conversion_start(detached_metadata);
+  return metadata_conversion_end (builder);
+}
+
 
 /* Implements --write-composejson-to, and also prints values.
  * If `path` is NULL, we'll just print some data.

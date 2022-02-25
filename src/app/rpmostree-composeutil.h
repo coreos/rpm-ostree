@@ -49,6 +49,9 @@ rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
                                          int         rootfs_dfd,
                                          GError    **error);
 
+GVariant *
+rpmostree_composeutil_finalize_detached_metadata (GHashTable *detached_metadata);
+
 gboolean
 rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
                                          const char *path,
