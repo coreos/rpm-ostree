@@ -386,6 +386,13 @@ pub mod ffi {
     }
 
     // treefile.rs
+    #[derive(Debug)]
+    enum RepoMetadataTarget {
+        Inline,
+        Detached,
+        Disabled,
+    }
+
     extern "Rust" {
         type Treefile;
 
@@ -429,6 +436,7 @@ pub mod ffi {
         fn get_recommends(&self) -> bool;
         fn get_selinux(&self) -> bool;
         fn get_releasever(&self) -> String;
+        fn get_repo_metadata_target(&self) -> RepoMetadataTarget;
         fn rpmdb_backend_is_target(&self) -> bool;
         fn should_normalize_rpmdb(&self) -> bool;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;

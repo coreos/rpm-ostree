@@ -824,6 +824,10 @@ impl Treefile {
         self.parsed.base.container_cmd.clone().unwrap_or_default()
     }
 
+    pub(crate) fn get_repo_metadata_target(&self) -> crate::ffi::RepoMetadataTarget {
+        self.parsed.base.repo_metadata.into()
+    }
+
     /// Returns true if the database backend must be regenerated using the target system.
     pub(crate) fn rpmdb_backend_is_target(&self) -> bool {
         self.parsed
@@ -1428,6 +1432,38 @@ impl From<ReleaseVer> for VarValue {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum RepoMetadataTarget {
+    Inline,
+    Detached,
+    Disabled,
+}
+
+impl RepoMetadataTarget {
+    const DEFAULT: Self = Self::Inline;
+
+    fn is_default(value: &Self) -> bool {
+        *value == Self::DEFAULT
+    }
+}
+
+impl Default for RepoMetadataTarget {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl From<RepoMetadataTarget> for crate::ffi::RepoMetadataTarget {
+    fn from(target: RepoMetadataTarget) -> Self {
+        match target {
+            RepoMetadataTarget::Inline => Self::Inline,
+            RepoMetadataTarget::Detached => Self::Detached,
+            RepoMetadataTarget::Disabled => Self::Disabled,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
@@ -1600,10 +1636,11 @@ pub(crate) struct BaseComposeConfigFields {
     // as well).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "RepoMetadataTarget::is_default")]
+    pub(crate) repo_metadata: RepoMetadataTarget,
     // The database backend
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) rpmdb: Option<RpmdbBackend>,
-
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) rpmdb_normalize: Option<bool>,
 
