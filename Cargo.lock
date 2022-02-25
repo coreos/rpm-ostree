@@ -1610,9 +1610,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46874597dc208031d680eeb1d445a9d408dfa3ba972f5f97f015b01dd0b7c021"
 dependencies = [
  "bitflags",
+ "cap-std",
  "gio",
  "glib",
  "hex",
+ "io-lifetimes",
  "libc",
  "once_cell",
  "ostree-sys",
@@ -1622,9 +1624,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.6.3"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ebb5dadc50483d76c9499a74be17e5c8afc8b10d61ec864199c353023ec745"
+checksum = "1e6d186573b7713d0794d2aa34c32ea5fa45a4f7fe77127c89815029ccc0bf3d"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1655,6 +1657,7 @@ dependencies = [
  "tar",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tracing",
 ]
@@ -2530,6 +2533,18 @@ checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
  "native-tls",
  "tokio",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50145484efff8818b5ccd256697f36863f587da82cf8b409c53adf1e840798e3"
+dependencies = [
+ "futures-core",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
