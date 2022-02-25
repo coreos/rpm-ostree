@@ -141,6 +141,7 @@ typedef struct {
   RpmOstreeContext *corectx;
   GFile *treefile_path;
   GHashTable *metadata;
+  GHashTable *detached_metadata;
   gboolean failed;
   GLnxTmpDir workdir_tmp;
   int workdir_dfd;
@@ -732,6 +733,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   self->metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                           (GDestroyNotify)g_variant_unref);
+  self->detached_metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                                   (GDestroyNotify)g_variant_unref);
 
   /* metadata from the treefile itself has the lowest priority */
   JsonNode *add_commit_metadata_node =
@@ -954,11 +957,29 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       }
   }
 
-  /* Bind metadata from the libdnf context */
-  if (!g_hash_table_contains (self->metadata, "rpmostree.rpmmd-repos"))
+
+  /* Optionally bind metadata from the libdnf context */
+  rpmostreecxx::RepoMetadataTarget repomd_target = (*self->treefile_rs)->get_repo_metadata_target();
+  if (repomd_target == rpmostreecxx::RepoMetadataTarget::Inline)
     {
-      g_hash_table_insert (self->metadata, g_strdup ("rpmostree.rpmmd-repos"),
-                           rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
+      if (!g_hash_table_contains (self->metadata, "rpmostree.rpmmd-repos"))
+        {
+          g_hash_table_insert (self->metadata, g_strdup ("rpmostree.rpmmd-repos"),
+                              rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
+        }
+    }
+  else if (repomd_target == rpmostreecxx::RepoMetadataTarget::Detached)
+    {
+      if (!g_hash_table_contains (self->detached_metadata, "rpmostree.rpmmd-repos"))
+        {
+          g_hash_table_insert (self->detached_metadata, g_strdup ("rpmostree.rpmmd-repos"),
+                              rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
+        }
+    }
+  else
+    {
+      g_hash_table_remove(self->metadata, "rpmostree.rpmmd-repos");
+      g_hash_table_remove(self->detached_metadata, "rpmostree.rpmmd-repos");
     }
 
   if (!inject_advisories (self, cancellable, error))
@@ -1079,10 +1100,11 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                            g_variant_ref_sink (v));
     }
 
-  /* Convert metadata hash to GVariant */
+  /* Convert metadata hash tables to GVariants */
   g_autoptr(GVariant) metadata = rpmostree_composeutil_finalize_metadata (self->metadata, self->rootfs_dfd, error);
   if (!metadata)
     return FALSE;
+  g_autoptr(GVariant) detached_metadata = rpmostree_composeutil_finalize_detached_metadata(self->detached_metadata);
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
   if (!rpmostree_postprocess_final (self->rootfs_dfd,
@@ -1135,8 +1157,8 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
   if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision,
-                                 metadata, gpgkey, selinux, self->devino_cache,
-                                 &new_revision, cancellable, error))
+                                 metadata, detached_metadata, gpgkey, selinux,
+                                 self->devino_cache, &new_revision, cancellable, error))
     return glnx_prefix_error (error, "Writing commit");
   g_assert(new_revision != NULL);
 
