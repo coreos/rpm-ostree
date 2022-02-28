@@ -37,10 +37,6 @@ use std::path::Path;
 use std::pin::Pin;
 use std::process::Stdio;
 
-/// Directories that are moved out and symlinked from their `/var/lib/<entry>`
-/// location to `/usr/lib/<entry>`.
-pub(crate) static COMPAT_VARLIB_SYMLINKS: &[&str] = &["alternatives", "vagrant"];
-
 /* See rpmostree-core.h */
 const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
 const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
@@ -810,7 +806,8 @@ pub fn rootfs_prepare_links(rootfs_dfd: i32) -> CxxResult<()> {
     rootfs
         .ensure_dir_all("usr/lib", 0o0755)
         .context("Creating /usr/lib")?;
-    for entry in COMPAT_VARLIB_SYMLINKS {
+    let content_dirs = &["alternatives", "vagrant"];
+    for entry in content_dirs {
         let varlib_path = format!("var/lib/{}", entry);
         let is_var_dir = rootfs
             .metadata_optional(&varlib_path)?

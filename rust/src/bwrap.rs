@@ -374,9 +374,8 @@ impl Bubblewrap {
     /// Set /var to be read-only, but with a transient writable /var/tmp
     /// and compat symlinks for scripts.
     pub(crate) fn setup_compat_var(&mut self) -> CxxResult<()> {
-        use crate::composepost::COMPAT_VARLIB_SYMLINKS;
-
-        for entry in COMPAT_VARLIB_SYMLINKS {
+        let content_dirs = &["alternatives", "vagrant"];
+        for entry in content_dirs {
             let varlib_path = format!("var/lib/{}", &entry);
             if !self.rootfs_fd.exists(&varlib_path)? {
                 let target = format!("../../usr/lib/{}", &entry);
