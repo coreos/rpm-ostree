@@ -13,7 +13,7 @@ use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use fn_error_context::context;
 use glib::{ToVariant, Variant};
-use openat_ext::{FileExt, OpenatDirExt};
+use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib, ostree};
 use rand::Rng;
 use std::fs;
@@ -76,7 +76,7 @@ pub(crate) fn mutate_one_executable_to(
     let mut destf = dest
         .write_file(name, 0o755)
         .context("Failed to open for write")?;
-    f.copy_to(&destf).context("Failed to copy")?;
+    std::io::copy(f, &mut destf).context("Failed to copy")?;
     if have_objcopy {
         std::mem::drop(destf);
         let r = Command::new("objcopy")
