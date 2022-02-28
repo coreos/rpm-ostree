@@ -155,6 +155,10 @@ rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
 GVariant *
 rpmostree_composeutil_finalize_detached_metadata (GHashTable *detached_metadata)
 {
+  /* canonicalize empty detached metadata to NULL */
+  if (g_hash_table_size (detached_metadata) == 0)
+    return NULL;
+
   g_autoptr(GVariantBuilder) builder = metadata_conversion_start(detached_metadata);
   return metadata_conversion_end (builder);
 }
