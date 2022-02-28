@@ -127,7 +127,7 @@ pub mod ffi {
 
         fn bind_read(&mut self, src: &str, dest: &str);
         fn bind_readwrite(&mut self, src: &str, dest: &str);
-        fn setup_compat_var(&mut self) -> Result<()>;
+        fn var_tmp_tmpfs(&mut self);
 
         fn run(&mut self, cancellable: Pin<&mut GCancellable>) -> Result<()>;
     }

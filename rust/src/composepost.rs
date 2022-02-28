@@ -788,46 +788,29 @@ fn convert_path_to_tmpfiles_d_recurse(
 ///
 /// For example:
 ///  - Symlink /usr/local -> /var/usrlocal
-///  - If present, symlink /var/lib/alternatives -> /usr/lib/alternatives
-///  - If present, symlink /var/lib/vagrant -> /usr/lib/vagrant
+///  - Symlink /var/lib/alternatives -> /usr/lib/alternatives
+///  - Symlink /var/lib/vagrant -> /usr/lib/vagrant
 #[context("Preparing symlinks in rootfs")]
 pub fn rootfs_prepare_links(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
 
-    // Unconditionally drop /usr/local and replace it with a symlink.
     rootfs
         .remove_all("usr/local")
         .context("Removing /usr/local")?;
-    ensure_symlink(&rootfs, "../var/usrlocal", "usr/local")
-        .context("Creating /usr/local symlink")?;
-
-    // Move existing content to /usr/lib, then put a symlink in its
-    // place under /var/lib.
-    rootfs
-        .ensure_dir_all("usr/lib", 0o0755)
-        .context("Creating /usr/lib")?;
-    let content_dirs = &["alternatives", "vagrant"];
-    for entry in content_dirs {
-        let varlib_path = format!("var/lib/{}", entry);
-        let is_var_dir = rootfs
-            .metadata_optional(&varlib_path)?
-            .map(|m| m.is_dir())
-            .unwrap_or(false);
-        if !is_var_dir {
-            continue;
-        }
-
-        let usrlib_path = format!("usr/lib/{}", entry);
+    let state_paths = &["usr/lib/alternatives", "usr/lib/vagrant"];
+    for entry in state_paths {
         rootfs
-            .remove_all(&usrlib_path)
-            .with_context(|| format!("Removing /{}", &usrlib_path))?;
-        rootfs
-            .local_rename(&varlib_path, &usrlib_path)
-            .with_context(|| format!("Moving /{} to /{}", &varlib_path, &usrlib_path))?;
+            .ensure_dir_all(*entry, 0o0755)
+            .with_context(|| format!("Creating '/{}'", entry))?;
+    }
 
-        let target = format!("../../{}", &usrlib_path);
-        ensure_symlink(&rootfs, &target, &varlib_path)
-            .with_context(|| format!("Creating /{} symlink", &varlib_path))?;
+    let symlinks = &[
+        ("../var/usrlocal", "usr/local"),
+        ("../../usr/lib/alternatives", "var/lib/alternatives"),
+        ("../../usr/lib/vagrant", "var/lib/vagrant"),
+    ];
+    for (target, linkpath) in symlinks {
+        ensure_symlink(&rootfs, target, linkpath)?;
     }
 
     Ok(())
@@ -1327,10 +1310,6 @@ OSTREE_VERSION='33.4'
         let temp_rootfs = tempfile::tempdir().unwrap();
         let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
         rootfs.ensure_dir_all("usr/local", 0o755).unwrap();
-        rootfs
-            .ensure_dir_all("var/lib/alternatives", 0o755)
-            .unwrap();
-        rootfs.ensure_dir_all("var/lib/vagrant", 0o755).unwrap();
 
         rootfs_prepare_links(rootfs.as_raw_fd()).unwrap();
         {

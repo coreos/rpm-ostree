@@ -368,11 +368,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
     (is_glibc_locales || !enable_fuse) ? rpmostreecxx::BubblewrapMutability::MutateFreely : rpmostreecxx::BubblewrapMutability::RoFiles;
   auto bwrap = CXX_TRY_VAL(bubblewrap_new_with_mutability (rootfs_fd, mutability), error);
   /* Scripts can see a /var with compat links like alternatives */
-  try {
-    bwrap->setup_compat_var();
-  } catch (std::exception&e) {
-    return glnx_throw (error, "%s", e.what());
-  }
+  bwrap->var_tmp_tmpfs();
 
   struct stat stbuf;
   if (glnx_fstatat (rootfs_fd, "usr/lib/opt", &stbuf, AT_SYMLINK_NOFOLLOW, NULL) && S_ISDIR(stbuf.st_mode))
