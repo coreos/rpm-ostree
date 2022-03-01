@@ -25,6 +25,7 @@
 
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
+
 #include "rpmostree-clientlib.h"
 #include "rpmostree-container.h"
 
