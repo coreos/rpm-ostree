@@ -3,7 +3,7 @@ dnl
 dnl SEE RELEASE.md FOR INSTRUCTIONS ON HOW TO DO A RELEASE.
 dnl
 m4_define([year_version], [2022])
-m4_define([release_version], [3])
+m4_define([release_version], [4])
 m4_define([package_version], [year_version.release_version])
 AC_INIT([rpm-ostree], [package_version], [coreos@lists.fedoraproject.org])
 AC_CONFIG_HEADER([config.h])
