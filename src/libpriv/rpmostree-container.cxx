@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 
 #include "rpmostree-core.h"
+
 #include "rpmostree-container.h"
 
 #include <libglnx.h>
