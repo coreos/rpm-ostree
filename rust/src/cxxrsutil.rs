@@ -116,7 +116,6 @@ cxxrs_bind!(G, glib, glib::ffi, [KeyFile, Variant, VariantDict]);
 /// `anyhow::Error` and `glib::Error`, so the default conversion
 /// from `?` should work.
 mod err {
-    use cap_std_ext::rustix;
     use ostree_ext::glib;
     use std::error::Error as StdError;
     use std::fmt::Display;
@@ -166,12 +165,6 @@ mod err {
 
     impl From<IoError> for CxxError {
         fn from(v: IoError) -> Self {
-            Self(format!("{}", v))
-        }
-    }
-
-    impl From<rustix::io::Error> for CxxError {
-        fn from(v: rustix::io::Error) -> Self {
             Self(format!("{}", v))
         }
     }
