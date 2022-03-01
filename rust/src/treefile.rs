@@ -2884,6 +2884,13 @@ pub(crate) fn treefile_new_from_string(buf: &str, client: bool) -> CxxResult<Box
     Ok(r)
 }
 
+/// Create a new treefile from fields.
+pub(crate) fn treefile_new_from_fields(packages: &Vec<String>) -> CxxResult<Box<Treefile>> {
+    let mut cfg = TreeComposeConfig::default();
+    cfg.packages = Some(packages.clone());
+    Ok(Box::new(Treefile::new_from_config(cfg, None)?))
+}
+
 /// Create a new empty treefile.
 pub(crate) fn treefile_new_empty() -> CxxResult<Box<Treefile>> {
     Ok(Treefile::new_from_string("{}")?)
