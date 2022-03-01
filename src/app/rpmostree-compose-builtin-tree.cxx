@@ -698,7 +698,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
   self->treefile_rs = CXX_TRY_VAL(treefile_new_compose(gs_file_get_path_cached (self->treefile_path),
                                                        basearch, self->workdir_dfd), error);
-  rpmostreecxx::composeutil_print_target_info(ostree_repo_get_dfd(self->build_repo));
   self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo,
                                                  **self->treefile_rs);
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
