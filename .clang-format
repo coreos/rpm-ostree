@@ -1,0 +1,4 @@
+---
+Language: Cpp
+BasedOnStyle: GNU
+ColumnLimit: 100
