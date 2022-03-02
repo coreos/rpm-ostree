@@ -75,7 +75,7 @@ rpmostree_ex_builtin_rebuild (int             argc,
       if (n == 0)
         {
           g_print ("No changes to apply.\n");
-        } 
+        }
     }
   else
     {

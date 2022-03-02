@@ -60,10 +60,9 @@ rpmostree_container_install_packages (char **packages,
                                       GCancellable  *cancellable,
                                       GError       **error)
 {
-  // XXX: awkward: add a e.g. `treefile_new_client_from_fields()`
-  g_autofree char *joined = g_strjoinv ("\",\"", packages);
-  g_autofree char *treefile_s = g_strdup_printf ("{\"packages\": [\"%s\"]}", joined);
-  auto treefile = CXX_TRY_VAL(treefile_new_from_string (treefile_s, true), error);
-
+  rust::Vec<rust::String> pkgs;
+  for (char **it = packages; it && *it; it++)
+    pkgs.push_back(std::string(*it));
+  auto treefile = CXX_TRY_VAL(treefile_new_from_fields(pkgs), error);
   return rpmostree_container_rebuild (*treefile, cancellable, error);
 }
