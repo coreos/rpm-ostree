@@ -807,6 +807,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
 {
   const char *pkg_name = headerGetString (hdr, RPMTAG_NAME);
   g_assert (pkg_name);
+  const char *pkg_scriptid = glnx_strjoina (pkg_name, ".transfiletriggerin");
 
   g_autofree char *error_prefix = g_strconcat ("Executing %transfiletriggerin for ", pkg_name, NULL);
   GLNX_AUTO_PREFIX_ERROR (error_prefix, error);
@@ -860,8 +861,28 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
       const char *interp = rpmtdGetString (&tprogs);
       if (!interp)
         interp = "/bin/sh";
-      if (!fail_if_interp_is_lua (interp, pkg_name, "%transfiletriggerin", error))
-        return FALSE;
+      if (g_str_equal (interp, lua_builtin))
+        {
+          gboolean found_replacement = FALSE;
+          for (guint i = 0; i < G_N_ELEMENTS (lua_replacements); i++)
+            {
+              const RpmOstreeLuaReplacement *repl = &lua_replacements[i];
+              if (!g_str_equal (repl->pkgname_script, pkg_scriptid))
+                continue;
+              found_replacement = TRUE;
+              interp = repl->interp;
+              script = repl->replacement;
+              expand = FALSE;
+              break;
+            }
+
+          if (!found_replacement)
+            {
+              /* No override found, throw an error and return */
+              if (!fail_if_interp_is_lua (interp, pkg_name, "%transfiletriggerin", error))
+                return FALSE;
+            }
+        }
 
       g_autofree char *script_owned = NULL;
       if (expand)
