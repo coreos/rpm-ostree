@@ -849,6 +849,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
       rpmFlags flags = 0;
       if (rpmtdSetIndex (&tscriptflags, i) >= 0)
         flags = rpmtdGetNumber (&tscriptflags);
+      gboolean expand = (flags & RPMSCRIPT_FLAG_EXPAND) > 0;
 
       g_assert_cmpint (rpmtdSetIndex (&tscripts, i), ==, i);
       const char *script = rpmtdGetString (&tscripts);
@@ -863,7 +864,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
         return FALSE;
 
       g_autofree char *script_owned = NULL;
-      if (flags & RPMSCRIPT_FLAG_EXPAND)
+      if (expand)
         script = script_owned = rpmExpand (script, NULL);
       (void)script_owned; /* Pacify static analysis */
 
