@@ -1878,6 +1878,7 @@ pub(crate) mod tests {
     use super::*;
     use indoc::indoc;
     use openat_ext::OpenatDirExt;
+    use std::io::Cursor;
     use tempfile;
 
     pub(crate) static ARCH_X86_64: &str = "x86_64";
@@ -1935,7 +1936,7 @@ pub(crate) mod tests {
 
     #[test]
     fn basic_valid() {
-        let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
+        let mut input = Cursor::new(VALID_PRELUDE);
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
@@ -1963,8 +1964,7 @@ pub(crate) mod tests {
              - foo
              - bar
         "#});
-        let buf = buf.as_bytes();
-        let mut input = io::BufReader::new(buf);
+        let mut input = Cursor::new(buf);
         let treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.base.add_files.unwrap().len() == 2);
@@ -1996,7 +1996,7 @@ pub(crate) mod tests {
 
     #[test]
     fn basic_js_valid() {
-        let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
+        let mut input = Cursor::new(VALID_PRELUDE_JS);
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::JSON, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
@@ -2006,7 +2006,7 @@ pub(crate) mod tests {
 
     #[test]
     fn basic_valid_noarch() {
-        let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
+        let mut input = Cursor::new(VALID_PRELUDE);
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, None).unwrap();
         treefile = treefile.substitute_vars().unwrap();
@@ -2016,7 +2016,7 @@ pub(crate) mod tests {
 
     fn append_and_parse(append: &'static str) -> TreeComposeConfig {
         let buf = VALID_PRELUDE.to_string() + append;
-        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         let treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile.substitute_vars().unwrap()
@@ -2024,7 +2024,7 @@ pub(crate) mod tests {
 
     fn test_invalid(data: &'static str) {
         let buf = VALID_PRELUDE.to_string() + data;
-        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         match treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)) {
             Err(ref e) => match e.downcast_ref::<io::Error>() {
                 Some(ref ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {}
@@ -2042,7 +2042,7 @@ pub(crate) mod tests {
             automatic-version-prefix: ${releasever}
             mutate-os-release: ${releasever}
         "#};
-        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
@@ -2061,7 +2061,7 @@ pub(crate) mod tests {
             automatic-version-prefix: ${releasever}
             mutate-os-release: ${releasever}
         "#};
-        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
@@ -2091,7 +2091,7 @@ pub(crate) mod tests {
             automatic-version-prefix: ${releasever}
             mutate-os-release: ${releasever}
         "#};
-        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         treefile = treefile.substitute_vars().unwrap();
@@ -2105,7 +2105,7 @@ pub(crate) mod tests {
                 releasever: foo
             releasever: 30
         "#};
-        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         assert!(
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).is_err()
         );
@@ -2113,7 +2113,7 @@ pub(crate) mod tests {
             variables:
                 basearch: foo
         "#};
-        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         assert!(
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).is_err()
         );
@@ -2596,7 +2596,7 @@ conditional-include:
             etc-group-members:
                 - sudo
         "#});
-        let mut mid_input = io::BufReader::new(
+        let mut mid_input = Cursor::new(
             indoc! {r#"
             variables:
               mystr_override: "overridden"
@@ -2619,7 +2619,7 @@ conditional-include:
         let mut mid =
             treefile_parse_stream(utils::InputFormat::YAML, &mut mid_input, basearch).unwrap();
         mid = mid.substitute_vars().unwrap();
-        let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
+        let mut top_input = Cursor::new(ROJIG_YAML);
         let mut top =
             treefile_parse_stream(utils::InputFormat::YAML, &mut top_input, basearch).unwrap();
         top = top.substitute_vars().unwrap();
