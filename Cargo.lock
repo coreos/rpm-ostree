@@ -327,17 +327,17 @@ dependencies = [
 
 [[package]]
 name = "containers-image-proxy"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30f3f6da50fb18bec30d07c2727edb90512512d74f97f53aa1ece0178fef7f01"
+checksum = "4b6139635005aca6a2f7ef7f623bfc7f2f447e78174321088f7b4ef81c2e188e"
 dependencies = [
  "anyhow",
  "capctl",
  "fn-error-context",
  "futures-util",
- "lazy_static",
  "libc",
- "nix 0.22.0",
+ "nix",
+ "once_cell",
  "semver",
  "serde",
  "serde_json",
@@ -1433,19 +1433,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf1e25ee6b412c2a1e3fcb6a4499a5c1bfe7f43e014bdce9a6b6666e5aa2d187"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 1.0.0",
- "libc",
- "memoffset",
-]
-
-[[package]]
-name = "nix"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
@@ -1546,7 +1533,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cf3e4baa7f516441f58373f58aaf6e91a5dfa2e2b50e68a0d313b082014c61d"
 dependencies = [
  "libc",
- "nix 0.23.1",
+ "nix",
  "openat",
  "rand",
 ]
@@ -2057,7 +2044,7 @@ dependencies = [
  "libdnf-sys",
  "maplit",
  "memfd",
- "nix 0.23.1",
+ "nix",
  "once_cell",
  "openat",
  "openat-ext",
