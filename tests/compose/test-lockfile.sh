@@ -19,7 +19,7 @@ echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
 treefile_append "packages" '["test-pkg", "another-test-pkg-a", "another-test-pkg-b", "another-test-pkg-c"]'
 
-runcompose --ex-write-lockfile-to="$PWD/versions.lock"
+runcompose --write-lockfile-to="$PWD/versions.lock"
 rpm-ostree --repo=${repo} db list ${treeref} > test-pkg-list.txt
 assert_file_has_content test-pkg-list.txt 'test-pkg-1.0-1.x86_64'
 assert_file_has_content test-pkg-list.txt 'another-test-pkg-a-1.0-1.x86_64'
@@ -44,7 +44,7 @@ build_rpm test-pkg version 2.0 requires test-pkg-common
 build_rpm another-test-pkg-a version 2.0
 build_rpm another-test-pkg-b version 2.0
 build_rpm another-test-pkg-c version 2.0
-runcompose --ex-lockfile="$PWD/versions.lock" |& tee out.txt
+runcompose --lockfile="$PWD/versions.lock" |& tee out.txt
 
 rpm-ostree --repo=${repo} db list ${treeref} > test-pkg-list.txt
 assert_file_has_content out.txt 'test-pkg-1.0-1.x86_64'
@@ -73,9 +73,9 @@ cat > override.lock <<EOF
 EOF
 
 runcompose \
-  --ex-lockfile="$PWD/versions.lock" \
-  --ex-lockfile="$PWD/override.lock" \
-  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --lockfile="$PWD/versions.lock" \
+  --lockfile="$PWD/override.lock" \
+  --write-lockfile-to="$PWD/versions.lock.new" \
   --dry-run "${treefile}" |& tee out.txt
 assert_file_has_content out.txt 'test-pkg-1.0-1.x86_64'
 assert_file_has_content out.txt 'test-pkg-common-1.0-1.x86_64'
@@ -93,9 +93,9 @@ echo "ok override"
 # sanity-check that we can remove packages in relaxed mode
 treefile_remove "packages" '"another-test-pkg-a"'
 runcompose \
-  --ex-lockfile="$PWD/versions.lock" \
-  --ex-lockfile="$PWD/override.lock" \
-  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --lockfile="$PWD/versions.lock" \
+  --lockfile="$PWD/override.lock" \
+  --write-lockfile-to="$PWD/versions.lock.new" \
   --dry-run "${treefile}" |& tee out.txt
 assert_file_has_content out.txt 'test-pkg-1.0-1.x86_64'
 assert_file_has_content out.txt 'test-pkg-common-1.0-1.x86_64'
@@ -107,9 +107,9 @@ echo "ok relaxed mode can remove pkg"
 # sanity-check that refeeding the output lockfile as input satisfies strict mode
 mv versions.lock{.new,}
 runcompose \
-  --ex-lockfile-strict \
-  --ex-lockfile="$PWD/versions.lock" \
-  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --lockfile-strict \
+  --lockfile="$PWD/versions.lock" \
+  --write-lockfile-to="$PWD/versions.lock.new" \
   --dry-run "${treefile}" |& tee out.txt
 assert_streq \
   "$(jq .packages versions.lock | sha256sum)" \
@@ -120,8 +120,8 @@ echo "ok strict mode sanity check"
 build_rpm unlocked-pkg
 treefile_append "packages" '["unlocked-pkg"]'
 if runcompose \
-    --ex-lockfile-strict \
-    --ex-lockfile="$PWD/versions.lock" \
+    --lockfile-strict \
+    --lockfile="$PWD/versions.lock" \
     --dry-run "${treefile}" &>err.txt; then
   fatal "compose unexpectedly succeeded"
 fi
@@ -142,9 +142,9 @@ cat > override.lock <<EOF
 }
 EOF
 if runcompose \
-    --ex-lockfile-strict \
-    --ex-lockfile="$PWD/versions.lock" \
-    --ex-lockfile="$PWD/override.lock" \
+    --lockfile-strict \
+    --lockfile="$PWD/versions.lock" \
+    --lockfile="$PWD/override.lock" \
     --dry-run "${treefile}" &>err.txt; then
   fatal "compose unexpectedly succeeded"
 fi
@@ -164,9 +164,9 @@ cat > override.lock <<EOF
 }
 EOF
 if runcompose \
-    --ex-lockfile-strict \
-    --ex-lockfile="$PWD/versions.lock" \
-    --ex-lockfile="$PWD/override.lock" \
+    --lockfile-strict \
+    --lockfile="$PWD/versions.lock" \
+    --lockfile="$PWD/override.lock" \
     --dry-run "${treefile}" &>err.txt; then
   fatal "compose unexpectedly succeeded"
 fi
@@ -191,8 +191,8 @@ treefile_append "packages" '["foobar"]'
 # try first as a regular repo, to make sure it's functional
 treefile_append "repos" '["test-lockfile-repo"]'
 runcompose \
-  --ex-lockfile="$PWD/versions.lock" \
-  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --lockfile="$PWD/versions.lock" \
+  --write-lockfile-to="$PWD/versions.lock.new" \
   --dry-run "${treefile}" |& tee out.txt
 assert_file_has_content out.txt 'foobar-2.0-1.x86_64'
 
@@ -200,8 +200,8 @@ assert_file_has_content out.txt 'foobar-2.0-1.x86_64'
 treefile_remove "repos" '"test-lockfile-repo"'
 treefile_append "lockfile-repos" '["test-lockfile-repo"]'
 runcompose \
-  --ex-lockfile="$PWD/versions.lock" \
-  --ex-write-lockfile-to="$PWD/versions.lock.new" \
+  --lockfile="$PWD/versions.lock" \
+  --write-lockfile-to="$PWD/versions.lock.new" \
   --dry-run "${treefile}" |& tee out.txt
 assert_file_has_content out.txt 'foobar-1.0-1.x86_64'
 treefile_remove "packages" '"foobar"'
