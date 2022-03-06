@@ -76,6 +76,13 @@ impl_packagelist_from_commit (OstreeRepo *repo, const char *commit, GError **err
     }
 
   g_autoptr(GVariant) pkgs = rpmostree_variant_pkgs_from_sack (rsack);
+  // It can happen that we successfully query zero packages.  For example,
+  // when rpm-ostree on RHEL8 (assuming bdb database) is trying to parse an
+  // ostree commit generated from fedora (sqlite rpmdb), librpm will just give us
+  // nothing.  Eventually perhaps we may need to fall back to actually running
+  // the target commit as a container just to get this data for cases like that.
+  if (g_variant_n_children (pkgs) == 0)
+    return g_variant_new_maybe ((GVariantType*) RPMOSTREE_SHLIB_IPC_PKGLIST, NULL);
   return g_variant_ref_sink (g_variant_new_maybe ((GVariantType*) RPMOSTREE_SHLIB_IPC_PKGLIST, pkgs));
 }
 
