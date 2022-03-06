@@ -590,6 +590,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_autofree const gchar **origin_requested_base_removals = NULL;
   g_autoptr(GVariant) origin_base_local_replacements = NULL;
   g_autofree const gchar **origin_requested_base_local_replacements = NULL;
+  g_autoptr(GVariant) origin_base_replacements = NULL;
+  g_autofree const gchar **origin_requested_base_replacements = NULL;
   if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec) ||
       g_variant_dict_lookup (dict, "container-image-reference", "&s", &origin_refspec))
     {
@@ -616,6 +618,11 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                                      G_VARIANT_TYPE ("a(vv)"));
       origin_requested_base_local_replacements =
         lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
+      origin_base_replacements =
+        g_variant_dict_lookup_value (dict, "base-replacements",
+                                     G_VARIANT_TYPE ("a(vv)"));
+      origin_requested_base_replacements =
+        lookup_array_and_canonicalize (dict, "requested-base-replacements");
     }
   else
     origin_refspec = NULL;
@@ -970,6 +977,10 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                   NULL,
                   FALSE);
     }
+//  if (origin_requested_base_replacements)
+//    {
+//      
+//    }
 
   if (origin_requested_base_local_replacements && opt_verbose)
     print_packages ("InactiveBaseReplacements", max_key_len,
