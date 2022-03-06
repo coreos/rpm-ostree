@@ -1030,6 +1030,10 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   if (g_variant_dict_lookup (dict, "cliwrap", "b", &cliwrap) && cliwrap)
     rpmostree_print_kv ("Cliwrap", max_key_len, "enabled");
 
+  gboolean nosetuid = FALSE;
+  if (g_variant_dict_lookup (dict, "nosetuid", "b", &nosetuid) && nosetuid)
+    rpmostree_print_kv ("nosetuid", max_key_len, "enabled");
+
   g_autofree char **initramfs_etc_files = NULL;
   g_variant_dict_lookup (dict, "initramfs-etc", "^a&s", &initramfs_etc_files);
   if (initramfs_etc_files && *initramfs_etc_files)

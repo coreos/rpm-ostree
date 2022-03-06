@@ -39,6 +39,7 @@ static gboolean opt_unchanged_exit_77;
 static gboolean opt_bypass_driver;
 static gboolean opt_skip_branch_check;
 static char *opt_ex_cliwrap;
+static char *opt_ex_nosetuid;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -57,6 +58,7 @@ static GOptionEntry option_entries[] = {
   { "register-driver", 0, 0, G_OPTION_ARG_STRING, &opt_register_driver, "Register the calling agent as the driver for updates; if REVISION is an empty string, register driver without deploying", "DRIVERNAME" },
   { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver, "Force a deploy even if an updates driver is registered", NULL},
   { "ex-cliwrap", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_ex_cliwrap, "Enable or disable wrapping binaries like /usr/bin/rpm", NULL},
+  { "ex-nosetuid", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_ex_nosetuid, "Enable or disable stripping SetUID/SetGID bits from executables", NULL},
   { NULL }
 };
 
@@ -90,9 +92,9 @@ rpmostree_builtin_deploy (int            argc,
     return FALSE;
 
   const gboolean arg_specified = argc >= 2;
-  // If using --ex-cliwrap or --register-driver, we don't usually
-  // expect them to be performing another operation.
-  const gboolean arg_required = !(opt_ex_cliwrap || opt_register_driver);
+  // If using --ex-cliwrap, --ex_no_setduid or --register-driver, we don't
+  // usually expect them to be performing another operation.
+  const gboolean arg_required = !(opt_ex_cliwrap || opt_ex_nosetuid || opt_register_driver);
   if (!arg_specified && arg_required)
     {
       rpmostree_usage_error (context, "REVISION must be specified", error);
@@ -161,10 +163,19 @@ rpmostree_builtin_deploy (int            argc,
             return glnx_throw (error, "Expecting --ex-cli-wrap=true/false but found %s", opt_ex_cliwrap);
           g_variant_dict_insert (&dict, "ex-cliwrap", "b", cliwrap_enabled);
         }
+      if (opt_ex_nosetuid)
+        {
+          gboolean nosetuid_enabled = FALSE;
+          if (g_str_equal (opt_ex_nosetuid, "true"))
+            nosetuid_enabled = TRUE;
+          else if (!g_str_equal (opt_ex_nosetuid, "false"))
+            return glnx_throw (error, "Expecting --ex-cli-wrap=true/false but found %s", opt_ex_nosetuid);
+          g_variant_dict_insert (&dict, "ex-nosetuid", "b", nosetuid_enabled);
+        }
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to so we maintain coverage. */
-      if (install_pkgs || uninstall_pkgs || opt_ex_cliwrap)
+      if (install_pkgs || uninstall_pkgs || opt_ex_cliwrap || opt_ex_nosetuid)
         {
           if (!rpmostree_update_deployment (os_proxy,
                                             NULL, /* refspec */

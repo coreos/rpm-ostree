@@ -362,6 +362,7 @@ rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
   return
         rpmostree_origin_get_cliwrap (origin) || 
+        rpmostree_origin_get_nosetuid (origin) || 
         rpmostree_origin_get_regenerate_initramfs (origin) ||
         (g_hash_table_size (origin->cached_initramfs_etc_files) > 0) ||
         rpmostree_origin_has_packages (origin) ||
@@ -556,6 +557,23 @@ rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
   const char k[] = "rpmostree";
   const char v[] = "ex-cliwrap";
   if (cliwrap)
+    g_key_file_set_boolean (origin->kf, k, v, TRUE);
+  else
+    g_key_file_remove_key (origin->kf, k, v, NULL);
+}
+
+gboolean
+rpmostree_origin_get_nosetuid (RpmOstreeOrigin *origin)
+{
+  return g_key_file_get_boolean (origin->kf, "rpmostree", "ex-nosetuid", NULL);
+}
+
+void
+rpmostree_origin_set_nosetuid (RpmOstreeOrigin *origin, gboolean nosetuid)
+{
+  const char k[] = "rpmostree";
+  const char v[] = "ex-nosetuid";
+  if (nosetuid)
     g_key_file_set_boolean (origin->kf, k, v, TRUE);
   else
     g_key_file_remove_key (origin->kf, k, v, NULL);

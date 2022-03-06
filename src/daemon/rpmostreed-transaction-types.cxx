@@ -1271,6 +1271,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         changed = TRUE;
       }
   }
+  // Handle the --ex-nosetuid option
+  {
+    gboolean nosetuid = FALSE;
+    if (g_variant_dict_lookup (self->options, "ex-nosetuid", "b", &nosetuid))
+      {
+        rpmostree_origin_set_nosetuid (origin, nosetuid);
+        changed = TRUE;
+      }
+  }
 
   if (no_layering)
     {
