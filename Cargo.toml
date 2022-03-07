@@ -75,7 +75,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1.16.1", features = ["full"] }
 xmlrpc = "0.15.1"
-termcolor = "1.1.2"
+termcolor = "1.1.3"
 
 [build-dependencies]
 anyhow = "1.0"
