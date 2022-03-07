@@ -18,6 +18,10 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#include <glib.h>
+
+#include "rpmostree-cxxrs.h"
+
 #pragma once
 
 G_BEGIN_DECLS
