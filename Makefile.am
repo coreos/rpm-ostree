@@ -97,6 +97,10 @@ clean-local-cargo:
 	cargo clean
 CLEAN_LOCAL_HOOKS += clean-local-cargo
 
+.PHONY: clang-format
+clang-format:
+	git ls-files '**.c' '**.cxx' '**.h' '**.hpp' | xargs clang-format -i
+
 use-git-not-dist-hook:
 	@echo
 	@echo 'ERROR: rpm-ostree does not use/support "make dist"; see packaging/Makefile.dist-packaging' 1>&2
