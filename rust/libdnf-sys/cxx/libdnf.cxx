@@ -20,25 +20,38 @@
 
 #include "libdnf.hxx"
 
-namespace dnfcxx {
-  // XXX: use macro to dedupe
-  rust::String dnf_package_get_nevra(DnfPackage &pkg) {
-    return rust::String(::dnf_package_get_nevra(&pkg));
-  }
-  rust::String dnf_package_get_name(DnfPackage &pkg) {
-    return rust::String(::dnf_package_get_name(&pkg));
-  }
-  rust::String dnf_package_get_evr(DnfPackage &pkg) {
-    return rust::String(::dnf_package_get_evr(&pkg));
-  }
-  rust::String dnf_package_get_arch(DnfPackage &pkg) {
-    return rust::String(::dnf_package_get_arch(&pkg));
-  }
+namespace dnfcxx
+{
+// XXX: use macro to dedupe
+rust::String
+dnf_package_get_nevra (DnfPackage &pkg)
+{
+  return rust::String (::dnf_package_get_nevra (&pkg));
+}
+rust::String
+dnf_package_get_name (DnfPackage &pkg)
+{
+  return rust::String (::dnf_package_get_name (&pkg));
+}
+rust::String
+dnf_package_get_evr (DnfPackage &pkg)
+{
+  return rust::String (::dnf_package_get_evr (&pkg));
+}
+rust::String
+dnf_package_get_arch (DnfPackage &pkg)
+{
+  return rust::String (::dnf_package_get_arch (&pkg));
+}
 
-  rust::String dnf_repo_get_id(DnfRepo &repo) {
-    return rust::String(::dnf_repo_get_id(&repo));
-  }
-  guint64 dnf_repo_get_timestamp_generated(DnfRepo &repo) {
-    return ::dnf_repo_get_timestamp_generated(&repo);
-  }
+rust::String
+dnf_repo_get_id (DnfRepo &repo)
+{
+  return rust::String (::dnf_repo_get_id (&repo));
+}
+guint64
+dnf_repo_get_timestamp_generated (DnfRepo &repo)
+{
+  return ::dnf_repo_get_timestamp_generated (&repo);
+}
 }

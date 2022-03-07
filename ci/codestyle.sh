@@ -15,7 +15,7 @@ echo "ok"
 
 echo -n "checking clang-format... "
 rm -f clang-unformatted.txt
-git ls-files 'src/**.c' 'src/**.cxx' 'src/**.h' 'src/**.hpp' | while read f; do
+git ls-files '**.c' '**.cxx' '**.h' '**.hpp' | while read f; do
     if ! clang-format --Werror --ferror-limit=1 --dry-run "$f" > /dev/null 2>&1; then
         echo "$f" >> clang-unformatted.txt
     fi
