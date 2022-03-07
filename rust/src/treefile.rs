@@ -1729,6 +1729,7 @@ pub(crate) struct DeriveConfigFields {
     pub(crate) custom: Option<DeriveCustom>,
 
     // Misc
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_commit: Option<String>,
 }
 
