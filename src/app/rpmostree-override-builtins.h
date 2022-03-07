@@ -26,21 +26,14 @@
 
 G_BEGIN_DECLS
 
-gboolean
-rpmostree_override_builtin_replace (int argc, char **argv,
-                                    RpmOstreeCommandInvocation *invocation,
-                                    GCancellable *cancellable,
-                                    GError **error);
-gboolean
-rpmostree_override_builtin_remove (int argc, char **argv,
-                                   RpmOstreeCommandInvocation *invocation,
-                                   GCancellable *cancellable,
-                                   GError **error);
-gboolean
-rpmostree_override_builtin_reset (int argc, char **argv,
-                                  RpmOstreeCommandInvocation *invocation,
-                                  GCancellable *cancellable,
-                                  GError **error);
+gboolean rpmostree_override_builtin_replace (int argc, char **argv,
+                                             RpmOstreeCommandInvocation *invocation,
+                                             GCancellable *cancellable, GError **error);
+gboolean rpmostree_override_builtin_remove (int argc, char **argv,
+                                            RpmOstreeCommandInvocation *invocation,
+                                            GCancellable *cancellable, GError **error);
+gboolean rpmostree_override_builtin_reset (int argc, char **argv,
+                                           RpmOstreeCommandInvocation *invocation,
+                                           GCancellable *cancellable, GError **error);
 
 G_END_DECLS
-

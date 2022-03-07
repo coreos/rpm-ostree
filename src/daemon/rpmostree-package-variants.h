@@ -27,27 +27,25 @@ G_BEGIN_DECLS
 
 #define RPMOSTREE_DB_DIFF_VARIANT_FORMAT G_VARIANT_TYPE ("a(sua{sv})")
 
-typedef enum {
+typedef enum
+{
   RPM_OSTREE_PACKAGE_ADDED,
   RPM_OSTREE_PACKAGE_REMOVED,
   RPM_OSTREE_PACKAGE_UPGRADED,
   RPM_OSTREE_PACKAGE_DOWNGRADED
 } RpmOstreePackageDiffTypes;
 
-gboolean
-rpm_ostree_db_diff_variant (OstreeRepo *repo,
-                            const char *from_rev,
-                            const char *to_rev,
-                            gboolean    allow_noent,
-                            GVariant  **out_variant,
-                            GCancellable *cancellable,
-                            GError **error);
+gboolean rpm_ostree_db_diff_variant (OstreeRepo *repo, const char *from_rev, const char *to_rev,
+                                     gboolean allow_noent, GVariant **out_variant,
+                                     GCancellable *cancellable, GError **error);
 
 G_END_DECLS
 
 #ifdef __cplusplus
 #include "rust/cxx.h"
-namespace rpmostreecxx {
-   GVariant *package_variant_list_for_commit (OstreeRepo &repo, rust::Str rev, GCancellable &cancellable);
+namespace rpmostreecxx
+{
+GVariant *package_variant_list_for_commit (OstreeRepo &repo, rust::Str rev,
+                                           GCancellable &cancellable);
 }
 #endif

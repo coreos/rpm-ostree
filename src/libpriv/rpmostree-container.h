@@ -22,14 +22,10 @@
 
 G_BEGIN_DECLS
 
-gboolean
-rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile,
-                             GCancellable           *cancellable,
-                             GError                **error);
+gboolean rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *cancellable,
+                                      GError **error);
 
-gboolean
-rpmostree_container_install_packages (char **packages,
-                                      GCancellable  *cancellable,
-                                      GError       **error);
+gboolean rpmostree_container_install_packages (char **packages, GCancellable *cancellable,
+                                               GError **error);
 
 G_END_DECLS

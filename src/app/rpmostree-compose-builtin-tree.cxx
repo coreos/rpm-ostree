@@ -20,41 +20,38 @@
 
 #include "config.h"
 
-#include <string.h>
-#include <glib-unix.h>
-#include <json-glib/json-glib.h>
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
-#include <libdnf/libdnf.h>
+#include <glib-unix.h>
+#include <json-glib/json-glib.h>
 #include <libdnf/dnf-repo.h>
-#include <sys/mount.h>
-#include <stdio.h>
+#include <libdnf/libdnf.h>
+#include <libglnx.h>
 #include <linux/magic.h>
+#include <optional>
+#include <rpm/rpmmacro.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/mount.h>
 #include <sys/statvfs.h>
 #include <sys/vfs.h>
-#include <libglnx.h>
-#include <rpm/rpmmacro.h>
 #include <utility>
-#include <optional>
 
 #include "rpmostree-compose-builtins.h"
-#include "rpmostree-util.h"
 #include "rpmostree-composeutil.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
-#include "rpmostree-postprocess.h"
-#include "rpmostree-package-variants.h"
 #include "rpmostree-libbuiltin.h"
+#include "rpmostree-package-variants.h"
+#include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-util.h"
 
 #include "libglnx.h"
 
-static gboolean
-pull_local_into_target_repo (OstreeRepo   *src_repo,
-                             OstreeRepo   *dest_repo,
-                             const char   *checksum,
-                             GCancellable *cancellable,
-                             GError      **error);
+static gboolean pull_local_into_target_repo (OstreeRepo *src_repo, OstreeRepo *dest_repo,
+                                             const char *checksum, GCancellable *cancellable,
+                                             GError **error);
 
 static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
@@ -84,60 +81,76 @@ static char *opt_extensions_output_dir;
 static char *opt_extensions_base_rev;
 
 /* shared by all subcommands */
-static GOptionEntry common_option_entries[] = {
-  { "ex-unified-core", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_unified_core, "Compat alias for --unified-core", NULL }, // Compat
-  { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core, "Use new \"unified core\" codepath", NULL },
-  { NULL }
-};
+static GOptionEntry common_option_entries[]
+    = { { "ex-unified-core", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_unified_core,
+          "Compat alias for --unified-core", NULL }, // Compat
+        { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core,
+          "Use new \"unified core\" codepath", NULL },
+        { NULL } };
 
 /* shared by install & commit */
-static GOptionEntry repo_option_entries[] = {
-  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
-  { NULL }
-};
+static GOptionEntry repo_option_entries[]
+    = { { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
+        { NULL } };
 
-static GOptionEntry install_option_entries[] = {
-  { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
-  { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
-  { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
-  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download and import RPMs as well; requires --cachedir", NULL },
-  { "download-only-rpms", 0, 0, G_OPTION_ARG_NONE, &opt_download_only_rpms, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
-  { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
-  { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
-  { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
-  { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
-  { "previous-commit", 0, 0, G_OPTION_ARG_STRING, &opt_previous_commit, "Use this commit for change detection", "COMMIT" },
-  { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
-  { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
-  { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile_to, "Write lockfile to FILE", "FILE" },
-  { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_lockfiles, "Read lockfile from FILE", "FILE" },
-  { "ex-lockfile-strict", 0, 0, G_OPTION_ARG_NONE, &opt_lockfile_strict, "With --ex-lockfile, only allow installing locked packages", NULL },
-  { NULL }
-};
+static GOptionEntry install_option_entries[]
+    = { { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache,
+          "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
+        { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only,
+          "Assume cache is present, do not attempt to update it", NULL },
+        { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+        { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only,
+          "Like --dry-run, but download and import RPMs as well; requires --cachedir", NULL },
+        { "download-only-rpms", 0, 0, G_OPTION_ARG_NONE, &opt_download_only_rpms,
+          "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
+        { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
+        { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit",
+          NULL },
+        { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only,
+          "Just expand any includes and print treefile", NULL },
+        { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed,
+          "Update the modification time on FILE if a new commit was created", "FILE" },
+        { "previous-commit", 0, 0, G_OPTION_ARG_STRING, &opt_previous_commit,
+          "Use this commit for change detection", "COMMIT" },
+        { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
+        { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs,
+          "Use tmpfs for working state", NULL },
+        { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile_to,
+          "Write lockfile to FILE", "FILE" },
+        { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_lockfiles, "Read lockfile from FILE",
+          "FILE" },
+        { "ex-lockfile-strict", 0, 0, G_OPTION_ARG_NONE, &opt_lockfile_strict,
+          "With --ex-lockfile, only allow installing locked packages", NULL },
+        { NULL } };
 
-static GOptionEntry postprocess_option_entries[] = {
-  { NULL }
-};
+static GOptionEntry postprocess_option_entries[] = { { NULL } };
 
 static GOptionEntry commit_option_entries[] = {
-  { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
-  { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
-  { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to, "File to write the composed commitid to instead of updating the ref", "FILE" },
-  { "write-composejson-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_composejson_to, "Write JSON to FILE containing information about the compose run", "FILE" },
+  { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings,
+    "Append given key and value (in string format) to metadata", "KEY=VALUE" },
+  { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_json,
+    "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
+  { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to,
+    "File to write the composed commitid to instead of updating the ref", "FILE" },
+  { "write-composejson-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_composejson_to,
+    "Write JSON to FILE containing information about the compose run", "FILE" },
   { "no-parent", 0, 0, G_OPTION_ARG_NONE, &opt_no_parent, "Always commit without a parent", NULL },
   { "parent", 0, 0, G_OPTION_ARG_STRING, &opt_parent, "Commit with specific parent", "REV" },
   { NULL }
 };
 
-static GOptionEntry extensions_option_entries[] = {
-  { "output-dir", 0, 0, G_OPTION_ARG_STRING, &opt_extensions_output_dir, "Path to extensions output directory", "PATH" },
-  { "base-rev", 0, 0, G_OPTION_ARG_STRING, &opt_extensions_base_rev, "Base OSTree revision", "REV" },
-  { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
-  { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if new extensions were downloaded", "FILE" },
-  { NULL }
-};
+static GOptionEntry extensions_option_entries[]
+    = { { "output-dir", 0, 0, G_OPTION_ARG_STRING, &opt_extensions_output_dir,
+          "Path to extensions output directory", "PATH" },
+        { "base-rev", 0, 0, G_OPTION_ARG_STRING, &opt_extensions_base_rev, "Base OSTree revision",
+          "REV" },
+        { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+        { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed,
+          "Update the modification time on FILE if new extensions were downloaded", "FILE" },
+        { NULL } };
 
-typedef struct {
+typedef struct
+{
   RpmOstreeContext *corectx;
   GFile *treefile_path;
   GHashTable *metadata;
@@ -155,10 +168,10 @@ typedef struct {
   const char *ref;
   char *previous_checksum;
 
-  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_rs;
+  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile_rs;
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
-  JsonObject *treefile; /* Unowned */
+  JsonObject *treefile;       /* Unowned */
 } RpmOstreeTreeComposeContext;
 
 static void
@@ -167,13 +180,13 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile_path);
   g_clear_pointer (&ctx->metadata, g_hash_table_unref);
-  ctx->treefile_rs.~optional();
+  ctx->treefile_rs.~optional ();
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized)
     glnx_close_fd (&ctx->workdir_dfd);
   const char *preserve = g_getenv ("RPMOSTREE_PRESERVE_TMPDIR");
-  if (ctx->workdir_tmp.initialized &&
-      (preserve && (!g_str_equal (preserve, "on-fail") || ctx->failed)))
+  if (ctx->workdir_tmp.initialized
+      && (preserve && (!g_str_equal (preserve, "on-fail") || ctx->failed)))
     g_printerr ("Preserved workdir: %s\n", ctx->workdir_tmp.path);
   else
     (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
@@ -187,29 +200,25 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->treefile_parser);
   g_free (ctx);
 }
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeTreeComposeContext, rpm_ostree_tree_compose_context_free)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeTreeComposeContext, rpm_ostree_tree_compose_context_free)
 
 static void
-on_hifstate_percentage_changed (DnfState   *hifstate,
-                                guint       percentage,
-                                gpointer    user_data)
+on_hifstate_percentage_changed (DnfState *hifstate, guint percentage, gpointer user_data)
 {
-  auto text = static_cast<const char*>(user_data);
+  auto text = static_cast<const char *> (user_data);
   glnx_console_progress_text_percent (text, percentage);
 }
 
 static gboolean
-inputhash_from_commit (OstreeRepo *repo,
-                       const char *sha256,
-                       char      **out_value, /* inout Option<String> */
-                       GError    **error)
+inputhash_from_commit (OstreeRepo *repo, const char *sha256,
+                       char **out_value, /* inout Option<String> */
+                       GError **error)
 {
-  g_autoptr(GVariant) commit_v = NULL;
-  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                 sha256, &commit_v, error))
+  g_autoptr (GVariant) commit_v = NULL;
+  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, sha256, &commit_v, error))
     return FALSE;
 
-  g_autoptr(GVariant) commit_metadata = g_variant_get_child_value (commit_v, 0);
+  g_autoptr (GVariant) commit_metadata = g_variant_get_child_value (commit_v, 0);
   g_assert (out_value);
   *out_value = NULL;
   g_variant_lookup (commit_metadata, "rpmostree.inputhash", "s", out_value);
@@ -217,21 +226,19 @@ inputhash_from_commit (OstreeRepo *repo,
 }
 
 static gboolean
-try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self,
-                            GCancellable                 *cancellable,
-                            GError                      **error)
+try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self, GCancellable *cancellable,
+                            GError **error)
 {
   gboolean selinux = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux",
-                                                               &selinux, error))
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux,
+                                                               error))
     return FALSE;
 
   if (!selinux || !self->previous_checksum)
     return TRUE; /* nothing to do! */
 
   OstreeRepoCommitState commitstate;
-  if (!ostree_repo_load_commit (self->repo, self->previous_checksum, NULL,
-                                &commitstate, error))
+  if (!ostree_repo_load_commit (self->repo, self->previous_checksum, NULL, &commitstate, error))
     return FALSE;
 
   if (commitstate & OSTREE_REPO_COMMIT_STATE_PARTIAL)
@@ -243,23 +250,21 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self,
    * previous commit, it's much likelier that its policy will be closer to the final
    * policy than the host system's policy. And in the case they match, we skip a full
    * relabeling phase. Let's use that instead. */
-  if (!glnx_shutil_mkdir_p_at (self->workdir_dfd,
-                               dirname (strdupa (TMP_SELINUX_ROOTFS)), 0755,
+  if (!glnx_shutil_mkdir_p_at (self->workdir_dfd, dirname (strdupa (TMP_SELINUX_ROOTFS)), 0755,
                                cancellable, error))
     return FALSE;
 
-  OstreeRepoCheckoutAtOptions opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_USER,
-                                       .subpath = "/usr/etc/selinux" };
-  if (!ostree_repo_checkout_at (self->repo, &opts, self->workdir_dfd,
-                                TMP_SELINUX_ROOTFS, self->previous_checksum,
-                                cancellable, error))
+  OstreeRepoCheckoutAtOptions opts
+      = { .mode = OSTREE_REPO_CHECKOUT_MODE_USER, .subpath = "/usr/etc/selinux" };
+  if (!ostree_repo_checkout_at (self->repo, &opts, self->workdir_dfd, TMP_SELINUX_ROOTFS,
+                                self->previous_checksum, cancellable, error))
     return FALSE;
 
 #undef TMP_SELINUX_ROOTFS
 
   g_autofree char *abspath = glnx_fdrel_abspath (self->workdir_dfd, "selinux.tmp");
-  g_autoptr(GFile) path = g_file_new_for_path (abspath);
-  g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new (path, cancellable, error);
+  g_autoptr (GFile) path = g_file_new_for_path (abspath);
+  g_autoptr (OstreeSePolicy) sepolicy = ostree_sepolicy_new (path, cancellable, error);
   if (sepolicy == NULL)
     return FALSE;
 
@@ -269,11 +274,8 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self,
 }
 
 static gboolean
-install_packages (RpmOstreeTreeComposeContext  *self,
-                  gboolean                     *out_unmodified,
-                  char                        **out_new_inputhash,
-                  GCancellable                 *cancellable,
-                  GError                      **error)
+install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
+                  char **out_new_inputhash, GCancellable *cancellable, GError **error)
 {
   int rootfs_dfd = self->rootfs_dfd;
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->corectx);
@@ -284,14 +286,16 @@ install_packages (RpmOstreeTreeComposeContext  *self,
    * but in the future we won't be using librpm at all for unpack/scripts, so it won't
    * matter.
    */
-  { const char *debuglevel = getenv ("RPMOSTREE_RPM_VERBOSITY");
+  {
+    const char *debuglevel = getenv ("RPMOSTREE_RPM_VERBOSITY");
     if (!debuglevel)
       debuglevel = "info";
     dnf_context_set_rpm_verbosity (dnfctx, debuglevel);
-    rpmlogSetFile(NULL);
+    rpmlogSetFile (NULL);
   }
 
-  { int tf_dfd = (*self->treefile_rs)->get_workdir();
+  {
+    int tf_dfd = (*self->treefile_rs)->get_workdir ();
     g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
     dnf_context_set_repo_dir (dnfctx, abs_tf_path);
   }
@@ -306,13 +310,13 @@ install_packages (RpmOstreeTreeComposeContext  *self,
    * used by coreos-assembler.  Today we don't expose the default, but we
    * could add --cache-default or something if someone wanted it.
    */
-  rpmostree_context_set_dnf_caching (self->corectx,
-                                     opt_cache_only ? RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER :
-                                     RPMOSTREE_CONTEXT_DNF_CACHE_NEVER);
+  rpmostree_context_set_dnf_caching (self->corectx, opt_cache_only
+                                                        ? RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER
+                                                        : RPMOSTREE_CONTEXT_DNF_CACHE_NEVER);
 
-  { g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
-    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL,
-                                  cancellable, error))
+  {
+    g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
+    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, cancellable, error))
       return FALSE;
   }
 
@@ -360,9 +364,11 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       /* Secret environment variable for those desperate */
       if (!g_getenv ("RPM_OSTREE_I_KNOW_NON_UNIFIED_CORE_IS_DEPRECATED"))
         {
-          g_printerr ("\nNOTICE: Running rpm-ostree compose tree without --unified-core is deprecated.\n"
-                      " Please add --unified-core to the command line and ensure your content\n"
-                      " works with it.  For more information, see https://github.com/coreos/rpm-ostree/issues/729\n\n");
+          g_printerr (
+              "\nNOTICE: Running rpm-ostree compose tree without --unified-core is deprecated.\n"
+              " Please add --unified-core to the command line and ensure your content\n"
+              " works with it.  For more information, see "
+              "https://github.com/coreos/rpm-ostree/issues/729\n\n");
           g_usleep (G_USEC_PER_SEC * 10);
         }
     }
@@ -374,22 +380,21 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   if (opt_write_lockfile_to)
     {
-      g_autoptr(GPtrArray) pkgs = rpmostree_context_get_packages (self->corectx);
+      g_autoptr (GPtrArray) pkgs = rpmostree_context_get_packages (self->corectx);
       g_assert (pkgs);
 
-      g_autoptr(GPtrArray) rpmmd_repos =
-        rpmostree_get_enabled_rpmmd_repos (rpmostree_context_get_dnf (self->corectx),
-                                           DNF_REPO_ENABLED_PACKAGES);
-      auto pkgs_v = rpmostreecxx::CxxGObjectArray(pkgs);
-      auto repos_v = rpmostreecxx::CxxGObjectArray(rpmmd_repos);
-      CXX_TRY(lockfile_write(opt_write_lockfile_to, pkgs_v, repos_v), error);
+      g_autoptr (GPtrArray) rpmmd_repos = rpmostree_get_enabled_rpmmd_repos (
+          rpmostree_context_get_dnf (self->corectx), DNF_REPO_ENABLED_PACKAGES);
+      auto pkgs_v = rpmostreecxx::CxxGObjectArray (pkgs);
+      auto repos_v = rpmostreecxx::CxxGObjectArray (rpmmd_repos);
+      CXX_TRY (lockfile_write (opt_write_lockfile_to, pkgs_v, repos_v), error);
     }
 
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;
   if (!rpmostree_composeutil_checksum (dnf_context_get_goal (dnfctx), self->repo,
-                                       **self->treefile_rs, self->treefile,
-                                       &ret_new_inputhash, error))
+                                       **self->treefile_rs, self->treefile, &ret_new_inputhash,
+                                       error))
     return FALSE;
 
   g_assert (ret_new_inputhash != NULL);
@@ -400,8 +405,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   if (self->previous_checksum && out_unmodified != NULL)
     {
       g_autofree char *previous_inputhash = NULL;
-      if (!inputhash_from_commit (self->repo, self->previous_checksum,
-                                  &previous_inputhash, error))
+      if (!inputhash_from_commit (self->repo, self->previous_checksum, &previous_inputhash, error))
         return FALSE;
 
       if (previous_inputhash)
@@ -419,7 +423,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   if (opt_dry_run)
     return TRUE; /* NB: early return */
 
-  (*self->treefile_rs)->sanitycheck_externals();
+  (*self->treefile_rs)->sanitycheck_externals ();
 
   /* --- Downloading packages --- */
   if (!rpmostree_context_download (self->corectx, cancellable, error))
@@ -437,9 +441,10 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
   g_assert (self->repo);
-  auto previous_ref = self->previous_checksum?: "";
-  CXX_TRY(passwd_compose_prep_repo(rootfs_dfd, **self->treefile_rs, *self->repo,
-                                   std::string(previous_ref), opt_unified_core), error);
+  auto previous_ref = self->previous_checksum ?: "";
+  CXX_TRY (passwd_compose_prep_repo (rootfs_dfd, **self->treefile_rs, *self->repo,
+                                     std::string (previous_ref), opt_unified_core),
+           error);
 
   if (opt_unified_core)
     {
@@ -452,7 +457,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       /* Now reload the policy from the tmproot, and relabel the pkgcache - this
        * is the same thing done in rpmostree_context_commit().
        */
-      g_autoptr(OstreeSePolicy) sepolicy = NULL;
+      g_autoptr (OstreeSePolicy) sepolicy = NULL;
       if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, &sepolicy, cancellable, error))
         return FALSE;
 
@@ -471,33 +476,34 @@ install_packages (RpmOstreeTreeComposeContext  *self,
       if (!glnx_shutil_mkdir_p_at (rootfs_dfd, kernel_installd_path, 0755, cancellable, error))
         return FALSE;
       const char skip_kernel_install_data[] = "#!/usr/bin/sh\nexit 77\n";
-      const char *kernel_skip_path = glnx_strjoina (kernel_installd_path, "/00-rpmostree-skip.install");
-      if (!glnx_file_replace_contents_with_perms_at (rootfs_dfd, kernel_skip_path,
-                                                     (guint8*)skip_kernel_install_data,
-                                                     strlen (skip_kernel_install_data),
-                                                     0755, 0, 0,
-                                                     GLNX_FILE_REPLACE_NODATASYNC,
-                                                     cancellable, error))
+      const char *kernel_skip_path
+          = glnx_strjoina (kernel_installd_path, "/00-rpmostree-skip.install");
+      if (!glnx_file_replace_contents_with_perms_at (
+              rootfs_dfd, kernel_skip_path, (guint8 *)skip_kernel_install_data,
+              strlen (skip_kernel_install_data), 0755, 0, 0, GLNX_FILE_REPLACE_NODATASYNC,
+              cancellable, error))
         return FALSE;
 
       /* Now actually run through librpm to install the packages.  Note this bit
        * will be replaced in the future with a unified core:
        * https://github.com/projectatomic/rpm-ostree/issues/729
        */
-      g_auto(GLnxConsoleRef) console = { 0, };
-      g_autoptr(DnfState) hifstate = dnf_state_new ();
+      g_auto (GLnxConsoleRef) console = {
+        0,
+      };
+      g_autoptr (DnfState) hifstate = dnf_state_new ();
 
-      guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                               reinterpret_cast<GCallback>(on_hifstate_percentage_changed),
-                                               (void*)"Installing packages:");
+      guint progress_sigid
+          = g_signal_connect (hifstate, "percentage-changed",
+                              reinterpret_cast<GCallback> (on_hifstate_percentage_changed),
+                              (void *)"Installing packages:");
 
       glnx_console_lock (&console);
 
-      CXX_TRY(composeutil_legacy_prep_dev_and_run(rootfs_dfd), error);
+      CXX_TRY (composeutil_legacy_prep_dev_and_run (rootfs_dfd), error);
 
       if (!dnf_transaction_commit (dnf_context_get_transaction (dnfctx),
-                                   dnf_context_get_goal (dnfctx),
-                                   hifstate, error))
+                                   dnf_context_get_goal (dnfctx), hifstate, error))
         return FALSE;
 
       g_signal_handler_disconnect (hifstate, progress_sigid);
@@ -510,9 +516,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 }
 
 static gboolean
-parse_metadata_keyvalue_strings (char             **strings,
-                                 GHashTable        *metadata_hash,
-                                 GError           **error)
+parse_metadata_keyvalue_strings (char **strings, GHashTable *metadata_hash, GError **error)
 {
   for (char **iter = strings; *iter; iter++)
     {
@@ -535,7 +539,7 @@ process_touch_if_changed (GError **error)
   if (!opt_touch_if_changed)
     return TRUE;
 
-  glnx_autofd int fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
+  glnx_autofd int fd = open (opt_touch_if_changed, O_CREAT | O_WRONLY | O_NOCTTY, 0644);
   if (fd == -1)
     return glnx_throw_errno_prefix (error, "Updating '%s'", opt_touch_if_changed);
   if (futimens (fd, NULL) == -1)
@@ -546,7 +550,7 @@ process_touch_if_changed (GError **error)
 
 /* https://pagure.io/atomic-wg/issue/387 */
 static gboolean
-repo_is_on_netfs (OstreeRepo  *repo)
+repo_is_on_netfs (OstreeRepo *repo)
 {
 #ifndef FUSE_SUPER_MAGIC
 #define FUSE_SUPER_MAGIC 0x65735546
@@ -570,17 +574,15 @@ repo_is_on_netfs (OstreeRepo  *repo)
  * the arguments such as loading the treefile and any specified metadata.
  */
 static gboolean
-rpm_ostree_compose_context_new (const char    *treefile_pathstr,
-                                const char    *basearch,
+rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basearch,
                                 RpmOstreeTreeComposeContext **out_context,
-                                GCancellable  *cancellable,
-                                GError       **error)
+                                GCancellable *cancellable, GError **error)
 {
-  g_assert(basearch != NULL);
+  g_assert (basearch != NULL);
 
-  g_autoptr(RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
+  g_autoptr (RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
 
-  CXX_TRY(core_libdnf_process_global_init(), error);
+  CXX_TRY (core_libdnf_process_global_init (), error);
 
   /* Init fds to -1 */
   self->workdir_dfd = self->rootfs_dfd = self->cachedir_dfd = -1;
@@ -588,7 +590,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
    * container without --privileged or userns exposed.
    */
   if (!(opt_download_only || opt_download_only_rpms))
-    CXX_TRY(bubblewrap_selftest(), error);
+    CXX_TRY (bubblewrap_selftest (), error);
 
   self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!self->repo)
@@ -631,8 +633,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
           if (!repo_is_on_netfs (self->repo))
             {
               if (!glnx_mkdtempat (ostree_repo_get_dfd (self->repo),
-                                   "tmp/rpm-ostree-compose.XXXXXX", 0700,
-                                   &self->workdir_tmp, error))
+                                   "tmp/rpm-ostree-compose.XXXXXX", 0700, &self->workdir_tmp,
+                                   error))
                 return FALSE;
             }
           else
@@ -647,18 +649,17 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
             return glnx_throw_errno_prefix (error, "fcntl");
         }
 
-      self->pkgcache_repo = ostree_repo_create_at (self->cachedir_dfd, "pkgcache-repo",
-                                                   OSTREE_REPO_MODE_BARE_USER, NULL,
-                                                   cancellable, error);
+      self->pkgcache_repo
+          = ostree_repo_create_at (self->cachedir_dfd, "pkgcache-repo", OSTREE_REPO_MODE_BARE_USER,
+                                   NULL, cancellable, error);
       if (!self->pkgcache_repo)
         return FALSE;
 
       /* We use a temporary repo for building and committing on the same FS as the
        * pkgcache to guarantee links and devino caching. We then pull-local into the "real"
        * target repo. */
-      self->build_repo = ostree_repo_create_at (self->cachedir_dfd, "repo-build",
-                                          OSTREE_REPO_MODE_BARE_USER, NULL,
-                                          cancellable, error);
+      self->build_repo = ostree_repo_create_at (
+          self->cachedir_dfd, "repo-build", OSTREE_REPO_MODE_BARE_USER, NULL, cancellable, error);
       if (!self->build_repo)
         return glnx_prefix_error (error, "Creating repo-build");
 
@@ -669,7 +670,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     {
       if (!opt_workdir)
         {
-          if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &self->workdir_tmp, error))
+          if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &self->workdir_tmp,
+                               error))
             return FALSE;
           /* Note special handling of this aliasing in rpm_ostree_tree_compose_context_free() */
           self->workdir_dfd = self->workdir_tmp.fd;
@@ -692,14 +694,16 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
             return glnx_throw_errno_prefix (error, "fcntl");
         }
 
-      self->build_repo = static_cast<OstreeRepo*>(g_object_ref (self->repo));
+      self->build_repo = static_cast<OstreeRepo *> (g_object_ref (self->repo));
     }
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
-  self->treefile_rs = CXX_TRY_VAL(treefile_new_compose(gs_file_get_path_cached (self->treefile_path),
-                                                       basearch, self->workdir_dfd), error);
-  self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo,
-                                                 **self->treefile_rs);
+  self->treefile_rs
+      = CXX_TRY_VAL (treefile_new_compose (gs_file_get_path_cached (self->treefile_path), basearch,
+                                           self->workdir_dfd),
+                     error);
+  self->corectx
+      = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo, **self->treefile_rs);
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
    * e.g. importing, relabeling, etc... so just disable it. We do still set the policy
    * to the final one right before commit as usual. */
@@ -710,19 +714,19 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   if (opt_lockfiles)
     {
-      if (!rpmostree_context_set_lockfile (self->corectx, opt_lockfiles, opt_lockfile_strict, error))
+      if (!rpmostree_context_set_lockfile (self->corectx, opt_lockfiles, opt_lockfile_strict,
+                                           error))
         return FALSE;
       g_print ("Loaded lockfiles:\n  %s\n", g_strjoinv ("\n  ", opt_lockfiles));
     }
 
-
-  auto serialized = (*self->treefile_rs)->get_json_string();
+  auto serialized = (*self->treefile_rs)->get_json_string ();
   self->treefile_parser = json_parser_new ();
-  if (!json_parser_load_from_data (self->treefile_parser, serialized.c_str(), -1, error))
+  if (!json_parser_load_from_data (self->treefile_parser, serialized.c_str (), -1, error))
     return FALSE;
 
-  (*self->treefile_rs)->print_deprecation_warnings();
-  (*self->treefile_rs)->print_experimental_notices();
+  (*self->treefile_rs)->print_deprecation_warnings ();
+  (*self->treefile_rs)->print_experimental_notices ();
 
   self->treefile_rootval = json_parser_get_root (self->treefile_parser);
   if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
@@ -730,18 +734,18 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   self->treefile = json_node_get_object (self->treefile_rootval);
 
-  self->metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                                          (GDestroyNotify)g_variant_unref);
-  self->detached_metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                                                   (GDestroyNotify)g_variant_unref);
+  self->metadata
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
+  self->detached_metadata
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
 
   /* metadata from the treefile itself has the lowest priority */
-  JsonNode *add_commit_metadata_node =
-    json_object_get_member (self->treefile, "add-commit-metadata");
+  JsonNode *add_commit_metadata_node
+      = json_object_get_member (self->treefile, "add-commit-metadata");
   if (add_commit_metadata_node)
     {
-      if (!rpmostree_composeutil_read_json_metadata (add_commit_metadata_node,
-                                                     self->metadata, error))
+      if (!rpmostree_composeutil_read_json_metadata (add_commit_metadata_node, self->metadata,
+                                                     error))
         return FALSE;
     }
 
@@ -764,27 +768,28 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         return FALSE;
     }
 
-  auto cmd = (*self->treefile_rs)->get_container_cmd();
-  if (cmd.size() > 0)
+  auto cmd = (*self->treefile_rs)->get_container_cmd ();
+  if (cmd.size () > 0)
     {
-      g_auto(GVariantBuilder) builder;
+      g_auto (GVariantBuilder) builder;
       g_variant_builder_init (&builder, G_VARIANT_TYPE ("as"));
-      for (auto s: cmd)
+      for (auto s : cmd)
         {
-          g_variant_builder_add (&builder, "s", s.c_str());
+          g_variant_builder_add (&builder, "s", s.c_str ());
         }
-      g_hash_table_insert (self->metadata, g_strdup ("ostree.container-cmd"), g_variant_ref_sink (g_variant_builder_end (&builder)));
+      g_hash_table_insert (self->metadata, g_strdup ("ostree.container-cmd"),
+                           g_variant_ref_sink (g_variant_builder_end (&builder)));
     }
 
-  auto layers = (*self->treefile_rs)->get_all_ostree_layers();
-  if (layers.size() > 0 && !opt_unified_core)
+  auto layers = (*self->treefile_rs)->get_all_ostree_layers ();
+  if (layers.size () > 0 && !opt_unified_core)
     return glnx_throw (error, "ostree-layers requires unified-core mode");
 
   if (self->build_repo != self->repo)
     {
       for (auto layer : layers)
         {
-          if (!pull_local_into_target_repo (self->repo, self->build_repo, layer.c_str(),
+          if (!pull_local_into_target_repo (self->repo, self->build_repo, layer.c_str (),
                                             cancellable, error))
             return FALSE;
         }
@@ -795,26 +800,23 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 }
 
 static gboolean
-inject_advisories (RpmOstreeTreeComposeContext *self,
-                   GCancellable    *cancellable,
-                   GError         **error)
+inject_advisories (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GPtrArray) pkgs = rpmostree_context_get_packages (self->corectx);
+  g_autoptr (GPtrArray) pkgs = rpmostree_context_get_packages (self->corectx);
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->corectx);
   DnfSack *yum_sack = dnf_context_get_sack (dnfctx);
-  g_autoptr(GVariant) advisories = rpmostree_advisories_variant (yum_sack, pkgs);
+  g_autoptr (GVariant) advisories = rpmostree_advisories_variant (yum_sack, pkgs);
 
   if (advisories && g_variant_n_children (advisories) > 0)
-    g_hash_table_insert (self->metadata, g_strdup ("rpmostree.advisories"), g_steal_pointer (&advisories));
+    g_hash_table_insert (self->metadata, g_strdup ("rpmostree.advisories"),
+                         g_steal_pointer (&advisories));
 
   return TRUE;
 }
 
 static gboolean
-impl_install_tree (RpmOstreeTreeComposeContext *self,
-                   gboolean        *out_changed,
-                   GCancellable    *cancellable,
-                   GError         **error)
+impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
+                   GCancellable *cancellable, GError **error)
 {
   /* Set this early here, so we only have to set it one more time in the
    * complete exit path too.
@@ -834,7 +836,8 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     {
       if (!opt_unified_core)
         return glnx_throw (error, "This command requires root privileges");
-      g_printerr ("NOTICE: Running this command as non-root is currently known not to work completely.\n");
+      g_printerr (
+          "NOTICE: Running this command as non-root is currently known not to work completely.\n");
       g_printerr ("NOTICE: Proceeding anyways.\n");
     }
 
@@ -866,8 +869,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     }
   else if (self->ref)
     {
-      if (!ostree_repo_resolve_rev (self->repo, self->ref, TRUE,
-                                    &self->previous_checksum, error))
+      if (!ostree_repo_resolve_rev (self->repo, self->ref, TRUE, &self->previous_checksum, error))
         return FALSE;
 
       if (!self->previous_checksum)
@@ -882,8 +884,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   if (mkdirat (self->workdir_dfd, rootfs_name, 0755) < 0)
     return glnx_throw_errno_prefix (error, "mkdirat(%s)", rootfs_name);
 
-  if (!glnx_opendirat (self->workdir_dfd, rootfs_name, TRUE,
-                       &self->rootfs_dfd, error))
+  if (!glnx_opendirat (self->workdir_dfd, rootfs_name, TRUE, &self->rootfs_dfd, error))
     return FALSE;
 
   rust::String next_version;
@@ -891,47 +892,51 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       /* let --add-metadata-string=version=... take precedence */
       !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
     {
-      const char *ver_prefix =
-        _rpmostree_jsonutil_object_require_string_member (self->treefile, "automatic-version-prefix", error);
+      const char *ver_prefix = _rpmostree_jsonutil_object_require_string_member (
+          self->treefile, "automatic-version-prefix", error);
       if (!ver_prefix)
         return FALSE;
       const char *ver_suffix = NULL;
-      if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "automatic-version-suffix", &ver_suffix, error))
+      if (!_rpmostree_jsonutil_object_get_optional_string_member (
+              self->treefile, "automatic-version-suffix", &ver_suffix, error))
         return FALSE;
 
       g_autofree char *last_version = NULL;
       if (self->previous_checksum)
         {
-          g_autoptr(GVariant) previous_commit = NULL;
+          g_autoptr (GVariant) previous_commit = NULL;
           if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
                                          self->previous_checksum, &previous_commit, error))
             return FALSE;
 
-          g_autoptr(GVariant) previous_metadata = g_variant_get_child_value (previous_commit, 0);
-          (void)g_variant_lookup (previous_metadata, OSTREE_COMMIT_META_KEY_VERSION, "s", &last_version);
+          g_autoptr (GVariant) previous_metadata = g_variant_get_child_value (previous_commit, 0);
+          (void)g_variant_lookup (previous_metadata, OSTREE_COMMIT_META_KEY_VERSION, "s",
+                                  &last_version);
         }
 
-      next_version = CXX_TRY_VAL(util_next_version (ver_prefix, ver_suffix ?: "", last_version ?: ""), error);
+      next_version = CXX_TRY_VAL (
+          util_next_version (ver_prefix, ver_suffix ?: "", last_version ?: ""), error);
       g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
-                           g_variant_ref_sink (g_variant_new_string (next_version.c_str())));
+                           g_variant_ref_sink (g_variant_new_string (next_version.c_str ())));
     }
   else
     {
       gpointer vp = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
-      auto v = static_cast<GVariant*>(vp);
+      auto v = static_cast<GVariant *> (vp);
       if (v)
         {
           g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
-          next_version = rust::String(static_cast<char*>(g_variant_dup_string (v, NULL)));
+          next_version = rust::String (static_cast<char *> (g_variant_dup_string (v, NULL)));
         }
     }
 
   /* Download rpm-md repos, packages, do install */
   g_autofree char *new_inputhash = NULL;
-  { gboolean unmodified = FALSE;
+  {
+    gboolean unmodified = FALSE;
 
-    if (!install_packages (self, opt_force_nocache ? NULL : &unmodified,
-                           &new_inputhash, cancellable, error))
+    if (!install_packages (self, opt_force_nocache ? NULL : &unmodified, &new_inputhash,
+                           cancellable, error))
       return FALSE;
 
     gboolean is_dry_run = opt_dry_run || (opt_download_only || opt_download_only_rpms);
@@ -956,15 +961,15 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       }
   }
 
-
   /* Optionally bind metadata from the libdnf context */
-  rpmostreecxx::RepoMetadataTarget repomd_target = (*self->treefile_rs)->get_repo_metadata_target();
+  rpmostreecxx::RepoMetadataTarget repomd_target
+      = (*self->treefile_rs)->get_repo_metadata_target ();
   if (repomd_target == rpmostreecxx::RepoMetadataTarget::Inline)
     {
       if (!g_hash_table_contains (self->metadata, "rpmostree.rpmmd-repos"))
         {
           g_hash_table_insert (self->metadata, g_strdup ("rpmostree.rpmmd-repos"),
-                              rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
+                               rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
         }
     }
   else if (repomd_target == rpmostreecxx::RepoMetadataTarget::Detached)
@@ -972,13 +977,13 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       if (!g_hash_table_contains (self->detached_metadata, "rpmostree.rpmmd-repos"))
         {
           g_hash_table_insert (self->detached_metadata, g_strdup ("rpmostree.rpmmd-repos"),
-                              rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
+                               rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
         }
     }
   else
     {
-      g_hash_table_remove(self->metadata, "rpmostree.rpmmd-repos");
-      g_hash_table_remove(self->detached_metadata, "rpmostree.rpmmd-repos");
+      g_hash_table_remove (self->metadata, "rpmostree.rpmmd-repos");
+      g_hash_table_remove (self->detached_metadata, "rpmostree.rpmmd-repos");
     }
 
   if (!inject_advisories (self, cancellable, error))
@@ -993,7 +998,9 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   /* Start postprocessing */
-  CXX_TRY(compose_postprocess(self->rootfs_dfd, **self->treefile_rs, next_version, self->unified_core_and_fuse), error);
+  CXX_TRY (compose_postprocess (self->rootfs_dfd, **self->treefile_rs, next_version,
+                                self->unified_core_and_fuse),
+           error);
 
   /* Until here, we targeted "rootfs.tmp" in the working directory. Most
    * user-configured postprocessing has run. Now, we need to perform required
@@ -1007,12 +1014,13 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
   if (!glnx_ensure_dir (self->workdir_dfd, final_rootfs_name, 0755, error))
     return FALSE;
-  { glnx_autofd int target_rootfs_dfd = -1;
-    if (!glnx_opendirat (self->workdir_dfd, final_rootfs_name, TRUE,
-                         &target_rootfs_dfd, error))
+  {
+    glnx_autofd int target_rootfs_dfd = -1;
+    if (!glnx_opendirat (self->workdir_dfd, final_rootfs_name, TRUE, &target_rootfs_dfd, error))
       return FALSE;
 
-    CXX_TRY(compose_prepare_rootfs(self->rootfs_dfd, target_rootfs_dfd, **self->treefile_rs), error);
+    CXX_TRY (compose_prepare_rootfs (self->rootfs_dfd, target_rootfs_dfd, **self->treefile_rs),
+             error);
 
     glnx_close_fd (&self->rootfs_dfd);
 
@@ -1033,34 +1041,33 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
 
 /* See canonical version of this in ot-builtin-pull.c */
 static void
-noninteractive_console_progress_changed (OstreeAsyncProgress *progress,
-                                         gpointer             user_data)
+noninteractive_console_progress_changed (OstreeAsyncProgress *progress, gpointer user_data)
 {
   /* We do nothing here - we just want the final status */
 }
 
 static gboolean
-pull_local_into_target_repo (OstreeRepo   *src_repo,
-                             OstreeRepo   *dest_repo,
-                             const char   *checksum,
-                             GCancellable *cancellable,
-                             GError      **error)
+pull_local_into_target_repo (OstreeRepo *src_repo, OstreeRepo *dest_repo, const char *checksum,
+                             GCancellable *cancellable, GError **error)
 {
   const char *refs[] = { checksum, NULL };
 
   /* really should enhance the pull API so we can just pass the src OstreeRepo directly */
-  g_autofree char *src_repo_uri =
-    g_strdup_printf ("file:///proc/self/fd/%d", ostree_repo_get_dfd (src_repo));
+  g_autofree char *src_repo_uri
+      = g_strdup_printf ("file:///proc/self/fd/%d", ostree_repo_get_dfd (src_repo));
 
-  g_auto(GLnxConsoleRef) console = { 0, };
+  g_auto (GLnxConsoleRef) console = {
+    0,
+  };
   glnx_console_lock (&console);
-  g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new_and_connect (
+  g_autoptr (OstreeAsyncProgress) progress = ostree_async_progress_new_and_connect (
       console.is_tty ? ostree_repo_pull_default_console_progress_changed
-                     : noninteractive_console_progress_changed, &console);
+                     : noninteractive_console_progress_changed,
+      &console);
 
   /* no fancy flags here, so just use the old school simpler API */
-  if (!ostree_repo_pull (dest_repo, src_repo_uri, (char**)refs, static_cast<OstreeRepoPullFlags>(0), progress,
-                         cancellable, error))
+  if (!ostree_repo_pull (dest_repo, src_repo_uri, (char **)refs,
+                         static_cast<OstreeRepoPullFlags> (0), progress, cancellable, error))
     return glnx_prefix_error (error, "Copying from build repo into target repo");
 
   if (!console.is_tty)
@@ -1076,16 +1083,16 @@ pull_local_into_target_repo (OstreeRepo   *src_repo,
 
 /* Perform required postprocessing, and invoke rpmostree_compose_commit(). */
 static gboolean
-impl_commit_tree (RpmOstreeTreeComposeContext *self,
-                  GCancellable    *cancellable,
-                  GError         **error)
+impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, GError **error)
 {
   const char *gpgkey = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "gpg-key", &gpgkey, error))
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "gpg-key", &gpgkey,
+                                                              error))
     return FALSE;
 
   gboolean selinux = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux, error))
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux,
+                                                               error))
     return FALSE;
 
   /* pick up any initramfs regeneration args to shove into the metadata */
@@ -1094,28 +1101,30 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     {
       GVariant *v = json_gvariant_deserialize (initramfs_args, "as", error);
       if (!v)
-       return FALSE;
+        return FALSE;
       g_hash_table_insert (self->metadata, g_strdup ("rpmostree.initramfs-args"),
                            g_variant_ref_sink (v));
     }
 
   /* Convert metadata hash tables to GVariants */
-  g_autoptr(GVariant) metadata = rpmostree_composeutil_finalize_metadata (self->metadata, self->rootfs_dfd, error);
+  g_autoptr (GVariant) metadata
+      = rpmostree_composeutil_finalize_metadata (self->metadata, self->rootfs_dfd, error);
   if (!metadata)
     return FALSE;
-  g_autoptr(GVariant) detached_metadata = rpmostree_composeutil_finalize_detached_metadata(self->detached_metadata);
+  g_autoptr (GVariant) detached_metadata
+      = rpmostree_composeutil_finalize_detached_metadata (self->detached_metadata);
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (self->rootfs_dfd,
-                                    self->treefile, self->unified_core_and_fuse,
+  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, self->unified_core_and_fuse,
                                     cancellable, error))
     return FALSE;
 
   if (self->treefile_rs)
     {
-      auto previous_rev = self->previous_checksum?: "";
-      CXX_TRY(check_passwd_group_entries (*self->repo, self->rootfs_dfd,
-                                          **self->treefile_rs, previous_rev), error);
+      auto previous_rev = self->previous_checksum ?: "";
+      CXX_TRY (check_passwd_group_entries (*self->repo, self->rootfs_dfd, **self->treefile_rs,
+                                           previous_rev),
+               error);
     }
 
   /* See comment above */
@@ -1127,7 +1136,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     g_print ("Network filesystem detected for repo; disabling transaction\n");
   const gboolean use_txn = !(txn_explicitly_disabled || using_netfs);
 
-  g_autoptr(OstreeRepoAutoLock) lock = NULL;
+  g_autoptr (OstreeRepoAutoLock) lock = NULL;
   if (use_txn)
     {
       if (!ostree_repo_prepare_transaction (self->build_repo, NULL, cancellable, error))
@@ -1136,7 +1145,8 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   else
     {
       /* if we're not using transactions, then get a shared lock ourselves */
-      lock = ostree_repo_auto_lock_push (self->build_repo, OSTREE_REPO_LOCK_SHARED, cancellable, error);
+      lock = ostree_repo_auto_lock_push (self->build_repo, OSTREE_REPO_LOCK_SHARED, cancellable,
+                                         error);
       if (!lock)
         return FALSE;
     }
@@ -1155,13 +1165,15 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
-  if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision,
-                                 metadata, detached_metadata, gpgkey, selinux,
-                                 self->devino_cache, &new_revision, cancellable, error))
+  if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision, metadata,
+                                 detached_metadata, gpgkey, selinux, self->devino_cache,
+                                 &new_revision, cancellable, error))
     return glnx_prefix_error (error, "Writing commit");
-  g_assert(new_revision != NULL);
+  g_assert (new_revision != NULL);
 
-  OstreeRepoTransactionStats stats = { 0, };
+  OstreeRepoTransactionStats stats = {
+    0,
+  };
   OstreeRepoTransactionStats *statsp = NULL;
 
   if (use_txn)
@@ -1179,12 +1191,12 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
       /* Now we actually pull it into the target repo specified by the user */
       g_assert (self->repo != self->build_repo);
 
-      if (!pull_local_into_target_repo (self->build_repo, self->repo, new_revision,
-                                        cancellable, error))
+      if (!pull_local_into_target_repo (self->build_repo, self->repo, new_revision, cancellable,
+                                        error))
         return FALSE;
     }
 
-  g_autoptr(GVariant) new_commit = NULL;
+  g_autoptr (GVariant) new_commit = NULL;
   if (!ostree_repo_load_commit (self->repo, new_revision, &new_commit, NULL, error))
     return FALSE;
 
@@ -1193,8 +1205,8 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   if (self->ref && !opt_write_commitid_to)
     {
       new_ref = self->ref;
-      if (!ostree_repo_set_ref_immediate (self->repo, NULL, self->ref, new_revision,
-                                          cancellable, error))
+      if (!ostree_repo_set_ref_immediate (self->repo, NULL, self->ref, new_revision, cancellable,
+                                          error))
         return FALSE;
       g_print ("%s => %s\n", self->ref, new_revision);
     }
@@ -1203,50 +1215,41 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   /* Optionally write a JSON summary of this compose-commit run */
   if (opt_write_composejson_to)
-    if (!rpmostree_composeutil_write_composejson (self->repo,
-                                                  opt_write_composejson_to, statsp,
-                                                  new_revision, new_commit, new_ref,
-                                                  cancellable, error))
+    if (!rpmostree_composeutil_write_composejson (self->repo, opt_write_composejson_to, statsp,
+                                                  new_revision, new_commit, new_ref, cancellable,
+                                                  error))
       return glnx_prefix_error (error, "Failed to write composejson");
 
   if (opt_write_commitid_to)
-    CXX_TRY(write_commit_id(opt_write_commitid_to, new_revision), error);
+    CXX_TRY (write_commit_id (opt_write_commitid_to, new_revision), error);
 
   return TRUE;
 }
 
 gboolean
-rpmostree_compose_builtin_install (int             argc,
-                                   char          **argv,
-                                   RpmOstreeCommandInvocation *invocation,
-                                   GCancellable   *cancellable,
-                                   GError        **error)
+rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                   GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE DESTDIR");
+  g_autoptr (GOptionContext) context = g_option_context_new ("TREEFILE DESTDIR");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
   g_option_context_add_main_entries (context, repo_option_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       install_option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL,
-                                       error))
+  if (!rpmostree_option_context_parse (context, install_option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, NULL, error))
     return FALSE;
 
   if (argc != 3)
-   {
+    {
       rpmostree_usage_error (context, "TREEFILE and DESTDIR required", error);
       return FALSE;
     }
 
   const char *treefile_path = argv[1];
-  auto basearch = rpmostreecxx::get_rpm_basearch();
+  auto basearch = rpmostreecxx::get_rpm_basearch ();
 
   if (opt_print_only)
     {
-      auto treefile = CXX_TRY_VAL(treefile_new (treefile_path, basearch, -1), error);
+      auto treefile = CXX_TRY_VAL (treefile_new (treefile_path, basearch, -1), error);
       treefile->prettyprint_json_stdout ();
       return TRUE;
     }
@@ -1267,26 +1270,29 @@ rpmostree_compose_builtin_install (int             argc,
   const char *destdir = argv[2];
   opt_workdir = g_strdup (destdir);
 
-  g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
+  g_autoptr (RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
   /* Need to handle both GError and C++ exceptions here */
-  try {
-    if (!impl_install_tree (self, &changed, cancellable, error))
-      {
-        self->failed = TRUE;
-        return FALSE;
-      }
-  } catch (std::exception &e) {
-    self->failed = TRUE;
-    throw;
-  }
+  try
+    {
+      if (!impl_install_tree (self, &changed, cancellable, error))
+        {
+          self->failed = TRUE;
+          return FALSE;
+        }
+    }
+  catch (std::exception &e)
+    {
+      self->failed = TRUE;
+      throw;
+    }
   if (opt_unified_core)
     {
-      if (!glnx_renameat (self->workdir_tmp.src_dfd, self->workdir_tmp.path,
-                          AT_FDCWD, destdir, error))
+      if (!glnx_renameat (self->workdir_tmp.src_dfd, self->workdir_tmp.path, AT_FDCWD, destdir,
+                          error))
         return FALSE;
       glnx_tmpdir_unset (&self->workdir_tmp);
       self->workdir_dfd = -1;
@@ -1297,22 +1303,15 @@ rpmostree_compose_builtin_install (int             argc,
 }
 
 gboolean
-rpmostree_compose_builtin_postprocess (int             argc,
-                                       char          **argv,
+rpmostree_compose_builtin_postprocess (int argc, char **argv,
                                        RpmOstreeCommandInvocation *invocation,
-                                       GCancellable   *cancellable,
-                                       GError        **error)
+                                       GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("ROOTFS [TREEFILE]");
+  g_autoptr (GOptionContext) context = g_option_context_new ("ROOTFS [TREEFILE]");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       postprocess_option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL,
-                                       error))
+  if (!rpmostree_option_context_parse (context, postprocess_option_entries, &argc, &argv,
+                                       invocation, cancellable, NULL, NULL, NULL, error))
     return FALSE;
 
   if (argc < 2 || argc > 3)
@@ -1330,16 +1329,19 @@ rpmostree_compose_builtin_postprocess (int             argc,
   const char *treefile_path = argc > 2 ? argv[2] : NULL;
   glnx_unref_object JsonParser *treefile_parser = NULL;
   JsonObject *treefile = NULL; /* Owned by parser */
-  g_auto(GLnxTmpDir) workdir_tmp = { 0, };
+  g_auto (GLnxTmpDir) workdir_tmp = {
+    0,
+  };
 
   if (treefile_path)
     {
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
         return FALSE;
-      auto treefile_rs = CXX_TRY_VAL(treefile_new_compose(treefile_path, "", workdir_tmp.fd), error);
-      auto serialized = treefile_rs->get_json_string();
+      auto treefile_rs
+          = CXX_TRY_VAL (treefile_new_compose (treefile_path, "", workdir_tmp.fd), error);
+      auto serialized = treefile_rs->get_json_string ();
       treefile_parser = json_parser_new ();
-      if (!json_parser_load_from_data (treefile_parser, serialized.c_str(), -1, error))
+      if (!json_parser_load_from_data (treefile_parser, serialized.c_str (), -1, error))
         return FALSE;
 
       JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
@@ -1353,30 +1355,21 @@ rpmostree_compose_builtin_postprocess (int             argc,
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_unified_core,
-                                    cancellable, error))
+  if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_unified_core, cancellable, error))
     return FALSE;
   return TRUE;
 }
 
 gboolean
-rpmostree_compose_builtin_commit (int             argc,
-                                  char          **argv,
-                                  RpmOstreeCommandInvocation *invocation,
-                                  GCancellable   *cancellable,
-                                  GError        **error)
+rpmostree_compose_builtin_commit (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                  GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE ROOTFS");
+  g_autoptr (GOptionContext) context = g_option_context_new ("TREEFILE ROOTFS");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
   g_option_context_add_main_entries (context, repo_option_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       commit_option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL,
-                                       error))
+  if (!rpmostree_option_context_parse (context, commit_option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, NULL, error))
     return FALSE;
 
   if (argc < 2)
@@ -1393,38 +1386,30 @@ rpmostree_compose_builtin_commit (int             argc,
 
   const char *treefile_path = argv[1];
   const char *rootfs_path = argv[2];
-  auto basearch = rpmostreecxx::get_rpm_basearch();
+  auto basearch = rpmostreecxx::get_rpm_basearch ();
 
-  g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
+  g_autoptr (RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
     return FALSE;
   if (!glnx_opendirat (AT_FDCWD, rootfs_path, TRUE, &self->rootfs_dfd, error))
     return FALSE;
   if (!impl_commit_tree (self, cancellable, error))
-     return FALSE;
+    return FALSE;
   return TRUE;
 }
 
 gboolean
-rpmostree_compose_builtin_tree (int             argc,
-                                char          **argv,
-                                RpmOstreeCommandInvocation *invocation,
-                                GCancellable   *cancellable,
-                                GError        **error)
+rpmostree_compose_builtin_tree (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE");
+  g_autoptr (GOptionContext) context = g_option_context_new ("TREEFILE");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
   g_option_context_add_main_entries (context, repo_option_entries, NULL);
   g_option_context_add_main_entries (context, install_option_entries, NULL);
   g_option_context_add_main_entries (context, postprocess_option_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       commit_option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL,
-                                       error))
+  if (!rpmostree_option_context_parse (context, commit_option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, NULL, error))
     return FALSE;
 
   if (argc < 2)
@@ -1434,11 +1419,11 @@ rpmostree_compose_builtin_tree (int             argc,
     }
 
   const char *treefile_path = argv[1];
-  auto basearch = rpmostreecxx::get_rpm_basearch();
+  auto basearch = rpmostreecxx::get_rpm_basearch ();
 
   if (opt_print_only)
     {
-      auto treefile = CXX_TRY_VAL(treefile_new (treefile_path, basearch, -1), error);
+      auto treefile = CXX_TRY_VAL (treefile_new (treefile_path, basearch, -1), error);
       treefile->prettyprint_json_stdout ();
       return TRUE;
     }
@@ -1449,22 +1434,25 @@ rpmostree_compose_builtin_tree (int             argc,
       return FALSE;
     }
 
-  g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
+  g_autoptr (RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
   /* Need to handle both GError and C++ exceptions here */
-  try {
-    if (!impl_install_tree (self, &changed, cancellable, error))
-      {
-        self->failed = TRUE;
-        return FALSE;
-      }
-  } catch (std::exception &e) {
-    self->failed = TRUE;
-    throw;
-  }
+  try
+    {
+      if (!impl_install_tree (self, &changed, cancellable, error))
+        {
+          self->failed = TRUE;
+          return FALSE;
+        }
+    }
+  catch (std::exception &e)
+    {
+      self->failed = TRUE;
+      throw;
+    }
   if (changed)
     {
       /* Do the ostree commit */
@@ -1478,29 +1466,20 @@ rpmostree_compose_builtin_tree (int             argc,
         return FALSE;
     }
 
-
   return TRUE;
 }
 
 gboolean
-rpmostree_compose_builtin_extensions (int             argc,
-                                      char          **argv,
-                                      RpmOstreeCommandInvocation *invocation,
-                                      GCancellable   *cancellable,
-                                      GError        **error)
+rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                      GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE EXTYAML");
+  g_autoptr (GOptionContext) context = g_option_context_new ("TREEFILE EXTYAML");
   g_option_context_add_main_entries (context, common_option_entries, NULL);
   g_option_context_add_main_entries (context, repo_option_entries, NULL);
   g_option_context_add_main_entries (context, extensions_option_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       NULL,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL,
-                                       error))
+  if (!rpmostree_option_context_parse (context, NULL, &argc, &argv, invocation, cancellable, NULL,
+                                       NULL, NULL, error))
     return FALSE;
 
   if (argc < 3)
@@ -1523,22 +1502,24 @@ rpmostree_compose_builtin_extensions (int             argc,
   const char *extensions_path = argv[2];
 
   auto basearch = rpmostreecxx::get_rpm_basearch ();
-  auto src_treefile = CXX_TRY_VAL(treefile_new_compose(treefile_path, basearch, -1), error);
+  auto src_treefile = CXX_TRY_VAL (treefile_new_compose (treefile_path, basearch, -1), error);
 
-  g_autoptr(OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
+  g_autoptr (OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!repo)
     return FALSE;
 
   if (!opt_extensions_base_rev)
     {
-      auto treeref = src_treefile->get_ostree_ref();
-      if (treeref.length() == 0)
+      auto treeref = src_treefile->get_ostree_ref ();
+      if (treeref.length () == 0)
         return glnx_throw (error, "--base-rev not specified and treefile doesn't have a ref");
-      opt_extensions_base_rev = g_strdup(treeref.c_str());
+      opt_extensions_base_rev = g_strdup (treeref.c_str ());
     }
 
   /* this is a similar construction to what's in rpm_ostree_compose_context_new() */
-  g_auto(GLnxTmpDir) cachedir_tmp = { 0, };
+  g_auto (GLnxTmpDir) cachedir_tmp = {
+    0,
+  };
   glnx_autofd int cachedir_dfd = -1;
   if (opt_cachedir)
     {
@@ -1547,8 +1528,7 @@ rpmostree_compose_builtin_extensions (int             argc,
     }
   else
     {
-      if (!glnx_mkdtempat (ostree_repo_get_dfd (repo),
-                           "tmp/rpm-ostree-compose.XXXXXX", 0700,
+      if (!glnx_mkdtempat (ostree_repo_get_dfd (repo), "tmp/rpm-ostree-compose.XXXXXX", 0700,
                            &cachedir_tmp, error))
         return FALSE;
 
@@ -1561,37 +1541,40 @@ rpmostree_compose_builtin_extensions (int             argc,
   if (!ostree_repo_resolve_rev (repo, opt_extensions_base_rev, FALSE, &base_rev, error))
     return FALSE;
 
-  g_autoptr(GVariant) commit = NULL;
+  g_autoptr (GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, base_rev, &commit, NULL, error))
     return FALSE;
 
-  g_autoptr(GPtrArray) packages =
-      rpm_ostree_db_query_all (repo, opt_extensions_base_rev, cancellable, error);
+  g_autoptr (GPtrArray) packages
+      = rpm_ostree_db_query_all (repo, opt_extensions_base_rev, cancellable, error);
   if (!packages)
-      return FALSE;
+    return FALSE;
 
-  auto packages_mapping = std::make_unique<rust::Vec<rpmostreecxx::StringMapping>>();
+  auto packages_mapping = std::make_unique<rust::Vec<rpmostreecxx::StringMapping> > ();
   for (guint i = 0; i < packages->len; i++)
     {
-      RpmOstreePackage *pkg = (RpmOstreePackage*)packages->pdata[i];
+      RpmOstreePackage *pkg = (RpmOstreePackage *)packages->pdata[i];
       const char *name = rpm_ostree_package_get_name (pkg);
       const char *evr = rpm_ostree_package_get_evr (pkg);
-      packages_mapping->push_back(rpmostreecxx::StringMapping{name, evr});
+      packages_mapping->push_back (rpmostreecxx::StringMapping{ name, evr });
     }
 
-  auto extensions = CXX_TRY_VAL(extensions_load (extensions_path, basearch, *packages_mapping), error);
+  auto extensions
+      = CXX_TRY_VAL (extensions_load (extensions_path, basearch, *packages_mapping), error);
 
   // This treefile basically tells the core to download the extension packages
   // from the repos, and that's it.
-  auto extension_tf = extensions->generate_treefile(*src_treefile);
+  auto extension_tf = extensions->generate_treefile (*src_treefile);
 
   // notice we don't use a pkgcache repo here like in the treecompose path: we
   // want RPMs, so having them already imported isn't useful to us (and anyway,
   // for OS extensions by definition they're not expected to be cached since
   // they're not in the base tree)
-  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_compose (cachedir_dfd, repo, *extension_tf);
+  g_autoptr (RpmOstreeContext) ctx
+      = rpmostree_context_new_compose (cachedir_dfd, repo, *extension_tf);
 
-  { int tf_dfd = src_treefile->get_workdir();
+  {
+    int tf_dfd = src_treefile->get_workdir ();
     g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
     dnf_context_set_repo_dir (rpmostree_context_get_dnf (ctx), abs_tf_path);
   }
@@ -1603,8 +1586,8 @@ rpmostree_compose_builtin_extensions (int             argc,
 
   g_print ("Checking out %.7s... ", base_rev);
   OstreeRepoCheckoutAtOptions opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_USER };
-  if (!ostree_repo_checkout_at (repo, &opts, cachedir_dfd, TMP_EXTENSIONS_ROOTFS,
-                                base_rev, cancellable, error))
+  if (!ostree_repo_checkout_at (repo, &opts, cachedir_dfd, TMP_EXTENSIONS_ROOTFS, base_rev,
+                                cancellable, error))
     return FALSE;
   g_print ("done!\n");
 
@@ -1637,15 +1620,16 @@ rpmostree_compose_builtin_extensions (int             argc,
   if (!rpmostree_context_download (ctx, cancellable, error))
     return FALSE;
 
-  g_autoptr(GPtrArray) extensions_pkgs = rpmostree_context_get_packages (ctx);
+  g_autoptr (GPtrArray) extensions_pkgs = rpmostree_context_get_packages (ctx);
   for (guint i = 0; i < extensions_pkgs->len; i++)
     {
-      DnfPackage *pkg = (DnfPackage*)extensions_pkgs->pdata[i];
+      DnfPackage *pkg = (DnfPackage *)extensions_pkgs->pdata[i];
       const char *src = dnf_package_get_filename (pkg);
       const char *basename = glnx_basename (src);
-      GLnxFileCopyFlags flags = static_cast<GLnxFileCopyFlags>(GLNX_FILE_COPY_NOXATTRS | GLNX_FILE_COPY_NOCHOWN);
-      if (!glnx_file_copy_at (AT_FDCWD, dnf_package_get_filename (pkg), NULL, output_dfd,
-                              basename, flags, cancellable, error))
+      GLnxFileCopyFlags flags
+          = static_cast<GLnxFileCopyFlags> (GLNX_FILE_COPY_NOXATTRS | GLNX_FILE_COPY_NOCHOWN);
+      if (!glnx_file_copy_at (AT_FDCWD, dnf_package_get_filename (pkg), NULL, output_dfd, basename,
+                              flags, cancellable, error))
         return FALSE;
     }
 
@@ -1659,15 +1643,14 @@ rpmostree_compose_builtin_extensions (int             argc,
   /* disable the system repo; we always want to download, even if already in the base */
   dnf_sack_repo_enabled (sack, HY_SYSTEM_REPO_NAME, 0);
 
-  auto pkgs = extensions->get_development_packages();
-  g_autoptr(GPtrArray) devel_pkgs_to_download =
-    g_ptr_array_new_with_free_func (g_object_unref);
-  for (auto & pkg : pkgs)
+  auto pkgs = extensions->get_development_packages ();
+  g_autoptr (GPtrArray) devel_pkgs_to_download = g_ptr_array_new_with_free_func (g_object_unref);
+  for (auto &pkg : pkgs)
     {
-      g_autoptr(GPtrArray) matches = rpmostree_get_matching_packages (sack, pkg.c_str());
+      g_autoptr (GPtrArray) matches = rpmostree_get_matching_packages (sack, pkg.c_str ());
       if (matches->len == 0)
-        return glnx_throw (error, "Package %s not found", pkg.c_str());
-      DnfPackage *found_pkg = (DnfPackage*)matches->pdata[0];
+        return glnx_throw (error, "Package %s not found", pkg.c_str ());
+      DnfPackage *found_pkg = (DnfPackage *)matches->pdata[0];
       g_ptr_array_add (devel_pkgs_to_download, g_object_ref (found_pkg));
     }
 
@@ -1678,12 +1661,13 @@ rpmostree_compose_builtin_extensions (int             argc,
 
   for (guint i = 0; i < devel_pkgs_to_download->len; i++)
     {
-      DnfPackage *pkg = (DnfPackage*)devel_pkgs_to_download->pdata[i];
+      DnfPackage *pkg = (DnfPackage *)devel_pkgs_to_download->pdata[i];
       const char *src = dnf_package_get_filename (pkg);
       const char *basename = glnx_basename (src);
-      GLnxFileCopyFlags flags = static_cast<GLnxFileCopyFlags>(GLNX_FILE_COPY_NOXATTRS | GLNX_FILE_COPY_NOCHOWN);
-      if (!glnx_file_copy_at (AT_FDCWD, dnf_package_get_filename (pkg), NULL, output_dfd,
-                              basename, flags, cancellable, error))
+      GLnxFileCopyFlags flags
+          = static_cast<GLnxFileCopyFlags> (GLNX_FILE_COPY_NOXATTRS | GLNX_FILE_COPY_NOCHOWN);
+      if (!glnx_file_copy_at (AT_FDCWD, dnf_package_get_filename (pkg), NULL, output_dfd, basename,
+                              flags, cancellable, error))
         return FALSE;
     }
 

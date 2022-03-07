@@ -20,43 +20,39 @@
 
 #include "config.h"
 
-#include <signal.h>
-#include <sys/socket.h>
-#include <sys/prctl.h>
 #include <err.h>
+#include <signal.h>
+#include <sys/prctl.h>
+#include <sys/socket.h>
 #include <systemd/sd-login.h>
-#include <utility>
 #include <unistd.h>
+#include <utility>
 
 #include <glib-unix.h>
 #include <libglnx.h>
 
-#include "rpmostree-types.h"
-#include "rpmostree-clientlib.h"
 #include "rpmostree-builtins.h"
-#include "rpmostree-libbuiltin.h"
-#include "rpmostree-util.h"
-#include "rpmostree-rpm-util.h"
+#include "rpmostree-clientlib.h"
 #include "rpmostree-cxxrs.h"
+#include "rpmostree-libbuiltin.h"
+#include "rpmostree-rpm-util.h"
+#include "rpmostree-types.h"
+#include "rpmostree-util.h"
 #include "rpmostreed-transaction-types.h"
 
-static gboolean
-impl_transaction_get_response_sync (GDBusConnection *connection,
-                                    const char *transaction_address,
-                                    GCancellable *cancellable,
-                                    GError **error);
+static gboolean impl_transaction_get_response_sync (GDBusConnection *connection,
+                                                    const char *transaction_address,
+                                                    GCancellable *cancellable, GError **error);
 
 #define RPMOSTREE_CLI_ID "cli"
 
 /* Used to close race conditions by ensuring the daemon status is up-to-date */
 static void
-on_reload_done (GObject      *src,
-                GAsyncResult *res,
-                gpointer      user_data)
+on_reload_done (GObject *src, GAsyncResult *res, gpointer user_data)
 {
-  auto donep = static_cast<gboolean *>(user_data);
+  auto donep = static_cast<gboolean *> (user_data);
   *donep = TRUE;
-  (void) rpmostree_sysroot_call_reload_finish ((RPMOSTreeSysroot*)src, res, NULL);
+  (void)rpmostree_sysroot_call_reload_finish ((RPMOSTreeSysroot *)src, res, NULL);
 }
 
 /* This is an async call so that gdbus handles signals for changed
@@ -70,21 +66,19 @@ await_reload_sync (RPMOSTreeSysroot *sysroot_proxy)
     g_main_context_iteration (NULL, TRUE);
 }
 
-/* Connect via DBus and register as a client to rpm-ostreed, 
+/* Connect via DBus and register as a client to rpm-ostreed,
  * with a retry loop in case the daemon
  * is in the process of auto-exiting.
  */
 static gboolean
-app_load_sysroot_impl (const char       *sysroot,
-                       GCancellable *cancellable, 
-                       GDBusConnection **out_conn,
+app_load_sysroot_impl (const char *sysroot, GCancellable *cancellable, GDBusConnection **out_conn,
                        GError **error)
 {
   const char *bus_name = NULL;
 
-  CXX_TRY(client_start_daemon(), error);
+  CXX_TRY (client_start_daemon (), error);
 
-  g_autoptr(GDBusConnection) connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
+  g_autoptr (GDBusConnection) connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
   if (!connection)
     return glnx_prefix_error (error, "Connecting to system bus");
 
@@ -116,21 +110,17 @@ app_load_sysroot_impl (const char       *sysroot,
   static const char sysroot_objpath[] = "/org/projectatomic/rpmostree1/Sysroot";
   while (should_register)
     {
-      g_autoptr(GError) local_error = NULL;
-      g_autoptr(GVariantBuilder) options_builder =
-        g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+      g_autoptr (GError) local_error = NULL;
+      g_autoptr (GVariantBuilder) options_builder
+          = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
       const char *clientid = g_getenv ("RPMOSTREE_CLIENT_ID") ?: RPMOSTREE_CLI_ID;
       g_variant_builder_add (options_builder, "{sv}", "id", g_variant_new_string (clientid));
-      g_autoptr(GVariant) res =
-        g_dbus_connection_call_sync (connection, bus_name, sysroot_objpath,
-                                     "org.projectatomic.rpmostree1.Sysroot",
-                                     "RegisterClient",
-                                     g_variant_new ("(@a{sv})", g_variant_builder_end (options_builder)),
-                                     (GVariantType*)"()",
-                                     G_DBUS_CALL_FLAGS_NONE, -1,
-                                     cancellable, &local_error);
+      g_autoptr (GVariant) res = g_dbus_connection_call_sync (
+          connection, bus_name, sysroot_objpath, "org.projectatomic.rpmostree1.Sysroot",
+          "RegisterClient", g_variant_new ("(@a{sv})", g_variant_builder_end (options_builder)),
+          (GVariantType *)"()", G_DBUS_CALL_FLAGS_NONE, -1, cancellable, &local_error);
       if (res)
-        break;  /* Success! */
+        break; /* Success! */
 
       if (g_dbus_error_is_remote_error (local_error))
         {
@@ -148,58 +138,57 @@ app_load_sysroot_impl (const char       *sysroot,
       return FALSE;
     }
 
-  *out_conn = util::move_nullify(connection);
+  *out_conn = util::move_nullify (connection);
   return TRUE;
 }
 
-namespace rpmostreecxx {
+namespace rpmostreecxx
+{
 
 std::unique_ptr<ClientConnection>
-new_client_connection()
+new_client_connection ()
 {
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   GDBusConnection *conn = NULL;
 
-  if (!app_load_sysroot_impl("/", NULL, &conn, &local_error))
-    util::throw_gerror(local_error);
-  return std::make_unique<ClientConnection>(conn);
+  if (!app_load_sysroot_impl ("/", NULL, &conn, &local_error))
+    util::throw_gerror (local_error);
+  return std::make_unique<ClientConnection> (conn);
 }
 
 // Connect to a transaction DBus and monitor its progress synchronously,
 // printing output to stdout.  Add a signal handler for SIGINT to cancel
 // the transaction.
-void 
-ClientConnection::transaction_connect_progress_sync(const rust::Str address) const
+void
+ClientConnection::transaction_connect_progress_sync (const rust::Str address) const
 {
-  g_autoptr(GError) local_error = NULL;
-  g_autoptr(GCancellable) cancellable = g_cancellable_new();
-  auto address_c = g_strndup(address.data(), address.length());
+  g_autoptr (GError) local_error = NULL;
+  g_autoptr (GCancellable) cancellable = g_cancellable_new ();
+  auto address_c = g_strndup (address.data (), address.length ());
   if (!impl_transaction_get_response_sync (conn, address_c, cancellable, &local_error))
     {
       // In this case the caller doesn't care about the remote exception; we never
       // try to match on it.
       g_dbus_error_strip_remote_error (local_error);
-      util::throw_gerror(local_error);
+      util::throw_gerror (local_error);
     }
 }
 
 } // namespace
 
 /**
-* rpmostree_load_sysroot
-* @cancellable: A GCancellable
-* @out_sysroot: (out) Return location for sysroot
-* @error: A pointer to a GError pointer.
-*
-* Returns: True on success
-**/
+ * rpmostree_load_sysroot
+ * @cancellable: A GCancellable
+ * @out_sysroot: (out) Return location for sysroot
+ * @error: A pointer to a GError pointer.
+ *
+ * Returns: True on success
+ **/
 gboolean
-rpmostree_load_sysroot (const char        *sysroot, 
-                        GCancellable      *cancellable,
-                        RPMOSTreeSysroot **out_sysroot_proxy,
-                        GError           **error)
+rpmostree_load_sysroot (const char *sysroot, GCancellable *cancellable,
+                        RPMOSTreeSysroot **out_sysroot_proxy, GError **error)
 {
-  g_autoptr(GDBusConnection) connection = NULL;
+  g_autoptr (GDBusConnection) connection = NULL;
 
   if (!app_load_sysroot_impl (sysroot, cancellable, &connection, error))
     return FALSE;
@@ -208,10 +197,9 @@ rpmostree_load_sysroot (const char        *sysroot,
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
 
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy =
-    rpmostree_sysroot_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_NONE,
-                                      bus_name, "/org/projectatomic/rpmostree1/Sysroot",
-                                      NULL, error);
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy
+      = rpmostree_sysroot_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_NONE, bus_name,
+                                          "/org/projectatomic/rpmostree1/Sysroot", NULL, error);
   if (sysroot_proxy == NULL)
     return FALSE;
 
@@ -223,12 +211,9 @@ rpmostree_load_sysroot (const char        *sysroot,
 }
 
 gboolean
-rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
-                           const char *opt_osname,
-                           GCancellable *cancellable,
-                           RPMOSTreeOS **out_os_proxy,
-                           RPMOSTreeOSExperimental **out_osexperimental_proxy,
-                           GError **error)
+rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy, const char *opt_osname,
+                           GCancellable *cancellable, RPMOSTreeOS **out_os_proxy,
+                           RPMOSTreeOSExperimental **out_osexperimental_proxy, GError **error)
 {
   g_autofree char *os_object_path = NULL;
   if (opt_osname == NULL)
@@ -242,11 +227,8 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
       if (!opt_osname)
         opt_osname = "";
 
-      if (!rpmostree_sysroot_call_get_os_sync (sysroot_proxy,
-                                               opt_osname,
-                                               &os_object_path,
-                                               cancellable,
-                                               error))
+      if (!rpmostree_sysroot_call_get_os_sync (sysroot_proxy, opt_osname, &os_object_path,
+                                               cancellable, error))
         return FALSE;
     }
 
@@ -256,26 +238,16 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
 
-  glnx_unref_object RPMOSTreeOS *os_proxy =
-    rpmostree_os_proxy_new_sync (connection,
-                                 G_DBUS_PROXY_FLAGS_NONE,
-                                 bus_name,
-                                 os_object_path,
-                                 cancellable,
-                                 error);
+  glnx_unref_object RPMOSTreeOS *os_proxy = rpmostree_os_proxy_new_sync (
+      connection, G_DBUS_PROXY_FLAGS_NONE, bus_name, os_object_path, cancellable, error);
   if (os_proxy == NULL)
     return FALSE;
 
   glnx_unref_object RPMOSTreeOSExperimental *ret_osexperimental_proxy = NULL;
   if (out_osexperimental_proxy)
     {
-      ret_osexperimental_proxy =
-        rpmostree_osexperimental_proxy_new_sync (connection,
-                                                 G_DBUS_PROXY_FLAGS_NONE,
-                                                 bus_name,
-                                                 os_object_path,
-                                                 cancellable,
-                                                 error);
+      ret_osexperimental_proxy = rpmostree_osexperimental_proxy_new_sync (
+          connection, G_DBUS_PROXY_FLAGS_NONE, bus_name, os_object_path, cancellable, error);
       if (!ret_osexperimental_proxy)
         return FALSE;
     }
@@ -287,14 +259,11 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
 }
 
 gboolean
-rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
-                         gchar *opt_osname,
-                         GCancellable *cancellable,
-                         RPMOSTreeOS **out_os_proxy,
-                         GError **error)
+rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy, gchar *opt_osname,
+                         GCancellable *cancellable, RPMOSTreeOS **out_os_proxy, GError **error)
 {
-  return rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable,
-                                    out_os_proxy, NULL, error);
+  return rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable, out_os_proxy, NULL,
+                                    error);
 }
 
 typedef struct
@@ -304,7 +273,6 @@ typedef struct
   GMainLoop *loop;
   gboolean complete;
 } TransactionProgress;
-
 
 static TransactionProgress *
 transaction_progress_new (void)
@@ -329,20 +297,17 @@ transaction_progress_end (TransactionProgress *self)
 {
   if (self->progress)
     {
-      rpmostreecxx::console_progress_end(rust::Str());
+      rpmostreecxx::console_progress_end (rust::Str ());
       self->progress = FALSE;
     }
   g_main_loop_quit (self->loop);
 }
 
 static void
-on_transaction_progress (GDBusProxy *proxy,
-                         gchar *sender_name,
-                         gchar *signal_name,
-                         GVariant *parameters,
-                         gpointer user_data)
+on_transaction_progress (GDBusProxy *proxy, gchar *sender_name, gchar *signal_name,
+                         GVariant *parameters, gpointer user_data)
 {
-  auto tp = static_cast<TransactionProgress *>(user_data);
+  auto tp = static_cast<TransactionProgress *> (user_data);
 
   if (g_strcmp0 (signal_name, "SignatureProgress") == 0)
     {
@@ -380,7 +345,7 @@ on_transaction_progress (GDBusProxy *proxy,
       if (tp->progress)
         {
           g_assert (tp->progress);
-          rpmostreecxx::console_progress_end (rust::Str());
+          rpmostreecxx::console_progress_end (rust::Str ());
           tp->progress = FALSE;
         }
     }
@@ -399,14 +364,14 @@ on_transaction_progress (GDBusProxy *proxy,
     }
   else if (g_strcmp0 (signal_name, "DownloadProgress") == 0)
     {
-      auto line = rpmostreecxx::client_render_download_progress(*parameters);
+      auto line = rpmostreecxx::client_render_download_progress (*parameters);
       if (!tp->progress)
         {
           tp->progress = TRUE;
-          rpmostreecxx::console_progress_begin_task (line.c_str());
+          rpmostreecxx::console_progress_begin_task (line.c_str ());
         }
       else
-        rpmostreecxx::console_progress_set_message (line.c_str());
+        rpmostreecxx::console_progress_set_message (line.c_str ());
     }
   else if (g_strcmp0 (signal_name, "Finished") == 0)
     {
@@ -419,8 +384,8 @@ on_transaction_progress (GDBusProxy *proxy,
 
           if (!success)
             {
-              tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
-                                                           error_message);
+              tp->error = g_dbus_error_new_for_dbus_error (
+                  "org.projectatomic.rpmostreed.Error.Failed", error_message);
             }
         }
 
@@ -429,14 +394,12 @@ on_transaction_progress (GDBusProxy *proxy,
 }
 
 static void
-on_owner_changed (GObject    *object,
-                  GParamSpec *pspec,
-                  gpointer    user_data)
+on_owner_changed (GObject *object, GParamSpec *pspec, gpointer user_data)
 {
   /* Owner shouldn't change during a transaction
    * that messes with notifications, abort, abort.
    */
-  auto tp = static_cast<TransactionProgress *>(user_data);
+  auto tp = static_cast<TransactionProgress *> (user_data);
   tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
                                                "Bus owner changed, aborting. This likely "
                                                "means the daemon crashed; check logs with "
@@ -445,17 +408,16 @@ on_owner_changed (GObject    *object,
 }
 
 static void
-cancelled_handler (GCancellable *cancellable,
-                   gpointer user_data)
+cancelled_handler (GCancellable *cancellable, gpointer user_data)
 {
-  auto transaction = static_cast<RPMOSTreeTransaction*>(user_data);
+  auto transaction = static_cast<RPMOSTreeTransaction *> (user_data);
   rpmostree_transaction_call_cancel_sync (transaction, NULL, NULL);
 }
 
 static gboolean
 on_sigint (gpointer user_data)
 {
-  auto cancellable = static_cast<GCancellable*>(user_data);
+  auto cancellable = static_cast<GCancellable *> (user_data);
   if (!g_cancellable_is_cancelled (cancellable))
     {
       g_printerr ("Caught SIGINT, cancelling transaction\n");
@@ -471,7 +433,7 @@ on_sigint (gpointer user_data)
 static gboolean
 set_variable_false (gpointer data)
 {
-  auto donep = static_cast<int*>(data);
+  auto donep = static_cast<int *> (data);
   g_atomic_int_set (donep, 1);
   g_main_context_wakeup (NULL);
   return FALSE;
@@ -491,39 +453,32 @@ spin_mainloop_for_a_second (void)
 }
 
 static RPMOSTreeTransaction *
-transaction_connect (const char *transaction_address,
-                     GCancellable *cancellable,
-                     GError      **error)
+transaction_connect (const char *transaction_address, GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GDBusConnection) peer_connection =
-    g_dbus_connection_new_for_address_sync (transaction_address,
-                                            G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
-                                            NULL, cancellable, error);
+  g_autoptr (GDBusConnection) peer_connection = g_dbus_connection_new_for_address_sync (
+      transaction_address, G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT, NULL, cancellable, error);
 
   if (peer_connection == NULL)
     return NULL;
 
-  return rpmostree_transaction_proxy_new_sync (peer_connection,
-                                               G_DBUS_PROXY_FLAGS_NONE,
-                                               NULL, "/", cancellable, error);
+  return rpmostree_transaction_proxy_new_sync (peer_connection, G_DBUS_PROXY_FLAGS_NONE, NULL, "/",
+                                               cancellable, error);
 }
 
 /* Connect to the active transaction if one exists.  Because this is
  * currently racy, we use a retry loop for up to ~5 seconds.
  */
 gboolean
-rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
-                                      char                 **out_path,
-                                      RPMOSTreeTransaction **out_txn,
-                                      GCancellable *cancellable,
-                                      GError      **error)
+rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy, char **out_path,
+                                      RPMOSTreeTransaction **out_txn, GCancellable *cancellable,
+                                      GError **error)
 {
   /* We don't want to loop infinitely if something is going wrong with e.g.
    * permissions.
    */
   guint n_tries = 0;
   const guint max_tries = 5;
-  g_autoptr(GError) txn_connect_error = NULL;
+  g_autoptr (GError) txn_connect_error = NULL;
 
   for (n_tries = 0; n_tries < max_tries; n_tries++)
     {
@@ -539,8 +494,7 @@ rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
 
       /* Keep track of the last error so we have something to return */
       g_clear_error (&txn_connect_error);
-      RPMOSTreeTransaction *txn =
-        transaction_connect (txn_path, cancellable, &txn_connect_error);
+      RPMOSTreeTransaction *txn = transaction_connect (txn_path, cancellable, &txn_connect_error);
       if (txn)
         {
           if (out_path)
@@ -561,10 +515,8 @@ rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
  * printing output it sends, and handle Ctrl-C, etc.
  */
 static gboolean
-impl_transaction_get_response_sync (GDBusConnection *connection,
-                                    const char *transaction_address,
-                                    GCancellable *cancellable,
-                                    GError **error)
+impl_transaction_get_response_sync (GDBusConnection *connection, const char *transaction_address,
+                                    GCancellable *cancellable, GError **error)
 {
   guint sigintid = 0;
   glnx_unref_object GDBusObjectManager *object_manager = NULL;
@@ -578,7 +530,6 @@ impl_transaction_get_response_sync (GDBusConnection *connection,
   gboolean success = FALSE;
   gboolean just_started = FALSE;
 
-
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
 
@@ -586,23 +537,17 @@ impl_transaction_get_response_sync (GDBusConnection *connection,
    * to notify if the owner changes. */
   if (bus_name != NULL)
     {
-      object_manager = rpmostree_object_manager_client_new_sync (connection,
-                                                          G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                          bus_name,
-                                                          "/org/projectatomic/rpmostree1",
-                                                          cancellable,
-                                                          error);
+      object_manager = rpmostree_object_manager_client_new_sync (
+          connection, G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE, bus_name,
+          "/org/projectatomic/rpmostree1", cancellable, error);
 
       if (object_manager == NULL)
         goto out;
 
-      g_signal_connect (object_manager,
-                        "notify::name-owner",
-                        G_CALLBACK (on_owner_changed),
-                        tp);
+      g_signal_connect (object_manager, "notify::name-owner", G_CALLBACK (on_owner_changed), tp);
     }
 
-  CXX_TRY(failpoint("client::connect"), error);
+  CXX_TRY (failpoint ("client::connect"), error);
 
   transaction = transaction_connect (transaction_address, cancellable, error);
   if (!transaction)
@@ -611,19 +556,14 @@ impl_transaction_get_response_sync (GDBusConnection *connection,
   sigintid = g_unix_signal_add (SIGINT, on_sigint, cancellable);
 
   /* setup cancel handler */
-  cancel_handler = g_cancellable_connect (cancellable,
-                                          G_CALLBACK (cancelled_handler),
-                                          transaction, NULL);
+  cancel_handler
+      = g_cancellable_connect (cancellable, G_CALLBACK (cancelled_handler), transaction, NULL);
 
-  signal_handler = g_signal_connect (transaction, "g-signal",
-                                     G_CALLBACK (on_transaction_progress),
-                                     tp);
+  signal_handler
+      = g_signal_connect (transaction, "g-signal", G_CALLBACK (on_transaction_progress), tp);
 
   /* Tell the server we're ready to receive signals. */
-  if (!rpmostree_transaction_call_start_sync (transaction,
-                                              &just_started,
-                                              cancellable,
-                                              error))
+  if (!rpmostree_transaction_call_start_sync (transaction, &just_started, cancellable, error))
     goto out;
 
   /* FIXME Use the 'just_started' flag to determine whether to print
@@ -667,8 +607,7 @@ out:
  */
 gboolean
 rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
-                                         const char *transaction_address,
-                                         GCancellable *cancellable,
+                                         const char *transaction_address, GCancellable *cancellable,
                                          GError **error)
 {
   auto connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
@@ -688,23 +627,19 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
  */
 gboolean
 rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
-                                  RPMOSTreeSysroot *sysroot_proxy,
-                                  RPMOSTreeOS      *os_proxy,
-                                  GVariant         *options,
-                                  gboolean          exit_unchanged_77,
-                                  const char       *transaction_address,
-                                  GVariant         *previous_deployment,
-                                  GCancellable     *cancellable,
-                                  GError          **error)
+                                  RPMOSTreeSysroot *sysroot_proxy, RPMOSTreeOS *os_proxy,
+                                  GVariant *options, gboolean exit_unchanged_77,
+                                  const char *transaction_address, GVariant *previous_deployment,
+                                  GCancellable *cancellable, GError **error)
 {
   /* Wait for the txn to complete */
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address,
-                                                cancellable, error))
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
+                                                error))
     return FALSE;
 
   /* Process the result of the txn and our options */
 
-  g_auto(GVariantDict) optdict = G_VARIANT_DICT_INIT (options);
+  g_auto (GVariantDict) optdict = G_VARIANT_DICT_INIT (options);
   /* Parse back the options variant */
   gboolean opt_reboot = FALSE;
   g_variant_dict_lookup (&optdict, "reboot", "b", &opt_reboot);
@@ -729,18 +664,20 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
         {
           /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
           const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-          CXX_TRY(print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
-                RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable), error);
+          CXX_TRY (print_treepkg_diff_from_sysroot_path (rust::Str (sysroot_path),
+                                                         RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE,
+                                                         0, cancellable),
+                   error);
           g_print ("Changes queued for next boot. Run \"systemctl reboot\" to start a reboot\n");
         }
       else if (opt_apply_live)
         {
           const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-          g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
-          g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
+          g_autoptr (GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+          g_autoptr (OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
           if (!ostree_sysroot_load (sysroot, cancellable, error))
             return FALSE;
-          CXX_TRY(applylive_finish (*sysroot), error);
+          CXX_TRY (applylive_finish (*sysroot), error);
         }
       else
         g_assert_not_reached ();
@@ -750,16 +687,14 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
 }
 
 static void
-rpmostree_print_signatures (GVariant *variant,
-                            const gchar *sep,
-                            gboolean verbose)
+rpmostree_print_signatures (GVariant *variant, const gchar *sep, gboolean verbose)
 {
   const guint n_sigs = g_variant_n_children (variant);
-  g_autoptr(GString) sigs_buffer = g_string_sized_new (256);
+  g_autoptr (GString) sigs_buffer = g_string_sized_new (256);
 
   for (guint i = 0; i < n_sigs; i++)
     {
-      g_autoptr(GVariant) v = NULL;
+      g_autoptr (GVariant) v = NULL;
       if (i != 0)
         g_string_append_c (sigs_buffer, '\n');
       g_variant_get_child (variant, i, "v", &v);
@@ -779,15 +714,16 @@ rpmostree_print_signatures (GVariant *variant,
 
           if (is_key_missing)
             {
-              g_string_append_printf (sigs_buffer, "Can't check signature: public key %s not found\n", fingerprint);
+              g_string_append_printf (
+                  sigs_buffer, "Can't check signature: public key %s not found\n", fingerprint);
             }
           else
             {
               gboolean valid;
               g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_VALID, "b", &valid);
 
-              g_string_append_printf (sigs_buffer, "%s signature by %s\n", valid ? "Valid" : "Invalid",
-                                      fingerprint);
+              g_string_append_printf (sigs_buffer, "%s signature by %s\n",
+                                      valid ? "Valid" : "Invalid", fingerprint);
             }
         }
     }
@@ -796,24 +732,21 @@ rpmostree_print_signatures (GVariant *variant,
 }
 
 void
-rpmostree_print_gpg_info (GVariant  *signatures,
-                          gboolean   verbose,
-                          guint      max_key_len)
+rpmostree_print_gpg_info (GVariant *signatures, gboolean verbose, guint max_key_len)
 {
   if (signatures)
     {
       /* +2 for initial leading spaces */
       const guint gpgpad = max_key_len + 2 + strlen (": ");
-      char gpgspaces[gpgpad+1];
+      char gpgspaces[gpgpad + 1];
       memset (gpgspaces, ' ', gpgpad);
       gpgspaces[gpgpad] = '\0';
 
       if (verbose)
         {
           const guint n_sigs = g_variant_n_children (signatures);
-          g_autofree char *gpgheader =
-            g_strdup_printf ("%u signature%s", n_sigs,
-                             n_sigs == 1 ? "" : "s");
+          g_autofree char *gpgheader
+              = g_strdup_printf ("%u signature%s", n_sigs, n_sigs == 1 ? "" : "s");
           rpmostree_print_kv ("GPGSignature", max_key_len, gpgheader);
         }
       else
@@ -827,15 +760,13 @@ rpmostree_print_gpg_info (GVariant  *signatures,
 }
 
 static gint
-pkg_diff_variant_compare (gconstpointer a,
-                          gconstpointer b,
-                          gpointer unused)
+pkg_diff_variant_compare (gconstpointer a, gconstpointer b, gpointer unused)
 {
   const char *pkg_name_a = NULL;
   const char *pkg_name_b = NULL;
 
-  g_variant_get_child ((GVariant *) a, 0, "&s", &pkg_name_a);
-  g_variant_get_child ((GVariant *) b, 0, "&s", &pkg_name_b);
+  g_variant_get_child ((GVariant *)a, 0, "&s", &pkg_name_a);
+  g_variant_get_child ((GVariant *)b, 0, "&s", &pkg_name_b);
 
   /* XXX Names should be unique since we're comparing packages
    *     from two different trees... right? */
@@ -846,7 +777,7 @@ pkg_diff_variant_compare (gconstpointer a,
 static void
 pkg_diff_variant_print (GVariant *variant)
 {
-  g_autoptr(GVariant) details = NULL;
+  g_autoptr (GVariant) details = NULL;
   const char *old_name, *old_evr, *old_arch;
   const char *new_name, *new_evr, *new_arch;
   gboolean have_old = FALSE;
@@ -855,13 +786,10 @@ pkg_diff_variant_print (GVariant *variant)
   details = g_variant_get_child_value (variant, 2);
   g_assert (details != NULL);
 
-  have_old = g_variant_lookup (details,
-                               "PreviousPackage", "(&s&s&s)",
-                               &old_name, &old_evr, &old_arch);
+  have_old
+      = g_variant_lookup (details, "PreviousPackage", "(&s&s&s)", &old_name, &old_evr, &old_arch);
 
-  have_new = g_variant_lookup (details,
-                               "NewPackage", "(&s&s&s)",
-                               &new_name, &new_evr, &new_arch);
+  have_new = g_variant_lookup (details, "NewPackage", "(&s&s&s)", &new_name, &new_evr, &new_arch);
 
   if (have_old && have_new)
     {
@@ -897,7 +825,7 @@ rpmostree_print_package_diffs (GVariant *variant)
 
   while (!g_queue_is_empty (&queue))
     {
-      child = (GVariant*)g_queue_pop_head (&queue);
+      child = (GVariant *)g_queue_pop_head (&queue);
       pkg_diff_variant_print (child);
       g_variant_unref (child);
     }
@@ -907,26 +835,23 @@ rpmostree_print_package_diffs (GVariant *variant)
  * install, and splits it into repo pkgs, and for local
  * pkgs, an fd list & idx variant. */
 gboolean
-rpmostree_sort_pkgs_strv (const char *const* pkgs,
-                          GUnixFDList  *fd_list,
-                          GPtrArray   **out_repo_pkgs,
-                          GVariant    **out_fd_idxs,
-                          GError      **error)
+rpmostree_sort_pkgs_strv (const char *const *pkgs, GUnixFDList *fd_list, GPtrArray **out_repo_pkgs,
+                          GVariant **out_fd_idxs, GError **error)
 {
-  g_autoptr(GPtrArray) repo_pkgs = g_ptr_array_new_with_free_func (g_free);
-  g_auto(GVariantBuilder) builder;
+  g_autoptr (GPtrArray) repo_pkgs = g_ptr_array_new_with_free_func (g_free);
+  g_auto (GVariantBuilder) builder;
   // TODO: better API/cache for this
-  g_autoptr(DnfContext) ctx = dnf_context_new ();
+  g_autoptr (DnfContext) ctx = dnf_context_new ();
   auto basearch = dnf_context_get_base_arch (ctx);
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("ah"));
-  for (const char *const* pkgiter = pkgs; pkgiter && *pkgiter; pkgiter++)
+  for (const char *const *pkgiter = pkgs; pkgiter && *pkgiter; pkgiter++)
     {
       auto pkg = *pkgiter;
-      auto fds = CXX_TRY_VAL(client_handle_fd_argument(pkg, basearch), error);
-      if (fds.size() > 0)
+      auto fds = CXX_TRY_VAL (client_handle_fd_argument (pkg, basearch), error);
+      if (fds.size () > 0)
         {
-          for (const auto & fd: fds)
+          for (const auto &fd : fds)
             {
               auto idx = g_unix_fd_list_append (fd_list, fd, error);
               if (idx < 0)
@@ -944,62 +869,52 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
 }
 
 static void
-vardict_insert_strv (GVariantDict *dict,
-                     const char   *key,
-                     const char *const* strv)
+vardict_insert_strv (GVariantDict *dict, const char *key, const char *const *strv)
 {
   if (strv && *strv)
-    g_variant_dict_insert (dict, key, "^as", (char**)strv);
+    g_variant_dict_insert (dict, key, "^as", (char **)strv);
 }
 
 static gboolean
-vardict_sort_and_insert_pkgs (GVariantDict *dict,
-                              const char   *key_prefix,
-                              GUnixFDList  *fd_list,
-                              const char *const* pkgs,
-                              GError      **error)
+vardict_sort_and_insert_pkgs (GVariantDict *dict, const char *key_prefix, GUnixFDList *fd_list,
+                              const char *const *pkgs, GError **error)
 {
-  g_autoptr(GVariant) fd_idxs = NULL;
-  g_autoptr(GPtrArray) repo_pkgs = NULL;
+  g_autoptr (GVariant) fd_idxs = NULL;
+  g_autoptr (GPtrArray) repo_pkgs = NULL;
 
   if (!rpmostree_sort_pkgs_strv (pkgs, fd_list, &repo_pkgs, &fd_idxs, error))
     return FALSE;
 
-  /* for grep: here we insert install-packages/install-fileoverride-packages/override-replace-packages */
+  /* for grep: here we insert
+   * install-packages/install-fileoverride-packages/override-replace-packages */
   if (repo_pkgs != NULL && repo_pkgs->len > 0)
-    g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-packages"),
-      g_variant_new_strv ((const char *const*)repo_pkgs->pdata,
-                                              repo_pkgs->len));
+    g_variant_dict_insert_value (
+        dict, glnx_strjoina (key_prefix, "-packages"),
+        g_variant_new_strv ((const char *const *)repo_pkgs->pdata, repo_pkgs->len));
 
-  /* for grep: here we insert install-local-packages/install-fileoverride-local-packages/override-replace-local-packages */
+  /* for grep: here we insert
+   * install-local-packages/install-fileoverride-local-packages/override-replace-local-packages */
   if (fd_idxs != NULL)
-    g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-local-packages"),
-                                 fd_idxs);
+    g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-local-packages"), fd_idxs);
   return TRUE;
 }
 
 static gboolean
-get_modifiers_variant (const char   *set_refspec,
-                       const char   *set_revision,
-                       const char *const* install_pkgs,
-                       const char *const* install_fileoverride_pkgs,
-                       const char *const* uninstall_pkgs,
-                       const char *const* override_replace_pkgs,
-                       const char *const* override_remove_pkgs,
-                       const char *const* override_reset_pkgs,
-                       const char   *local_repo_remote,
-                       GVariant    **out_modifiers,
-                       GUnixFDList **out_fd_list,
-                       GError      **error)
+get_modifiers_variant (const char *set_refspec, const char *set_revision,
+                       const char *const *install_pkgs,
+                       const char *const *install_fileoverride_pkgs,
+                       const char *const *uninstall_pkgs, const char *const *override_replace_pkgs,
+                       const char *const *override_remove_pkgs,
+                       const char *const *override_reset_pkgs, const char *local_repo_remote,
+                       GVariant **out_modifiers, GUnixFDList **out_fd_list, GError **error)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  g_autoptr(GUnixFDList) fd_list = g_unix_fd_list_new ();
+  g_autoptr (GUnixFDList) fd_list = g_unix_fd_list_new ();
 
   if (install_pkgs)
     {
-      if (!vardict_sort_and_insert_pkgs (&dict, "install", fd_list,
-                                         install_pkgs, error))
+      if (!vardict_sort_and_insert_pkgs (&dict, "install", fd_list, install_pkgs, error))
         return FALSE;
     }
 
@@ -1012,8 +927,8 @@ get_modifiers_variant (const char   *set_refspec,
 
   if (override_replace_pkgs)
     {
-      if (!vardict_sort_and_insert_pkgs (&dict, "override-replace", fd_list,
-                                         override_replace_pkgs, error))
+      if (!vardict_sort_and_insert_pkgs (&dict, "override-replace", fd_list, override_replace_pkgs,
+                                         error))
         return FALSE;
     }
 
@@ -1045,48 +960,29 @@ get_modifiers_variant (const char   *set_refspec,
 }
 
 gboolean
-rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
-                             const char   *set_refspec,
-                             const char   *set_revision,
-                             const char *const* install_pkgs,
-                             const char *const* install_fileoverride_pkgs,
-                             const char *const* uninstall_pkgs,
-                             const char *const* override_replace_pkgs,
-                             const char *const* override_remove_pkgs,
-                             const char *const* override_reset_pkgs,
-                             const char   *local_repo_remote,
-                             GVariant     *options,
-                             char        **out_transaction_address,
-                             GCancellable *cancellable,
-                             GError      **error)
+rpmostree_update_deployment (RPMOSTreeOS *os_proxy, const char *set_refspec,
+                             const char *set_revision, const char *const *install_pkgs,
+                             const char *const *install_fileoverride_pkgs,
+                             const char *const *uninstall_pkgs,
+                             const char *const *override_replace_pkgs,
+                             const char *const *override_remove_pkgs,
+                             const char *const *override_reset_pkgs, const char *local_repo_remote,
+                             GVariant *options, char **out_transaction_address,
+                             GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GVariant) modifiers = NULL;
+  g_autoptr (GVariant) modifiers = NULL;
   glnx_unref_object GUnixFDList *fd_list = NULL;
-  if (!get_modifiers_variant (set_refspec, set_revision,
-                              install_pkgs,
-                              install_fileoverride_pkgs,
-                              uninstall_pkgs,
-                              override_replace_pkgs,
-                              override_remove_pkgs,
-                              override_reset_pkgs,
-                              local_repo_remote,
-                              &modifiers, &fd_list, error))
+  if (!get_modifiers_variant (set_refspec, set_revision, install_pkgs, install_fileoverride_pkgs,
+                              uninstall_pkgs, override_replace_pkgs, override_remove_pkgs,
+                              override_reset_pkgs, local_repo_remote, &modifiers, &fd_list, error))
     return glnx_prefix_error (error, "Preparing D-Bus arguments");
 
-  return rpmostree_os_call_update_deployment_sync (os_proxy,
-                                                   modifiers,
-                                                   options,
-                                                   fd_list,
-                                                   out_transaction_address,
-                                                   NULL,
-                                                   cancellable,
-                                                   error);
+  return rpmostree_os_call_update_deployment_sync (
+      os_proxy, modifiers, options, fd_list, out_transaction_address, NULL, cancellable, error);
 }
 
 static void
-append_to_summary (GString     *summary,
-                   const char  *type,
-                   guint        n)
+append_to_summary (GString *summary, const char *type, guint n)
 {
   if (n == 0)
     return;
@@ -1096,11 +992,10 @@ append_to_summary (GString     *summary,
 }
 
 static int
-compare_sec_advisories (gconstpointer ap,
-                        gconstpointer bp)
+compare_sec_advisories (gconstpointer ap, gconstpointer bp)
 {
-  GVariant *a = *((GVariant**)ap);
-  GVariant *b = *((GVariant**)bp);
+  GVariant *a = *((GVariant **)ap);
+  GVariant *b = *((GVariant **)bp);
 
   RpmOstreeAdvisorySeverity asev;
   g_variant_get_child (a, 2, "u", &asev);
@@ -1120,7 +1015,7 @@ compare_sec_advisories (gconstpointer ap,
   return strcmp (aid, bid);
 }
 
-static const char*
+static const char *
 severity_to_str (RpmOstreeAdvisorySeverity severity)
 {
   switch (severity)
@@ -1139,16 +1034,16 @@ severity_to_str (RpmOstreeAdvisorySeverity severity)
 }
 
 void
-rpmostree_print_advisories (GVariant *advisories,
-                            gboolean  verbose,
-                            guint     max_key_len)
+rpmostree_print_advisories (GVariant *advisories, gboolean verbose, guint max_key_len)
 {
   /* counters for none/unknown, low, moderate, important, critical advisories */
-  guint n_sev[RPM_OSTREE_ADVISORY_SEVERITY_LAST] = {0,};
+  guint n_sev[RPM_OSTREE_ADVISORY_SEVERITY_LAST] = {
+    0,
+  };
 
   /* we only display security advisories for now */
-  g_autoptr(GPtrArray) sec_advisories =
-    g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
+  g_autoptr (GPtrArray) sec_advisories
+      = g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
 
   guint max_id_len = 0;
 
@@ -1156,7 +1051,7 @@ rpmostree_print_advisories (GVariant *advisories,
   g_variant_iter_init (&iter, advisories);
   while (TRUE)
     {
-      g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
+      g_autoptr (GVariant) child = g_variant_iter_next_value (&iter);
       if (!child)
         break;
 
@@ -1197,8 +1092,8 @@ rpmostree_print_advisories (GVariant *advisories,
     {
       /* just spell out "severity" for the unknown case, because e.g.
        * "SecAdvisories: 1 unknown" on its own is cryptic and scary */
-      g_autoptr(GString) advisory_summary = g_string_new (NULL);
-      const char *sev_str[] = {"unknown severity", "low", "moderate", "important", "critical"};
+      g_autoptr (GString) advisory_summary = g_string_new (NULL);
+      const char *sev_str[] = { "unknown severity", "low", "moderate", "important", "critical" };
       g_assert_cmpint (G_N_ELEMENTS (n_sev), ==, G_N_ELEMENTS (sev_str));
       for (guint i = 0; i < G_N_ELEMENTS (sev_str); i++)
         append_to_summary (advisory_summary, sev_str[i], n_sev[i]);
@@ -1216,7 +1111,7 @@ rpmostree_print_advisories (GVariant *advisories,
 
   for (guint i = 0; i < sec_advisories->len; i++)
     {
-      auto advisory = static_cast<GVariant*>(sec_advisories->pdata[i]);
+      auto advisory = static_cast<GVariant *> (sec_advisories->pdata[i]);
 
       const char *id;
       g_variant_get_child (advisory, 0, "&s", &id);
@@ -1227,7 +1122,7 @@ rpmostree_print_advisories (GVariant *advisories,
       RpmOstreeAdvisorySeverity severity;
       g_variant_get_child (advisory, 2, "u", &severity);
 
-      g_autoptr(GVariant) pkgs = g_variant_get_child_value (advisory, 3);
+      g_autoptr (GVariant) pkgs = g_variant_get_child_value (advisory, 3);
 
       const char *severity_str = severity_to_str (severity);
       const guint n_pkgs = g_variant_n_children (pkgs);
@@ -1239,16 +1134,16 @@ rpmostree_print_advisories (GVariant *advisories,
           if (i == 0 && j == 0 && max_key_len > 0) /* we're on the same line as SecAdvisories */
             g_print ("%-*s  %-*s  %s\n", max_id_len, id, max_sev_len, severity_str, nevra);
           else
-            g_print ("  %*s  %-*s  %-*s  %s\n", max_key_len, "", max_id_len, id,
-                     max_sev_len, severity_str, nevra);
+            g_print ("  %*s  %-*s  %-*s  %s\n", max_key_len, "", max_id_len, id, max_sev_len,
+                     severity_str, nevra);
         }
 
-      g_autoptr(GVariant) additional_info = g_variant_get_child_value (advisory, 4);
-      g_auto(GVariantDict) dict;
+      g_autoptr (GVariant) additional_info = g_variant_get_child_value (advisory, 4);
+      g_auto (GVariantDict) dict;
       g_variant_dict_init (&dict, additional_info);
 
-      g_autoptr(GVariant) refs =
-        g_variant_dict_lookup_value (&dict, "cve_references", G_VARIANT_TYPE ("a(ss)"));
+      g_autoptr (GVariant) refs
+          = g_variant_dict_lookup_value (&dict, "cve_references", G_VARIANT_TYPE ("a(ss)"));
 
       /* for backwards compatibility with cached metadata from older versions */
       if (!refs)
@@ -1267,12 +1162,8 @@ rpmostree_print_advisories (GVariant *advisories,
 
 /* print "rpm-diff" and "advisories" GVariants from a cached update */
 gboolean
-rpmostree_print_diff_advisories (GVariant         *rpm_diff,
-                                 GVariant         *advisories,
-                                 gboolean          verbose,
-                                 gboolean          verbose_advisories,
-                                 guint             max_key_len,
-                                 GError          **error)
+rpmostree_print_diff_advisories (GVariant *rpm_diff, GVariant *advisories, gboolean verbose,
+                                 gboolean verbose_advisories, guint max_key_len, GError **error)
 {
   if (!rpm_diff)
     return TRUE; /* Nothing to 🖨️ */
@@ -1280,47 +1171,36 @@ rpmostree_print_diff_advisories (GVariant         *rpm_diff,
   if (advisories)
     rpmostree_print_advisories (advisories, verbose || verbose_advisories, max_key_len);
 
-  g_auto(GVariantDict) rpm_diff_dict;
+  g_auto (GVariantDict) rpm_diff_dict;
   g_variant_dict_init (&rpm_diff_dict, rpm_diff);
 
-  g_autoptr(GVariant) upgraded =
-    _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "upgraded",
-                                              RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT,
-                                              error);
+  g_autoptr (GVariant) upgraded = _rpmostree_vardict_lookup_value_required (
+      &rpm_diff_dict, "upgraded", RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT, error);
   if (!upgraded)
     return FALSE;
 
-  g_autoptr(GVariant) downgraded =
-    _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "downgraded",
-                                              RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT,
-                                              error);
+  g_autoptr (GVariant) downgraded = _rpmostree_vardict_lookup_value_required (
+      &rpm_diff_dict, "downgraded", RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT, error);
   if (!downgraded)
     return FALSE;
 
-  g_autoptr(GVariant) removed =
-    _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "removed",
-                                              RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT,
-                                              error);
+  g_autoptr (GVariant) removed = _rpmostree_vardict_lookup_value_required (
+      &rpm_diff_dict, "removed", RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT, error);
   if (!removed)
     return FALSE;
 
-  g_autoptr(GVariant) added =
-    _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "added",
-                                              RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT,
-                                              error);
+  g_autoptr (GVariant) added = _rpmostree_vardict_lookup_value_required (
+      &rpm_diff_dict, "added", RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT, error);
   if (!added)
     return FALSE;
 
   if (verbose)
-    rpmostree_variant_diff_print_formatted (max_key_len,
-                                            upgraded, downgraded, removed, added);
+    rpmostree_variant_diff_print_formatted (max_key_len, upgraded, downgraded, removed, added);
   else
     {
-      g_autofree char *diff_summary =
-        rpmostree_generate_diff_summary (g_variant_n_children (upgraded),
-                                         g_variant_n_children (downgraded),
-                                         g_variant_n_children (removed),
-                                         g_variant_n_children (added));
+      g_autofree char *diff_summary = rpmostree_generate_diff_summary (
+          g_variant_n_children (upgraded), g_variant_n_children (downgraded),
+          g_variant_n_children (removed), g_variant_n_children (added));
       if (strlen (diff_summary) > 0) /* only print if we have something to print */
         rpmostree_print_kv ("Diff", max_key_len, diff_summary);
     }
@@ -1330,15 +1210,13 @@ rpmostree_print_diff_advisories (GVariant         *rpm_diff,
 
 /* this is used by both `status` and `upgrade --check/--preview` */
 gboolean
-rpmostree_print_cached_update (GVariant         *cached_update,
-                               gboolean          verbose,
-                               gboolean          verbose_advisories,
-                               GCancellable     *cancellable,
-                               GError          **error)
+rpmostree_print_cached_update (GVariant *cached_update, gboolean verbose,
+                               gboolean verbose_advisories, GCancellable *cancellable,
+                               GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Retrieving cached update", error);
 
-  g_auto(GVariantDict) dict;
+  g_auto (GVariantDict) dict;
   g_variant_dict_init (&dict, cached_update);
 
   /* let's just extract 📤 all the info ahead of time */
@@ -1349,10 +1227,11 @@ rpmostree_print_cached_update (GVariant         *cached_update,
 
   const char *version;
   if (!g_variant_dict_lookup (&dict, "version", "&s", &version))
-    version= NULL;
+    version = NULL;
 
   g_autofree char *timestamp = NULL;
-  { guint64 t;
+  {
+    guint64 t;
     if (!g_variant_dict_lookup (&dict, "timestamp", "t", &t))
       t = 0;
     timestamp = rpmostree_timestamp_str_from_unix_utc (t);
@@ -1362,25 +1241,24 @@ rpmostree_print_cached_update (GVariant         *cached_update,
   if (!g_variant_dict_lookup (&dict, "gpg-enabled", "b", &gpg_enabled))
     gpg_enabled = FALSE;
 
-  g_autoptr(GVariant) signatures =
-    g_variant_dict_lookup_value (&dict, "signatures", G_VARIANT_TYPE ("av"));
+  g_autoptr (GVariant) signatures
+      = g_variant_dict_lookup_value (&dict, "signatures", G_VARIANT_TYPE ("av"));
 
   gboolean is_new_checksum;
   g_assert (g_variant_dict_lookup (&dict, "ref-has-new-commit", "b", &is_new_checksum));
 
-  g_autoptr(GVariant) rpm_diff =
-    g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
+  g_autoptr (GVariant) rpm_diff
+      = g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
 
-  g_autoptr(GVariant) advisories =
-    g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
+  g_autoptr (GVariant) advisories
+      = g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
 
   /* and now we can print 🖨️ things! */
 
   g_print ("AvailableUpdate:\n");
 
   /* add the long keys here */
-  const guint max_key_len = MAX (strlen ("SecAdvisories"),
-                                 strlen ("GPGSignature"));
+  const guint max_key_len = MAX (strlen ("SecAdvisories"), strlen ("GPGSignature"));
 
   if (is_new_checksum)
     {
@@ -1390,8 +1268,8 @@ rpmostree_print_cached_update (GVariant         *cached_update,
         rpmostree_print_gpg_info (signatures, verbose, max_key_len);
     }
 
-  if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose,
-                                        verbose_advisories, max_key_len, error))
+  if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose, verbose_advisories,
+                                        max_key_len, error))
     return FALSE;
 
   return TRUE;
@@ -1400,25 +1278,20 @@ rpmostree_print_cached_update (GVariant         *cached_update,
 /* Query systemd for systemd unit's object path using method_name provided with
  * parameters. The reply_type of method_name must be G_VARIANT_TYPE_TUPLE. */
 gboolean
-get_sd_unit_objpath (GDBusConnection  *connection,
-                     const char       *method_name,
-                     GVariant         *parameters,
-                     const char      **unit_objpath,
-                     GCancellable     *cancellable,
-                     GError          **error)
+get_sd_unit_objpath (GDBusConnection *connection, const char *method_name, GVariant *parameters,
+                     const char **unit_objpath, GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GVariant) update_driver_objpath_tuple = 
-    g_dbus_connection_call_sync (connection, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
-                                 "org.freedesktop.systemd1.Manager", method_name,
-                                 parameters, G_VARIANT_TYPE_TUPLE,
-                                 G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
+  g_autoptr (GVariant) update_driver_objpath_tuple = g_dbus_connection_call_sync (
+      connection, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+      "org.freedesktop.systemd1.Manager", method_name, parameters, G_VARIANT_TYPE_TUPLE,
+      G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
   if (!update_driver_objpath_tuple)
     return FALSE;
   else if (g_variant_n_children (update_driver_objpath_tuple) < 1)
     return glnx_throw (error, "%s returned empty tuple", method_name);
 
-  g_autoptr(GVariant) update_driver_objpath_val =
-    g_variant_get_child_value (update_driver_objpath_tuple, 0);
+  g_autoptr (GVariant) update_driver_objpath_val
+      = g_variant_get_child_value (update_driver_objpath_tuple, 0);
   *unit_objpath = g_variant_dup_string (update_driver_objpath_val, NULL);
   g_assert (*unit_objpath);
 
@@ -1428,31 +1301,25 @@ get_sd_unit_objpath (GDBusConnection  *connection,
 /* Get the property_name property of sd_unit. Returns a reference to the GVariant
  * instance that holds the value for property_name GVariant in cache_val. */
 static gboolean
-get_sd_unit_property (GDBusConnection *connection,
-                      const char      *method_name,
-                      GVariant        *parameters,
-                      const char      *property_name,
-                      GVariant       **cache_val,
-                      GCancellable    *cancellable,
-                      GError         **error)
+get_sd_unit_property (GDBusConnection *connection, const char *method_name, GVariant *parameters,
+                      const char *property_name, GVariant **cache_val, GCancellable *cancellable,
+                      GError **error)
 {
   g_autofree const char *objpath = NULL;
   if (!get_sd_unit_objpath (connection, method_name, parameters, &objpath, cancellable, error))
     return FALSE;
 
   /* Look up property_name property of systemd unit. */
-  g_autoptr(GDBusProxy) unit_obj_proxy =
-    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
-                           "org.freedesktop.systemd1", objpath,
-                           "org.freedesktop.systemd1.Unit", cancellable, error);
+  g_autoptr (GDBusProxy) unit_obj_proxy = g_dbus_proxy_new_sync (
+      connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL, "org.freedesktop.systemd1",
+      objpath, "org.freedesktop.systemd1.Unit", cancellable, error);
   if (!unit_obj_proxy)
     return FALSE;
 
-  *cache_val =
-    g_dbus_proxy_get_cached_property (unit_obj_proxy, property_name);
+  *cache_val = g_dbus_proxy_get_cached_property (unit_obj_proxy, property_name);
   if (!*cache_val)
-    return glnx_throw (error, "%s property not found in proxy's cache (%s)",
-                       property_name, objpath);
+    return glnx_throw (error, "%s property not found in proxy's cache (%s)", property_name,
+                       objpath);
 
   return TRUE;
 }
@@ -1460,13 +1327,11 @@ get_sd_unit_property (GDBusConnection *connection,
 /* Helper function to append docs information for sd_unit to str.
  * Prints any errors that occur. */
 static void
-append_docs_to_str (GString          *str,
-                    GDBusConnection  *connection,
-                    char             *sd_unit,
-                    GCancellable     *cancellable)
+append_docs_to_str (GString *str, GDBusConnection *connection, char *sd_unit,
+                    GCancellable *cancellable)
 {
-  g_autoptr(GVariant) docs_array = NULL;
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GVariant) docs_array = NULL;
+  g_autoptr (GError) local_error = NULL;
   if (!get_sd_unit_property (connection, "LoadUnit", g_variant_new ("(s)", sd_unit),
                              "Documentation", &docs_array, cancellable, &local_error))
     {
@@ -1475,14 +1340,12 @@ append_docs_to_str (GString          *str,
   else if (docs_array)
     {
       gsize docs_len;
-      g_autofree const char **docs =
-        g_variant_get_strv (docs_array, &docs_len);
+      g_autofree const char **docs = g_variant_get_strv (docs_array, &docs_len);
       if (docs_len > 0)
         {
           g_string_append_printf (str, " at ");
           for (guint i = 0; i < docs_len; i++)
-            g_string_append_printf (str, "%s%s", docs[i],
-                                    i < docs_len - 1 ? ", " : "\n");
+            g_string_append_printf (str, "%s%s", docs[i], i < docs_len - 1 ? ", " : "\n");
         }
       else
         {
@@ -1494,20 +1357,18 @@ append_docs_to_str (GString          *str,
 /* Check whether sd_unit's `ActiveState` is "active" and return the boolean
  * in `sd_unit_is_active`. */
 static gboolean
-check_sd_unit_state_is_active (char            *sd_unit,
-                               gboolean        *sd_unit_is_active,
-                               GDBusConnection *connection,
-                               GCancellable    *cancellable,
-                               GError         **error)
+check_sd_unit_state_is_active (char *sd_unit, gboolean *sd_unit_is_active,
+                               GDBusConnection *connection, GCancellable *cancellable,
+                               GError **error)
 {
-  g_autoptr(GVariant) active_state = NULL;
-  if (!get_sd_unit_property (connection, "LoadUnit", g_variant_new ("(s)", sd_unit),
-                             "ActiveState", &active_state, cancellable, error))
+  g_autoptr (GVariant) active_state = NULL;
+  if (!get_sd_unit_property (connection, "LoadUnit", g_variant_new ("(s)", sd_unit), "ActiveState",
+                             &active_state, cancellable, error))
     return FALSE;
   g_assert (active_state);
   // NB: include "failed" in states we consider "active" so we do not ignore crashed
   // updates drivers.
-  const char *states[] = {"active", "activating", "reloading", "failed", NULL};
+  const char *states[] = { "active", "activating", "reloading", "failed", NULL };
   const char *active_state_str = g_variant_get_string (active_state, NULL);
   *sd_unit_is_active = (active_state_str && g_strv_contains (states, active_state_str));
   return TRUE;
@@ -1515,18 +1376,14 @@ check_sd_unit_state_is_active (char            *sd_unit,
 
 /* Check whether sd_unit contains pid and return the boolean in sd_unit_contains_pid. */
 static gboolean
-check_sd_unit_contains_pid (char            *sd_unit,
-                            pid_t            pid,
-                            gboolean        *sd_unit_contains_pid,
-                            GDBusConnection *connection,
-                            GCancellable    *cancellable,
-                            GError         **error)
+check_sd_unit_contains_pid (char *sd_unit, pid_t pid, gboolean *sd_unit_contains_pid,
+                            GDBusConnection *connection, GCancellable *cancellable, GError **error)
 {
   // Get the systemd unit associated with pid.
-  g_autoptr(GVariant) process_sd_unit_val = NULL;
+  g_autoptr (GVariant) process_sd_unit_val = NULL;
   const char *process_sd_unit = NULL;
-  if (!get_sd_unit_property (connection, "GetUnitByPID", g_variant_new ("(u)", (guint32) pid),
-                             "Id", &process_sd_unit_val, cancellable, error))
+  if (!get_sd_unit_property (connection, "GetUnitByPID", g_variant_new ("(u)", (guint32)pid), "Id",
+                             &process_sd_unit_val, cancellable, error))
     return FALSE;
   process_sd_unit = g_variant_get_string (process_sd_unit_val, NULL);
   if (g_strcmp0 (process_sd_unit, sd_unit) == 0)
@@ -1538,9 +1395,8 @@ check_sd_unit_contains_pid (char            *sd_unit,
 
 /* Throw an error if an updates driver is registered and active. */
 gboolean
-error_if_driver_registered (RPMOSTreeSysroot *sysroot_proxy,
-                            GCancellable     *cancellable,
-                            GError          **error)
+error_if_driver_registered (RPMOSTreeSysroot *sysroot_proxy, GCancellable *cancellable,
+                            GError **error)
 {
   g_autofree char *update_driver_sd_unit = NULL;
   g_autofree char *update_driver_name = NULL;
@@ -1551,11 +1407,10 @@ error_if_driver_registered (RPMOSTreeSysroot *sysroot_proxy,
    * done through the driver. */
   if (update_driver_sd_unit && update_driver_name)
     {
-      GDBusConnection *connection =
-        g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+      GDBusConnection *connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
 
       // Do not error out if current process' systemd unit is the same as updates driver's.
-      pid_t pid = getpid();
+      pid_t pid = getpid ();
       gboolean sd_unit_contains_pid = FALSE;
       if (!check_sd_unit_contains_pid (update_driver_sd_unit, pid, &sd_unit_contains_pid,
                                        connection, cancellable, error))
@@ -1564,14 +1419,14 @@ error_if_driver_registered (RPMOSTreeSysroot *sysroot_proxy,
         return TRUE;
 
       // Build and throw error message.
-      g_autoptr(GString) error_msg = g_string_new(NULL);
+      g_autoptr (GString) error_msg = g_string_new (NULL);
       g_string_printf (error_msg, "Updates and deployments are driven by %s (%s)\n",
                        update_driver_name, update_driver_sd_unit);
       g_string_append_printf (error_msg, "See %s's documentation", update_driver_name);
       // Only try to get unit's `Documentation` and check unit's state if we're on the system bus.
       gboolean sd_unit_is_active = TRUE;
-      if (!check_sd_unit_state_is_active (update_driver_sd_unit, &sd_unit_is_active,
-                                          connection, cancellable, error))
+      if (!check_sd_unit_state_is_active (update_driver_sd_unit, &sd_unit_is_active, connection,
+                                          cancellable, error))
         return FALSE;
       // Ignore driver if driver's `ActiveState` is not "active", even if registered.
       if (!sd_unit_is_active)

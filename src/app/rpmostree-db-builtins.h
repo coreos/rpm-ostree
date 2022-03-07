@@ -26,16 +26,18 @@
 
 G_BEGIN_DECLS
 
-gboolean rpmostree_db_builtin_diff (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
-gboolean rpmostree_db_builtin_list (int argc, char **argv, RpmOstreeCommandInvocation *invocation,  GCancellable *cancellable, GError **error);
-gboolean rpmostree_db_builtin_version (int argc, char **argv, RpmOstreeCommandInvocation *invocation,  GCancellable *cancellable, GError **error);
+gboolean rpmostree_db_builtin_diff (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                    GCancellable *cancellable, GError **error);
+gboolean rpmostree_db_builtin_list (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                    GCancellable *cancellable, GError **error);
+gboolean rpmostree_db_builtin_version (int argc, char **argv,
+                                       RpmOstreeCommandInvocation *invocation,
+                                       GCancellable *cancellable, GError **error);
 
 gboolean rpmostree_db_option_context_parse (GOptionContext *context,
-                                            const GOptionEntry *main_entries,
-                                            int *argc, char ***argv,
-                                            RpmOstreeCommandInvocation *invocation,
-                                            OstreeRepo **out_repo,
-                                            GCancellable *cancellable,
+                                            const GOptionEntry *main_entries, int *argc,
+                                            char ***argv, RpmOstreeCommandInvocation *invocation,
+                                            OstreeRepo **out_repo, GCancellable *cancellable,
                                             GError **error);
 
 G_END_DECLS

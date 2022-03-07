@@ -20,8 +20,8 @@
 
 #include "config.h"
 
-#include "rpmostree-override-builtins.h"
 #include "rpmostree-libbuiltin.h"
+#include "rpmostree-override-builtins.h"
 
 #include <libglnx.h>
 
@@ -39,47 +39,46 @@ static gboolean opt_lock_finalization;
 static gboolean opt_experimental;
 static gboolean opt_freeze;
 
-static GOptionEntry option_entries[] = {
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
-  { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Only operate on cached data", NULL },
-  { NULL }
-};
+static GOptionEntry option_entries[]
+    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+        { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
+          "Initiate a reboot after operation is complete", NULL },
+        { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction",
+          NULL },
+        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+          "Prevent automatic deployment finalization on shutdown", NULL },
+        { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Only operate on cached data",
+          NULL },
+        { NULL } };
 
-static GOptionEntry reset_option_entries[] = {
-  { "all", 'a', 0, G_OPTION_ARG_NONE, &opt_reset_all, "Reset all active overrides", NULL },
-  { NULL }
-};
+static GOptionEntry reset_option_entries[]
+    = { { "all", 'a', 0, G_OPTION_ARG_NONE, &opt_reset_all, "Reset all active overrides", NULL },
+        { NULL } };
 
-static GOptionEntry replace_option_entries[] = {
-  { "remove", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_remove_pkgs, "Remove a package", "PKG" },
-  { "experimental", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_experimental, "Allow experimental options such as --from or --freeze", NULL},
-  { "freeze", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_freeze, "Pin packages to versions found", NULL},
-  { "from", 'r', G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_from, "Source of override", "KIND=NAME" },
-  { NULL }
-};
+static GOptionEntry replace_option_entries[]
+    = { { "remove", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_remove_pkgs, "Remove a package", "PKG" },
+        { "experimental", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_experimental,
+          "Allow experimental options such as --from or --freeze", NULL },
+        { "freeze", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_freeze,
+          "Pin packages to versions found", NULL },
+        { "from", 'r', G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_from, "Source of override",
+          "KIND=NAME" },
+        { NULL } };
 
-static GOptionEntry remove_option_entries[] = {
-  { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_replace_pkgs, "Replace a package", "RPM" },
-  { NULL }
-};
+static GOptionEntry remove_option_entries[] = { { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY,
+                                                  &opt_replace_pkgs, "Replace a package", "RPM" },
+                                                { NULL } };
 
 static gboolean
-handle_override (RPMOSTreeSysroot  *sysroot_proxy,
-                 RpmOstreeCommandInvocation *invocation,
-                 const char *const *override_remove,
-                 const char *const *override_replace,
-                 const char *const *override_reset,
-                 GCancellable      *cancellable,
-                 GError           **error)
+handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *invocation,
+                 const char *const *override_remove, const char *const *override_replace,
+                 const char *const *override_reset, GCancellable *cancellable, GError **error)
 {
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
 
-  if (!rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable,
-                                  &os_proxy, &osexperimental_proxy, error))
+  if (!rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable, &os_proxy,
+                                  &osexperimental_proxy, error))
     return FALSE;
 
   /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
@@ -96,11 +95,11 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   g_variant_dict_insert (&dict, "no-overrides", "b", opt_reset_all);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
-  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+  g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
-  g_autoptr(GUnixFDList) fetched_rpms_fds = NULL;
-  g_autoptr(GPtrArray) override_replace_final = NULL; 
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr (GUnixFDList) fetched_rpms_fds = NULL;
+  g_autoptr (GPtrArray) override_replace_final = NULL;
 
   if (!opt_experimental && (opt_freeze || opt_from))
     return glnx_throw (error, "Must specify --experimental to use --freeze or --from");
@@ -108,9 +107,9 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   if (override_replace && opt_experimental && opt_freeze && opt_from)
     {
       override_replace_final = g_ptr_array_new_with_free_func (free);
-      g_autoptr(GPtrArray) queries = g_ptr_array_new ();
+      g_autoptr (GPtrArray) queries = g_ptr_array_new ();
 
-      for (const char *const* it = override_replace; it && *it; it++)
+      for (const char *const *it = override_replace; it && *it; it++)
         {
           auto pkg = *it;
 
@@ -132,13 +131,12 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
           if (!rpmostree_os_call_refresh_md_sync (os_proxy, options, &refresh_transaction_address,
                                                   cancellable, error))
             return FALSE;
-          if (!rpmostree_transaction_get_response_sync (sysroot_proxy, (const char*)refresh_transaction_address,
-                                                       cancellable, error))
+          if (!rpmostree_transaction_get_response_sync (
+                  sysroot_proxy, (const char *)refresh_transaction_address, cancellable, error))
             return FALSE;
-          if (!rpmostree_osexperimental_call_download_packages_sync (osexperimental_proxy,
-                                                                     (const char *const*)queries->pdata,
-                                                                     opt_from, NULL, &fetched_rpms_fds,
-                                                                     cancellable, error))
+          if (!rpmostree_osexperimental_call_download_packages_sync (
+                  osexperimental_proxy, (const char *const *)queries->pdata, opt_from, NULL,
+                  &fetched_rpms_fds, cancellable, error))
             return FALSE;
 
           const int nfds = fetched_rpms_fds ? g_unix_fd_list_get_length (fetched_rpms_fds) : 0;
@@ -149,32 +147,23 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
               gint fd = g_unix_fd_list_get (fetched_rpms_fds, i, error);
               if (fd < 0)
                 return FALSE;
-              g_ptr_array_add (override_replace_final, g_strdup_printf ("file:///proc/self/fd/%d", fd));
+              g_ptr_array_add (override_replace_final,
+                               g_strdup_printf ("file:///proc/self/fd/%d", fd));
             }
           g_ptr_array_add (override_replace_final, NULL);
-          override_replace = (const char *const*)override_replace_final->pdata;
+          override_replace = (const char *const *)override_replace_final->pdata;
         }
     }
   g_autofree char *transaction_address = NULL;
-  if (!rpmostree_update_deployment (os_proxy,
-                                    NULL, /* set-refspec */
-                                    NULL, /* set-revision */
-                                    install_pkgs,
-                                    NULL, /* install_fileoverride_pkgs */
-                                    uninstall_pkgs,
-                                    override_replace,
-                                    override_remove,
-                                    override_reset,
-                                    NULL,
-                                    options,
-                                    &transaction_address,
-                                    cancellable,
-                                    error))
+  if (!rpmostree_update_deployment (os_proxy, NULL,     /* set-refspec */
+                                    NULL,               /* set-revision */
+                                    install_pkgs, NULL, /* install_fileoverride_pkgs */
+                                    uninstall_pkgs, override_replace, override_remove,
+                                    override_reset, NULL, options, &transaction_address,
+                                    cancellable, error))
     return FALSE;
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
                                                 error))
     return FALSE;
 
@@ -189,8 +178,10 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
         return TRUE;
 
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      CXX_TRY(print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
-            RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable), error);
+      CXX_TRY (print_treepkg_diff_from_sysroot_path (rust::Str (sysroot_path),
+                                                     RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0,
+                                                     cancellable),
+               error);
 
       if (override_replace || override_remove)
         g_print ("Use \"rpm-ostree override reset\" to undo overrides\n");
@@ -202,10 +193,8 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
 }
 
 gboolean
-rpmostree_override_builtin_replace (int argc, char **argv,
-                                    RpmOstreeCommandInvocation *invocation,
-                                    GCancellable *cancellable,
-                                    GError **error)
+rpmostree_override_builtin_replace (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                    GCancellable *cancellable, GError **error)
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
@@ -214,39 +203,30 @@ rpmostree_override_builtin_replace (int argc, char **argv,
 
   g_option_context_add_main_entries (context, replace_option_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       &install_pkgs,
-                                       &uninstall_pkgs,
-                                       &sysroot_proxy,
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, &install_pkgs, &uninstall_pkgs, &sysroot_proxy,
                                        error))
     return FALSE;
 
   if (argc < 2)
     {
-      rpmostree_usage_error (context, "At least one PACKAGE must be specified",
-                             error);
+      rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
       return FALSE;
     }
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
    * might have moved args around) */
-  argv++; argc--;
+  argv++;
+  argc--;
   argv[argc] = NULL;
 
-  return handle_override (sysroot_proxy, invocation,
-                          opt_remove_pkgs, (const char *const*)argv, NULL,
-                          cancellable, error);
+  return handle_override (sysroot_proxy, invocation, opt_remove_pkgs, (const char *const *)argv,
+                          NULL, cancellable, error);
 }
 
 gboolean
-rpmostree_override_builtin_remove (int argc, char **argv,
-                                   RpmOstreeCommandInvocation *invocation,
-                                   GCancellable *cancellable,
-                                   GError **error)
+rpmostree_override_builtin_remove (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                   GCancellable *cancellable, GError **error)
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
@@ -255,39 +235,30 @@ rpmostree_override_builtin_remove (int argc, char **argv,
 
   g_option_context_add_main_entries (context, remove_option_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       &install_pkgs,
-                                       &uninstall_pkgs,
-                                       &sysroot_proxy,
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, &install_pkgs, &uninstall_pkgs, &sysroot_proxy,
                                        error))
     return FALSE;
 
   if (argc < 2)
     {
-      rpmostree_usage_error (context, "At least one PACKAGE must be specified",
-                             error);
+      rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
       return FALSE;
     }
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
    * might have moved args around) */
-  argv++; argc--;
+  argv++;
+  argc--;
   argv[argc] = NULL;
 
-  return handle_override (sysroot_proxy, invocation,
-                          (const char *const*)argv, opt_replace_pkgs, NULL,
-                          cancellable, error);
+  return handle_override (sysroot_proxy, invocation, (const char *const *)argv, opt_replace_pkgs,
+                          NULL, cancellable, error);
 }
 
 gboolean
-rpmostree_override_builtin_reset (int argc, char **argv,
-                                  RpmOstreeCommandInvocation *invocation,
-                                  GCancellable *cancellable,
-                                  GError **error)
+rpmostree_override_builtin_reset (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                  GCancellable *cancellable, GError **error)
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
@@ -296,36 +267,28 @@ rpmostree_override_builtin_reset (int argc, char **argv,
 
   g_option_context_add_main_entries (context, reset_option_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       &install_pkgs,
-                                       &uninstall_pkgs,
-                                       &sysroot_proxy,
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, &install_pkgs, &uninstall_pkgs, &sysroot_proxy,
                                        error))
     return FALSE;
 
   if (argc < 2 && !opt_reset_all)
     {
-      rpmostree_usage_error (context, "At least one PACKAGE must be specified",
-                             error);
+      rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
       return FALSE;
     }
   else if (opt_reset_all && argc >= 2)
     {
-      rpmostree_usage_error (context, "Cannot specify PACKAGEs with --all",
-                             error);
+      rpmostree_usage_error (context, "Cannot specify PACKAGEs with --all", error);
       return FALSE;
     }
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
    * might have moved args around) */
-  argv++; argc--;
+  argv++;
+  argc--;
   argv[argc] = NULL;
 
-  return handle_override (sysroot_proxy, invocation,
-                          NULL, NULL, (const char *const*)argv,
+  return handle_override (sysroot_proxy, invocation, NULL, NULL, (const char *const *)argv,
                           cancellable, error);
 }

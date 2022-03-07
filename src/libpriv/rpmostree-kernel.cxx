@@ -22,21 +22,21 @@
 
 #include "string.h"
 
-#include <ostree.h>
-#include <errno.h>
-#include <stdio.h>
-#include <utime.h>
 #include <err.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <libglnx.h>
-#include <stdlib.h>
+#include <errno.h>
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
+#include <libglnx.h>
+#include <ostree.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <utime.h>
 
 #include "rpmostree-core.h"
-#include "rpmostree-kernel.h"
 #include "rpmostree-cxxrs.h"
+#include "rpmostree-kernel.h"
 #include "rpmostree-util.h"
 
 static const char usrlib_ostreeboot[] = "usr/lib/ostree-boot";
@@ -46,17 +46,16 @@ static const char usrlib_ostreeboot[] = "usr/lib/ostree-boot";
  * to support grabbing wherever the Fedora kernel RPM dropped files as well.
  */
 static gboolean
-find_kernel_and_initramfs_in_bootdir (int          rootfs_dfd,
-                                      const char  *bootdir,
-                                      char       **out_kernel,
-                                      char       **out_initramfs,
-                                      GCancellable *cancellable,
-                                      GError     **error)
+find_kernel_and_initramfs_in_bootdir (int rootfs_dfd, const char *bootdir, char **out_kernel,
+                                      char **out_initramfs, GCancellable *cancellable,
+                                      GError **error)
 {
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  g_auto (GLnxDirFdIterator) dfd_iter = {
+    0,
+  };
   glnx_autofd int dfd = -1;
-  g_autofree char* ret_kernel = NULL;
-  g_autofree char* ret_initramfs = NULL;
+  g_autofree char *ret_kernel = NULL;
+  g_autofree char *ret_initramfs = NULL;
 
   *out_kernel = *out_initramfs = NULL;
 
@@ -111,14 +110,13 @@ find_kernel_and_initramfs_in_bootdir (int          rootfs_dfd,
  * return an error.
  */
 static gboolean
-find_ensure_one_subdirectory (int            rootfs_dfd,
-                              const char    *subpath,
-                              char         **out_subdir,
-                              GCancellable  *cancellable,
-                              GError       **error)
+find_ensure_one_subdirectory (int rootfs_dfd, const char *subpath, char **out_subdir,
+                              GCancellable *cancellable, GError **error)
 {
   g_autofree char *ret_subdir = NULL;
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  g_auto (GLnxDirFdIterator) dfd_iter = {
+    0,
+  };
 
   if (!glnx_dirfd_iterator_init_at (rootfs_dfd, subpath, TRUE, &dfd_iter, error))
     return FALSE;
@@ -138,7 +136,8 @@ find_ensure_one_subdirectory (int            rootfs_dfd,
       if (ret_subdir)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Multiple subdirectories found in: %s: %s %s", subpath, glnx_basename (ret_subdir), dent->d_name);
+                       "Multiple subdirectories found in: %s: %s %s", subpath,
+                       glnx_basename (ret_subdir), dent->d_name);
           return FALSE;
         }
       ret_subdir = g_strconcat (subpath, "/", dent->d_name, NULL);
@@ -149,15 +148,11 @@ find_ensure_one_subdirectory (int            rootfs_dfd,
 }
 
 static gboolean
-kernel_remove_in (int rootfs_dfd,
-                  const char *bootdir,
-                  GCancellable *cancellable,
-                  GError **error)
+kernel_remove_in (int rootfs_dfd, const char *bootdir, GCancellable *cancellable, GError **error)
 {
-  g_autofree char* kernel_path = NULL;
-  g_autofree char* initramfs_path = NULL;
-  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
-                                             &kernel_path, &initramfs_path,
+  g_autofree char *kernel_path = NULL;
+  g_autofree char *initramfs_path = NULL;
+  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kernel_path, &initramfs_path,
                                              cancellable, error))
     return FALSE;
 
@@ -173,7 +168,6 @@ kernel_remove_in (int rootfs_dfd,
     }
 
   return TRUE;
-
 }
 
 /* Given a root filesystem, delete all kernel/initramfs data from it.
@@ -182,13 +176,11 @@ kernel_remove_in (int rootfs_dfd,
  * Used by `rpm-ostree override replace ./kernel-42.x86_64.rpm`.
  */
 gboolean
-rpmostree_kernel_remove (int rootfs_dfd,
-                         GCancellable *cancellable,
-                         GError **error)
+rpmostree_kernel_remove (int rootfs_dfd, GCancellable *cancellable, GError **error)
 {
-  g_autofree char* modversion_dir = NULL;
-  if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules",
-                                     &modversion_dir, cancellable, error))
+  g_autofree char *modversion_dir = NULL;
+  if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules", &modversion_dir, cancellable,
+                                     error))
     return FALSE;
   if (modversion_dir)
     {
@@ -205,9 +197,11 @@ rpmostree_kernel_remove (int rootfs_dfd,
        * See also `/usr/lib/kernel/install.d/50-depmod.install`
        * which is run by `kernel-install remove` from RPM `%postun`.
        */
-      const char *depmod_files[] = {"modules.alias", "modules.alias.bin", "modules.builtin.alias.bin", "modules.builtin.bin",
-                                    "modules.dep", "modules.dep.bin", "modules.devname",
-                                    "modules.softdep", "modules.symbols", "modules.symbols.bin" };
+      const char *depmod_files[]
+          = { "modules.alias",       "modules.alias.bin", "modules.builtin.alias.bin",
+              "modules.builtin.bin", "modules.dep",       "modules.dep.bin",
+              "modules.devname",     "modules.softdep",   "modules.symbols",
+              "modules.symbols.bin" };
       for (guint i = 0; i < G_N_ELEMENTS (depmod_files); i++)
         {
           const char *name = depmod_files[i];
@@ -233,27 +227,24 @@ rpmostree_kernel_remove (int rootfs_dfd,
  *  - initramfs_path: Relative (to rootfs) path to initramfs (may be NULL if no initramfs)
  */
 GVariant *
-rpmostree_find_kernel (int rootfs_dfd,
-                       GCancellable *cancellable,
-                       GError **error)
+rpmostree_find_kernel (int rootfs_dfd, GCancellable *cancellable, GError **error)
 {
   /* Fetch the kver from /usr/lib/modules */
-  g_autofree char* modversion_dir = NULL;
-  if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules",
-                                     &modversion_dir, cancellable, error))
+  g_autofree char *modversion_dir = NULL;
+  if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules", &modversion_dir, cancellable,
+                                     error))
     return NULL;
 
   if (!modversion_dir)
-    return (GVariant*)glnx_null_throw (error, "/usr/lib/modules is empty");
+    return (GVariant *)glnx_null_throw (error, "/usr/lib/modules is empty");
 
   const char *kver = glnx_basename (modversion_dir);
 
   /* First, look for the kernel in the canonical ostree directory */
-  g_autofree char* kernel_path = NULL;
-  g_autofree char* initramfs_path = NULL;
+  g_autofree char *kernel_path = NULL;
+  g_autofree char *initramfs_path = NULL;
   g_autofree char *bootdir = g_strdup (usrlib_ostreeboot);
-  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
-                                             &kernel_path, &initramfs_path,
+  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kernel_path, &initramfs_path,
                                              cancellable, error))
     return NULL;
 
@@ -263,8 +254,7 @@ rpmostree_find_kernel (int rootfs_dfd,
       g_free (bootdir);
       bootdir = g_strdup ("boot");
 
-      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
-                                                 &kernel_path, &initramfs_path,
+      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kernel_path, &initramfs_path,
                                                  cancellable, error))
         return NULL;
     }
@@ -274,15 +264,16 @@ rpmostree_find_kernel (int rootfs_dfd,
     {
       g_free (bootdir);
       bootdir = util::move_nullify (modversion_dir);
-      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
-                                                 &kernel_path, &initramfs_path,
+      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kernel_path, &initramfs_path,
                                                  cancellable, error))
         return NULL;
     }
 
   if (kernel_path == NULL)
-    return (GVariant*)glnx_null_throw (error, "Unable to find kernel (vmlinuz) in /boot "
-                                              "or /usr/lib/modules (bootdir=%s)", bootdir);
+    return (GVariant *)glnx_null_throw (error,
+                                        "Unable to find kernel (vmlinuz) in /boot "
+                                        "or /usr/lib/modules (bootdir=%s)",
+                                        bootdir);
 
   return g_variant_ref_sink (g_variant_new ("(sssms)", kver, bootdir, kernel_path, initramfs_path));
 }
@@ -294,21 +285,15 @@ rpmostree_find_kernel (int rootfs_dfd,
  * if it isn't being used.
  */
 static gboolean
-copy_kernel_into (int rootfs_dfd,
-                  const char *kver,
-                  const char *boot_checksum_str,
-                  const char *kernel_modules_path,
-                  const char *initramfs_modules_path,
-                  gboolean only_if_found,
-                  const char *bootdir,
-                  GCancellable *cancellable,
+copy_kernel_into (int rootfs_dfd, const char *kver, const char *boot_checksum_str,
+                  const char *kernel_modules_path, const char *initramfs_modules_path,
+                  gboolean only_if_found, const char *bootdir, GCancellable *cancellable,
                   GError **error)
 {
   g_autofree char *legacy_kernel_path = NULL;
-  g_autofree char* legacy_initramfs_path = NULL;
-  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
-                                             &legacy_kernel_path, &legacy_initramfs_path,
-                                             cancellable, error))
+  g_autofree char *legacy_initramfs_path = NULL;
+  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &legacy_kernel_path,
+                                             &legacy_initramfs_path, cancellable, error))
     return FALSE;
 
   /* No kernel found? Skip to the next if we're in "auto"
@@ -335,7 +320,8 @@ copy_kernel_into (int rootfs_dfd,
         return FALSE;
       g_free (legacy_initramfs_path);
     }
-  legacy_initramfs_path = g_strconcat (bootdir, "/", "initramfs-", kver, ".img-", boot_checksum_str, NULL);
+  legacy_initramfs_path
+      = g_strconcat (bootdir, "/", "initramfs-", kver, ".img-", boot_checksum_str, NULL);
   if (linkat (rootfs_dfd, initramfs_modules_path, rootfs_dfd, legacy_initramfs_path, 0) < 0)
     return glnx_throw_errno_prefix (error, "linkat(%s)", legacy_initramfs_path);
 
@@ -347,13 +333,9 @@ copy_kernel_into (int rootfs_dfd,
  * /boot paths where we need to pre-compute their checksum.
  */
 gboolean
-rpmostree_finalize_kernel (int rootfs_dfd,
-                           const char *bootdir,
-                           const char *kver,
-                           const char *kernel_path,
-                           GLnxTmpfile *initramfs_tmpf,
-                           RpmOstreeFinalizeKernelDestination dest,
-                           GCancellable *cancellable,
+rpmostree_finalize_kernel (int rootfs_dfd, const char *bootdir, const char *kver,
+                           const char *kernel_path, GLnxTmpfile *initramfs_tmpf,
+                           RpmOstreeFinalizeKernelDestination dest, GCancellable *cancellable,
                            GError **error)
 {
   const char slash_bootdir[] = "boot";
@@ -363,20 +345,20 @@ rpmostree_finalize_kernel (int rootfs_dfd,
    * checksum"). We checksum the initramfs from the tmpfile fd (via mmap()) to
    * avoid writing it to disk in another temporary location.
    */
-  g_autoptr(GChecksum) boot_checksum = g_checksum_new (G_CHECKSUM_SHA256);
+  g_autoptr (GChecksum) boot_checksum = g_checksum_new (G_CHECKSUM_SHA256);
   if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, kernel_path,
                                                   cancellable, error))
     return FALSE;
 
-  g_autofree char *initramfs_modules_path =
-    g_build_filename (modules_bootdir, "initramfs.img", NULL);
+  g_autofree char *initramfs_modules_path
+      = g_build_filename (modules_bootdir, "initramfs.img", NULL);
 
   if (initramfs_tmpf && initramfs_tmpf->initialized)
     {
-      g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmpf->fd, FALSE, error);
+      g_autoptr (GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmpf->fd, FALSE, error);
       if (!mfile)
         return glnx_prefix_error (error, "mmap(initramfs)");
-      g_checksum_update (boot_checksum, (guint8*)g_mapped_file_get_contents (mfile),
+      g_checksum_update (boot_checksum, (guint8 *)g_mapped_file_get_contents (mfile),
                          g_mapped_file_get_length (mfile));
 
       /* Replace the initramfs */
@@ -385,17 +367,15 @@ rpmostree_finalize_kernel (int rootfs_dfd,
           if (errno != ENOENT)
             return glnx_throw_errno_prefix (error, "unlinkat(%s)", initramfs_modules_path);
         }
-      if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                                 rootfs_dfd, initramfs_modules_path,
-                                 error))
+      if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE, rootfs_dfd,
+                                 initramfs_modules_path, error))
         return glnx_prefix_error (error, "Linking initramfs");
     }
   else
     {
       /* we're not replacing the initramfs; use built-in one */
       if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd,
-                                                      initramfs_modules_path, cancellable,
-                                                      error))
+                                                      initramfs_modules_path, cancellable, error))
         return FALSE;
     }
 
@@ -431,16 +411,15 @@ rpmostree_finalize_kernel (int rootfs_dfd,
     return FALSE;
   if (errno == 0)
     {
-      g_autofree char *contents = glnx_file_get_contents_utf8_at (rootfs_dfd, hmac_path,
-                                                                  NULL, cancellable, error);
+      g_autofree char *contents
+          = glnx_file_get_contents_utf8_at (rootfs_dfd, hmac_path, NULL, cancellable, error);
       if (contents == NULL)
         return FALSE;
 
       /* rather than trying to parse and understand the *sum format, just hackily replace */
       g_autofree char *old_path = g_strconcat ("  /boot/vmlinuz-", kver, NULL);
       g_autofree char *new_path = g_strconcat ("  vmlinuz-", kver, NULL);
-      g_autofree char *new_contents =
-        rpmostree_str_replace (contents, old_path, new_path, error);
+      g_autofree char *new_contents = rpmostree_str_replace (contents, old_path, new_path, error);
       if (!new_contents)
         return FALSE;
 
@@ -449,9 +428,9 @@ rpmostree_finalize_kernel (int rootfs_dfd,
       if (strchr (new_contents, '/') != 0)
         return glnx_throw (error, "Unexpected / in .vmlinuz.hmac: %s", new_contents);
 
-      if (!glnx_file_replace_contents_at (rootfs_dfd, hmac_path,
-                                          (guint8*)new_contents, -1, static_cast<GLnxFileReplaceFlags>(0),
-                                          cancellable, error))
+      if (!glnx_file_replace_contents_at (rootfs_dfd, hmac_path, (guint8 *)new_contents, -1,
+                                          static_cast<GLnxFileReplaceFlags> (0), cancellable,
+                                          error))
         return FALSE;
     }
 
@@ -459,69 +438,64 @@ rpmostree_finalize_kernel (int rootfs_dfd,
   const gboolean only_if_found = (dest == RPMOSTREE_FINALIZE_KERNEL_AUTO);
   if (only_if_found || dest >= RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT)
     {
-      if (!copy_kernel_into (rootfs_dfd, kver, boot_checksum_str,
-                             kernel_modules_path, initramfs_modules_path,
-                             only_if_found, usrlib_ostreeboot,
-                             cancellable, error))
+      if (!copy_kernel_into (rootfs_dfd, kver, boot_checksum_str, kernel_modules_path,
+                             initramfs_modules_path, only_if_found, usrlib_ostreeboot, cancellable,
+                             error))
         return FALSE;
     }
   if (only_if_found || dest >= RPMOSTREE_FINALIZE_KERNEL_SLASH_BOOT)
     {
-      if (!copy_kernel_into (rootfs_dfd, kver, boot_checksum_str,
-                             kernel_modules_path, initramfs_modules_path,
-                             only_if_found, slash_bootdir,
-                             cancellable, error))
+      if (!copy_kernel_into (rootfs_dfd, kver, boot_checksum_str, kernel_modules_path,
+                             initramfs_modules_path, only_if_found, slash_bootdir, cancellable,
+                             error))
         return FALSE;
     }
   return TRUE;
 }
 
-struct Unlinker {
+struct Unlinker
+{
   int rootfs_dfd;
   const char *path;
 
-  ~Unlinker() {
-    (void) unlinkat (rootfs_dfd, path, 0);
-  }
+  ~Unlinker () { (void)unlinkat (rootfs_dfd, path, 0); }
 };
 
 gboolean
-rpmostree_run_dracut (int     rootfs_dfd,
-                      const char *const* argv,
-                      const char *kver,
-                      const char *rebuild_from_initramfs,
-                      gboolean     use_root_etc,
-                      GLnxTmpDir  *dracut_host_tmpdir,
-                      GLnxTmpfile *out_initramfs_tmpf,
-                      GCancellable  *cancellable,
-                      GError **error)
+rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
+                      const char *rebuild_from_initramfs, gboolean use_root_etc,
+                      GLnxTmpDir *dracut_host_tmpdir, GLnxTmpfile *out_initramfs_tmpf,
+                      GCancellable *cancellable, GError **error)
 {
-  auto destdir = rpmostreecxx::cliwrap_destdir();
+  auto destdir = rpmostreecxx::cliwrap_destdir ();
   /* Shell wrapper around dracut to write to the O_TMPFILE fd;
    * at some point in the future we should add --fd X instead of -f
    * to dracut.
    */
   static const char rpmostree_dracut_wrapper_path[] = "usr/bin/rpmostree-dracut-wrapper";
   /* This also hardcodes a few arguments */
-  g_autofree char * rpmostree_dracut_wrapper =
-    g_strdup_printf (
-    "#!/usr/bin/bash\n"
-    "set -euo pipefail\n"
-    "export PATH=%s:${PATH}\n"
-    "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then extra_argv=\"--reproducible --gzip\"; fi\n"
-    "mkdir -p /tmp/dracut && dracut $extra_argv -v --add ostree --tmpdir=/tmp/dracut -f /tmp/initramfs.img \"$@\"\n"
-    "cat /tmp/initramfs.img >/proc/self/fd/3\n",
-    destdir.c_str());
-  g_autoptr(GPtrArray) rebuild_argv = NULL;
-  g_auto(GLnxTmpfile) tmpf = { 0, };
+  g_autofree char *rpmostree_dracut_wrapper
+      = g_strdup_printf ("#!/usr/bin/bash\n"
+                         "set -euo pipefail\n"
+                         "export PATH=%s:${PATH}\n"
+                         "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then "
+                         "extra_argv=\"--reproducible --gzip\"; fi\n"
+                         "mkdir -p /tmp/dracut && dracut $extra_argv -v --add ostree "
+                         "--tmpdir=/tmp/dracut -f /tmp/initramfs.img \"$@\"\n"
+                         "cat /tmp/initramfs.img >/proc/self/fd/3\n",
+                         destdir.c_str ());
+  g_autoptr (GPtrArray) rebuild_argv = NULL;
+  g_auto (GLnxTmpfile) tmpf = {
+    0,
+  };
 
   /* We need to have /etc/passwd since dracut doesn't have altfiles
    * today.  Though maybe in the future we should add it, but
    * in the end we want to use systemd-sysusers of course.
    **/
-  auto etc_guard = CXX_TRY_VAL(prepare_tempetc_guard (rootfs_dfd), error);
+  auto etc_guard = CXX_TRY_VAL (prepare_tempetc_guard (rootfs_dfd), error);
 
-  gboolean have_passwd = CXX_TRY_VAL(prepare_rpm_layering (rootfs_dfd, ""), error);
+  gboolean have_passwd = CXX_TRY_VAL (prepare_rpm_layering (rootfs_dfd, ""), error);
 
   /* Note rebuild_from_initramfs now is only used as a fallback in the client-side regen
    * path when we can't fetch the canonical initramfs args to use. */
@@ -529,69 +503,64 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (rebuild_from_initramfs)
     {
       rebuild_argv = g_ptr_array_new ();
-      g_ptr_array_add (rebuild_argv, (char*)"--rebuild");
-      g_ptr_array_add (rebuild_argv, (char*)rebuild_from_initramfs);
+      g_ptr_array_add (rebuild_argv, (char *)"--rebuild");
+      g_ptr_array_add (rebuild_argv, (char *)rebuild_from_initramfs);
 
       /* In this case, any args specified in argv are *additional*
        * to the rebuild from the base.
        */
-      for (char **iter = (char**)argv; iter && *iter; iter++)
+      for (char **iter = (char **)argv; iter && *iter; iter++)
         g_ptr_array_add (rebuild_argv, *iter);
       g_ptr_array_add (rebuild_argv, NULL);
-      argv = (const char *const*)rebuild_argv->pdata;
+      argv = (const char *const *)rebuild_argv->pdata;
     }
 
   /* First tempfile is just our shell script */
-  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "usr/bin",
-                                      O_RDWR | O_CLOEXEC,
-                                      &tmpf, error))
+  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "usr/bin", O_RDWR | O_CLOEXEC, &tmpf, error))
     return FALSE;
   if (glnx_loop_write (tmpf.fd, rpmostree_dracut_wrapper, strlen (rpmostree_dracut_wrapper)) < 0
       || fchmod (tmpf.fd, 0755) < 0)
     return glnx_throw_errno_prefix (error, "writing");
 
-  if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                             rootfs_dfd, rpmostree_dracut_wrapper_path,
-                             error))
+  if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE, rootfs_dfd,
+                             rpmostree_dracut_wrapper_path, error))
     return FALSE;
   /* Close the fd now, otherwise an exec will fail */
   glnx_tmpfile_clear (&tmpf);
 
-  auto unlinker = Unlinker{ .rootfs_dfd=rootfs_dfd, .path=rpmostree_dracut_wrapper_path };
+  auto unlinker = Unlinker{ .rootfs_dfd = rootfs_dfd, .path = rpmostree_dracut_wrapper_path };
 
   /* Second tempfile is the initramfs contents.  Note we generate the tmpfile
    * in . since in the current rpm-ostree design the temporary rootfs may not have tmp/
    * as a real mountpoint.
    */
-  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".",
-                                      O_RDWR | O_CLOEXEC,
-                                      &tmpf, error))
+  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".", O_RDWR | O_CLOEXEC, &tmpf, error))
     return FALSE;
 
-  auto bwrap = CXX_TRY_VAL(bubblewrap_new(rootfs_dfd), error);
+  auto bwrap = CXX_TRY_VAL (bubblewrap_new (rootfs_dfd), error);
   if (use_root_etc)
     {
-      bwrap->bind_read("/etc", "/etc");
-      bwrap->bind_read("usr", "/usr");
+      bwrap->bind_read ("/etc", "/etc");
+      bwrap->bind_read ("usr", "/usr");
     }
   else
     {
-      bwrap->bind_read("usr/etc", "/etc");
-      bwrap->bind_read("usr", "/usr");
+      bwrap->bind_read ("usr/etc", "/etc");
+      bwrap->bind_read ("usr", "/usr");
     }
 
   if (dracut_host_tmpdir)
-    bwrap->bind_readwrite(dracut_host_tmpdir->path, "/tmp/dracut");
+    bwrap->bind_readwrite (dracut_host_tmpdir->path, "/tmp/dracut");
 
   /* Set up argv and run */
-  bwrap->append_child_arg((const char*)glnx_basename (rpmostree_dracut_wrapper_path));
-  for (char **iter = (char**)argv; iter && *iter; iter++)
-    bwrap->append_child_arg(*iter);
+  bwrap->append_child_arg ((const char *)glnx_basename (rpmostree_dracut_wrapper_path));
+  for (char **iter = (char **)argv; iter && *iter; iter++)
+    bwrap->append_child_arg (*iter);
 
   if (kver)
     {
-      bwrap->append_child_arg("--kver");
-      bwrap->append_child_arg(kver);
+      bwrap->append_child_arg ("--kver");
+      bwrap->append_child_arg (kver);
     }
 
   // Pass the tempfile to the child as fd 3
@@ -600,7 +569,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
     return glnx_throw_errno_prefix (error, "fnctl");
   bwrap->take_fd (glnx_steal_fd (&tmpf_child), 3);
 
-  bwrap->run(*cancellable);
+  bwrap->run (*cancellable);
 
   /* For FIPS mode we need /dev/urandom pre-created because the FIPS
    * standards authors require that randomness is tested in a
@@ -613,17 +582,18 @@ rpmostree_run_dracut (int     rootfs_dfd,
   auto random_cpio_data = rpmostreecxx::get_dracut_random_cpio ();
   if (lseek (tmpf.fd, 0, SEEK_END) < 0)
     return glnx_throw_errno_prefix (error, "lseek");
-  if (glnx_loop_write (tmpf.fd, random_cpio_data.data(), random_cpio_data.length()) < 0)
+  if (glnx_loop_write (tmpf.fd, random_cpio_data.data (), random_cpio_data.length ()) < 0)
     return glnx_throw_errno_prefix (error, "write");
 
   if (rebuild_from_initramfs)
-    (void) unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
+    (void)unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
 
   if (have_passwd)
-    CXX_TRY(complete_rpm_layering (rootfs_dfd), error);
+    CXX_TRY (complete_rpm_layering (rootfs_dfd), error);
 
-  etc_guard->undo();
+  etc_guard->undo ();
 
-  *out_initramfs_tmpf = tmpf; tmpf.initialized = FALSE; /* Transfer */
+  *out_initramfs_tmpf = tmpf;
+  tmpf.initialized = FALSE; /* Transfer */
   return TRUE;
 }

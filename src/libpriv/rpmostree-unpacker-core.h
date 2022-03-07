@@ -23,13 +23,13 @@
 #include <ostree.h>
 
 #include "libglnx.h"
-#include <rpm/rpmlib.h>
-#include <libdnf/libdnf.h>
 #include <archive.h>
 #include <archive_entry.h>
+#include <libdnf/libdnf.h>
+#include <rpm/rpmlib.h>
 
 G_BEGIN_DECLS
 
-struct archive * rpmostree_unpack_rpm2cpio (int fd, GError **error);
+struct archive *rpmostree_unpack_rpm2cpio (int fd, GError **error);
 
 G_END_DECLS

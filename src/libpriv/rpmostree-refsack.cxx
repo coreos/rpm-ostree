@@ -20,15 +20,15 @@
 
 #include "config.h"
 
-#include <string.h>
 #include "rpmostree-refsack.h"
 #include "rpmostree-rpm-util.h"
+#include <string.h>
 
 RpmOstreeRefSack *
 rpmostree_refsack_new (DnfSack *sack, GLnxTmpDir *tmpdir)
 {
   RpmOstreeRefSack *rsack = g_new0 (RpmOstreeRefSack, 1);
-  rsack->sack = (DnfSack*)g_object_ref (sack);
+  rsack->sack = (DnfSack *)g_object_ref (sack);
   rsack->refcount = 1;
   if (tmpdir)
     {

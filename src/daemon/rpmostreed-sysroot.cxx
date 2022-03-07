@@ -1,51 +1,50 @@
 /*
-* Copyright (C) 2015 Red Hat, Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
-*/
+ * Copyright (C) 2015 Red Hat, Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 
 #include "config.h"
 #include "ostree.h"
 
-#include "rpmostreed-daemon.h"
-#include "rpmostreed-sysroot.h"
-#include "rpmostreed-os.h"
-#include "rpmostreed-os-experimental.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-util.h"
-#include "rpmostreed-utils.h"
+#include "rpmostreed-daemon.h"
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-errors.h"
+#include "rpmostreed-os-experimental.h"
+#include "rpmostreed-os.h"
+#include "rpmostreed-sysroot.h"
 #include "rpmostreed-transaction.h"
-#include "rpmostree-cxxrs.h"
+#include "rpmostreed-utils.h"
 
 #include "rpmostree-output.h"
 
-#include <err.h>
 #include "libglnx.h"
+#include <err.h>
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
-#include <systemd/sd-login.h>
 #include <systemd/sd-journal.h>
+#include <systemd/sd-login.h>
 
 /* Avoid clients leaking their bus connections keeping the transaction open */
 #define FORCE_CLOSE_TXN_TIMEOUT_SECS 30
 
-static gboolean
-sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self,
-                                               gboolean *out_changed,
-                                               GError **error);
+static gboolean sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self,
+                                                               gboolean *out_changed,
+                                                               GError **error);
 
 /**
  * SECTION: sysroot
@@ -63,7 +62,8 @@ typedef struct _RpmostreedSysrootClass RpmostreedSysrootClass;
  * The #RpmostreedSysroot structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _RpmostreedSysroot {
+struct _RpmostreedSysroot
+{
   RPMOSTreeSysrootSkeleton parent_instance;
 
   OstreeSysroot *ot_sysroot;
@@ -81,11 +81,13 @@ struct _RpmostreedSysroot {
   guint sig_changed;
 };
 
-struct _RpmostreedSysrootClass {
+struct _RpmostreedSysrootClass
+{
   RPMOSTreeSysrootSkeletonClass parent_class;
 };
 
-enum {
+enum
+{
   UPDATED,
   NUM_SIGNALS
 };
@@ -93,15 +95,14 @@ enum {
 static guint signals[NUM_SIGNALS];
 static void rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (RpmostreedSysroot,
-                         rpmostreed_sysroot,
-                         RPMOSTREE_TYPE_SYSROOT_SKELETON,
+G_DEFINE_TYPE_WITH_CODE (RpmostreedSysroot, rpmostreed_sysroot, RPMOSTREE_TYPE_SYSROOT_SKELETON,
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_SYSROOT,
                                                 rpmostreed_sysroot_iface_init));
 
 static RpmostreedSysroot *_sysroot_instance;
 
-/* ---------------------------------------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------------------------------------
+ */
 
 static void
 sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
@@ -126,92 +127,90 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
 
   RPMOSTreeTransaction *transaction = RPMOSTREE_TRANSACTION (self->transaction);
   switch (type)
-  {
-  case RPMOSTREE_OUTPUT_MESSAGE:
-    rpmostree_transaction_emit_message (transaction, ((RpmOstreeOutputMessage*)data)->text);
-    break;
-  case RPMOSTREE_OUTPUT_PROGRESS_BEGIN:
     {
-      auto begin = static_cast<RpmOstreeOutputProgressBegin *>(data);
-      g_clear_pointer (&progress_str, g_free);
-      progress_state_percent = false;
-      progress_state_n_items = 0;
-      if (begin->percent)
-        {
-          progress_str = g_strdup (begin->prefix);
-          rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
-          progress_state_percent = true;
-        }
-      else if (begin->n > 0)
-        {
-          progress_str = g_strdup (begin->prefix);
-          progress_state_n_items = begin->n;
-          /* For backcompat, this is a percentage.  See below */
-          rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
-        }
-      else
-        {
-          rpmostree_transaction_emit_task_begin (transaction, begin->prefix);
-        }
+    case RPMOSTREE_OUTPUT_MESSAGE:
+      rpmostree_transaction_emit_message (transaction, ((RpmOstreeOutputMessage *)data)->text);
+      break;
+    case RPMOSTREE_OUTPUT_PROGRESS_BEGIN:
+      {
+        auto begin = static_cast<RpmOstreeOutputProgressBegin *> (data);
+        g_clear_pointer (&progress_str, g_free);
+        progress_state_percent = false;
+        progress_state_n_items = 0;
+        if (begin->percent)
+          {
+            progress_str = g_strdup (begin->prefix);
+            rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
+            progress_state_percent = true;
+          }
+        else if (begin->n > 0)
+          {
+            progress_str = g_strdup (begin->prefix);
+            progress_state_n_items = begin->n;
+            /* For backcompat, this is a percentage.  See below */
+            rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
+          }
+        else
+          {
+            rpmostree_transaction_emit_task_begin (transaction, begin->prefix);
+          }
+      }
+      break;
+    case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
+      {
+        auto update = static_cast<RpmOstreeOutputProgressUpdate *> (data);
+        if (progress_state_n_items)
+          {
+            /* We still emit PercentProgress for compatibility with older clients as
+             * well as Cockpit. It's not worth trying to deal with version skew just
+             * for this yet.
+             */
+            int percentage = (update->c == progress_state_n_items)
+                                 ? 100
+                                 : (((double)(update->c)) / (progress_state_n_items)*100);
+            g_autofree char *newtext
+                = g_strdup_printf ("%s (%u/%u)", progress_str, update->c, progress_state_n_items);
+            rpmostree_transaction_emit_percent_progress (transaction, newtext, percentage);
+          }
+        else
+          {
+            rpmostree_transaction_emit_percent_progress (transaction, progress_str, update->c);
+          }
+      }
+      break;
+    case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
+      {
+        /* Not handled right now */
+      }
+      break;
+    case RPMOSTREE_OUTPUT_PROGRESS_END:
+      {
+        if (progress_state_percent || progress_state_n_items > 0)
+          {
+            rpmostree_transaction_emit_progress_end (transaction);
+          }
+        else
+          {
+            rpmostree_transaction_emit_task_end (transaction, "done");
+          }
+      }
+      break;
     }
-    break;
-  case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
-    {
-      auto update = static_cast<RpmOstreeOutputProgressUpdate *>(data);
-      if (progress_state_n_items)
-        {
-          /* We still emit PercentProgress for compatibility with older clients as
-           * well as Cockpit. It's not worth trying to deal with version skew just
-           * for this yet.
-           */
-          int percentage = (update->c == progress_state_n_items) ? 100 :
-            (((double)(update->c)) / (progress_state_n_items) * 100);
-          g_autofree char *newtext = g_strdup_printf ("%s (%u/%u)", progress_str, update->c, progress_state_n_items);
-          rpmostree_transaction_emit_percent_progress (transaction, newtext, percentage);
-        }
-      else
-        {
-          rpmostree_transaction_emit_percent_progress (transaction, progress_str, update->c);
-        }
-    }
-    break;
-  case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
-    {
-      /* Not handled right now */
-    }
-    break;
-  case RPMOSTREE_OUTPUT_PROGRESS_END:
-    {
-      if (progress_state_percent || progress_state_n_items > 0)
-        {
-          rpmostree_transaction_emit_progress_end (transaction);
-        }
-      else
-        {
-          rpmostree_transaction_emit_task_end (transaction, "done");
-        }
-    }
-    break;
-  }
 }
 
 static gboolean
-handle_get_os (RPMOSTreeSysroot *object,
-               GDBusMethodInvocation *invocation,
-               const char *arg_name)
+handle_get_os (RPMOSTreeSysroot *object, GDBusMethodInvocation *invocation, const char *arg_name)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
 
   if (arg_name[0] == '\0')
     {
-      rpmostree_sysroot_complete_get_os (object,
-                                         invocation,
-                                         rpmostree_sysroot_dup_booted (object));
-        return FALSE;
+      rpmostree_sysroot_complete_get_os (object, invocation, rpmostree_sysroot_dup_booted (object));
+      return FALSE;
     }
 
-  g_autoptr(GDBusInterfaceSkeleton) os_interface =
-    (GDBusInterfaceSkeleton*)g_hash_table_lookup (self->os_interfaces, arg_name);
+  g_autoptr (GDBusInterfaceSkeleton) os_interface
+      = (GDBusInterfaceSkeleton *)g_hash_table_lookup (self->os_interfaces, arg_name);
   if (os_interface != NULL)
     g_object_ref (os_interface);
 
@@ -222,19 +221,15 @@ handle_get_os (RPMOSTreeSysroot *object,
     }
   else
     {
-      g_dbus_method_invocation_return_error (invocation,
-                                             G_IO_ERROR,
-                                             G_IO_ERROR_NOT_FOUND,
-                                             "OS name \"%s\" not found",
-                                             arg_name);
+      g_dbus_method_invocation_return_error (invocation, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                                             "OS name \"%s\" not found", arg_name);
     }
 
   return TRUE;
 }
 
 static gboolean
-sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
-                                       gboolean *out_changed,
+sysroot_populate_deployments_unlocked (RpmostreedSysroot *self, gboolean *out_changed,
                                        GError **error)
 {
   /* just set the out var early */
@@ -249,9 +244,9 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
   if (!glnx_fstat (ostree_repo_get_dfd (self->repo), &repo_new_stat, error))
     return FALSE;
 
-  const gboolean repo_changed =
-    !((self->repo_last_stat.st_mtim.tv_sec  == repo_new_stat.st_mtim.tv_sec) &&
-      (self->repo_last_stat.st_mtim.tv_nsec == repo_new_stat.st_mtim.tv_nsec));
+  const gboolean repo_changed
+      = !((self->repo_last_stat.st_mtim.tv_sec == repo_new_stat.st_mtim.tv_sec)
+          && (self->repo_last_stat.st_mtim.tv_nsec == repo_new_stat.st_mtim.tv_nsec));
   if (repo_changed)
     self->repo_last_stat = repo_new_stat;
 
@@ -263,8 +258,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
   GVariantBuilder builder;
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
 
-  g_autoptr(GHashTable) seen_osnames =
-    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+  g_autoptr (GHashTable) seen_osnames = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
 
   /* Updated booted property; object owned by sysroot */
   g_autofree gchar *booted_id = NULL;
@@ -274,8 +268,8 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
       const gchar *os = ostree_deployment_get_osname (booted);
       g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, os, NULL);
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
-      auto bootedid_v = CXX_TRY_VAL(deployment_generate_id(*booted), error);
-      booted_id = g_strdup(bootedid_v.c_str());
+      auto bootedid_v = CXX_TRY_VAL (deployment_generate_id (*booted), error);
+      booted_id = g_strdup (bootedid_v.c_str ());
     }
   else
     {
@@ -283,14 +277,14 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
     }
 
   /* Add deployment interfaces */
-  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (self->ot_sysroot);
+  g_autoptr (GPtrArray) deployments = ostree_sysroot_get_deployments (self->ot_sysroot);
 
   for (guint i = 0; deployments != NULL && i < deployments->len; i++)
     {
-      auto deployment = static_cast<OstreeDeployment *>(deployments->pdata[i]);
+      auto deployment = static_cast<OstreeDeployment *> (deployments->pdata[i]);
       GVariant *variant = NULL;
-      if (!rpmostreed_deployment_generate_variant (self->ot_sysroot, deployment,
-            booted_id, self->repo, TRUE, &variant, error))
+      if (!rpmostreed_deployment_generate_variant (self->ot_sysroot, deployment, booted_id,
+                                                   self->repo, TRUE, &variant, error))
         return glnx_prefix_error (error, "Reading deployment %u", i);
 
       g_variant_builder_add_value (&builder, variant);
@@ -302,33 +296,30 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
        */
       if (!g_hash_table_contains (self->os_interfaces, deployment_os))
         {
-          RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, self->repo,
-                                                deployment_os);
+          RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, self->repo, deployment_os);
           g_hash_table_insert (self->os_interfaces, g_strdup (deployment_os), obj);
 
-          RPMOSTreeOSExperimental *eobj = rpmostreed_osexperimental_new (self->ot_sysroot, self->repo,
-                                                                         deployment_os);
+          RPMOSTreeOSExperimental *eobj
+              = rpmostreed_osexperimental_new (self->ot_sysroot, self->repo, deployment_os);
           g_hash_table_insert (self->osexperimental_interfaces, g_strdup (deployment_os), eobj);
-
         }
       /* Owned by deployment, hash lifetime is smaller */
-      g_hash_table_add (seen_osnames, (char*)deployment_os);
+      g_hash_table_add (seen_osnames, (char *)deployment_os);
     }
 
   /* Remove dead os paths */
-  GLNX_HASH_TABLE_FOREACH_IT (self->os_interfaces, it, const char*, k, GObject*, v)
-    {
-      if (!g_hash_table_contains (seen_osnames, k))
-        {
-          g_object_run_dispose (G_OBJECT (v));
-          g_hash_table_iter_remove (&it);
+  GLNX_HASH_TABLE_FOREACH_IT (self->os_interfaces, it, const char *, k, GObject *, v)
+  {
+    if (!g_hash_table_contains (seen_osnames, k))
+      {
+        g_object_run_dispose (G_OBJECT (v));
+        g_hash_table_iter_remove (&it);
 
-          g_hash_table_remove (self->osexperimental_interfaces, k);
-        }
-    }
+        g_hash_table_remove (self->osexperimental_interfaces, k);
+      }
+  }
 
-  rpmostree_sysroot_set_deployments (RPMOSTREE_SYSROOT (self),
-                                     g_variant_builder_end (&builder));
+  rpmostree_sysroot_set_deployments (RPMOSTREE_SYSROOT (self), g_variant_builder_end (&builder));
   g_debug ("finished deployments");
 
   if (out_changed)
@@ -337,14 +328,13 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
 }
 
 static gboolean
-handle_register_client (RPMOSTreeSysroot *object,
-                        GDBusMethodInvocation *invocation,
+handle_register_client (RPMOSTreeSysroot *object, GDBusMethodInvocation *invocation,
                         GVariant *arg_options)
 {
   const char *sender = g_dbus_method_invocation_get_sender (invocation);
   g_assert (sender);
 
-  g_autoptr(GVariantDict) optdict = g_variant_dict_new (arg_options);
+  g_autoptr (GVariantDict) optdict = g_variant_dict_new (arg_options);
   const char *client_id = NULL;
   g_variant_dict_lookup (optdict, "id", "&s", &client_id);
 
@@ -355,8 +345,7 @@ handle_register_client (RPMOSTreeSysroot *object,
 }
 
 static gboolean
-handle_unregister_client (RPMOSTreeSysroot *object,
-                          GDBusMethodInvocation *invocation,
+handle_unregister_client (RPMOSTreeSysroot *object, GDBusMethodInvocation *invocation,
                           GVariant *arg_options)
 {
   const char *sender;
@@ -372,8 +361,7 @@ handle_unregister_client (RPMOSTreeSysroot *object,
 
 /* remap relevant daemon configs to D-Bus properties */
 static gboolean
-reset_config_properties (RpmostreedSysroot  *self,
-                         GError            **error)
+reset_config_properties (RpmostreedSysroot *self, GError **error)
 {
   RpmostreedDaemon *daemon = rpmostreed_daemon_get ();
 
@@ -385,7 +373,8 @@ reset_config_properties (RpmostreedSysroot  *self,
   return TRUE;
 }
 
-typedef struct {
+typedef struct
+{
   RPMOSTreeSysroot *object;
   GDBusMethodInvocation *invocation;
 } ReloadIdleData;
@@ -394,11 +383,11 @@ typedef struct {
 static gboolean
 handle_reload_via_idle (gpointer data)
 {
-  auto idata = static_cast<ReloadIdleData *>(data);
+  auto idata = static_cast<ReloadIdleData *> (data);
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (idata->object);
   GDBusMethodInvocation *invocation = idata->invocation;
 
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   if (!sysroot_populate_deployments_unlocked (self, NULL, &local_error))
     goto out;
 
@@ -418,13 +407,12 @@ out:
 
 /* reloads *only* deployments and os internals, *no* configuration files */
 static gboolean
-handle_reload (RPMOSTreeSysroot *object,
-               GDBusMethodInvocation *invocation)
+handle_reload (RPMOSTreeSysroot *object, GDBusMethodInvocation *invocation)
 {
   ReloadIdleData *idata = g_new0 (ReloadIdleData, 1);
   idata->object = object;
   idata->invocation = invocation;
-  /* Deferred to an idle to ensure that we've processed any 
+  /* Deferred to an idle to ensure that we've processed any
    * other pending notifications, such as file descriptors being closed
    * for the transaction, etc.
    */
@@ -434,11 +422,10 @@ handle_reload (RPMOSTreeSysroot *object,
 
 /* reloads *everything*: ostree configs, rpm-ostreed.conf, deployments, os internals */
 static gboolean
-handle_reload_config (RPMOSTreeSysroot *object,
-                      GDBusMethodInvocation *invocation)
+handle_reload_config (RPMOSTreeSysroot *object, GDBusMethodInvocation *invocation)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   GError **error = &local_error;
 
   gboolean changed = FALSE;
@@ -468,7 +455,8 @@ out:
   return TRUE;
 }
 
-/* ---------------------------------------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------------------------------------
+ */
 static void
 sysroot_dispose (GObject *object)
 {
@@ -493,7 +481,7 @@ sysroot_dispose (GObject *object)
        */
 
       g_file_monitor_cancel (self->monitor);
-      for (tries = 0; tries < 10; tries ++)
+      for (tries = 0; tries < 10; tries++)
         {
           if (!g_main_context_iteration (NULL, FALSE))
             break;
@@ -501,8 +489,8 @@ sysroot_dispose (GObject *object)
     }
 
   /* Tracked os paths are responsible to unpublish themselves */
-  GLNX_HASH_TABLE_FOREACH_KV (self->os_interfaces, const char*, k, GObject*, value)
-    g_object_run_dispose (value);
+  GLNX_HASH_TABLE_FOREACH_KV (self->os_interfaces, const char *, k, GObject *, value)
+  g_object_run_dispose (value);
   g_hash_table_remove_all (self->os_interfaces);
   g_hash_table_remove_all (self->osexperimental_interfaces);
 
@@ -534,17 +522,17 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
   g_assert (_sysroot_instance == NULL);
   _sysroot_instance = self;
 
-  self->os_interfaces = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                                               (GDestroyNotify) g_object_unref);
-  self->osexperimental_interfaces = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                                                           (GDestroyNotify) g_object_unref);
+  self->os_interfaces
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_object_unref);
+  self->osexperimental_interfaces
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_object_unref);
 
   self->monitor = NULL;
 
   /* Only use polkit when running as root on system bus; self-tests don't need it */
   if (!self->on_session_bus)
     {
-      g_autoptr(GError) local_error = NULL;
+      g_autoptr (GError) local_error = NULL;
       self->authority = polkit_authority_get_sync (NULL, &local_error);
       if (self->authority == NULL)
         {
@@ -556,8 +544,7 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
 }
 
 static gboolean
-sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
-                          GDBusMethodInvocation  *invocation)
+sysroot_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *invocation)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (interface);
   const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
@@ -570,8 +557,7 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
       /* The daemon is on the session bus, running self tests */
       authorized = TRUE;
     }
-  else if (g_strcmp0 (method_name, "GetOS") == 0 ||
-           g_strcmp0 (method_name, "Reload") == 0)
+  else if (g_strcmp0 (method_name, "GetOS") == 0 || g_strcmp0 (method_name, "Reload") == 0)
     {
       /* GetOS() and Reload() are always allowed */
       authorized = TRUE;
@@ -584,8 +570,8 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
     {
       action = "org.projectatomic.rpmostree1.cancel";
     }
-  else if (g_strcmp0 (method_name, "RegisterClient") == 0 ||
-           g_strcmp0 (method_name, "UnregisterClient") == 0)
+  else if (g_strcmp0 (method_name, "RegisterClient") == 0
+           || g_strcmp0 (method_name, "UnregisterClient") == 0)
     {
       action = "org.projectatomic.rpmostree1.client-management";
 
@@ -599,8 +585,7 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
               if (g_strcmp0 (state, "active") == 0)
                 {
                   authorized = TRUE;
-                  sd_journal_print (LOG_INFO, "Allowing active client %s (uid %d)",
-                                    sender, uid);
+                  sd_journal_print (LOG_INFO, "Allowing active client %s (uid %d)", sender, uid);
                 }
             }
           else
@@ -614,13 +599,12 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
   if (!authorized && action != NULL)
     {
       glnx_unref_object PolkitSubject *subject = polkit_system_bus_name_new (sender);
-      g_autoptr(GError) local_error = NULL;
+      g_autoptr (GError) local_error = NULL;
 
-      glnx_unref_object PolkitAuthorizationResult *result =
-        polkit_authority_check_authorization_sync (self->authority, subject,
-                                                   action, NULL,
-                                                   POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
-                                                   NULL, &local_error);
+      glnx_unref_object PolkitAuthorizationResult *result
+          = polkit_authority_check_authorization_sync (
+              self->authority, subject, action, NULL,
+              POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION, NULL, &local_error);
       if (result == NULL)
         {
           g_assert (local_error);
@@ -632,10 +616,8 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
                   return rpmostreed_authorize_method_for_uid0 (invocation);
                 }
             }
-          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
-                                                 G_DBUS_ERROR_FAILED,
-                                                 "Authorization error: %s",
-                                                 local_error->message);
+          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                                 "Authorization error: %s", local_error->message);
           return FALSE;
         }
 
@@ -644,9 +626,7 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
 
   if (!authorized)
     {
-      g_dbus_method_invocation_return_error (invocation,
-                                             G_DBUS_ERROR,
-                                             G_DBUS_ERROR_ACCESS_DENIED,
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED,
                                              "rpmostreed Sysroot operation %s not allowed for user",
                                              method_name);
     }
@@ -662,22 +642,17 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 
   gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->dispose = sysroot_dispose;
-  gobject_class->finalize     = sysroot_finalize;
+  gobject_class->finalize = sysroot_finalize;
 
-  signals[UPDATED] = g_signal_new ("updated",
-                                   RPMOSTREED_TYPE_SYSROOT,
-                                   G_SIGNAL_RUN_LAST,
-                                   0,
-                                   NULL, NULL, NULL,
-                                   G_TYPE_NONE, 0);
+  signals[UPDATED] = g_signal_new ("updated", RPMOSTREED_TYPE_SYSROOT, G_SIGNAL_RUN_LAST, 0, NULL,
+                                   NULL, NULL, G_TYPE_NONE, 0);
 
   gdbus_interface_skeleton_class = G_DBUS_INTERFACE_SKELETON_CLASS (klass);
   gdbus_interface_skeleton_class->g_authorize_method = sysroot_authorize_method;
 }
 
 static gboolean
-sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self,
-                                               gboolean *out_changed,
+sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self, gboolean *out_changed,
                                                GError **error)
 {
   gboolean ret = FALSE;
@@ -692,7 +667,7 @@ sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self,
   ret = TRUE;
   if (out_changed)
     *out_changed = did_change;
- out:
+out:
   if (ret && did_change)
     g_signal_emit (self, signals[UPDATED], 0);
   return ret;
@@ -706,14 +681,11 @@ rpmostreed_sysroot_reload (RpmostreedSysroot *self, GError **error)
 }
 
 static void
-on_deploy_changed (GFileMonitor *monitor,
-                   GFile *file,
-                   GFile *other_file,
-                   GFileMonitorEvent event_type,
-                   gpointer user_data)
+on_deploy_changed (GFileMonitor *monitor, GFile *file, GFile *other_file,
+                   GFileMonitorEvent event_type, gpointer user_data)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (user_data);
-  g_autoptr(GError) error = NULL;
+  g_autoptr (GError) error = NULL;
 
   if (event_type == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED)
     {
@@ -721,7 +693,7 @@ on_deploy_changed (GFileMonitor *monitor,
         goto out;
     }
 
- out:
+out:
   if (error)
     sd_journal_print (LOG_ERR, "Unable to update state: %s", error->message);
 }
@@ -744,15 +716,13 @@ rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
  * Returns: True on success
  */
 gboolean
-rpmostreed_sysroot_populate (RpmostreedSysroot *self,
-                             GCancellable *cancellable,
-                             GError **error)
+rpmostreed_sysroot_populate (RpmostreedSysroot *self, GCancellable *cancellable, GError **error)
 {
   g_assert (self != NULL);
 
   /* See also related code in rpmostred-transaction.cxx */
   const char *sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
-  g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+  g_autoptr (GFile) sysroot_file = g_file_new_for_path (sysroot_path);
   self->ot_sysroot = ostree_sysroot_new (sysroot_file);
   if (!ostree_sysroot_initialize (self->ot_sysroot, error))
     return FALSE;
@@ -768,26 +738,25 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
   if (!sysroot_populate_deployments_unlocked (self, NULL, error))
     return FALSE;
 
-  CXX_TRY(daemon_sanitycheck_environment(*self->ot_sysroot), error);
+  CXX_TRY (daemon_sanitycheck_environment (*self->ot_sysroot), error);
 
   if (!reset_config_properties (self, error))
     return FALSE;
 
   if (self->monitor == NULL)
     {
-      const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (self->ot_sysroot));
+      const char *sysroot_path
+          = gs_file_get_path_cached (ostree_sysroot_get_path (self->ot_sysroot));
       g_autofree char *sysroot_deploy_path = g_build_filename (sysroot_path, "ostree/deploy", NULL);
-      g_autoptr(GFile) sysroot_deploy = g_file_new_for_path (sysroot_deploy_path);
+      g_autoptr (GFile) sysroot_deploy = g_file_new_for_path (sysroot_deploy_path);
 
       self->monitor = g_file_monitor (sysroot_deploy, (GFileMonitorFlags)0, NULL, error);
 
       if (self->monitor == NULL)
         return FALSE;
 
-      self->sig_changed = g_signal_connect (self->monitor,
-                                            "changed",
-                                            G_CALLBACK (on_deploy_changed),
-                                            self);
+      self->sig_changed
+          = g_signal_connect (self->monitor, "changed", G_CALLBACK (on_deploy_changed), self);
     }
 
   return TRUE;
@@ -798,11 +767,8 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
  * be used at the start of both state querying and transactions.
  */
 gboolean
-rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
-                               GCancellable *cancellable,
-                               OstreeSysroot **out_sysroot,
-                               OstreeRepo **out_repo,
-                               GError **error)
+rpmostreed_sysroot_load_state (RpmostreedSysroot *self, GCancellable *cancellable,
+                               OstreeSysroot **out_sysroot, OstreeRepo **out_repo, GError **error)
 {
   /* Always do a reload check here to suppress race conditions such as
    * doing: ostree admin pin && rpm-ostree cleanup
@@ -813,36 +779,38 @@ rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
   if (!rpmostreed_sysroot_reload (self, error))
     return FALSE;
   if (out_sysroot)
-    *out_sysroot = (OstreeSysroot*)g_object_ref (rpmostreed_sysroot_get_root (self));
+    *out_sysroot = (OstreeSysroot *)g_object_ref (rpmostreed_sysroot_get_root (self));
   if (out_repo)
-    *out_repo = (OstreeRepo*)g_object_ref (rpmostreed_sysroot_get_repo (self));
+    *out_repo = (OstreeRepo *)g_object_ref (rpmostreed_sysroot_get_repo (self));
   return TRUE;
 }
 
 gboolean
-rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot     *self,
-                                 GDBusMethodInvocation *invocation,
-                                 RpmostreedTransaction **out_compat_txn,
-                                 GError               **error)
+rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot *self, GDBusMethodInvocation *invocation,
+                                 RpmostreedTransaction **out_compat_txn, GError **error)
 {
-  if (rpmostreed_daemon_is_rebooting (rpmostreed_daemon_get()))
+  if (rpmostreed_daemon_is_rebooting (rpmostreed_daemon_get ()))
     return glnx_throw (error, "Reboot initiated, cannot start new transaction");
   if (self->transaction)
     {
       if (rpmostreed_transaction_is_compatible (self->transaction, invocation))
         {
-          *out_compat_txn = (RpmostreedTransaction*)g_object_ref (self->transaction);
+          *out_compat_txn = (RpmostreedTransaction *)g_object_ref (self->transaction);
           return TRUE;
         }
-      const char *title = rpmostree_transaction_get_title ((RPMOSTreeTransaction*)(self->transaction));
-      return glnx_throw (error, "Transaction in progress: %s\n You can cancel the current transaction with `rpm-ostree cancel`", title);
+      const char *title
+          = rpmostree_transaction_get_title ((RPMOSTreeTransaction *)(self->transaction));
+      return glnx_throw (error,
+                         "Transaction in progress: %s\n You can cancel the current transaction "
+                         "with `rpm-ostree cancel`",
+                         title);
     }
   *out_compat_txn = NULL;
   return TRUE;
 }
 
 gboolean
-rpmostreed_sysroot_has_txn (RpmostreedSysroot     *self)
+rpmostreed_sysroot_has_txn (RpmostreedSysroot *self)
 {
   return self->transaction != NULL;
 }
@@ -850,7 +818,7 @@ rpmostreed_sysroot_has_txn (RpmostreedSysroot     *self)
 static gboolean
 on_force_close (gpointer data)
 {
-  auto self = static_cast<RpmostreedSysroot *>(data);
+  auto self = static_cast<RpmostreedSysroot *> (data);
 
   if (self->transaction)
     {
@@ -863,23 +831,20 @@ on_force_close (gpointer data)
 }
 
 static void
-on_txn_executed_changed (GObject    *object,
-                         GParamSpec *pspec,
-                         gpointer    user_data)
+on_txn_executed_changed (GObject *object, GParamSpec *pspec, gpointer user_data)
 {
-  auto self = static_cast<RpmostreedSysroot *>(user_data);
+  auto self = static_cast<RpmostreedSysroot *> (user_data);
   gboolean executed;
   g_object_get (object, "executed", &executed, NULL);
   if (executed && self->close_transaction_timeout_id == 0)
     {
-      self->close_transaction_timeout_id =
-        g_timeout_add_seconds (FORCE_CLOSE_TXN_TIMEOUT_SECS, on_force_close, self);
+      self->close_transaction_timeout_id
+          = g_timeout_add_seconds (FORCE_CLOSE_TXN_TIMEOUT_SECS, on_force_close, self);
     }
 }
 
 void
-rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
-                            RpmostreedTransaction *txn)
+rpmostreed_sysroot_set_txn (RpmostreedSysroot *self, RpmostreedTransaction *txn)
 {
   /* If the transaction is changing, clear the timer */
   if (self->close_transaction_timeout_id > 0)
@@ -891,43 +856,41 @@ rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
   if (txn != NULL)
     {
       g_assert (self->transaction == NULL);
-      self->transaction = (RpmostreedTransaction*)g_object_ref (txn);
+      self->transaction = (RpmostreedTransaction *)g_object_ref (txn);
 
-      g_signal_connect (self->transaction, "notify::executed",
-                        G_CALLBACK (on_txn_executed_changed), self);
+      g_signal_connect (self->transaction, "notify::executed", G_CALLBACK (on_txn_executed_changed),
+                        self);
 
       GDBusMethodInvocation *invocation = rpmostreed_transaction_get_invocation (self->transaction);
-      g_autoptr(GVariant) v = g_variant_ref_sink (g_variant_new ("(sss)",
-                                                                 g_dbus_method_invocation_get_method_name (invocation),
-                                                                 g_dbus_method_invocation_get_sender (invocation),
-                                                                 g_dbus_method_invocation_get_object_path (invocation)));
-      rpmostree_sysroot_set_active_transaction ((RPMOSTreeSysroot*)self, v);
-      rpmostree_sysroot_set_active_transaction_path ((RPMOSTreeSysroot*)self,
-                                                     rpmostreed_transaction_get_client_address (self->transaction));
+      g_autoptr (GVariant) v = g_variant_ref_sink (
+          g_variant_new ("(sss)", g_dbus_method_invocation_get_method_name (invocation),
+                         g_dbus_method_invocation_get_sender (invocation),
+                         g_dbus_method_invocation_get_object_path (invocation)));
+      rpmostree_sysroot_set_active_transaction ((RPMOSTreeSysroot *)self, v);
+      rpmostree_sysroot_set_active_transaction_path (
+          (RPMOSTreeSysroot *)self, rpmostreed_transaction_get_client_address (self->transaction));
     }
   else
     {
       g_assert (self->transaction);
       g_clear_object (&self->transaction);
 
-      g_autoptr(GVariant) v = g_variant_ref_sink (g_variant_new ("(sss)", "", "", ""));
+      g_autoptr (GVariant) v = g_variant_ref_sink (g_variant_new ("(sss)", "", "", ""));
       rpmostree_sysroot_set_active_transaction ((RPMOSTreeSysroot *)self, v);
       rpmostree_sysroot_set_active_transaction_path ((RPMOSTreeSysroot *)self, "");
     }
 }
 
 void
-rpmostreed_sysroot_set_txn_and_title (RpmostreedSysroot     *self,
-                                      RpmostreedTransaction *txn,
-                                      const char            *title)
+rpmostreed_sysroot_set_txn_and_title (RpmostreedSysroot *self, RpmostreedTransaction *txn,
+                                      const char *title)
 {
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)txn, title);
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction *)txn, title);
   rpmostreed_sysroot_set_txn (self, txn);
 }
 
 void
-rpmostreed_sysroot_finish_txn (RpmostreedSysroot     *self,
-                               RpmostreedTransaction *txn)
+rpmostreed_sysroot_finish_txn (RpmostreedSysroot *self, RpmostreedTransaction *txn)
 {
   g_assert (self->transaction == txn);
   rpmostreed_sysroot_set_txn (self, NULL);

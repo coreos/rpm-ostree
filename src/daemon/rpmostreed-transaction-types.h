@@ -18,40 +18,30 @@
 
 #pragma once
 
-#include "rpmostreed-types.h"
 #include "rpmostreed-daemon.h"
 #include "rpmostreed-os.h"
+#include "rpmostreed-types.h"
 
 #include <gio/gunixfdlist.h>
 
 G_BEGIN_DECLS
 
-RpmostreedTransaction *
-                rpmostreed_transaction_new_package_diff    (GDBusMethodInvocation *invocation,
+RpmostreedTransaction *rpmostreed_transaction_new_package_diff (
+    GDBusMethodInvocation *invocation, OstreeSysroot *sysroot, const char *osname,
+    const char *refspec, const char *revision, GCancellable *cancellable, GError **error);
+
+RpmostreedTransaction *rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot *sysroot,
-                                                            const char *osname,
-                                                            const char *refspec,
-                                                            const char *revision,
+                                                            const char *osname, gboolean reboot,
                                                             GCancellable *cancellable,
                                                             GError **error);
 
-RpmostreedTransaction *
-                rpmostreed_transaction_new_rollback        (GDBusMethodInvocation *invocation,
-                                                            OstreeSysroot *sysroot,
-                                                            const char *osname,
-                                                            gboolean reboot,
-                                                            GCancellable *cancellable,
-                                                            GError **error);
+RpmostreedTransaction *rpmostreed_transaction_new_clear_rollback (
+    GDBusMethodInvocation *invocation, OstreeSysroot *sysroot, const char *osname, gboolean reboot,
+    GCancellable *cancellable, GError **error);
 
-RpmostreedTransaction *
-                rpmostreed_transaction_new_clear_rollback  (GDBusMethodInvocation *invocation,
-                                                            OstreeSysroot *sysroot,
-                                                            const char *osname,
-                                                            gboolean reboot,
-                                                            GCancellable *cancellable,
-                                                            GError **error);
-
-typedef enum {
+typedef enum
+{
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE = (1 << 2),
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE = (1 << 4),
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN = (1 << 5),
@@ -59,49 +49,27 @@ typedef enum {
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY = (1 << 9),
 } RpmOstreeTransactionDeployFlags;
 
-
 RpmostreedTransaction *
-rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
-                                   OstreeSysroot *sysroot,
-                                   const char *osname,
-                                   RpmOstreeTransactionDeployFlags flags,
-                                   GVariant               *options,
-                                   RpmOstreeUpdateDeploymentModifiers *modifiers,
-                                   GUnixFDList            *fd_list,
-                                   GCancellable *cancellable,
-                                   GError **error);
+rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation, OstreeSysroot *sysroot,
+                                   const char *osname, RpmOstreeTransactionDeployFlags flags,
+                                   GVariant *options, RpmOstreeUpdateDeploymentModifiers *modifiers,
+                                   GUnixFDList *fd_list, GCancellable *cancellable, GError **error);
 
-RpmostreedTransaction *
-rpmostreed_transaction_new_finalize_deployment (GDBusMethodInvocation *invocation,
-                                                OstreeSysroot         *sysroot,
-                                                const char            *osname,
-                                                GVariant              *options,
-                                                GCancellable          *cancellable,
-                                                GError               **error);
+RpmostreedTransaction *rpmostreed_transaction_new_finalize_deployment (
+    GDBusMethodInvocation *invocation, OstreeSysroot *sysroot, const char *osname,
+    GVariant *options, GCancellable *cancellable, GError **error);
 
-RpmostreedTransaction *
-rpmostreed_transaction_new_initramfs_etc (GDBusMethodInvocation *invocation,
-                                          OstreeSysroot         *sysroot,
-                                          const char            *osname,
-                                          char                 **track,
-                                          char                 **untrack,
-                                          gboolean               untrack_all,
-                                          gboolean               force_sync,
-                                          GVariant              *options,
-                                          GCancellable          *cancellable,
-                                          GError               **error);
+RpmostreedTransaction *rpmostreed_transaction_new_initramfs_etc (
+    GDBusMethodInvocation *invocation, OstreeSysroot *sysroot, const char *osname, char **track,
+    char **untrack, gboolean untrack_all, gboolean force_sync, GVariant *options,
+    GCancellable *cancellable, GError **error);
 
-RpmostreedTransaction *
-rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocation,
-                                                  OstreeSysroot         *sysroot,
-                                                  const char            *osname,
-                                                  gboolean               regenerate,
-                                                  char                 **args,
-                                                  GVariant              *options,
-                                                  GCancellable          *cancellable,
-                                                  GError               **error);
+RpmostreedTransaction *rpmostreed_transaction_new_initramfs_state (
+    GDBusMethodInvocation *invocation, OstreeSysroot *sysroot, const char *osname,
+    gboolean regenerate, char **args, GVariant *options, GCancellable *cancellable, GError **error);
 
-typedef enum {
+typedef enum
+{
   RPMOSTREE_TRANSACTION_CLEANUP_BASE = (1 << 0),
   RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY = (1 << 1),
   RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY = (1 << 2),
@@ -109,60 +77,38 @@ typedef enum {
 } RpmOstreeTransactionCleanupFlags;
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_cleanup       (GDBusMethodInvocation *invocation,
-                                          OstreeSysroot         *sysroot,
-                                          const char            *osname,
-                                          RpmOstreeTransactionCleanupFlags flags,
-                                          GCancellable          *cancellable,
-                                          GError               **error);
+rpmostreed_transaction_new_cleanup (GDBusMethodInvocation *invocation, OstreeSysroot *sysroot,
+                                    const char *osname, RpmOstreeTransactionCleanupFlags flags,
+                                    GCancellable *cancellable, GError **error);
 
-RpmostreedTransaction *
-rpmostreed_transaction_new_apply_live (GDBusMethodInvocation *invocation,
-                                       OstreeSysroot         *sysroot,
-                                       GVariant              *options,
-                                       GCancellable          *cancellable,
-                                       GError               **error);
-    
-typedef enum {
+RpmostreedTransaction *rpmostreed_transaction_new_apply_live (GDBusMethodInvocation *invocation,
+                                                              OstreeSysroot *sysroot,
+                                                              GVariant *options,
+                                                              GCancellable *cancellable,
+                                                              GError **error);
+
+typedef enum
+{
   RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE = (1 << 0),
 } RpmOstreeTransactionRefreshMdFlags;
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
-                                       OstreeSysroot         *sysroot,
-                                       RpmOstreeTransactionRefreshMdFlags flags,
-                                       const char            *osname,
-                                       GCancellable          *cancellable,
-                                       GError               **error);
+rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation, OstreeSysroot *sysroot,
+                                       RpmOstreeTransactionRefreshMdFlags flags, const char *osname,
+                                       GCancellable *cancellable, GError **error);
 
-RpmostreedTransaction *
-rpmostreed_transaction_new_modify_yum_repo (GDBusMethodInvocation *invocation,
-                                            OstreeSysroot         *sysroot,
-                                            const char            *osname,
-                                            const char            *repo_id,
-                                            GVariant              *settings,
-                                            GCancellable          *cancellable,
-                                            GError               **error);
+RpmostreedTransaction *rpmostreed_transaction_new_modify_yum_repo (
+    GDBusMethodInvocation *invocation, OstreeSysroot *sysroot, const char *osname,
+    const char *repo_id, GVariant *settings, GCancellable *cancellable, GError **error);
 
-RpmostreedTransaction *
-rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
-                                       OstreeSysroot         *sysroot,
-                                       const char *           osname,
-                                       const char *           existing_kernel_args,
-                                       const char * const *kernel_args_added,
-                                       const char * const *kernel_args_replaced,
-                                       const char * const *kernel_args_deleted,
-                                       GVariant              *options,
-                                       GCancellable          *cancellable,
-                                       GError               **error);
+RpmostreedTransaction *rpmostreed_transaction_new_kernel_arg (
+    GDBusMethodInvocation *invocation, OstreeSysroot *sysroot, const char *osname,
+    const char *existing_kernel_args, const char *const *kernel_args_added,
+    const char *const *kernel_args_replaced, const char *const *kernel_args_deleted,
+    GVariant *options, GCancellable *cancellable, GError **error);
 
 G_END_DECLS
 
-gboolean
-get_driver_info (char   **name,
-                 char   **sd_unit,
-                 GError **error);
+gboolean get_driver_info (char **name, char **sd_unit, GError **error);
 
-gboolean
-get_driver_g_variant (GVariant **driver_info,
-                      GError   **error);
+gboolean get_driver_g_variant (GVariant **driver_info, GError **error);

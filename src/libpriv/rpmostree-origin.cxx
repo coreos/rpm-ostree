@@ -24,12 +24,13 @@
 #include <systemd/sd-journal.h>
 
 #include "libglnx.h"
-#include "rpmostree-origin.h"
 #include "rpmostree-core.h"
-#include "rpmostree-util.h"
+#include "rpmostree-origin.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-util.h"
 
-struct RpmOstreeOrigin {
+struct RpmOstreeOrigin
+{
   guint refcount;
 
   /* this is the single source of truth */
@@ -54,8 +55,8 @@ struct RpmOstreeOrigin {
   GHashTable *cached_local_packages;              /* NEVRA --> header sha256 */
   GHashTable *cached_local_fileoverride_packages; /* NEVRA --> header sha256 */
   /* GHashTable *cached_overrides_replace;         XXX: NOT IMPLEMENTED YET */
-  GHashTable *cached_overrides_local_replace;     /* NEVRA --> header sha256 */
-  GHashTable *cached_overrides_remove;            /* set of pkgnames (no EVRA) */
+  GHashTable *cached_overrides_local_replace; /* NEVRA --> header sha256 */
+  GHashTable *cached_overrides_remove;        /* set of pkgnames (no EVRA) */
 };
 
 static GKeyFile *
@@ -71,14 +72,10 @@ keyfile_dup (GKeyFile *kf)
 
 /* take <nevra:sha256> entries from keyfile and inserts them into hash table */
 static gboolean
-parse_packages_strv (GKeyFile *kf,
-                     const char *group,
-                     const char *key,
-                     gboolean    has_sha256,
-                     GHashTable *ht,
-                     GError    **error)
+parse_packages_strv (GKeyFile *kf, const char *group, const char *key, gboolean has_sha256,
+                     GHashTable *ht, GError **error)
 {
-  g_auto(GStrv) packages = g_key_file_get_string_list (kf, group, key, NULL, NULL);
+  g_auto (GStrv) packages = g_key_file_get_string_list (kf, group, key, NULL, NULL);
 
   for (char **it = packages; it && *it; it++)
     {
@@ -100,10 +97,9 @@ parse_packages_strv (GKeyFile *kf,
 }
 
 RpmOstreeOrigin *
-rpmostree_origin_parse_keyfile (GKeyFile         *origin,
-                                GError          **error)
+rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
 {
-  g_autoptr(RpmOstreeOrigin) ret = NULL;
+  g_autoptr (RpmOstreeOrigin) ret = NULL;
 
   ret = g_new0 (RpmOstreeOrigin, 1);
   ret->refcount = 1;
@@ -112,41 +108,42 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   ret->cached_modules_enable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   ret->cached_modules_install = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  ret->cached_local_packages =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-  ret->cached_local_fileoverride_packages =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-  ret->cached_overrides_local_replace =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-  ret->cached_overrides_remove =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  ret->cached_initramfs_etc_files =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  ret->cached_local_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  ret->cached_local_fileoverride_packages
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  ret->cached_overrides_local_replace
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  ret->cached_overrides_remove = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  ret->cached_initramfs_etc_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
-  ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
+  ret->cached_unconfigured_state
+      = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
   /* Note that the refspec type can be inferred from the key in the origin file, where
    * the `RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY` and `RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY` keys
-   * may correspond to either TYPE_OSTREE or TYPE_CHECKSUM (further classification is required), and 
+   * may correspond to either TYPE_OSTREE or TYPE_CHECKSUM (further classification is required), and
    * `RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY` always only corresponds to TYPE_CONTAINER. */
-  g_autofree char *ost_refspec = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
-  g_autofree char *imgref = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
+  g_autofree char *ost_refspec
+      = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
+  g_autofree char *imgref
+      = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
   if (!ost_refspec)
     {
       /* See if ostree refspec is baserefspec. */
-      ost_refspec = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL);
+      ost_refspec = g_key_file_get_string (ret->kf, "origin",
+                                           RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL);
       if (!ost_refspec && !imgref)
-        return (RpmOstreeOrigin *)glnx_null_throw (error, 
-                                                   "No origin/%s, origin/%s, or origin/%s "
-                                                   "in current deployment origin; cannot handle via rpm-ostree",
-                                                   RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY,
-                                                   RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
-                                                   RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY);
+        return (RpmOstreeOrigin *)glnx_null_throw (
+            error,
+            "No origin/%s, origin/%s, or origin/%s "
+            "in current deployment origin; cannot handle via rpm-ostree",
+            RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
+            RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY);
     }
   if (ost_refspec && imgref)
     {
-      return (RpmOstreeOrigin *)glnx_null_throw (error,
-                                                "Refspec expressed by multiple keys in deployment origin");
+      return (RpmOstreeOrigin *)glnx_null_throw (
+          error, "Refspec expressed by multiple keys in deployment origin");
     }
   else if (ost_refspec)
     {
@@ -154,23 +151,23 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
       if (!rpmostree_refspec_classify (ost_refspec, &ret->refspec_type, error))
         return FALSE;
       ret->cached_refspec = util::move_nullify (ost_refspec);
-      ret->cached_override_commit =
-        g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
+      ret->cached_override_commit
+          = g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
     }
   else if (imgref)
     {
       ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_CONTAINER;
       ret->cached_refspec = util::move_nullify (imgref);
 
-      ret->cached_digest = g_key_file_get_string (ret->kf, "origin", "container-image-reference-digest", NULL);
+      ret->cached_digest
+          = g_key_file_get_string (ret->kf, "origin", "container-image-reference-digest", NULL);
     }
   else
     {
       g_assert_not_reached ();
     }
 
-  if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE,
-                            ret->cached_packages, error))
+  if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE, ret->cached_packages, error))
     return FALSE;
 
   if (!parse_packages_strv (ret->kf, "packages", "requested-local", TRUE,
@@ -181,33 +178,32 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
                             ret->cached_local_fileoverride_packages, error))
     return FALSE;
 
-  if (!parse_packages_strv (ret->kf, "modules", "enable", FALSE,
-                            ret->cached_modules_enable, error))
+  if (!parse_packages_strv (ret->kf, "modules", "enable", FALSE, ret->cached_modules_enable, error))
     return FALSE;
 
-  if (!parse_packages_strv (ret->kf, "modules", "install", FALSE,
-                            ret->cached_modules_install, error))
+  if (!parse_packages_strv (ret->kf, "modules", "install", FALSE, ret->cached_modules_install,
+                            error))
     return FALSE;
 
-  if (!parse_packages_strv (ret->kf, "overrides", "remove", FALSE,
-                            ret->cached_overrides_remove, error))
+  if (!parse_packages_strv (ret->kf, "overrides", "remove", FALSE, ret->cached_overrides_remove,
+                            error))
     return FALSE;
 
   if (!parse_packages_strv (ret->kf, "overrides", "replace-local", TRUE,
                             ret->cached_overrides_local_replace, error))
     return FALSE;
 
-  g_auto(GStrv) initramfs_etc_files =
-    g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-etc", NULL, NULL);
+  g_auto (GStrv) initramfs_etc_files
+      = g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-etc", NULL, NULL);
   for (char **f = initramfs_etc_files; f && *f; f++)
     g_hash_table_add (ret->cached_initramfs_etc_files, util::move_nullify (*f));
 
-  ret->cached_initramfs_args =
-    g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
+  ret->cached_initramfs_args
+      = g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
 
   // We will eventually start converting origin to treefile, this helps us
   // debug cases that may fail currently.
-  rpmostreecxx::origin_validate_roundtrip(*ret->kf);
+  rpmostreecxx::origin_validate_roundtrip (*ret->kf);
 
   return util::move_nullify (ret);
 }
@@ -215,7 +211,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 RpmOstreeOrigin *
 rpmostree_origin_dup (RpmOstreeOrigin *origin)
 {
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   RpmOstreeOrigin *ret = rpmostree_origin_parse_keyfile (origin->kf, &local_error);
   g_assert_no_error (local_error);
   return ret;
@@ -234,7 +230,6 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
 }
 
-
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 {
@@ -242,8 +237,7 @@ rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 }
 
 char *
-rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
-                                   RpmOstreeRefspecType *out_refspectype)
+rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin, RpmOstreeRefspecType *out_refspectype)
 {
   if (out_refspectype)
     *out_refspectype = origin->refspec_type;
@@ -251,9 +245,8 @@ rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
 }
 
 void
-rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
-                                   RpmOstreeRefspecType *out_type,
-                                   const char          **out_refspec)
+rpmostree_origin_classify_refspec (RpmOstreeOrigin *origin, RpmOstreeRefspecType *out_type,
+                                   const char **out_refspec)
 {
   *out_type = origin->refspec_type;
   if (out_refspec)
@@ -270,9 +263,8 @@ keyfile_get_nonempty_string (GKeyFile *kf, const char *section, const char *key)
 }
 
 void
-rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin,
-                                         char           **custom_type,
-                                         char           **custom_description)
+rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin, char **custom_type,
+                                         char **custom_description)
 {
   *custom_type = keyfile_get_nonempty_string (origin->kf, "origin", "custom-url");
   if (*custom_type)
@@ -339,13 +331,13 @@ rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
   return g_key_file_get_boolean (origin->kf, "rpmostree", "regenerate-initramfs", NULL);
 }
 
-const char *const*
+const char *const *
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
 {
-  return (const char * const*)origin->cached_initramfs_args;
+  return (const char *const *)origin->cached_initramfs_args;
 }
 
-const char*
+const char *
 rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
 {
   return origin->cached_unconfigured_state;
@@ -360,29 +352,26 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
 gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
-  return
-        rpmostree_origin_get_cliwrap (origin) || 
-        rpmostree_origin_get_regenerate_initramfs (origin) ||
-        (g_hash_table_size (origin->cached_initramfs_etc_files) > 0) ||
-        rpmostree_origin_has_packages (origin) ||
-        /* Technically, alone it doesn't require require assembly, but it still
-         * requires fetching repo metadata to validate (remember: modules are a
-         * pure rpmmd concept). This means we may pay the cost of an unneeded
-         * tree checkout, but it's not worth trying to optimize for it. */
-        (g_hash_table_size (origin->cached_modules_enable) > 0);
+  return rpmostree_origin_get_cliwrap (origin) || rpmostree_origin_get_regenerate_initramfs (origin)
+         || (g_hash_table_size (origin->cached_initramfs_etc_files) > 0)
+         || rpmostree_origin_has_packages (origin) ||
+         /* Technically, alone it doesn't require require assembly, but it still
+          * requires fetching repo metadata to validate (remember: modules are a
+          * pure rpmmd concept). This means we may pay the cost of an unneeded
+          * tree checkout, but it's not worth trying to optimize for it. */
+         (g_hash_table_size (origin->cached_modules_enable) > 0);
 }
 
 /* Returns TRUE if this origin contains overlay or override packages */
 gboolean
 rpmostree_origin_has_packages (RpmOstreeOrigin *origin)
 {
-  return
-    (g_hash_table_size (origin->cached_packages) > 0) ||
-    (g_hash_table_size (origin->cached_local_packages) > 0) ||
-    (g_hash_table_size (origin->cached_local_fileoverride_packages) > 0) ||
-    (g_hash_table_size (origin->cached_overrides_local_replace) > 0) ||
-    (g_hash_table_size (origin->cached_overrides_remove) > 0) ||
-    (g_hash_table_size (origin->cached_modules_install) > 0);
+  return (g_hash_table_size (origin->cached_packages) > 0)
+         || (g_hash_table_size (origin->cached_local_packages) > 0)
+         || (g_hash_table_size (origin->cached_local_fileoverride_packages) > 0)
+         || (g_hash_table_size (origin->cached_overrides_local_replace) > 0)
+         || (g_hash_table_size (origin->cached_overrides_remove) > 0)
+         || (g_hash_table_size (origin->cached_modules_install) > 0);
 }
 
 GKeyFile *
@@ -392,14 +381,12 @@ rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
 }
 
 char *
-rpmostree_origin_get_string (RpmOstreeOrigin *origin,
-                             const char *section,
-                             const char *value)
+rpmostree_origin_get_string (RpmOstreeOrigin *origin, const char *section, const char *value)
 {
   return g_key_file_get_string (origin->kf, section, value, NULL);
 }
 
-RpmOstreeOrigin*
+RpmOstreeOrigin *
 rpmostree_origin_ref (RpmOstreeOrigin *origin)
 {
   g_assert (origin);
@@ -431,18 +418,15 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
 }
 
 static void
-update_string_list_from_hash_table (GKeyFile *kf,
-                                    const char *group,
-                                    const char *key,
+update_string_list_from_hash_table (GKeyFile *kf, const char *group, const char *key,
                                     GHashTable *values)
 {
-  g_autofree char **strv = (char**)g_hash_table_get_keys_as_array (values, NULL);
-  g_key_file_set_string_list (kf, group, key, (const char *const*)strv, g_strv_length (strv));
+  g_autofree char **strv = (char **)g_hash_table_get_keys_as_array (values, NULL);
+  g_key_file_set_string_list (kf, group, key, (const char *const *)strv, g_strv_length (strv));
 }
 
 void
-rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin,
-                                            char **paths,
+rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, char **paths,
                                             gboolean *out_changed)
 {
   gboolean changed = FALSE;
@@ -457,8 +441,7 @@ rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin,
 }
 
 void
-rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin,
-                                              char **paths,
+rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin, char **paths,
                                               gboolean *out_changed)
 {
   gboolean changed = FALSE;
@@ -473,8 +456,7 @@ rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin,
 }
 
 void
-rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin,
-                                                  gboolean *out_changed)
+rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin, gboolean *out_changed)
 {
   const gboolean changed = (g_hash_table_size (origin->cached_initramfs_etc_files) > 0);
   g_hash_table_remove_all (origin->cached_initramfs_etc_files);
@@ -486,8 +468,7 @@ rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin,
 }
 
 void
-rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
-                                           gboolean regenerate,
+rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean regenerate,
                                            char **args)
 {
   const char *section = "rpmostree";
@@ -501,8 +482,7 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
       g_key_file_set_boolean (origin->kf, section, regeneratek, TRUE);
       if (args && *args)
         {
-          g_key_file_set_string_list (origin->kf, section, argsk,
-                                      (const char *const*)args,
+          g_key_file_set_string_list (origin->kf, section, argsk, (const char *const *)args,
                                       g_strv_length (args));
         }
       else
@@ -514,14 +494,13 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
       g_key_file_remove_key (origin->kf, section, argsk, NULL);
     }
 
-  origin->cached_initramfs_args =
-    g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
+  origin->cached_initramfs_args
+      = g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
 }
 
 void
-rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
-                                      const char      *checksum,
-                                      const char      *version)
+rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum,
+                                      const char *version)
 {
   if (checksum != NULL)
     {
@@ -530,8 +509,7 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
       /* Add a comment with the version, to be nice. */
       if (version != NULL)
         {
-          g_autofree char *comment =
-            g_strdup_printf ("Version %s [%.10s]", version, checksum);
+          g_autofree char *comment = g_strdup_printf ("Version %s [%.10s]", version, checksum);
           g_key_file_set_comment (origin->kf, "origin", "override-commit", comment, NULL);
         }
     }
@@ -562,11 +540,9 @@ rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
 }
 
 gboolean
-rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
-                                    const char      *new_refspec,
-                                    const char      *custom_origin_url,
-                                    const char      *custom_origin_description,
-                                    GError         **error)
+rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_refspec,
+                                    const char *custom_origin_url,
+                                    const char *custom_origin_description, GError **error)
 {
   /* Require non-empty strings */
   if (custom_origin_url)
@@ -575,9 +551,9 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
       g_assert (custom_origin_description && *custom_origin_description);
     }
 
-   /* We don't want to carry any commit overrides or version pinning during a
-    * rebase by default.
-    */
+  /* We don't want to carry any commit overrides or version pinning during a
+   * rebase by default.
+   */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
 
   /* See related code in rpmostree_origin_parse_keyfile() */
@@ -585,9 +561,9 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
     return FALSE;
   g_free (origin->cached_refspec);
   origin->cached_refspec = g_strdup (new_refspec);
-  /* Note the following sets different keys depending on the type of refspec; 
+  /* Note the following sets different keys depending on the type of refspec;
    * TYPE_OSTREE and TYPE_CHECKSUM may set either `RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY`
-   * or `RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY`, while TYPE_CONTAINER will set the 
+   * or `RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY`, while TYPE_CONTAINER will set the
    * `RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY` key. */
   switch (origin->refspec_type)
     {
@@ -598,9 +574,11 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
         g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
         g_key_file_remove_key (origin->kf, "origin", "container-image-reference-digest", NULL);
 
-        const char *refspec_key =
-          g_key_file_has_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL) ?
-          RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY : RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY;
+        const char *refspec_key
+            = g_key_file_has_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
+                                  NULL)
+                  ? RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY
+                  : RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY;
         g_key_file_set_string (origin->kf, "origin", refspec_key, origin->cached_refspec);
         if (!custom_origin_url)
           {
@@ -613,7 +591,8 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
             g_assert_cmpint (origin->refspec_type, ==, RPMOSTREE_REFSPEC_TYPE_CHECKSUM);
             g_key_file_set_string (origin->kf, "origin", "custom-url", custom_origin_url);
             if (custom_origin_description)
-              g_key_file_set_string (origin->kf, "origin", "custom-description", custom_origin_description);
+              g_key_file_set_string (origin->kf, "origin", "custom-description",
+                                     custom_origin_description);
           }
       }
       break;
@@ -622,11 +601,13 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
         /* Remove `TYPE_OSTREE` and `TYPE_CHECKSUM`-related keys */
         g_assert (!custom_origin_url);
         g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
-        g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL);
+        g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
+                               NULL);
         g_key_file_remove_key (origin->kf, "origin", "custom-url", NULL);
         g_key_file_remove_key (origin->kf, "origin", "custom-description", NULL);
 
-        g_key_file_set_string (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, origin->cached_refspec);
+        g_key_file_set_string (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY,
+                               origin->cached_refspec);
       }
       break;
     }
@@ -635,9 +616,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
 }
 
 gboolean
-rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
-                             const char      *new_refspec,
-                             GError         **error)
+rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec, GError **error)
 {
   return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL, error);
 }
@@ -668,11 +647,8 @@ sync_baserefspec (RpmOstreeOrigin *origin)
 }
 
 static void
-update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
-                                const char      *group,
-                                const char      *key,
-                                GHashTable      *pkgs,
-                                gboolean         has_csum)
+update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin, const char *group, const char *key,
+                                GHashTable *pkgs, gboolean has_csum)
 {
   /* we're abusing a bit the concept of cache here, though
    * it's just easier to go from cache to origin */
@@ -686,12 +662,10 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
 
   if (has_csum)
     {
-      g_autoptr(GPtrArray) pkg_csum =
-        g_ptr_array_new_with_free_func (g_free);
-      GLNX_HASH_TABLE_FOREACH_KV (pkgs, const char*, k, const char*, v)
-        g_ptr_array_add (pkg_csum, g_strconcat (v, ":", k, NULL));
-      g_key_file_set_string_list (origin->kf, group, key,
-                                  (const char *const*)pkg_csum->pdata,
+      g_autoptr (GPtrArray) pkg_csum = g_ptr_array_new_with_free_func (g_free);
+      GLNX_HASH_TABLE_FOREACH_KV (pkgs, const char *, k, const char *, v)
+      g_ptr_array_add (pkg_csum, g_strconcat (v, ":", k, NULL));
+      g_key_file_set_string_list (origin->kf, group, key, (const char *const *)pkg_csum->pdata,
                                   pkg_csum->len);
     }
   else
@@ -711,13 +685,9 @@ set_changed (gboolean *out, gboolean c)
 }
 
 gboolean
-rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
-                               char             **packages,
-                               gboolean           local,
-                               gboolean           fileoverride,
-                               gboolean           allow_existing,
-                               gboolean          *out_changed,
-                               GError           **error)
+rpmostree_origin_add_packages (RpmOstreeOrigin *origin, char **packages, gboolean local,
+                               gboolean fileoverride, gboolean allow_existing,
+                               gboolean *out_changed, GError **error)
 {
   if (!packages)
     return TRUE;
@@ -737,7 +707,8 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
 
       requested = g_hash_table_contains (origin->cached_packages, pkg);
       requested_local = g_hash_table_contains (origin->cached_local_packages, pkg);
-      requested_local_fileoverride = g_hash_table_contains (origin->cached_local_fileoverride_packages, pkg);
+      requested_local_fileoverride
+          = g_hash_table_contains (origin->cached_local_fileoverride_packages, pkg);
 
       /* The list of packages is really a list of provides, so string equality
        * is a bit weird here. Multiple provides can resolve to the same package
@@ -793,30 +764,25 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
 }
 
 static gboolean
-build_name_to_nevra_map (GHashTable  *nevras,
-                         GHashTable **out_name_to_nevra,
-                         GError     **error)
+build_name_to_nevra_map (GHashTable *nevras, GHashTable **out_name_to_nevra, GError **error)
 {
-  g_autoptr(GHashTable) name_to_nevra = /* nevra vals owned by @nevras */
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  GLNX_HASH_TABLE_FOREACH (nevras, const char*, nevra)
-    {
-      g_autofree char *name = NULL;
-      if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
-        return FALSE;
-      g_hash_table_insert (name_to_nevra, util::move_nullify (name), (gpointer)nevra);
-    }
+  g_autoptr (GHashTable) name_to_nevra = /* nevra vals owned by @nevras */
+      g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  GLNX_HASH_TABLE_FOREACH (nevras, const char *, nevra)
+  {
+    g_autofree char *name = NULL;
+    if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
+      return FALSE;
+    g_hash_table_insert (name_to_nevra, util::move_nullify (name), (gpointer)nevra);
+  }
 
   *out_name_to_nevra = util::move_nullify (name_to_nevra);
   return TRUE;
 }
 
 gboolean
-rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
-                                  char            **packages,
-                                  gboolean          allow_noent,
-                                  gboolean         *out_changed,
-                                  GError          **error)
+rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, char **packages, gboolean allow_noent,
+                                  gboolean *out_changed, GError **error)
 {
   if (!packages)
     return TRUE;
@@ -825,8 +791,8 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
   gboolean local_fileoverride_changed = FALSE;
 
   /* lazily calculated */
-  g_autoptr(GHashTable) name_to_nevra = NULL;
-  g_autoptr(GHashTable) name_to_nevra_fileoverride = NULL;
+  g_autoptr (GHashTable) name_to_nevra = NULL;
+  g_autoptr (GHashTable) name_to_nevra_fileoverride = NULL;
 
   for (char **it = packages; it && *it; it++)
     {
@@ -842,8 +808,7 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
         {
           if (!name_to_nevra)
             {
-              if (!build_name_to_nevra_map (origin->cached_local_packages,
-                                            &name_to_nevra, error))
+              if (!build_name_to_nevra_map (origin->cached_local_packages, &name_to_nevra, error))
                 return FALSE;
               if (!build_name_to_nevra_map (origin->cached_local_fileoverride_packages,
                                             &name_to_nevra_fileoverride, error))
@@ -858,8 +823,9 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
             }
           else if (g_hash_table_contains (name_to_nevra_fileoverride, package))
             {
-              g_assert (g_hash_table_remove (origin->cached_local_fileoverride_packages,
-                                             g_hash_table_lookup (name_to_nevra_fileoverride, package)));
+              g_assert (
+                  g_hash_table_remove (origin->cached_local_fileoverride_packages,
+                                       g_hash_table_lookup (name_to_nevra_fileoverride, package)));
               local_fileoverride_changed = TRUE;
             }
           else if (!allow_noent)
@@ -869,8 +835,8 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
     }
 
   if (changed)
-    update_keyfile_pkgs_from_cache (origin, "packages", "requested",
-                                    origin->cached_packages, FALSE);
+    update_keyfile_pkgs_from_cache (origin, "packages", "requested", origin->cached_packages,
+                                    FALSE);
   if (local_changed)
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
                                     origin->cached_local_packages, TRUE);
@@ -883,17 +849,13 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
 }
 
 gboolean
-rpmostree_origin_add_modules (RpmOstreeOrigin  *origin,
-                              char           **modules,
-                              gboolean         enable_only,
-                              gboolean        *out_changed,
-                              GError         **error)
+rpmostree_origin_add_modules (RpmOstreeOrigin *origin, char **modules, gboolean enable_only,
+                              gboolean *out_changed, GError **error)
 {
   if (!modules)
     return TRUE;
   const char *key = enable_only ? "enable" : "install";
-  GHashTable *target = enable_only ? origin->cached_modules_enable
-                                   : origin->cached_modules_install;
+  GHashTable *target = enable_only ? origin->cached_modules_enable : origin->cached_modules_install;
   gboolean changed = FALSE;
   for (char **mod = modules; mod && *mod; mod++)
     changed = (g_hash_table_add (target, g_strdup (*mod)) || changed);
@@ -906,17 +868,13 @@ rpmostree_origin_add_modules (RpmOstreeOrigin  *origin,
 }
 
 gboolean
-rpmostree_origin_remove_modules (RpmOstreeOrigin  *origin,
-                                 char           **modules,
-                                 gboolean         enable_only,
-                                 gboolean        *out_changed,
-                                 GError         **error)
+rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, char **modules, gboolean enable_only,
+                                 gboolean *out_changed, GError **error)
 {
   if (!modules)
     return TRUE;
   const char *key = enable_only ? "enable" : "install";
-  GHashTable *target = enable_only ? origin->cached_modules_enable
-                                   : origin->cached_modules_install;
+  GHashTable *target = enable_only ? origin->cached_modules_enable : origin->cached_modules_install;
   gboolean changed = FALSE;
   for (char **mod = modules; mod && *mod; mod++)
     changed = (g_hash_table_remove (target, *mod) || changed);
@@ -929,9 +887,8 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin  *origin,
 }
 
 gboolean
-rpmostree_origin_remove_all_packages (RpmOstreeOrigin  *origin,
-                                      gboolean         *out_changed,
-                                      GError          **error)
+rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin, gboolean *out_changed,
+                                      GError **error)
 {
   gboolean changed = FALSE;
   gboolean local_changed = FALSE;
@@ -970,8 +927,8 @@ rpmostree_origin_remove_all_packages (RpmOstreeOrigin  *origin,
     }
 
   if (changed)
-    update_keyfile_pkgs_from_cache (origin, "packages", "requested",
-                                    origin->cached_packages, FALSE);
+    update_keyfile_pkgs_from_cache (origin, "packages", "requested", origin->cached_packages,
+                                    FALSE);
   if (local_changed)
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
                                     origin->cached_local_packages, TRUE);
@@ -979,22 +936,21 @@ rpmostree_origin_remove_all_packages (RpmOstreeOrigin  *origin,
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local-fileoverride",
                                     origin->cached_local_fileoverride_packages, TRUE);
   if (modules_enable_changed)
-    update_keyfile_pkgs_from_cache (origin, "modules", "enable",
-                                    origin->cached_modules_enable, FALSE);
+    update_keyfile_pkgs_from_cache (origin, "modules", "enable", origin->cached_modules_enable,
+                                    FALSE);
   if (modules_install_changed)
-    update_keyfile_pkgs_from_cache (origin, "modules", "install",
-                                    origin->cached_modules_install, FALSE);
+    update_keyfile_pkgs_from_cache (origin, "modules", "install", origin->cached_modules_install,
+                                    FALSE);
 
-  changed = changed || local_changed || local_fileoverride_changed || modules_enable_changed || modules_install_changed;
+  changed = changed || local_changed || local_fileoverride_changed || modules_enable_changed
+            || modules_install_changed;
   set_changed (out_changed, changed);
   return TRUE;
 }
 
 gboolean
-rpmostree_origin_add_overrides (RpmOstreeOrigin  *origin,
-                                char            **packages,
-                                RpmOstreeOriginOverrideType type,
-                                GError          **error)
+rpmostree_origin_add_overrides (RpmOstreeOrigin *origin, char **packages,
+                                RpmOstreeOriginOverrideType type, GError **error)
 {
   gboolean changed = FALSE;
   for (char **it = packages; it && *it; it++)
@@ -1011,8 +967,8 @@ rpmostree_origin_add_overrides (RpmOstreeOrigin  *origin,
       /* Check that the same overrides don't already exist. Of course, in the local replace
        * case, this doesn't catch same pkg name but different EVRA; we'll just barf at that
        * later on in the core. This is just an early easy sanity check. */
-      if (g_hash_table_contains (origin->cached_overrides_remove, pkg) ||
-          g_hash_table_contains (origin->cached_overrides_local_replace, pkg))
+      if (g_hash_table_contains (origin->cached_overrides_remove, pkg)
+          || g_hash_table_contains (origin->cached_overrides_local_replace, pkg))
         return glnx_throw (error, "Override already exists for package '%s'", pkg);
 
       if (type == RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL)
@@ -1043,8 +999,7 @@ rpmostree_origin_add_overrides (RpmOstreeOrigin  *origin,
 
 /* Returns FALSE if the override does not exist. */
 gboolean
-rpmostree_origin_remove_override (RpmOstreeOrigin  *origin,
-                                  const char       *package,
+rpmostree_origin_remove_override (RpmOstreeOrigin *origin, const char *package,
                                   RpmOstreeOriginOverrideType type)
 {
   if (type == RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL)
@@ -1068,20 +1023,18 @@ rpmostree_origin_remove_override (RpmOstreeOrigin  *origin,
 }
 
 gboolean
-rpmostree_origin_remove_all_overrides (RpmOstreeOrigin  *origin,
-                                       gboolean         *out_changed,
-                                       GError          **error)
+rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin, gboolean *out_changed,
+                                       GError **error)
 {
   gboolean remove_changed = (g_hash_table_size (origin->cached_overrides_remove) > 0);
   g_hash_table_remove_all (origin->cached_overrides_remove);
 
-  gboolean local_replace_changed =
-    (g_hash_table_size (origin->cached_overrides_local_replace) > 0);
+  gboolean local_replace_changed = (g_hash_table_size (origin->cached_overrides_local_replace) > 0);
   g_hash_table_remove_all (origin->cached_overrides_local_replace);
 
   if (remove_changed)
-    update_keyfile_pkgs_from_cache (origin, "overrides", "remove",
-                                    origin->cached_overrides_remove, FALSE);
+    update_keyfile_pkgs_from_cache (origin, "overrides", "remove", origin->cached_overrides_remove,
+                                    FALSE);
   if (local_replace_changed)
     update_keyfile_pkgs_from_cache (origin, "overrides", "replace-local",
                                     origin->cached_overrides_local_replace, TRUE);

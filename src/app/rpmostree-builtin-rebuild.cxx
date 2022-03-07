@@ -20,8 +20,8 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
@@ -32,34 +32,26 @@
 #include <libglnx.h>
 
 gboolean
-rpmostree_ex_builtin_rebuild (int             argc,
-                              char          **argv,
-                              RpmOstreeCommandInvocation *invocation,
-                              GCancellable   *cancellable,
-                              GError        **error)
+rpmostree_ex_builtin_rebuild (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                              GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
 
-  if (!rpmostree_option_context_parse (context,
-                                       NULL,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL,
-                                       error))
+  if (!rpmostree_option_context_parse (context, NULL, &argc, &argv, invocation, cancellable, NULL,
+                                       NULL, NULL, error))
     return FALSE;
 
   bool in_container = false;
-  if (rpmostreecxx::running_in_container())
+  if (rpmostreecxx::running_in_container ())
     {
-      auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
+      auto is_ostree_container = CXX_TRY_VAL (is_ostree_container (), error);
       if (!is_ostree_container)
         return glnx_throw (error, "This command can only run in an OSTree container.");
       in_container = true;
     }
 
-  auto basearch = rpmostreecxx::get_rpm_basearch();
-  auto treefile = CXX_TRY_VAL(treefile_new_client_from_etc (basearch), error);
+  auto basearch = rpmostreecxx::get_rpm_basearch ();
+  auto treefile = CXX_TRY_VAL (treefile_new_client_from_etc (basearch), error);
 
   /* This is the big switch: we support running this command in two modes:
    * "client containers", where the effect takes place in the active rootfs, and
@@ -72,7 +64,7 @@ rpmostree_ex_builtin_rebuild (int             argc,
 
       /* In the container flow, we effectively "consume" the treefiles after
        * modifying the rootfs. */
-      auto n = CXX_TRY_VAL(treefile_delete_client_etc (), error);
+      auto n = CXX_TRY_VAL (treefile_delete_client_etc (), error);
       if (n == 0)
         {
           g_print ("No changes to apply.\n");

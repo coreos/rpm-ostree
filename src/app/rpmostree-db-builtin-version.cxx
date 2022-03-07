@@ -23,25 +23,20 @@
 #include "rpmostree-db-builtins.h"
 #include "rpmostree-rpm-util.h"
 
-static GOptionEntry db_version_entries[] = {
-  { NULL }
-};
+static GOptionEntry db_version_entries[] = { { NULL } };
 
 static gboolean
-_builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
-                     GCancellable   *cancellable,
-                     GError        **error)
+_builtin_db_version (OstreeRepo *repo, GPtrArray *revs, GCancellable *cancellable, GError **error)
 {
   for (guint num = 0; num < revs->len; num++)
     {
-      auto rev = static_cast<const char *>(revs->pdata[num]);
+      auto rev = static_cast<const char *> (revs->pdata[num]);
 
-      g_autoptr(RpmRevisionData) rpmrev = rpmrev_new (repo, rev, NULL, cancellable, error);
+      g_autoptr (RpmRevisionData) rpmrev = rpmrev_new (repo, rev, NULL, cancellable, error);
       if (!rpmrev)
         return FALSE;
 
-      g_autofree char *rpmdbv =
-        rpmhdrs_rpmdbv (rpmrev_get_headers (rpmrev), cancellable, error);
+      g_autofree char *rpmdbv = rpmhdrs_rpmdbv (rpmrev_get_headers (rpmrev), cancellable, error);
       if (rpmdbv == NULL)
         return FALSE;
 
@@ -57,20 +52,17 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
 }
 
 gboolean
-rpmostree_db_builtin_version (int argc, char **argv,
-                              RpmOstreeCommandInvocation *invocation,
+rpmostree_db_builtin_version (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                               GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context =
-    g_option_context_new ("COMMIT...");
+  g_autoptr (GOptionContext) context = g_option_context_new ("COMMIT...");
 
-  g_autoptr(OstreeRepo) repo = NULL;
-  if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc,
-                                          &argv, invocation, &repo, cancellable,
-                                          error))
+  g_autoptr (OstreeRepo) repo = NULL;
+  if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc, &argv, invocation,
+                                          &repo, cancellable, error))
     return FALSE;
 
-  g_autoptr(GPtrArray) revs = g_ptr_array_new ();
+  g_autoptr (GPtrArray) revs = g_ptr_array_new ();
 
   for (int ii = 1; ii < argc; ii++)
     g_ptr_array_add (revs, argv[ii]);
@@ -80,4 +72,3 @@ rpmostree_db_builtin_version (int argc, char **argv,
 
   return TRUE;
 }
-

@@ -20,16 +20,16 @@
 
 #include "config.h"
 
+#include "libglnx.h"
+#include "string.h"
 #include <gio/gio.h>
 #include <gio/gunixfdmessage.h>
 #include <gio/gunixsocketaddress.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include "string.h"
-#include "libglnx.h"
+#include <sys/types.h>
 
-#include "rpmostree.h"
 #include "rpmostree-shlib-ipc-private.h"
+#include "rpmostree.h"
 
 /**
  * SECTION:librpmostree
@@ -42,30 +42,33 @@
 GVariant *
 _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd, GError **error)
 {
-  g_autoptr(GSubprocessLauncher) launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_PIPE);
+  g_autoptr (GSubprocessLauncher) launcher = g_subprocess_launcher_new (
+      G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_PIPE);
   int pair[2];
   if (socketpair (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) < 0)
-    return (GVariant*)glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
+    return (GVariant *)glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
   glnx_fd_close int my_sock_fd = glnx_steal_fd (&pair[0]);
   g_subprocess_launcher_take_fd (launcher, pair[1], RPMOSTREE_SHLIB_IPC_FD);
 
   if (wd != NULL)
     g_subprocess_launcher_set_cwd (launcher, wd);
 
-  g_autoptr(GSocket) my_sock = g_socket_new_from_fd (my_sock_fd, error);
+  g_autoptr (GSocket) my_sock = g_socket_new_from_fd (my_sock_fd, error);
   if (!my_sock)
     return NULL;
-  my_sock_fd = -1; (void) my_sock_fd; /* Ownership was transferred */
-  g_autoptr(GPtrArray) full_args = g_ptr_array_new ();
+  my_sock_fd = -1;
+  (void)my_sock_fd; /* Ownership was transferred */
+  g_autoptr (GPtrArray) full_args = g_ptr_array_new ();
   g_ptr_array_add (full_args, "rpm-ostree");
   g_ptr_array_add (full_args, "shlib-backend");
   for (char **it = args; it && *it; it++)
     g_ptr_array_add (full_args, *it);
   g_ptr_array_add (full_args, NULL);
-  g_autoptr(GSubprocess) proc = g_subprocess_launcher_spawnv (launcher, (const char*const*)full_args->pdata, error);
+  g_autoptr (GSubprocess) proc
+      = g_subprocess_launcher_spawnv (launcher, (const char *const *)full_args->pdata, error);
   if (!proc)
     return NULL;
-  
+
   g_autofree char *stderr = NULL;
   if (!g_subprocess_communicate_utf8 (proc, NULL, NULL, NULL, &stderr, error))
     return NULL;
@@ -79,9 +82,8 @@ _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd
   guint8 buffer[1024];
   iv.buffer = buffer;
   iv.size = 1;
-  gssize r = g_socket_receive_message (my_sock, NULL, &iv, 1,
-                                       (GSocketControlMessage ***) &mv,
-                                       &nm, &flags, NULL, error);
+  gssize r = g_socket_receive_message (my_sock, NULL, &iv, 1, (GSocketControlMessage ***)&mv, &nm,
+                                       &flags, NULL, error);
   if (r < 0)
     return NULL;
   g_assert_cmpint (r, ==, 1);
@@ -98,10 +100,11 @@ _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd
   const int *fds = g_unix_fd_list_peek_fds (fdlist, NULL);
   const int result_memfd = fds[0];
   g_assert_cmpint (result_memfd, !=, -1);
-  g_autoptr(GMappedFile) retmap = g_mapped_file_new_from_fd (result_memfd, FALSE, error);
+  g_autoptr (GMappedFile) retmap = g_mapped_file_new_from_fd (result_memfd, FALSE, error);
   if (!retmap)
     return FALSE;
-  return g_variant_new_from_bytes ((GVariantType*) variant_type, g_mapped_file_get_bytes (retmap), FALSE);
+  return g_variant_new_from_bytes ((GVariantType *)variant_type, g_mapped_file_get_bytes (retmap),
+                                   FALSE);
 }
 
 /**
@@ -113,9 +116,9 @@ _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd
 char *
 rpm_ostree_get_basearch (void)
 {
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   char *args[] = { "get-basearch", NULL };
-  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, NULL, &local_error);
+  g_autoptr (GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, NULL, &local_error);
   g_assert_no_error (local_error);
   return g_variant_dup_string (ret, NULL);
 }
@@ -124,14 +127,14 @@ rpm_ostree_get_basearch (void)
  * rpm_ostree_varsubst_basearch:
  * @src: String (commonly a URL)
  *
- * Returns: A copy of @src with all references for `${basearch}` replaced with `rpmostree_get_basearch()`, or %NULL on error
- * Since: 2017.8
+ * Returns: A copy of @src with all references for `${basearch}` replaced with
+ * `rpmostree_get_basearch()`, or %NULL on error Since: 2017.8
  */
 char *
 rpm_ostree_varsubst_basearch (const char *src, GError **error)
 {
-  char *args[] = { "varsubst-basearch", (char*)src, NULL };
-  g_autoptr(GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, NULL, error);
+  char *args[] = { "varsubst-basearch", (char *)src, NULL };
+  g_autoptr (GVariant) ret = _rpmostree_shlib_ipc_send ("s", args, NULL, error);
   if (!ret)
     return NULL;
   return g_variant_dup_string (ret, NULL);
@@ -151,5 +154,5 @@ rpm_ostree_varsubst_basearch (const char *src, GError **error)
 gboolean
 rpm_ostree_check_version (guint required_year, guint required_release)
 {
-  return RPM_OSTREE_CHECK_VERSION(required_year, required_release);
+  return RPM_OSTREE_CHECK_VERSION (required_year, required_release);
 }

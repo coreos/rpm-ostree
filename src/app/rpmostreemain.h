@@ -2,7 +2,8 @@
 
 #include "rust/cxx.h"
 
-namespace rpmostreecxx {
+namespace rpmostreecxx
+{
 
 void early_main ();
 void rpmostree_process_global_teardown ();

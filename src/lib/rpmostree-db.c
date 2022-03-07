@@ -18,10 +18,10 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#include "config.h"
-#include "string.h"
 #include "rpmostree-db.h"
+#include "config.h"
 #include "rpmostree-package-priv.h"
+#include "string.h"
 
 /**
  * SECTION:librpmostree-dbquery
@@ -45,12 +45,10 @@
  * Returns: (transfer container) (element-type RpmOstreePackage): A query result, or %NULL on error
  */
 GPtrArray *
-rpm_ostree_db_query_all (OstreeRepo                *repo,
-                         const char                *ref,
-                         GCancellable              *cancellable,
-                         GError                   **error)
+rpm_ostree_db_query_all (OstreeRepo *repo, const char *ref, GCancellable *cancellable,
+                         GError **error)
 {
-  g_autoptr(GPtrArray) pkglist = NULL;
+  g_autoptr (GPtrArray) pkglist = NULL;
   if (!_rpm_ostree_package_list_for_commit (repo, ref, FALSE, &pkglist, cancellable, error))
     return NULL;
   return g_steal_pointer (&pkglist);
@@ -61,10 +59,14 @@ rpm_ostree_db_query_all (OstreeRepo                *repo,
  * @repo: An OSTree repository
  * @orig_ref: Original ref (branch or commit)
  * @new_ref: New ref (branch or commit)
- * @out_removed: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for removed packages
- * @out_added: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for added packages
- * @out_modified_old: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for modified old packages
- * @out_modified_new: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for modified new packages
+ * @out_removed: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return
+ * location for removed packages
+ * @out_added: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return
+ * location for added packages
+ * @out_modified_old: (out) (transfer container) (element-type RpmOstreePackage) (allow-none):
+ * Return location for modified old packages
+ * @out_modified_new: (out) (transfer container) (element-type RpmOstreePackage) (allow-none):
+ * Return location for modified new packages
  *
  * Compute the RPM package delta between two commits.
  *
@@ -78,26 +80,12 @@ rpm_ostree_db_query_all (OstreeRepo                *repo,
  *     be paired with the same arbitrary pkg coming from one of the N entries.
  */
 gboolean
-rpm_ostree_db_diff (OstreeRepo               *repo,
-                    const char               *orig_ref,
-                    const char               *new_ref,
-                    GPtrArray               **out_removed,
-                    GPtrArray               **out_added,
-                    GPtrArray               **out_modified_old,
-                    GPtrArray               **out_modified_new,
-                    GCancellable             *cancellable,
-                    GError                  **error)
+rpm_ostree_db_diff (OstreeRepo *repo, const char *orig_ref, const char *new_ref,
+                    GPtrArray **out_removed, GPtrArray **out_added, GPtrArray **out_modified_old,
+                    GPtrArray **out_modified_new, GCancellable *cancellable, GError **error)
 {
-  return rpm_ostree_db_diff_ext (repo,
-                                 orig_ref,
-                                 new_ref,
-                                 0,
-                                 out_removed,
-                                 out_added,
-                                 out_modified_old,
-                                 out_modified_new,
-                                 cancellable,
-                                 error);
+  return rpm_ostree_db_diff_ext (repo, orig_ref, new_ref, 0, out_removed, out_added,
+                                 out_modified_old, out_modified_new, cancellable, error);
 }
 
 /**
@@ -106,10 +94,14 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
  * @orig_ref: Original ref (branch or commit)
  * @new_ref: New ref (branch or commit)
  * @flags: Flags controlling diff behaviour
- * @out_removed: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for removed packages
- * @out_added: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for added packages
- * @out_modified_old: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for modified old packages
- * @out_modified_new: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for modified new packages
+ * @out_removed: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return
+ * location for removed packages
+ * @out_added: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return
+ * location for added packages
+ * @out_modified_old: (out) (transfer container) (element-type RpmOstreePackage) (allow-none):
+ * Return location for modified old packages
+ * @out_modified_new: (out) (transfer container) (element-type RpmOstreePackage) (allow-none):
+ * Return location for modified new packages
  *
  * This function is identical to rpm_ostree_db_diff_ext(), but supports a @flags argument to
  * further control behaviour. At least one of the @out parameters must not be NULL.
@@ -117,31 +109,24 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
  * Since: 2017.12
  */
 gboolean
-rpm_ostree_db_diff_ext (OstreeRepo               *repo,
-                        const char               *orig_ref,
-                        const char               *new_ref,
-                        RpmOstreeDbDiffExtFlags   flags,
-                        GPtrArray               **out_removed,
-                        GPtrArray               **out_added,
-                        GPtrArray               **out_modified_old,
-                        GPtrArray               **out_modified_new,
-                        GCancellable             *cancellable,
-                        GError                  **error)
+rpm_ostree_db_diff_ext (OstreeRepo *repo, const char *orig_ref, const char *new_ref,
+                        RpmOstreeDbDiffExtFlags flags, GPtrArray **out_removed,
+                        GPtrArray **out_added, GPtrArray **out_modified_old,
+                        GPtrArray **out_modified_new, GCancellable *cancellable, GError **error)
 {
-  g_return_val_if_fail (out_removed || out_added ||
-                        out_modified_old || out_modified_new, FALSE);
+  g_return_val_if_fail (out_removed || out_added || out_modified_old || out_modified_new, FALSE);
 
   const gboolean allow_noent = ((flags & RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT) > 0);
 
-  g_autoptr(GPtrArray) orig_pkglist = NULL;
-  if (!_rpm_ostree_package_list_for_commit (repo, orig_ref, allow_noent, &orig_pkglist,
-                                            cancellable, error))
+  g_autoptr (GPtrArray) orig_pkglist = NULL;
+  if (!_rpm_ostree_package_list_for_commit (repo, orig_ref, allow_noent, &orig_pkglist, cancellable,
+                                            error))
     {
       g_prefix_error (error, "Failed to load package list: ");
       return FALSE;
     }
 
-  g_autoptr(GPtrArray) new_pkglist = NULL;
+  g_autoptr (GPtrArray) new_pkglist = NULL;
   if (orig_pkglist)
     {
       if (!_rpm_ostree_package_list_for_commit (repo, new_ref, allow_noent, &new_pkglist,

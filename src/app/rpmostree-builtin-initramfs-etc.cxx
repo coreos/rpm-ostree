@@ -20,12 +20,12 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
+#include "rpmostree-clientlib.h"
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
-#include "rpmostree-clientlib.h"
 
 #include <libglnx.h>
 
@@ -40,23 +40,24 @@ static gboolean opt_unchanged_exit_77;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "force-sync", 0, 0, G_OPTION_ARG_NONE, &opt_force_sync, "Deploy a new tree with the latest tracked /etc files", NULL },
+  { "force-sync", 0, 0, G_OPTION_ARG_NONE, &opt_force_sync,
+    "Deploy a new tree with the latest tracked /etc files", NULL },
   { "track", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_track, "Track root /etc file", "FILE" },
   { "untrack", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_untrack, "Untrack root /etc file", "FILE" },
   { "untrack-all", 0, 0, G_OPTION_ARG_NONE, &opt_untrack_all, "Untrack all root /etc files", NULL },
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
-  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no new deployment made, exit 77", NULL },
+  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
+    "Initiate a reboot after operation is complete", NULL },
+  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+    "Prevent automatic deployment finalization on shutdown", NULL },
+  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77,
+    "If no new deployment made, exit 77", NULL },
 
   { NULL }
 };
 
 gboolean
-rpmostree_ex_builtin_initramfs_etc (int             argc,
-                                    char          **argv,
-                                    RpmOstreeCommandInvocation *invocation,
-                                    GCancellable   *cancellable,
-                                    GError        **error)
+rpmostree_ex_builtin_initramfs_etc (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                    GCancellable *cancellable, GError **error)
 {
   g_printerr ("NOTICE: This command is now stable and no longer requires `ex`.\n");
   g_printerr ("NOTICE: Please update scripts; support for this alias will be removed.\n");
@@ -64,43 +65,35 @@ rpmostree_ex_builtin_initramfs_etc (int             argc,
 }
 
 gboolean
-rpmostree_builtin_initramfs_etc (int             argc,
-                                 char          **argv,
-                                 RpmOstreeCommandInvocation *invocation,
-                                 GCancellable   *cancellable,
-                                 GError        **error)
+rpmostree_builtin_initramfs_etc (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                 GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
 
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
 
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   if (!(opt_track || opt_untrack || opt_untrack_all || opt_force_sync))
     {
       if (opt_reboot)
-        return glnx_throw (error, "Cannot use ---reboot without --track, --untrack, --untrack-all, or --force-sync");
+        return glnx_throw (
+            error,
+            "Cannot use ---reboot without --track, --untrack, --untrack-all, or --force-sync");
 
       g_autofree char **files = NULL;
-      g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+      g_autoptr (GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
       if (g_variant_n_children (deployments) > 0)
         {
-          g_autoptr(GVariant) pending = g_variant_get_child_value (deployments, 0);
-          g_auto(GVariantDict) dict;
+          g_autoptr (GVariant) pending = g_variant_get_child_value (deployments, 0);
+          g_auto (GVariantDict) dict;
           g_variant_dict_init (&dict, pending);
 
           g_variant_dict_lookup (&dict, "initramfs-etc", "^a&s", &files);
@@ -118,7 +111,7 @@ rpmostree_builtin_initramfs_etc (int             argc,
       return TRUE; /* note early return */
     }
 
-  char *empty_strv[] = {NULL};
+  char *empty_strv[] = { NULL };
   if (!opt_track)
     opt_track = empty_strv;
   if (!opt_untrack)
@@ -129,23 +122,15 @@ rpmostree_builtin_initramfs_etc (int             argc,
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
-  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+  g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   g_autofree char *transaction_address = NULL;
-  if (!rpmostree_os_call_initramfs_etc_sync (os_proxy,
-                                             (const char *const*)opt_track,
-                                             (const char *const*)opt_untrack,
-                                             opt_untrack_all,
-                                             opt_force_sync,
-                                             options,
-                                             &transaction_address,
-                                             cancellable,
-                                             error))
+  if (!rpmostree_os_call_initramfs_etc_sync (
+          os_proxy, (const char *const *)opt_track, (const char *const *)opt_untrack,
+          opt_untrack_all, opt_force_sync, options, &transaction_address, cancellable, error))
     return FALSE;
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
                                                 error))
     return FALSE;
 

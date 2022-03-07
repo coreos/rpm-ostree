@@ -24,23 +24,21 @@
 
 static RpmOstreeCommand ex_subcommands[] = {
   { "livefs", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
-    "Apply pending deployment changes to booted deployment",
-    rpmostree_ex_builtin_apply_live },
-  { "apply-live", (RpmOstreeBuiltinFlags)0,
-    "Apply pending deployment changes to booted deployment",
+    "Apply pending deployment changes to booted deployment", rpmostree_ex_builtin_apply_live },
+  { "apply-live", (RpmOstreeBuiltinFlags)0, "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_apply_live },
   { "history", (RpmOstreeBuiltinFlags)RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
-  { "initramfs-etc", (RpmOstreeBuiltinFlags)0,
-    "Track initramfs configuration files", rpmostree_ex_builtin_initramfs_etc },
+  { "initramfs-etc", (RpmOstreeBuiltinFlags)0, "Track initramfs configuration files",
+    rpmostree_ex_builtin_initramfs_etc },
   /* This is currently only for CoreOS layering; so hide it to not confuse
    * users. */
   { "rebuild", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     "Rebuild system based on configuration", rpmostree_ex_builtin_rebuild },
   /* To graduate out of experimental, simply revert:
    * https://github.com/coreos/rpm-ostree/pull/3078 */
-  { "module", static_cast<RpmOstreeBuiltinFlags>(0),
-    "Commands to install/uninstall modules", rpmostree_ex_builtin_module },
+  { "module", static_cast<RpmOstreeBuiltinFlags> (0), "Commands to install/uninstall modules",
+    rpmostree_ex_builtin_module },
   { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
@@ -51,25 +49,22 @@ static GOptionEntry global_entries[] = {
 */
 
 gboolean
-rpmostree_builtin_ex (int argc, char **argv,
-                      RpmOstreeCommandInvocation *invocation,
+rpmostree_builtin_ex (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                       GCancellable *cancellable, GError **error)
 {
   g_printerr ("NOTICE: Experimental commands are subject to change.\n");
-  return rpmostree_handle_subcommand (argc, argv, ex_subcommands,
-                                      invocation, cancellable, error);
+  return rpmostree_handle_subcommand (argc, argv, ex_subcommands, invocation, cancellable, error);
 }
 
 /* Commands that are pure Rust are proxied here. */
 
 gboolean
-rpmostree_ex_builtin_module (int argc, char **argv,
-                             RpmOstreeCommandInvocation *invocation,
+rpmostree_ex_builtin_module (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                              GCancellable *cancellable, GError **error)
 {
   rust::Vec<rust::String> rustargv;
   for (int i = 0; i < argc; i++)
-    rustargv.push_back(std::string(argv[i]));
-  CXX_TRY(modularity_entrypoint(rustargv), error);
+    rustargv.push_back (std::string (argv[i]));
+  CXX_TRY (modularity_entrypoint (rustargv), error);
   return TRUE;
 }

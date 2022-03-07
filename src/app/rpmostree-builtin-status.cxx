@@ -21,39 +21,37 @@
 
 #include "config.h"
 
-#include <string.h>
-#include <stdio.h>
-#include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
+#include <glib-unix.h>
 #include <json-glib/json-glib.h>
 #include <libdnf/libdnf.h>
+#include <stdio.h>
+#include <string.h>
 
-#include "rpmostree-builtins.h"
-#include "rpmostree-ex-builtins.h"
-#include "rpmostree-libbuiltin.h"
-#include "rpmostreed-transaction-types.h"
-#include "rpmostree-clientlib.h"
-#include "rpmostree-util.h"
-#include "rpmostree-core.h"
-#include "rpmostree-rpm-util.h"
 #include "libsd-locale-util.h"
 #include "libsd-time-util.h"
+#include "rpmostree-builtins.h"
+#include "rpmostree-clientlib.h"
+#include "rpmostree-core.h"
+#include "rpmostree-ex-builtins.h"
+#include "rpmostree-libbuiltin.h"
+#include "rpmostree-rpm-util.h"
+#include "rpmostree-util.h"
+#include "rpmostreed-transaction-types.h"
 
 #include <libglnx.h>
 
-#define RPMOSTREE_AUTOMATIC_TIMER_UNIT \
-  "rpm-ostreed-automatic.timer"
-#define RPMOSTREE_AUTOMATIC_SERVICE_UNIT          \
-  "rpm-ostreed-automatic.service"
-#define RPMOSTREE_AUTOMATIC_TIMER_OBJPATH \
+#define RPMOSTREE_AUTOMATIC_TIMER_UNIT "rpm-ostreed-automatic.timer"
+#define RPMOSTREE_AUTOMATIC_SERVICE_UNIT "rpm-ostreed-automatic.service"
+#define RPMOSTREE_AUTOMATIC_TIMER_OBJPATH                                                          \
   "/org/freedesktop/systemd1/unit/rpm_2dostreed_2dautomatic_2etimer"
-#define RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH \
+#define RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH                                                        \
   "/org/freedesktop/systemd1/unit/rpm_2dostreed_2dautomatic_2eservice"
 
-#define OSTREE_FINALIZE_STAGED_SERVICE_UNIT \
-  "ostree-finalize-staged.service"
+#define OSTREE_FINALIZE_STAGED_SERVICE_UNIT "ostree-finalize-staged.service"
 
-#define SD_MESSAGE_UNIT_STOPPED_STR       SD_ID128_MAKE_STR(9d,1a,aa,27,d6,01,40,bd,96,36,54,38,aa,d2,02,86)
+#define SD_MESSAGE_UNIT_STOPPED_STR                                                                \
+  SD_ID128_MAKE_STR (9d, 1a, aa, 27, d6, 01, 40, bd, 96, 36, 54, 38, aa, d2, 02, 86)
 
 static gboolean opt_pretty;
 static gboolean opt_verbose;
@@ -63,16 +61,21 @@ static gboolean opt_only_booted;
 static const char *opt_jsonpath;
 static gboolean opt_pending_exit_77;
 
-static GOptionEntry option_entries[] = {
-  { "pretty", 'p', G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_pretty, "This option is deprecated and no longer has any effect", NULL },
-  { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot); implies -a", NULL },
-  { "advisories", 'a', 0, G_OPTION_ARG_NONE, &opt_verbose_advisories, "Expand advisories listing", NULL },
-  { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
-  { "jsonpath", 'J', 0, G_OPTION_ARG_STRING, &opt_jsonpath, "Filter JSONPath expression", "EXPRESSION" },
-  { "booted", 'b', 0, G_OPTION_ARG_NONE, &opt_only_booted, "Only print the booted deployment", NULL },
-  { "pending-exit-77", 'b', 0, G_OPTION_ARG_NONE, &opt_pending_exit_77, "If pending deployment available, exit 77", NULL },
-  { NULL }
-};
+static GOptionEntry option_entries[]
+    = { { "pretty", 'p', G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_pretty,
+          "This option is deprecated and no longer has any effect", NULL },
+        { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose,
+          "Print additional fields (e.g. StateRoot); implies -a", NULL },
+        { "advisories", 'a', 0, G_OPTION_ARG_NONE, &opt_verbose_advisories,
+          "Expand advisories listing", NULL },
+        { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
+        { "jsonpath", 'J', 0, G_OPTION_ARG_STRING, &opt_jsonpath, "Filter JSONPath expression",
+          "EXPRESSION" },
+        { "booted", 'b', 0, G_OPTION_ARG_NONE, &opt_only_booted, "Only print the booted deployment",
+          NULL },
+        { "pending-exit-77", 'b', 0, G_OPTION_ARG_NONE, &opt_pending_exit_77,
+          "If pending deployment available, exit 77", NULL },
+        { NULL } };
 
 /* return space available for printing value side of kv */
 static guint
@@ -84,13 +87,13 @@ get_textarea_width (guint maxkeylen)
   if (right_side_width >= columns)
     return G_MAXUINT; /* can't even print keys without wrapping, nothing pretty to do here */
   /* the sha is already 64 chars, so no point in trying to use less */
-  return MAX(OSTREE_SHA256_STRING_LEN, columns - right_side_width);
+  return MAX (OSTREE_SHA256_STRING_LEN, columns - right_side_width);
 }
 
 static GVariant *
 get_active_txn (RPMOSTreeSysroot *sysroot_proxy)
 {
-  GVariant* txn = rpmostree_sysroot_get_active_transaction (sysroot_proxy);
+  GVariant *txn = rpmostree_sysroot_get_active_transaction (sysroot_proxy);
   const char *a, *b, *c;
   if (txn)
     {
@@ -104,20 +107,18 @@ get_active_txn (RPMOSTreeSysroot *sysroot_proxy)
 static gint
 sort_by_name (gconstpointer a, gconstpointer b)
 {
-  const char *entry1 = *(const char **) a;
-  const char *entry2 = *(const char **) b;
+  const char *entry1 = *(const char **)a;
+  const char *entry2 = *(const char **)b;
 
   return g_ascii_strcasecmp (entry1, entry2);
 }
 
 static void
-print_packages (const char *k, guint max_key_len,
-                const char *const* pkgs,
-                const char *const* omit_pkgs,
-                gboolean quote)
+print_packages (const char *k, guint max_key_len, const char *const *pkgs,
+                const char *const *omit_pkgs, gboolean quote)
 {
-  g_autoptr(GPtrArray) packages_sorted = g_ptr_array_new_with_free_func (g_free);
-  for (char **iter = (char**) pkgs; iter && *iter; iter++)
+  g_autoptr (GPtrArray) packages_sorted = g_ptr_array_new_with_free_func (g_free);
+  for (char **iter = (char **)pkgs; iter && *iter; iter++)
     {
       const char *pkg = *iter;
       if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, pkg))
@@ -126,11 +127,11 @@ print_packages (const char *k, guint max_key_len,
       if (quote)
         {
           auto quoted = rpmostreecxx::maybe_shell_quote (pkg);
-          g_ptr_array_add (packages_sorted, g_strdup(quoted.c_str()));
+          g_ptr_array_add (packages_sorted, g_strdup (quoted.c_str ()));
         }
       else
         {
-          g_ptr_array_add (packages_sorted, g_strdup(pkg));
+          g_ptr_array_add (packages_sorted, g_strdup (pkg));
         }
     }
 
@@ -138,7 +139,7 @@ print_packages (const char *k, guint max_key_len,
   if (n_packages == 0)
     return;
 
-  g_ptr_array_sort(packages_sorted, sort_by_name);
+  g_ptr_array_sort (packages_sorted, sort_by_name);
 
   rpmostree_print_kv_no_newline (k, max_key_len, "");
 
@@ -147,7 +148,7 @@ print_packages (const char *k, guint max_key_len,
   guint current_width = 0;
   for (guint i = 0; i < n_packages; i++)
     {
-      auto pkg = static_cast<const char *>(packages_sorted->pdata[i]);
+      auto pkg = static_cast<const char *> (packages_sorted->pdata[i]);
       const guint pkg_width = strlen (pkg);
 
       /* first print */
@@ -172,9 +173,8 @@ print_packages (const char *k, guint max_key_len,
   putc ('\n', stdout);
 }
 
-static const gchar**
-lookup_array_and_canonicalize (GVariantDict *dict,
-                               const char   *key)
+static const gchar **
+lookup_array_and_canonicalize (GVariantDict *dict, const char *key)
 {
   g_autofree const gchar **ret = NULL;
 
@@ -189,8 +189,7 @@ lookup_array_and_canonicalize (GVariantDict *dict,
 }
 
 static void
-gv_nevra_to_evr (GString  *buffer,
-                 GVariant *gv_nevra)
+gv_nevra_to_evr (GString *buffer, GVariant *gv_nevra)
 {
   guint64 epoch;
   const char *version, *release;
@@ -199,7 +198,8 @@ gv_nevra_to_evr (GString  *buffer,
                           PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
 }
 
-typedef enum {
+typedef enum
+{
   AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN,
   AUTO_UPDATE_SDSTATE_TIMER_INACTIVE,
   AUTO_UPDATE_SDSTATE_SERVICE_FAILED,
@@ -208,26 +208,22 @@ typedef enum {
 } AutoUpdateSdState;
 
 static gboolean
-get_last_auto_update_run (GDBusConnection   *connection,
-                          AutoUpdateSdState *out_state,
-                          char             **out_last_run,
-                          GCancellable      *cancellable,
-                          GError           **error)
+get_last_auto_update_run (GDBusConnection *connection, AutoUpdateSdState *out_state,
+                          char **out_last_run, GCancellable *cancellable, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Querying systemd for last auto-update run", error);
 
   /* Check if the timer is running, otherwise systemd won't even keep timestamp info on dead
    * services. Also good to tell users if the policy is not none, but timer is off (though
    * we don't print it as an error; e.g. the timer might have been explicitly masked). */
-  g_autoptr(GDBusProxy) timer_unit_proxy =
-    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
-                           "org.freedesktop.systemd1", RPMOSTREE_AUTOMATIC_TIMER_OBJPATH,
-                           "org.freedesktop.systemd1.Unit", cancellable, error);
+  g_autoptr (GDBusProxy) timer_unit_proxy = g_dbus_proxy_new_sync (
+      connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL, "org.freedesktop.systemd1",
+      RPMOSTREE_AUTOMATIC_TIMER_OBJPATH, "org.freedesktop.systemd1.Unit", cancellable, error);
   if (!timer_unit_proxy)
     return FALSE;
 
-  g_autoptr(GVariant) timer_state_val =
-    g_dbus_proxy_get_cached_property (timer_unit_proxy, "ActiveState");
+  g_autoptr (GVariant) timer_state_val
+      = g_dbus_proxy_get_cached_property (timer_unit_proxy, "ActiveState");
 
   /* let's not error out if we can't msg systemd (e.g. bad sepol); just mark as unknown */
   if (timer_state_val == NULL)
@@ -243,15 +239,14 @@ get_last_auto_update_run (GDBusConnection   *connection,
       return TRUE; /* NB early return */
     }
 
-  g_autoptr(GDBusProxy) service_unit_proxy =
-    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
-                           "org.freedesktop.systemd1", RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH,
-                           "org.freedesktop.systemd1.Unit", cancellable, error);
+  g_autoptr (GDBusProxy) service_unit_proxy = g_dbus_proxy_new_sync (
+      connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL, "org.freedesktop.systemd1",
+      RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH, "org.freedesktop.systemd1.Unit", cancellable, error);
   if (!service_unit_proxy)
     return FALSE;
 
-  g_autoptr(GVariant) service_state_val =
-    g_dbus_proxy_get_cached_property (service_unit_proxy, "ActiveState");
+  g_autoptr (GVariant) service_state_val
+      = g_dbus_proxy_get_cached_property (service_unit_proxy, "ActiveState");
   const char *service_state = g_variant_get_string (service_state_val, NULL);
   if (g_str_equal (service_state, "failed"))
     {
@@ -264,15 +259,14 @@ get_last_auto_update_run (GDBusConnection   *connection,
       return TRUE; /* NB early return */
     }
 
-  g_autoptr(GDBusProxy) service_proxy =
-    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
-                           "org.freedesktop.systemd1", RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH,
-                           "org.freedesktop.systemd1.Service", cancellable, error);
+  g_autoptr (GDBusProxy) service_proxy = g_dbus_proxy_new_sync (
+      connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL, "org.freedesktop.systemd1",
+      RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH, "org.freedesktop.systemd1.Service", cancellable, error);
   if (!service_proxy)
     return FALSE;
 
-  g_autoptr(GVariant) t_val =
-    g_dbus_proxy_get_cached_property (service_proxy, "ExecMainExitTimestamp");
+  g_autoptr (GVariant) t_val
+      = g_dbus_proxy_get_cached_property (service_proxy, "ExecMainExitTimestamp");
 
   g_autofree char *last_run = NULL;
   if (t_val)
@@ -281,7 +275,7 @@ get_last_auto_update_run (GDBusConnection   *connection,
       if (t > 0)
         {
           char time_rel[FORMAT_TIMESTAMP_RELATIVE_MAX] = "";
-          libsd_format_timestamp_relative (time_rel, sizeof(time_rel), t);
+          libsd_format_timestamp_relative (time_rel, sizeof (time_rel), t);
           last_run = g_strdup (time_rel);
         }
     }
@@ -295,14 +289,11 @@ get_last_auto_update_run (GDBusConnection   *connection,
  * (and StatusText if found) is returned as a single string in `update_driver_state` if
  * ActiveState is not empty. */
 static gboolean
-get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy,
-                         const char       *update_driver_sd_unit,
-                         const char      **update_driver_state,
-                         GCancellable     *cancellable,
-                         GError          **error)
+get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy, const char *update_driver_sd_unit,
+                         const char **update_driver_state, GCancellable *cancellable,
+                         GError **error)
 {
-  GDBusConnection *connection =
-    g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+  GDBusConnection *connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
 
   const char *update_driver_objpath = NULL;
   if (!get_sd_unit_objpath (connection, "LoadUnit", g_variant_new ("(s)", update_driver_sd_unit),
@@ -310,15 +301,14 @@ get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy,
     return FALSE;
 
   /* Look up ActiveState property of update driver's systemd unit. */
-  g_autoptr(GDBusProxy) update_driver_unit_obj_proxy =
-    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
-                           "org.freedesktop.systemd1", update_driver_objpath,
-                           "org.freedesktop.systemd1.Unit", cancellable, error);
+  g_autoptr (GDBusProxy) update_driver_unit_obj_proxy = g_dbus_proxy_new_sync (
+      connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL, "org.freedesktop.systemd1",
+      update_driver_objpath, "org.freedesktop.systemd1.Unit", cancellable, error);
   if (!update_driver_unit_obj_proxy)
     return FALSE;
 
-  g_autoptr(GVariant) active_state_val =
-    g_dbus_proxy_get_cached_property (update_driver_unit_obj_proxy, "ActiveState");
+  g_autoptr (GVariant) active_state_val
+      = g_dbus_proxy_get_cached_property (update_driver_unit_obj_proxy, "ActiveState");
   if (!active_state_val)
     return glnx_throw (error, "ActiveState property not found in proxy's cache (%s)",
                        update_driver_objpath);
@@ -327,18 +317,17 @@ get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy,
 
   /* Only look up StatusText property if update driver is a service unit. */
   const char *status_text = NULL;
-  g_autoptr(GVariant) status_text_val = NULL;
+  g_autoptr (GVariant) status_text_val = NULL;
   if (g_str_has_suffix (update_driver_sd_unit, ".service"))
     {
-      g_autoptr(GDBusProxy) update_driver_service_obj_proxy =
-        g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
-                               "org.freedesktop.systemd1", update_driver_objpath,
-                               "org.freedesktop.systemd1.Service", cancellable, error);
+      g_autoptr (GDBusProxy) update_driver_service_obj_proxy = g_dbus_proxy_new_sync (
+          connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL, "org.freedesktop.systemd1",
+          update_driver_objpath, "org.freedesktop.systemd1.Service", cancellable, error);
       if (!update_driver_service_obj_proxy)
         return FALSE;
 
-      status_text_val =
-        g_dbus_proxy_get_cached_property (update_driver_service_obj_proxy, "StatusText");
+      status_text_val
+          = g_dbus_proxy_get_cached_property (update_driver_service_obj_proxy, "StatusText");
       if (!status_text_val)
         return glnx_throw (error, "StatusText property not found in proxy's cache (%s)",
                            update_driver_objpath);
@@ -359,13 +348,10 @@ get_update_driver_state (RPMOSTreeSysroot *sysroot_proxy,
 }
 
 static gboolean
-print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
-                    GCancellable     *cancellable,
-                    GError          **error)
+print_daemon_state (RPMOSTreeSysroot *sysroot_proxy, GCancellable *cancellable, GError **error)
 {
   glnx_unref_object RPMOSTreeTransaction *txn_proxy = NULL;
-  if (!rpmostree_transaction_connect_active (sysroot_proxy, NULL, &txn_proxy,
-                                             cancellable, error))
+  if (!rpmostree_transaction_connect_active (sysroot_proxy, NULL, &txn_proxy, cancellable, error))
     return FALSE;
 
   const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
@@ -382,16 +368,15 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
   if (update_driver_name && update_driver_sd_unit)
     {
       if (opt_verbose)
-        g_print ("AutomaticUpdatesDriver: %s (%s)\n", 
-                 update_driver_name, update_driver_sd_unit);
+        g_print ("AutomaticUpdatesDriver: %s (%s)\n", update_driver_name, update_driver_sd_unit);
       else
         g_print ("AutomaticUpdatesDriver: %s\n", update_driver_name);
 
       /* only try to get unit's StatusText if we're on the system bus */
       g_autofree const char *update_driver_state = NULL;
-      g_autoptr(GError) local_error = NULL;
-      if (!get_update_driver_state (sysroot_proxy, update_driver_sd_unit,
-                                    &update_driver_state, cancellable, &local_error))
+      g_autoptr (GError) local_error = NULL;
+      if (!get_update_driver_state (sysroot_proxy, update_driver_sd_unit, &update_driver_state,
+                                    cancellable, &local_error))
         g_printerr ("%s", local_error->message);
       else if (update_driver_state)
         g_print ("  DriverState: %s\n", update_driver_state);
@@ -411,8 +396,7 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
       AutoUpdateSdState state;
       g_autofree char *last_run = NULL;
       g_print ("; ");
-      GDBusConnection *connection =
-        g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+      GDBusConnection *connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
       if (!get_last_auto_update_run (connection, &state, &last_run, cancellable, error))
         return FALSE;
       switch (state)
@@ -429,10 +413,8 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
           }
         case AUTO_UPDATE_SDSTATE_SERVICE_FAILED:
           {
-            g_print ("%s: %s%slast run failed%s%s\n",
-                     RPMOSTREE_AUTOMATIC_SERVICE_UNIT,
-                     get_red_start (), get_bold_start (),
-                     get_bold_end (), get_red_end ());
+            g_print ("%s: %s%slast run failed%s%s\n", RPMOSTREE_AUTOMATIC_SERVICE_UNIT,
+                     get_red_start (), get_bold_start (), get_bold_end (), get_red_end ());
             break;
           }
         case AUTO_UPDATE_SDSTATE_SERVICE_RUNNING:
@@ -472,11 +454,10 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
 
 /* Print the result of rpmostree_context_get_rpmmd_repo_commit_metadata() */
 static void
-print_origin_repos (gboolean host_endian,
-                    guint maxkeylen, GVariantDict *commit_meta)
+print_origin_repos (gboolean host_endian, guint maxkeylen, GVariantDict *commit_meta)
 {
-  g_autoptr(GVariant) reposdata =
-    g_variant_dict_lookup_value (commit_meta, "rpmostree.rpmmd-repos", G_VARIANT_TYPE ("aa{sv}"));
+  g_autoptr (GVariant) reposdata = g_variant_dict_lookup_value (
+      commit_meta, "rpmostree.rpmmd-repos", G_VARIANT_TYPE ("aa{sv}"));
 
   if (!reposdata)
     return;
@@ -484,8 +465,8 @@ print_origin_repos (gboolean host_endian,
   const guint n = g_variant_n_children (reposdata);
   for (guint i = 0; i < n; i++)
     {
-      g_autoptr(GVariant) child = g_variant_get_child_value (reposdata, i);
-      g_autoptr(GVariantDict) cdict = g_variant_dict_new (child);
+      g_autoptr (GVariant) child = g_variant_get_child_value (reposdata, i);
+      g_autoptr (GVariantDict) cdict = g_variant_dict_new (child);
 
       const char *id = NULL;
       if (!g_variant_dict_lookup (cdict, "id", "&s", &id))
@@ -500,18 +481,18 @@ print_origin_repos (gboolean host_endian,
         ts = GUINT64_FROM_BE (ts);
       g_autofree char *timestamp_string = rpmostree_timestamp_str_from_unix_utc (ts);
       g_print ("  %*s%s %s (%s)\n", maxkeylen + 2, " ",
-               libsd_special_glyph (i == (n-1) ? TREE_RIGHT : TREE_BRANCH),
-               id, timestamp_string);
+               libsd_special_glyph (i == (n - 1) ? TREE_RIGHT : TREE_BRANCH), id, timestamp_string);
     }
 }
 
 static gboolean
-print_live_pkgdiff (const char *live_target, RpmOstreeDiffPrintFormat format, guint max_key_len, GCancellable *cancellable, GError **error)
+print_live_pkgdiff (const char *live_target, RpmOstreeDiffPrintFormat format, guint max_key_len,
+                    GCancellable *cancellable, GError **error)
 {
-  g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new_default ();
+  g_autoptr (OstreeSysroot) sysroot = ostree_sysroot_new_default ();
   if (!ostree_sysroot_load (sysroot, cancellable, error))
     return FALSE;
-  g_autoptr(OstreeRepo) repo = NULL;
+  g_autoptr (OstreeRepo) repo = NULL;
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     return FALSE;
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
@@ -520,7 +501,8 @@ print_live_pkgdiff (const char *live_target, RpmOstreeDiffPrintFormat format, gu
   const char *from_rev = ostree_deployment_get_csum (booted_deployment);
 
   gboolean have_target = FALSE;
-  if (!ostree_repo_has_object (repo, OSTREE_OBJECT_TYPE_COMMIT, live_target, &have_target, NULL, error))
+  if (!ostree_repo_has_object (repo, OSTREE_OBJECT_TYPE_COMMIT, live_target, &have_target, NULL,
+                               error))
     return FALSE;
   /* It might happen that the live target commit was GC'd somehow; we're not writing
    * an explicit ref for it.  In that case skip the diff.
@@ -528,37 +510,29 @@ print_live_pkgdiff (const char *live_target, RpmOstreeDiffPrintFormat format, gu
   if (!have_target)
     return TRUE;
 
-  g_autoptr(GPtrArray) removed = NULL;
-  g_autoptr(GPtrArray) added = NULL;
-  g_autoptr(GPtrArray) modified_old = NULL;
-  g_autoptr(GPtrArray) modified_new = NULL;
-  if (!rpm_ostree_db_diff (repo, from_rev, live_target,
-                           &removed, &added, &modified_old, &modified_new,
-                           cancellable, error))
+  g_autoptr (GPtrArray) removed = NULL;
+  g_autoptr (GPtrArray) added = NULL;
+  g_autoptr (GPtrArray) modified_old = NULL;
+  g_autoptr (GPtrArray) modified_new = NULL;
+  if (!rpm_ostree_db_diff (repo, from_rev, live_target, &removed, &added, &modified_old,
+                           &modified_new, cancellable, error))
     return FALSE;
-  rpmostree_diff_print_formatted (format, "Live", max_key_len,
-                                  removed, added, modified_old, modified_new);
+  rpmostree_diff_print_formatted (format, "Live", max_key_len, removed, added, modified_old,
+                                  modified_new);
   return TRUE;
 }
 
 static gboolean
-print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
-                      GVariant         *child,
-                      gboolean          first,
-                      gboolean          have_any_live_overlay,
-                      gboolean          have_multiple_stateroots,
-                      const char       *booted_osname,
-                      const char       *cached_update_deployment_id,
-                      GVariant         *cached_update,
-                      gboolean         *out_printed_cached_update,
-                      GError          **error)
+print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean first,
+                      gboolean have_any_live_overlay, gboolean have_multiple_stateroots,
+                      const char *booted_osname, const char *cached_update_deployment_id,
+                      GVariant *cached_update, gboolean *out_printed_cached_update, GError **error)
 {
   /* Add the long keys here */
-  const guint max_key_len = MAX (strlen ("InactiveBaseReplacements"),
-                                 strlen ("InterruptedLiveCommit"));
+  const guint max_key_len
+      = MAX (strlen ("InactiveBaseReplacements"), strlen ("InterruptedLiveCommit"));
 
-
-  g_autoptr(GVariantDict) dict = g_variant_dict_new (child);
+  g_autoptr (GVariantDict) dict = g_variant_dict_new (child);
 
   /* osname should always be present. */
   const gchar *os_name;
@@ -586,36 +560,30 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_autofree const gchar **origin_requested_modules = NULL;
   g_autofree const gchar **origin_requested_local_packages = NULL;
   g_autofree const gchar **origin_requested_local_fileoverride_packages = NULL;
-  g_autoptr(GVariant) origin_base_removals = NULL;
+  g_autoptr (GVariant) origin_base_removals = NULL;
   g_autofree const gchar **origin_requested_base_removals = NULL;
-  g_autoptr(GVariant) origin_base_local_replacements = NULL;
+  g_autoptr (GVariant) origin_base_local_replacements = NULL;
   g_autofree const gchar **origin_requested_base_local_replacements = NULL;
-  if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec) ||
-      g_variant_dict_lookup (dict, "container-image-reference", "&s", &origin_refspec))
+  if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec)
+      || g_variant_dict_lookup (dict, "container-image-reference", "&s", &origin_refspec))
     {
-      origin_packages =
-        lookup_array_and_canonicalize (dict, "packages");
-      origin_modules =
-        lookup_array_and_canonicalize (dict, "modules");
-      origin_modules_enabled =
-        lookup_array_and_canonicalize (dict, "modules-enabled");
-      origin_requested_packages =
-        lookup_array_and_canonicalize (dict, "requested-packages");
-      origin_requested_modules =
-        lookup_array_and_canonicalize (dict, "requested-modules");
-      origin_requested_local_packages =
-        lookup_array_and_canonicalize (dict, "requested-local-packages");
-      origin_requested_local_fileoverride_packages =
-        lookup_array_and_canonicalize (dict, "requested-local-fileoverride-packages");
-      origin_base_removals =
-        g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
-      origin_requested_base_removals =
-        lookup_array_and_canonicalize (dict, "requested-base-removals");
-      origin_base_local_replacements =
-        g_variant_dict_lookup_value (dict, "base-local-replacements",
-                                     G_VARIANT_TYPE ("a(vv)"));
-      origin_requested_base_local_replacements =
-        lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
+      origin_packages = lookup_array_and_canonicalize (dict, "packages");
+      origin_modules = lookup_array_and_canonicalize (dict, "modules");
+      origin_modules_enabled = lookup_array_and_canonicalize (dict, "modules-enabled");
+      origin_requested_packages = lookup_array_and_canonicalize (dict, "requested-packages");
+      origin_requested_modules = lookup_array_and_canonicalize (dict, "requested-modules");
+      origin_requested_local_packages
+          = lookup_array_and_canonicalize (dict, "requested-local-packages");
+      origin_requested_local_fileoverride_packages
+          = lookup_array_and_canonicalize (dict, "requested-local-fileoverride-packages");
+      origin_base_removals
+          = g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
+      origin_requested_base_removals
+          = lookup_array_and_canonicalize (dict, "requested-base-removals");
+      origin_base_local_replacements
+          = g_variant_dict_lookup_value (dict, "base-local-replacements", G_VARIANT_TYPE ("a(vv)"));
+      origin_requested_base_local_replacements
+          = lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
     }
   else
     origin_refspec = NULL;
@@ -631,8 +599,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   if (!g_variant_dict_lookup (dict, "regenerate-initramfs", "b", &regenerate_initramfs))
     regenerate_initramfs = FALSE;
 
-  g_autoptr(GVariant) signatures =
-    g_variant_dict_lookup_value (dict, "signatures", G_VARIANT_TYPE ("av"));
+  g_autoptr (GVariant) signatures
+      = g_variant_dict_lookup_value (dict, "signatures", G_VARIANT_TYPE ("av"));
 
   if (!first && !opt_only_booted)
     g_print ("\n");
@@ -650,8 +618,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         {
         case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
           {
-            g_variant_dict_lookup (dict, "custom-origin", "(&s&s)",
-                                   &custom_origin_url,
+            g_variant_dict_lookup (dict, "custom-origin", "(&s&s)", &custom_origin_url,
                                    &custom_origin_description);
             /* Canonicalize the empty string to NULL */
             if (custom_origin_url && !*custom_origin_url)
@@ -672,10 +639,11 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
           break;
         case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
           {
-            g_assert (g_variant_dict_lookup (dict, "container-image-reference-digest", "s", &container_image_reference_digest));
+            g_assert (g_variant_dict_lookup (dict, "container-image-reference-digest", "s",
+                                             &container_image_reference_digest));
             g_print ("%s", origin_refspec);
           }
-         break;
+          break;
         }
     }
   else
@@ -703,20 +671,23 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
     is_locally_assembled = TRUE;
 
   /* Load the commit metadata into a dict */
-  g_autoptr(GVariantDict) commit_meta_dict =
-    ({ g_autoptr(GVariant) commit_meta_v = NULL;
-      g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "@a{sv}", &commit_meta_v));
-      g_variant_dict_new (commit_meta_v); });
-  g_autoptr(GVariantDict) layered_commit_meta_dict = NULL;
+  g_autoptr (GVariantDict) commit_meta_dict = ({
+    g_autoptr (GVariant) commit_meta_v = NULL;
+    g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "@a{sv}", &commit_meta_v));
+    g_variant_dict_new (commit_meta_v);
+  });
+  g_autoptr (GVariantDict) layered_commit_meta_dict = NULL;
   if (is_locally_assembled)
     {
-      g_autoptr(GVariant) layered_commit_meta_v = NULL;
-      g_assert (g_variant_dict_lookup (dict, "layered-commit-meta", "@a{sv}", &layered_commit_meta_v));
+      g_autoptr (GVariant) layered_commit_meta_v = NULL;
+      g_assert (
+          g_variant_dict_lookup (dict, "layered-commit-meta", "@a{sv}", &layered_commit_meta_v));
       layered_commit_meta_dict = g_variant_dict_new (layered_commit_meta_v);
     }
 
   const gchar *source_title = NULL;
-  g_variant_dict_lookup (commit_meta_dict, OSTREE_COMMIT_META_KEY_SOURCE_TITLE, "&s", &source_title);
+  g_variant_dict_lookup (commit_meta_dict, OSTREE_COMMIT_META_KEY_SOURCE_TITLE, "&s",
+                         &source_title);
   if (source_title)
     g_print ("  %s %s\n", libsd_special_glyph (TREE_RIGHT), source_title);
 
@@ -738,9 +709,9 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   const gboolean have_live_changes = live_inprogress || live_replaced;
 
   const gboolean is_ostree_or_verbose = opt_verbose || refspectype == RPMOSTREE_REFSPEC_TYPE_OSTREE;
-  const RpmOstreeDiffPrintFormat diff_format =
-        opt_verbose ? RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED
-                    : RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY;
+  const RpmOstreeDiffPrintFormat diff_format = opt_verbose
+                                                   ? RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED
+                                                   : RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY;
 
   if (is_locally_assembled && is_ostree_or_verbose)
     {
@@ -801,47 +772,46 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   if (gpg_enabled)
     rpmostree_print_gpg_info (signatures, opt_verbose, max_key_len);
 
-  gboolean is_pending_deployment =
-    (first && !is_booted && g_strcmp0 (os_name, booted_osname) == 0);
+  gboolean is_pending_deployment = (first && !is_booted && g_strcmp0 (os_name, booted_osname) == 0);
 
   /* Print rpm diff and advisories summary if this is a pending deployment matching the
    * deployment on which the cached update is based. */
   if (is_pending_deployment && g_strcmp0 (id, cached_update_deployment_id) == 0)
     {
-      g_auto(GVariantDict) dict;
+      g_auto (GVariantDict) dict;
       g_variant_dict_init (&dict, cached_update);
-      g_autoptr(GVariant) rpm_diff =
-        g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
-      g_autoptr(GVariant) advisories =
-        g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
+      g_autoptr (GVariant) rpm_diff
+          = g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
+      g_autoptr (GVariant) advisories
+          = g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
       if (!rpmostree_print_diff_advisories (rpm_diff, advisories, opt_verbose,
                                             opt_verbose_advisories, max_key_len, error))
         return FALSE;
       if (out_printed_cached_update)
-        *out_printed_cached_update= TRUE;
+        *out_printed_cached_update = TRUE;
     }
   else if (is_pending_deployment && sysroot_proxy)
     {
       /* No cached update, but we can still print a diff summary */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      CXX_TRY(print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path), diff_format,
-                                                          max_key_len, NULL), error);
+      CXX_TRY (print_treepkg_diff_from_sysroot_path (rust::Str (sysroot_path), diff_format,
+                                                     max_key_len, NULL),
+               error);
     }
 
   /* print base overrides before overlays */
-  g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
-  g_autoptr(GPtrArray) active_removals_grouped = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr (GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr (GPtrArray) active_removals_grouped = g_ptr_array_new_with_free_func (g_free);
   if (origin_base_removals)
     {
-      g_autoptr(GHashTable) grouped_evrs =
-        g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                               (GDestroyNotify)g_ptr_array_unref);
+      g_autoptr (GHashTable) grouped_evrs = g_hash_table_new_full (
+          g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_ptr_array_unref);
 
       const guint n = g_variant_n_children (origin_base_removals);
       for (guint i = 0; i < n; i++)
         {
-          g_autoptr(GString) buf = g_string_new ("");
-          g_autoptr(GVariant) gv_nevra;
+          g_autoptr (GString) buf = g_string_new ("");
+          g_autoptr (GVariant) gv_nevra;
           g_variant_get_child (origin_base_removals, i, "v", &gv_nevra);
           const char *name;
           g_variant_get_child (gv_nevra, 1, "&s", &name);
@@ -849,7 +819,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
 
           gv_nevra_to_evr (buf, gv_nevra);
           const char *evr = buf->str;
-          auto pkgs = static_cast<GPtrArray *>(g_hash_table_lookup (grouped_evrs, evr));
+          auto pkgs = static_cast<GPtrArray *> (g_hash_table_lookup (grouped_evrs, evr));
           if (!pkgs)
             {
               pkgs = g_ptr_array_new_with_free_func (g_free);
@@ -859,53 +829,48 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         }
       g_ptr_array_add (active_removals, NULL);
 
-      GLNX_HASH_TABLE_FOREACH_KV (grouped_evrs, const char*, evr, GPtrArray*, pkgs)
-        {
-          g_autoptr(GString) pkggroup_buf = g_string_new ("");
-          for (guint i = 0, n = pkgs->len; i < n; i++)
-            {
-              auto pkgname = static_cast<const char *>(g_ptr_array_index (pkgs, i));
-              if (i > 0)
-                g_string_append_c (pkggroup_buf, ' ');
-              g_string_append (pkggroup_buf, pkgname);
-            }
-          g_string_append_printf (pkggroup_buf, " %s", evr);
+      GLNX_HASH_TABLE_FOREACH_KV (grouped_evrs, const char *, evr, GPtrArray *, pkgs)
+      {
+        g_autoptr (GString) pkggroup_buf = g_string_new ("");
+        for (guint i = 0, n = pkgs->len; i < n; i++)
+          {
+            auto pkgname = static_cast<const char *> (g_ptr_array_index (pkgs, i));
+            if (i > 0)
+              g_string_append_c (pkggroup_buf, ' ');
+            g_string_append (pkggroup_buf, pkgname);
+          }
+        g_string_append_printf (pkggroup_buf, " %s", evr);
 
-          g_ptr_array_add (active_removals_grouped, g_strdup (pkggroup_buf->str));
-        }
+        g_ptr_array_add (active_removals_grouped, g_strdup (pkggroup_buf->str));
+      }
 
       g_ptr_array_add (active_removals_grouped, NULL);
 
       if (active_removals_grouped->len > 1)
-        print_packages("RemovedBasePackages", max_key_len,
-                       (const char *const*)active_removals_grouped->pdata,
-                       NULL,
-                       FALSE);
+        print_packages ("RemovedBasePackages", max_key_len,
+                        (const char *const *)active_removals_grouped->pdata, NULL, FALSE);
     }
 
   /* only print inactive base removal requests in verbose mode */
   if (origin_requested_base_removals && opt_verbose)
-    print_packages ("InactiveBaseRemovals", max_key_len,
-                    origin_requested_base_removals,
-                    (const char *const*)active_removals->pdata,
-                    TRUE);
+    print_packages ("InactiveBaseRemovals", max_key_len, origin_requested_base_removals,
+                    (const char *const *)active_removals->pdata, TRUE);
 
-  g_autoptr(GPtrArray) active_replacements = g_ptr_array_new_with_free_func (g_free);
-  g_autoptr(GPtrArray) active_replacements_grouped = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr (GPtrArray) active_replacements = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr (GPtrArray) active_replacements_grouped = g_ptr_array_new_with_free_func (g_free);
   if (origin_base_local_replacements)
     {
-      g_autoptr(GString) buf = g_string_new ("");
-      g_autoptr(GHashTable) grouped_diffs =
-        g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                               (GDestroyNotify)g_ptr_array_unref);
+      g_autoptr (GString) buf = g_string_new ("");
+      g_autoptr (GHashTable) grouped_diffs = g_hash_table_new_full (
+          g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_ptr_array_unref);
 
       const guint n = g_variant_n_children (origin_base_local_replacements);
       for (guint i = 0; i < n; i++)
         {
-          g_autoptr(GVariant) gv_nevra_new;
-          g_autoptr(GVariant) gv_nevra_old;
-          g_variant_get_child (origin_base_local_replacements, i, "(vv)",
-                               &gv_nevra_new, &gv_nevra_old);
+          g_autoptr (GVariant) gv_nevra_new;
+          g_autoptr (GVariant) gv_nevra_old;
+          g_variant_get_child (origin_base_local_replacements, i, "(vv)", &gv_nevra_new,
+                               &gv_nevra_old);
           const char *nevra_new, *name_new, *name_old;
           g_variant_get_child (gv_nevra_new, 0, "&s", &nevra_new);
           g_variant_get_child (gv_nevra_new, 1, "&s", &name_new);
@@ -921,7 +886,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
               g_string_append (buf, " -> ");
               gv_nevra_to_evr (buf, gv_nevra_new);
               const char *diff = buf->str + original_size;
-              auto pkgs = static_cast<GPtrArray *>(g_hash_table_lookup (grouped_diffs, diff));
+              auto pkgs = static_cast<GPtrArray *> (g_hash_table_lookup (grouped_diffs, diff));
               if (!pkgs)
                 {
                   pkgs = g_ptr_array_new_with_free_func (g_free);
@@ -942,74 +907,64 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
           g_ptr_array_add (active_replacements, g_strdup (nevra_new));
         }
 
-      GLNX_HASH_TABLE_FOREACH_KV (grouped_diffs, const char*, diff, GPtrArray*, pkgs)
-        {
-          g_autoptr(GString) pkggroup_buf = g_string_new ("");
-          for (guint i = 0, n = pkgs->len; i < n; i++)
-            {
-              auto pkgname = static_cast<const char *>(g_ptr_array_index (pkgs, i));
-              if (i > 0)
-                g_string_append_c (pkggroup_buf, ' ');
-              g_string_append (pkggroup_buf, pkgname);
-            }
-          g_string_append_c (pkggroup_buf, ' ');
-          g_string_append (pkggroup_buf, diff);
+      GLNX_HASH_TABLE_FOREACH_KV (grouped_diffs, const char *, diff, GPtrArray *, pkgs)
+      {
+        g_autoptr (GString) pkggroup_buf = g_string_new ("");
+        for (guint i = 0, n = pkgs->len; i < n; i++)
+          {
+            auto pkgname = static_cast<const char *> (g_ptr_array_index (pkgs, i));
+            if (i > 0)
+              g_string_append_c (pkggroup_buf, ' ');
+            g_string_append (pkggroup_buf, pkgname);
+          }
+        g_string_append_c (pkggroup_buf, ' ');
+        g_string_append (pkggroup_buf, diff);
 
-          g_ptr_array_add (active_replacements_grouped, g_strdup (pkggroup_buf->str));
-        }
+        g_ptr_array_add (active_replacements_grouped, g_strdup (pkggroup_buf->str));
+      }
 
       g_ptr_array_add (active_replacements, NULL);
       g_ptr_array_add (active_replacements_grouped, NULL);
 
-
       g_ptr_array_add (active_replacements_grouped, NULL);
 
       if (active_replacements_grouped->len > 1)
-        print_packages("ReplacedBasePackages", max_key_len,
-                  (const char *const*)active_replacements_grouped->pdata,
-                  NULL,
-                  FALSE);
+        print_packages ("ReplacedBasePackages", max_key_len,
+                        (const char *const *)active_replacements_grouped->pdata, NULL, FALSE);
     }
 
   if (origin_requested_base_local_replacements && opt_verbose)
     print_packages ("InactiveBaseReplacements", max_key_len,
                     origin_requested_base_local_replacements,
-                    (const char *const*)active_replacements->pdata,
-                    TRUE);
+                    (const char *const *)active_replacements->pdata, TRUE);
 
   /* only print inactive layering requests in verbose mode */
   if (origin_requested_packages && opt_verbose)
     /* requested-packages - packages = inactive (i.e. dormant requests) */
-    print_packages ("InactiveRequests", max_key_len,
-                    origin_requested_packages, origin_packages,
+    print_packages ("InactiveRequests", max_key_len, origin_requested_packages, origin_packages,
                     TRUE);
   if (origin_requested_modules && opt_verbose)
     /* requested-modules - modules = inactive (i.e. dormant requests) */
     /* note the core doesn't support inactive modules yet, but could in the future */
-    print_packages ("InactiveModuleRequests", max_key_len,
-                    origin_requested_modules, origin_modules,
+    print_packages ("InactiveModuleRequests", max_key_len, origin_requested_modules, origin_modules,
                     TRUE);
 
   if (origin_packages)
-    print_packages ("LayeredPackages", max_key_len,
-                    origin_packages, NULL, TRUE);
+    print_packages ("LayeredPackages", max_key_len, origin_packages, NULL, TRUE);
   if (origin_modules)
-    print_packages ("LayeredModules", max_key_len,
-                    origin_modules, NULL, TRUE);
+    print_packages ("LayeredModules", max_key_len, origin_modules, NULL, TRUE);
   if (origin_modules_enabled)
-    print_packages ("EnabledModules", max_key_len,
-                    origin_modules_enabled, NULL, TRUE);
+    print_packages ("EnabledModules", max_key_len, origin_modules_enabled, NULL, TRUE);
 
   if (origin_requested_local_packages)
-    print_packages ("LocalPackages", max_key_len,
-                    origin_requested_local_packages, NULL, TRUE);
+    print_packages ("LocalPackages", max_key_len, origin_requested_local_packages, NULL, TRUE);
   if (origin_requested_local_fileoverride_packages)
     print_packages ("LocalForcedPackages", max_key_len,
                     origin_requested_local_fileoverride_packages, NULL, TRUE);
 
   if (regenerate_initramfs)
     {
-      g_autoptr(GString) buf = g_string_new ("");
+      g_autoptr (GString) buf = g_string_new ("");
       g_autofree char **initramfs_args = NULL;
 
       g_variant_dict_lookup (dict, "initramfs-args", "^a&s", &initramfs_args);
@@ -1018,14 +973,14 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         {
           const char *arg = *iter;
           auto quoted = rpmostreecxx::maybe_shell_quote (arg);
-          g_string_append (buf, quoted.c_str());
+          g_string_append (buf, quoted.c_str ());
           g_string_append_c (buf, ' ');
         }
       if (buf->len == 0)
         g_string_append (buf, "regenerate");
       rpmostree_print_kv ("Initramfs", max_key_len, buf->str);
     }
-  
+
   gboolean cliwrap = FALSE;
   if (g_variant_dict_lookup (dict, "cliwrap", "b", &cliwrap) && cliwrap)
     rpmostree_print_kv ("Cliwrap", max_key_len, "enabled");
@@ -1034,7 +989,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_variant_dict_lookup (dict, "initramfs-etc", "^a&s", &initramfs_etc_files);
   if (initramfs_etc_files && *initramfs_etc_files)
     /* XXX: not really packages but it works... should just rename that function */
-    print_packages ("InitramfsEtc", max_key_len, (const char**)initramfs_etc_files, NULL, TRUE);
+    print_packages ("InitramfsEtc", max_key_len, (const char **)initramfs_etc_files, NULL, TRUE);
 
   gboolean pinned = FALSE;
   g_variant_dict_lookup (dict, "pinned", "b", &pinned);
@@ -1065,12 +1020,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
  * two deployments, this code will be the generic fallback.
  */
 static gboolean
-print_deployments (RPMOSTreeSysroot *sysroot_proxy,
-                   GVariant         *deployments,
-                   GVariant         *cached_update,
-                   gboolean         *out_printed_cached_update,
-                   GCancellable     *cancellable,
-                   GError          **error)
+print_deployments (RPMOSTreeSysroot *sysroot_proxy, GVariant *deployments, GVariant *cached_update,
+                   gboolean *out_printed_cached_update, GCancellable *cancellable, GError **error)
 {
   GVariantIter iter;
 
@@ -1082,12 +1033,12 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
   g_variant_iter_init (&iter, deployments);
   while (TRUE)
     {
-      g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
+      g_autoptr (GVariant) child = g_variant_iter_next_value (&iter);
 
       if (!child)
         break;
 
-      g_autoptr(GVariantDict) dict = g_variant_dict_new (child);
+      g_autoptr (GVariantDict) dict = g_variant_dict_new (child);
 
       const gchar *live_inprogress;
       if (!g_variant_dict_lookup (dict, "live-inprogress", "&s", &live_inprogress))
@@ -1123,7 +1074,7 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
   const char *cached_update_deployment_id = NULL;
   if (cached_update)
     {
-      g_auto(GVariantDict) dict;
+      g_auto (GVariantDict) dict;
       g_variant_dict_init (&dict, cached_update);
       g_variant_dict_lookup (&dict, "deployment", "&s", &cached_update_deployment_id);
     }
@@ -1133,7 +1084,7 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
   gboolean first = TRUE;
   while (TRUE)
     {
-      g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
+      g_autoptr (GVariant) child = g_variant_iter_next_value (&iter);
       if (child == NULL)
         break;
 
@@ -1150,24 +1101,15 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
 }
 
 gboolean
-rpmostree_builtin_status (int             argc,
-                          char          **argv,
-                          RpmOstreeCommandInvocation *invocation,
-                          GCancellable   *cancellable,
-                          GError        **error)
+rpmostree_builtin_status (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                          GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
   if (opt_json && opt_jsonpath)
@@ -1180,12 +1122,12 @@ rpmostree_builtin_status (int             argc,
   if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, cancellable, &os_proxy, error))
     return FALSE;
 
-  g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+  g_autoptr (GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
   g_assert (deployments);
-  g_autoptr(GVariant) cached_update = NULL;
+  g_autoptr (GVariant) cached_update = NULL;
   if (rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
     cached_update = rpmostree_os_dup_cached_update (os_proxy);
-  g_autoptr(GVariant) driver_info = NULL;
+  g_autoptr (GVariant) driver_info = NULL;
   if (!get_driver_g_variant (&driver_info, error))
     return FALSE;
 
@@ -1198,8 +1140,7 @@ rpmostree_builtin_status (int             argc,
       json_builder_add_value (builder, json_gvariant_serialize (deployments));
       json_builder_set_member_name (builder, "transaction");
       GVariant *txn = get_active_txn (sysroot_proxy);
-      JsonNode *txn_node =
-        txn ? json_gvariant_serialize (txn) : json_node_new (JSON_NODE_NULL);
+      JsonNode *txn_node = txn ? json_gvariant_serialize (txn) : json_node_new (JSON_NODE_NULL);
       json_builder_add_value (builder, txn_node);
       json_builder_set_member_name (builder, "cached-update");
       JsonNode *cached_update_node;
@@ -1209,8 +1150,8 @@ rpmostree_builtin_status (int             argc,
         cached_update_node = json_node_new (JSON_NODE_NULL);
       json_builder_add_value (builder, cached_update_node);
       json_builder_set_member_name (builder, "update-driver");
-      JsonNode *update_driver_node =
-        driver_info ? json_gvariant_serialize (driver_info) : json_node_new (JSON_NODE_NULL);
+      JsonNode *update_driver_node
+          = driver_info ? json_gvariant_serialize (driver_info) : json_node_new (JSON_NODE_NULL);
       json_builder_add_value (builder, update_driver_node);
       json_builder_end_object (builder);
 
@@ -1245,8 +1186,8 @@ rpmostree_builtin_status (int             argc,
         return FALSE;
 
       gboolean printed_cached_update = FALSE;
-      if (!print_deployments (sysroot_proxy, deployments, cached_update,
-                              &printed_cached_update, cancellable, error))
+      if (!print_deployments (sysroot_proxy, deployments, cached_update, &printed_cached_update,
+                              cancellable, error))
         return FALSE;
 
       const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
@@ -1254,8 +1195,8 @@ rpmostree_builtin_status (int             argc,
       if (cached_update && !printed_cached_update && auto_updates_enabled)
         {
           g_print ("\n");
-          if (!rpmostree_print_cached_update (cached_update, opt_verbose,
-                                              opt_verbose_advisories, cancellable, error))
+          if (!rpmostree_print_cached_update (cached_update, opt_verbose, opt_verbose_advisories,
+                                              cancellable, error))
             return FALSE;
         }
     }
@@ -1264,8 +1205,8 @@ rpmostree_builtin_status (int             argc,
     {
       if (g_variant_n_children (deployments) > 1)
         {
-          g_autoptr(GVariant) pending = g_variant_get_child_value (deployments, 0);
-          g_auto(GVariantDict) dict;
+          g_autoptr (GVariant) pending = g_variant_get_child_value (deployments, 0);
+          g_auto (GVariantDict) dict;
           g_variant_dict_init (&dict, pending);
           gboolean is_booted;
           if (g_variant_dict_lookup (&dict, "booted", "b", &is_booted) && !is_booted)
@@ -1283,29 +1224,31 @@ static gboolean opt_deployments;
 static int opt_limit = 3;
 static gboolean opt_all;
 
-static GOptionEntry history_option_entries[] = {
-  { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot)", NULL },
-  { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
-  { "limit", 'n', 0, G_OPTION_ARG_INT, &opt_limit, "Limit number of entries to output (default: 3)", "N" },
-  { "all", 0, 0, G_OPTION_ARG_NONE, &opt_all, "Output all entries", NULL },
-  /* XXX { "deployments", 0, 0, G_OPTION_ARG_NONE, &opt_deployments, "Print all deployments, not just those booted into", NULL }, */
-  /* XXX { "no-pager", 0, 0, G_OPTION_ARG_NONE, &opt_no_pager, "Don't use a pager to display output", NULL }, */
-  { NULL }
-};
+static GOptionEntry history_option_entries[]
+    = { { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose,
+          "Print additional fields (e.g. StateRoot)", NULL },
+        { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
+        { "limit", 'n', 0, G_OPTION_ARG_INT, &opt_limit,
+          "Limit number of entries to output (default: 3)", "N" },
+        { "all", 0, 0, G_OPTION_ARG_NONE, &opt_all, "Output all entries", NULL },
+        /* XXX { "deployments", 0, 0, G_OPTION_ARG_NONE, &opt_deployments, "Print all deployments,
+           not just those booted into", NULL }, */
+        /* XXX { "no-pager", 0, 0, G_OPTION_ARG_NONE, &opt_no_pager, "Don't use a pager to display
+           output", NULL }, */
+        { NULL } };
 
 /* Read from history db, sets @out_deployment to NULL on ENOENT. */
 static gboolean
 fetch_history_deployment_gvariant (const rpmostreecxx::HistoryEntry &entry,
-                                   GVariant        **out_deployment,
-                                   GError          **error)
+                                   GVariant **out_deployment, GError **error)
 {
-  g_autofree char *fn =
-    g_strdup_printf ("%s/%" PRIu64, RPMOSTREE_HISTORY_DIR, entry.deploy_timestamp);
+  g_autofree char *fn
+      = g_strdup_printf ("%s/%" PRIu64, RPMOSTREE_HISTORY_DIR, entry.deploy_timestamp);
 
   *out_deployment = NULL;
 
   glnx_autofd int fd = -1;
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   if (!glnx_openat_rdonly (AT_FDCWD, fn, TRUE, &fd, &local_error))
     {
       if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
@@ -1313,31 +1256,30 @@ fetch_history_deployment_gvariant (const rpmostreecxx::HistoryEntry &entry,
       return TRUE; /* Note early return */
     }
 
-  g_autoptr(GBytes) data = glnx_fd_readall_bytes (fd, NULL, error);
+  g_autoptr (GBytes) data = glnx_fd_readall_bytes (fd, NULL, error);
   if (!data)
     return FALSE;
 
-  *out_deployment =
-    g_variant_ref_sink (g_variant_new_from_bytes (G_VARIANT_TYPE_VARDICT, data, FALSE));
+  *out_deployment
+      = g_variant_ref_sink (g_variant_new_from_bytes (G_VARIANT_TYPE_VARDICT, data, FALSE));
   return TRUE;
 }
 
 static void
-print_timestamp_and_relative (const char* key, guint64 t)
+print_timestamp_and_relative (const char *key, guint64 t)
 {
   g_autofree char *ts = rpmostree_timestamp_str_from_unix_utc (t);
   char time_rel[FORMAT_TIMESTAMP_RELATIVE_MAX] = "";
-  libsd_format_timestamp_relative (time_rel, sizeof(time_rel), t * USEC_PER_SEC);
+  libsd_format_timestamp_relative (time_rel, sizeof (time_rel), t * USEC_PER_SEC);
   if (key)
     g_print ("%s: ", key);
   g_print ("%s (%s)\n", ts, time_rel);
 }
 
 static gboolean
-print_history_entry (const rpmostreecxx::HistoryEntry &entry,
-                     GError          **error)
+print_history_entry (const rpmostreecxx::HistoryEntry &entry, GError **error)
 {
-  g_autoptr(GVariant) deployment = NULL;
+  g_autoptr (GVariant) deployment = NULL;
   if (!fetch_history_deployment_gvariant (entry, &deployment, error))
     return FALSE;
 
@@ -1346,18 +1288,18 @@ print_history_entry (const rpmostreecxx::HistoryEntry &entry,
       print_timestamp_and_relative ("BootTimestamp", entry.last_boot_timestamp);
       if (entry.boot_count > 1)
         {
-          g_print ("%s BootCount: %" PRIu64 "; first booted on ",
-                   libsd_special_glyph (TREE_RIGHT), entry.boot_count);
+          g_print ("%s BootCount: %" PRIu64 "; first booted on ", libsd_special_glyph (TREE_RIGHT),
+                   entry.boot_count);
           print_timestamp_and_relative (NULL, entry.first_boot_timestamp);
         }
 
       print_timestamp_and_relative ("CreateTimestamp", entry.deploy_timestamp);
-      if (entry.deploy_cmdline.length() > 0)
+      if (entry.deploy_cmdline.length () > 0)
         {
           // Copy so we can use c_str()
-          auto cmdline_copy = std::string(entry.deploy_cmdline);
-          g_print ("CreateCommand: %s%s%s\n",
-                   get_bold_start (), cmdline_copy.c_str(), get_bold_end ());
+          auto cmdline_copy = std::string (entry.deploy_cmdline);
+          g_print ("CreateCommand: %s%s%s\n", get_bold_start (), cmdline_copy.c_str (),
+                   get_bold_end ());
         }
       if (!deployment)
         /* somehow we're missing an entry? XXX: just fallback to checksum, version, refspec
@@ -1365,8 +1307,8 @@ print_history_entry (const rpmostreecxx::HistoryEntry &entry,
         g_print ("  << Missing history information >>\n");
 
       /* XXX: factor out interesting bits from print_one_deployment() */
-      else if (!print_one_deployment (NULL, deployment, TRUE, FALSE, FALSE,
-                                      NULL, NULL, NULL, NULL, error))
+      else if (!print_one_deployment (NULL, deployment, TRUE, FALSE, FALSE, NULL, NULL, NULL, NULL,
+                                      error))
         return FALSE;
     }
   else
@@ -1384,12 +1326,12 @@ print_history_entry (const rpmostreecxx::HistoryEntry &entry,
 
       json_builder_set_member_name (builder, "deployment-create-timestamp");
       json_builder_add_int_value (builder, entry.deploy_timestamp);
-      if (entry.deploy_cmdline.length() > 0)
+      if (entry.deploy_cmdline.length () > 0)
         {
-          json_builder_set_member_name (builder, "deployment-create-command-line"); 
+          json_builder_set_member_name (builder, "deployment-create-command-line");
           // Copy so we can use c_str()
-          auto cmdline_copy = std::string(entry.deploy_cmdline);
-          json_builder_add_string_value (builder, cmdline_copy.c_str()); 
+          auto cmdline_copy = std::string (entry.deploy_cmdline);
+          json_builder_add_string_value (builder, cmdline_copy.c_str ());
         }
       json_builder_set_member_name (builder, "boot-count");
       json_builder_add_int_value (builder, entry.boot_count);
@@ -1416,20 +1358,12 @@ print_history_entry (const rpmostreecxx::HistoryEntry &entry,
 /* The `history` command also lives here since the printing bits re-use a lot of the
  * `status` machinery. */
 gboolean
-rpmostree_ex_builtin_history (int             argc,
-                              char          **argv,
-                              RpmOstreeCommandInvocation *invocation,
-                              GCancellable   *cancellable,
-                              GError        **error)
+rpmostree_ex_builtin_history (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                              GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
-  if (!rpmostree_option_context_parse (context,
-                                       history_option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL,
-                                       error))
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
+  if (!rpmostree_option_context_parse (context, history_option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, NULL, error))
     return FALSE;
 
   if (opt_limit <= 0)
@@ -1438,14 +1372,14 @@ rpmostree_ex_builtin_history (int             argc,
   /* initiate a history context, then iterate over each (boot time, deploy time), then print */
 
   /* XXX: enhance with option for going in reverse (oldest first) */
-  auto history_ctx = CXX_TRY_VAL(history_ctx_new (), error);
+  auto history_ctx = CXX_TRY_VAL (history_ctx_new (), error);
 
   /* XXX: use pager here */
 
   gboolean at_least_one = FALSE;
   while (opt_all || opt_limit--)
     {
-      auto entry = history_ctx->next_entry();
+      auto entry = history_ctx->next_entry ();
       if (entry.eof)
         break;
       if (!print_history_entry (entry, error))

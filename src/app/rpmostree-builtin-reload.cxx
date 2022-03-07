@@ -20,37 +20,26 @@
 
 #include "config.h"
 
-#include <string.h>
-#include <glib-unix.h>
 #include <gio/gio.h>
+#include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
 
 #include <libglnx.h>
 
-static GOptionEntry option_entries[] = {
-  { NULL }
-};
+static GOptionEntry option_entries[] = { { NULL } };
 
 gboolean
-rpmostree_builtin_reload (int             argc,
-                          char          **argv,
-                          RpmOstreeCommandInvocation *invocation,
-                          GCancellable   *cancellable,
-                          GError        **error)
+rpmostree_builtin_reload (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                          GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
   if (!rpmostree_sysroot_call_reload_config_sync (sysroot_proxy, cancellable, error))

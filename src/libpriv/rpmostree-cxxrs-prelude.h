@@ -22,25 +22,27 @@
 
 #include <ostree.h>
 
-namespace rpmostreecxx {
-    // Currently cxx-rs requires that external bindings are in the same namespace as
-    // its own bindings, so we maintain typedefs.  Update cxxrsutil.rs first.
-    typedef ::OstreeDeployment OstreeDeployment;
-    typedef ::OstreeRepo OstreeRepo;
-    typedef ::OstreeRepoTransactionStats OstreeRepoTransactionStats;
-    typedef ::OstreeSysroot OstreeSysroot;
-    typedef ::GObject GObject;
-    typedef ::GCancellable GCancellable;
-    typedef ::GDBusConnection GDBusConnection;
-    typedef ::GFileInfo GFileInfo;
-    typedef ::GVariant GVariant;
-    typedef ::GVariantDict GVariantDict;
-    typedef ::GKeyFile GKeyFile;
+namespace rpmostreecxx
+{
+// Currently cxx-rs requires that external bindings are in the same namespace as
+// its own bindings, so we maintain typedefs.  Update cxxrsutil.rs first.
+typedef ::OstreeDeployment OstreeDeployment;
+typedef ::OstreeRepo OstreeRepo;
+typedef ::OstreeRepoTransactionStats OstreeRepoTransactionStats;
+typedef ::OstreeSysroot OstreeSysroot;
+typedef ::GObject GObject;
+typedef ::GCancellable GCancellable;
+typedef ::GDBusConnection GDBusConnection;
+typedef ::GFileInfo GFileInfo;
+typedef ::GVariant GVariant;
+typedef ::GVariantDict GVariantDict;
+typedef ::GKeyFile GKeyFile;
 }
 
 // XXX: really should just include! libdnf.hxx in the bridge
 #include <libdnf/libdnf.h>
-namespace dnfcxx {
-  typedef ::DnfPackage DnfPackage;
-  typedef ::DnfRepo DnfRepo;
+namespace dnfcxx
+{
+typedef ::DnfPackage DnfPackage;
+typedef ::DnfRepo DnfRepo;
 }

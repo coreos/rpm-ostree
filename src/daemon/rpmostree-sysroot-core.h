@@ -37,26 +37,21 @@ G_BEGIN_DECLS
  * /run/ostree/staged-deployment path and company. */
 #define _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED "/run/ostree/staged-deployment-locked"
 
-gboolean
-rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
-                           OstreeRepo               *repo,
-                           GCancellable             *cancellable,
-                           GError                  **error);
+gboolean rpmostree_syscore_cleanup (OstreeSysroot *sysroot, OstreeRepo *repo,
+                                    GCancellable *cancellable, GError **error);
 
-OstreeDeployment *rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *self, const char *osname);
+OstreeDeployment *rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *self,
+                                                                 const char *osname);
 
 gboolean rpmostree_syscore_bump_mtime (OstreeSysroot *self, GError **error);
 
-GPtrArray *rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
-                                                 const char         *osname,
-                                                 gboolean            remove_pending,
-                                                 gboolean            remove_rollback);
+GPtrArray *rpmostree_syscore_filter_deployments (OstreeSysroot *sysroot, const char *osname,
+                                                 gboolean remove_pending, gboolean remove_rollback);
 
-gboolean rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
-                                             OstreeDeployment        *new_deployment,
-                                             OstreeDeployment        *merge_deployment,
-                                             gboolean                 pushing_rollback,
-                                             GCancellable            *cancellable,
-                                             GError                 **error);
+gboolean rpmostree_syscore_write_deployment (OstreeSysroot *sysroot,
+                                             OstreeDeployment *new_deployment,
+                                             OstreeDeployment *merge_deployment,
+                                             gboolean pushing_rollback, GCancellable *cancellable,
+                                             GError **error);
 
 G_END_DECLS

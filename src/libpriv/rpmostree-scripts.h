@@ -21,73 +21,50 @@
 #pragma once
 
 #include <gio/gio.h>
+#include <libdnf/libdnf.h>
 #include <ostree.h>
-#include <rpm/rpmsq.h>
+#include <rpm/rpmfi.h>
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
-#include <rpm/rpmfi.h>
 #include <rpm/rpmmacro.h>
+#include <rpm/rpmsq.h>
 #include <rpm/rpmts.h>
-#include <libdnf/libdnf.h>
 
 #include "libglnx.h"
 
 G_BEGIN_DECLS
 
-typedef enum {
+typedef enum
+{
   RPMOSTREE_SCRIPT_PREIN,
   RPMOSTREE_SCRIPT_POSTIN,
   RPMOSTREE_SCRIPT_POSTTRANS,
 } RpmOstreeScriptKind;
 
-gboolean
-rpmostree_script_txn_validate (DnfPackage    *package,
-                               Header         hdr,
-                               GCancellable  *cancellable,
-                               GError       **error);
+gboolean rpmostree_script_txn_validate (DnfPackage *package, Header hdr, GCancellable *cancellable,
+                                        GError **error);
 
-gboolean
-rpmostree_script_run_sync (DnfPackage    *pkg,
-                           Header         hdr,
-                           RpmOstreeScriptKind kind,
-                           int            rootfs_fd,
-                           GLnxTmpDir    *var_lib_rpm_statedir,
-                           gboolean       enable_rofiles,
-                           guint         *out_n_run,
-                           GCancellable  *cancellable,
-                           GError       **error);
+gboolean rpmostree_script_run_sync (DnfPackage *pkg, Header hdr, RpmOstreeScriptKind kind,
+                                    int rootfs_fd, GLnxTmpDir *var_lib_rpm_statedir,
+                                    gboolean enable_rofiles, guint *out_n_run,
+                                    GCancellable *cancellable, GError **error);
 
-gboolean
-rpmostree_transfiletriggers_run_sync (Header         hdr,
-                                      int            rootfs_fd,
-                                      gboolean       enable_rofiles,
-                                      guint         *out_n_run,
-                                      GCancellable  *cancellable,
-                                      GError       **error);
+gboolean rpmostree_transfiletriggers_run_sync (Header hdr, int rootfs_fd, gboolean enable_rofiles,
+                                               guint *out_n_run, GCancellable *cancellable,
+                                               GError **error);
 
-gboolean
-rpmostree_deployment_sanitycheck_true (int           rootfs_fd,
-                                       GCancellable *cancellable,
-                                       GError      **error);
+gboolean rpmostree_deployment_sanitycheck_true (int rootfs_fd, GCancellable *cancellable,
+                                                GError **error);
 
-gboolean
-rpmostree_deployment_sanitycheck_rpmdb (int           rootfs_fd,
-                                        GPtrArray     *overlays,
-                                        GPtrArray     *overrides,
-                                        GCancellable *cancellable,
-                                        GError      **error);
+gboolean rpmostree_deployment_sanitycheck_rpmdb (int rootfs_fd, GPtrArray *overlays,
+                                                 GPtrArray *overrides, GCancellable *cancellable,
+                                                 GError **error);
 
-gboolean
-rpmostree_run_script_in_bwrap_container (int rootfs_fd,
-                               GLnxTmpDir *var_lib_rpm_statedir,
-                               gboolean    enable_fuse,
-                               const char *name,
-                               const char *scriptdesc,
-                               const char *interp,
-                               const char *script,
-                               const char *script_arg,
-                               int         stdin_fd,
-                               GCancellable  *cancellable,
-                               GError       **error);
+gboolean rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_statedir,
+                                                  gboolean enable_fuse, const char *name,
+                                                  const char *scriptdesc, const char *interp,
+                                                  const char *script, const char *script_arg,
+                                                  int stdin_fd, GCancellable *cancellable,
+                                                  GError **error);
 
 G_END_DECLS

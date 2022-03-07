@@ -20,55 +20,49 @@
 
 #include "config.h"
 
-#include <string.h>
-#include <stdio.h>
+#include <gio/gunixoutputstream.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
-#include <gio/gunixoutputstream.h>
+#include <stdio.h>
+#include <string.h>
 #include <systemd/sd-journal.h>
 
-#include "rpmostree-util.h"
+#include "libglnx.h"
+#include "libsd-locale-util.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-output.h"
-#include "libsd-locale-util.h"
-#include "libglnx.h"
+#include "rpmostree-util.h"
 
 #define RPMOSTREE_OLD_PKGCACHE_DIR "extensions/rpmostree/pkgcache"
 
 int
-rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
-                                         gconstpointer bp)
+rpmostree_ptrarray_sort_compare_strings (gconstpointer ap, gconstpointer bp)
 {
-  char **asp = (char**)(gpointer)ap;
-  char **bsp = (char**)(gpointer)bp;
+  char **asp = (char **)(gpointer)ap;
+  char **bsp = (char **)(gpointer)bp;
   return strcmp (*asp, *bsp);
 }
 
 GVariant *
-_rpmostree_vardict_lookup_value_required (GVariantDict *dict,
-                                          const char *key,
-                                          const GVariantType *fmt,
-                                          GError     **error)
+_rpmostree_vardict_lookup_value_required (GVariantDict *dict, const char *key,
+                                          const GVariantType *fmt, GError **error)
 {
   GVariant *r = g_variant_dict_lookup_value (dict, key, fmt);
   if (!r)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                   "Failed to find metadata key %s (signature %s)", key, (char*)fmt);
+                   "Failed to find metadata key %s (signature %s)", key, (char *)fmt);
       return NULL;
     }
   return r;
 }
 
 gboolean
-_rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
-                                           int           dfd,
-                                           const char   *path,
-                                           GCancellable *cancellable,
-                                           GError      **error)
+_rpmostree_util_update_checksum_from_file (GChecksum *checksum, int dfd, const char *path,
+                                           GCancellable *cancellable, GError **error)
 {
   glnx_autofd int fd = -1;
-  g_autoptr(GMappedFile) mfile = NULL;
+  g_autoptr (GMappedFile) mfile = NULL;
 
   if (!glnx_openat_rdonly (dfd, path, TRUE, &fd, error))
     return FALSE;
@@ -77,7 +71,7 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
   if (!mfile)
     return FALSE;
 
-  g_checksum_update (checksum, (guint8*)g_mapped_file_get_contents (mfile),
+  g_checksum_update (checksum, (guint8 *)g_mapped_file_get_contents (mfile),
                      g_mapped_file_get_length (mfile));
 
   return TRUE;
@@ -88,8 +82,8 @@ gboolean
 rpmostree_pkg_is_local (DnfPackage *pkg)
 {
   const char *reponame = dnf_package_get_reponame (pkg);
-  return (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0 ||
-          dnf_repo_is_local (dnf_package_get_repo (pkg)));
+  return (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0
+          || dnf_repo_is_local (dnf_package_get_repo (pkg)));
 }
 
 /* Returns the local filesystem path for a package; for non-local packages,
@@ -105,28 +99,26 @@ rpmostree_pkg_get_local_path (DnfPackage *pkg)
   else
     {
       const char *pkg_location = dnf_package_get_location (pkg);
-      return g_build_filename (dnf_repo_get_location (pkg_repo),
-                               "packages", glnx_basename (pkg_location), NULL);
+      return g_build_filename (dnf_repo_get_location (pkg_repo), "packages",
+                               glnx_basename (pkg_location), NULL);
     }
 }
 
 gboolean
-rpmostree_check_size_within_limit (guint64     actual,
-                                   guint64     limit,
-                                   const char *subject,
-                                   GError    **error)
+rpmostree_check_size_within_limit (guint64 actual, guint64 limit, const char *subject,
+                                   GError **error)
 {
   if (actual <= limit)
     return TRUE;
   g_autofree char *max_formatted = g_format_size (limit);
   g_autofree char *found_formatted = g_format_size (actual);
-  return glnx_throw (error, "Exceeded maximum size %s; %s is of size: %s",
-                     max_formatted, subject, found_formatted);
+  return glnx_throw (error, "Exceeded maximum size %s; %s is of size: %s", max_formatted, subject,
+                     found_formatted);
 }
 
 /* Convert a "traditional" path (normally from e.g. an RPM) into its final location in
  * ostree */
-char*
+char *
 rpmostree_translate_path_for_ostree (const char *path)
 {
   if (g_str_has_prefix (path, "etc/"))
@@ -138,13 +130,14 @@ rpmostree_translate_path_for_ostree (const char *path)
    * and rpmostree_postprocess_selinux_policy_store_location().
    */
   else if (g_str_has_prefix (path, VAR_SELINUX_TARGETED_PATH))
-    return g_strconcat ("usr/etc/selinux/targeted/", path + strlen (VAR_SELINUX_TARGETED_PATH), NULL);
+    return g_strconcat ("usr/etc/selinux/targeted/", path + strlen (VAR_SELINUX_TARGETED_PATH),
+                        NULL);
   else if (g_str_has_prefix (path, "opt/"))
     return g_strconcat ("usr/lib/", path, NULL);
-  else if ((strcmp (path, "var/lib/alternatives/") == 0) ||
-           g_str_has_prefix (path, "var/lib/alternatives") ||
-           (strcmp (path, "var/lib/vagrant/") == 0) ||
-           g_str_has_prefix (path, "var/lib/vagrant"))
+  else if ((strcmp (path, "var/lib/alternatives/") == 0)
+           || g_str_has_prefix (path, "var/lib/alternatives")
+           || (strcmp (path, "var/lib/vagrant/") == 0)
+           || g_str_has_prefix (path, "var/lib/vagrant"))
     return g_strconcat ("usr/", path + strlen ("var/"), NULL);
 
   return NULL;
@@ -155,15 +148,11 @@ rpmostree_translate_path_for_ostree (const char *path)
  * Returns TRUE on success, FALSE otherwise.
  */
 static gboolean
-handle_date_tag (GString    *prefix,
-                 const char *date_fmt,
-                 gint        tag_start,
-                 gint        tag_end,
-                 GError    **error)
+handle_date_tag (GString *prefix, const char *date_fmt, gint tag_start, gint tag_end,
+                 GError **error)
 {
-  g_autoptr(GDateTime) date_time_utc = g_date_time_new_now_utc ();
-  g_autofree char *date_time_str = g_date_time_format (date_time_utc,
-                                                       date_fmt);
+  g_autoptr (GDateTime) date_time_utc = g_date_time_new_now_utc ();
+  g_autofree char *date_time_str = g_date_time_format (date_time_utc, date_fmt);
   if (!date_time_str)
     return glnx_throw (error, "error in formatting date string (%s)", date_fmt);
   g_string_erase (prefix, tag_start, tag_end - tag_start);
@@ -174,32 +163,30 @@ handle_date_tag (GString    *prefix,
 /* Increment the version number in last_version, and append it to
  * prefix. increment_start specifies the version number to start at
  * if a version number is not present in last_version.
- * 
+ *
  * If a version number cannot be parsed from last_version, or last_version
  * does not begin with prefix, then append increment_start to prefix.
- * 
+ *
  * Example:
  * last_version == NULL, prefix == 10, increment_start == 0 --> return 10.0
- * 
+ *
  * If both prefix and last_version are equal, then append increment_start.
- * 
+ *
  * Example:
  * last_version == 10, prefix == 10, increment_start == 5 --> return 10.5
- * 
+ *
  * If increment_start is set to NULL, then append ".1" to prefix if and only
  * if last_version is equal to prefix (a version increment *must* occur to
  * update the version string at this point).
- * 
+ *
  * Example:
  * last_version == NULL, prefix == 10, increment_start == NULL --> return 10
  * last_version == 10, prefix == 10, increment_start == NULL --> return 10.1
- * 
+ *
  * Returns the next version string.
  */
-static char*
-increment_version (const char *version_suffix_str,
-                   const char *last_version,
-                   const char *prefix,
+static char *
+increment_version (const char *version_suffix_str, const char *last_version, const char *prefix,
                    const char *increment_start)
 {
   const gboolean increment_given = increment_start != NULL;
@@ -213,7 +200,8 @@ increment_version (const char *version_suffix_str,
 
   g_assert (prefix != NULL);
 
-  g_autofree char *incremented = g_strdup_printf ("%s%c%s", prefix, version_suffix, increment_start);
+  g_autofree char *incremented
+      = g_strdup_printf ("%s%c%s", prefix, version_suffix, increment_start);
   if (!last_version || !g_str_has_prefix (last_version, prefix))
     return increment_given ? util::move_nullify (incremented) : g_strdup (prefix);
 
@@ -234,21 +222,21 @@ increment_version (const char *version_suffix_str,
 
 #define VERSION_TAG_REGEX "<([a-zA-Z]+):(.*)?>"
 
-namespace rpmostreecxx {
+namespace rpmostreecxx
+{
 /* Get the next version, given a version prefix and a last version.
  * Checks for supported version fields in the auto_version_prefix
  * and renders them.
- * 
+ *
  * Returns the next version string if successful.
  */
 rust::String
-util_next_version (rust::Str auto_version_prefix,
-                   rust::Str version_suffix_rs, /* Option<&str> */
+util_next_version (rust::Str auto_version_prefix, rust::Str version_suffix_rs, /* Option<&str> */
                    rust::Str last_version_rs)
 {
   static gsize tag_regex_initialized;
   static GRegex *tag_regex;
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   GError **error = &local_error;
   if (g_once_init_enter (&tag_regex_initialized))
     {
@@ -257,26 +245,25 @@ util_next_version (rust::Str auto_version_prefix,
       g_once_init_leave (&tag_regex_initialized, 1);
     }
 
-  g_autoptr(GString) next_version = g_string_new ("");
-  g_string_append_len (next_version, auto_version_prefix.data(), auto_version_prefix.length());
+  g_autoptr (GString) next_version = g_string_new ("");
+  g_string_append_len (next_version, auto_version_prefix.data (), auto_version_prefix.length ());
   g_assert (next_version->str);
   bool date_tag_given = FALSE;
 
-  g_autoptr(GMatchInfo) tag_match_info = NULL;
-  g_regex_match (tag_regex, next_version->str,
-                 (GRegexMatchFlags)0, &tag_match_info);
+  g_autoptr (GMatchInfo) tag_match_info = NULL;
+  g_regex_match (tag_regex, next_version->str, (GRegexMatchFlags)0, &tag_match_info);
 
   while (g_match_info_matches (tag_match_info))
     {
       gint match_start, match_end;
       g_assert (g_match_info_fetch_pos (tag_match_info, 0, &match_start, &match_end));
 
-      g_autofree char* tag = g_match_info_fetch (tag_match_info, 1);
+      g_autofree char *tag = g_match_info_fetch (tag_match_info, 1);
       if (g_str_equal (tag, "date"))
         {
-          g_autofree char* date_fmt = g_match_info_fetch (tag_match_info, 2);
+          g_autofree char *date_fmt = g_match_info_fetch (tag_match_info, 2);
           if (!handle_date_tag (next_version, date_fmt, match_start, match_end, error))
-            util::throw_gerror(local_error);
+            util::throw_gerror (local_error);
           date_tag_given = TRUE;
         }
       else
@@ -288,45 +275,50 @@ util_next_version (rust::Str auto_version_prefix,
   /* Just copy as NUL terminated C strings to avoid rewriting this; also
    * the inner function expects NULL instead of an empty string
    */
-  g_autofree char *version_suffix = version_suffix_rs.length() > 0 ? g_strndup (version_suffix_rs.data(), version_suffix_rs.length()) : NULL;
-  g_autofree char *last_version = last_version_rs.length() > 0 ? g_strndup (last_version_rs.data(), last_version_rs.length()) : NULL;
-  g_autofree char *v = increment_version (version_suffix, last_version, next_version->str, date_tag_given ? "0" : NULL);
-  return rust::String(v);
+  g_autofree char *version_suffix
+      = version_suffix_rs.length () > 0
+            ? g_strndup (version_suffix_rs.data (), version_suffix_rs.length ())
+            : NULL;
+  g_autofree char *last_version
+      = last_version_rs.length () > 0
+            ? g_strndup (last_version_rs.data (), last_version_rs.length ())
+            : NULL;
+  g_autofree char *v = increment_version (version_suffix, last_version, next_version->str,
+                                          date_tag_given ? "0" : NULL);
+  return rust::String (v);
 }
 
 // A test function to validate that we can pass glib-rs types
 // from Rust back through cxx-rs to C++.
 int
-testutil_validate_cxxrs_passthrough(OstreeRepo &repo) noexcept
+testutil_validate_cxxrs_passthrough (OstreeRepo &repo) noexcept
 {
-  return ostree_repo_get_dfd(&repo);
+  return ostree_repo_get_dfd (&repo);
 }
-
 
 } /* namespace */
 #undef VERSION_TAG_REGEX
 
 /* Replace every occurrence of @old in @buf with @new. */
 char *
-rpmostree_str_replace (const char  *buf,
-                       const char  *old,
-                       const char  *newv,
-                       GError     **error)
+rpmostree_str_replace (const char *buf, const char *old, const char *newv, GError **error)
 {
   g_autofree char *literal_old = g_regex_escape_string (old, -1);
-  g_autoptr(GRegex) regex = g_regex_new (literal_old, (GRegexCompileFlags)0, (GRegexMatchFlags)0, error);
+  g_autoptr (GRegex) regex
+      = g_regex_new (literal_old, (GRegexCompileFlags)0, (GRegexMatchFlags)0, error);
 
   if (regex == NULL)
     return NULL;
 
-  return g_regex_replace_literal (regex, buf, -1, 0, newv, static_cast<GRegexMatchFlags>(0), error);
+  return g_regex_replace_literal (regex, buf, -1, 0, newv, static_cast<GRegexMatchFlags> (0),
+                                  error);
 }
 
 /* FIXME: This is a copy of ot_admin_checksum_version */
 char *
 rpmostree_checksum_version (GVariant *checksum)
 {
-  g_autoptr(GVariant) metadata = NULL;
+  g_autoptr (GVariant) metadata = NULL;
   const char *ret = NULL;
 
   metadata = g_variant_get_child_value (checksum, 0);
@@ -338,18 +330,15 @@ rpmostree_checksum_version (GVariant *checksum)
 }
 
 static gboolean
-pull_content_only_recurse (OstreeRepo  *dest,
-                           OstreeRepo  *src,
-                           OstreeRepoCommitTraverseIter *iter,
-                           GCancellable *cancellable,
-                           GError      **error)
+pull_content_only_recurse (OstreeRepo *dest, OstreeRepo *src, OstreeRepoCommitTraverseIter *iter,
+                           GCancellable *cancellable, GError **error)
 {
   gboolean done = FALSE;
 
   while (!done)
     {
-      OstreeRepoCommitIterResult iterres =
-        ostree_repo_commit_traverse_iter_next (iter, cancellable, error);
+      OstreeRepoCommitIterResult iterres
+          = ostree_repo_commit_traverse_iter_next (iter, cancellable, error);
 
       switch (iterres)
         {
@@ -365,8 +354,8 @@ pull_content_only_recurse (OstreeRepo  *dest,
 
             ostree_repo_commit_traverse_iter_get_file (iter, &name, &checksum);
 
-            if (!ostree_repo_import_object_from (dest, src, OSTREE_OBJECT_TYPE_FILE,
-                                                 checksum, cancellable, error))
+            if (!ostree_repo_import_object_from (dest, src, OSTREE_OBJECT_TYPE_FILE, checksum,
+                                                 cancellable, error))
               return FALSE;
           }
           break;
@@ -375,20 +364,20 @@ pull_content_only_recurse (OstreeRepo  *dest,
             char *name;
             char *content_checksum;
             char *meta_checksum;
-            g_autoptr(GVariant) dirtree = NULL;
-            ostree_cleanup_repo_commit_traverse_iter
-              OstreeRepoCommitTraverseIter subiter = { 0, };
+            g_autoptr (GVariant) dirtree = NULL;
+            ostree_cleanup_repo_commit_traverse_iter OstreeRepoCommitTraverseIter subiter = {
+              0,
+            };
 
-            ostree_repo_commit_traverse_iter_get_dir (iter, &name, &content_checksum, &meta_checksum);
+            ostree_repo_commit_traverse_iter_get_dir (iter, &name, &content_checksum,
+                                                      &meta_checksum);
 
-            if (!ostree_repo_load_variant (src, OSTREE_OBJECT_TYPE_DIR_TREE,
-                                           content_checksum, &dirtree,
-                                           error))
+            if (!ostree_repo_load_variant (src, OSTREE_OBJECT_TYPE_DIR_TREE, content_checksum,
+                                           &dirtree, error))
               return FALSE;
 
-            if (!ostree_repo_commit_traverse_iter_init_dirtree (&subiter, src, dirtree,
-                                                                OSTREE_REPO_COMMIT_TRAVERSE_FLAG_NONE,
-                                                                error))
+            if (!ostree_repo_commit_traverse_iter_init_dirtree (
+                    &subiter, src, dirtree, OSTREE_REPO_COMMIT_TRAVERSE_FLAG_NONE, error))
               return FALSE;
 
             if (!pull_content_only_recurse (dest, src, &subiter, cancellable, error))
@@ -405,22 +394,19 @@ pull_content_only_recurse (OstreeRepo  *dest,
  * Used for package layering.
  */
 gboolean
-rpmostree_pull_content_only (OstreeRepo  *dest,
-                             OstreeRepo  *src,
-                             const char  *src_commit,
-                             GCancellable *cancellable,
-                             GError      **error)
+rpmostree_pull_content_only (OstreeRepo *dest, OstreeRepo *src, const char *src_commit,
+                             GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GVariant) commitdata = NULL;
-  ostree_cleanup_repo_commit_traverse_iter
-    OstreeRepoCommitTraverseIter iter = { 0, };
+  g_autoptr (GVariant) commitdata = NULL;
+  ostree_cleanup_repo_commit_traverse_iter OstreeRepoCommitTraverseIter iter = {
+    0,
+  };
 
   if (!ostree_repo_load_commit (src, src_commit, &commitdata, NULL, error))
     return FALSE;
 
   if (!ostree_repo_commit_traverse_iter_init_commit (&iter, src, commitdata,
-                                                     OSTREE_REPO_COMMIT_TRAVERSE_FLAG_NONE,
-                                                     error))
+                                                     OSTREE_REPO_COMMIT_TRAVERSE_FLAG_NONE, error))
     return FALSE;
 
   if (!pull_content_only_recurse (dest, src, &iter, cancellable, error))
@@ -447,7 +433,7 @@ rpmostree_file_get_path_cached (GFile *file)
 
   G_LOCK (pathname_cache);
 
-  auto path = (const char*)g_object_get_qdata ((GObject*)file, _file_path_quark);
+  auto path = (const char *)g_object_get_qdata ((GObject *)file, _file_path_quark);
   if (!path)
     {
       path = g_file_get_path (file);
@@ -456,7 +442,8 @@ rpmostree_file_get_path_cached (GFile *file)
           G_UNLOCK (pathname_cache);
           return NULL;
         }
-      g_object_set_qdata_full ((GObject*)file, _file_path_quark, (char*)path, (GDestroyNotify)g_free);
+      g_object_set_qdata_full ((GObject *)file, _file_path_quark, (char *)path,
+                               (GDestroyNotify)g_free);
     }
 
   G_UNLOCK (pathname_cache);
@@ -465,9 +452,7 @@ rpmostree_file_get_path_cached (GFile *file)
 }
 
 gboolean
-rpmostree_str_has_prefix_in_strv (const char *str,
-                                  char      **prefixes,
-                                  int         n)
+rpmostree_str_has_prefix_in_strv (const char *str, char **prefixes, int n)
 {
   if (n < 0)
     n = g_strv_length (prefixes);
@@ -480,10 +465,9 @@ rpmostree_str_has_prefix_in_strv (const char *str,
 }
 
 gboolean
-rpmostree_str_has_prefix_in_ptrarray (const char *str,
-                                      GPtrArray  *prefixes)
+rpmostree_str_has_prefix_in_ptrarray (const char *str, GPtrArray *prefixes)
 {
-  return rpmostree_str_has_prefix_in_strv (str, (char**)prefixes->pdata, prefixes->len);
+  return rpmostree_str_has_prefix_in_strv (str, (char **)prefixes->pdata, prefixes->len);
 }
 
 /**
@@ -493,8 +477,7 @@ rpmostree_str_has_prefix_in_ptrarray (const char *str,
  * Handles strs==NULL as an empty array.
  */
 gboolean
-rpmostree_str_ptrarray_contains (GPtrArray  *strs,
-                                 const char *str)
+rpmostree_str_ptrarray_contains (GPtrArray *strs, const char *str)
 {
   g_assert (str);
   if (!strs)
@@ -510,75 +493,66 @@ rpmostree_str_ptrarray_contains (GPtrArray  *strs,
 }
 
 gboolean
-rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
-                                       OstreeDeployment  *deployment,
-                                       gboolean          *out_is_layered,
-                                       guint             *out_layer_version,
-                                       char             **out_base_layer,
-                                       char            ***out_layered_pkgs,
-                                       char            ***out_layered_modules,
-                                       GVariant         **out_removed_base_pkgs,
-                                       GVariant         **out_replaced_base_pkgs,
-                                       GError           **error)
+rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deployment,
+                                       gboolean *out_is_layered, guint *out_layer_version,
+                                       char **out_base_layer, char ***out_layered_pkgs,
+                                       char ***out_layered_modules,
+                                       GVariant **out_removed_base_pkgs,
+                                       GVariant **out_replaced_base_pkgs, GError **error)
 {
   const char *csum = ostree_deployment_get_csum (deployment);
-  g_autoptr(GVariant) commit = NULL;
+  g_autoptr (GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, csum, &commit, NULL, error))
     return FALSE;
 
-  auto layeredmeta = CXX_TRY_VAL(deployment_layeredmeta_from_commit(*deployment, *commit), error);
+  auto layeredmeta = CXX_TRY_VAL (deployment_layeredmeta_from_commit (*deployment, *commit), error);
 
-  g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
-  g_autoptr(GVariantDict) dict = g_variant_dict_new (metadata);
+  g_autoptr (GVariant) metadata = g_variant_get_child_value (commit, 0);
+  g_autoptr (GVariantDict) dict = g_variant_dict_new (metadata);
 
   /* only fetch pkgs if we have to */
-  g_auto(GStrv) layered_pkgs = NULL;
-  g_auto(GStrv) layered_modules = NULL;
-  g_autoptr(GVariant) removed_base_pkgs = NULL;
-  g_autoptr(GVariant) replaced_base_pkgs = NULL;
+  g_auto (GStrv) layered_pkgs = NULL;
+  g_auto (GStrv) layered_modules = NULL;
+  g_autoptr (GVariant) removed_base_pkgs = NULL;
+  g_autoptr (GVariant) replaced_base_pkgs = NULL;
   if (layeredmeta.is_layered && (out_layered_pkgs != NULL || out_removed_base_pkgs != NULL))
     {
       /* starting from v1, we no longer embed a treespec in client layers */
       if (layeredmeta.clientlayer_version >= 1)
         {
-          g_assert (g_variant_dict_lookup (dict, "rpmostree.packages", "^as",
-                                           &layered_pkgs));
+          g_assert (g_variant_dict_lookup (dict, "rpmostree.packages", "^as", &layered_pkgs));
         }
       else
         {
-          g_autoptr(GVariant) treespec_v = NULL;
-          g_autoptr(GVariantDict) treespec = NULL;
+          g_autoptr (GVariant) treespec_v = NULL;
+          g_autoptr (GVariantDict) treespec = NULL;
 
           g_assert (g_variant_dict_contains (dict, "rpmostree.spec"));
 
-           /* there should always be a treespec */
-          treespec_v = g_variant_dict_lookup_value (dict, "rpmostree.spec",
-                                                    G_VARIANT_TYPE ("a{sv}"));
+          /* there should always be a treespec */
+          treespec_v
+              = g_variant_dict_lookup_value (dict, "rpmostree.spec", G_VARIANT_TYPE ("a{sv}"));
           g_assert (treespec_v);
 
           /* there should always be a packages entry, even if empty */
           treespec = g_variant_dict_new (treespec_v);
-          g_assert (g_variant_dict_lookup (treespec, "packages", "^as",
-                                           &layered_pkgs));
+          g_assert (g_variant_dict_lookup (treespec, "packages", "^as", &layered_pkgs));
         }
 
       if (layeredmeta.clientlayer_version >= 2)
         {
-          removed_base_pkgs =
-            g_variant_dict_lookup_value (dict, "rpmostree.removed-base-packages",
-                                         G_VARIANT_TYPE ("av"));
+          removed_base_pkgs = g_variant_dict_lookup_value (dict, "rpmostree.removed-base-packages",
+                                                           G_VARIANT_TYPE ("av"));
           g_assert (removed_base_pkgs);
 
-          replaced_base_pkgs =
-            g_variant_dict_lookup_value (dict, "rpmostree.replaced-base-packages",
-                                         G_VARIANT_TYPE ("a(vv)"));
+          replaced_base_pkgs = g_variant_dict_lookup_value (
+              dict, "rpmostree.replaced-base-packages", G_VARIANT_TYPE ("a(vv)"));
           g_assert (replaced_base_pkgs);
         }
 
       if (layeredmeta.clientlayer_version >= 5)
         {
-          g_assert (g_variant_dict_lookup (dict, "rpmostree.modules", "^as",
-                                           &layered_modules));
+          g_assert (g_variant_dict_lookup (dict, "rpmostree.modules", "^as", &layered_modules));
         }
     }
 
@@ -589,31 +563,31 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
   if (out_layer_version != NULL)
     *out_layer_version = layeredmeta.clientlayer_version;
   if (out_base_layer != NULL && layeredmeta.is_layered)
-    *out_base_layer = util::ruststr_dup_c_optempty(layeredmeta.base_commit);
+    *out_base_layer = util::ruststr_dup_c_optempty (layeredmeta.base_commit);
   if (out_layered_pkgs != NULL)
     {
       if (!layered_pkgs)
-        layered_pkgs = g_new0 (char*, 1);
+        layered_pkgs = g_new0 (char *, 1);
       *out_layered_pkgs = util::move_nullify (layered_pkgs);
     }
   if (out_layered_modules != NULL)
     {
       if (!layered_modules)
-        layered_modules = g_new0 (char*, 1);
+        layered_modules = g_new0 (char *, 1);
       *out_layered_modules = util::move_nullify (layered_modules);
     }
   if (out_removed_base_pkgs != NULL)
     {
       if (!removed_base_pkgs)
-        removed_base_pkgs =
-          g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("v"), NULL, 0));
+        removed_base_pkgs
+            = g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("v"), NULL, 0));
       *out_removed_base_pkgs = util::move_nullify (removed_base_pkgs);
     }
   if (out_replaced_base_pkgs != NULL)
     {
       if (!replaced_base_pkgs)
-        replaced_base_pkgs =
-          g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("(vv)"), NULL, 0));
+        replaced_base_pkgs
+            = g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("(vv)"), NULL, 0));
       *out_replaced_base_pkgs = util::move_nullify (replaced_base_pkgs);
     }
 
@@ -622,23 +596,18 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
 
 /* Returns the base layer checksum if layered, NULL otherwise. */
 gboolean
-rpmostree_deployment_get_base_layer (OstreeRepo        *repo,
-                                     OstreeDeployment  *deployment,
-                                     char             **out_base_layer,
-                                     GError           **error)
+rpmostree_deployment_get_base_layer (OstreeRepo *repo, OstreeDeployment *deployment,
+                                     char **out_base_layer, GError **error)
 {
-  return rpmostree_deployment_get_layered_info (repo, deployment, NULL, NULL,
-                                                out_base_layer, NULL, NULL, NULL, NULL, error);
+  return rpmostree_deployment_get_layered_info (repo, deployment, NULL, NULL, out_base_layer, NULL,
+                                                NULL, NULL, NULL, error);
 }
 
 static gboolean
-do_pkgcache_migration (OstreeRepo    *repo,
-                       OstreeRepo    *pkgcache,
-                       guint         *out_n_migrated,
-                       GCancellable  *cancellable,
-                       GError       **error)
+do_pkgcache_migration (OstreeRepo *repo, OstreeRepo *pkgcache, guint *out_n_migrated,
+                       GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GHashTable) pkgcache_refs = NULL;
+  g_autoptr (GHashTable) pkgcache_refs = NULL;
   if (!ostree_repo_list_refs_ext (pkgcache, "rpmostree/pkg", &pkgcache_refs,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
@@ -649,12 +618,11 @@ do_pkgcache_migration (OstreeRepo    *repo,
       return TRUE; /* Note early return */
     }
 
-  g_autofree char **refs_strv =
-    (char **)g_hash_table_get_keys_as_array (pkgcache_refs, NULL);
+  g_autofree char **refs_strv = (char **)g_hash_table_get_keys_as_array (pkgcache_refs, NULL);
 
   /* fd-relative pull API anyone? build the path manually at least to avoid one malloc */
-  g_autofree char *pkgcache_uri =
-    g_strdup_printf ("file:///proc/self/fd/%d", ostree_repo_get_dfd (pkgcache));
+  g_autofree char *pkgcache_uri
+      = g_strdup_printf ("file:///proc/self/fd/%d", ostree_repo_get_dfd (pkgcache));
   if (!ostree_repo_pull (repo, pkgcache_uri, refs_strv, OSTREE_REPO_PULL_FLAGS_NONE, NULL,
                          cancellable, error))
     return FALSE;
@@ -664,15 +632,13 @@ do_pkgcache_migration (OstreeRepo    *repo,
 }
 
 gboolean
-rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
-                                 GCancellable *cancellable,
-                                 GError      **error)
+rpmostree_migrate_pkgcache_repo (OstreeRepo *repo, GCancellable *cancellable, GError **error)
 {
   int repo_dfd = ostree_repo_get_dfd (repo);
 
   struct stat stbuf;
-  if (!glnx_fstatat_allow_noent (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, &stbuf,
-                                 AT_SYMLINK_NOFOLLOW, error))
+  if (!glnx_fstatat_allow_noent (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, &stbuf, AT_SYMLINK_NOFOLLOW,
+                                 error))
     return FALSE;
 
   if (errno == 0 && S_ISLNK (stbuf.st_mode))
@@ -684,11 +650,10 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
     {
       if (S_ISDIR (stbuf.st_mode))
         {
-          auto task = rpmostreecxx::progress_begin_task("Migrating pkgcache");
+          auto task = rpmostreecxx::progress_begin_task ("Migrating pkgcache");
 
-          g_autoptr(OstreeRepo) pkgcache = ostree_repo_open_at (repo_dfd,
-                                                                RPMOSTREE_OLD_PKGCACHE_DIR,
-                                                                cancellable, error);
+          g_autoptr (OstreeRepo) pkgcache
+              = ostree_repo_open_at (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, cancellable, error);
           if (!pkgcache)
             return FALSE;
 
@@ -696,11 +661,11 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
           if (!do_pkgcache_migration (repo, pkgcache, &n_migrated, cancellable, error))
             return FALSE;
 
-          auto msg = g_strdup_printf("%u done", n_migrated);
-          task->end(msg);
+          auto msg = g_strdup_printf ("%u done", n_migrated);
+          task->end (msg);
           if (n_migrated > 0)
-            sd_journal_print (LOG_INFO, "migrated %u cached package%s to system repo",
-                              n_migrated, _NS(n_migrated));
+            sd_journal_print (LOG_INFO, "migrated %u cached package%s to system repo", n_migrated,
+                              _NS (n_migrated));
         }
 
       if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, cancellable, error))
@@ -708,8 +673,8 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
     }
   else
     {
-      if (!glnx_shutil_mkdir_p_at (repo_dfd, dirname (strdupa (RPMOSTREE_OLD_PKGCACHE_DIR)),
-                                   0755, cancellable, error))
+      if (!glnx_shutil_mkdir_p_at (repo_dfd, dirname (strdupa (RPMOSTREE_OLD_PKGCACHE_DIR)), 0755,
+                                   cancellable, error))
         return FALSE;
     }
 
@@ -720,20 +685,17 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
   return TRUE;
 }
 
-char*
-rpmostree_get_deployment_root (OstreeSysroot     *sysroot,
-                               OstreeDeployment *deployment)
+char *
+rpmostree_get_deployment_root (OstreeSysroot *sysroot, OstreeDeployment *deployment)
 {
   const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (sysroot));
-  g_autofree char *deployment_dirpath =
-    ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
+  g_autofree char *deployment_dirpath = ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
   return g_build_filename (sysroot_path, deployment_dirpath, NULL);
 }
 
 gboolean
 rpmostree_decompose_sha256_nevra (const char **nevra, /* gets incremented */
-                                  char       **out_sha256,
-                                  GError     **error)
+                                  char **out_sha256, GError **error)
 {
   const char *sha256_nevra = *nevra;
   g_autofree char *sha256 = NULL;
@@ -760,37 +722,34 @@ rpmostree_decompose_sha256_nevra (const char **nevra, /* gets incremented */
 char *
 rpmostree_commit_content_checksum (GVariant *commit)
 {
-  g_autoptr(GChecksum) hasher = g_checksum_new (G_CHECKSUM_SHA256);
-  char checksum[OSTREE_SHA256_STRING_LEN+1];
+  g_autoptr (GChecksum) hasher = g_checksum_new (G_CHECKSUM_SHA256);
+  char checksum[OSTREE_SHA256_STRING_LEN + 1];
   const guint8 *csum;
 
   /* Hash content checksum */
-  g_autoptr(GVariant) csum_bytes = NULL;
+  g_autoptr (GVariant) csum_bytes = NULL;
   g_variant_get_child (commit, 6, "@ay", &csum_bytes);
   csum = ostree_checksum_bytes_peek (csum_bytes);
   ostree_checksum_inplace_from_bytes (csum, checksum);
-  g_checksum_update (hasher, (guint8*)checksum, OSTREE_SHA256_STRING_LEN);
+  g_checksum_update (hasher, (guint8 *)checksum, OSTREE_SHA256_STRING_LEN);
   g_clear_pointer (&csum_bytes, (GDestroyNotify)g_variant_unref);
 
   /* Hash meta checksum */
   g_variant_get_child (commit, 7, "@ay", &csum_bytes);
   csum = ostree_checksum_bytes_peek (csum_bytes);
   ostree_checksum_inplace_from_bytes (csum, checksum);
-  g_checksum_update (hasher, (guint8*)checksum, OSTREE_SHA256_STRING_LEN);
+  g_checksum_update (hasher, (guint8 *)checksum, OSTREE_SHA256_STRING_LEN);
 
   return g_strdup (g_checksum_get_string (hasher));
 }
 
-char*
-rpmostree_generate_diff_summary (guint upgraded,
-                                 guint downgraded,
-                                 guint removed,
-                                 guint added)
+char *
+rpmostree_generate_diff_summary (guint upgraded, guint downgraded, guint removed, guint added)
 {
   guint args[] = { upgraded, downgraded, removed, added };
   const char *arg_desc[] = { "upgraded", "downgraded", "removed", "added" };
 
-  g_autoptr(GString) summary = g_string_new (NULL);
+  g_autoptr (GString) summary = g_string_new (NULL);
   for (guint i = 0; i < G_N_ELEMENTS (args); i++)
     {
       if (args[i] == 0)
@@ -804,13 +763,9 @@ rpmostree_generate_diff_summary (guint upgraded,
 
 /* Given the result of rpm_ostree_db_diff(), print it in a nice formatted way for humans. */
 void
-rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
-                                const char *prefix,
-                                guint      max_key_len,
-                                GPtrArray *removed,
-                                GPtrArray *added,
-                                GPtrArray *modified_old,
-                                GPtrArray *modified_new)
+rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format, const char *prefix,
+                                guint max_key_len, GPtrArray *removed, GPtrArray *added,
+                                GPtrArray *modified_old, GPtrArray *modified_new)
 {
   const char *sprefix = prefix ?: "";
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
@@ -818,8 +773,8 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
   guint upgraded = 0;
   for (guint i = 0; i < modified_old->len; i++)
     {
-      auto oldpkg = static_cast<RpmOstreePackage *>(modified_old->pdata[i]);
-      auto newpkg = static_cast<RpmOstreePackage *>(modified_new->pdata[i]);
+      auto oldpkg = static_cast<RpmOstreePackage *> (modified_old->pdata[i]);
+      auto newpkg = static_cast<RpmOstreePackage *> (modified_new->pdata[i]);
       const char *name = rpm_ostree_package_get_name (oldpkg);
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
@@ -833,13 +788,12 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
           g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? "Upgraded" : "",
                    i == 0 ? ":" : " ", name, rpm_ostree_package_get_evr (oldpkg),
-                                             rpm_ostree_package_get_evr (newpkg));
+                   rpm_ostree_package_get_evr (newpkg));
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
           if (upgraded == 0)
             g_print ("%sUpgraded:\n", sprefix);
-          g_print ("  %s %s -> %s\n", name,
-                   rpm_ostree_package_get_evr (oldpkg),
+          g_print ("  %s %s -> %s\n", name, rpm_ostree_package_get_evr (oldpkg),
                    rpm_ostree_package_get_evr (newpkg));
           break;
         default:
@@ -851,8 +805,8 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
   guint downgraded = 0;
   for (guint i = 0; i < modified_old->len; i++)
     {
-      auto oldpkg = static_cast<RpmOstreePackage *>(modified_old->pdata[i]);
-      auto newpkg = static_cast<RpmOstreePackage *>(modified_new->pdata[i]);
+      auto oldpkg = static_cast<RpmOstreePackage *> (modified_old->pdata[i]);
+      auto newpkg = static_cast<RpmOstreePackage *> (modified_new->pdata[i]);
       const char *name = rpm_ostree_package_get_name (oldpkg);
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) < 0)
@@ -865,18 +819,18 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
           {
-            g_autofree char *header_owned = prefix ? g_strconcat (prefix, "Downgraded", NULL) : NULL;
+            g_autofree char *header_owned
+                = prefix ? g_strconcat (prefix, "Downgraded", NULL) : NULL;
             const char *header = header_owned ?: "Downgraded";
-            g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? header : "",
-                     i == 0 ? ":" : " ", name, rpm_ostree_package_get_evr (oldpkg),
-                                               rpm_ostree_package_get_evr (newpkg));
+            g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? header : "", i == 0 ? ":" : " ",
+                     name, rpm_ostree_package_get_evr (oldpkg),
+                     rpm_ostree_package_get_evr (newpkg));
           }
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
           if (downgraded == 0)
             g_print ("%sDowngraded:\n", sprefix);
-          g_print ("  %s %s -> %s\n", name,
-                   rpm_ostree_package_get_evr (oldpkg),
+          g_print ("  %s %s -> %s\n", name, rpm_ostree_package_get_evr (oldpkg),
                    rpm_ostree_package_get_evr (newpkg));
           break;
         default:
@@ -888,8 +842,8 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
   /* now that we have all the counts, we can handle the SUMMARY path */
   if (format == RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY)
     {
-      g_autofree char *diff_summary =
-        rpmostree_generate_diff_summary (upgraded, downgraded, removed->len, added->len);
+      g_autofree char *diff_summary
+          = rpmostree_generate_diff_summary (upgraded, downgraded, removed->len, added->len);
       g_autofree char *header_owned = prefix ? g_strconcat (prefix, "Diff", NULL) : NULL;
       const char *header = header_owned ?: "Diff";
       if (strlen (diff_summary) > 0) /* only print if we have something to print */
@@ -899,7 +853,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
 
   for (guint i = 0; i < removed->len; i++)
     {
-      auto pkg = static_cast<RpmOstreePackage *>(removed->pdata[i]);
+      auto pkg = static_cast<RpmOstreePackage *> (removed->pdata[i]);
       const char *nevra = rpm_ostree_package_get_nevra (pkg);
 
       switch (format)
@@ -908,8 +862,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
           {
             g_autofree char *header_owned = prefix ? g_strconcat (prefix, "Removed", NULL) : NULL;
             const char *header = header_owned ?: "Removed";
-            g_print ("  %*s%s %s\n", max_key_len, i == 0 ? header : "",
-                     i == 0 ? ":" : " ", nevra);
+            g_print ("  %*s%s %s\n", max_key_len, i == 0 ? header : "", i == 0 ? ":" : " ", nevra);
           }
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
@@ -924,7 +877,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
 
   for (guint i = 0; i < added->len; i++)
     {
-      auto pkg = static_cast<RpmOstreePackage *>(added->pdata[i]);
+      auto pkg = static_cast<RpmOstreePackage *> (added->pdata[i]);
       const char *nevra = rpm_ostree_package_get_nevra (pkg);
 
       switch (format)
@@ -933,8 +886,7 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
           {
             g_autofree char *header_owned = prefix ? g_strconcat (prefix, "Added", NULL) : NULL;
             const char *header = header_owned ?: "Added";
-            g_print ("  %*s%s %s\n", max_key_len, i == 0 ? header : "",
-                     i == 0 ? ":" : " ", nevra);
+            g_print ("  %*s%s %s\n", max_key_len, i == 0 ? header : "", i == 0 ? ":" : " ", nevra);
           }
           break;
         case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
@@ -949,42 +901,35 @@ rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
 }
 
 static void
-variant_diff_print_modified (guint       max_key_len,
-                             GVariant   *modified,
-                             const char *type)
+variant_diff_print_modified (guint max_key_len, GVariant *modified, const char *type)
 {
   guint n = g_variant_n_children (modified);
   for (guint i = 0; i < n; i++)
     {
       const char *name, *evr_old, *evr_new;
-      g_variant_get_child (modified, i, "(u&s(&ss)(&ss))",
-                           NULL, &name, &evr_old, NULL, &evr_new, NULL);
-      g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? type : "", i == 0 ? ":" : " ",
-               name, evr_old, evr_new);
+      g_variant_get_child (modified, i, "(u&s(&ss)(&ss))", NULL, &name, &evr_old, NULL, &evr_new,
+                           NULL);
+      g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? type : "", i == 0 ? ":" : " ", name,
+               evr_old, evr_new);
     }
 }
 
 static void
-variant_diff_print_singles (guint       max_key_len,
-                            GVariant   *singles,
-                            const char *type)
+variant_diff_print_singles (guint max_key_len, GVariant *singles, const char *type)
 {
   guint n = g_variant_n_children (singles);
   for (guint i = 0; i < n; i++)
     {
       const char *name, *evr, *arch;
       g_variant_get_child (singles, i, "(u&s&s&s)", NULL, &name, &evr, &arch);
-      g_print ("  %*s%s %s-%s.%s\n", max_key_len, i == 0 ? type : "", i == 0 ? ":" : " ",
-               name, evr, arch);
+      g_print ("  %*s%s %s-%s.%s\n", max_key_len, i == 0 ? type : "", i == 0 ? ":" : " ", name, evr,
+               arch);
     }
 }
 
 void
-rpmostree_variant_diff_print_formatted (guint     max_key_len,
-                                        GVariant *upgraded,
-                                        GVariant *downgraded,
-                                        GVariant *removed,
-                                        GVariant *added)
+rpmostree_variant_diff_print_formatted (guint max_key_len, GVariant *upgraded, GVariant *downgraded,
+                                        GVariant *removed, GVariant *added)
 {
   variant_diff_print_modified (max_key_len, upgraded, "Upgraded");
   variant_diff_print_modified (max_key_len, downgraded, "Downgraded");
@@ -1005,9 +950,7 @@ pkg_cmp_end (RpmOstreePackage *a, RpmOstreePackage *b)
 
 /* Given the result of rpm_ostree_db_diff(), print it in diff format for scripts. */
 void
-rpmostree_diff_print (GPtrArray *removed,
-                      GPtrArray *added,
-                      GPtrArray *modified_old,
+rpmostree_diff_print (GPtrArray *removed, GPtrArray *added, GPtrArray *modified_old,
                       GPtrArray *modified_new)
 {
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
@@ -1029,7 +972,8 @@ rpmostree_diff_print (GPtrArray *removed,
         if (pkg_cmp_end (pkg_m, pkg_a) < 0)
           { /* mod is first */
             g_print ("!%s\n", rpm_ostree_package_get_nevra (pkg_m));
-            g_print ("=%s\n", rpm_ostree_package_get_nevra (static_cast<RpmOstreePackage*>(modified_new->pdata[cur_m])));
+            g_print ("=%s\n", rpm_ostree_package_get_nevra (
+                                  static_cast<RpmOstreePackage *> (modified_new->pdata[cur_m])));
             cur_m++;
           }
         else
@@ -1037,17 +981,16 @@ rpmostree_diff_print (GPtrArray *removed,
             g_print ("+%s\n", rpm_ostree_package_get_nevra (pkg_a));
             cur_a++;
           }
+      else if (pkg_cmp_end (pkg_r, pkg_a) < 0)
+        { /* del is first */
+          g_print ("-%s\n", rpm_ostree_package_get_nevra (pkg_r));
+          cur_r++;
+        }
       else
-        if (pkg_cmp_end (pkg_r, pkg_a) < 0)
-          { /* del is first */
-            g_print ("-%s\n", rpm_ostree_package_get_nevra (pkg_r));
-            cur_r++;
-          }
-        else
-          { /* add is first */
-            g_print ("+%s\n", rpm_ostree_package_get_nevra (pkg_a));
-            cur_a++;
-          }
+        { /* add is first */
+          g_print ("+%s\n", rpm_ostree_package_get_nevra (pkg_a));
+          cur_a++;
+        }
     }
 }
 
@@ -1063,9 +1006,7 @@ rpmostree_diff_print (GPtrArray *removed,
  * Returns: %TRUE iff found
  */
 gboolean
-rpmostree_variant_bsearch_str (GVariant   *array,
-                               const char *str,
-                               int        *out_pos)
+rpmostree_variant_bsearch_str (GVariant *array, const char *str, int *out_pos)
 {
   const gsize n = g_variant_n_children (array);
   if (n == 0)
@@ -1080,7 +1021,7 @@ rpmostree_variant_bsearch_str (GVariant   *array,
 
       imid = (imin + imax) / 2;
 
-      g_autoptr(GVariant) child = g_variant_get_child_value (array, imid);
+      g_autoptr (GVariant) child = g_variant_get_child_value (array, imid);
       g_variant_get_child (child, 0, "&s", &cur, NULL);
 
       int cmp = strcmp (cur, str);
@@ -1108,9 +1049,8 @@ rpmostree_variant_bsearch_str (GVariant   *array,
   return FALSE;
 }
 
-const char*
-rpmostree_auto_update_policy_to_str (RpmostreedAutomaticUpdatePolicy policy,
-                                     GError **error)
+const char *
+rpmostree_auto_update_policy_to_str (RpmostreedAutomaticUpdatePolicy policy, GError **error)
 {
   switch (policy)
     {
@@ -1121,14 +1061,13 @@ rpmostree_auto_update_policy_to_str (RpmostreedAutomaticUpdatePolicy policy,
     case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_STAGE:
       return "stage";
     default:
-      return (char*)glnx_null_throw (error, "Invalid policy value %u", policy);
+      return (char *)glnx_null_throw (error, "Invalid policy value %u", policy);
     }
 }
 
 gboolean
-rpmostree_str_to_auto_update_policy (const char *str,
-                                     RpmostreedAutomaticUpdatePolicy *out_policy,
-                                     GError    **error)
+rpmostree_str_to_auto_update_policy (const char *str, RpmostreedAutomaticUpdatePolicy *out_policy,
+                                     GError **error)
 {
   g_assert (str);
   if (g_str_equal (str, "none") || g_str_equal (str, "off"))
@@ -1143,10 +1082,10 @@ rpmostree_str_to_auto_update_policy (const char *str,
 }
 
 /* Get an ISO8601-formatted string for UTC timestamp t (seconds) */
-char*
+char *
 rpmostree_timestamp_str_from_unix_utc (guint64 t)
 {
-  g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
+  g_autoptr (GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
   if (timestamp != NULL)
     return g_date_time_format (timestamp, "%FT%H:%M:%SZ");
   return g_strdup_printf ("(invalid timestamp)");
@@ -1182,12 +1121,12 @@ rpmostree_variant_native_to_be (GVariant **v)
   rpmostree_variant_be_to_native (v);
 }
 
-char**
+char **
 rpmostree_cxx_string_vec_to_strv (rust::Vec<rust::String> &v)
 {
-  g_autoptr(GPtrArray) r = g_ptr_array_new_full (v.size(), g_free);
-  for (auto & s : v)
-    g_ptr_array_add (r, g_strdup (s.c_str()));
+  g_autoptr (GPtrArray) r = g_ptr_array_new_full (v.size (), g_free);
+  for (auto &s : v)
+    g_ptr_array_add (r, g_strdup (s.c_str ()));
   g_ptr_array_add (r, NULL);
-  return (char**)g_ptr_array_free (util::move_nullify(r), FALSE);
+  return (char **)g_ptr_array_free (util::move_nullify (r), FALSE);
 }

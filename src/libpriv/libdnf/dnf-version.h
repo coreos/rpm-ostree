@@ -4,4 +4,3 @@
 // like LIBDNF_MAJOR_VERSION, if anything depends on them it will
 // fail at build time.
 #pragma once
-

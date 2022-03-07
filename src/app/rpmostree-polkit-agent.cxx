@@ -21,26 +21,26 @@
 
 /* snipped from PackageKit/systemd */
 
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/prctl.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include <dirent.h>
-#include <signal.h>
-#include <fcntl.h>
-#include <errno.h>
 #include <err.h>
-#include <inttypes.h>
-#include <sys/poll.h>
-#include <sys/wait.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
+#include <inttypes.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/poll.h>
+#include <sys/prctl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "rpmostree-polkit-agent.h"
 
-#define memzero(x,l) (memset((x), 0, (l)))
-#define zero(x) (memzero(&(x), sizeof(x)))
+#define memzero(x, l) (memset ((x), 0, (l)))
+#define zero(x) (memzero (&(x), sizeof (x)))
 
 #define POLKIT_TTY_AGENT_BINARY_PATH "/usr/bin/pkttyagent"
 
@@ -99,33 +99,33 @@ fork_agent (pid_t *pid, const char *path, ...)
        * read EOF we actually do generate EOF and
        * not delay this indefinitely by because we
        * keep an unused copy of stdin around. */
-      fd = open("/dev/tty", O_WRONLY);
+      fd = open ("/dev/tty", O_WRONLY);
       if (fd < 0)
         err (EXIT_FAILURE, "Failed to open /dev/tty");
 
       if (!stdout_is_tty)
-        dup2(fd, STDOUT_FILENO);
+        dup2 (fd, STDOUT_FILENO);
 
       if (!stderr_is_tty)
-        dup2(fd, STDERR_FILENO);
+        dup2 (fd, STDERR_FILENO);
 
       if (fd > 2)
-        close(fd);
+        close (fd);
     }
 
   /* Count arguments */
   va_start (ap, path);
-  for (n = 0; va_arg(ap, char*); n++)
+  for (n = 0; va_arg (ap, char *); n++)
     ;
-  va_end(ap);
+  va_end (ap);
 
   /* Allocate strv */
-  l = (char**)alloca (sizeof(char *) * (n + 1));
+  l = (char **)alloca (sizeof (char *) * (n + 1));
 
   /* Fill in arguments */
   va_start (ap, path);
   for (i = 0; i <= n; i++)
-    l[i] = va_arg (ap, char*);
+    l[i] = va_arg (ap, char *);
   va_end (ap);
 
   execv (path, l);
@@ -168,11 +168,11 @@ fd_wait_for_event (int fd, int event, uint64_t t)
   struct pollfd pollfd;
   int r;
 
-  zero(pollfd);
+  zero (pollfd);
   pollfd.fd = fd;
   pollfd.events = event;
 
-  r = poll(&pollfd, 1, t == (uint64_t) -1 ? -1 : (int) (t / 1000));
+  r = poll (&pollfd, 1, t == (uint64_t)-1 ? -1 : (int)(t / 1000));
   if (r < 0)
     return -errno;
 
@@ -190,11 +190,12 @@ wait_for_terminate (pid_t pid)
 
   for (;;)
     {
-      if (waitpid(pid, &status, 0) < 0) {
-        if (errno == EINTR)
-          continue;
-        return -errno;
-      }
+      if (waitpid (pid, &status, 0) < 0)
+        {
+          if (errno == EINTR)
+            continue;
+          return -errno;
+        }
       return 0;
     }
 }
@@ -218,13 +219,10 @@ rpmostree_polkit_agent_open (void)
     return -errno;
 
   snprintf (notify_fd, sizeof (notify_fd), "%i", pipe_fd[1]);
-  notify_fd[sizeof (notify_fd) -1] = 0;
+  notify_fd[sizeof (notify_fd) - 1] = 0;
 
-  r = fork_agent (&agent_pid,
-                  POLKIT_TTY_AGENT_BINARY_PATH,
-                  POLKIT_TTY_AGENT_BINARY_PATH,
-                  "--notify-fd", notify_fd,
-                  "--fallback", NULL);
+  r = fork_agent (&agent_pid, POLKIT_TTY_AGENT_BINARY_PATH, POLKIT_TTY_AGENT_BINARY_PATH,
+                  "--notify-fd", notify_fd, "--fallback", NULL);
 
   /* Close the writing side, because that's the one for the agent */
   close_nointr_nofail (pipe_fd[1]);
@@ -233,7 +231,7 @@ rpmostree_polkit_agent_open (void)
     g_warning ("Failed to fork TTY ask password agent: %s", strerror (-r));
   else
     /* Wait until the agent closes the fd */
-    fd_wait_for_event (pipe_fd[0], POLLHUP, (uint64_t) -1);
+    fd_wait_for_event (pipe_fd[0], POLLHUP, (uint64_t)-1);
 
   close_nointr_nofail (pipe_fd[0]);
 

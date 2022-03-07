@@ -22,43 +22,40 @@
 
 #include "string.h"
 
-#include <ostree.h>
-#include <errno.h>
-#include <json-glib/json-glib.h>
-#include <stdio.h>
-#include <utime.h>
 #include <err.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <pwd.h>
-#include <grp.h>
-#include <unistd.h>
-#include <libglnx.h>
-#include <stdlib.h>
+#include <errno.h>
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
+#include <grp.h>
+#include <json-glib/json-glib.h>
+#include <libglnx.h>
+#include <ostree.h>
+#include <pwd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <utility>
+#include <utime.h>
 #include <vector>
 
-#include "rpmostree-postprocess.h"
-#include "rpmostree-kernel.h"
-#include "rpmostree-output.h"
-#include "rpmostree-rpm-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
+#include "rpmostree-kernel.h"
+#include "rpmostree-output.h"
+#include "rpmostree-postprocess.h"
+#include "rpmostree-rpm-util.h"
 #include "rpmostree-util.h"
 
-typedef enum {
+typedef enum
+{
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW,
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES,
 } RpmOstreePostprocessBootLocation;
 
 static gboolean
-rename_if_exists (int         src_dfd,
-                  const char *from,
-                  int         dest_dfd,
-                  const char *to,
-                  GError    **error)
+rename_if_exists (int src_dfd, const char *from, int dest_dfd, const char *to, GError **error)
 {
   const char *errmsg = glnx_strjoina ("renaming ", from);
   GLNX_AUTO_PREFIX_ERROR (errmsg, error);
@@ -91,11 +88,8 @@ rename_if_exists (int         src_dfd,
  * either both (/boot and /usr/lib/ostree-boot), or just the latter.
  */
 static gboolean
-process_kernel_and_initramfs (int            rootfs_dfd,
-                              JsonObject    *treefile,
-                              gboolean       unified_core_mode,
-                              GCancellable  *cancellable,
-                              GError       **error)
+process_kernel_and_initramfs (int rootfs_dfd, JsonObject *treefile, gboolean unified_core_mode,
+                              GCancellable *cancellable, GError **error)
 {
   /* The current systemd kernel-install will inject
    * /boot/${machine_id}/${uname -r} which we don't use;
@@ -103,7 +97,8 @@ process_kernel_and_initramfs (int            rootfs_dfd,
    * on systemd itself having set up the machine id from its %post,
    * so we need to read it.  We'll reset the machine ID after this.
    */
-  { glnx_autofd int fd = openat (rootfs_dfd, "usr/etc/machine-id", O_RDONLY | O_CLOEXEC);
+  {
+    glnx_autofd int fd = openat (rootfs_dfd, "usr/etc/machine-id", O_RDONLY | O_CLOEXEC);
     if (fd < 0)
       {
         if (errno != ENOENT)
@@ -140,17 +135,15 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   /* Find the kernel in the source root (at this point one of usr/lib/modules or
    * usr/lib/ostree-boot)
    */
-  g_autoptr(GVariant) kernelstate = rpmostree_find_kernel (rootfs_dfd, cancellable, error);
+  g_autoptr (GVariant) kernelstate = rpmostree_find_kernel (rootfs_dfd, cancellable, error);
   if (!kernelstate)
     return FALSE;
-  const char* kernel_path;
-  const char* initramfs_path;
+  const char *kernel_path;
+  const char *initramfs_path;
   const char *kver;
   const char *bootdir;
   /* Used to optionally hardlink result of our dracut run */
-  g_variant_get (kernelstate, "(&s&s&sm&s)",
-                 &kver, &bootdir,
-                 &kernel_path, &initramfs_path);
+  g_variant_get (kernelstate, "(&s&s&sm&s)", &kver, &bootdir, &kernel_path, &initramfs_path);
 
   /* We generate our own initramfs with custom arguments, so if the RPM install
    * generated one (should only happen on CentOS now), delete it.
@@ -168,13 +161,11 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   /* Ensure depmod (kernel modules index) is up to date; because on Fedora we
    * suppress the kernel %posttrans we need to take care of this.
    */
-  CXX_TRY(run_depmod(rootfs_dfd, kver, unified_core_mode), error);
+  CXX_TRY (run_depmod (rootfs_dfd, kver, unified_core_mode), error);
 
-  RpmOstreePostprocessBootLocation boot_location =
-    RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
+  RpmOstreePostprocessBootLocation boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
   const char *boot_location_str = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
-                                                              "boot-location",
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "boot-location",
                                                               &boot_location_str, error))
     return FALSE;
   if (boot_location_str != NULL)
@@ -203,18 +194,17 @@ process_kernel_and_initramfs (int            rootfs_dfd,
        * systemd-219-9.fc22) but it is correctly populated if the file is there.
        */
       g_print ("Creating empty machine-id\n");
-      if (!glnx_file_replace_contents_at (rootfs_dfd, "usr/etc/machine-id", (guint8*)"", 0,
-                                          GLNX_FILE_REPLACE_NODATASYNC,
-                                          cancellable, error))
+      if (!glnx_file_replace_contents_at (rootfs_dfd, "usr/etc/machine-id", (guint8 *)"", 0,
+                                          GLNX_FILE_REPLACE_NODATASYNC, cancellable, error))
         return FALSE;
     }
   else
     {
-      (void) unlinkat (rootfs_dfd, "usr/etc/machine-id", 0);
+      (void)unlinkat (rootfs_dfd, "usr/etc/machine-id", 0);
     }
 
   /* Run dracut with our chosen arguments (commonly at least --no-hostonly) */
-  g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();
+  g_autoptr (GPtrArray) dracut_argv = g_ptr_array_new ();
   if (treefile && json_object_has_member (treefile, "initramfs-args"))
     {
       JsonArray *initramfs_args = json_object_get_array_member (treefile, "initramfs-args");
@@ -222,31 +212,34 @@ process_kernel_and_initramfs (int            rootfs_dfd,
 
       for (guint i = 0; i < len; i++)
         {
-          const char *arg = _rpmostree_jsonutil_array_require_string_element (initramfs_args, i, error);
+          const char *arg
+              = _rpmostree_jsonutil_array_require_string_element (initramfs_args, i, error);
           if (!arg)
             return FALSE;
-          g_ptr_array_add (dracut_argv, (char*)arg);
+          g_ptr_array_add (dracut_argv, (char *)arg);
         }
     }
   else
     {
       /* Default to this for treecomposes */
-      g_ptr_array_add (dracut_argv, (char*)"--no-hostonly");
+      g_ptr_array_add (dracut_argv, (char *)"--no-hostonly");
     }
   g_ptr_array_add (dracut_argv, NULL);
 
-  g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
+  g_auto (GLnxTmpfile) initramfs_tmpf = {
+    0,
+  };
   /* We use a tmpdir under the target root since dracut currently tries to copy
    * xattrs, including e.g. user.ostreemeta, which can't be copied to tmpfs.
    */
-  { g_auto(GLnxTmpDir) dracut_host_tmpd = { 0, };
-    if (!glnx_mkdtempat (rootfs_dfd, "rpmostree-dracut.XXXXXX", 0700,
-                         &dracut_host_tmpd, error))
+  {
+    g_auto (GLnxTmpDir) dracut_host_tmpd = {
+      0,
+    };
+    if (!glnx_mkdtempat (rootfs_dfd, "rpmostree-dracut.XXXXXX", 0700, &dracut_host_tmpd, error))
       return FALSE;
-    if (!rpmostree_run_dracut (rootfs_dfd,
-                               (const char *const*)dracut_argv->pdata, kver,
-                               NULL, FALSE, &dracut_host_tmpd,
-                               &initramfs_tmpf, cancellable, error))
+    if (!rpmostree_run_dracut (rootfs_dfd, (const char *const *)dracut_argv->pdata, kver, NULL,
+                               FALSE, &dracut_host_tmpd, &initramfs_tmpf, cancellable, error))
       return FALSE;
     /* No reason to have the initramfs not be world-readable since
      * it's server-side generated and shouldn't contain any secrets.
@@ -259,12 +252,11 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   /* We always tell rpmostree_finalize_kernel() to skip /boot, since we'll do a
    * full hardlink pass if needed after that for the kernel + bootloader data.
    */
-  RpmOstreeFinalizeKernelDestination fin_dest =
-    (boot_location == RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES) ?
-    RPMOSTREE_FINALIZE_KERNEL_USRLIB_MODULES :
-    RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT;
-  if (!rpmostree_finalize_kernel (rootfs_dfd, bootdir, kver, kernel_path,
-                                  &initramfs_tmpf, fin_dest,
+  RpmOstreeFinalizeKernelDestination fin_dest
+      = (boot_location == RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES)
+            ? RPMOSTREE_FINALIZE_KERNEL_USRLIB_MODULES
+            : RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT;
+  if (!rpmostree_finalize_kernel (rootfs_dfd, bootdir, kver, kernel_path, &initramfs_tmpf, fin_dest,
                                   cancellable, error))
     return FALSE;
 
@@ -276,14 +268,12 @@ process_kernel_and_initramfs (int            rootfs_dfd,
 }
 
 gboolean
-rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
-                                       OstreeSePolicy **out_sepolicy,
-                                       GCancellable  *cancellable,
-                                       GError       **error)
+rpmostree_prepare_rootfs_get_sepolicy (int dfd, OstreeSePolicy **out_sepolicy,
+                                       GCancellable *cancellable, GError **error)
 {
-  CXX_TRY(workaround_selinux_cross_labeling(dfd, *cancellable), error);
+  CXX_TRY (workaround_selinux_cross_labeling (dfd, *cancellable), error);
 
-  g_autoptr(OstreeSePolicy) ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
+  g_autoptr (OstreeSePolicy) ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
   if (ret_sepolicy == NULL)
     return FALSE;
 
@@ -295,8 +285,7 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
  * Part of SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659
  */
 gboolean
-rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
-                                           GCancellable *cancellable,
+rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd, GCancellable *cancellable,
                                            GError **error)
 {
   const char *semanage_path = "usr/etc/selinux/semanage.conf";
@@ -307,9 +296,8 @@ rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
   if (errno == ENOENT)
     return TRUE;
 
-  g_autofree char *orig_contents =
-    glnx_file_get_contents_utf8_at (rootfs_dfd, semanage_path, NULL,
-                                    cancellable, error);
+  g_autofree char *orig_contents
+      = glnx_file_get_contents_utf8_at (rootfs_dfd, semanage_path, NULL, cancellable, error);
   if (orig_contents == NULL)
     return glnx_prefix_error (error, "Opening %s", semanage_path);
 
@@ -317,9 +305,9 @@ rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
   if (strstr (orig_contents, new_store_root) == NULL)
     {
       g_autofree char *new_contents = g_strconcat (orig_contents, new_store_root, NULL);
-      if (!glnx_file_replace_contents_at (rootfs_dfd, semanage_path,
-                                          (guint8*)new_contents, -1, static_cast<GLnxFileReplaceFlags>(0),
-                                          cancellable, error))
+      if (!glnx_file_replace_contents_at (rootfs_dfd, semanage_path, (guint8 *)new_contents, -1,
+                                          static_cast<GLnxFileReplaceFlags> (0), cancellable,
+                                          error))
         return glnx_prefix_error (error, "Replacing %s", semanage_path);
     }
 
@@ -328,11 +316,12 @@ rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
 
 /* SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659 */
 static gboolean
-postprocess_selinux_policy_store_location (int rootfs_dfd,
-                                           GCancellable *cancellable,
+postprocess_selinux_policy_store_location (int rootfs_dfd, GCancellable *cancellable,
                                            GError **error)
 {
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  g_auto (GLnxDirFdIterator) dfd_iter = {
+    0,
+  };
   glnx_unref_object OstreeSePolicy *sepolicy = NULL;
   const char *var_policy_location = NULL;
   const char *etc_policy_location = NULL;
@@ -393,11 +382,8 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
  * rpm-ostree on the target host.
  */
 gboolean
-rpmostree_postprocess_final (int            rootfs_dfd,
-                             JsonObject    *treefile,
-                             gboolean       unified_core_mode,
-                             GCancellable  *cancellable,
-                             GError       **error)
+rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unified_core_mode,
+                             GCancellable *cancellable, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Finalizing rootfs", error);
 
@@ -406,19 +392,18 @@ rpmostree_postprocess_final (int            rootfs_dfd,
    * postprocess-root` with `compose commit`.
    */
   const char tmpfiles_integration_path[] = "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf";
-  if (!glnx_fstatat_allow_noent (rootfs_dfd, tmpfiles_integration_path, NULL, AT_SYMLINK_NOFOLLOW, error))
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, tmpfiles_integration_path, NULL, AT_SYMLINK_NOFOLLOW,
+                                 error))
     return FALSE;
   if (errno == 0)
     return TRUE;
 
   gboolean selinux = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
-                                                               "selinux",
-                                                               &selinux,
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "selinux", &selinux,
                                                                error))
     return FALSE;
 
-  CXX_TRY(compose_postprocess_final (rootfs_dfd), error);
+  CXX_TRY (compose_postprocess_final (rootfs_dfd), error);
 
   if (selinux)
     {
@@ -426,19 +411,17 @@ rpmostree_postprocess_final (int            rootfs_dfd,
 
       /* Now regenerate SELinux policy so that postprocess scripts from users and from us
        * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
-      rust::Vec child_argv = { rust::String("semodule"), rust::String("-nB") };
-      CXX_TRY(bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode), error);
+      rust::Vec child_argv = { rust::String ("semodule"), rust::String ("-nB") };
+      CXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode), error);
     }
 
   gboolean container = FALSE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
-                                                               "container",
-                                                               &container,
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "container", &container,
                                                                error))
     return FALSE;
 
   g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
-  CXX_TRY(migrate_passwd_except_root(rootfs_dfd), error);
+  CXX_TRY (migrate_passwd_except_root (rootfs_dfd), error);
 
   rust::Vec<rust::String> preserve_groups_set;
   if (treefile && json_object_has_member (treefile, "etc-group-members"))
@@ -449,17 +432,17 @@ rpmostree_postprocess_final (int            rootfs_dfd,
         {
           const char *elt = json_array_get_string_element (etc_group_members, i);
           g_assert (elt != NULL);
-          auto entry = std::string(elt);
+          auto entry = std::string (elt);
           // TODO(lucab): drop this once we can pass the treefile directly to Rust.
-          preserve_groups_set.push_back(entry);
+          preserve_groups_set.push_back (entry);
         }
     }
 
   g_print ("Migrating /usr/etc/group to /usr/lib/\n");
-  CXX_TRY(migrate_group_except_root(rootfs_dfd, preserve_groups_set), error);
+  CXX_TRY (migrate_group_except_root (rootfs_dfd, preserve_groups_set), error);
 
   /* NSS configuration to look at the new files */
-  CXX_TRY(composepost_nsswitch_altfiles(rootfs_dfd), error);
+  CXX_TRY (composepost_nsswitch_altfiles (rootfs_dfd), error);
 
   if (selinux)
     {
@@ -467,9 +450,9 @@ rpmostree_postprocess_final (int            rootfs_dfd,
         return glnx_prefix_error (error, "SELinux postprocess");
     }
 
-  CXX_TRY(rootfs_prepare_links(rootfs_dfd), error);
+  CXX_TRY (rootfs_prepare_links (rootfs_dfd), error);
 
-  CXX_TRY(convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
+  CXX_TRY (convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
 
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
@@ -477,8 +460,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
   g_print ("Adding rpm-ostree-0-integration.conf\n");
   /* This is useful if we're running in an uninstalled configuration, e.g.
    * during tests. */
-  const char *pkglibdir_path
-    = g_getenv("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
+  const char *pkglibdir_path = g_getenv ("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
   glnx_autofd int pkglibdir_dfd = -1;
 
   if (!glnx_opendirat (AT_FDCWD, pkglibdir_path, TRUE, &pkglibdir_dfd, error))
@@ -487,8 +469,8 @@ rpmostree_postprocess_final (int            rootfs_dfd,
   if (!glnx_shutil_mkdir_p_at (rootfs_dfd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
     return FALSE;
 
-  if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration.conf", NULL,
-                          rootfs_dfd, tmpfiles_integration_path,
+  if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration.conf", NULL, rootfs_dfd,
+                          tmpfiles_integration_path,
                           GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
                           cancellable, error))
     return FALSE;
@@ -502,26 +484,24 @@ rpmostree_postprocess_final (int            rootfs_dfd,
       if (!glnx_shutil_rm_rf_at (rootfs_dfd, "boot/loader", cancellable, error))
         return FALSE;
 
-      if (!process_kernel_and_initramfs (rootfs_dfd, treefile, unified_core_mode,
-                                         cancellable, error))
+      if (!process_kernel_and_initramfs (rootfs_dfd, treefile, unified_core_mode, cancellable,
+                                         error))
         return glnx_prefix_error (error, "During kernel processing");
     }
 
   /* we're composing a new tree; copy the rpmdb to the base location */
-  CXX_TRY(prepare_rpmdb_base_location(rootfs_dfd, *cancellable), error);
+  CXX_TRY (prepare_rpmdb_base_location (rootfs_dfd, *cancellable), error);
 
   return TRUE;
 }
 
 static gboolean
-cleanup_leftover_files (int            rootfs_fd,
-                        const char    *subpath,
-                        const char    *files[],
-                        const char    *prefixes[],
-                        GCancellable  *cancellable,
-                        GError       **error)
+cleanup_leftover_files (int rootfs_fd, const char *subpath, const char *files[],
+                        const char *prefixes[], GCancellable *cancellable, GError **error)
 {
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  g_auto (GLnxDirFdIterator) dfd_iter = {
+    0,
+  };
   if (!glnx_dirfd_iterator_init_at (rootfs_fd, subpath, TRUE, &dfd_iter, error))
     return glnx_prefix_error (error, "Opening %s", subpath);
 
@@ -538,8 +518,8 @@ cleanup_leftover_files (int            rootfs_fd,
       const char *name = dent->d_name;
 
       const gboolean in_files = (files != NULL && g_strv_contains (files, name));
-      const gboolean has_prefix =
-        (prefixes != NULL && rpmostree_str_has_prefix_in_strv (name, (char**)prefixes, -1));
+      const gboolean has_prefix
+          = (prefixes != NULL && rpmostree_str_has_prefix_in_strv (name, (char **)prefixes, -1));
 
       if (!in_files && !has_prefix)
         continue;
@@ -551,16 +531,12 @@ cleanup_leftover_files (int            rootfs_fd,
   return TRUE;
 }
 
-static const char *selinux_leftover_files[] = { "semanage.trans.LOCK",
-                                                "semanage.read.LOCK", NULL };
-static const char *rpmdb_leftover_files[] = { ".dbenv.lock",
-                                              ".rpm.lock", NULL };
+static const char *selinux_leftover_files[] = { "semanage.trans.LOCK", "semanage.read.LOCK", NULL };
+static const char *rpmdb_leftover_files[] = { ".dbenv.lock", ".rpm.lock", NULL };
 static const char *rpmdb_leftover_prefixes[] = { "__db.", NULL };
 
 static gboolean
-cleanup_selinux_lockfiles (int            rootfs_fd,
-                           GCancellable  *cancellable,
-                           GError       **error)
+cleanup_selinux_lockfiles (int rootfs_fd, GCancellable *cancellable, GError **error)
 {
   if (!glnx_fstatat_allow_noent (rootfs_fd, "usr/etc/selinux", NULL, 0, error))
     return FALSE;
@@ -569,7 +545,9 @@ cleanup_selinux_lockfiles (int            rootfs_fd,
     return TRUE; /* Note early return */
 
   /* really we only have to do this for the active policy, but let's scan all the dirs */
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  g_auto (GLnxDirFdIterator) dfd_iter = {
+    0,
+  };
   if (!glnx_dirfd_iterator_init_at (rootfs_fd, "usr/etc/selinux", FALSE, &dfd_iter, error))
     return glnx_prefix_error (error, "Opening /usr/etc/selinux");
 
@@ -584,8 +562,8 @@ cleanup_selinux_lockfiles (int            rootfs_fd,
         continue;
 
       const char *name = dent->d_name;
-      if (!cleanup_leftover_files (dfd_iter.fd, name, selinux_leftover_files, NULL,
-                                   cancellable, error))
+      if (!cleanup_leftover_files (dfd_iter.fd, name, selinux_leftover_files, NULL, cancellable,
+                                   error))
         return FALSE;
     }
 
@@ -593,9 +571,7 @@ cleanup_selinux_lockfiles (int            rootfs_fd,
 }
 
 gboolean
-rpmostree_cleanup_leftover_rpmdb_files (int            rootfs_fd,
-                                        GCancellable  *cancellable,
-                                        GError       **error)
+rpmostree_cleanup_leftover_rpmdb_files (int rootfs_fd, GCancellable *cancellable, GError **error)
 {
   return cleanup_leftover_files (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, rpmdb_leftover_files,
                                  rpmdb_leftover_prefixes, cancellable, error);
@@ -616,14 +592,13 @@ rpmostree_cleanup_leftover_rpmdb_files (int            rootfs_fd,
  * no further effect after the first.
  */
 gboolean
-rpmostree_rootfs_postprocess_common (int           rootfs_fd,
-                                     GCancellable *cancellable,
-                                     GError       **error)
+rpmostree_rootfs_postprocess_common (int rootfs_fd, GCancellable *cancellable, GError **error)
 {
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  if (!glnx_fstatat_allow_noent (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, NULL, AT_SYMLINK_NOFOLLOW, error))
+  if (!glnx_fstatat_allow_noent (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, NULL, AT_SYMLINK_NOFOLLOW,
+                                 error))
     return FALSE;
   const bool have_rpmdb = (errno == 0);
   if (!have_rpmdb)
@@ -632,9 +607,10 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
       struct stat stbuf;
       if (!glnx_fstatat_allow_noent (rootfs_fd, "var/lib/rpm", &stbuf, AT_SYMLINK_NOFOLLOW, error))
         return FALSE;
-      if (errno == 0 && S_ISDIR(stbuf.st_mode))
+      if (errno == 0 && S_ISDIR (stbuf.st_mode))
         {
-          if (!rename_if_exists (rootfs_fd, "var/lib/rpm", rootfs_fd, RPMOSTREE_RPMDB_LOCATION, error))
+          if (!rename_if_exists (rootfs_fd, "var/lib/rpm", rootfs_fd, RPMOSTREE_RPMDB_LOCATION,
+                                 error))
             return FALSE;
           if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
             return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
@@ -642,7 +618,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
     }
 
   /* Make sure there is an RPM macro in place pointing to the rpmdb in /usr */
-  CXX_TRY(compose_postprocess_rpm_macro(rootfs_fd), error);
+  CXX_TRY (compose_postprocess_rpm_macro (rootfs_fd), error);
 
   if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
     return FALSE;
@@ -650,16 +626,17 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
     return FALSE;
 
-  CXX_TRY(passwd_cleanup(rootfs_fd), error);
+  CXX_TRY (passwd_cleanup (rootfs_fd), error);
 
   return TRUE;
 }
 
-struct CommitThreadData {
-  gint done;  /* atomic */
+struct CommitThreadData
+{
+  gint done; /* atomic */
   off_t n_bytes;
   off_t n_processed;
-  gint percent;  /* atomic */
+  gint percent; /* atomic */
   std::unique_ptr<rpmostreecxx::Progress> progress;
   OstreeRepo *repo;
   int rootfs_fd;
@@ -673,23 +650,20 @@ struct CommitThreadData {
 
 /* Filters out all xattrs that aren't accepted. */
 static GVariant *
-filter_xattrs_cb (OstreeRepo     *repo,
-                  const char     *relpath,
-                  GFileInfo      *file_info,
-                  gpointer        user_data)
+filter_xattrs_cb (OstreeRepo *repo, const char *relpath, GFileInfo *file_info, gpointer user_data)
 {
   g_assert (relpath);
 
-  auto tdata = static_cast<struct CommitThreadData *>(user_data);
+  auto tdata = static_cast<struct CommitThreadData *> (user_data);
   int rootfs_fd = tdata->rootfs_fd;
   /* If you have a use case for something else, file an issue */
-  static const char *accepted_xattrs[] =
-    { "security.capability", /* https://lwn.net/Articles/211883/ */
-      "user.pax.flags", /* https://github.com/projectatomic/rpm-ostree/issues/412 */
-      "user.ima" /* will be replaced with security.ima */
-    };
-  g_autoptr(GVariant) existing_xattrs = NULL;
-  g_autoptr(GVariantIter) viter = NULL;
+  static const char *accepted_xattrs[] = {
+    "security.capability", /* https://lwn.net/Articles/211883/ */
+    "user.pax.flags",      /* https://github.com/projectatomic/rpm-ostree/issues/412 */
+    "user.ima"             /* will be replaced with security.ima */
+  };
+  g_autoptr (GVariant) existing_xattrs = NULL;
+  g_autoptr (GVariantIter) viter = NULL;
   GError *local_error = NULL;
   GError **error = &local_error;
   GVariant *key, *value;
@@ -707,15 +681,14 @@ filter_xattrs_cb (OstreeRepo     *repo,
     }
   else
     {
-      if (!glnx_dfd_name_get_all_xattrs (rootfs_fd, relpath, &existing_xattrs,
-                                         NULL, error))
+      if (!glnx_dfd_name_get_all_xattrs (rootfs_fd, relpath, &existing_xattrs, NULL, error))
         g_error ("Reading xattrs on %s: %s", relpath, local_error->message);
     }
 
   if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
     {
       tdata->n_processed += g_file_info_get_size (file_info);
-      g_atomic_int_set (&tdata->percent, (gint)((100.0*tdata->n_processed)/tdata->n_bytes));
+      g_atomic_int_set (&tdata->percent, (gint)((100.0 * tdata->n_processed) / tdata->n_bytes));
     }
 
   viter = g_variant_iter_new (existing_xattrs);
@@ -729,10 +702,10 @@ filter_xattrs_cb (OstreeRepo     *repo,
           if (g_str_equal (validkey, attrkey))
             {
               if (g_str_equal (validkey, "user.ima"))
-                  g_variant_builder_add (&builder, "(@ay@ay)",
-                                         g_variant_new_bytestring ("security.ima"), value);
+                g_variant_builder_add (&builder, "(@ay@ay)",
+                                       g_variant_new_bytestring ("security.ima"), value);
               else
-                  g_variant_builder_add (&builder, "(@ay@ay)", key, value);
+                g_variant_builder_add (&builder, "(@ay@ay)", key, value);
             }
         }
     }
@@ -743,16 +716,14 @@ filter_xattrs_cb (OstreeRepo     *repo,
 static gpointer
 write_dfd_thread (gpointer datap)
 {
-  auto data = static_cast<struct CommitThreadData *>(datap);
+  auto data = static_cast<struct CommitThreadData *> (datap);
 
-  if (!ostree_repo_write_dfd_to_mtree (data->repo, data->rootfs_fd, ".",
-                                       data->mtree,
-                                       data->commit_modifier,
-                                       data->cancellable, data->error))
+  if (!ostree_repo_write_dfd_to_mtree (data->repo, data->rootfs_fd, ".", data->mtree,
+                                       data->commit_modifier, data->cancellable, data->error))
     goto out;
 
   data->success = TRUE;
- out:
+out:
   g_atomic_int_inc (&data->done);
   g_main_context_wakeup (NULL);
   return NULL;
@@ -761,11 +732,11 @@ write_dfd_thread (gpointer datap)
 static gboolean
 on_progress_timeout (gpointer datap)
 {
-  auto data = static_cast<struct CommitThreadData *>(datap);
+  auto data = static_cast<struct CommitThreadData *> (datap);
   const gint percent = g_atomic_int_get (&data->percent);
 
   /* clamp to 100 if it somehow goes over (XXX: bad counting?) */
-  data->progress->percent_update(MIN(percent, 100));
+  data->progress->percent_update (MIN (percent, 100));
 
   return TRUE;
 }
@@ -775,19 +746,13 @@ on_progress_timeout (gpointer datap)
  * buildroots.
  */
 gboolean
-rpmostree_compose_commit (int            rootfs_fd,
-                          OstreeRepo    *repo,
-                          const char    *parent_revision,
-                          GVariant      *src_metadata,
-                          GVariant      *detached_metadata,
-                          const char    *gpg_keyid,
-                          gboolean       enable_selinux,
-                          OstreeRepoDevInoCache *devino_cache,
-                          char         **out_new_revision,
-                          GCancellable  *cancellable,
-                          GError       **error)
+rpmostree_compose_commit (int rootfs_fd, OstreeRepo *repo, const char *parent_revision,
+                          GVariant *src_metadata, GVariant *detached_metadata,
+                          const char *gpg_keyid, gboolean enable_selinux,
+                          OstreeRepoDevInoCache *devino_cache, char **out_new_revision,
+                          GCancellable *cancellable, GError **error)
 {
-  g_autoptr(OstreeSePolicy) sepolicy = NULL;
+  g_autoptr (OstreeSePolicy) sepolicy = NULL;
   if (enable_selinux)
     {
       sepolicy = ostree_sepolicy_new_at (rootfs_fd, cancellable, error);
@@ -795,7 +760,7 @@ rpmostree_compose_commit (int            rootfs_fd,
         return FALSE;
     }
 
-  g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
+  g_autoptr (OstreeMutableTree) mtree = ostree_mutable_tree_new ();
   /* We may make this configurable if someone complains about including some
    * unlabeled content, but I think the fix for that is to ensure that policy is
    * labeling it.
@@ -803,15 +768,16 @@ rpmostree_compose_commit (int            rootfs_fd,
    * Also right now we unconditionally use the CONSUME flag, but this will need
    * to change for the split compose/commit root patches.
    */
-  auto modifier_flags = static_cast<OstreeRepoCommitModifierFlags>(OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED |
-    OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CONSUME);
+  auto modifier_flags = static_cast<OstreeRepoCommitModifierFlags> (
+      OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED
+      | OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CONSUME);
   /* If changing this, also look at changing rpmostree-unpacker.c */
-  g_autoptr(OstreeRepoCommitModifier) commit_modifier =
-    ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
-  struct CommitThreadData tdata = { 0, };
-  ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
-                                                  filter_xattrs_cb, NULL,
-                                                  &tdata);
+  g_autoptr (OstreeRepoCommitModifier) commit_modifier
+      = ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
+  struct CommitThreadData tdata = {
+    0,
+  };
+  ostree_repo_commit_modifier_set_xattr_callback (commit_modifier, filter_xattrs_cb, NULL, &tdata);
 
   if (sepolicy && ostree_sepolicy_get_name (sepolicy) != NULL)
     ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
@@ -821,7 +787,7 @@ rpmostree_compose_commit (int            rootfs_fd,
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
-  auto n_bytes = CXX_TRY_VAL(directory_size(rootfs_fd, *cancellable), error);
+  auto n_bytes = CXX_TRY_VAL (directory_size (rootfs_fd, *cancellable), error);
 
   tdata.n_bytes = n_bytes;
   tdata.repo = repo;
@@ -832,11 +798,11 @@ rpmostree_compose_commit (int            rootfs_fd,
   tdata.error = error;
 
   {
-    g_autoptr(GThread) commit_thread = g_thread_new ("commit", write_dfd_thread, &tdata);
+    g_autoptr (GThread) commit_thread = g_thread_new ("commit", write_dfd_thread, &tdata);
 
-    tdata.progress = rpmostreecxx::progress_percent_begin("Committing");
+    tdata.progress = rpmostreecxx::progress_percent_begin ("Committing");
 
-    g_autoptr(GSource) progress_src = g_timeout_source_new_seconds (1);
+    g_autoptr (GSource) progress_src = g_timeout_source_new_seconds (1);
     g_source_set_callback (progress_src, on_progress_timeout, &tdata, NULL);
     g_source_attach (progress_src, NULL);
 
@@ -846,38 +812,37 @@ rpmostree_compose_commit (int            rootfs_fd,
     g_source_destroy (progress_src);
     g_thread_join (util::move_nullify (commit_thread));
 
-    tdata.progress->percent_update(100);
+    tdata.progress->percent_update (100);
   }
 
   if (!tdata.success)
     return glnx_prefix_error (error, "While writing rootfs to mtree");
 
-  g_autoptr(GFile) root_tree = NULL;
+  g_autoptr (GFile) root_tree = NULL;
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
     return glnx_prefix_error (error, "While writing tree");
 
   // Unfortunately this API takes GVariantDict, not GVariantBuilder, so convert
-  g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (src_metadata);
+  g_autoptr (GVariantDict) metadata_dict = g_variant_dict_new (src_metadata);
   if (!ostree_commit_metadata_for_bootable (root_tree, metadata_dict, cancellable, error))
     return glnx_prefix_error (error, "Looking for bootable kernel");
-  g_autoptr(GVariant) metadata = g_variant_dict_end (metadata_dict);
+  g_autoptr (GVariant) metadata = g_variant_dict_end (metadata_dict);
 
   g_autofree char *new_revision = NULL;
   if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,
-                                 (OstreeRepoFile*)root_tree, &new_revision,
-                                 cancellable, error))
+                                 (OstreeRepoFile *)root_tree, &new_revision, cancellable, error))
     return glnx_prefix_error (error, "While writing commit");
 
   if (detached_metadata != NULL)
     {
-        if (!ostree_repo_write_commit_detached_metadata (repo, new_revision, detached_metadata, cancellable, error))
-          return glnx_prefix_error (error, "While writing detached metadata");
+      if (!ostree_repo_write_commit_detached_metadata (repo, new_revision, detached_metadata,
+                                                       cancellable, error))
+        return glnx_prefix_error (error, "While writing detached metadata");
     }
 
   if (gpg_keyid)
     {
-      if (!ostree_repo_sign_commit (repo, new_revision, gpg_keyid, NULL,
-                                    cancellable, error))
+      if (!ostree_repo_sign_commit (repo, new_revision, gpg_keyid, NULL, cancellable, error))
         return glnx_prefix_error (error, "While signing commit");
     }
 

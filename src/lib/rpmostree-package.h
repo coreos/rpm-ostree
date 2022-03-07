@@ -27,9 +27,10 @@ G_BEGIN_DECLS
 
 typedef struct RpmOstreePackage RpmOstreePackage;
 
-#define RPM_OSTREE_TYPE_PACKAGE         (rpm_ostree_package_get_type ())
-#define RPM_OSTREE_PACKAGE(inst)        (G_TYPE_CHECK_INSTANCE_CAST ((inst), RPM_OSTREE_TYPE_PACKAGE, RpmOstreePackage))
-#define RPM_OSTREE_IS_PACKAGE(inst)     (G_TYPE_CHECK_INSTANCE_TYPE ((inst), RPM_OSTREE_TYPE_PACKAGE))
+#define RPM_OSTREE_TYPE_PACKAGE (rpm_ostree_package_get_type ())
+#define RPM_OSTREE_PACKAGE(inst)                                                                   \
+  (G_TYPE_CHECK_INSTANCE_CAST ((inst), RPM_OSTREE_TYPE_PACKAGE, RpmOstreePackage))
+#define RPM_OSTREE_IS_PACKAGE(inst) (G_TYPE_CHECK_INSTANCE_TYPE ((inst), RPM_OSTREE_TYPE_PACKAGE))
 
 _RPMOSTREE_EXTERN
 GType rpm_ostree_package_get_type (void);

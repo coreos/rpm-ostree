@@ -20,34 +20,37 @@
 
 #include "config.h"
 
-#include <gio/gio.h>
-#include <systemd/sd-journal.h>
+#include "libglnx.h"
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-output.h"
 #include "rpmostree-util.h"
-#include "rpmostree-cxxrs.h"
 #include <err.h>
+#include <gio/gio.h>
 #include <systemd/sd-journal.h>
-#include "libglnx.h"
 
-#include "rpmostree-scripts.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-scripts.h"
 
-#define RPMOSTREE_MESSAGE_PREPOST SD_ID128_MAKE(42,d3,72,22,dc,a2,4a,3b,9d,30,ce,d4,bb,bc,ac,d2)
-#define RPMOSTREE_MESSAGE_FILETRIGGER SD_ID128_MAKE(ef,dd,0e,4e,79,ca,45,d3,88,76,ac,45,e1,28,23,68)
+#define RPMOSTREE_MESSAGE_PREPOST                                                                  \
+  SD_ID128_MAKE (42, d3, 72, 22, dc, a2, 4a, 3b, 9d, 30, ce, d4, bb, bc, ac, d2)
+#define RPMOSTREE_MESSAGE_FILETRIGGER                                                              \
+  SD_ID128_MAKE (ef, dd, 0e, 4e, 79, ca, 45, d3, 88, 76, ac, 45, e1, 28, 23, 68)
 
 /* This bit is currently private in librpm */
-enum rpmscriptFlags_e {
-  RPMSCRIPT_FLAG_NONE		= 0,
-  RPMSCRIPT_FLAG_EXPAND	= (1 << 0), /* macro expansion */
-  RPMSCRIPT_FLAG_QFORMAT	= (1 << 1), /* header queryformat expansion */
+enum rpmscriptFlags_e
+{
+  RPMSCRIPT_FLAG_NONE = 0,
+  RPMSCRIPT_FLAG_EXPAND = (1 << 0),  /* macro expansion */
+  RPMSCRIPT_FLAG_QFORMAT = (1 << 1), /* header queryformat expansion */
 };
 
-typedef struct {
-    const char *desc;
-    rpmsenseFlags sense;
-    rpmTagVal tag;
-    rpmTagVal progtag;
-    rpmTagVal flagtag;
+typedef struct
+{
+  const char *desc;
+  rpmsenseFlags sense;
+  rpmTagVal tag;
+  rpmTagVal progtag;
+  rpmTagVal flagtag;
 } KnownRpmScriptKind;
 
 /* The RPM interpreter for built-in lua */
@@ -82,37 +85,36 @@ static const KnownRpmScriptKind ignored_scripts[] = {
 #endif
 
 /* Supported script types */
-static const KnownRpmScriptKind pre_script =
-  { "%prein", 0, RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS };
-static const KnownRpmScriptKind post_script =
-  { "%post", 0, RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_POSTINFLAGS };
-static const KnownRpmScriptKind posttrans_script =
-  { "%posttrans", 0, RPMTAG_POSTTRANS, RPMTAG_POSTTRANSPROG, RPMTAG_POSTTRANSFLAGS };
+static const KnownRpmScriptKind pre_script
+    = { "%prein", 0, RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS };
+static const KnownRpmScriptKind post_script
+    = { "%post", 0, RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_POSTINFLAGS };
+static const KnownRpmScriptKind posttrans_script
+    = { "%posttrans", 0, RPMTAG_POSTTRANS, RPMTAG_POSTTRANSPROG, RPMTAG_POSTTRANSFLAGS };
 
 static const KnownRpmScriptKind unsupported_scripts[] = {
-  { "%triggerprein", RPMSENSE_TRIGGERPREIN,
-    RPMTAG_TRIGGERPREIN, 0, 0 },
-  { "%triggerin", RPMSENSE_TRIGGERIN,
-    RPMTAG_TRIGGERIN, 0, 0 },
+  { "%triggerprein", RPMSENSE_TRIGGERPREIN, RPMTAG_TRIGGERPREIN, 0, 0 },
+  { "%triggerin", RPMSENSE_TRIGGERIN, RPMTAG_TRIGGERIN, 0, 0 },
 };
 
-typedef struct {
+typedef struct
+{
   const char *pkgname_script;
   const char *interp;
   const char *replacement;
 } RpmOstreeLuaReplacement;
 
-static const char glibc_langpacks_script[] =
-  "set -euo pipefail\n"
-  "tmpl=/usr/lib/locale/locale-archive.tmpl\n"
-  "if test -s \"${tmpl}\"; then\n"
-  "  cp -a \"${tmpl}\"{,.new} && mv \"${tmpl}\"{.new,}\n"
-  "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
-  "fi\n";
+static const char glibc_langpacks_script[]
+    = "set -euo pipefail\n"
+      "tmpl=/usr/lib/locale/locale-archive.tmpl\n"
+      "if test -s \"${tmpl}\"; then\n"
+      "  cp -a \"${tmpl}\"{,.new} && mv \"${tmpl}\"{.new,}\n"
+      "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
+      "fi\n";
 
-static const char glibc_post_script[] =
-  "libdir=" LIBDIR "\n"
-  "exec iconvconfig -o ${libdir}/gconv/gconv-modules.cache --nostdlib ${libdir}/gconv";
+static const char glibc_post_script[]
+    = "libdir=" LIBDIR "\n"
+      "exec iconvconfig -o ${libdir}/gconv/gconv-modules.cache --nostdlib ${libdir}/gconv";
 
 static const RpmOstreeLuaReplacement lua_replacements[] = {
   /* This code only applies to Fedora <= 29, see:
@@ -123,28 +125,22 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
    * wants to use rpm-ostree can just do `ln` in shell script in their package
    * too.
    */
-  { "fedora-release-atomichost.post",
-    "/usr/bin/sh",
+  { "fedora-release-atomichost.post", "/usr/bin/sh",
     "set -euo pipefail\n"
-    "ln -sf os.release.d/os-release-atomichost /usr/lib/os-release\n"
-  },
-  { "fedora-release-coreos.post",
-    "/usr/bin/sh",
+    "ln -sf os.release.d/os-release-atomichost /usr/lib/os-release\n" },
+  { "fedora-release-coreos.post", "/usr/bin/sh",
     "set -euo pipefail\n"
-    "ln -sf os.release.d/os-release-coreos /usr/lib/os-release\n"
-  },
-  { "fedora-release-workstation.post",
-    "/usr/bin/sh",
+    "ln -sf os.release.d/os-release-coreos /usr/lib/os-release\n" },
+  { "fedora-release-workstation.post", "/usr/bin/sh",
     "set -euo pipefail\n"
     "ln -sf os.release.d/os-release-workstation /usr/lib/os-release\n"
     "preset=/usr/lib/os.release.d/presets/80-workstation.preset\n"
-    "if [ -f \"${preset}\" ]; then ln -sr ${preset} /usr/lib/systemd/system-preset && systemctl preset -q sshd.socket sshd.service cups.socket cups.path cups.service; fi\n"
-  },
-  { "fedora-release.post",
-    "/usr/bin/sh",
+    "if [ -f \"${preset}\" ]; then ln -sr ${preset} /usr/lib/systemd/system-preset && systemctl "
+    "preset -q sshd.socket sshd.service cups.socket cups.path cups.service; fi\n" },
+  { "fedora-release.post", "/usr/bin/sh",
     "set -euo pipefail\n"
-    "if ! test -L /usr/lib/os-release; then ln -s os.release.d/os-release-fedora /usr/lib/os-release; fi\n"
-  },
+    "if ! test -L /usr/lib/os-release; then ln -s os.release.d/os-release-fedora "
+    "/usr/lib/os-release; fi\n" },
   /* Upstream bug for replacing lua with shell: https://bugzilla.redhat.com/show_bug.cgi?id=1367585
    * Further note that the current glibc code triggers a chain of bugs
    * in rofiles-fuse: https://github.com/ostreedev/ostree/pull/1470
@@ -155,73 +151,51 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
    * locale code is (hopefully!) unlikely to go out mutating other files, so we'll
    * live with this hack for now.
    **/
-  { "glibc-all-langpacks.posttrans",
-    "/usr/bin/sh",
-    glibc_langpacks_script
-  },
-  { "glibc-common.post",
-    "/usr/bin/sh",
-    glibc_langpacks_script
-  },
+  { "glibc-all-langpacks.posttrans", "/usr/bin/sh", glibc_langpacks_script },
+  { "glibc-common.post", "/usr/bin/sh", glibc_langpacks_script },
   /* See https://src.fedoraproject.org/rpms/glibc/pull-request/54, which converts this to
    * Lua as part of https://bugzilla.redhat.com/show_bug.cgi?id=2018913.
    */
-  { "glibc-common.transfiletriggerin",
-    "/usr/bin/sh",
-    "/sbin/ldconfig"
-  },
-  { "glibc-common.transfiletriggerpostun",
-    "/usr/bin/sh",
-    "/sbin/ldconfig"
-  },
+  { "glibc-common.transfiletriggerin", "/usr/bin/sh", "/sbin/ldconfig" },
+  { "glibc-common.transfiletriggerpostun", "/usr/bin/sh", "/sbin/ldconfig" },
   /* See https://src.fedoraproject.org/rpms/glibc/pull-request/12
-   * Code originally introduced in https://src.fedoraproject.org/rpms/glibc/c/34927af202deb7d97dbb211a3cb13b1c53b496d3?branch=master
+   * Code originally introduced in
+   * https://src.fedoraproject.org/rpms/glibc/c/34927af202deb7d97dbb211a3cb13b1c53b496d3?branch=master
    * Most of that script is about working around bugs from a traditional RPM in-place update,
    * but rpm-ostree always starts from a clean filesystem checkout.  We just need step (4)
    * which is updating the iconv cache.
    */
-  { "glibc.post",
-    "/usr/bin/bash",
-    glibc_post_script
-  },
-  /* Code introduced in https://src.fedoraproject.org/rpms/glibc/c/ca0613665ce6e1b4e92dadd3660ad39cf3dc5f3e?branch=main */
-  { "glibc-gconv-extra.post",
-    "/usr/bin/bash",
-    glibc_post_script
-  },
+  { "glibc.post", "/usr/bin/bash", glibc_post_script },
+  /* Code introduced in
+     https://src.fedoraproject.org/rpms/glibc/c/ca0613665ce6e1b4e92dadd3660ad39cf3dc5f3e?branch=main
+   */
+  { "glibc-gconv-extra.post", "/usr/bin/bash", glibc_post_script },
   /* See https://bugzilla.redhat.com/show_bug.cgi?id=1847454.
    * Code originally introduced in:
    * https://src.fedoraproject.org/rpms/crypto-policies/c/9b9c9f7378c3fd375b9a08d5283c530a51a5de34?branch=master
    * Keying off the installed machines FIPS mode for the installroot doesn't make sense, so
    * just revert back to baking in the DEFAULT config.
    */
-  { "crypto-policies.post",
-    "/usr/bin/bash",
+  { "crypto-policies.post", "/usr/bin/bash",
     "cp " DATADIR "/crypto-policies/default-config " SYSCONFDIR "/crypto-policies/config\n"
     "echo DEFAULT > " SYSCONFDIR "/crypto-policies/state/current\n"
     "for f in " DATADIR "/crypto-policies/DEFAULT/*; do\n"
     "  ln -sf $f " SYSCONFDIR "/crypto-policies/back-ends/$(basename $f .txt).config\n"
-    "done"
-  },
-  // Replicating https://src.fedoraproject.org/rpms/authselect/blob/e597fee6295c4334214b306acbbf8dabff67c4da/f/authselect.spec#_284
-  { "authselect-libs.prein",
-    "/usr/bin/bash",
-    "touch /var/lib/rpm-state/authselect.force"
-  },
+    "done" },
+  // Replicating
+  // https://src.fedoraproject.org/rpms/authselect/blob/e597fee6295c4334214b306acbbf8dabff67c4da/f/authselect.spec#_284
+  { "authselect-libs.prein", "/usr/bin/bash", "touch /var/lib/rpm-state/authselect.force" },
   /* Just for the tests */
-  { "rpmostree-lua-override-test.post",
-    "/usr/bin/sh",
+  { "rpmostree-lua-override-test.post", "/usr/bin/sh",
     "set -euo pipefail\n"
-    "echo %{_install_langs} >/usr/share/rpmostree-lua-override-test\n"
-  },
-  { "rpmostree-lua-override-test-expand.post",
-    "/usr/bin/sh",
+    "echo %{_install_langs} >/usr/share/rpmostree-lua-override-test\n" },
+  { "rpmostree-lua-override-test-expand.post", "/usr/bin/sh",
     "set -euo pipefail\n"
-    "echo %{_install_langs} >/usr/share/rpmostree-lua-override-test-expand\n"
-  }
+    "echo %{_install_langs} >/usr/share/rpmostree-lua-override-test-expand\n" }
 };
 
-typedef struct {
+typedef struct
+{
   const char *pkgname_script;
   const char *release_suffix;
   const char *interp;
@@ -241,10 +215,8 @@ static const RpmOstreeScriptReplacement script_replacements[] = {
 };
 
 static gboolean
-fail_if_interp_is_lua (const char *interp,
-                       const char *pkg_name,
-                       const char *script_desc,
-                       GError    **error)
+fail_if_interp_is_lua (const char *interp, const char *pkg_name, const char *script_desc,
+                       GError **error)
 {
   if (g_strcmp0 (interp, lua_builtin) == 0)
     return glnx_throw (error, "Package '%s' has (currently) unsupported %s script in '%s'",
@@ -254,10 +226,8 @@ fail_if_interp_is_lua (const char *interp,
 }
 
 gboolean
-rpmostree_script_txn_validate (DnfPackage    *package,
-                               Header         hdr,
-                               GCancellable  *cancellable,
-                               GError       **error)
+rpmostree_script_txn_validate (DnfPackage *package, Header hdr, GCancellable *cancellable,
+                               GError **error)
 {
   for (guint i = 0; i < G_N_ELEMENTS (unsupported_scripts); i++)
     {
@@ -270,7 +240,9 @@ rpmostree_script_txn_validate (DnfPackage    *package,
 
       if (!rpmostreecxx::script_is_ignored (dnf_package_get_name (package), desc))
         {
-          return glnx_throw (error, "Package '%s' has (currently) unsupported script of type '%s'; see https://github.com/coreos/rpm-ostree/issues/749",
+          return glnx_throw (error,
+                             "Package '%s' has (currently) unsupported script of type '%s'; see "
+                             "https://github.com/coreos/rpm-ostree/issues/749",
                              dnf_package_get_name (package), desc);
         }
     }
@@ -282,19 +254,17 @@ rpmostree_script_txn_validate (DnfPackage    *package,
  * the script identifier (e.g. foo.post: bla bla bla).
  */
 static gboolean
-dump_buffered_output (const char *prefix,
-                      GLnxTmpfile *tmpf,
-                      GError     **error)
+dump_buffered_output (const char *prefix, GLnxTmpfile *tmpf, GError **error)
 {
   /* The tmpf won't be initialized in the journal case */
   if (!tmpf->initialized)
     return TRUE;
   if (lseek (tmpf->fd, 0, SEEK_SET) < 0)
     return glnx_throw_errno_prefix (error, "lseek");
-  g_autoptr(FILE) buf = fdopen (tmpf->fd, "r");
+  g_autoptr (FILE) buf = fdopen (tmpf->fd, "r");
   if (!buf)
     return glnx_throw_errno_prefix (error, "fdopen");
-  tmpf->fd = -1;  /* Ownership of fd was transferred */
+  tmpf->fd = -1; /* Ownership of fd was transferred */
 
   while (TRUE)
     {
@@ -310,7 +280,7 @@ dump_buffered_output (const char *prefix,
             break;
         }
       printf ("%s: %s", prefix, line);
-      if (bytes_read > 0 && line[bytes_read-1] != '\n')
+      if (bytes_read > 0 && line[bytes_read - 1] != '\n')
         fputc ('\n', stdout);
     }
 
@@ -321,10 +291,9 @@ dump_buffered_output (const char *prefix,
  * any errors there and print.
  */
 static void
-dump_buffered_output_noerr (const char *prefix,
-                            GLnxTmpfile *tmpf)
+dump_buffered_output_noerr (const char *prefix, GLnxTmpfile *tmpf)
 {
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   if (!dump_buffered_output (prefix, tmpf, &local_error))
     g_printerr ("While writing output: %s\n", local_error->message);
 }
@@ -333,19 +302,14 @@ dump_buffered_output_noerr (const char *prefix,
  * synchronously.
  */
 gboolean
-rpmostree_run_script_in_bwrap_container (int rootfs_fd,
-                               GLnxTmpDir *var_lib_rpm_statedir,
-                               gboolean    enable_fuse,
-                               const char *name,
-                               const char *scriptdesc,
-                               const char *interp,
-                               const char *script,
-                               const char *script_arg,
-                               int         provided_stdin_fd,
-                               GCancellable  *cancellable,
-                               GError       **error)
+rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_statedir,
+                                         gboolean enable_fuse, const char *name,
+                                         const char *scriptdesc, const char *interp,
+                                         const char *script, const char *script_arg,
+                                         int provided_stdin_fd, GCancellable *cancellable,
+                                         GError **error)
 {
-  const char *pkg_script = scriptdesc ? glnx_strjoina (name, ".", scriptdesc+1) : name;
+  const char *pkg_script = scriptdesc ? glnx_strjoina (name, ".", scriptdesc + 1) : name;
 
   // A dance just to pass a well-known fd for /dev/null to bwrap as fd 3
   // so that we can use it for --ro-bind-data.
@@ -362,28 +326,33 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
    *
    * See above for why we special case glibc.
    */
-  gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0 ||
-    strcmp (pkg_script, "glibc-common.post") == 0;
-  rpmostreecxx::BubblewrapMutability mutability =
-    (is_glibc_locales || !enable_fuse) ? rpmostreecxx::BubblewrapMutability::MutateFreely : rpmostreecxx::BubblewrapMutability::RoFiles;
-  auto bwrap = CXX_TRY_VAL(bubblewrap_new_with_mutability (rootfs_fd, mutability), error);
+  gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0
+                              || strcmp (pkg_script, "glibc-common.post") == 0;
+  rpmostreecxx::BubblewrapMutability mutability
+      = (is_glibc_locales || !enable_fuse) ? rpmostreecxx::BubblewrapMutability::MutateFreely
+                                           : rpmostreecxx::BubblewrapMutability::RoFiles;
+  auto bwrap = CXX_TRY_VAL (bubblewrap_new_with_mutability (rootfs_fd, mutability), error);
   /* Scripts can see a /var with compat links like alternatives */
-  try {
-    bwrap->setup_compat_var();
-  } catch (std::exception&e) {
-    return glnx_throw (error, "%s", e.what());
-  }
+  try
+    {
+      bwrap->setup_compat_var ();
+    }
+  catch (std::exception &e)
+    {
+      return glnx_throw (error, "%s", e.what ());
+    }
 
   struct stat stbuf;
-  if (glnx_fstatat (rootfs_fd, "usr/lib/opt", &stbuf, AT_SYMLINK_NOFOLLOW, NULL) && S_ISDIR(stbuf.st_mode))
+  if (glnx_fstatat (rootfs_fd, "usr/lib/opt", &stbuf, AT_SYMLINK_NOFOLLOW, NULL)
+      && S_ISDIR (stbuf.st_mode))
     {
-      bwrap->append_bwrap_arg("--symlink");
-      bwrap->append_bwrap_arg("usr/lib/opt");
-      bwrap->append_bwrap_arg("/opt");
+      bwrap->append_bwrap_arg ("--symlink");
+      bwrap->append_bwrap_arg ("usr/lib/opt");
+      bwrap->append_bwrap_arg ("/opt");
     }
 
   /* Don't let scripts see the base rpm database by default */
-  bwrap->bind_read("usr/share/empty", "usr/share/rpm");
+  bwrap->bind_read ("usr/share/empty", "usr/share/rpm");
 
   /* Also a tmpfs for /run.
    * Add ostree-booted API; some scriptlets may work differently on OSTree systems; e.g.
@@ -391,16 +360,16 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
    * adding stuff there anyway. */
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "run", 0755, cancellable, error))
     return FALSE;
-  bwrap->append_bwrap_arg("--tmpfs");
-  bwrap->append_bwrap_arg("/run");
+  bwrap->append_bwrap_arg ("--tmpfs");
+  bwrap->append_bwrap_arg ("/run");
 
-  bwrap->take_fd(glnx_steal_fd (&devnull_fd), devnull_target_fd);
-  bwrap->append_bwrap_arg("--ro-bind-data");
-  bwrap->append_bwrap_arg(bwrap_devnull_fd);
-  bwrap->append_bwrap_arg("/run/ostree-booted");
+  bwrap->take_fd (glnx_steal_fd (&devnull_fd), devnull_target_fd);
+  bwrap->append_bwrap_arg ("--ro-bind-data");
+  bwrap->append_bwrap_arg (bwrap_devnull_fd);
+  bwrap->append_bwrap_arg ("/run/ostree-booted");
 
   if (var_lib_rpm_statedir)
-    bwrap->bind_readwrite(var_lib_rpm_statedir->path, "/var/lib/rpm-state");
+    bwrap->bind_readwrite (var_lib_rpm_statedir->path, "/var/lib/rpm-state");
 
   gboolean debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
 
@@ -408,7 +377,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
    * "systemctl,verbs: Introduce SYSTEMD_OFFLINE environment variable"
    * https://github.com/systemd/systemd/commit/f38951a62837a00a0b1ff42d007e9396b347742d
    */
-  bwrap->setenv("SYSTEMD_OFFLINE", "1");
+  bwrap->setenv ("SYSTEMD_OFFLINE", "1");
 
   /* FDs that need to be held open until we exec; they're
    * owned by the GSubprocessLauncher instance.
@@ -423,20 +392,22 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
       stdin_fd = fcntl (provided_stdin_fd, F_DUPFD_CLOEXEC, 3);
       if (stdin_fd == -1)
         return glnx_throw_errno_prefix (error, "fcntl");
-      bwrap->take_stdin_fd(stdin_fd);
+      bwrap->take_stdin_fd (stdin_fd);
     }
 
-  g_auto(GLnxTmpfile) buffered_output = { 0, };
+  g_auto (GLnxTmpfile) buffered_output = {
+    0,
+  };
   const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
   if (debugging_script || stdin_fd == STDIN_FILENO)
     {
       bwrap->append_child_arg ("/usr/bin/bash");
-      bwrap->set_inherit_stdin();
+      bwrap->set_inherit_stdin ();
     }
   else
     {
-      rust::Slice<const uint8_t> scriptslice{(guint8*)script, strlen (script)};
-      glnx_fd_close int script_memfd = CXX_TRY_VAL(sealed_memfd (pkg_script, scriptslice), error);
+      rust::Slice<const uint8_t> scriptslice{ (guint8 *)script, strlen (script) };
+      glnx_fd_close int script_memfd = CXX_TRY_VAL (sealed_memfd (pkg_script, scriptslice), error);
 
       /* Only try to log to the journal if we're already set up that way (normally
        * rpm-ostreed for host system management). Otherwise we might be in a Docker
@@ -444,17 +415,17 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
        * via `ex container`, and in these cases we want to output to stdout, which
        * is where other output will go.
        */
-      if (rpmostreecxx::running_in_systemd())
+      if (rpmostreecxx::running_in_systemd ())
         {
           stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
           if (stdout_fd < 0)
             return glnx_prefix_error (error, "While creating stdout stream fd");
-          bwrap->take_stdout_fd(stdout_fd);
+          bwrap->take_stdout_fd (stdout_fd);
 
           stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
           if (stderr_fd < 0)
             return glnx_prefix_error (error, "While creating stderr stream fd");
-          bwrap->take_stderr_fd(stderr_fd);
+          bwrap->take_stderr_fd (stderr_fd);
         }
       else
         {
@@ -464,31 +435,34 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
           buffered_output_fd_child = fcntl (buffered_output.fd, F_DUPFD_CLOEXEC, 3);
           if (buffered_output_fd_child < 0)
             return glnx_throw_errno_prefix (error, "fcntl");
-          bwrap->take_stdout_and_stderr_fd(buffered_output_fd_child);
+          bwrap->take_stdout_and_stderr_fd (buffered_output_fd_child);
         }
 
       const int script_child_fd = 5;
-      bwrap->take_fd(glnx_steal_fd (&script_memfd), script_child_fd);
+      bwrap->take_fd (glnx_steal_fd (&script_memfd), script_child_fd);
       g_autofree char *procpath = g_strdup_printf ("/proc/self/fd/%d", script_child_fd);
-      bwrap->append_child_arg(interp);
-      bwrap->append_child_arg(procpath);
+      bwrap->append_child_arg (interp);
+      bwrap->append_child_arg (procpath);
       if (script_arg != nullptr)
-        bwrap->append_child_arg(script_arg);
+        bwrap->append_child_arg (script_arg);
     }
 
-  try {
-    g_assert(cancellable);
-    bwrap->run(*cancellable);
-  } catch (std::exception&e) {
-      dump_buffered_output_noerr(pkg_script, &buffered_output);
-      auto msg = e.what();
+  try
+    {
+      g_assert (cancellable);
+      bwrap->run (*cancellable);
+    }
+  catch (std::exception &e)
+    {
+      dump_buffered_output_noerr (pkg_script, &buffered_output);
+      auto msg = e.what ();
       /* If errors go to the journal, help the user/admin find them there */
-      if (rpmostreecxx::running_in_systemd())
+      if (rpmostreecxx::running_in_systemd ())
         return glnx_throw (error, "%s; run `journalctl -t '%s'` for more information", msg, id);
       else
         return glnx_throw (error, "%s", msg);
-  }
-  dump_buffered_output_noerr(pkg_script, &buffered_output);
+    }
+  dump_buffered_output_noerr (pkg_script, &buffered_output);
 
   return TRUE;
 }
@@ -498,19 +472,14 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd,
  * level bwrap execution.
  */
 static gboolean
-impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
-                     DnfPackage    *pkg,
-                     Header         hdr,
-                     int            rootfs_fd,
-                     GLnxTmpDir    *var_lib_rpm_statedir,
-                     gboolean       enable_fuse,
-                     GCancellable  *cancellable,
-                     GError       **error)
+impl_run_rpm_script (const KnownRpmScriptKind *rpmscript, DnfPackage *pkg, Header hdr,
+                     int rootfs_fd, GLnxTmpDir *var_lib_rpm_statedir, gboolean enable_fuse,
+                     GCancellable *cancellable, GError **error)
 {
   struct rpmtd_s td;
   g_autofree char **args = NULL;
-  if (headerGet (hdr, rpmscript->progtag, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
-    args = static_cast<char**>(td.data);
+  if (headerGet (hdr, rpmscript->progtag, &td, (HEADERGET_ALLOC | HEADERGET_ARGV)))
+    args = static_cast<char **> (td.data);
 
   const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
   const char *script;
@@ -534,7 +503,8 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
       if (!found_replacement)
         {
           /* No override found, throw an error and return */
-          g_assert (!fail_if_interp_is_lua (interp, dnf_package_get_name (pkg), rpmscript->desc, error));
+          g_assert (
+              !fail_if_interp_is_lua (interp, dnf_package_get_name (pkg), rpmscript->desc, error));
           return FALSE;
         }
 
@@ -551,8 +521,8 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
           const RpmOstreeScriptReplacement *repl = &script_replacements[i];
           if (!g_str_equal (repl->pkgname_script, pkg_scriptid))
             continue;
-          if (repl->release_suffix &&
-              !g_str_has_suffix (dnf_package_get_release (pkg), repl->release_suffix))
+          if (repl->release_suffix
+              && !g_str_has_suffix (dnf_package_get_release (pkg), repl->release_suffix))
             continue;
           /* Is this completely suppressing the script?  If so, we're done */
           if (!repl->interp)
@@ -595,19 +565,18 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
 
   guint64 start_time_ms = g_get_monotonic_time () / 1000;
   if (!rpmostree_run_script_in_bwrap_container (rootfs_fd, var_lib_rpm_statedir, enable_fuse,
-                                      dnf_package_get_name (pkg),
-                                      rpmscript->desc, interp, script, script_arg,
-                                      -1, cancellable, error))
-    return glnx_prefix_error (error, "Running %s for %s", rpmscript->desc, dnf_package_get_name (pkg));
+                                                dnf_package_get_name (pkg), rpmscript->desc, interp,
+                                                script, script_arg, -1, cancellable, error))
+    return glnx_prefix_error (error, "Running %s for %s", rpmscript->desc,
+                              dnf_package_get_name (pkg));
   guint64 end_time_ms = g_get_monotonic_time () / 1000;
   guint64 elapsed_ms = end_time_ms - start_time_ms;
 
-  sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PREPOST),
-                   "MESSAGE=Executed %s for %s in %" G_GUINT64_FORMAT " ms", rpmscript->desc, dnf_package_get_name (pkg), elapsed_ms,
-                   "SCRIPT_TYPE=%s", rpmscript->desc,
-                   "PKG=%s", dnf_package_get_name (pkg),
-                   "EXEC_TIME_MS=%" G_GUINT64_FORMAT, elapsed_ms,
-                   NULL);
+  sd_journal_send (
+      "MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL (RPMOSTREE_MESSAGE_PREPOST),
+      "MESSAGE=Executed %s for %s in %" G_GUINT64_FORMAT " ms", rpmscript->desc,
+      dnf_package_get_name (pkg), elapsed_ms, "SCRIPT_TYPE=%s", rpmscript->desc, "PKG=%s",
+      dnf_package_get_name (pkg), "EXEC_TIME_MS=%" G_GUINT64_FORMAT, elapsed_ms, NULL);
 
   return TRUE;
 }
@@ -616,15 +585,9 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
  * execute it if it exists (and it's not ignored).
  */
 static gboolean
-run_script (const KnownRpmScriptKind *rpmscript,
-            DnfPackage               *pkg,
-            Header                    hdr,
-            int                       rootfs_fd,
-            GLnxTmpDir               *var_lib_rpm_statedir,
-            gboolean                  enable_fuse,
-            gboolean                 *out_did_run,
-            GCancellable             *cancellable,
-            GError                  **error)
+run_script (const KnownRpmScriptKind *rpmscript, DnfPackage *pkg, Header hdr, int rootfs_fd,
+            GLnxTmpDir *var_lib_rpm_statedir, gboolean enable_fuse, gboolean *out_did_run,
+            GCancellable *cancellable, GError **error)
 {
   rpmTagVal tagval = rpmscript->tag;
   rpmTagVal progtagval = rpmscript->progtag;
@@ -643,13 +606,12 @@ run_script (const KnownRpmScriptKind *rpmscript,
     return TRUE; /* Note early return */
 
   *out_did_run = TRUE;
-  return impl_run_rpm_script (rpmscript, pkg, hdr, rootfs_fd, var_lib_rpm_statedir,
-                              enable_fuse, cancellable, error);
+  return impl_run_rpm_script (rpmscript, pkg, hdr, rootfs_fd, var_lib_rpm_statedir, enable_fuse,
+                              cancellable, error);
 }
 
 static gboolean
-write_filename (FILE *f, GString *prefix,
-                GError **error)
+write_filename (FILE *f, GString *prefix, GError **error)
 {
   if (fwrite_unlocked (prefix->str, 1, prefix->len, f) != prefix->len)
     return glnx_throw_errno_prefix (error, "fwrite");
@@ -662,12 +624,8 @@ write_filename (FILE *f, GString *prefix,
  * writes the filenames to a tmpfile.
  */
 static gboolean
-write_subdir (int dfd, const char *path,
-              GString *prefix,
-              FILE *f,
-              guint *inout_n_matched,
-              GCancellable *cancellable,
-              GError **error)
+write_subdir (int dfd, const char *path, GString *prefix, FILE *f, guint *inout_n_matched,
+              GCancellable *cancellable, GError **error)
 {
   /* This is an inlined copy of ot_dfd_iter_init_allow_noent()...if more users
    * appear we should probably push to libglnx.
@@ -681,7 +639,9 @@ write_subdir (int dfd, const char *path,
       /* Not early return */
       return TRUE;
     }
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  g_auto (GLnxDirFdIterator) dfd_iter = {
+    0,
+  };
   if (!glnx_dirfd_iterator_init_take_fd (&target_dfd, &dfd_iter, error))
     return FALSE;
 
@@ -699,9 +659,8 @@ write_subdir (int dfd, const char *path,
       g_string_append (prefix, dent->d_name);
       if (dent->d_type == DT_DIR)
         {
-          if (!write_subdir (dfd_iter.fd, dent->d_name, prefix, f,
-                             inout_n_matched,
-                             cancellable, error))
+          if (!write_subdir (dfd_iter.fd, dent->d_name, prefix, f, inout_n_matched, cancellable,
+                             error))
             return FALSE;
         }
       else
@@ -721,11 +680,8 @@ write_subdir (int dfd, const char *path,
  * for %transfiletriggerin.
  */
 static gboolean
-find_and_write_matching_files (int rootfs_fd, const char *pattern,
-                               FILE *f,
-                               guint *out_n_matches,
-                               GCancellable *cancellable,
-                               GError **error)
+find_and_write_matching_files (int rootfs_fd, const char *pattern, FILE *f, guint *out_n_matches,
+                               GCancellable *cancellable, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Finding matches", error);
 
@@ -733,20 +689,18 @@ find_and_write_matching_files (int rootfs_fd, const char *pattern,
    * touching /usr/local.  While I'm here, proactively
    * require /usr as a prefix too.
    */
-  if (g_str_has_prefix (pattern, "usr/local") ||
-      !g_str_has_prefix (pattern, "usr/"))
+  if (g_str_has_prefix (pattern, "usr/local") || !g_str_has_prefix (pattern, "usr/"))
     return TRUE;
 
   /* The printed buffer does have a leading / */
-  g_autoptr(GString) buf = g_string_new ("/");
+  g_autoptr (GString) buf = g_string_new ("/");
   g_string_append (buf, pattern);
   /* Strip trailing '/' in the mutable copy we have here */
-  while (buf->len > 0 && buf->str[buf->len-1] == '/')
+  while (buf->len > 0 && buf->str[buf->len - 1] == '/')
     g_string_truncate (buf, buf->len - 1);
 
   guint n_pattern_matches = 0;
-  if (!write_subdir (rootfs_fd, pattern, buf, f, &n_pattern_matches,
-                     cancellable, error))
+  if (!write_subdir (rootfs_fd, pattern, buf, f, &n_pattern_matches, cancellable, error))
     return glnx_prefix_error (error, "pattern '%s'", pattern);
   *out_n_matches += n_pattern_matches;
 
@@ -757,15 +711,9 @@ find_and_write_matching_files (int rootfs_fd, const char *pattern,
  * does not currently kill a running script subprocess.
  */
 gboolean
-rpmostree_script_run_sync (DnfPackage    *pkg,
-                           Header         hdr,
-                           RpmOstreeScriptKind kind,
-                           int            rootfs_fd,
-                           GLnxTmpDir    *var_lib_rpm_statedir,
-                           gboolean       enable_fuse,
-                           guint         *out_n_run,
-                           GCancellable  *cancellable,
-                           GError       **error)
+rpmostree_script_run_sync (DnfPackage *pkg, Header hdr, RpmOstreeScriptKind kind, int rootfs_fd,
+                           GLnxTmpDir *var_lib_rpm_statedir, gboolean enable_fuse, guint *out_n_run,
+                           GCancellable *cancellable, GError **error)
 {
   const KnownRpmScriptKind *scriptkind;
   switch (kind)
@@ -784,9 +732,8 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
     }
 
   gboolean did_run = FALSE;
-  if (!run_script (scriptkind, pkg, hdr, rootfs_fd,
-                   var_lib_rpm_statedir, enable_fuse,
-                   &did_run, cancellable, error))
+  if (!run_script (scriptkind, pkg, hdr, rootfs_fd, var_lib_rpm_statedir, enable_fuse, &did_run,
+                   cancellable, error))
     return FALSE;
 
   if (did_run)
@@ -798,18 +745,15 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
  * info at <http://rpm.org/user_doc/file_triggers.html>.
  */
 gboolean
-rpmostree_transfiletriggers_run_sync (Header        hdr,
-                                      int           rootfs_fd,
-                                      gboolean      enable_fuse,
-                                      guint        *out_n_run,
-                                      GCancellable *cancellable,
-                                      GError      **error)
+rpmostree_transfiletriggers_run_sync (Header hdr, int rootfs_fd, gboolean enable_fuse,
+                                      guint *out_n_run, GCancellable *cancellable, GError **error)
 {
   const char *pkg_name = headerGetString (hdr, RPMTAG_NAME);
   g_assert (pkg_name);
   const char *pkg_scriptid = glnx_strjoina (pkg_name, ".transfiletriggerin");
 
-  g_autofree char *error_prefix = g_strconcat ("Executing %transfiletriggerin for ", pkg_name, NULL);
+  g_autofree char *error_prefix
+      = g_strconcat ("Executing %transfiletriggerin for ", pkg_name, NULL);
   GLNX_AUTO_PREFIX_ERROR (error_prefix, error);
 
   if (rpmostreecxx::script_is_ignored (pkg_name, "%transfiletriggerin"))
@@ -824,10 +768,9 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
   headerGet (hdr, RPMTAG_TRANSFILETRIGGERFLAGS, &tflags, hgflags);
   headerGet (hdr, RPMTAG_TRANSFILETRIGGERSCRIPTFLAGS, &tscriptflags, hgflags);
   headerGet (hdr, RPMTAG_TRANSFILETRIGGERINDEX, &tindex, hgflags);
-  g_debug ("pkg %s transtrigger count %u/%u/%u/%u/%u/%u\n",
-           pkg_name, rpmtdCount (&tname), rpmtdCount (&tscripts),
-           rpmtdCount (&tprogs), rpmtdCount (&tflags), rpmtdCount (&tscriptflags),
-           rpmtdCount (&tindex));
+  g_debug ("pkg %s transtrigger count %u/%u/%u/%u/%u/%u\n", pkg_name, rpmtdCount (&tname),
+           rpmtdCount (&tscripts), rpmtdCount (&tprogs), rpmtdCount (&tflags),
+           rpmtdCount (&tscriptflags), rpmtdCount (&tindex));
 
   if (rpmtdCount (&tscripts) == 0)
     return TRUE;
@@ -889,7 +832,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
         script = script_owned = rpmExpand (script, NULL);
       (void)script_owned; /* Pacify static analysis */
 
-      g_autoptr(GPtrArray) patterns = g_ptr_array_new_with_free_func (g_free);
+      g_autoptr (GPtrArray) patterns = g_ptr_array_new_with_free_func (g_free);
 
       /* Iterate over the trigger "names" which are file patterns */
       for (guint j = 0; j < n_names; j++)
@@ -932,20 +875,22 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
        * shouldn't be megabytes of data here, and the parallelism loss in
        * practice I think is going to be small.
        */
-      g_auto(GLnxTmpfile) matching_files_tmpf = { 0, };
+      g_auto (GLnxTmpfile) matching_files_tmpf = {
+        0,
+      };
       if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &matching_files_tmpf, error))
         return FALSE;
-      g_autoptr(FILE) tmpf_file = fdopen (matching_files_tmpf.fd, "w");
+      g_autoptr (FILE) tmpf_file = fdopen (matching_files_tmpf.fd, "w");
       if (!tmpf_file)
         return glnx_throw_errno_prefix (error, "fdopen");
       matching_files_tmpf.fd = -1; /* Transferred */
 
-      g_autoptr(GString) patterns_joined = g_string_new ("");
+      g_autoptr (GString) patterns_joined = g_string_new ("");
       guint n_total_matched = 0;
       for (guint j = 0; j < patterns->len; j++)
         {
           guint n_matched = 0;
-          auto pattern = static_cast<const char *>(patterns->pdata[j]);
+          auto pattern = static_cast<const char *> (patterns->pdata[j]);
           if (j > 0)
             g_string_append (patterns_joined, ", ");
           g_string_append (patterns_joined, pattern);
@@ -955,7 +900,8 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
           if (n_matched == 0)
             {
               /* This is probably a bug...let's log it */
-              sd_journal_print (LOG_INFO, "No files matched %%transfiletriggerin(%s) for %s", pattern, pkg_name);
+              sd_journal_print (LOG_INFO, "No files matched %%transfiletriggerin(%s) for %s",
+                                pattern, pkg_name);
             }
           n_total_matched += n_matched;
         }
@@ -973,23 +919,23 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
       /* Run it, and log the result */
       guint64 start_time_ms = g_get_monotonic_time () / 1000;
       if (!rpmostree_run_script_in_bwrap_container (rootfs_fd, NULL, enable_fuse, pkg_name,
-                                          "%transfiletriggerin", interp, script, NULL,
-                                          fileno (tmpf_file), cancellable, error))
+                                                    "%transfiletriggerin", interp, script, NULL,
+                                                    fileno (tmpf_file), cancellable, error))
         return FALSE;
       guint64 end_time_ms = g_get_monotonic_time () / 1000;
       guint64 elapsed_ms = end_time_ms - start_time_ms;
 
       (*out_n_run)++;
 
-      sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_FILETRIGGER),
-                       "MESSAGE=Executed %%transfiletriggerin(%s) for %s in %" G_GUINT64_FORMAT " ms; %u matched files",
+      sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR,
+                       SD_ID128_FORMAT_VAL (RPMOSTREE_MESSAGE_FILETRIGGER),
+                       "MESSAGE=Executed %%transfiletriggerin(%s) for %s in %" G_GUINT64_FORMAT
+                       " ms; %u matched files",
                        pkg_name, patterns_joined->str, elapsed_ms, n_total_matched,
                        "SCRIPT_TYPE=%%transfiletriggerin"
-                       "PKG=%s", pkg_name,
-                       "PATTERNS=%s", patterns_joined->str,
-                       "TRIGGER_N_MATCHES=%u", n_total_matched,
-                       "EXEC_TIME_MS=%" G_GUINT64_FORMAT, elapsed_ms,
-                       NULL);
+                       "PKG=%s",
+                       pkg_name, "PATTERNS=%s", patterns_joined->str, "TRIGGER_N_MATCHES=%u",
+                       n_total_matched, "EXEC_TIME_MS=%" G_GUINT64_FORMAT, elapsed_ms, NULL);
     }
   return TRUE;
 }
@@ -1004,37 +950,38 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
  * volatile mode, but that could just as easily be a separate tool.
  */
 gboolean
-rpmostree_deployment_sanitycheck_true (int           rootfs_fd,
-                                       GCancellable *cancellable,
-                                       GError      **error)
+rpmostree_deployment_sanitycheck_true (int rootfs_fd, GCancellable *cancellable, GError **error)
 {
   /* Used by the test suite */
   if (getenv ("RPMOSTREE_SKIP_SANITYCHECK"))
     return TRUE;
 
-  g_assert(cancellable);
-  auto bwrap = CXX_TRY_VAL(bubblewrap_new_with_mutability(rootfs_fd, rpmostreecxx::BubblewrapMutability::Immutable), error);
-  bwrap->append_child_arg("/usr/bin/true");
-  try {
-    bwrap->run(*cancellable);
-  } catch (std::exception& e) {
-    util::rethrow_prefixed(e, "Sanity-checking final rootfs");
-  }
+  g_assert (cancellable);
+  auto bwrap = CXX_TRY_VAL (
+      bubblewrap_new_with_mutability (rootfs_fd, rpmostreecxx::BubblewrapMutability::Immutable),
+      error);
+  bwrap->append_child_arg ("/usr/bin/true");
+  try
+    {
+      bwrap->run (*cancellable);
+    }
+  catch (std::exception &e)
+    {
+      util::rethrow_prefixed (e, "Sanity-checking final rootfs");
+    }
   sd_journal_print (LOG_INFO, "sanitycheck(/usr/bin/true) successful");
   return TRUE;
 }
 
 static gboolean
-verify_packages_in_sack (DnfSack      *sack,
-                         GPtrArray    *pkgs,
-                         GError      **error)
+verify_packages_in_sack (DnfSack *sack, GPtrArray *pkgs, GError **error)
 {
   if (!pkgs || pkgs->len == 0)
     return TRUE;
 
   for (guint i = 0; i < pkgs->len; i++)
     {
-      auto pkg = static_cast<DnfPackage *>(pkgs->pdata[i]);
+      auto pkg = static_cast<DnfPackage *> (pkgs->pdata[i]);
       const char *nevra = dnf_package_get_nevra (pkg);
       if (!rpmostree_sack_has_subject (sack, nevra))
         return glnx_throw (error, "Didn't find package '%s'", nevra);
@@ -1050,23 +997,21 @@ verify_packages_in_sack (DnfSack      *sack,
  * after scripts are executed to give a nicer error if the scripts did `rm -rf`.
  */
 gboolean
-rpmostree_deployment_sanitycheck_rpmdb (int           rootfs_fd,
+rpmostree_deployment_sanitycheck_rpmdb (int rootfs_fd,
                                         /* just allow two args to avoid allocating */
-                                        GPtrArray     *overlays,
-                                        GPtrArray     *overrides,
-                                        GCancellable *cancellable,
-                                        GError      **error)
+                                        GPtrArray *overlays, GPtrArray *overrides,
+                                        GCancellable *cancellable, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Sanity-checking final rpmdb", error);
 
-  g_autoptr(RpmOstreeRefSack) sack = rpmostree_get_refsack_for_root (rootfs_fd, ".", error);
+  g_autoptr (RpmOstreeRefSack) sack = rpmostree_get_refsack_for_root (rootfs_fd, ".", error);
   if (!sack)
     return FALSE;
 
   if ((overlays && overlays->len > 0) || (overrides && overrides->len > 0))
     {
-      if (!verify_packages_in_sack (sack->sack, overlays, error) ||
-          !verify_packages_in_sack (sack->sack, overrides, error))
+      if (!verify_packages_in_sack (sack->sack, overlays, error)
+          || !verify_packages_in_sack (sack->sack, overrides, error))
         return FALSE;
     }
   else
@@ -1074,7 +1019,7 @@ rpmostree_deployment_sanitycheck_rpmdb (int           rootfs_fd,
       /* OK, let's just sanity check that there are *some* packages in the rpmdb */
       hy_autoquery HyQuery query = hy_query_create (sack->sack);
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-      g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+      g_autoptr (GPtrArray) pkgs = hy_query_run (query);
       if (pkgs->len == 0)
         return glnx_throw (error, "No packages found in rpmdb!");
     }

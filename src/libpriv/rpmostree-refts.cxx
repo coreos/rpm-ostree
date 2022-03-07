@@ -20,9 +20,9 @@
 
 #include "config.h"
 
-#include <string.h>
 #include "rpmostree-refts.h"
 #include "rpmostree-rpm-util.h"
+#include <string.h>
 
 /*
  * A wrapper for an `rpmts` that supports:

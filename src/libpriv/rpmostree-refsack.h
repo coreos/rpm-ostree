@@ -21,27 +21,25 @@
 
 #pragma once
 
+#include "libglnx.h"
 #include <gio/gio.h>
 #include <libdnf/libdnf.h>
-#include "libglnx.h"
 
 G_BEGIN_DECLS
 
-typedef struct {
-  gint refcount;  /* atomic */
+typedef struct
+{
+  gint refcount; /* atomic */
   DnfSack *sack;
   GLnxTmpDir tmpdir;
 } RpmOstreeRefSack;
 
-RpmOstreeRefSack *
-rpmostree_refsack_new (DnfSack *sack, GLnxTmpDir *tmpdir);
+RpmOstreeRefSack *rpmostree_refsack_new (DnfSack *sack, GLnxTmpDir *tmpdir);
 
-RpmOstreeRefSack *
-rpmostree_refsack_ref (RpmOstreeRefSack *rsack);
+RpmOstreeRefSack *rpmostree_refsack_ref (RpmOstreeRefSack *rsack);
 
-void
-rpmostree_refsack_unref (RpmOstreeRefSack *rsack);
+void rpmostree_refsack_unref (RpmOstreeRefSack *rsack);
 
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefSack, rpmostree_refsack_unref);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeRefSack, rpmostree_refsack_unref);
 
 G_END_DECLS

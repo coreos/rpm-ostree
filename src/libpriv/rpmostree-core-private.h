@@ -24,19 +24,20 @@
 
 #include "libglnx.h"
 #include "rpmostree-core.h"
-#include "rpmostree-output.h"
 #include "rpmostree-cxxrs.h"
+#include "rpmostree-output.h"
 
 G_BEGIN_DECLS
 
-struct _RpmOstreeContext {
+struct _RpmOstreeContext
+{
   GObject parent;
 
   /* Whether we were created with new_system() or new_container() */
   gboolean is_system;
   /* Whether we were created with new_container() */
   gboolean is_container;
-  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_owned;
+  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile_owned;
   rpmostreecxx::Treefile *treefile_rs; /* For composes for now */
   gboolean empty;
   gboolean disable_selinux;
@@ -72,7 +73,7 @@ struct _RpmOstreeContext {
 
   GHashTable *fileoverride_pkgs; /* set of nevras */
 
-  std::optional<rust::Box<rpmostreecxx::LockfileConfig>> lockfile;
+  std::optional<rust::Box<rpmostreecxx::LockfileConfig> > lockfile;
   gboolean lockfile_strict;
 
   GLnxTmpDir tmpdir;

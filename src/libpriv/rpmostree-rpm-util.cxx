@@ -20,19 +20,19 @@
 
 #include "config.h"
 
+#include "rpmostree-core.h"
+#include "rpmostree-output.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-util.h"
-#include "rpmostree-output.h"
-#include "rpmostree-core.h"
 #include <exception>
 #include <stdexcept>
 #include <string>
 
-#include <inttypes.h>
 #include <fnmatch.h>
-#include <sys/ioctl.h>
-#include <sys/capability.h>
+#include <inttypes.h>
 #include <libglnx.h>
+#include <sys/capability.h>
+#include <sys/ioctl.h>
 
 #include <rpm/rpmts.h>
 
@@ -43,7 +43,7 @@ cleanup_rpmtdFreeData (rpmtd *tdp)
   if (td)
     rpmtdFreeData (td);
 }
-#define _cleanup_rpmtddata_ __attribute__((cleanup(cleanup_rpmtdFreeData)))
+#define _cleanup_rpmtddata_ __attribute__ ((cleanup (cleanup_rpmtdFreeData)))
 
 struct RpmRevisionData
 {
@@ -55,8 +55,8 @@ struct RpmRevisionData
 static int
 header_name_cmp (Header h1, Header h2)
 {
-  const char*    n1 = headerGetString (h1, RPMTAG_NAME);
-  const char*    n2 = headerGetString (h2, RPMTAG_NAME);
+  const char *n1 = headerGetString (h1, RPMTAG_NAME);
+  const char *n2 = headerGetString (h2, RPMTAG_NAME);
   int cmp = strcmp (n1, n2);
   return cmp;
 }
@@ -66,11 +66,11 @@ header_name_cmp (Header h1, Header h2)
 static char *
 pkg_envra_strdup (Header h1)
 {
-  const char*    name = headerGetString (h1, RPMTAG_NAME);
-  uint64_t      epoch = headerGetNumber (h1, RPMTAG_EPOCH);
-  const char* version = headerGetString (h1, RPMTAG_VERSION);
-  const char* release = headerGetString (h1, RPMTAG_RELEASE);
-  const char*    arch = headerGetString (h1, RPMTAG_ARCH);
+  const char *name = headerGetString (h1, RPMTAG_NAME);
+  uint64_t epoch = headerGetNumber (h1, RPMTAG_EPOCH);
+  const char *version = headerGetString (h1, RPMTAG_VERSION);
+  const char *release = headerGetString (h1, RPMTAG_RELEASE);
+  const char *arch = headerGetString (h1, RPMTAG_ARCH);
   char *envra = NULL;
 
   if (!epoch)
@@ -78,29 +78,22 @@ pkg_envra_strdup (Header h1)
   else
     {
       unsigned long long ullepoch = epoch;
-      envra = g_strdup_printf ("%llu:%s-%s-%s.%s", ullepoch, name,
-                               version, release, arch);
+      envra = g_strdup_printf ("%llu:%s-%s-%s.%s", ullepoch, name, version, release, arch);
     }
 
   return envra;
 }
 
 void
-rpmostree_custom_nevra (GString    *buffer,
-                        const char *name,
-                        uint64_t    epoch,
-                        const char *version,
-                        const char *release,
-                        const char *arch,
-                        RpmOstreePkgNevraFlags flags)
+rpmostree_custom_nevra (GString *buffer, const char *name, uint64_t epoch, const char *version,
+                        const char *release, const char *arch, RpmOstreePkgNevraFlags flags)
 {
   gsize original_len = buffer->len;
 
   if (flags & PKG_NEVRA_FLAGS_NAME)
     g_string_append (buffer, name);
 
-  if (flags & (PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-               PKG_NEVRA_FLAGS_VERSION_RELEASE))
+  if (flags & (PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE | PKG_NEVRA_FLAGS_VERSION_RELEASE))
     {
       if (buffer->len > original_len)
         g_string_append_c (buffer, '-');
@@ -120,12 +113,8 @@ rpmostree_custom_nevra (GString    *buffer,
 }
 
 char *
-rpmostree_custom_nevra_strdup (const char *name,
-                               uint64_t    epoch,
-                               const char *version,
-                               const char *release,
-                               const char *arch,
-                               RpmOstreePkgNevraFlags flags)
+rpmostree_custom_nevra_strdup (const char *name, uint64_t epoch, const char *version,
+                               const char *release, const char *arch, RpmOstreePkgNevraFlags flags)
 {
   GString *nevra = g_string_new ("");
   rpmostree_custom_nevra (nevra, name, epoch, version, release, arch, flags);
@@ -135,40 +124,39 @@ rpmostree_custom_nevra_strdup (const char *name,
 char *
 rpmostree_header_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags)
 {
-  return rpmostree_custom_nevra_strdup (headerGetString (h, RPMTAG_NAME),
-                                        headerGetNumber (h, RPMTAG_EPOCH),
-                                        headerGetString (h, RPMTAG_VERSION),
-                                        headerGetString (h, RPMTAG_RELEASE),
-                                        headerGetString (h, RPMTAG_ARCH), flags);
+  return rpmostree_custom_nevra_strdup (
+      headerGetString (h, RPMTAG_NAME), headerGetNumber (h, RPMTAG_EPOCH),
+      headerGetString (h, RPMTAG_VERSION), headerGetString (h, RPMTAG_RELEASE),
+      headerGetString (h, RPMTAG_ARCH), flags);
 }
 
 static char *
 pkg_nevra_strdup (Header h1)
 {
-  return rpmostree_header_custom_nevra_strdup (h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME |
-                                                   PKG_NEVRA_FLAGS_EVR |
-                                                   PKG_NEVRA_FLAGS_ARCH));
+  return rpmostree_header_custom_nevra_strdup (
+      h1,
+      (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME | PKG_NEVRA_FLAGS_EVR | PKG_NEVRA_FLAGS_ARCH));
 }
 
 static char *
 pkg_na_strdup (Header h1)
 {
-  return rpmostree_header_custom_nevra_strdup (h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME |
-                                                   PKG_NEVRA_FLAGS_ARCH));
+  return rpmostree_header_custom_nevra_strdup (
+      h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME | PKG_NEVRA_FLAGS_ARCH));
 }
 
 static char *
 pkg_nvr_strdup (Header h1)
 {
-  return rpmostree_header_custom_nevra_strdup (h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME |
-                                                   PKG_NEVRA_FLAGS_VERSION_RELEASE));
+  return rpmostree_header_custom_nevra_strdup (
+      h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME | PKG_NEVRA_FLAGS_VERSION_RELEASE));
 }
 
 static char *
 pkg_evra_strdup (Header h1)
 {
-  return rpmostree_header_custom_nevra_strdup (h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-                                                   PKG_NEVRA_FLAGS_ARCH));
+  return rpmostree_header_custom_nevra_strdup (
+      h1, (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE | PKG_NEVRA_FLAGS_ARCH));
 }
 
 static void
@@ -202,7 +190,7 @@ pat_fnmatch_prefix (const GPtrArray *patterns)
 
   for (num = 0; num < patterns->len; num++)
     {
-      auto pat = static_cast<const char *>(patterns->pdata[num]);
+      auto pat = static_cast<const char *> (patterns->pdata[num]);
       gsize prefix = 0;
 
       while (*pat)
@@ -224,27 +212,26 @@ pat_fnmatch_prefix (const GPtrArray *patterns)
           ++pat;
         }
 
-      ret = MIN(ret, prefix);
+      ret = MIN (ret, prefix);
     }
 
   return ret;
 }
 
 static gboolean
-pat_fnmatch_match (Header pkg, const char *name,
-                   gsize patprefixlen, const GPtrArray *patterns)
+pat_fnmatch_match (Header pkg, const char *name, gsize patprefixlen, const GPtrArray *patterns)
 {
   int num = 0;
-  g_autofree char *pkg_na    = NULL;
+  g_autofree char *pkg_na = NULL;
   g_autofree char *pkg_nevra = NULL;
-  g_autofree char *pkg_nvr   = NULL;
+  g_autofree char *pkg_nvr = NULL;
 
   if (!patterns)
     return TRUE;
 
   for (num = 0; num < patterns->len; num++)
     {
-      auto pattern = static_cast<const char *>(patterns->pdata[num]);
+      auto pattern = static_cast<const char *> (patterns->pdata[num]);
 
       if (patprefixlen && !CASENCMP_EQ (name, pattern, patprefixlen))
         continue;
@@ -252,15 +239,12 @@ pat_fnmatch_match (Header pkg, const char *name,
       if (!pkg_na)
         {
           pkg_nevra = pkg_nevra_strdup (pkg);
-          pkg_na    = pkg_na_strdup (pkg);
-          pkg_nvr   = pkg_nvr_strdup (pkg);
+          pkg_na = pkg_na_strdup (pkg);
+          pkg_nvr = pkg_nvr_strdup (pkg);
         }
 
-      if (CASEFNMATCH_EQ (pattern, name) ||
-          CASEFNMATCH_EQ (pattern, pkg_nevra) ||
-          CASEFNMATCH_EQ (pattern, pkg_na) ||
-          CASEFNMATCH_EQ (pattern, pkg_nvr) ||
-          FALSE)
+      if (CASEFNMATCH_EQ (pattern, name) || CASEFNMATCH_EQ (pattern, pkg_nevra)
+          || CASEFNMATCH_EQ (pattern, pkg_na) || CASEFNMATCH_EQ (pattern, pkg_nvr) || FALSE)
         return TRUE;
     }
 
@@ -270,7 +254,7 @@ pat_fnmatch_match (Header pkg, const char *name,
 static void
 header_free_p (gpointer data)
 {
-  headerFree (static_cast<Header>(data));
+  headerFree (static_cast<Header> (data));
 }
 
 static int
@@ -299,9 +283,10 @@ rpmhdrs_new (RpmOstreeRefTs *refts, const GPtrArray *patterns)
   hs = g_ptr_array_new_with_free_func (header_free_p);
   while ((h1 = rpmdbNextIterator (iter)))
     {
-      const char*    name = headerGetString (h1, RPMTAG_NAME);
+      const char *name = headerGetString (h1, RPMTAG_NAME);
 
-      if (g_str_equal (name, "gpg-pubkey")) continue; /* rpmdb abstraction leak */
+      if (g_str_equal (name, "gpg-pubkey"))
+        continue; /* rpmdb abstraction leak */
 
       if (!pat_fnmatch_match (h1, name, patprefixlen, patterns))
         continue;
@@ -309,11 +294,12 @@ rpmhdrs_new (RpmOstreeRefTs *refts, const GPtrArray *patterns)
       h1 = headerLink (h1);
       g_ptr_array_add (hs, h1);
     }
-  iter = rpmdbFreeIterator (iter); (void) iter;
+  iter = rpmdbFreeIterator (iter);
+  (void)iter;
 
   g_ptr_array_sort (hs, header_cmp_p);
 
-  ret = (struct RpmHeaders*)g_malloc0 (sizeof (struct RpmHeaders));
+  ret = (struct RpmHeaders *)g_malloc0 (sizeof (struct RpmHeaders));
 
   ret->refts = rpmostree_refts_ref (refts);
   ret->hs = hs;
@@ -337,14 +323,14 @@ rpmhdrs_free (struct RpmHeaders *hdrs)
 static struct RpmHeadersDiff *
 rpmhdrs_diff_new (void)
 {
-  auto ret = static_cast<struct RpmHeadersDiff *>(g_malloc0(sizeof (struct RpmHeadersDiff)));
+  auto ret = static_cast<struct RpmHeadersDiff *> (g_malloc0 (sizeof (struct RpmHeadersDiff)));
 
   ret->hs_add = g_ptr_array_new ();
   ret->hs_del = g_ptr_array_new ();
   ret->hs_mod_old = g_ptr_array_new ();
   ret->hs_mod_new = g_ptr_array_new ();
 
- return ret;
+  return ret;
 }
 
 static void
@@ -359,8 +345,7 @@ rpmhdrs_diff_free (struct RpmHeadersDiff *diff)
 }
 
 struct RpmHeadersDiff *
-rpmhdrs_diff (struct RpmHeaders *l1,
-              struct RpmHeaders *l2)
+rpmhdrs_diff (struct RpmHeaders *l1, struct RpmHeaders *l2)
 {
   int n1 = 0;
   int n2 = 0;
@@ -368,7 +353,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
 
   while (n1 < l1->hs->len)
     {
-      auto h1 = static_cast<Header>(l1->hs->pdata[n1]);
+      auto h1 = static_cast<Header> (l1->hs->pdata[n1]);
       if (n2 >= l2->hs->len)
         {
           g_ptr_array_add (ret->hs_del, h1);
@@ -376,7 +361,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
         }
       else
         {
-          auto h2 = static_cast<Header>(l2->hs->pdata[n2]);
+          auto h2 = static_cast<Header> (l2->hs->pdata[n2]);
           int cmp = header_name_cmp (h1, h2);
 
           if (cmp > 0)
@@ -392,7 +377,12 @@ rpmhdrs_diff (struct RpmHeaders *l1,
           else
             {
               cmp = rpmVersionCompare (h1, h2);
-              if (!cmp) { ++n1; ++n2; continue; }
+              if (!cmp)
+                {
+                  ++n1;
+                  ++n2;
+                  continue;
+                }
 
               g_ptr_array_add (ret->hs_mod_old, h1);
               ++n1;
@@ -404,7 +394,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
 
   while (n2 < l2->hs->len)
     {
-      auto h2 = static_cast<Header>(l2->hs->pdata[n2]);
+      auto h2 = static_cast<Header> (l2->hs->pdata[n2]);
 
       g_ptr_array_add (ret->hs_add, h2);
       ++n2;
@@ -420,25 +410,23 @@ rpmhdrs_list (struct RpmHeaders *l1)
 
   while (num < l1->hs->len)
     {
-      auto h1 = static_cast<Header>(l1->hs->pdata[num++]);
+      auto h1 = static_cast<Header> (l1->hs->pdata[num++]);
       g_print (" ");
       pkg_print (h1);
     }
 }
 
 char *
-rpmhdrs_rpmdbv (struct RpmHeaders *l1,
-                GCancellable   *cancellable,
-                GError        **error)
+rpmhdrs_rpmdbv (struct RpmHeaders *l1, GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GChecksum) checksum = g_checksum_new (G_CHECKSUM_SHA256);
+  g_autoptr (GChecksum) checksum = g_checksum_new (G_CHECKSUM_SHA256);
   int num = 0;
   while (num < l1->hs->len)
     {
-      auto pkg = static_cast<Header>(l1->hs->pdata[num++]);
+      auto pkg = static_cast<Header> (l1->hs->pdata[num++]);
       g_autofree char *envra = pkg_envra_strdup (pkg);
 
-      g_checksum_update (checksum, (guint8*)envra, strlen(envra));
+      g_checksum_update (checksum, (guint8 *)envra, strlen (envra));
     }
 
   return g_strdup_printf ("%u:%s", num, g_checksum_get_string (checksum));
@@ -458,8 +446,8 @@ _gptr_array_reverse (GPtrArray *data)
   while (num >= 2)
     {
       void *swap = ptr[0];
-      ptr[0] = ptr[num-1];
-      ptr[num-1] = swap;
+      ptr[0] = ptr[num - 1];
+      ptr[num - 1] = swap;
 
       num -= 2;
       ptr++;
@@ -472,10 +460,10 @@ _rpmhdrs_diff_cmp_end (const GPtrArray *hs1, const GPtrArray *hs2)
   if (!hs2->len)
     return -1;
   if (!hs1->len)
-    return  1;
+    return 1;
 
-  auto h1 = static_cast<Header>(hs1->pdata[hs1->len - 1]);
-  auto h2 = static_cast<Header>(hs2->pdata[hs2->len - 1]);
+  auto h1 = static_cast<Header> (hs1->pdata[hs1->len - 1]);
+  auto h2 = static_cast<Header> (hs2->pdata[hs2->len - 1]);
 
   return header_name_cmp (h1, h2);
 }
@@ -495,8 +483,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
       const char *next_srpm = NULL;
       for (num = 0; num < diff->hs_mod_new->len; ++num)
         {
-          auto ho = static_cast<Header>(diff->hs_mod_old->pdata[num]);
-          auto hn = static_cast<Header>(diff->hs_mod_new->pdata[num]);
+          auto ho = static_cast<Header> (diff->hs_mod_old->pdata[num]);
+          auto hn = static_cast<Header> (diff->hs_mod_new->pdata[num]);
           struct rpmtd_s ochanges_date_s;
           _cleanup_rpmtddata_ rpmtd ochanges_date = NULL;
           struct rpmtd_s ochanges_name_s;
@@ -511,7 +499,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
           _cleanup_rpmtddata_ rpmtd nchanges_text = NULL;
           int ocnum = 0;
           int ncnum = 0;
-          uint64_t    ochange_date = 0;
+          uint64_t ochange_date = 0;
           const char *ochange_name = NULL;
           const char *ochange_text = NULL;
 
@@ -539,8 +527,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
             next_srpm = NULL;
           else
             {
-              auto next_ho = static_cast<Header>(diff->hs_mod_old->pdata[num+1]);
-              next_srpm = headerGetString(next_ho, RPMTAG_SOURCERPM);
+              auto next_ho = static_cast<Header> (diff->hs_mod_old->pdata[num + 1]);
+              next_srpm = headerGetString (next_ho, RPMTAG_SOURCERPM);
             }
           if (g_strcmp0 (current_srpm, next_srpm) == 0)
             continue;
@@ -576,7 +564,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
 
           while (ncnum > 0)
             {
-              uint64_t    nchange_date = 0;
+              uint64_t nchange_date = 0;
               const char *nchange_name = NULL;
               const char *nchange_text = NULL;
               GDateTime *dt = NULL;
@@ -594,9 +582,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
                * then we are done. */
               if (ochange_date > nchange_date)
                 break;
-              if ((ochange_date == nchange_date) &&
-                  g_str_equal (ochange_name, nchange_name) &&
-                  g_str_equal (ochange_text, nchange_text))
+              if ((ochange_date == nchange_date) && g_str_equal (ochange_name, nchange_name)
+                  && g_str_equal (ochange_text, nchange_text))
                 break;
 
 #define CHANGELOG_INDENTATION "    "
@@ -604,7 +591,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
               g_autofree char *indented_nchange_text = NULL;
               if (strchr (nchange_text, '\n'))
                 {
-                  g_auto(GStrv) lines = g_strsplit (nchange_text, "\n", 0);
+                  g_auto (GStrv) lines = g_strsplit (nchange_text, "\n", 0);
                   indented_nchange_text = g_strjoinv ("\n" CHANGELOG_INDENTATION, lines);
                 }
 
@@ -613,9 +600,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
               date_time_str = g_date_time_format (dt, "%a %b %d %Y");
               g_date_time_unref (dt);
 
-              g_print (CHANGELOG_INDENTATION "* %s %s\n"
-                       CHANGELOG_INDENTATION "%s\n\n", date_time_str, nchange_name,
-                       indented_nchange_text ?: nchange_text);
+              g_print (CHANGELOG_INDENTATION "* %s %s\n" CHANGELOG_INDENTATION "%s\n\n",
+                       date_time_str, nchange_name, indented_nchange_text ?: nchange_text);
 
 #undef CHANGELOG_INDENTATION
 
@@ -626,8 +612,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
       done = FALSE;
       for (num = 0; num < diff->hs_mod_new->len; ++num)
         {
-          auto ho = static_cast<Header>(diff->hs_mod_old->pdata[num]);
-          auto hn = static_cast<Header>(diff->hs_mod_new->pdata[num]);
+          auto ho = static_cast<Header> (diff->hs_mod_old->pdata[num]);
+          auto hn = static_cast<Header> (diff->hs_mod_new->pdata[num]);
 
           g_assert (!header_name_cmp (ho, hn));
           if (rpmVersionCompare (ho, hn) < 0)
@@ -650,7 +636,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
 
       for (num = 0; num < diff->hs_del->len; ++num)
         {
-          auto hd = static_cast<Header>(diff->hs_del->pdata[num]);
+          auto hd = static_cast<Header> (diff->hs_del->pdata[num]);
 
           g_print ("  ");
           pkg_print (hd);
@@ -663,7 +649,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
 
       for (num = 0; num < diff->hs_add->len; ++num)
         {
-          auto ha = static_cast<Header>(diff->hs_add->pdata[num]);
+          auto ha = static_cast<Header> (diff->hs_add->pdata[num]);
 
           g_print ("  ");
           pkg_print (ha);
@@ -683,68 +669,63 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
 
   g_assert (diff->hs_mod_old->len == diff->hs_mod_new->len);
 
-  while (diff->hs_add->len ||
-         diff->hs_del->len ||
-         diff->hs_mod_old->len)
+  while (diff->hs_add->len || diff->hs_del->len || diff->hs_mod_old->len)
     {
       if (_rpmhdrs_diff_cmp_end (diff->hs_mod_old, diff->hs_del) < 0)
         if (_rpmhdrs_diff_cmp_end (diff->hs_mod_old, diff->hs_add) < 0)
           { /* mod is first */
-            auto hm = static_cast<Header>(diff->hs_mod_old->pdata[diff->hs_mod_old->len-1]);
+            auto hm = static_cast<Header> (diff->hs_mod_old->pdata[diff->hs_mod_old->len - 1]);
 
             g_print ("!");
             pkg_print (hm);
-            g_ptr_array_remove_index(diff->hs_mod_old, diff->hs_mod_old->len-1);
+            g_ptr_array_remove_index (diff->hs_mod_old, diff->hs_mod_old->len - 1);
             g_print ("=");
-            hm = static_cast<Header>(diff->hs_mod_new->pdata[diff->hs_mod_new->len-1]);
+            hm = static_cast<Header> (diff->hs_mod_new->pdata[diff->hs_mod_new->len - 1]);
             pkg_print (hm);
-            g_ptr_array_remove_index(diff->hs_mod_new, diff->hs_mod_new->len-1);
+            g_ptr_array_remove_index (diff->hs_mod_new, diff->hs_mod_new->len - 1);
           }
         else
           { /* add is first */
-            auto ha = static_cast<Header>(diff->hs_add->pdata[diff->hs_add->len-1]);
+            auto ha = static_cast<Header> (diff->hs_add->pdata[diff->hs_add->len - 1]);
 
             g_print ("+");
             pkg_print (ha);
-            g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
+            g_ptr_array_remove_index (diff->hs_add, diff->hs_add->len - 1);
           }
+      else if (_rpmhdrs_diff_cmp_end (diff->hs_del, diff->hs_add) < 0)
+        { /* del is first */
+          auto hd = static_cast<Header> (diff->hs_del->pdata[diff->hs_del->len - 1]);
+
+          g_print ("-");
+          pkg_print (hd);
+          g_ptr_array_remove_index (diff->hs_del, diff->hs_del->len - 1);
+        }
       else
-        if (_rpmhdrs_diff_cmp_end (diff->hs_del, diff->hs_add) < 0)
-          { /* del is first */
-            auto hd = static_cast<Header>(diff->hs_del->pdata[diff->hs_del->len-1]);
+        { /* add is first */
+          auto ha = static_cast<Header> (diff->hs_add->pdata[diff->hs_add->len - 1]);
 
-            g_print ("-");
-            pkg_print (hd);
-            g_ptr_array_remove_index(diff->hs_del, diff->hs_del->len-1);
-          }
-        else
-          { /* add is first */
-            auto ha = static_cast<Header>(diff->hs_add->pdata[diff->hs_add->len-1]);
-
-            g_print ("+");
-            pkg_print (ha);
-            g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
-          }
+          g_print ("+");
+          pkg_print (ha);
+          g_ptr_array_remove_index (diff->hs_add, diff->hs_add->len - 1);
+        }
     }
 
   rpmhdrs_diff_free (diff);
 }
 
 struct RpmRevisionData *
-rpmrev_new (OstreeRepo *repo, const char *rev,
-            const GPtrArray *patterns,
-            GCancellable   *cancellable,
-            GError        **error)
+rpmrev_new (OstreeRepo *repo, const char *rev, const GPtrArray *patterns, GCancellable *cancellable,
+            GError **error)
 {
   g_autofree char *commit = NULL;
   if (!ostree_repo_resolve_rev (repo, rev, FALSE, &commit, error))
     return NULL;
 
-  g_autoptr(RpmOstreeRefTs) refts = NULL;
+  g_autoptr (RpmOstreeRefTs) refts = NULL;
   if (!rpmostree_get_refts_for_commit (repo, commit, &refts, cancellable, error))
     return NULL;
 
-  auto rpmrev = static_cast<RpmRevisionData *>(g_malloc0 (sizeof(struct RpmRevisionData)));
+  auto rpmrev = static_cast<RpmRevisionData *> (g_malloc0 (sizeof (struct RpmRevisionData)));
   rpmrev->refts = util::move_nullify (refts);
   rpmrev->commit = util::move_nullify (commit);
   rpmrev->rpmdb = rpmhdrs_new (rpmrev->refts, patterns);
@@ -782,9 +763,7 @@ rpmrev_free (struct RpmRevisionData *ptr)
 /* Currently, our rpmdb lives at /usr/share/rpm. Add symlinks from the legacy
  * /var/lib/rpm *and* the future /usr/lib/sysimage/rpm paths to that. */
 static gboolean
-mk_rpmdb_compat_symlinks (int            rootfs_dfd,
-                          GCancellable  *cancellable,
-                          GError       **error)
+mk_rpmdb_compat_symlinks (int rootfs_dfd, GCancellable *cancellable, GError **error)
 {
   if (!glnx_shutil_mkdir_p_at (rootfs_dfd, "var/lib", 0777, cancellable, error))
     return FALSE;
@@ -801,12 +780,8 @@ mk_rpmdb_compat_symlinks (int            rootfs_dfd,
 
 /* Check out a copy of the rpmdb into @tmpdir */
 static gboolean
-checkout_only_rpmdb (OstreeRepo       *repo,
-                     const char       *ref,
-                     const char       *rpmdb,
-                     GLnxTmpDir       *tmpdir,
-                     GCancellable     *cancellable,
-                     GError          **error)
+checkout_only_rpmdb (OstreeRepo *repo, const char *ref, const char *rpmdb, GLnxTmpDir *tmpdir,
+                     GCancellable *cancellable, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("rpmdb checkout", error);
   g_autofree char *commit = NULL;
@@ -818,13 +793,14 @@ checkout_only_rpmdb (OstreeRepo       *repo,
     return FALSE;
 
   /* Check out the database (via copy) */
-  OstreeRepoCheckoutAtOptions checkout_options = { (OstreeRepoCheckoutMode)0, };
+  OstreeRepoCheckoutAtOptions checkout_options = {
+    (OstreeRepoCheckoutMode)0,
+  };
   checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
   const char *subpath = glnx_strjoina ("/", rpmdb);
   checkout_options.subpath = subpath;
-  if (!ostree_repo_checkout_at (repo, &checkout_options, tmpdir->fd,
-                                RPMOSTREE_RPMDB_LOCATION, commit,
-                                cancellable, error))
+  if (!ostree_repo_checkout_at (repo, &checkout_options, tmpdir->fd, RPMOSTREE_RPMDB_LOCATION,
+                                commit, cancellable, error))
     return FALSE;
 
   if (!mk_rpmdb_compat_symlinks (tmpdir->fd, cancellable, error))
@@ -834,19 +810,16 @@ checkout_only_rpmdb (OstreeRepo       *repo,
 }
 
 static gboolean
-get_sack_for_root (int               dfd,
-                   const char       *path,
-                   DnfSack         **out_sack,
-                   GError          **error)
+get_sack_for_root (int dfd, const char *path, DnfSack **out_sack, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Loading sack", error);
   g_assert (out_sack != NULL);
 
-  CXX_TRY(core_libdnf_process_global_init(), error);
+  CXX_TRY (core_libdnf_process_global_init (), error);
 
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
-  g_autoptr(DnfSack) sack = dnf_sack_new ();
+  g_autoptr (DnfSack) sack = dnf_sack_new ();
   dnf_sack_set_rootdir (sack, fullpath);
 
   if (!dnf_sack_setup (sack, 0, error))
@@ -862,11 +835,9 @@ get_sack_for_root (int               dfd,
 /* Given @dfd + @path, return a "sack", i.e. database of packages.
  */
 RpmOstreeRefSack *
-rpmostree_get_refsack_for_root (int              dfd,
-                                const char      *path,
-                                GError         **error)
+rpmostree_get_refsack_for_root (int dfd, const char *path, GError **error)
 {
-  g_autoptr(DnfSack) sack = NULL; /* NB: refsack adds a ref to it */
+  g_autoptr (DnfSack) sack = NULL; /* NB: refsack adds a ref to it */
   if (!get_sack_for_root (dfd, path, &sack, error))
     return NULL;
   return rpmostree_refsack_new (sack, NULL);
@@ -879,11 +850,8 @@ rpmostree_get_refsack_for_root (int              dfd,
  * started embedding RPMOSTREE_BASE_RPMDB.
  */
 gboolean
-rpmostree_get_base_refsack_for_root (int                dfd,
-                                     const char        *path,
-                                     RpmOstreeRefSack **out_sack,
-                                     GCancellable      *cancellable,
-                                     GError           **error)
+rpmostree_get_base_refsack_for_root (int dfd, const char *path, RpmOstreeRefSack **out_sack,
+                                     GCancellable *cancellable, GError **error)
 {
   g_autofree char *subpath = g_build_filename (path, RPMOSTREE_BASE_RPMDB, NULL);
   if (!glnx_fstatat_allow_noent (dfd, subpath, NULL, AT_SYMLINK_NOFOLLOW, error))
@@ -891,10 +859,13 @@ rpmostree_get_base_refsack_for_root (int                dfd,
   if (errno == ENOENT)
     return TRUE;
 
-  g_auto(GLnxTmpDir) tmpdir = {0, };
+  g_auto (GLnxTmpDir) tmpdir = {
+    0,
+  };
   if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
     return FALSE;
-  if (!glnx_shutil_mkdir_p_at (tmpdir.fd, dirname (strdupa (RPMOSTREE_RPMDB_LOCATION)), 0777, cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (tmpdir.fd, dirname (strdupa (RPMOSTREE_RPMDB_LOCATION)), 0777,
+                               cancellable, error))
     return FALSE;
 
   g_autofree char *base_rpm = glnx_fdrel_abspath (dfd, subpath);
@@ -904,7 +875,7 @@ rpmostree_get_base_refsack_for_root (int                dfd,
   if (!mk_rpmdb_compat_symlinks (tmpdir.fd, cancellable, error))
     return FALSE;
 
-  g_autoptr(DnfSack) sack = NULL; /* NB: refsack adds a ref to it */
+  g_autoptr (DnfSack) sack = NULL; /* NB: refsack adds a ref to it */
   if (!get_sack_for_root (tmpdir.fd, ".", &sack, error))
     return FALSE;
 
@@ -912,24 +883,22 @@ rpmostree_get_base_refsack_for_root (int                dfd,
   return TRUE;
 }
 
-
 /* Given @ref which is an OSTree ref, return a "sack" i.e. database of packages.
  */
 RpmOstreeRefSack *
-rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
-                                  const char                *ref,
-                                  GCancellable              *cancellable,
-                                  GError                   **error)
+rpmostree_get_refsack_for_commit (OstreeRepo *repo, const char *ref, GCancellable *cancellable,
+                                  GError **error)
 {
-  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  g_auto (GLnxTmpDir) tmpdir = {
+    0,
+  };
   if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
     return NULL;
 
-  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_RPMDB_LOCATION,
-                            &tmpdir, cancellable, error))
+  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_RPMDB_LOCATION, &tmpdir, cancellable, error))
     return NULL;
 
-  g_autoptr(DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
+  g_autoptr (DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
   if (!get_sack_for_root (tmpdir.fd, ".", &hsack, error))
     return NULL;
 
@@ -941,12 +910,12 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
  * involved.
  */
 RpmOstreeRefSack *
-rpmostree_get_base_refsack_for_commit (OstreeRepo                *repo,
-                                       const char                *ref,
-                                       GCancellable              *cancellable,
-                                       GError                   **error)
+rpmostree_get_base_refsack_for_commit (OstreeRepo *repo, const char *ref, GCancellable *cancellable,
+                                       GError **error)
 {
-  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  g_auto (GLnxTmpDir) tmpdir = {
+    0,
+  };
   if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
     return NULL;
 
@@ -954,11 +923,10 @@ rpmostree_get_base_refsack_for_commit (OstreeRepo                *repo,
    * a temporary root. Fixing this would require patching through new APIs into
    * libdnf → libsolv to teach it about a way to find a user-specified dbpath.
    */
-  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_BASE_RPMDB,
-                            &tmpdir, cancellable, error))
+  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_BASE_RPMDB, &tmpdir, cancellable, error))
     return NULL;
 
-  g_autoptr(DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
+  g_autoptr (DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
   if (!get_sack_for_root (tmpdir.fd, ".", &hsack, error))
     return NULL;
 
@@ -966,9 +934,8 @@ rpmostree_get_base_refsack_for_commit (OstreeRepo                *repo,
   return rpmostree_refsack_new (hsack, &tmpdir);
 }
 
-static RpmOstreeRefTs*
-get_refts_for_rootfs (const char       *rootfs,
-                      GLnxTmpDir       *tmpdir)
+static RpmOstreeRefTs *
+get_refts_for_rootfs (const char *rootfs, GLnxTmpDir *tmpdir)
 {
   g_assert ((rootfs != NULL) || (tmpdir != NULL));
   g_assert ((rootfs == NULL) || (tmpdir == NULL));
@@ -985,18 +952,16 @@ get_refts_for_rootfs (const char       *rootfs,
 }
 
 gboolean
-rpmostree_get_refts_for_commit (OstreeRepo                *repo,
-                                const char                *ref,
-                                RpmOstreeRefTs           **out_ts,
-                                GCancellable              *cancellable,
-                                GError                   **error)
+rpmostree_get_refts_for_commit (OstreeRepo *repo, const char *ref, RpmOstreeRefTs **out_ts,
+                                GCancellable *cancellable, GError **error)
 {
-  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  g_auto (GLnxTmpDir) tmpdir = {
+    0,
+  };
   if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
     return FALSE;
 
-  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_RPMDB_LOCATION,
-                            &tmpdir, cancellable, error))
+  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_RPMDB_LOCATION, &tmpdir, cancellable, error))
     return FALSE;
 
   /* Ownership of tmpdir is transferred */
@@ -1005,8 +970,7 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
 }
 
 gint
-rpmostree_pkg_array_compare (DnfPackage **p_pkg1,
-                             DnfPackage **p_pkg2)
+rpmostree_pkg_array_compare (DnfPackage **p_pkg1, DnfPackage **p_pkg2)
 {
   return dnf_package_cmp (*p_pkg1, *p_pkg2);
 }
@@ -1020,28 +984,26 @@ rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
 static void
 print_pkglist (GPtrArray *pkglist)
 {
-  g_ptr_array_sort (pkglist, (GCompareFunc) rpmostree_pkg_array_compare);
+  g_ptr_array_sort (pkglist, (GCompareFunc)rpmostree_pkg_array_compare);
 
   for (guint i = 0; i < pkglist->len; i++)
     {
-      auto pkg = static_cast<DnfPackage *>(pkglist->pdata[i]);
+      auto pkg = static_cast<DnfPackage *> (pkglist->pdata[i]);
       rpmostree_output_message ("  %s (%s)", dnf_package_get_nevra (pkg),
-                                             dnf_package_get_reponame (pkg));
+                                dnf_package_get_reponame (pkg));
     }
 }
 
 void
-rpmostree_print_transaction (DnfContext   *dnfctx)
+rpmostree_print_transaction (DnfContext *dnfctx)
 {
   gboolean empty = TRUE;
 
-  { g_autoptr(GPtrArray) packages = NULL;
-    packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
-                                      DNF_PACKAGE_INFO_INSTALL,
-                                      DNF_PACKAGE_INFO_REINSTALL,
-                                      DNF_PACKAGE_INFO_DOWNGRADE,
-                                      DNF_PACKAGE_INFO_UPDATE,
-                                      -1);
+  {
+    g_autoptr (GPtrArray) packages = NULL;
+    packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx), DNF_PACKAGE_INFO_INSTALL,
+                                      DNF_PACKAGE_INFO_REINSTALL, DNF_PACKAGE_INFO_DOWNGRADE,
+                                      DNF_PACKAGE_INFO_UPDATE, -1);
 
     if (packages->len > 0)
       {
@@ -1051,11 +1013,10 @@ rpmostree_print_transaction (DnfContext   *dnfctx)
       }
   }
 
-  { g_autoptr(GPtrArray) packages = NULL;
-    packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
-                                      DNF_PACKAGE_INFO_REMOVE,
-                                      DNF_PACKAGE_INFO_OBSOLETE,
-                                      -1);
+  {
+    g_autoptr (GPtrArray) packages = NULL;
+    packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx), DNF_PACKAGE_INFO_REMOVE,
+                                      DNF_PACKAGE_INFO_OBSOLETE, -1);
 
     if (packages->len > 0)
       {
@@ -1069,12 +1030,14 @@ rpmostree_print_transaction (DnfContext   *dnfctx)
     rpmostree_output_message ("Empty transaction");
 }
 
-struct _cap_struct {
-    struct __user_cap_header_struct head;
-    union {
-        struct __user_cap_data_struct set;
-        __u32 flat[3];
-    } u[_LINUX_CAPABILITY_U32S_2];
+struct _cap_struct
+{
+  struct __user_cap_header_struct head;
+  union
+  {
+    struct __user_cap_data_struct set;
+    __u32 flat[3];
+  } u[_LINUX_CAPABILITY_U32S_2];
 };
 
 /* Rewritten version of _fcaps_save from libcap, since it's not
@@ -1104,39 +1067,38 @@ cap_t_to_vfs (cap_t cap_d, struct vfs_cap_data *rawvfscap, int *out_size)
 
   for (i = 0; i < tocopy; i++)
     {
-      rawvfscap->data[i].permitted
-        = GUINT32_TO_LE(cap_d->u[i].flat[CAP_PERMITTED]);
-      rawvfscap->data[i].inheritable
-        = GUINT32_TO_LE(cap_d->u[i].flat[CAP_INHERITABLE]);
+      rawvfscap->data[i].permitted = GUINT32_TO_LE (cap_d->u[i].flat[CAP_PERMITTED]);
+      rawvfscap->data[i].inheritable = GUINT32_TO_LE (cap_d->u[i].flat[CAP_INHERITABLE]);
     }
 
   if (eff_not_zero == 0)
-    rawvfscap->magic_etc = GUINT32_TO_LE(magic);
+    rawvfscap->magic_etc = GUINT32_TO_LE (magic);
   else
-    rawvfscap->magic_etc = GUINT32_TO_LE(magic|VFS_CAP_FLAGS_EFFECTIVE);
+    rawvfscap->magic_etc = GUINT32_TO_LE (magic | VFS_CAP_FLAGS_EFFECTIVE);
 }
 
 GVariant *
 rpmostree_fcap_to_xattr_variant (const char *fcap)
 {
-  g_auto(GVariantBuilder) builder;
+  g_auto (GVariantBuilder) builder;
   cap_t caps = cap_from_text (fcap);
-  struct vfs_cap_data vfscap = { 0, };
-  g_autoptr(GBytes) vfsbytes = NULL;
+  struct vfs_cap_data vfscap = {
+    0,
+  };
+  g_autoptr (GBytes) vfsbytes = NULL;
   int vfscap_size;
 
   cap_t_to_vfs (caps, &vfscap, &vfscap_size);
   vfsbytes = g_bytes_new (&vfscap, vfscap_size);
 
-  g_variant_builder_init (&builder, (GVariantType*)"a(ayay)");
-  g_variant_builder_add (&builder, "(@ay@ay)",
-                         g_variant_new_bytestring ("security.capability"),
-                         g_variant_new_from_bytes ((GVariantType*)"ay",
-                                                   vfsbytes, FALSE));
+  g_variant_builder_init (&builder, (GVariantType *)"a(ayay)");
+  g_variant_builder_add (&builder, "(@ay@ay)", g_variant_new_bytestring ("security.capability"),
+                         g_variant_new_from_bytes ((GVariantType *)"ay", vfsbytes, FALSE));
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
-namespace rpmostreecxx {
+namespace rpmostreecxx
+{
 /* Returns the checksum of the RPM we retrieved from the repodata XML. The
  * actual checksum type used depends on how the repodata was created. Thus, the
  * output is a string representation of the form "TYPE:HASH" where TYPE is the
@@ -1160,23 +1122,23 @@ get_repodata_chksum_repr (DnfPackage &pkg)
   if (chksum == NULL)
     {
       // TODO try out the tinyformat.hpp in libdnf
-      g_autofree char *msg = g_strdup_printf ("Couldn't get chksum for pkg %s", dnf_package_get_nevra(&pkg));
+      g_autofree char *msg
+          = g_strdup_printf ("Couldn't get chksum for pkg %s", dnf_package_get_nevra (&pkg));
       throw std::runtime_error (msg);
     }
 
   // Would be nice to expose a format!() equivalent on rust::String
   std::ostringstream ss;
   ss << hy_chksum_name (chksum_type) << ":" << chksum;
-  return rust::String(ss.str());
+  return rust::String (ss.str ());
 }
 }
 
-GPtrArray*
-rpmostree_get_matching_packages (DnfSack *sack,
-                                 const char *pattern)
+GPtrArray *
+rpmostree_get_matching_packages (DnfSack *sack, const char *pattern)
 {
   /* mimic dnf_context_install() */
-  g_autoptr(GPtrArray) matches = NULL;
+  g_autoptr (GPtrArray) matches = NULL;
   HySelector selector = NULL;
   HySubject subject = NULL;
 
@@ -1191,30 +1153,27 @@ rpmostree_get_matching_packages (DnfSack *sack,
 }
 
 gboolean
-rpmostree_sack_has_subject (DnfSack *sack,
-                            const char *pattern)
+rpmostree_sack_has_subject (DnfSack *sack, const char *pattern)
 {
-  g_autoptr(GPtrArray) matches = rpmostree_get_matching_packages (sack, pattern);
+  g_autoptr (GPtrArray) matches = rpmostree_get_matching_packages (sack, pattern);
   return matches->len > 0;
 }
 
 /* Errors out if multiple pkgs match pkgname. Otherwise, sets out_pkg to the found pkg, or
  * NULL if not found. */
 gboolean
-rpmostree_sack_get_by_pkgname (DnfSack     *sack,
-                               const char  *pkgname,
-                               DnfPackage **out_pkg,
-                               GError     **error)
+rpmostree_sack_get_by_pkgname (DnfSack *sack, const char *pkgname, DnfPackage **out_pkg,
+                               GError **error)
 {
-  g_autoptr(DnfPackage) ret_pkg = NULL;
+  g_autoptr (DnfPackage) ret_pkg = NULL;
   hy_autoquery HyQuery query = hy_query_create (sack);
   hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
-  g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+  g_autoptr (GPtrArray) pkgs = hy_query_run (query);
 
   if (pkgs->len > 1)
     return glnx_throw (error, "Multiple packages match \"%s\"", pkgname);
   else if (pkgs->len == 1)
-    ret_pkg = (DnfPackage*)g_object_ref (pkgs->pdata[0]);
+    ret_pkg = (DnfPackage *)g_object_ref (pkgs->pdata[0]);
   else /* for obviousness */
     ret_pkg = NULL;
 
@@ -1222,7 +1181,7 @@ rpmostree_sack_get_by_pkgname (DnfSack     *sack,
   return TRUE;
 }
 
-GPtrArray*
+GPtrArray *
 rpmostree_sack_get_packages (DnfSack *sack)
 {
   hy_autoquery HyQuery query = hy_query_create (sack);
@@ -1230,10 +1189,10 @@ rpmostree_sack_get_packages (DnfSack *sack)
   return hy_query_run (query);
 }
 
-GPtrArray*
+GPtrArray *
 rpmostree_sack_get_sorted_packages (DnfSack *sack)
 {
-  g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_packages (sack);
+  g_autoptr (GPtrArray) pkglist = rpmostree_sack_get_packages (sack);
   g_ptr_array_sort (pkglist, (GCompareFunc)rpmostree_pkg_array_compare);
   return util::move_nullify (pkglist);
 }
@@ -1242,23 +1201,21 @@ GVariant *
 rpmostree_variant_pkgs_from_sack (RpmOstreeRefSack *refsack)
 {
   /* we insert it sorted here so it can efficiently be searched on retrieval */
-  g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (refsack->sack);
+  g_autoptr (GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (refsack->sack);
 
   GVariantBuilder pkglist_v_builder;
-  g_variant_builder_init (&pkglist_v_builder, (GVariantType*)"a(sssss)");
+  g_variant_builder_init (&pkglist_v_builder, (GVariantType *)"a(sssss)");
 
   const guint n = pkglist->len;
   for (guint i = 0; i < n; i++)
     {
-      auto pkg = static_cast<DnfPackage *>(pkglist->pdata[i]);
+      auto pkg = static_cast<DnfPackage *> (pkglist->pdata[i]);
 
       /* put epoch as a string so we're indifferent to endianness -- also note that unlike
        * librpm, libdnf doesn't care about unset vs 0 epoch and neither do we */
       g_autofree char *epoch = g_strdup_printf ("%" PRIu64, dnf_package_get_epoch (pkg));
-      g_variant_builder_add (&pkglist_v_builder, "(sssss)",
-                             dnf_package_get_name (pkg), epoch,
-                             dnf_package_get_version (pkg),
-                             dnf_package_get_release (pkg),
+      g_variant_builder_add (&pkglist_v_builder, "(sssss)", dnf_package_get_name (pkg), epoch,
+                             dnf_package_get_version (pkg), dnf_package_get_release (pkg),
                              dnf_package_get_arch (pkg));
     }
 
@@ -1266,13 +1223,10 @@ rpmostree_variant_pkgs_from_sack (RpmOstreeRefSack *refsack)
 }
 
 gboolean
-rpmostree_create_rpmdb_pkglist_variant (int              dfd,
-                                        const char      *path,
-                                        GVariant       **out_variant,
-                                        GCancellable    *cancellable,
-                                        GError         **error)
+rpmostree_create_rpmdb_pkglist_variant (int dfd, const char *path, GVariant **out_variant,
+                                        GCancellable *cancellable, GError **error)
 {
-  g_autoptr(RpmOstreeRefSack) refsack = rpmostree_get_refsack_for_root (dfd, path, error);
+  g_autoptr (RpmOstreeRefSack) refsack = rpmostree_get_refsack_for_root (dfd, path, error);
   if (!refsack)
     return FALSE;
 
@@ -1282,13 +1236,12 @@ rpmostree_create_rpmdb_pkglist_variant (int              dfd,
 
 /* Simple wrapper around hy_split_nevra() that adds allow-none and GError convention */
 gboolean
-rpmostree_decompose_nevra (const char  *nevra,
-                           char       **out_name,    /* allow-none */
-                           guint64     *out_epoch,   /* allow-none */
-                           char       **out_version, /* allow-none */
-                           char       **out_release, /* allow-none */
-                           char       **out_arch,    /* allow-none */
-                           GError     **error)
+rpmostree_decompose_nevra (const char *nevra, char **out_name, /* allow-none */
+                           guint64 *out_epoch,                 /* allow-none */
+                           char **out_version,                 /* allow-none */
+                           char **out_release,                 /* allow-none */
+                           char **out_arch,                    /* allow-none */
+                           GError **error)
 {
   g_autofree char *name = NULL;
   int epoch;
@@ -1314,26 +1267,28 @@ rpmostree_decompose_nevra (const char  *nevra,
 }
 
 /* translates NEVRA to its cache branch */
-namespace rpmostreecxx {
+namespace rpmostreecxx
+{
 rust::String
 nevra_to_cache_branch (const std::string &nevra)
 {
   /* It's cumbersome, but we have to decompose the NEVRA and the rebuild it into a cache
    * branch. Something something Rust slices... */
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   g_autofree char *name = NULL;
   guint64 epoch = 0;
   g_autofree char *version = NULL;
   g_autofree char *release = NULL;
   g_autofree char *arch = NULL;
 
-  if (!rpmostree_decompose_nevra (nevra.c_str(), &name, &epoch, &version, &release, &arch, &local_error))
-    util::throw_gerror(local_error);
+  if (!rpmostree_decompose_nevra (nevra.c_str (), &name, &epoch, &version, &release, &arch,
+                                  &local_error))
+    util::throw_gerror (local_error);
 
-  g_autofree char *evr = rpmostree_custom_nevra_strdup (name, epoch, version, release, arch,
-                                                        PKG_NEVRA_FLAGS_EVR);
+  g_autofree char *evr
+      = rpmostree_custom_nevra_strdup (name, epoch, version, release, arch, PKG_NEVRA_FLAGS_EVR);
   g_autofree char *branch = rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
-  return rust::String (util::move_nullify(branch));
+  return rust::String (util::move_nullify (branch));
 }
 }
 
@@ -1414,21 +1369,19 @@ rpmostree_get_cache_branch_header (Header hdr)
 char *
 rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
 {
-  return rpmostree_get_cache_branch_for_n_evr_a (dnf_package_get_name (pkg),
-                                                 dnf_package_get_evr (pkg),
-                                                 dnf_package_get_arch (pkg));
+  return rpmostree_get_cache_branch_for_n_evr_a (
+      dnf_package_get_name (pkg), dnf_package_get_evr (pkg), dnf_package_get_arch (pkg));
 }
 
-GPtrArray*
-rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx,
-                                   DnfRepoEnabled enablement)
+GPtrArray *
+rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement)
 {
-  g_autoptr(GPtrArray) ret = g_ptr_array_new ();
+  g_autoptr (GPtrArray) ret = g_ptr_array_new ();
   GPtrArray *repos = dnf_context_get_repos (dnfctx);
 
   for (guint i = 0; i < repos->len; i++)
     {
-      auto repo = static_cast<DnfRepo *>(repos->pdata[i]);
+      auto repo = static_cast<DnfRepo *> (repos->pdata[i]);
       if (dnf_repo_get_enabled (repo) & enablement)
         g_ptr_array_add (ret, repo);
     }
@@ -1457,14 +1410,13 @@ str2severity (const char *str)
 }
 
 static int
-compare_advisory_refs (gconstpointer ap,
-                       gconstpointer bp)
+compare_advisory_refs (gconstpointer ap, gconstpointer bp)
 {
   /* We use URLs to sort here; often CVE RHBZs will have multiple duplicates for each stream
    * affected (e.g. Fedora, EPEL, RHEL, etc...), but we want the first one, which contains
    * all the juicy details. A naive strcmp() sort on the URL gives us this. */
-  DnfAdvisoryRef *a = *((DnfAdvisoryRef**)ap);
-  DnfAdvisoryRef *b = *((DnfAdvisoryRef**)bp);
+  DnfAdvisoryRef *a = *((DnfAdvisoryRef **)ap);
+  DnfAdvisoryRef *b = *((DnfAdvisoryRef **)bp);
 
   g_assert (a);
   g_assert (b);
@@ -1475,9 +1427,8 @@ compare_advisory_refs (gconstpointer ap,
 }
 
 /* Returns a *floating* variant ref representing the advisory */
-static GVariant*
-advisory_variant_new (DnfAdvisory *adv,
-                      GPtrArray   *pkgs)
+static GVariant *
+advisory_variant_new (DnfAdvisory *adv, GPtrArray *pkgs)
 {
   static gsize cve_regex_initialized;
   static GRegex *cve_regex;
@@ -1486,60 +1437,64 @@ advisory_variant_new (DnfAdvisory *adv,
 
   if (g_once_init_enter (&cve_regex_initialized))
     {
-      cve_regex = g_regex_new ("\\b" CVE_REGEXP "\\b", static_cast<GRegexCompileFlags>(0), static_cast<GRegexMatchFlags>(0), NULL);
+      cve_regex = g_regex_new ("\\b" CVE_REGEXP "\\b", static_cast<GRegexCompileFlags> (0),
+                               static_cast<GRegexMatchFlags> (0), NULL);
       g_assert (cve_regex);
       g_once_init_leave (&cve_regex_initialized, 1);
     }
 
 #undef CVE_REGEXP
 
-  g_auto(GVariantBuilder) builder;
+  g_auto (GVariantBuilder) builder;
   g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
   g_variant_builder_add (&builder, "s", dnf_advisory_get_id (adv));
   g_variant_builder_add (&builder, "u", dnf_advisory_get_kind (adv));
   g_variant_builder_add (&builder, "u", str2severity (dnf_advisory_get_severity (adv)));
 
-  { g_auto(GVariantBuilder) pkgs_array;
+  {
+    g_auto (GVariantBuilder) pkgs_array;
     g_variant_builder_init (&pkgs_array, G_VARIANT_TYPE ("as"));
     for (guint i = 0; i < pkgs->len; i++)
-      g_variant_builder_add (&pkgs_array, "s", dnf_package_get_nevra (static_cast<DnfPackage*>(pkgs->pdata[i])));
+      g_variant_builder_add (&pkgs_array, "s",
+                             dnf_package_get_nevra (static_cast<DnfPackage *> (pkgs->pdata[i])));
     g_variant_builder_add_value (&builder, g_variant_builder_end (&pkgs_array));
   }
 
   /* final a{sv} for any additional metadata */
-  g_auto(GVariantDict) dict;
+  g_auto (GVariantDict) dict;
   g_variant_dict_init (&dict, NULL);
 
-  { g_auto(GVariantBuilder) cve_references;
+  {
+    g_auto (GVariantBuilder) cve_references;
     g_variant_builder_init (&cve_references, G_VARIANT_TYPE ("a(ss)"));
 
     /* we maintain a set to make sure we only add the earliest ref for each CVE */
-    g_autoptr(GHashTable) created_cves =
-      g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+    g_autoptr (GHashTable) created_cves
+        = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
-    g_autoptr(GPtrArray) refs = dnf_advisory_get_references (adv);
+    g_autoptr (GPtrArray) refs = dnf_advisory_get_references (adv);
     g_ptr_array_sort (refs, compare_advisory_refs);
 
     /* for each ref, look for CVEs in their title, and add an (ss) for refs which mention
      * new CVEs. */
     for (guint i = 0; i < refs->len; i++)
       {
-        auto ref = static_cast<DnfAdvisoryRef *>(refs->pdata[i]);
+        auto ref = static_cast<DnfAdvisoryRef *> (refs->pdata[i]);
         if (dnf_advisoryref_get_kind (ref) != DNF_REFERENCE_KIND_BUGZILLA)
           continue;
 
-        g_autoptr(GMatchInfo) match = NULL;
+        g_autoptr (GMatchInfo) match = NULL;
         const char *title = dnf_advisoryref_get_title (ref);
         const char *url = dnf_advisoryref_get_url (ref);
 
         if (!url || !title)
           continue;
 
-        if (!g_regex_match (cve_regex, title, static_cast<GRegexMatchFlags>(0), &match))
+        if (!g_regex_match (cve_regex, title, static_cast<GRegexMatchFlags> (0), &match))
           continue;
 
         /* collect all the found CVEs first */
-        g_autoptr(GPtrArray) found_cves = g_ptr_array_new_with_free_func (g_free);
+        g_autoptr (GPtrArray) found_cves = g_ptr_array_new_with_free_func (g_free);
         while (g_match_info_matches (match))
           {
             g_ptr_array_add (found_cves, g_match_info_fetch (match, 0));
@@ -1556,14 +1511,13 @@ advisory_variant_new (DnfAdvisory *adv,
             g_variant_builder_add (&cve_references, "(ss)", url, title);
             /* steal all the cves and transfer to set, autofree'ing dupes */
             g_ptr_array_add (found_cves, NULL);
-            g_autofree char **cves =
-              (char**)g_ptr_array_free (util::move_nullify (found_cves), FALSE);
+            g_autofree char **cves
+                = (char **)g_ptr_array_free (util::move_nullify (found_cves), FALSE);
             for (char **cve = cves; cve && *cve; cve++)
               g_hash_table_add (created_cves, *cve);
           }
       }
-    g_variant_dict_insert_value (&dict, "cve_references",
-                                 g_variant_builder_end (&cve_references));
+    g_variant_dict_insert_value (&dict, "cve_references", g_variant_builder_end (&cve_references));
   }
   g_variant_builder_add_value (&builder, g_variant_dict_end (&dict));
 
@@ -1575,22 +1529,21 @@ advisory_variant_new (DnfAdvisory *adv,
 static guint
 advisory_hash (gconstpointer v)
 {
-  return g_str_hash (dnf_advisory_get_id ((DnfAdvisory*)v));
+  return g_str_hash (dnf_advisory_get_id ((DnfAdvisory *)v));
 }
 
 static gboolean
-advisory_equal (gconstpointer v1,
-                gconstpointer v2)
+advisory_equal (gconstpointer v1, gconstpointer v2)
 {
-  return g_str_equal (dnf_advisory_get_id ((DnfAdvisory*)v1),
-                      dnf_advisory_get_id ((DnfAdvisory*)v2));
+  return g_str_equal (dnf_advisory_get_id ((DnfAdvisory *)v1),
+                      dnf_advisory_get_id ((DnfAdvisory *)v2));
 }
 
 /* adds noop-on-NULL semantics so we can steal in advisories_variant() */
 static void
 advisory_free (gpointer p)
 {
-  auto adv = static_cast<DnfAdvisory*>(p);
+  auto adv = static_cast<DnfAdvisory *> (p);
   if (adv)
     dnf_advisory_free (adv);
 }
@@ -1599,37 +1552,35 @@ advisory_free (gpointer p)
  * no advisories are found, returns %NULL. Otherwise, returns a GVariant of the type
  * RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT.
  */
-GVariant*
-rpmostree_advisories_variant (DnfSack    *sack,
-                              GPtrArray  *pkgs)
+GVariant *
+rpmostree_advisories_variant (DnfSack *sack, GPtrArray *pkgs)
 {
-  g_autoptr(GHashTable) advisories =
-    g_hash_table_new_full (advisory_hash, advisory_equal, advisory_free,
-                           (GDestroyNotify)g_ptr_array_unref);
+  g_autoptr (GHashTable) advisories = g_hash_table_new_full (
+      advisory_hash, advisory_equal, advisory_free, (GDestroyNotify)g_ptr_array_unref);
 
   /* libdnf provides pkg -> set of advisories, but we want advisory -> set of pkgs;
    * making sure we only keep the pkgs we actually care about */
   for (guint i = 0; i < pkgs->len; i++)
     {
-      auto pkg = static_cast<DnfPackage *>(pkgs->pdata[i]);
-      g_autoptr(GPtrArray) advisories_with_pkg = dnf_package_get_advisories (pkg, HY_EQ);
+      auto pkg = static_cast<DnfPackage *> (pkgs->pdata[i]);
+      g_autoptr (GPtrArray) advisories_with_pkg = dnf_package_get_advisories (pkg, HY_EQ);
       for (guint j = 0; j < advisories_with_pkg->len; j++)
         {
-          auto advisory = static_cast<DnfAdvisory *>(advisories_with_pkg->pdata[j]);
+          auto advisory = static_cast<DnfAdvisory *> (advisories_with_pkg->pdata[j]);
 
           /* for now we're only interested in security erratas */
           if (dnf_advisory_get_kind (advisory) != DNF_ADVISORY_KIND_SECURITY)
             continue;
 
           /* reverse mapping */
-          auto pkgs_in_advisory = static_cast<GPtrArray *>(g_hash_table_lookup (advisories, advisory));
+          auto pkgs_in_advisory
+              = static_cast<GPtrArray *> (g_hash_table_lookup (advisories, advisory));
           if (!pkgs_in_advisory)
             {
               /* take it out of the array, transferring ownership to the hash table; there's
                * g_ptr_array_steal_index() we could use, but it's still very new */
               advisories_with_pkg->pdata[j] = NULL;
-              pkgs_in_advisory =
-                g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+              pkgs_in_advisory = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
               g_hash_table_insert (advisories, advisory, pkgs_in_advisory);
             }
           g_ptr_array_add (pkgs_in_advisory, g_object_ref (pkg));
@@ -1639,9 +1590,9 @@ rpmostree_advisories_variant (DnfSack    *sack,
   if (g_hash_table_size (advisories) == 0)
     return NULL;
 
-  g_auto(GVariantBuilder) builder;
+  g_auto (GVariantBuilder) builder;
   g_variant_builder_init (&builder, RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT);
-  GLNX_HASH_TABLE_FOREACH_KV (advisories, DnfAdvisory*, advisory, GPtrArray*, pkgs)
-    g_variant_builder_add_value (&builder, advisory_variant_new (advisory, pkgs));
+  GLNX_HASH_TABLE_FOREACH_KV (advisories, DnfAdvisory *, advisory, GPtrArray *, pkgs)
+  g_variant_builder_add_value (&builder, advisory_variant_new (advisory, pkgs));
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
