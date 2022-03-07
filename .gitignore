@@ -3,6 +3,7 @@
 .deps
 .dirstamp
 .libs
+.vscode
 /*.bak
 /*.gcda
 /*.gcno
@@ -53,6 +54,7 @@
 /gtk-doc.make
 /insttree/
 /libglnx.la
+/libglnx-config.h
 /librpmostree-1.la
 /librpmostreecxxrs.la
 /librpmostreeinternals.la
