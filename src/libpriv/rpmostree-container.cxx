@@ -54,13 +54,3 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
 
   return TRUE;
 }
-
-gboolean
-rpmostree_container_install_packages (char **packages, GCancellable *cancellable, GError **error)
-{
-  rust::Vec<rust::String> pkgs;
-  for (char **it = packages; it && *it; it++)
-    pkgs.push_back (std::string (*it));
-  auto treefile = CXX_TRY_VAL (treefile_new_from_fields (pkgs), error);
-  return rpmostree_container_rebuild (*treefile, cancellable, error);
-}

@@ -181,7 +181,11 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
 
   auto is_ostree_container = CXX_TRY_VAL (is_ostree_container (), error);
   if (is_ostree_container)
-    return rpmostree_container_install_packages (argv, cancellable, error);
+    {
+      auto pkgs = util::rust_stringvec_from_strv (argv);
+      auto treefile = CXX_TRY_VAL (treefile_new_from_fields (pkgs), error);
+      return rpmostree_container_rebuild (*treefile, cancellable, error);
+    }
 
   return pkg_change (invocation, sysroot_proxy, (const char *const *)argv,
                      (const char *const *)opt_uninstall, cancellable, error);
