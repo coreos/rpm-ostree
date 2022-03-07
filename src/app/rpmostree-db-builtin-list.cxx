@@ -25,21 +25,17 @@
 
 static gboolean opt_advisories;
 
-static GOptionEntry option_entries[] = {
-  { "advisories", 'a', 0, G_OPTION_ARG_NONE, &opt_advisories, "Also list advisories", NULL },
-  { NULL }
-};
+static GOptionEntry option_entries[]
+    = { { "advisories", 'a', 0, G_OPTION_ARG_NONE, &opt_advisories, "Also list advisories", NULL },
+        { NULL } };
 
 static gboolean
-_builtin_db_list (OstreeRepo      *repo,
-                  GPtrArray       *revs,
-                  const GPtrArray *patterns,
-                  GCancellable    *cancellable,
-                  GError         **error)
+_builtin_db_list (OstreeRepo *repo, GPtrArray *revs, const GPtrArray *patterns,
+                  GCancellable *cancellable, GError **error)
 {
   for (guint num = 0; num < revs->len; num++)
     {
-      auto rev = static_cast<const char *>(revs->pdata[num]);
+      auto rev = static_cast<const char *> (revs->pdata[num]);
 
       g_autofree char *checksum = NULL;
       if (!ostree_repo_resolve_rev (repo, rev, FALSE, &checksum, error))
@@ -53,20 +49,20 @@ _builtin_db_list (OstreeRepo      *repo,
       /* in the common case where no patterns are provided, use the smarter db_query API */
       if (!patterns)
         {
-          g_autoptr(GPtrArray) packages =
-            rpm_ostree_db_query_all (repo, checksum, cancellable, error);
+          g_autoptr (GPtrArray) packages
+              = rpm_ostree_db_query_all (repo, checksum, cancellable, error);
           if (!packages)
             return FALSE;
 
           for (guint i = 0; i < packages->len; i++)
             {
-              auto package = static_cast<RpmOstreePackage *>(g_ptr_array_index (packages, i));
+              auto package = static_cast<RpmOstreePackage *> (g_ptr_array_index (packages, i));
               g_print (" %s\n", rpm_ostree_package_get_nevra (package));
             }
         }
       else
         {
-          g_autoptr(RpmRevisionData) rpmrev = NULL;
+          g_autoptr (RpmRevisionData) rpmrev = NULL;
           rpmrev = rpmrev_new (repo, checksum, patterns, cancellable, error);
           if (!rpmrev)
             return FALSE;
@@ -76,16 +72,16 @@ _builtin_db_list (OstreeRepo      *repo,
 
       if (opt_advisories)
         {
-          g_autoptr(GVariant) commit = NULL;
+          g_autoptr (GVariant) commit = NULL;
           if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
             return FALSE;
 
-          g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
+          g_autoptr (GVariant) meta = g_variant_get_child_value (commit, 0);
           rpmostree_variant_be_to_native (&meta);
-          g_autoptr(GVariantDict) dict = g_variant_dict_new (meta);
+          g_autoptr (GVariantDict) dict = g_variant_dict_new (meta);
 
-          g_autoptr(GVariant) advisories =
-            g_variant_dict_lookup_value (dict, "rpmostree.advisories", RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT);
+          g_autoptr (GVariant) advisories = g_variant_dict_lookup_value (
+              dict, "rpmostree.advisories", RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT);
           if (advisories)
             {
               g_print ("\n");
@@ -98,24 +94,22 @@ _builtin_db_list (OstreeRepo      *repo,
 }
 
 gboolean
-rpmostree_db_builtin_list (int argc, char **argv,
-                           RpmOstreeCommandInvocation *invocation,
+rpmostree_db_builtin_list (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context =
-    g_option_context_new ("REV... [PREFIX-PKGNAME...]");
+  g_autoptr (GOptionContext) context = g_option_context_new ("REV... [PREFIX-PKGNAME...]");
 
-  g_autoptr(OstreeRepo) repo = NULL;
-  if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv,
-                                          invocation, &repo, cancellable, error))
+  g_autoptr (OstreeRepo) repo = NULL;
+  if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, invocation, &repo,
+                                          cancellable, error))
     return FALSE;
 
   /* Iterate over all arguments. When we see the first argument which
    * appears to be an OSTree commit, take all other arguments to be
    * patterns.
    */
-  g_autoptr(GPtrArray) revs = g_ptr_array_new ();
-  g_autoptr(GPtrArray) patterns = NULL;
+  g_autoptr (GPtrArray) revs = g_ptr_array_new ();
+  g_autoptr (GPtrArray) patterns = NULL;
 
   for (int ii = 1; ii < argc; ii++)
     {

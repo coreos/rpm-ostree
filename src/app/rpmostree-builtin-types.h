@@ -26,12 +26,13 @@ G_BEGIN_DECLS
 
 /* Exit code for no change after pulling commits.
  * Use alongside EXIT_SUCCESS and EXIT_FAILURE. */
-#define RPM_OSTREE_EXIT_UNCHANGED  (77)
+#define RPM_OSTREE_EXIT_UNCHANGED (77)
 
 /* Exit code for when a pending deployment can be rebooted into. */
-#define RPM_OSTREE_EXIT_PENDING  (77)
+#define RPM_OSTREE_EXIT_PENDING (77)
 
-typedef enum {
+typedef enum
+{
   RPM_OSTREE_BUILTIN_FLAG_NONE = 0,
   RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD = 1 << 0,
   RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT = 1 << 1,
@@ -42,20 +43,22 @@ typedef enum {
 typedef struct RpmOstreeCommand RpmOstreeCommand;
 typedef struct RpmOstreeCommandInvocation RpmOstreeCommandInvocation;
 
-struct RpmOstreeCommand {
+struct RpmOstreeCommand
+{
   const char *name;
   RpmOstreeBuiltinFlags flags;
   const char *description; /* a short decription to describe the functionality */
-  int (*fn) (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
+  int (*fn) (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+             GCancellable *cancellable, GError **error);
 };
 
 /* @command: Passed from core cmdline parsing to cmds
  * @exit_code: Set by commands; default -1 meaning "if GError is set exit 1, otherwise 0"
  */
-struct RpmOstreeCommandInvocation {
+struct RpmOstreeCommandInvocation
+{
   RpmOstreeCommand *command;
   const char *command_line;
   int exit_code;
 };
 G_END_DECLS
-

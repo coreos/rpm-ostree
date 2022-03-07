@@ -27,7 +27,7 @@
 
 G_BEGIN_DECLS
 
-char *  ot_editor_prompt    (OstreeRepo *repo, const char *input,
-                             GCancellable *cancellable, GError **error);
+char *ot_editor_prompt (OstreeRepo *repo, const char *input, GCancellable *cancellable,
+                        GError **error);
 
 G_END_DECLS

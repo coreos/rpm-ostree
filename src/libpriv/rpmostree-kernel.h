@@ -24,42 +24,26 @@
 
 G_BEGIN_DECLS
 
-typedef enum {
+typedef enum
+{
   RPMOSTREE_FINALIZE_KERNEL_AUTO,
   RPMOSTREE_FINALIZE_KERNEL_USRLIB_MODULES,
   RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT,
   RPMOSTREE_FINALIZE_KERNEL_SLASH_BOOT,
 } RpmOstreeFinalizeKernelDestination;
 
-GVariant *
-rpmostree_find_kernel (int rootfs_dfd,
-                       GCancellable *cancellable,
-                       GError **error);
+GVariant *rpmostree_find_kernel (int rootfs_dfd, GCancellable *cancellable, GError **error);
 
-gboolean
-rpmostree_kernel_remove (int rootfs_dfd,
-                         GCancellable *cancellable,
-                         GError **error);
+gboolean rpmostree_kernel_remove (int rootfs_dfd, GCancellable *cancellable, GError **error);
 
-gboolean
-rpmostree_finalize_kernel (int rootfs_dfd,
-                           const char *bootdir,
-                           const char *kver,
-                           const char *kernel_path,
-                           GLnxTmpfile *initramfs_tmpf,
-                           RpmOstreeFinalizeKernelDestination dest,
-                           GCancellable *cancellable,
-                           GError **error);
+gboolean rpmostree_finalize_kernel (int rootfs_dfd, const char *bootdir, const char *kver,
+                                    const char *kernel_path, GLnxTmpfile *initramfs_tmpf,
+                                    RpmOstreeFinalizeKernelDestination dest,
+                                    GCancellable *cancellable, GError **error);
 
-gboolean
-rpmostree_run_dracut (int     rootfs_dfd,
-                      const char *const* argv,
-                      const char *kver,
-                      const char *rebuild_from_initramfs,
-                      gboolean     use_root_etc,
-                      GLnxTmpDir  *dracut_host_tmpdir,
-                      GLnxTmpfile *out_initramfs_tmpf,
-                      GCancellable  *cancellable,
-                      GError **error);
+gboolean rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
+                               const char *rebuild_from_initramfs, gboolean use_root_etc,
+                               GLnxTmpDir *dracut_host_tmpdir, GLnxTmpfile *out_initramfs_tmpf,
+                               GCancellable *cancellable, GError **error);
 
 G_END_DECLS

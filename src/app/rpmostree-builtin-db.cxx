@@ -23,52 +23,40 @@
 #include "rpmostree-db-builtins.h"
 #include "rpmostree-rpm-util.h"
 
-static RpmOstreeCommand rpm_subcommands[] = {
-  { "diff", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Show package changes between two commits",
-    rpmostree_db_builtin_diff },
-  { "list", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "List packages within commits",
-    rpmostree_db_builtin_list },
-  { "version", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Show rpmdb version of packages within the commits",
-    rpmostree_db_builtin_version },
-  { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
-};
+static RpmOstreeCommand rpm_subcommands[]
+    = { { "diff", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD, "Show package changes between two commits",
+          rpmostree_db_builtin_diff },
+        { "list", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD, "List packages within commits",
+          rpmostree_db_builtin_list },
+        { "version", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+          "Show rpmdb version of packages within the commits", rpmostree_db_builtin_version },
+        { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL } };
 
 static char *opt_repo;
 
-static GOptionEntry global_entries[] = {
-  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository (defaults to /sysroot/ostree/repo)", "PATH" },
-  { NULL }
-};
+static GOptionEntry global_entries[]
+    = { { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo,
+          "Path to OSTree repository (defaults to /sysroot/ostree/repo)", "PATH" },
+        { NULL } };
 
 gboolean
-rpmostree_db_option_context_parse (GOptionContext *context,
-                                   const GOptionEntry *main_entries,
-                                   int *argc, char ***argv,
-                                   RpmOstreeCommandInvocation *invocation,
-                                   OstreeRepo **out_repo,
-                                   GCancellable *cancellable, GError **error)
+rpmostree_db_option_context_parse (GOptionContext *context, const GOptionEntry *main_entries,
+                                   int *argc, char ***argv, RpmOstreeCommandInvocation *invocation,
+                                   OstreeRepo **out_repo, GCancellable *cancellable, GError **error)
 {
   /* Entries are listed in --help output in the order added.  We add the
    * main entries ourselves so that we can add the --repo entry first. */
 
   g_option_context_add_main_entries (context, global_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       main_entries,
-                                       argc, argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL,
-                                       error))
+  if (!rpmostree_option_context_parse (context, main_entries, argc, argv, invocation, cancellable,
+                                       NULL, NULL, NULL, error))
     return FALSE;
 
-  g_autoptr(OstreeRepo) repo = NULL;
+  g_autoptr (OstreeRepo) repo = NULL;
   if (opt_repo == NULL)
     {
-      g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new_default ();
+      g_autoptr (OstreeSysroot) sysroot = ostree_sysroot_new_default ();
 
       if (!ostree_sysroot_load (sysroot, cancellable, error))
         return FALSE;
@@ -91,11 +79,8 @@ rpmostree_db_option_context_parse (GOptionContext *context,
 }
 
 gboolean
-rpmostree_builtin_db (int argc, char **argv,
-                      RpmOstreeCommandInvocation *invocation,
+rpmostree_builtin_db (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                       GCancellable *cancellable, GError **error)
 {
-  return rpmostree_handle_subcommand (argc, argv, rpm_subcommands,
-                                      invocation, cancellable, error);
+  return rpmostree_handle_subcommand (argc, argv, rpm_subcommands, invocation, cancellable, error);
 }
-

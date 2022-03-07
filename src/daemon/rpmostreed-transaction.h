@@ -22,45 +22,46 @@
 
 G_BEGIN_DECLS
 
-#define RPMOSTREED_TYPE_TRANSACTION          (rpmostreed_transaction_get_type ())
-#define RPMOSTREED_TRANSACTION(o)            (G_TYPE_CHECK_INSTANCE_CAST ((o), RPMOSTREED_TYPE_TRANSACTION, RpmostreedTransaction))
-#define RPMOSTREED_TRANSACTION_CLASS(c)      (G_TYPE_CHECK_CLASS_CAST ((c), RPMOSTREED_TYPE_TRANSACTION, RpmostreedTransactionClass))
-#define RPMOSTREED_IS_TRANSACTION(o)         (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPMOSTREED_TYPE_TRANSACTION))
-#define RPMOSTREED_TRANSACTION_GET_CLASS(o)  (G_TYPE_INSTANCE_GET_CLASS ((o), RPMOSTREED_TYPE_TRANSACTION, RpmostreedTransactionClass))
+#define RPMOSTREED_TYPE_TRANSACTION (rpmostreed_transaction_get_type ())
+#define RPMOSTREED_TRANSACTION(o)                                                                  \
+  (G_TYPE_CHECK_INSTANCE_CAST ((o), RPMOSTREED_TYPE_TRANSACTION, RpmostreedTransaction))
+#define RPMOSTREED_TRANSACTION_CLASS(c)                                                            \
+  (G_TYPE_CHECK_CLASS_CAST ((c), RPMOSTREED_TYPE_TRANSACTION, RpmostreedTransactionClass))
+#define RPMOSTREED_IS_TRANSACTION(o) (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPMOSTREED_TYPE_TRANSACTION))
+#define RPMOSTREED_TRANSACTION_GET_CLASS(o)                                                        \
+  (G_TYPE_INSTANCE_GET_CLASS ((o), RPMOSTREED_TYPE_TRANSACTION, RpmostreedTransactionClass))
 
 typedef struct _RpmostreedTransactionClass RpmostreedTransactionClass;
 typedef struct _RpmostreedTransactionPrivate RpmostreedTransactionPrivate;
 
-struct _RpmostreedTransaction {
+struct _RpmostreedTransaction
+{
   RPMOSTreeTransactionSkeleton parent;
   RpmostreedTransactionPrivate *priv;
 };
 
-struct _RpmostreedTransactionClass {
+struct _RpmostreedTransactionClass
+{
   RPMOSTreeTransactionSkeletonClass parent_class;
 
-  gboolean      (*execute)                 (RpmostreedTransaction *transaction,
-                                            GCancellable *cancellable,
-                                            GError **error);
+  gboolean (*execute) (RpmostreedTransaction *transaction, GCancellable *cancellable,
+                       GError **error);
 };
 
-GType           rpmostreed_transaction_get_type            (void) G_GNUC_CONST;
-gboolean        rpmostreed_transaction_get_active          (RpmostreedTransaction *transaction);
-OstreeSysroot * rpmostreed_transaction_get_sysroot         (RpmostreedTransaction *transaction);
-const char *    rpmostreed_transaction_get_client          (RpmostreedTransaction *transaction);
-const char *    rpmostreed_transaction_get_agent_id        (RpmostreedTransaction *transaction);
-const char *    rpmostreed_transaction_get_sd_unit         (RpmostreedTransaction *transaction);
-GDBusMethodInvocation *
-                rpmostreed_transaction_get_invocation      (RpmostreedTransaction *transaction);
-const char *    rpmostreed_transaction_get_client_address  (RpmostreedTransaction *transaction);
-gboolean        rpmostreed_transaction_is_compatible       (RpmostreedTransaction *transaction,
-                                                            GDBusMethodInvocation *invocation);
-void            rpmostreed_transaction_connect_download_progress
-                                                           (RpmostreedTransaction *transaction,
-                                                            OstreeAsyncProgress *progress);
-void            rpmostreed_transaction_connect_signature_progress
-                                                           (RpmostreedTransaction *transaction,
-                                                            OstreeRepo *repo);
-void            rpmostreed_transaction_force_close         (RpmostreedTransaction *transaction);
+GType rpmostreed_transaction_get_type (void) G_GNUC_CONST;
+gboolean rpmostreed_transaction_get_active (RpmostreedTransaction *transaction);
+OstreeSysroot *rpmostreed_transaction_get_sysroot (RpmostreedTransaction *transaction);
+const char *rpmostreed_transaction_get_client (RpmostreedTransaction *transaction);
+const char *rpmostreed_transaction_get_agent_id (RpmostreedTransaction *transaction);
+const char *rpmostreed_transaction_get_sd_unit (RpmostreedTransaction *transaction);
+GDBusMethodInvocation *rpmostreed_transaction_get_invocation (RpmostreedTransaction *transaction);
+const char *rpmostreed_transaction_get_client_address (RpmostreedTransaction *transaction);
+gboolean rpmostreed_transaction_is_compatible (RpmostreedTransaction *transaction,
+                                               GDBusMethodInvocation *invocation);
+void rpmostreed_transaction_connect_download_progress (RpmostreedTransaction *transaction,
+                                                       OstreeAsyncProgress *progress);
+void rpmostreed_transaction_connect_signature_progress (RpmostreedTransaction *transaction,
+                                                        OstreeRepo *repo);
+void rpmostreed_transaction_force_close (RpmostreedTransaction *transaction);
 
 G_END_DECLS

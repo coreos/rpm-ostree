@@ -21,35 +21,22 @@
 
 #pragma once
 
-#include <ostree.h>
 #include "rpmostree-package.h"
+#include <ostree.h>
 
 G_BEGIN_DECLS
 
-RpmOstreePackage * _rpm_ostree_package_new_from_variant (GVariant *gv_nevra);
+RpmOstreePackage *_rpm_ostree_package_new_from_variant (GVariant *gv_nevra);
 
-gboolean
-_rpm_ostree_package_variant_list_for_commit (OstreeRepo   *repo,
-                                     const char   *rev,
-                                     gboolean      allow_noent,
-                                     GVariant    **out_pkglist,
-                                     GCancellable *cancellable,
-                                     GError      **error);
+gboolean _rpm_ostree_package_variant_list_for_commit (OstreeRepo *repo, const char *rev,
+                                                      gboolean allow_noent, GVariant **out_pkglist,
+                                                      GCancellable *cancellable, GError **error);
 
-gboolean
-_rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
-                                     const char   *rev,
-                                     gboolean      allow_noent,
-                                     GPtrArray   **out_pkglist,
-                                     GCancellable *cancellable,
-                                     GError      **error);
-gboolean
-_rpm_ostree_diff_package_lists (GPtrArray  *a,
-                                GPtrArray  *b,
-                                GPtrArray **out_unique_a,
-                                GPtrArray **out_unique_b,
-                                GPtrArray **out_modified_a,
-                                GPtrArray **out_modified_b,
-                                GPtrArray **out_common);
+gboolean _rpm_ostree_package_list_for_commit (OstreeRepo *repo, const char *rev,
+                                              gboolean allow_noent, GPtrArray **out_pkglist,
+                                              GCancellable *cancellable, GError **error);
+gboolean _rpm_ostree_diff_package_lists (GPtrArray *a, GPtrArray *b, GPtrArray **out_unique_a,
+                                         GPtrArray **out_unique_b, GPtrArray **out_modified_a,
+                                         GPtrArray **out_modified_b, GPtrArray **out_common);
 
 G_END_DECLS

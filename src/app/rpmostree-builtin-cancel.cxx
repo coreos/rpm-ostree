@@ -20,70 +20,54 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-builtins.h"
-#include "rpmostree-util.h"
-#include "rpmostree-libbuiltin.h"
 #include "rpmostree-clientlib.h"
+#include "rpmostree-libbuiltin.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 
-static GOptionEntry option_entries[] = {
-  { NULL }
-};
+static GOptionEntry option_entries[] = { { NULL } };
 
 static void
-on_cancel_method_completed (GObject      *src,
-                            GAsyncResult *res,
-                            gpointer      user_data)
+on_cancel_method_completed (GObject *src, GAsyncResult *res, gpointer user_data)
 {
   /* Nothing right now - we ideally should check for an error, but the
    * transaction could have gone away. A better fix here would be to keep
    * transactions around for some period of time.
    */
-  (void) rpmostree_transaction_call_cancel_finish ((RPMOSTreeTransaction*)src, res, NULL);
+  (void)rpmostree_transaction_call_cancel_finish ((RPMOSTreeTransaction *)src, res, NULL);
 }
 
 static void
-on_active_txn_path_changed (GObject    *object,
-                            GParamSpec *pspec,
-                            gpointer    user_data)
+on_active_txn_path_changed (GObject *object, GParamSpec *pspec, gpointer user_data)
 {
-  auto donep = static_cast<gboolean *>(user_data);
+  auto donep = static_cast<gboolean *> (user_data);
   *donep = TRUE;
   g_main_context_wakeup (NULL);
 }
 
 gboolean
-rpmostree_builtin_cancel (int             argc,
-                          char          **argv,
-                          RpmOstreeCommandInvocation *invocation,
-                          GCancellable   *cancellable,
-                          GError        **error)
+rpmostree_builtin_cancel (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                          GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
-
 
   /* Keep track of the txn path we saw first, as well as checking if it changed
    * over time.
    */
   g_autofree char *txn_path = NULL;
   glnx_unref_object RPMOSTreeTransaction *txn_proxy = NULL;
-  if (!rpmostree_transaction_connect_active (sysroot_proxy, &txn_path, &txn_proxy,
-                                             cancellable, error))
+  if (!rpmostree_transaction_connect_active (sysroot_proxy, &txn_path, &txn_proxy, cancellable,
+                                             error))
     return FALSE;
   if (!txn_proxy)
     {
@@ -99,8 +83,7 @@ rpmostree_builtin_cancel (int             argc,
   g_print ("Cancelling transaction: %s\n", title);
 
   /* Asynchronously cancel, waiting for the sysroot property to change */
-  rpmostree_transaction_call_cancel (txn_proxy, cancellable,
-                                     on_cancel_method_completed, NULL);
+  rpmostree_transaction_call_cancel (txn_proxy, cancellable, on_cancel_method_completed, NULL);
 
   g_clear_object (&txn_proxy);
 

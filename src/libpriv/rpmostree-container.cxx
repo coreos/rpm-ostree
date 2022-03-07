@@ -20,8 +20,8 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-core.h"
 
@@ -30,11 +30,10 @@
 #include <libglnx.h>
 
 gboolean
-rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile,
-                             GCancellable           *cancellable,
-                             GError                **error)
+rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *cancellable,
+                             GError **error)
 {
-  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_container ();
+  g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_container ();
   rpmostree_context_set_treefile (ctx, treefile);
 
   if (!rpmostree_context_setup (ctx, "/", "/", cancellable, error))
@@ -57,13 +56,11 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile,
 }
 
 gboolean
-rpmostree_container_install_packages (char **packages,
-                                      GCancellable  *cancellable,
-                                      GError       **error)
+rpmostree_container_install_packages (char **packages, GCancellable *cancellable, GError **error)
 {
   rust::Vec<rust::String> pkgs;
   for (char **it = packages; it && *it; it++)
-    pkgs.push_back(std::string(*it));
-  auto treefile = CXX_TRY_VAL(treefile_new_from_fields(pkgs), error);
+    pkgs.push_back (std::string (*it));
+  auto treefile = CXX_TRY_VAL (treefile_new_from_fields (pkgs), error);
   return rpmostree_container_rebuild (*treefile, cancellable, error);
 }

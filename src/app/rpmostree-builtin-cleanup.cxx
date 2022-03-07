@@ -20,14 +20,14 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-builtins.h"
-#include "rpmostree-core.h"
-#include "rpmostree-util.h"
-#include "rpmostree-libbuiltin.h"
 #include "rpmostree-clientlib.h"
+#include "rpmostree-core.h"
+#include "rpmostree-libbuiltin.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 
@@ -39,7 +39,8 @@ static gboolean opt_repomd;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "base", 'b', 0, G_OPTION_ARG_NONE, &opt_base, "Clear temporary files; will leave deployments unchanged", NULL },
+  { "base", 'b', 0, G_OPTION_ARG_NONE, &opt_base,
+    "Clear temporary files; will leave deployments unchanged", NULL },
   { "pending", 'p', 0, G_OPTION_ARG_NONE, &opt_pending, "Remove pending deployment", NULL },
   { "rollback", 'r', 0, G_OPTION_ARG_NONE, &opt_rollback, "Remove rollback deployment", NULL },
   { "repomd", 'm', 0, G_OPTION_ARG_NONE, &opt_repomd, "Delete cached rpm repo metadata", NULL },
@@ -47,26 +48,17 @@ static GOptionEntry option_entries[] = {
 };
 
 gboolean
-rpmostree_builtin_cleanup (int             argc,
-                           char          **argv,
-                           RpmOstreeCommandInvocation *invocation,
-                           GCancellable   *cancellable,
-                           GError        **error)
+rpmostree_builtin_cleanup (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                           GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
-  g_autoptr(GPtrArray) cleanup_types = g_ptr_array_new ();
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GPtrArray) cleanup_types = g_ptr_array_new ();
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
   if (argc < 1 || argc > 2)
@@ -76,42 +68,36 @@ rpmostree_builtin_cleanup (int             argc,
     }
 
   if (opt_base)
-    g_ptr_array_add (cleanup_types, (char*)"base");
+    g_ptr_array_add (cleanup_types, (char *)"base");
   if (opt_pending)
-    g_ptr_array_add (cleanup_types, (char*)"pending-deploy");
+    g_ptr_array_add (cleanup_types, (char *)"pending-deploy");
   if (opt_rollback)
-    g_ptr_array_add (cleanup_types, (char*)"rollback-deploy");
+    g_ptr_array_add (cleanup_types, (char *)"rollback-deploy");
   if (opt_repomd)
-    g_ptr_array_add (cleanup_types, (char*)"repomd");
+    g_ptr_array_add (cleanup_types, (char *)"repomd");
   if (cleanup_types->len == 0)
     {
       glnx_throw (error, "At least one cleanup option must be specified");
       return FALSE;
     }
 
-  auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
+  auto is_ostree_container = CXX_TRY_VAL (is_ostree_container (), error);
   if (is_ostree_container && cleanup_types->len == 1 && opt_repomd)
     {
       /* just directly nuke the cachedir */
-      return glnx_shutil_rm_rf_at(AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error);
+      return glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error);
     }
 
   g_ptr_array_add (cleanup_types, NULL);
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
 
-  if (!rpmostree_os_call_cleanup_sync (os_proxy,
-                                       (const char *const*)cleanup_types->pdata,
-                                       &transaction_address,
-                                       cancellable,
-                                       error))
+  if (!rpmostree_os_call_cleanup_sync (os_proxy, (const char *const *)cleanup_types->pdata,
+                                       &transaction_address, cancellable, error))
     return FALSE;
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
                                                 error))
     return FALSE;
 

@@ -27,39 +27,24 @@
 
 G_BEGIN_DECLS
 
-gboolean
-rpmostree_composeutil_checksum (HyGoal             goal,
-                                OstreeRepo        *repo,
-                                const rpmostreecxx::Treefile &tf,
-                                JsonObject        *treefile,
-                                char             **out_checksum,
-                                GError           **error);
+gboolean rpmostree_composeutil_checksum (HyGoal goal, OstreeRepo *repo,
+                                         const rpmostreecxx::Treefile &tf, JsonObject *treefile,
+                                         char **out_checksum, GError **error);
 
-gboolean
-rpmostree_composeutil_read_json_metadata (JsonNode    *root,
-                                          GHashTable  *metadata,
-                                          GError     **error);
-gboolean
-rpmostree_composeutil_read_json_metadata_from_file (const char *path,
-                                                    GHashTable *metadata,
-                                                    GError    **error);
+gboolean rpmostree_composeutil_read_json_metadata (JsonNode *root, GHashTable *metadata,
+                                                   GError **error);
+gboolean rpmostree_composeutil_read_json_metadata_from_file (const char *path, GHashTable *metadata,
+                                                             GError **error);
 
-GVariant *
-rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
-                                         int         rootfs_dfd,
-                                         GError    **error);
+GVariant *rpmostree_composeutil_finalize_metadata (GHashTable *metadata, int rootfs_dfd,
+                                                   GError **error);
 
-GVariant *
-rpmostree_composeutil_finalize_detached_metadata (GHashTable *detached_metadata);
+GVariant *rpmostree_composeutil_finalize_detached_metadata (GHashTable *detached_metadata);
 
-gboolean
-rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
-                                         const char *path,
-                                         const OstreeRepoTransactionStats *stats,
-                                         const char *new_revision,
-                                         GVariant   *new_commit,
-                                         const char *new_ref,
-                                         GCancellable *cancellable,
-                                         GError    **error);
+gboolean rpmostree_composeutil_write_composejson (OstreeRepo *repo, const char *path,
+                                                  const OstreeRepoTransactionStats *stats,
+                                                  const char *new_revision, GVariant *new_commit,
+                                                  const char *new_ref, GCancellable *cancellable,
+                                                  GError **error);
 
 G_END_DECLS

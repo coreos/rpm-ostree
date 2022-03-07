@@ -18,24 +18,23 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-builtins.h"
-#include "rpmostree-util.h"
-#include "rpmostree-libbuiltin.h"
 #include "rpmostree-clientlib.h"
+#include "rpmostree-libbuiltin.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 
 static char *opt_osname;
 static char *opt_force;
 
-static GOptionEntry option_entries[] = {
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "force", 'f', 0, G_OPTION_ARG_NONE, &opt_force, "Expire current cache", NULL },
-  { NULL }
-};
+static GOptionEntry option_entries[]
+    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+        { "force", 'f', 0, G_OPTION_ARG_NONE, &opt_force, "Expire current cache", NULL },
+        { NULL } };
 
 static GVariant *
 get_args_variant (void)
@@ -47,25 +46,16 @@ get_args_variant (void)
 }
 
 gboolean
-rpmostree_builtin_refresh_md (int             argc,
-                              char          **argv,
-                              RpmOstreeCommandInvocation *invocation,
-                              GCancellable   *cancellable,
-                              GError        **error)
+rpmostree_builtin_refresh_md (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                              GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
   if (argc < 1 || argc > 2)
@@ -74,20 +64,14 @@ rpmostree_builtin_refresh_md (int             argc,
       return FALSE;
     }
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
 
-  if (!rpmostree_os_call_refresh_md_sync (os_proxy,
-                                          get_args_variant (),
-                                          &transaction_address,
-                                          cancellable,
-                                          error))
+  if (!rpmostree_os_call_refresh_md_sync (os_proxy, get_args_variant (), &transaction_address,
+                                          cancellable, error))
     return FALSE;
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
                                                 error))
     return FALSE;
 

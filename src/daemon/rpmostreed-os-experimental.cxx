@@ -1,38 +1,38 @@
 /*
-* Copyright (C) 2015 Red Hat, Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
-*/
+ * Copyright (C) 2015 Red Hat, Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 
 #include "config.h"
 #include "ostree.h"
 
 #include <libglnx.h>
 
-#include "rpmostreed-sysroot.h"
+#include "rpmostree-origin.h"
+#include "rpmostree-package-variants.h"
+#include "rpmostree-sysroot-core.h"
+#include "rpmostree-util.h"
 #include "rpmostreed-daemon.h"
 #include "rpmostreed-deployment-utils.h"
-#include "rpmostree-package-variants.h"
 #include "rpmostreed-errors.h"
-#include "rpmostree-origin.h"
 #include "rpmostreed-os-experimental.h"
-#include "rpmostreed-utils.h"
-#include "rpmostree-util.h"
-#include "rpmostreed-transaction.h"
+#include "rpmostreed-sysroot.h"
 #include "rpmostreed-transaction-types.h"
-#include "rpmostree-sysroot-core.h"
+#include "rpmostreed-transaction.h"
+#include "rpmostreed-utils.h"
 
 typedef struct _RpmostreedOSExperimentalClass RpmostreedOSExperimentalClass;
 
@@ -48,15 +48,13 @@ struct _RpmostreedOSExperimentalClass
 
 static void rpmostreed_osexperimental_iface_init (RPMOSTreeOSExperimentalIface *iface);
 
-
-G_DEFINE_TYPE_WITH_CODE (RpmostreedOSExperimental,
-                         rpmostreed_osexperimental,
+G_DEFINE_TYPE_WITH_CODE (RpmostreedOSExperimental, rpmostreed_osexperimental,
                          RPMOSTREE_TYPE_OSEXPERIMENTAL_SKELETON,
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_OSEXPERIMENTAL,
-                                                rpmostreed_osexperimental_iface_init)
-                         );
+                                                rpmostreed_osexperimental_iface_init));
 
-/* ---------------------------------------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------------------------------------
+ */
 
 static void
 os_dispose (GObject *object)
@@ -64,11 +62,10 @@ os_dispose (GObject *object)
   RpmostreedOSExperimental *self = RPMOSTREED_OSEXPERIMENTAL (object);
   const gchar *object_path;
 
-  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON(self));
+  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (self));
   if (object_path != NULL)
     {
-      rpmostreed_daemon_unpublish (rpmostreed_daemon_get (),
-                                   object_path, object);
+      rpmostreed_daemon_unpublish (rpmostreed_daemon_get (), object_path, object);
     }
 
   G_OBJECT_CLASS (rpmostreed_osexperimental_parent_class)->dispose (object);
@@ -91,8 +88,7 @@ rpmostreed_osexperimental_class_init (RpmostreedOSExperimentalClass *klass)
 
   gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->dispose = os_dispose;
-  gobject_class->constructed  = os_constructed;
-
+  gobject_class->constructed = os_constructed;
 }
 
 static void
@@ -101,28 +97,24 @@ rpmostreed_osexperimental_init (RpmostreedOSExperimental *self)
 }
 
 static gboolean
-osexperimental_handle_moo (RPMOSTreeOSExperimental *interface,
-                           GDBusMethodInvocation   *invocation,
-                           gboolean                 is_utf8)
+osexperimental_handle_moo (RPMOSTreeOSExperimental *interface, GDBusMethodInvocation *invocation,
+                           gboolean is_utf8)
 {
-  static const char ascii_cow[] = "\n" \
-"                 (__)\n" \
-"                 (oo)\n" \
-"           /------\\/\n" \
-"          / |    ||\n" \
-"         *  /\\---/\\\n" \
-"            ~~   ~~\n";
+  static const char ascii_cow[] = "\n"
+                                  "                 (__)\n"
+                                  "                 (oo)\n"
+                                  "           /------\\/\n"
+                                  "          / |    ||\n"
+                                  "         *  /\\---/\\\n"
+                                  "            ~~   ~~\n";
   const char *result = is_utf8 ? "🐄\n" : ascii_cow;
   rpmostree_osexperimental_complete_moo (interface, invocation, result);
   return TRUE;
 }
 
 static gboolean
-prepare_live_fs_txn(RPMOSTreeOSExperimental *interface,
-                    GDBusMethodInvocation *invocation,
-                    GVariant *arg_options,
-                    RpmostreedTransaction **out_txn,
-                    GError    **error)
+prepare_live_fs_txn (RPMOSTreeOSExperimental *interface, GDBusMethodInvocation *invocation,
+                     GVariant *arg_options, RpmostreedTransaction **out_txn, GError **error)
 {
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
 
@@ -134,20 +126,14 @@ prepare_live_fs_txn(RPMOSTreeOSExperimental *interface,
 
   if (transaction == NULL)
     {
-      g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+      g_autoptr (GCancellable) cancellable = g_cancellable_new ();
       glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
-                                          cancellable,
-                                          &ot_sysroot,
-                                          NULL,
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                           error))
         return glnx_prefix_error (error, "Loading sysroot state");
 
-      transaction = rpmostreed_transaction_new_apply_live (invocation,
-                                                           ot_sysroot,
-                                                           arg_options,
-                                                           cancellable,
-                                                           error);
+      transaction = rpmostreed_transaction_new_apply_live (invocation, ot_sysroot, arg_options,
+                                                           cancellable, error);
       if (transaction == NULL)
         return glnx_prefix_error (error, "Starting live fs transaction");
     }
@@ -160,18 +146,18 @@ prepare_live_fs_txn(RPMOSTreeOSExperimental *interface,
 
 static gboolean
 osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
-                               GDBusMethodInvocation *invocation,
-                               GVariant *arg_options)
+                               GDBusMethodInvocation *invocation, GVariant *arg_options)
 {
   GError *local_error = NULL;
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
 
-  gboolean is_ok = prepare_live_fs_txn (interface, invocation, arg_options, &transaction, &local_error);
+  gboolean is_ok
+      = prepare_live_fs_txn (interface, invocation, arg_options, &transaction, &local_error);
   if (!is_ok)
     {
       g_assert (local_error != NULL);
       g_dbus_method_invocation_take_error (invocation, local_error);
-      return TRUE;  /* 🔚 Early return */
+      return TRUE; /* 🔚 Early return */
     }
 
   g_assert (transaction != NULL);
@@ -182,33 +168,31 @@ osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
 }
 
 static gboolean
-prepare_download_pkgs_txn(const gchar * const *queries,
-                          const char * source,
-                          GUnixFDList **out_fd_list,
-                          GError    **error)
+prepare_download_pkgs_txn (const gchar *const *queries, const char *source,
+                           GUnixFDList **out_fd_list, GError **error)
 {
   GUnixFDList *fd_list = NULL;
-  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  g_autoptr (GCancellable) cancellable = g_cancellable_new ();
 
   if (!queries || !*queries)
-      return glnx_throw (error, "No queries passed");
+    return glnx_throw (error, "No queries passed");
 
   OstreeSysroot *sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
   const char *osname = ostree_deployment_get_osname (booted_deployment);
-  g_autoptr(GPtrArray) dnf_pkgs = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr (GPtrArray) dnf_pkgs = g_ptr_array_new_with_free_func (g_object_unref);
 
-  g_autoptr(OstreeDeployment) cfg_merge_deployment =
-    ostree_sysroot_get_merge_deployment (sysroot, osname);
-  g_autoptr(OstreeDeployment) origin_merge_deployment =
-    rpmostree_syscore_get_origin_merge_deployment (sysroot, osname);
+  g_autoptr (OstreeDeployment) cfg_merge_deployment
+      = ostree_sysroot_get_merge_deployment (sysroot, osname);
+  g_autoptr (OstreeDeployment) origin_merge_deployment
+      = rpmostree_syscore_get_origin_merge_deployment (sysroot, osname);
 
   /* but set the source root to be the origin merge deployment's so we pick up releasever */
-  g_autofree char *origin_deployment_root =
-    rpmostree_get_deployment_root (sysroot, origin_merge_deployment);
+  g_autofree char *origin_deployment_root
+      = rpmostree_get_deployment_root (sysroot, origin_merge_deployment);
 
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
-  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_client (repo);
+  g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_client (repo);
   rpmostree_context_set_dnf_caching (ctx, RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER);
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us
@@ -225,19 +209,19 @@ prepare_download_pkgs_txn(const gchar * const *queries,
     return glnx_prefix_error (error, "Downloading metadata");
 
   DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
-  auto parsed_source = CXX_TRY_VAL(parse_override_source(source), error);
+  auto parsed_source = CXX_TRY_VAL (parse_override_source (source), error);
 
   if (parsed_source.kind == rpmostreecxx::PackageOverrideSourceKind::Repo)
     {
-      const char *source_name = parsed_source.name.c_str();
-      for (const char* const* it = queries; it && *it; it++)
+      const char *source_name = parsed_source.name.c_str ();
+      for (const char *const *it = queries; it && *it; it++)
         {
-          auto pkg_name = static_cast<const char*> (*it);
-          g_autoptr(GPtrArray) pkglist = NULL;
+          auto pkg_name = static_cast<const char *> (*it);
+          g_autoptr (GPtrArray) pkglist = NULL;
           HyNevra nevra = NULL;
-          g_auto(HySubject) subject = hy_subject_create(pkg_name);
-          hy_autoquery HyQuery query =
-            hy_subject_get_best_solution(subject, sack, NULL, &nevra, FALSE, TRUE, TRUE, TRUE, FALSE);
+          g_auto (HySubject) subject = hy_subject_create (pkg_name);
+          hy_autoquery HyQuery query = hy_subject_get_best_solution (
+              subject, sack, NULL, &nevra, FALSE, TRUE, TRUE, TRUE, FALSE);
           hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, source_name);
           pkglist = hy_query_run (query);
           if (!pkglist || pkglist->len == 0)
@@ -256,9 +240,9 @@ prepare_download_pkgs_txn(const gchar * const *queries,
     return glnx_prefix_error (error, "Downloading packages");
 
   fd_list = g_unix_fd_list_new ();
-  for (unsigned int i = 0;  i < dnf_pkgs->len; i++)
+  for (unsigned int i = 0; i < dnf_pkgs->len; i++)
     {
-      DnfPackage *pkg = static_cast<DnfPackage *>(dnf_pkgs->pdata[i]);
+      DnfPackage *pkg = static_cast<DnfPackage *> (dnf_pkgs->pdata[i]);
       const gchar *path = dnf_package_get_filename (pkg);
       gint fd = -1;
 
@@ -278,10 +262,8 @@ prepare_download_pkgs_txn(const gchar * const *queries,
 
 static gboolean
 osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
-                                         GDBusMethodInvocation *invocation,
-                                         GUnixFDList* _fds,
-                                         const gchar * const *queries,
-                                         const char * source)
+                                         GDBusMethodInvocation *invocation, GUnixFDList *_fds,
+                                         const gchar *const *queries, const char *source)
 {
   GError *local_error = NULL;
   GUnixFDList *fd_list = NULL;
@@ -291,7 +273,7 @@ osexperimental_handle_download_packages (RPMOSTreeOSExperimental *interface,
     {
       g_assert (local_error != NULL);
       g_dbus_method_invocation_take_error (invocation, local_error);
-      return TRUE;  /* 🔚 Early return */
+      return TRUE; /* 🔚 Early return */
     }
 
   g_assert (fd_list != NULL);
@@ -308,12 +290,11 @@ rpmostreed_osexperimental_iface_init (RPMOSTreeOSExperimentalIface *iface)
   iface->handle_download_packages = osexperimental_handle_download_packages;
 }
 
-/* ---------------------------------------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------------------------------------
+ */
 
 RPMOSTreeOSExperimental *
-rpmostreed_osexperimental_new (OstreeSysroot *sysroot,
-                               OstreeRepo *repo,
-                               const char *name)
+rpmostreed_osexperimental_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name)
 {
   g_assert (OSTREE_IS_SYSROOT (sysroot));
   g_assert (name != NULL);

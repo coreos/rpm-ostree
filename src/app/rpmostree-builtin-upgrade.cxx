@@ -20,14 +20,14 @@
 
 #include "config.h"
 
-#include <string.h>
-#include <glib-unix.h>
 #include <gio/gio.h>
+#include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-builtins.h"
+#include "rpmostree-clientlib.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-clientlib.h"
 
 #include <libglnx.h>
 
@@ -45,46 +45,48 @@ static gboolean opt_lock_finalization;
 static gboolean opt_bypass_driver;
 
 /* "check-diff" is deprecated, replaced by "preview" */
-static GOptionEntry option_entries[] = {
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
-  { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade, "Permit deployment of chronologically older trees", NULL },
-  { "check-diff", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_preview, "Check for upgrades and print package diff only", NULL },
-  { "preview", 0, 0, G_OPTION_ARG_NONE, &opt_preview, "Just preview package differences (implies --unchanged-exit-77)", NULL },
-  { "check", 0, 0, G_OPTION_ARG_NONE, &opt_check, "Just check if an upgrade is available (implies --unchanged-exit-77)", NULL },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
-  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
-  /* legacy alias for --unchanged-exit-77 */
-  { "upgrade-unchanged-exit-77", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_upgrade_unchanged_exit_77, "If no upgrade is available, exit 77", NULL },
-  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no new deployment made, exit 77", NULL },
-  { "trigger-automatic-update-policy", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_automatic, "For automated use only; triggered by automatic timer", NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
-  { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver, "Force an upgrade even if an updates driver is registered", NULL},
-  { NULL }
-};
+static GOptionEntry option_entries[]
+    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+        { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
+          "Initiate a reboot after operation is complete", NULL },
+        { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade,
+          "Permit deployment of chronologically older trees", NULL },
+        { "check-diff", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_preview,
+          "Check for upgrades and print package diff only", NULL },
+        { "preview", 0, 0, G_OPTION_ARG_NONE, &opt_preview,
+          "Just preview package differences (implies --unchanged-exit-77)", NULL },
+        { "check", 0, 0, G_OPTION_ARG_NONE, &opt_check,
+          "Just check if an upgrade is available (implies --unchanged-exit-77)", NULL },
+        { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only,
+          "Do not download latest ostree and RPM data", NULL },
+        { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only,
+          "Just download latest ostree and RPM data, don't deploy", NULL },
+        /* legacy alias for --unchanged-exit-77 */
+        { "upgrade-unchanged-exit-77", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE,
+          &opt_upgrade_unchanged_exit_77, "If no upgrade is available, exit 77", NULL },
+        { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77,
+          "If no new deployment made, exit 77", NULL },
+        { "trigger-automatic-update-policy", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE,
+          &opt_automatic, "For automated use only; triggered by automatic timer", NULL },
+        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+          "Prevent automatic deployment finalization on shutdown", NULL },
+        { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver,
+          "Force an upgrade even if an updates driver is registered", NULL },
+        { NULL } };
 
 gboolean
-rpmostree_builtin_upgrade (int             argc,
-                           char          **argv,
-                           RpmOstreeCommandInvocation *invocation,
-                           GCancellable   *cancellable,
-                           GError        **error)
+rpmostree_builtin_upgrade (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                           GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       &install_pkgs,
-                                       &uninstall_pkgs,
-                                       &sysroot_proxy,
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, &install_pkgs, &uninstall_pkgs, &sysroot_proxy,
                                        error))
     return FALSE;
 
@@ -113,8 +115,7 @@ rpmostree_builtin_upgrade (int             argc,
   if (opt_preview)
     opt_check = FALSE;
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
 
   /* Print a notice if stage updates are enabled and the user
@@ -133,7 +134,7 @@ rpmostree_builtin_upgrade (int             argc,
     if (!error_if_driver_registered (sysroot_proxy, cancellable, error))
       return FALSE;
 
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   const gboolean check_or_preview = (opt_check || opt_preview);
   if (opt_automatic || check_or_preview)
@@ -146,15 +147,11 @@ rpmostree_builtin_upgrade (int             argc,
        * or we're *are* handling --trigger-automatic-update-policy, but on a tty */
       if (check_or_preview || glnx_stdout_is_tty ())
         g_variant_dict_insert (&dict, "output-to-self", "b", FALSE);
-      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+      g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       gboolean auto_updates_enabled;
-      if (!rpmostree_os_call_automatic_update_trigger_sync (os_proxy,
-                                                            options,
-                                                            &auto_updates_enabled,
-                                                            &transaction_address,
-                                                            cancellable,
-                                                            error))
+      if (!rpmostree_os_call_automatic_update_trigger_sync (
+              os_proxy, options, &auto_updates_enabled, &transaction_address, cancellable, error))
         return FALSE;
 
       if (!auto_updates_enabled)
@@ -174,49 +171,36 @@ rpmostree_builtin_upgrade (int             argc,
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
       g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
       g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
-      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+      g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to. */
       if (install_pkgs || uninstall_pkgs)
         {
-          if (!rpmostree_update_deployment (os_proxy,
-                                            NULL, /* refspec */
-                                            NULL, /* revision */
-                                            install_pkgs,
-                                            NULL, /* install_fileoverride_pkgs */
-                                            uninstall_pkgs,
-                                            NULL, /* override replace */
-                                            NULL, /* override remove */
-                                            NULL, /* override reset */
-                                            NULL, /* local_repo_remote */
-                                            options,
-                                            &transaction_address,
-                                            cancellable,
-                                            error))
+          if (!rpmostree_update_deployment (os_proxy, NULL,       /* refspec */
+                                            NULL,                 /* revision */
+                                            install_pkgs, NULL,   /* install_fileoverride_pkgs */
+                                            uninstall_pkgs, NULL, /* override replace */
+                                            NULL,                 /* override remove */
+                                            NULL,                 /* override reset */
+                                            NULL,                 /* local_repo_remote */
+                                            options, &transaction_address, cancellable, error))
             return FALSE;
         }
       else
         {
-          if (!rpmostree_os_call_upgrade_sync (os_proxy,
-                                               options,
-                                               NULL,
-                                               &transaction_address,
-                                               NULL,
-                                               cancellable,
-                                               error))
+          if (!rpmostree_os_call_upgrade_sync (os_proxy, options, NULL, &transaction_address, NULL,
+                                               cancellable, error))
             return FALSE;
         }
     }
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
                                                 error))
     return FALSE;
 
   if (check_or_preview)
     {
-      g_autoptr(GVariant) cached_update = NULL;
+      g_autoptr (GVariant) cached_update = NULL;
       if (rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
         cached_update = rpmostree_os_dup_cached_update (os_proxy);
 
@@ -228,8 +212,8 @@ rpmostree_builtin_upgrade (int             argc,
       else
         {
           /* preview --> verbose (i.e. we want the diff) */
-          if (!rpmostree_print_cached_update (cached_update, opt_preview, FALSE,
-                                              cancellable, error))
+          if (!rpmostree_print_cached_update (cached_update, opt_preview, FALSE, cancellable,
+                                              error))
             return FALSE;
         }
     }
@@ -244,8 +228,10 @@ rpmostree_builtin_upgrade (int             argc,
 
       /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      CXX_TRY(print_treepkg_diff_from_sysroot_path (rust::Str(sysroot_path),
-            RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0, cancellable), error);
+      CXX_TRY (print_treepkg_diff_from_sysroot_path (rust::Str (sysroot_path),
+                                                     RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0,
+                                                     cancellable),
+               error);
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }

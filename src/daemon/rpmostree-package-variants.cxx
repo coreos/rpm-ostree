@@ -20,11 +20,11 @@
 
 #include "config.h"
 
-#include <rpmostree.h>
-#include "rpmostree-package-variants.h"
 #include "rpmostree-package-priv.h"
+#include "rpmostree-package-variants.h"
 #include "rpmostree-util.h"
 #include <libglnx.h>
+#include <rpmostree.h>
 
 /**
  * package_to_variant
@@ -36,17 +36,13 @@
 static GVariant *
 package_variant_new (RpmOstreePackage *package)
 {
-  return g_variant_new ("(sss)",
-                        rpm_ostree_package_get_name (package),
+  return g_variant_new ("(sss)", rpm_ostree_package_get_name (package),
                         rpm_ostree_package_get_evr (package),
                         rpm_ostree_package_get_arch (package));
 }
 
-
 static GVariant *
-build_diff_variant (const gchar *name,
-                    guint type,
-                    RpmOstreePackage *old_package,
+build_diff_variant (const gchar *name, guint type, RpmOstreePackage *old_package,
                     RpmOstreePackage *new_package)
 {
   GVariantBuilder options_builder;
@@ -72,15 +68,13 @@ build_diff_variant (const gchar *name,
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
-
 static int
-rpm_ostree_db_diff_variant_compare_by_name (const void *v1,
-                                            const void *v2)
+rpm_ostree_db_diff_variant_compare_by_name (const void *v1, const void *v2)
 
 {
-  GVariant **v1pp = (GVariant**)v1;
+  GVariant **v1pp = (GVariant **)v1;
   GVariant *variant1 = *v1pp;
-  GVariant **v2pp = (GVariant**)v2;
+  GVariant **v2pp = (GVariant **)v2;
   GVariant *variant2 = *v2pp;
 
   const char *name1 = NULL;
@@ -94,13 +88,12 @@ rpm_ostree_db_diff_variant_compare_by_name (const void *v1,
 }
 
 static int
-rpm_ostree_db_diff_variant_compare_by_type (const void *v1,
-                                            const void *v2)
+rpm_ostree_db_diff_variant_compare_by_type (const void *v1, const void *v2)
 
 {
-  GVariant **v1pp = (GVariant**)v1;
+  GVariant **v1pp = (GVariant **)v1;
   GVariant *variant1 = *v1pp;
-  GVariant **v2pp = (GVariant**)v2;
+  GVariant **v2pp = (GVariant **)v2;
   GVariant *variant2 = *v2pp;
 
   guint type1;
@@ -128,25 +121,20 @@ rpm_ostree_db_diff_variant_compare_by_type (const void *v1,
  * Returns: %TRUE on success, %FALSE on failure
  */
 gboolean
-rpm_ostree_db_diff_variant (OstreeRepo *repo,
-                            const char *from_rev,
-                            const char *to_rev,
-                            gboolean    allow_noent,
-                            GVariant  **out_variant,
-                            GCancellable *cancellable,
+rpm_ostree_db_diff_variant (OstreeRepo *repo, const char *from_rev, const char *to_rev,
+                            gboolean allow_noent, GVariant **out_variant, GCancellable *cancellable,
                             GError **error)
 {
   int flags = 0;
   if (allow_noent)
     flags |= RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
 
-  g_autoptr(GPtrArray) removed = NULL;
-  g_autoptr(GPtrArray) added = NULL;
-  g_autoptr(GPtrArray) modified_old = NULL;
-  g_autoptr(GPtrArray) modified_new = NULL;
-  if (!rpm_ostree_db_diff_ext (repo, from_rev, to_rev, (RpmOstreeDbDiffExtFlags)flags,
-                               &removed, &added, &modified_old, &modified_new,
-                               cancellable, error))
+  g_autoptr (GPtrArray) removed = NULL;
+  g_autoptr (GPtrArray) added = NULL;
+  g_autoptr (GPtrArray) modified_old = NULL;
+  g_autoptr (GPtrArray) modified_new = NULL;
+  if (!rpm_ostree_db_diff_ext (repo, from_rev, to_rev, (RpmOstreeDbDiffExtFlags)flags, &removed,
+                               &added, &modified_old, &modified_new, cancellable, error))
     return FALSE;
 
   if (allow_noent && !removed)
@@ -157,14 +145,13 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
 
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
 
-  g_autoptr(GPtrArray) found =
-    g_ptr_array_new_with_free_func ((GDestroyNotify) g_variant_unref);
+  g_autoptr (GPtrArray) found = g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
 
   for (guint i = 0; i < modified_old->len; i++)
     {
       guint type = RPM_OSTREE_PACKAGE_UPGRADED;
-      auto oldpkg = static_cast<RpmOstreePackage *>(modified_old->pdata[i]);
-      auto newpkg = static_cast<RpmOstreePackage *>(modified_new->pdata[i]);
+      auto oldpkg = static_cast<RpmOstreePackage *> (modified_old->pdata[i]);
+      auto newpkg = static_cast<RpmOstreePackage *> (modified_new->pdata[i]);
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
         type = RPM_OSTREE_PACKAGE_DOWNGRADED;
@@ -176,7 +163,7 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   for (guint i = 0; i < removed->len; i++)
     {
       guint type = RPM_OSTREE_PACKAGE_REMOVED;
-      auto pkg = static_cast<RpmOstreePackage *>(removed->pdata[i]);
+      auto pkg = static_cast<RpmOstreePackage *> (removed->pdata[i]);
       const char *name = rpm_ostree_package_get_name (pkg);
       g_ptr_array_add (found, build_diff_variant (name, type, pkg, NULL));
     }
@@ -184,7 +171,7 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   for (guint i = 0; i < added->len; i++)
     {
       guint type = RPM_OSTREE_PACKAGE_ADDED;
-      auto pkg = static_cast<RpmOstreePackage *>(added->pdata[i]);
+      auto pkg = static_cast<RpmOstreePackage *> (added->pdata[i]);
       const char *name = rpm_ostree_package_get_name (pkg);
       g_ptr_array_add (found, build_diff_variant (name, type, NULL, pkg));
     }
@@ -194,22 +181,24 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   GVariantBuilder builder;
   g_variant_builder_init (&builder, RPMOSTREE_DB_DIFF_VARIANT_FORMAT);
   for (guint i = 0; i < found->len; i++)
-    g_variant_builder_add_value (&builder, (GVariant*)found->pdata[i]);
+    g_variant_builder_add_value (&builder, (GVariant *)found->pdata[i]);
 
   *out_variant = g_variant_builder_end (&builder);
   g_variant_ref_sink (*out_variant);
   return TRUE;
 }
 
-namespace rpmostreecxx {
+namespace rpmostreecxx
+{
 GVariant *
 package_variant_list_for_commit (OstreeRepo &repo, rust::Str rev, GCancellable &cancellable)
 {
-  g_autoptr(GError) local_error = NULL;
-  auto rev_c = std::string(rev);
-  g_autoptr(GVariant) ret_v = NULL;
-  if (!_rpm_ostree_package_variant_list_for_commit (&repo, rev_c.c_str(), FALSE, &ret_v, &cancellable, &local_error))
+  g_autoptr (GError) local_error = NULL;
+  auto rev_c = std::string (rev);
+  g_autoptr (GVariant) ret_v = NULL;
+  if (!_rpm_ostree_package_variant_list_for_commit (&repo, rev_c.c_str (), FALSE, &ret_v,
+                                                    &cancellable, &local_error))
     util::throw_gerror (local_error);
-  return util::move_nullify(ret_v);
+  return util::move_nullify (ret_v);
 }
 }

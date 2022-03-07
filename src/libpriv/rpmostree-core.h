@@ -22,15 +22,15 @@
 
 #include <gio/gio.h>
 #include <libdnf/libdnf.h>
-#include <ostree.h>
 #include <memory>
+#include <ostree.h>
 
-#include "rpmostree-cxxrs.h"
 #include "libglnx.h"
-
+#include "rpmostree-cxxrs.h"
 
 // C++ APIs
-std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping>> rpmostree_dnfcontext_get_varsubsts (DnfContext *context);
+std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping> >
+rpmostree_dnfcontext_get_varsubsts (DnfContext *context);
 
 // Begin C APIs
 G_BEGIN_DECLS
@@ -56,7 +56,8 @@ G_BEGIN_DECLS
 #define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
 
-typedef enum {
+typedef enum
+{
   RPMOSTREE_REFSPEC_TYPE_OSTREE,
   RPMOSTREE_REFSPEC_TYPE_CHECKSUM,
   RPMOSTREE_REFSPEC_TYPE_CONTAINER,
@@ -66,155 +67,122 @@ typedef enum {
 #define RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY "baserefspec"
 #define RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY "container-image-reference"
 
-gboolean rpmostree_refspec_classify (const char *refspec,
-                                     RpmOstreeRefspecType *out_type,
-                                     GError     **error);
+gboolean rpmostree_refspec_classify (const char *refspec, RpmOstreeRefspecType *out_type,
+                                     GError **error);
 
-namespace rpmostreecxx {
-void core_libdnf_process_global_init();
+namespace rpmostreecxx
+{
+void core_libdnf_process_global_init ();
 }
 
-RpmOstreeContext *rpmostree_context_new_base (OstreeRepo   *repo);
+RpmOstreeContext *rpmostree_context_new_base (OstreeRepo *repo);
 
-RpmOstreeContext *rpmostree_context_new_client (OstreeRepo   *repo);
+RpmOstreeContext *rpmostree_context_new_client (OstreeRepo *repo);
 
-RpmOstreeContext * rpmostree_context_new_container ();
+RpmOstreeContext *rpmostree_context_new_container ();
 
-RpmOstreeContext *rpmostree_context_new_compose (int basedir_dfd,
-                                                 OstreeRepo  *repo,
+RpmOstreeContext *rpmostree_context_new_compose (int basedir_dfd, OstreeRepo *repo,
                                                  rpmostreecxx::Treefile &treefile_rs);
 
-void rpmostree_context_set_cache_root (RpmOstreeContext *self,
-                                       int               userroot_dfd);
+void rpmostree_context_set_cache_root (RpmOstreeContext *self, int userroot_dfd);
 
-void rpmostree_context_set_pkgcache_only (RpmOstreeContext *self,
-                                          gboolean          pkgcache_only);
+void rpmostree_context_set_pkgcache_only (RpmOstreeContext *self, gboolean pkgcache_only);
 
-typedef enum {
-      RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER,
-      RPMOSTREE_CONTEXT_DNF_CACHE_DEFAULT,
-      RPMOSTREE_CONTEXT_DNF_CACHE_NEVER,
+typedef enum
+{
+  RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER,
+  RPMOSTREE_CONTEXT_DNF_CACHE_DEFAULT,
+  RPMOSTREE_CONTEXT_DNF_CACHE_NEVER,
 } RpmOstreeContextDnfCachePolicy;
 
 void rpmostree_context_set_dnf_caching (RpmOstreeContext *self,
                                         RpmOstreeContextDnfCachePolicy policy);
 
-DnfContext * rpmostree_context_get_dnf (RpmOstreeContext *self);
+DnfContext *rpmostree_context_get_dnf (RpmOstreeContext *self);
 
-GVariant *rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self);
+GVariant *rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext *self);
 
 void rpmostree_context_set_treefile (RpmOstreeContext *self, rpmostreecxx::Treefile &treefile);
 
-gboolean rpmostree_context_setup (RpmOstreeContext     *self,
-                                  const char    *install_root,
-                                  const char    *source_root,
-                                  GCancellable  *cancellable,
-                                  GError       **error);
+gboolean rpmostree_context_setup (RpmOstreeContext *self, const char *install_root,
+                                  const char *source_root, GCancellable *cancellable,
+                                  GError **error);
 
-void
-rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
-                                             OstreeSysroot    *sysroot,
-                                             OstreeDeployment *cfg_deployment);
+void rpmostree_context_configure_from_deployment (RpmOstreeContext *self, OstreeSysroot *sysroot,
+                                                  OstreeDeployment *cfg_deployment);
 
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
 void rpmostree_context_disable_selinux (RpmOstreeContext *self);
 const char *rpmostree_context_get_ref (RpmOstreeContext *self);
 
-void rpmostree_context_set_repos (RpmOstreeContext *self,
-                                  OstreeRepo       *base_repo,
-                                  OstreeRepo       *pkgcache_repo);
+void rpmostree_context_set_repos (RpmOstreeContext *self, OstreeRepo *base_repo,
+                                  OstreeRepo *pkgcache_repo);
 void rpmostree_context_set_devino_cache (RpmOstreeContext *self,
                                          OstreeRepoDevInoCache *devino_cache);
 void rpmostree_context_disable_rofiles (RpmOstreeContext *self);
-void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
-                                     OstreeSePolicy   *sepolicy);
+void rpmostree_context_set_sepolicy (RpmOstreeContext *self, OstreeSePolicy *sepolicy);
 
-gboolean rpmostree_dnf_add_checksum_goal (GChecksum  *checksum,
-                                          HyGoal      goal,
-                                          OstreeRepo *pkgcache_repo,
-                                          GError    **error);
+gboolean rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal,
+                                          OstreeRepo *pkgcache_repo, GError **error);
 
-gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
-                                             char            **out_checksum,
-                                             GError          **error);
+gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self, char **out_checksum,
+                                             GError **error);
 
-gboolean
-rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
-                                    const char    *nevra,
-                                    const char    *expected_sha256,
-                                    GVariant     **out_header,
-                                    GCancellable  *cancellable,
-                                    GError       **error);
+gboolean rpmostree_pkgcache_find_pkg_header (OstreeRepo *pkgcache, const char *nevra,
+                                             const char *expected_sha256, GVariant **out_header,
+                                             GCancellable *cancellable, GError **error);
 
-gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
+gboolean rpmostree_context_download_metadata (RpmOstreeContext *context,
                                               DnfContextSetupSackFlags flags,
-                                              GCancellable      *cancellable,
-                                              GError           **error);
+                                              GCancellable *cancellable, GError **error);
 
 /* This API allocates an install context, use with one of the later ones */
-gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
-                                    GCancellable   *cancellable,
-                                    GError        **error);
+gboolean rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable,
+                                    GError **error);
 
 GPtrArray *rpmostree_context_get_packages (RpmOstreeContext *self);
 
 GPtrArray *rpmostree_context_get_packages_to_import (RpmOstreeContext *self);
 
-gboolean
-rpmostree_context_set_lockfile (RpmOstreeContext *self,
-                                char            **lockfiles,
-                                gboolean          strict,
-                                GError          **error);
+gboolean rpmostree_context_set_lockfile (RpmOstreeContext *self, char **lockfiles, gboolean strict,
+                                         GError **error);
 
-gboolean rpmostree_download_packages (GPtrArray      *packages,
-                                      GCancellable   *cancellable,
-                                      GError        **error);
+gboolean rpmostree_download_packages (GPtrArray *packages, GCancellable *cancellable,
+                                      GError **error);
 
-gboolean rpmostree_context_download (RpmOstreeContext *self,
-                                     GCancellable     *cancellable,
-                                     GError           **error);
+gboolean rpmostree_context_download (RpmOstreeContext *self, GCancellable *cancellable,
+                                     GError **error);
 
-void rpmostree_set_repos_on_packages (DnfContext *dnfctx,
-                                      GPtrArray  *packages);
+void rpmostree_set_repos_on_packages (DnfContext *dnfctx, GPtrArray *packages);
 
-gboolean
-rpmostree_context_consume_package (RpmOstreeContext  *self,
-                                   DnfPackage        *package,
-                                   int               *out_fd,
-                                   GError           **error);
+gboolean rpmostree_context_consume_package (RpmOstreeContext *self, DnfPackage *package,
+                                            int *out_fd, GError **error);
 
-gboolean rpmostree_context_import (RpmOstreeContext *self,
-                                   GCancellable     *cancellable,
-                                   GError          **error);
+gboolean rpmostree_context_import (RpmOstreeContext *self, GCancellable *cancellable,
+                                   GError **error);
 
-gboolean rpmostree_context_force_relabel (RpmOstreeContext *self,
-                                          GCancellable     *cancellable,
-                                          GError          **error);
+gboolean rpmostree_context_force_relabel (RpmOstreeContext *self, GCancellable *cancellable,
+                                          GError **error);
 
-typedef enum {
+typedef enum
+{
   RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
   RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING
 } RpmOstreeAssembleType;
 
-void rpmostree_context_set_tmprootfs_dfd (RpmOstreeContext *self,
-                                          int               dfd);
-int rpmostree_context_get_tmprootfs_dfd  (RpmOstreeContext *self);
+void rpmostree_context_set_tmprootfs_dfd (RpmOstreeContext *self, int dfd);
+int rpmostree_context_get_tmprootfs_dfd (RpmOstreeContext *self);
 
 gboolean rpmostree_context_get_kernel_changed (RpmOstreeContext *self);
 
 /* NB: tmprootfs_dfd is allowed to have pre-existing data */
 /* devino_cache can be NULL if no previous cache established */
-gboolean rpmostree_context_assemble (RpmOstreeContext      *self,
-                                     GCancellable          *cancellable,
-                                     GError               **error);
-gboolean rpmostree_context_assemble_end (RpmOstreeContext      *self,
-                                         GCancellable          *cancellable,
-                                         GError               **error);
-gboolean rpmostree_context_commit (RpmOstreeContext      *self,
-                                   const char            *parent,
-                                   RpmOstreeAssembleType  assemble_type,
-                                   char                 **out_commit,
-                                   GCancellable          *cancellable,
-                                   GError               **error);
+gboolean rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable,
+                                     GError **error);
+gboolean rpmostree_context_assemble_end (RpmOstreeContext *self, GCancellable *cancellable,
+                                         GError **error);
+gboolean rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
+                                   RpmOstreeAssembleType assemble_type, char **out_commit,
+                                   GCancellable *cancellable, GError **error);
 
 G_END_DECLS

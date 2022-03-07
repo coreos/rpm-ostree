@@ -21,22 +21,30 @@
 
 #pragma once
 
-#include <gio/gio.h>
 #include <archive.h>
 #include <archive_entry.h>
+#include <gio/gio.h>
 
 G_BEGIN_DECLS
 
-#define RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM         (_rpm_ostree_libarchive_input_stream_get_type ())
-#define RPM_OSTREE_LIBARCHIVE_INPUT_STREAM(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM, RpmOstreeLibarchiveInputStream))
-#define RPM_OSTREE_LIBARCHIVE_INPUT_STREAM_CLASS(k)     (G_TYPE_CHECK_CLASS_CAST((k), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM, RpmOstreeLibarchiveInputStreamClass))
-#define RPM_OSTREE_IS_LIBARCHIVE_INPUT_STREAM(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM))
-#define RPM_OSTREE_IS_LIBARCHIVE_INPUT_STREAM_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE ((k), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM))
-#define RPM_OSTREE_LIBARCHIVE_INPUT_STREAM_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS ((o), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM, RpmOstreeLibarchiveInputStreamClass))
+#define RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM (_rpm_ostree_libarchive_input_stream_get_type ())
+#define RPM_OSTREE_LIBARCHIVE_INPUT_STREAM(o)                                                      \
+  (G_TYPE_CHECK_INSTANCE_CAST ((o), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM,                       \
+                               RpmOstreeLibarchiveInputStream))
+#define RPM_OSTREE_LIBARCHIVE_INPUT_STREAM_CLASS(k)                                                \
+  (G_TYPE_CHECK_CLASS_CAST ((k), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM,                          \
+                            RpmOstreeLibarchiveInputStreamClass))
+#define RPM_OSTREE_IS_LIBARCHIVE_INPUT_STREAM(o)                                                   \
+  (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM))
+#define RPM_OSTREE_IS_LIBARCHIVE_INPUT_STREAM_CLASS(k)                                             \
+  (G_TYPE_CHECK_CLASS_TYPE ((k), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM))
+#define RPM_OSTREE_LIBARCHIVE_INPUT_STREAM_GET_CLASS(o)                                            \
+  (G_TYPE_INSTANCE_GET_CLASS ((o), RPM_OSTREE_TYPE_LIBARCHIVE_INPUT_STREAM,                        \
+                              RpmOstreeLibarchiveInputStreamClass))
 
-typedef struct _RpmOstreeLibarchiveInputStream         RpmOstreeLibarchiveInputStream;
-typedef struct _RpmOstreeLibarchiveInputStreamClass    RpmOstreeLibarchiveInputStreamClass;
-typedef struct _RpmOstreeLibarchiveInputStreamPrivate  RpmOstreeLibarchiveInputStreamPrivate;
+typedef struct _RpmOstreeLibarchiveInputStream RpmOstreeLibarchiveInputStream;
+typedef struct _RpmOstreeLibarchiveInputStreamClass RpmOstreeLibarchiveInputStreamClass;
+typedef struct _RpmOstreeLibarchiveInputStreamPrivate RpmOstreeLibarchiveInputStreamPrivate;
 
 struct _RpmOstreeLibarchiveInputStream
 {
@@ -59,8 +67,8 @@ struct _RpmOstreeLibarchiveInputStreamClass
   void (*_g_reserved5) (void);
 };
 
-GType          _rpm_ostree_libarchive_input_stream_get_type     (void) G_GNUC_CONST;
+GType _rpm_ostree_libarchive_input_stream_get_type (void) G_GNUC_CONST;
 
-GInputStream * _rpm_ostree_libarchive_input_stream_new          (struct archive  *a);
+GInputStream *_rpm_ostree_libarchive_input_stream_new (struct archive *a);
 
 G_END_DECLS

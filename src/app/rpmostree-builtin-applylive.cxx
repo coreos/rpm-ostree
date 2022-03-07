@@ -20,26 +20,23 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
-#include "rpmostree-ex-builtins.h"
-#include "rpmostree-libbuiltin.h"
 #include "rpmostree-clientlib.h"
 #include "rpmostree-cxxrs.h"
+#include "rpmostree-ex-builtins.h"
+#include "rpmostree-libbuiltin.h"
 
 #include <libglnx.h>
 
 gboolean
-rpmostree_ex_builtin_apply_live (int             argc,
-                                 char          **argv,
-                                 RpmOstreeCommandInvocation *invocation,
-                                 GCancellable   *cancellable,
-                                 GError        **error)
+rpmostree_ex_builtin_apply_live (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                 GCancellable *cancellable, GError **error)
 {
   rust::Vec<rust::String> rustargv;
   for (int i = 0; i < argc; i++)
-    rustargv.push_back(std::string(argv[i]));
-  CXX_TRY(applylive_entrypoint(rustargv), error);
+    rustargv.push_back (std::string (argv[i]));
+  CXX_TRY (applylive_entrypoint (rustargv), error);
   return TRUE;
 }

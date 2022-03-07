@@ -30,51 +30,38 @@
 
 G_BEGIN_DECLS
 
-#define TERM_ESCAPE_SEQUENCE(type,seq)                   \
-    static inline const char* get_##type (void) {        \
-      if (glnx_stdout_is_tty ())                         \
-        return seq;                                      \
-      return "";                                         \
-    }
+#define TERM_ESCAPE_SEQUENCE(type, seq)                                                            \
+  static inline const char *get_##type (void)                                                      \
+  {                                                                                                \
+    if (glnx_stdout_is_tty ())                                                                     \
+      return seq;                                                                                  \
+    return "";                                                                                     \
+  }
 
-TERM_ESCAPE_SEQUENCE(red_start,  "\x1b[31m")
-TERM_ESCAPE_SEQUENCE(red_end,    "\x1b[22m")
-TERM_ESCAPE_SEQUENCE(bold_start, "\x1b[1m")
-TERM_ESCAPE_SEQUENCE(bold_end,   "\x1b[0m")
+TERM_ESCAPE_SEQUENCE (red_start, "\x1b[31m")
+TERM_ESCAPE_SEQUENCE (red_end, "\x1b[22m")
+TERM_ESCAPE_SEQUENCE (bold_start, "\x1b[1m")
+TERM_ESCAPE_SEQUENCE (bold_end, "\x1b[0m")
 
 #undef TERM_ESCAPE_SEQUENCE
 
-void
-rpmostree_print_kv_no_newline (const char *key,
-                               guint       maxkeylen,
-                               const char *value);
+void rpmostree_print_kv_no_newline (const char *key, guint maxkeylen, const char *value);
 
-void
-rpmostree_print_kv (const char *key,
-                    guint       maxkeylen,
-                    const char *value);
+void rpmostree_print_kv (const char *key, guint maxkeylen, const char *value);
 
-void
-rpmostree_usage_error (GOptionContext  *context,
-                       const char      *message,
-                       GError         **error);
+void rpmostree_usage_error (GOptionContext *context, const char *message, GError **error);
 
-gboolean
-rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
-                                      GVariant    *previous_deployment);
+gboolean rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
+                                               GVariant *previous_deployment);
 
-namespace rpmostreecxx {
+namespace rpmostreecxx
+{
 
-void
-print_treepkg_diff_from_sysroot_path (rust::Str      sysroot_path,
-                                      RpmOstreeDiffPrintFormat format,
-                                      guint32        max_key_len,
-                                      GCancellable  *cancellable);
+void print_treepkg_diff_from_sysroot_path (rust::Str sysroot_path, RpmOstreeDiffPrintFormat format,
+                                           guint32 max_key_len, GCancellable *cancellable);
 }
 
-void
-rpmostree_print_timestamp_version (const char  *version_string,
-                                   const char  *timestamp_string,
-                                   guint        max_key_len);
+void rpmostree_print_timestamp_version (const char *version_string, const char *timestamp_string,
+                                        guint max_key_len);
 
 G_END_DECLS

@@ -20,21 +20,20 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-builtins.h"
-#include "rpmostree-libbuiltin.h"
 #include "rpmostree-clientlib.h"
+#include "rpmostree-libbuiltin.h"
 
 #include <libglnx.h>
 
 static gboolean opt_reboot;
 
-static GOptionEntry option_entries[] = {
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
-  { NULL }
-};
+static GOptionEntry option_entries[] = { { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
+                                           "Initiate a reboot after operation is complete", NULL },
+                                         { NULL } };
 
 static GVariant *
 get_args_variant (void)
@@ -48,48 +47,33 @@ get_args_variant (void)
 }
 
 gboolean
-rpmostree_builtin_rollback (int             argc,
-                            char          **argv,
-                            RpmOstreeCommandInvocation *invocation,
-                            GCancellable   *cancellable,
-                            GError        **error)
+rpmostree_builtin_rollback (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                            GCancellable *cancellable, GError **error)
 {
   GOptionContext *context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, cancellable, &os_proxy, error))
     return FALSE;
 
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
   /* really, rollback only supports the "reboot" option; all others are ignored */
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+  g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
-  if (!rpmostree_os_call_rollback_sync (os_proxy,
-                                        get_args_variant (),
-                                        &transaction_address,
-                                        cancellable,
-                                        error))
+  if (!rpmostree_os_call_rollback_sync (os_proxy, get_args_variant (), &transaction_address,
+                                        cancellable, error))
     return FALSE;
 
-  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, FALSE,
-                                           transaction_address,
-                                           previous_deployment,
-                                           cancellable, error);
+  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy, options, FALSE,
+                                           transaction_address, previous_deployment, cancellable,
+                                           error);
 }

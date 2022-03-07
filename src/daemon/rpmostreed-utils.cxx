@@ -18,19 +18,18 @@
 
 #include "config.h"
 
-#include "rpmostree-util.h"
-#include "rpmostreed-utils.h"
-#include "rpmostreed-errors.h"
-#include "rpmostreed-daemon.h"
 #include "libglnx.h"
-#include <systemd/sd-journal.h>
+#include "rpmostree-util.h"
+#include "rpmostreed-daemon.h"
+#include "rpmostreed-errors.h"
+#include "rpmostreed-utils.h"
 #include <stdint.h>
+#include <systemd/sd-journal.h>
 
 #include <libglnx.h>
 
 static void
-append_to_object_path (GString *str,
-                       const gchar *s)
+append_to_object_path (GString *str, const gchar *s)
 {
   guint n;
 
@@ -74,9 +73,7 @@ append_to_object_path (GString *str,
  * Returns: An allocated string that must be freed with g_free ().
  */
 gchar *
-rpmostreed_generate_object_path (const gchar *base,
-                                 const gchar *part,
-                                 ...)
+rpmostreed_generate_object_path (const gchar *base, const gchar *part, ...)
 {
   gchar *result;
   va_list va;
@@ -89,9 +86,7 @@ rpmostreed_generate_object_path (const gchar *base,
 }
 
 gchar *
-rpmostreed_generate_object_path_from_va (const gchar *base,
-                                         const gchar *part,
-                                         va_list va)
+rpmostreed_generate_object_path_from_va (const gchar *base, const gchar *part, va_list va)
 {
   GString *path;
 
@@ -133,10 +128,8 @@ rpmostreed_generate_object_path_from_va (const gchar *base,
  * Returns: True on success.
  */
 gboolean
-rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
-                                  const gchar *base_refspec,
-                                  gchar **out_refspec,
-                                  GError **error)
+rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec, const gchar *base_refspec,
+                                  gchar **out_refspec, GError **error)
 {
   g_autofree gchar *ref = NULL;
   g_autofree gchar *remote = NULL;
@@ -145,7 +138,7 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
   /* Allow just switching remotes */
   if (g_str_has_suffix (new_provided_refspec, ":"))
     {
-      remote = g_strndup (new_provided_refspec, strlen(new_provided_refspec)-1);
+      remote = g_strndup (new_provided_refspec, strlen (new_provided_refspec) - 1);
     }
   /* Allow switching to a local branch */
   else if (g_str_has_prefix (new_provided_refspec, ":"))
@@ -155,12 +148,10 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
     }
   else
     {
-      g_autoptr(GError) parse_error = NULL;
-      if (!ostree_parse_refspec (new_provided_refspec, &remote,
-                                 &ref, &parse_error))
+      g_autoptr (GError) parse_error = NULL;
+      if (!ostree_parse_refspec (new_provided_refspec, &remote, &ref, &parse_error))
         {
-          g_set_error_literal (error, RPM_OSTREED_ERROR,
-                               RPM_OSTREED_ERROR_INVALID_REFSPEC,
+          g_set_error_literal (error, RPM_OSTREED_ERROR, RPM_OSTREED_ERROR_INVALID_REFSPEC,
                                parse_error->message);
           return FALSE;
         }
@@ -170,12 +161,10 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
   g_autofree gchar *origin_remote = NULL;
   if (base_refspec != NULL)
     {
-      g_autoptr(GError) parse_error = NULL;
-      if (!ostree_parse_refspec (base_refspec, &origin_remote,
-                                 &origin_ref, &parse_error))
+      g_autoptr (GError) parse_error = NULL;
+      if (!ostree_parse_refspec (base_refspec, &origin_remote, &origin_ref, &parse_error))
         {
-          g_set_error_literal (error, RPM_OSTREED_ERROR,
-                               RPM_OSTREED_ERROR_INVALID_REFSPEC,
+          g_set_error_literal (error, RPM_OSTREED_ERROR, RPM_OSTREED_ERROR_INVALID_REFSPEC,
                                parse_error->message);
           return FALSE;
         }
@@ -189,12 +178,10 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
         }
       else
         {
-          g_set_error (error, RPM_OSTREED_ERROR,
-                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
-                      "Could not determine default ref to pull.");
+          g_set_error (error, RPM_OSTREED_ERROR, RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                       "Could not determine default ref to pull.");
           return FALSE;
         }
-
     }
   else if (infer_remote && remote == NULL)
     {
@@ -205,9 +192,9 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
     }
 
   if (remote == NULL)
-      *out_refspec = util::move_nullify (ref);
+    *out_refspec = util::move_nullify (ref);
   else
-      *out_refspec = g_strconcat (remote, ":", ref, NULL);
+    *out_refspec = g_strconcat (remote, ":", ref, NULL);
 
   return TRUE;
 }
@@ -232,13 +219,10 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
  * Returns: %TRUE on success, %FALSE on failure
  */
 gboolean
-rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
-                               const char               *refspec,
-                               RpmostreedCommitVisitor   visitor,
-                               gpointer                  visitor_data,
-                               OstreeAsyncProgress      *progress,
-                               GCancellable             *cancellable,
-                               GError                  **error)
+rpmostreed_repo_pull_ancestry (OstreeRepo *repo, const char *refspec,
+                               RpmostreedCommitVisitor visitor, gpointer visitor_data,
+                               OstreeAsyncProgress *progress, GCancellable *cancellable,
+                               GError **error)
 {
   OstreeRepoPullFlags flags;
   GVariantDict options;
@@ -278,8 +262,7 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
       if (remote != NULL)
         {
           /* Floating reference, transferred to dictionary. */
-          refs_value =
-            g_variant_new_strv ((const char * const *) refs_array, -1);
+          refs_value = g_variant_new_strv ((const char *const *)refs_array, -1);
 
           g_variant_dict_init (&options, NULL);
           if (!first_pass)
@@ -287,9 +270,8 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
           g_variant_dict_insert (&options, "flags", "i", flags);
           g_variant_dict_insert_value (&options, "refs", refs_value);
 
-          if (!ostree_repo_pull_with_options (repo, remote,
-                                              g_variant_dict_end (&options),
-                                              progress, cancellable, error))
+          if (!ostree_repo_pull_with_options (repo, remote, g_variant_dict_end (&options), progress,
+                                              cancellable, error))
             goto out;
 
           if (progress)
@@ -307,11 +289,10 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
         {
           for (ii = 0; ii < (first_pass ? 1 : depth) && checksum != NULL; ii++)
             {
-              g_autoptr(GVariant) commit = NULL;
+              g_autoptr (GVariant) commit = NULL;
               gboolean stop = FALSE;
 
-              if (!ostree_repo_load_commit (repo, checksum, &commit,
-                                            NULL, error))
+              if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
                 goto out;
 
               if (!visitor (repo, checksum, commit, visitor_data, &stop, error))
@@ -342,21 +323,18 @@ out:
   return ret;
 }
 
-typedef struct {
+typedef struct
+{
   const char *version;
   char *checksum;
 } VersionVisitorClosure;
 
 static gboolean
-version_visitor (OstreeRepo  *repo,
-                 const char  *checksum,
-                 GVariant    *commit,
-                 gpointer     user_data,
-                 gboolean    *out_stop,
-                 GError     **error)
+version_visitor (OstreeRepo *repo, const char *checksum, GVariant *commit, gpointer user_data,
+                 gboolean *out_stop, GError **error)
 {
-  auto closure = static_cast<VersionVisitorClosure *>(user_data);
-  g_autoptr(GVariant) metadict = NULL;
+  auto closure = static_cast<VersionVisitorClosure *> (user_data);
+  g_autoptr (GVariant) metadict = NULL;
   const char *version = NULL;
 
   metadict = g_variant_get_child_value (commit, 0);
@@ -388,13 +366,9 @@ version_visitor (OstreeRepo  *repo,
  * Returns: %TRUE on success, %FALSE on failure
  */
 gboolean
-rpmostreed_repo_lookup_version (OstreeRepo           *repo,
-                                const char           *refspec,
-                                const char           *version,
-                                OstreeAsyncProgress  *progress,
-                                GCancellable         *cancellable,
-                                char                **out_checksum,
-                                GError              **error)
+rpmostreed_repo_lookup_version (OstreeRepo *repo, const char *refspec, const char *version,
+                                OstreeAsyncProgress *progress, GCancellable *cancellable,
+                                char **out_checksum, GError **error)
 {
   VersionVisitorClosure closure = { version, NULL };
 
@@ -402,16 +376,15 @@ rpmostreed_repo_lookup_version (OstreeRepo           *repo,
   g_assert (refspec != NULL);
   g_assert (version != NULL);
 
-  if (!rpmostreed_repo_pull_ancestry (repo, refspec,
-                                      version_visitor, &closure,
-                                      progress, cancellable, error))
+  if (!rpmostreed_repo_pull_ancestry (repo, refspec, version_visitor, &closure, progress,
+                                      cancellable, error))
     return FALSE;
 
   g_autofree char *checksum = util::move_nullify (closure.checksum);
   if (checksum == NULL)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                   "Version %s not found in %s", version, refspec);
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "Version %s not found in %s", version,
+                   refspec);
       return FALSE;
     }
 
@@ -420,20 +393,17 @@ rpmostreed_repo_lookup_version (OstreeRepo           *repo,
   return TRUE;
 }
 
-typedef struct {
+typedef struct
+{
   const char *wanted_checksum;
   gboolean found;
 } ChecksumVisitorClosure;
 
 static gboolean
-checksum_visitor (OstreeRepo  *repo,
-                  const char  *checksum,
-                  GVariant    *commit,
-                  gpointer     user_data,
-                  gboolean    *out_stop,
-                  GError     **error)
+checksum_visitor (OstreeRepo *repo, const char *checksum, GVariant *commit, gpointer user_data,
+                  gboolean *out_stop, GError **error)
 {
-  auto closure = static_cast<ChecksumVisitorClosure *>(user_data);
+  auto closure = static_cast<ChecksumVisitorClosure *> (user_data);
   *out_stop = closure->found = g_str_equal (checksum, closure->wanted_checksum);
   return TRUE;
 }
@@ -454,12 +424,9 @@ checksum_visitor (OstreeRepo  *repo,
  * Returns: %TRUE on success, %FALSE on failure
  */
 gboolean
-rpmostreed_repo_lookup_checksum (OstreeRepo           *repo,
-                                 const char           *refspec,
-                                 const char           *checksum,
-                                 OstreeAsyncProgress  *progress,
-                                 GCancellable         *cancellable,
-                                 GError              **error)
+rpmostreed_repo_lookup_checksum (OstreeRepo *repo, const char *refspec, const char *checksum,
+                                 OstreeAsyncProgress *progress, GCancellable *cancellable,
+                                 GError **error)
 {
   ChecksumVisitorClosure closure = { checksum, FALSE };
 
@@ -467,15 +434,14 @@ rpmostreed_repo_lookup_checksum (OstreeRepo           *repo,
   g_assert (refspec != NULL);
   g_assert (checksum != NULL);
 
-  if (!rpmostreed_repo_pull_ancestry (repo, refspec,
-                                      checksum_visitor, &closure,
-                                      progress, cancellable, error))
+  if (!rpmostreed_repo_pull_ancestry (repo, refspec, checksum_visitor, &closure, progress,
+                                      cancellable, error))
     return FALSE;
 
   if (!closure.found)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
-                   "Checksum %s not found in %s", checksum, refspec);
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "Checksum %s not found in %s", checksum,
+                   refspec);
       return FALSE;
     }
 
@@ -498,12 +464,9 @@ rpmostreed_repo_lookup_checksum (OstreeRepo           *repo,
  * Returns: %TRUE on success, %FALSE on failure
  */
 gboolean
-rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
-                                       const char    *refspec,
-                                       const char    *version,
-                                       GCancellable  *cancellable,
-                                       char         **out_checksum,
-                                       GError       **error)
+rpmostreed_repo_lookup_cached_version (OstreeRepo *repo, const char *refspec, const char *version,
+                                       GCancellable *cancellable, char **out_checksum,
+                                       GError **error)
 {
   VersionVisitorClosure closure = { version, NULL };
   g_autofree char *checksum = NULL;
@@ -517,7 +480,7 @@ rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
 
   while (checksum != NULL)
     {
-      g_autoptr(GVariant) commit = NULL;
+      g_autoptr (GVariant) commit = NULL;
       gboolean stop = FALSE;
 
       if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
@@ -546,29 +509,26 @@ rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
  * Note: systemd 248 provides a `--check-inhibitors` option, but it also checks
  * for inhibitors in `delay` mode, which isn't what we want. */
 gboolean
-check_sd_inhibitor_locks (GCancellable    *cancellable,
-                          GError         **error)
+check_sd_inhibitor_locks (GCancellable *cancellable, GError **error)
 {
   GDBusConnection *connection = rpmostreed_daemon_connection ();
   // https://www.freedesktop.org/software/systemd/man/org.freedesktop.login1.html
-  g_autoptr(GVariant) inhibitors_array_tuple = 
-    g_dbus_connection_call_sync (connection, "org.freedesktop.login1", "/org/freedesktop/login1",
-                                 "org.freedesktop.login1.Manager", "ListInhibitors",
-                                 NULL, (const GVariantType*)"(a(ssssuu))",
-                                 G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
+  g_autoptr (GVariant) inhibitors_array_tuple = g_dbus_connection_call_sync (
+      connection, "org.freedesktop.login1", "/org/freedesktop/login1",
+      "org.freedesktop.login1.Manager", "ListInhibitors", NULL, (const GVariantType *)"(a(ssssuu))",
+      G_DBUS_CALL_FLAGS_NONE, -1, cancellable, error);
   if (!inhibitors_array_tuple)
     return glnx_prefix_error (error, "Checking systemd inhibitor locks");
   else if (g_variant_n_children (inhibitors_array_tuple) < 1)
     return glnx_throw (error, "ListInhibitors returned empty tuple");
-  g_autoptr(GVariant) inhibitors_array =
-    g_variant_get_child_value (inhibitors_array_tuple, 0);
+  g_autoptr (GVariant) inhibitors_array = g_variant_get_child_value (inhibitors_array_tuple, 0);
 
   char *what = NULL;
   char *who = NULL;
   char *why = NULL;
   char *mode = NULL;
   int num_block_inhibitors = 0;
-  g_autoptr(GString) error_msg = g_string_new(NULL);
+  g_autoptr (GString) error_msg = g_string_new (NULL);
   GVariantIter viter;
   g_variant_iter_init (&viter, inhibitors_array);
   while (g_variant_iter_loop (&viter, "(ssssuu)", &what, &who, &why, &mode, NULL, NULL))
@@ -603,7 +563,7 @@ check_sd_inhibitor_locks (GCancellable    *cancellable,
 static void
 test_refspec_parse_partial (void)
 {
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   GError **error = &local_error;
 
   g_autofree char *new_refspec = NULL;
@@ -614,7 +574,7 @@ test_refspec_parse_partial (void)
 }
 #endif
 
-void 
+void
 rpmostreed_utils_tests (void)
 {
 #ifdef BUILDOPT_BIN_UNIT_TESTS

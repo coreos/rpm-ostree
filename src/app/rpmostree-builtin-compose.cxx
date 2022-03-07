@@ -20,38 +20,40 @@
 
 #include "config.h"
 
-#include "rpmostree-compose-builtins.h"
 #include "rpmostree-builtins.h"
+#include "rpmostree-compose-builtins.h"
 
-#include <ostree.h>
 #include "libglnx.h"
+#include <ostree.h>
 
 #include <glib/gi18n.h>
 
-static RpmOstreeCommand compose_subcommands[] = {
-  { "tree", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Process a \"treefile\"; install packages and commit the result to an OSTree repository",
-    rpmostree_compose_builtin_tree },
-  { "install", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
-    "Install packages into a target path",
-    rpmostree_compose_builtin_install },
-  { "postprocess", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
-    "Perform final postprocessing on an installation root",
-    rpmostree_compose_builtin_postprocess },
-  { "commit", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
-    "Commit a target path to an OSTree repository",
-    rpmostree_compose_builtin_commit },
-  { "extensions", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Download RPM packages guaranteed to depsolve with a base OSTree",
-    rpmostree_compose_builtin_extensions },
-  { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
-};
+static RpmOstreeCommand compose_subcommands[]
+    = { { "tree", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+          "Process a \"treefile\"; install packages and commit the result to an OSTree repository",
+          rpmostree_compose_builtin_tree },
+        { "install",
+          (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
+                                  | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
+          "Install packages into a target path", rpmostree_compose_builtin_install },
+        { "postprocess",
+          (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
+                                  | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
+          "Perform final postprocessing on an installation root",
+          rpmostree_compose_builtin_postprocess },
+        { "commit",
+          (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
+                                  | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
+          "Commit a target path to an OSTree repository", rpmostree_compose_builtin_commit },
+        { "extensions", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+          "Download RPM packages guaranteed to depsolve with a base OSTree",
+          rpmostree_compose_builtin_extensions },
+        { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL } };
 
 gboolean
-rpmostree_builtin_compose (int argc, char **argv,
-                           RpmOstreeCommandInvocation *invocation,
+rpmostree_builtin_compose (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
 {
-  return rpmostree_handle_subcommand (argc, argv, compose_subcommands,
-                                      invocation, cancellable, error);
+  return rpmostree_handle_subcommand (argc, argv, compose_subcommands, invocation, cancellable,
+                                      error);
 }

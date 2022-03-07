@@ -23,16 +23,17 @@
 #include <ostree.h>
 
 #include "libglnx.h"
-#include <rpm/rpmlib.h>
 #include <libdnf/libdnf.h>
+#include <rpm/rpmlib.h>
 
 G_BEGIN_DECLS
 
 typedef struct RpmOstreeImporter RpmOstreeImporter;
 
-#define RPMOSTREE_TYPE_IMPORTER         (rpmostree_importer_get_type ())
-#define RPMOSTREE_IMPORTER(inst)        (G_TYPE_CHECK_INSTANCE_CAST ((inst), RPMOSTREE_TYPE_IMPORTER, RpmOstreeImporter))
-#define RPMOSTREE_IS_IMPORTER(inst)     (G_TYPE_CHECK_INSTANCE_TYPE ((inst), RPMOSTREE_TYPE_IMPORTER))
+#define RPMOSTREE_TYPE_IMPORTER (rpmostree_importer_get_type ())
+#define RPMOSTREE_IMPORTER(inst)                                                                   \
+  (G_TYPE_CHECK_INSTANCE_CAST ((inst), RPMOSTREE_TYPE_IMPORTER, RpmOstreeImporter))
+#define RPMOSTREE_IS_IMPORTER(inst) (G_TYPE_CHECK_INSTANCE_TYPE ((inst), RPMOSTREE_TYPE_IMPORTER))
 
 GType rpmostree_importer_get_type (void);
 
@@ -40,55 +41,38 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeImporter, g_object_unref)
 
 /**
  * RpmOstreeImporterFlags:
- * @RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS: Skip files/directories outside of supported ostree-compliant paths rather than erroring out
+ * @RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS: Skip files/directories outside of supported
+ * ostree-compliant paths rather than erroring out
  * @RPMOSTREE_IMPORTER_FLAGS_NODOCS: Skip documentation files
  * @RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES: Make executable files readonly
  */
-typedef enum {
-  RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS =  (1 << 0),
-  RPMOSTREE_IMPORTER_FLAGS_NODOCS =  (1 << 1),
-  RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES =  (1 << 2),
+typedef enum
+{
+  RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS = (1 << 0),
+  RPMOSTREE_IMPORTER_FLAGS_NODOCS = (1 << 1),
+  RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES = (1 << 2),
 } RpmOstreeImporterFlags;
 
-RpmOstreeImporter*
-rpmostree_importer_new_take_fd (int                     *fd,
-                                OstreeRepo              *repo,
-                                DnfPackage              *pkg,
-                                RpmOstreeImporterFlags   flags,
-                                OstreeSePolicy          *sepolicy,
-                                GError                 **error);
+RpmOstreeImporter *rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
+                                                   RpmOstreeImporterFlags flags,
+                                                   OstreeSePolicy *sepolicy, GError **error);
 
-gboolean
-rpmostree_importer_read_metainfo (int fd,
-                                  Header *out_header,
-                                  gsize *out_cpio_offset,
-                                  rpmfi *out_fi,
-                                  GError **error);
+gboolean rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_offset,
+                                           rpmfi *out_fi, GError **error);
 
-const char*
-rpmostree_importer_get_ostree_branch (RpmOstreeImporter *unpacker);
+const char *rpmostree_importer_get_ostree_branch (RpmOstreeImporter *unpacker);
 
-gboolean
-rpmostree_importer_run (RpmOstreeImporter *unpacker,
-                        char             **out_commit,
-                        GCancellable      *cancellable,
-                        GError           **error);
+gboolean rpmostree_importer_run (RpmOstreeImporter *unpacker, char **out_commit,
+                                 GCancellable *cancellable, GError **error);
 
-void
-rpmostree_importer_run_async (RpmOstreeImporter  *unpacker,
-                              GCancellable       *cancellable,
-                              GAsyncReadyCallback callback,
-                              gpointer            user_data);
+void rpmostree_importer_run_async (RpmOstreeImporter *unpacker, GCancellable *cancellable,
+                                   GAsyncReadyCallback callback, gpointer user_data);
 
-char *
-rpmostree_importer_run_async_finish (RpmOstreeImporter  *self,
-                                     GAsyncResult       *res,
-                                     GError            **error);
+char *rpmostree_importer_run_async_finish (RpmOstreeImporter *self, GAsyncResult *res,
+                                           GError **error);
 
-char *
-rpmostree_importer_get_nevra (RpmOstreeImporter *self);
+char *rpmostree_importer_get_nevra (RpmOstreeImporter *self);
 
-const char *
-rpmostree_importer_get_header_sha256 (RpmOstreeImporter *self);
+const char *rpmostree_importer_get_header_sha256 (RpmOstreeImporter *self);
 
 G_END_DECLS

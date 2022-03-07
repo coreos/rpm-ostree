@@ -27,6 +27,7 @@ G_BEGIN_DECLS
 #define RPMOSTREE_SHLIB_IPC_FD 3
 #define RPMOSTREE_SHLIB_IPC_PKGLIST "a(sssss)"
 
-GVariant *_rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd, GError **error);
+GVariant *_rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd,
+                                     GError **error);
 
 G_END_DECLS

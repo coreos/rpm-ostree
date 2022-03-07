@@ -25,20 +25,14 @@
 
 G_BEGIN_DECLS
 
-_RPMOSTREE_EXTERN GPtrArray *rpm_ostree_db_query_all (OstreeRepo               *repo,
-                                                      const char               *ref,
-                                                      GCancellable             *cancellable,
-                                                      GError                  **error);
+_RPMOSTREE_EXTERN GPtrArray *rpm_ostree_db_query_all (OstreeRepo *repo, const char *ref,
+                                                      GCancellable *cancellable, GError **error);
 
-_RPMOSTREE_EXTERN gboolean rpm_ostree_db_diff (OstreeRepo               *repo,
-                                               const char               *orig_ref,
-                                               const char               *new_ref,
-                                               GPtrArray               **out_removed,
-                                               GPtrArray               **out_added,
-                                               GPtrArray               **out_modified_old,
-                                               GPtrArray               **out_modified_new,
-                                               GCancellable             *cancellable,
-                                               GError                  **error);
+_RPMOSTREE_EXTERN gboolean rpm_ostree_db_diff (OstreeRepo *repo, const char *orig_ref,
+                                               const char *new_ref, GPtrArray **out_removed,
+                                               GPtrArray **out_added, GPtrArray **out_modified_old,
+                                               GPtrArray **out_modified_new,
+                                               GCancellable *cancellable, GError **error);
 
 /**
  * RpmOstreeDbDiffFlags:
@@ -48,19 +42,14 @@ _RPMOSTREE_EXTERN gboolean rpm_ostree_db_diff (OstreeRepo               *repo,
  *
  * Since: 2017.12
  */
-typedef enum {
-  RPM_OSTREE_DB_DIFF_EXT_NONE        = 0,
+typedef enum
+{
+  RPM_OSTREE_DB_DIFF_EXT_NONE = 0,
   RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT = (1 << 0),
 } RpmOstreeDbDiffExtFlags;
 
-_RPMOSTREE_EXTERN gboolean rpm_ostree_db_diff_ext (OstreeRepo               *repo,
-                                                   const char               *orig_ref,
-                                                   const char               *new_ref,
-                                                   RpmOstreeDbDiffExtFlags   flags,
-                                                   GPtrArray               **out_removed,
-                                                   GPtrArray               **out_added,
-                                                   GPtrArray               **out_modified_old,
-                                                   GPtrArray               **out_modified_new,
-                                                   GCancellable             *cancellable,
-                                                   GError                  **error);
+_RPMOSTREE_EXTERN gboolean rpm_ostree_db_diff_ext (
+    OstreeRepo *repo, const char *orig_ref, const char *new_ref, RpmOstreeDbDiffExtFlags flags,
+    GPtrArray **out_removed, GPtrArray **out_added, GPtrArray **out_modified_old,
+    GPtrArray **out_modified_new, GCancellable *cancellable, GError **error);
 G_END_DECLS

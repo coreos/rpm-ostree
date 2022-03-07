@@ -29,24 +29,23 @@
 
 #include "config.h"
 
-#include <pwd.h>
-#include <grp.h>
-#include <gio/gunixinputstream.h>
-#include "rpmostree-unpacker-core.h"
-#include "rpmostree-importer.h"
 #include "rpmostree-core.h"
+#include "rpmostree-importer.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-unpacker-core.h"
 #include "rpmostree-util.h"
-#include <rpm/rpmlib.h>
-#include <rpm/rpmlog.h>
-#include <rpm/rpmfi.h>
-#include <rpm/rpmts.h>
 #include <archive.h>
 #include <archive_entry.h>
+#include <gio/gunixinputstream.h>
+#include <grp.h>
+#include <pwd.h>
+#include <rpm/rpmfi.h>
+#include <rpm/rpmlib.h>
+#include <rpm/rpmlog.h>
+#include <rpm/rpmts.h>
 
-
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef GObjectClass RpmOstreeImporterClass;
 
@@ -81,18 +80,18 @@ struct RpmOstreeImporter
   char *ostree_branch;
 };
 
-G_DEFINE_TYPE(RpmOstreeImporter, rpmostree_importer, G_TYPE_OBJECT)
+G_DEFINE_TYPE (RpmOstreeImporter, rpmostree_importer, G_TYPE_OBJECT)
 
 static void
 rpmostree_importer_finalize (GObject *object)
 {
-  RpmOstreeImporter *self = (RpmOstreeImporter*)object;
+  RpmOstreeImporter *self = (RpmOstreeImporter *)object;
   if (self->hdr)
     headerFree (self->hdr);
   if (self->archive)
     archive_read_free (self->archive);
   if (self->fi)
-    (void) rpmfiFree (self->fi);
+    (void)rpmfiFree (self->fi);
   glnx_close_fd (&self->fd);
   g_string_free (self->tmpfiles_d, TRUE);
   g_free (self->ostree_branch);
@@ -121,23 +120,19 @@ static void
 rpmostree_importer_init (RpmOstreeImporter *self)
 {
   self->fd = -1;
-  self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                 g_free, NULL);
+  self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   self->tmpfiles_d = g_string_new ("");
 }
 
 gboolean
-rpmostree_importer_read_metainfo (int fd,
-                                  Header *out_header,
-                                  gsize *out_cpio_offset,
-                                  rpmfi *out_fi,
+rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_offset, rpmfi *out_fi,
                                   GError **error)
 {
   gboolean ret = FALSE;
-  g_auto(rpmts) ts = NULL;
+  g_auto (rpmts) ts = NULL;
   FD_t rpmfd;
-  g_auto(Header) ret_header = NULL;
-  g_auto(rpmfi) ret_fi = NULL;
+  g_auto (Header) ret_header = NULL;
+  g_auto (rpmfi) ret_fi = NULL;
   gsize ret_cpio_offset;
   g_autofree char *abspath = g_strdup_printf ("/proc/self/fd/%d", fd);
 
@@ -149,28 +144,19 @@ rpmostree_importer_read_metainfo (int fd,
   rpmfd = Fopen (abspath, "r.fdio");
   if (rpmfd == NULL)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to open %s", abspath);
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Failed to open %s", abspath);
       goto out;
     }
   if (Ferror (rpmfd))
     {
-      g_set_error (error,
-                   G_IO_ERROR,
-                   G_IO_ERROR_FAILED,
-                   "Opening %s: %s",
-                   abspath,
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Opening %s: %s", abspath,
                    Fstrerror (rpmfd));
       goto out;
     }
 
   if (rpmReadPackageFile (ts, rpmfd, abspath, &ret_header) != RPMRC_OK)
     {
-      g_set_error (error,
-                   G_IO_ERROR,
-                   G_IO_ERROR_FAILED,
-                   "Verification of %s failed",
-                    abspath);
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Verification of %s failed", abspath);
       goto out;
     }
 
@@ -189,9 +175,9 @@ rpmostree_importer_read_metainfo (int fd,
     *out_fi = util::move_nullify (ret_fi);
   if (out_cpio_offset)
     *out_cpio_offset = ret_cpio_offset;
- out:
+out:
   if (rpmfd)
-    (void) Fclose (rpmfd);
+    (void)Fclose (rpmfd);
   return ret;
 }
 
@@ -220,8 +206,7 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
       const gboolean fcaps_is_unset = (fcaps == NULL || fcaps[0] == '\0');
       if (!(user_is_root && group_is_root && fcaps_is_unset))
         {
-          g_hash_table_insert (self->rpmfi_overrides, g_strdup (fn),
-                               GINT_TO_POINTER (i));
+          g_hash_table_insert (self->rpmfi_overrides, g_strdup (fn), GINT_TO_POINTER (i));
         }
 
       const gboolean is_doc = (fattrs & RPMFILE_DOC) > 0;
@@ -244,15 +229,12 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
  * origin repo will be added to the final commit.
  */
 RpmOstreeImporter *
-rpmostree_importer_new_take_fd (int                     *fd,
-                                OstreeRepo              *repo,
-                                DnfPackage              *pkg,
-                                RpmOstreeImporterFlags   flags,
-                                OstreeSePolicy          *sepolicy,
-                                GError                 **error)
+rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
+                                RpmOstreeImporterFlags flags, OstreeSePolicy *sepolicy,
+                                GError **error)
 {
   RpmOstreeImporter *ret = NULL;
-  g_auto(Header) hdr = NULL;
+  g_auto (Header) hdr = NULL;
   rpmfi fi = NULL;
   struct archive *archive;
   gsize cpio_offset;
@@ -264,25 +246,24 @@ rpmostree_importer_new_take_fd (int                     *fd,
   if (!rpmostree_importer_read_metainfo (*fd, &hdr, &cpio_offset, &fi, error))
     goto out;
 
-  ret = (RpmOstreeImporter*)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
+  ret = (RpmOstreeImporter *)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
   ret->fd = glnx_steal_fd (fd);
-  ret->repo = (OstreeRepo*)g_object_ref (repo);
-  ret->sepolicy = (OstreeSePolicy*)(sepolicy ? g_object_ref (sepolicy) : NULL);
+  ret->repo = (OstreeRepo *)g_object_ref (repo);
+  ret->sepolicy = (OstreeSePolicy *)(sepolicy ? g_object_ref (sepolicy) : NULL);
   ret->fi = util::move_nullify (fi);
   ret->archive = util::move_nullify (archive);
   ret->flags = flags;
   ret->hdr = util::move_nullify (hdr);
   ret->cpio_offset = cpio_offset;
-  ret->pkg = (DnfPackage*)(pkg ? g_object_ref (pkg) : NULL);
+  ret->pkg = (DnfPackage *)(pkg ? g_object_ref (pkg) : NULL);
   ret->opt_direntries = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   ret->varlib_direntries = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
-    ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                            g_free, NULL);
+    ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   build_rpmfi_overrides (ret);
 
- out:
+out:
   if (archive)
     archive_read_free (archive);
   if (fi)
@@ -291,11 +272,8 @@ rpmostree_importer_new_take_fd (int                     *fd,
 }
 
 static void
-get_rpmfi_override (RpmOstreeImporter *self,
-                    const char        *path,
-                    const char       **out_user,
-                    const char       **out_group,
-                    const char       **out_fcaps)
+get_rpmfi_override (RpmOstreeImporter *self, const char *path, const char **out_user,
+                    const char **out_group, const char **out_fcaps)
 {
   gpointer v;
 
@@ -326,15 +304,13 @@ rpmostree_importer_get_ostree_branch (RpmOstreeImporter *self)
 }
 
 static gboolean
-get_lead_sig_header_as_bytes (RpmOstreeImporter *self,
-                              GBytes  **out_metadata,
-                              GCancellable *cancellable,
-                              GError  **error)
+get_lead_sig_header_as_bytes (RpmOstreeImporter *self, GBytes **out_metadata,
+                              GCancellable *cancellable, GError **error)
 {
   /* Inline a pread() based reader here to avoid affecting the file
    * offset since both librpm and libarchive have references.
    */
-  g_autofree char *buf = (char*)g_malloc (self->cpio_offset);
+  g_autofree char *buf = (char *)g_malloc (self->cpio_offset);
   char *bufp = buf;
   size_t bytes_remaining = self->cpio_offset;
   while (bytes_remaining > 0)
@@ -368,29 +344,26 @@ get_lead_sig_header_as_bytes (RpmOstreeImporter *self,
 static GVariant *
 repo_metadata_for_package (DnfRepo *repo)
 {
-  g_auto(GVariantBuilder) builder;
-  g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
+  g_auto (GVariantBuilder) builder;
+  g_variant_builder_init (&builder, (GVariantType *)"a{sv}");
 
   /* For now, just the id...in the future maybe we'll add more, but this is
    * enough to provide useful semantics.
    */
-  g_variant_builder_add (&builder, "{sv}",
-                         "id", g_variant_new_string (dnf_repo_get_id (repo)));
-  g_variant_builder_add (&builder, "{sv}",
-                         "timestamp", g_variant_new_uint64 (dnf_repo_get_timestamp_generated (repo)));
+  g_variant_builder_add (&builder, "{sv}", "id", g_variant_new_string (dnf_repo_get_id (repo)));
+  g_variant_builder_add (&builder, "{sv}", "timestamp",
+                         g_variant_new_uint64 (dnf_repo_get_timestamp_generated (repo)));
 
   return g_variant_builder_end (&builder);
 }
 
 static gboolean
-build_metadata_variant (RpmOstreeImporter *self,
-                        GVariant         **out_variant,
-                        GCancellable      *cancellable,
-                        GError           **error)
+build_metadata_variant (RpmOstreeImporter *self, GVariant **out_variant, GCancellable *cancellable,
+                        GError **error)
 {
-  g_autoptr(GChecksum) pkg_checksum = g_checksum_new (G_CHECKSUM_SHA256);
-  g_auto(GVariantBuilder) metadata_builder;
-  g_variant_builder_init (&metadata_builder, (GVariantType*)"a{sv}");
+  g_autoptr (GChecksum) pkg_checksum = g_checksum_new (G_CHECKSUM_SHA256);
+  g_auto (GVariantBuilder) metadata_builder;
+  g_variant_builder_init (&metadata_builder, (GVariantType *)"a{sv}");
 
   /* NB: We store the full header of the RPM in the commit for three reasons:
    *   1. it holds the file security capabilities, which we need during checkout
@@ -400,22 +373,20 @@ build_metadata_variant (RpmOstreeImporter *self,
    *      rpmostree_context_prepare())
    */
   {
-    g_autoptr(GBytes) metadata = NULL;
+    g_autoptr (GBytes) metadata = NULL;
 
     if (!get_lead_sig_header_as_bytes (self, &metadata, cancellable, error))
       return FALSE;
 
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.metadata",
-                           g_variant_new_from_bytes ((GVariantType*)"ay",
-                                                     metadata, TRUE));
+                           g_variant_new_from_bytes ((GVariantType *)"ay", metadata, TRUE));
 
-    g_checksum_update (pkg_checksum, (const guint8*)g_bytes_get_data (metadata, NULL),
-                                     g_bytes_get_size (metadata));
+    g_checksum_update (pkg_checksum, (const guint8 *)g_bytes_get_data (metadata, NULL),
+                       g_bytes_get_size (metadata));
 
     self->hdr_sha256 = g_strdup (g_checksum_get_string (pkg_checksum));
 
-    g_variant_builder_add (&metadata_builder, "{sv}",
-                           "rpmostree.metadata_sha256",
+    g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.metadata_sha256",
                            g_variant_new_string (self->hdr_sha256));
   }
 
@@ -423,8 +394,7 @@ build_metadata_variant (RpmOstreeImporter *self,
    * just to get e.g. the pkgname */
   g_autofree char *nevra = rpmostree_importer_get_nevra (self);
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.nevra",
-                         g_variant_new ("(sstsss)", nevra,
-                                        headerGetString (self->hdr, RPMTAG_NAME),
+                         g_variant_new ("(sstsss)", nevra, headerGetString (self->hdr, RPMTAG_NAME),
                                         headerGetNumber (self->hdr, RPMTAG_EPOCH),
                                         headerGetString (self->hdr, RPMTAG_VERSION),
                                         headerGetString (self->hdr, RPMTAG_RELEASE),
@@ -435,8 +405,7 @@ build_metadata_variant (RpmOstreeImporter *self,
    * files should be relabeled. */
   if (self->sepolicy)
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.sepolicy",
-                           g_variant_new_string
-                             (ostree_sepolicy_get_csum (self->sepolicy)));
+                           g_variant_new_string (ostree_sepolicy_get_csum (self->sepolicy)));
 
   /* let's be nice to our future selves just in case */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_version",
@@ -459,16 +428,14 @@ build_metadata_variant (RpmOstreeImporter *self,
 
       /* include a checksum of the RPM as a whole; the actual algo used depends
        * on how the repodata was created, so just keep a repr */
-      auto chksum_repr = CXX_TRY_VAL(get_repodata_chksum_repr(*self->pkg), error);
-      g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.repodata_checksum",
-                             g_variant_new_string (chksum_repr.c_str()));
+      auto chksum_repr = CXX_TRY_VAL (get_repodata_chksum_repr (*self->pkg), error);
+      g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.repodata_checksum",
+                             g_variant_new_string (chksum_repr.c_str ()));
     }
 
   if (self->doc_files)
     {
-      g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.nodocs",
+      g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.nodocs",
                              g_variant_new_boolean (TRUE));
     }
 
@@ -478,15 +445,12 @@ build_metadata_variant (RpmOstreeImporter *self,
 
 typedef struct
 {
-  RpmOstreeImporter  *self;
-  GError  **error;
+  RpmOstreeImporter *self;
+  GError **error;
 } cb_data;
 
 static OstreeRepoCommitFilterResult
-compose_filter_cb (OstreeRepo         *repo,
-                   const char         *path,
-                   GFileInfo          *file_info,
-                   gpointer            user_data)
+compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer user_data)
 {
   // NOTE(lucab): `path` here is the ostree-compatible absolute filepath,
   //  i.e. after translation by `translate_pathname` callback.
@@ -497,8 +461,8 @@ compose_filter_cb (OstreeRepo         *repo,
   g_assert (file_info != NULL);
   g_assert (user_data != NULL);
 
-  RpmOstreeImporter *self = ((cb_data*)user_data)->self;
-  GError **error = ((cb_data*)user_data)->error;
+  RpmOstreeImporter *self = ((cb_data *)user_data)->self;
+  GError **error = ((cb_data *)user_data)->error;
 
   /* Are we filtering out docs?  Let's check that first */
   if (self->doc_files && g_hash_table_contains (self->doc_files, path))
@@ -529,29 +493,34 @@ compose_filter_cb (OstreeRepo         *repo,
       const char *group = NULL;
       get_rpmfi_override (self, path, &user, &group, NULL);
 
-      try {
-        auto entry = rpmostreecxx::tmpfiles_translate (path, *file_info,
-                                                       user ?: "root",
-                                                       group ?: "root");
-        g_string_append (self->tmpfiles_d, entry.c_str());
-        g_string_append_c (self->tmpfiles_d, '\n');
-      } catch (std::exception& e) {
-        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
-        return OSTREE_REPO_COMMIT_FILTER_SKIP;
-      }
+      try
+        {
+          auto entry = rpmostreecxx::tmpfiles_translate (path, *file_info, user ?: "root",
+                                                         group ?: "root");
+          g_string_append (self->tmpfiles_d, entry.c_str ());
+          g_string_append_c (self->tmpfiles_d, '\n');
+        }
+      catch (std::exception &e)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what ());
+          return OSTREE_REPO_COMMIT_FILTER_SKIP;
+        }
 
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
 
-  try {
-    bool skip_extraneous = (self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) != 0;
-    auto is_ignored = rpmostreecxx::importer_compose_filter (path, *file_info, skip_extraneous);
-    if (is_ignored)
+  try
+    {
+      bool skip_extraneous = (self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) != 0;
+      auto is_ignored = rpmostreecxx::importer_compose_filter (path, *file_info, skip_extraneous);
+      if (is_ignored)
+        return OSTREE_REPO_COMMIT_FILTER_SKIP;
+    }
+  catch (std::exception &e)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what ());
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
-  } catch (std::exception& e) {
-    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
-    return OSTREE_REPO_COMMIT_FILTER_SKIP;
-  }
+    }
 
   bool ro_executables = (self->flags & RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES) != 0;
   rpmostreecxx::tweak_imported_file_info (*file_info, ro_executables);
@@ -559,11 +528,8 @@ compose_filter_cb (OstreeRepo         *repo,
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
-static GVariant*
-xattr_cb (OstreeRepo  *repo,
-          const char  *path,
-          GFileInfo   *file_info,
-          gpointer     user_data)
+static GVariant *
+xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer user_data)
 {
   // NOTE(lucab): `path` here is the ostree-compatible absolute filepath,
   //  i.e. after translation by `translate_pathname` callback.
@@ -573,7 +539,7 @@ xattr_cb (OstreeRepo  *repo,
   g_assert (*path == '/');
   g_assert (user_data != NULL);
 
-  auto self = static_cast<RpmOstreeImporter *>(user_data);
+  auto self = static_cast<RpmOstreeImporter *> (user_data);
   const char *fcaps = NULL;
 
   get_rpmfi_override (self, path, NULL, NULL, &fcaps);
@@ -587,7 +553,7 @@ xattr_cb (OstreeRepo  *repo,
 static char *
 get_first_path_element (const char *rel_path)
 {
-  const char *end = strchr(rel_path, '/');
+  const char *end = strchr (rel_path, '/');
 
   if (end == NULL)
     return g_strdup (rel_path);
@@ -599,33 +565,26 @@ get_first_path_element (const char *rel_path)
  * for ostree convention.
  */
 static char *
-handle_translate_pathname (OstreeRepo   *repo,
-                           const struct stat *stbuf,
-                           const char   *path,
-                           gpointer      user_data)
+handle_translate_pathname (OstreeRepo *repo, const struct stat *stbuf, const char *path,
+                           gpointer user_data)
 {
   // Sanity check that path is relative (i.e. no leading slash).
   g_assert (path != NULL);
   g_assert (*path != '/');
 
-  auto self = static_cast<RpmOstreeImporter *>(user_data);
+  auto self = static_cast<RpmOstreeImporter *> (user_data);
 
   if (g_str_has_prefix (path, "opt/"))
-    g_hash_table_add (self->opt_direntries,
-                      get_first_path_element (path + strlen("opt/")));
-  else if ((strcmp (path, "var/lib/alternatives") == 0) ||
-           (strcmp (path, "var/lib/vagrant") == 0))
-    g_hash_table_add (self->varlib_direntries,
-                      g_strdup (path + strlen("var/lib/")));
+    g_hash_table_add (self->opt_direntries, get_first_path_element (path + strlen ("opt/")));
+  else if ((strcmp (path, "var/lib/alternatives") == 0) || (strcmp (path, "var/lib/vagrant") == 0))
+    g_hash_table_add (self->varlib_direntries, g_strdup (path + strlen ("var/lib/")));
 
   return rpmostree_translate_path_for_ostree (path);
 }
 
 static gboolean
-import_rpm_to_repo (RpmOstreeImporter *self,
-                    char             **out_csum,
-                    GCancellable      *cancellable,
-                    GError           **error)
+import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, GCancellable *cancellable,
+                    GError **error)
 {
   OstreeRepo *repo = self->repo;
   /* Passed to the commit modifier */
@@ -633,10 +592,9 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   cb_data fdata = { self, &cb_error };
 
   /* If changing this, also look at changing rpmostree-postprocess.cxx */
-  int modifier_flags =
-    OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
-  g_autoptr(OstreeRepoCommitModifier) modifier =
-    ostree_repo_commit_modifier_new (static_cast<OstreeRepoCommitModifierFlags>(modifier_flags), compose_filter_cb, &fdata, NULL);
+  int modifier_flags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
+  g_autoptr (OstreeRepoCommitModifier) modifier = ostree_repo_commit_modifier_new (
+      static_cast<OstreeRepoCommitModifierFlags> (modifier_flags), compose_filter_cb, &fdata, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb, NULL, self);
   ostree_repo_commit_modifier_set_sepolicy (modifier, self->sepolicy);
 
@@ -646,9 +604,9 @@ import_rpm_to_repo (RpmOstreeImporter *self,
   opts.translate_pathname = handle_translate_pathname;
   opts.translate_pathname_user_data = self;
 
-  g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
-  if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree,
-                                            modifier, cancellable, error))
+  g_autoptr (OstreeMutableTree) mtree = ostree_mutable_tree_new ();
+  if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree, modifier,
+                                            cancellable, error))
     return glnx_prefix_error (error, "Importing archive");
 
   /* check if any of the cbs set an error */
@@ -658,48 +616,49 @@ import_rpm_to_repo (RpmOstreeImporter *self,
       return FALSE;
     }
 
-  GLNX_HASH_TABLE_FOREACH (self->opt_direntries, const char*, filename)
-    {
-      g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
-      auto quoted = rpmostreecxx::maybe_shell_quote (opt);
-      /* Note that the destination can't be quoted as systemd just
-       * parses the remainder of the line, and doesn't expand quotes.
-       **/
-      g_string_append_printf (self->tmpfiles_d,
-                              "L %s - - - - /usr/lib/opt/%s\n",
-                              quoted.c_str(), filename);
-    }
+  GLNX_HASH_TABLE_FOREACH (self->opt_direntries, const char *, filename)
+  {
+    g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
+    auto quoted = rpmostreecxx::maybe_shell_quote (opt);
+    /* Note that the destination can't be quoted as systemd just
+     * parses the remainder of the line, and doesn't expand quotes.
+     **/
+    g_string_append_printf (self->tmpfiles_d, "L %s - - - - /usr/lib/opt/%s\n", quoted.c_str (),
+                            filename);
+  }
 
-  GLNX_HASH_TABLE_FOREACH (self->varlib_direntries, const char*, dirname)
-    {
-      g_autofree char *linkpath = g_strconcat ("/var/lib/", dirname, NULL);
-      auto quoted = rpmostreecxx::maybe_shell_quote (linkpath);
-      g_string_append_printf (self->tmpfiles_d,
-                              "L %s - - - - ../../usr/lib/%s\n",
-                              quoted.c_str(), dirname);
-    }
+  GLNX_HASH_TABLE_FOREACH (self->varlib_direntries, const char *, dirname)
+  {
+    g_autofree char *linkpath = g_strconcat ("/var/lib/", dirname, NULL);
+    auto quoted = rpmostreecxx::maybe_shell_quote (linkpath);
+    g_string_append_printf (self->tmpfiles_d, "L %s - - - - ../../usr/lib/%s\n", quoted.c_str (),
+                            dirname);
+  }
 
   /* Handle any data we've accumulated to write to tmpfiles.d.
    * I originally tried to do this entirely in memory but things
    * like selinux labeling only happen as callbacks out of using
    * the input dfd/archive paths...so let's just use a tempdir. (:sadface:)
    */
-  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  g_auto (GLnxTmpDir) tmpdir = {
+    0,
+  };
   if (self->tmpfiles_d->len > 0)
     {
       g_autofree char *pkgname = headerGetAsString (self->hdr, RPMTAG_NAME);
 
       if (!glnx_mkdtemp ("rpm-ostree-import.XXXXXX", 0700, &tmpdir, error))
         return FALSE;
-      if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "usr/lib/tmpfiles.d", 0755, cancellable,  error))
+      if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
         return FALSE;
-      if (!glnx_file_replace_contents_at (tmpdir.fd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkgname, ".conf"),
-                                          (guint8*)self->tmpfiles_d->str, self->tmpfiles_d->len, GLNX_FILE_REPLACE_NODATASYNC,
-                                          cancellable, error))
+      if (!glnx_file_replace_contents_at (
+              tmpdir.fd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkgname, ".conf"),
+              (guint8 *)self->tmpfiles_d->str, self->tmpfiles_d->len, GLNX_FILE_REPLACE_NODATASYNC,
+              cancellable, error))
         return FALSE;
 
-      if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir.fd, ".", mtree, modifier,
-                                           cancellable, error))
+      if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir.fd, ".", mtree, modifier, cancellable,
+                                           error))
         return glnx_prefix_error (error, "Writing tmpfiles mtree");
 
       /* check if any of the cbs set an error */
@@ -710,11 +669,11 @@ import_rpm_to_repo (RpmOstreeImporter *self,
         }
     }
 
-  g_autoptr(GFile) root = NULL;
+  g_autoptr (GFile) root = NULL;
   if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
     return glnx_prefix_error (error, "Writing mtree");
 
-  g_autoptr(GVariant) metadata = NULL;
+  g_autoptr (GVariant) metadata = NULL;
   if (!build_metadata_variant (self, &metadata, cancellable, error))
     return FALSE;
   g_variant_ref_sink (metadata);
@@ -725,19 +684,16 @@ import_rpm_to_repo (RpmOstreeImporter *self,
    * same checksum anyway). */
   guint64 buildtime = headerGetNumber (self->hdr, RPMTAG_BUILDTIME);
 
-  if (!ostree_repo_write_commit_with_time (repo, NULL, "", "", metadata,
-                                           OSTREE_REPO_FILE (root), buildtime,
-                                           out_csum, cancellable, error))
+  if (!ostree_repo_write_commit_with_time (repo, NULL, "", "", metadata, OSTREE_REPO_FILE (root),
+                                           buildtime, out_csum, cancellable, error))
     return glnx_prefix_error (error, "Writing commit");
 
   return TRUE;
 }
 
 gboolean
-rpmostree_importer_run (RpmOstreeImporter *self,
-                        char             **out_csum,
-                        GCancellable      *cancellable,
-                        GError           **error)
+rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, GCancellable *cancellable,
+                        GError **error)
 {
   if (g_cancellable_set_error_if_cancelled (cancellable, error))
     return FALSE;
@@ -758,13 +714,10 @@ rpmostree_importer_run (RpmOstreeImporter *self,
 }
 
 static void
-import_in_thread (GTask            *task,
-                  gpointer          source,
-                  gpointer          task_data,
-                  GCancellable     *cancellable)
+import_in_thread (GTask *task, gpointer source, gpointer task_data, GCancellable *cancellable)
 {
   GError *local_error = NULL;
-  auto self = static_cast<RpmOstreeImporter *>(source);
+  auto self = static_cast<RpmOstreeImporter *> (source);
   g_autofree char *rev = NULL;
 
   if (!rpmostree_importer_run (self, &rev, cancellable, &local_error))
@@ -774,22 +727,18 @@ import_in_thread (GTask            *task,
 }
 
 void
-rpmostree_importer_run_async (RpmOstreeImporter  *self,
-                              GCancellable       *cancellable,
-                              GAsyncReadyCallback callback,
-                              gpointer            user_data)
+rpmostree_importer_run_async (RpmOstreeImporter *self, GCancellable *cancellable,
+                              GAsyncReadyCallback callback, gpointer user_data)
 {
-  g_autoptr(GTask) task = g_task_new (self, cancellable, callback, user_data);
+  g_autoptr (GTask) task = g_task_new (self, cancellable, callback, user_data);
   g_task_run_in_thread (task, import_in_thread);
 }
 
 char *
-rpmostree_importer_run_async_finish (RpmOstreeImporter  *self,
-                                     GAsyncResult       *result,
-                                     GError            **error)
+rpmostree_importer_run_async_finish (RpmOstreeImporter *self, GAsyncResult *result, GError **error)
 {
   g_assert (g_task_is_valid (result, self));
-  return static_cast<char*>(g_task_propagate_pointer ((GTask*)result, error));
+  return static_cast<char *> (g_task_propagate_pointer ((GTask *)result, error));
 }
 
 char *
@@ -797,10 +746,10 @@ rpmostree_importer_get_nevra (RpmOstreeImporter *self)
 {
   if (self->hdr == NULL)
     return NULL;
-  return rpmostree_header_custom_nevra_strdup (self->hdr,
-                                               (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME |
-                                               PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-                                               PKG_NEVRA_FLAGS_ARCH));
+  return rpmostree_header_custom_nevra_strdup (
+      self->hdr,
+      (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME | PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE
+                               | PKG_NEVRA_FLAGS_ARCH));
 }
 
 const char *

@@ -20,13 +20,13 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
-#include "rpmostree-ex-builtins.h"
-#include "rpmostree-util.h"
-#include "rpmostree-libbuiltin.h"
 #include "rpmostree-clientlib.h"
+#include "rpmostree-ex-builtins.h"
+#include "rpmostree-libbuiltin.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 
@@ -37,37 +37,31 @@ static gboolean opt_overrides;
 static gboolean opt_initramfs;
 static gboolean opt_lock_finalization;
 
-static GOptionEntry option_entries[] = {
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after transaction is complete", NULL },
-  { "overlays", 'l', 0, G_OPTION_ARG_NONE, &opt_overlays, "Remove all overlayed packages", NULL },
-  { "overrides", 'o', 0, G_OPTION_ARG_NONE, &opt_overrides, "Remove all overrides", NULL },
-  { "initramfs", 'i', 0, G_OPTION_ARG_NONE, &opt_initramfs, "Stop regenerating initramfs or tracking files", NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
-  { NULL }
-};
+static GOptionEntry option_entries[]
+    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+        { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
+          "Initiate a reboot after transaction is complete", NULL },
+        { "overlays", 'l', 0, G_OPTION_ARG_NONE, &opt_overlays, "Remove all overlayed packages",
+          NULL },
+        { "overrides", 'o', 0, G_OPTION_ARG_NONE, &opt_overrides, "Remove all overrides", NULL },
+        { "initramfs", 'i', 0, G_OPTION_ARG_NONE, &opt_initramfs,
+          "Stop regenerating initramfs or tracking files", NULL },
+        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+          "Prevent automatic deployment finalization on shutdown", NULL },
+        { NULL } };
 
 gboolean
-rpmostree_builtin_reset (int             argc,
-                         char          **argv,
-                         RpmOstreeCommandInvocation *invocation,
-                         GCancellable   *cancellable,
-                         GError        **error)
+rpmostree_builtin_reset (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                         GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       &install_pkgs,
-                                       &uninstall_pkgs,
-                                       &sysroot_proxy,
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, &install_pkgs, &uninstall_pkgs, &sysroot_proxy,
                                        error))
     return FALSE;
 
@@ -85,11 +79,10 @@ rpmostree_builtin_reset (int             argc,
   gboolean cache_only = (install_pkgs == NULL);
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
 
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -101,16 +94,14 @@ rpmostree_builtin_reset (int             argc,
   g_variant_dict_insert (&dict, "cache-only", "b", cache_only);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
-  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+  g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
-  if (!rpmostree_update_deployment (os_proxy, NULL, NULL, install_pkgs, NULL, uninstall_pkgs,
-                                    NULL, NULL, NULL, NULL, options, &transaction_address,
-                                    cancellable, error))
+  if (!rpmostree_update_deployment (os_proxy, NULL, NULL, install_pkgs, NULL, uninstall_pkgs, NULL,
+                                    NULL, NULL, NULL, options, &transaction_address, cancellable,
+                                    error))
     return FALSE;
 
-  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, FALSE,
-                                           transaction_address,
-                                           previous_deployment,
-                                           cancellable, error);
+  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy, options, FALSE,
+                                           transaction_address, previous_deployment, cancellable,
+                                           error);
 }

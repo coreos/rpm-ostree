@@ -1,4 +1,4 @@
-/* 
+/*
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
  * by the Free Software Foundation; either version 2 of the licence or (at
@@ -17,37 +17,39 @@
 
 #pragma once
 
-#include <string>
 #include <exception>
-#include <sstream>
 #include <gio/gio.h>
+#include <sstream>
+#include <string>
 
 #include "rust/cxx.h"
 
 // Helpers corresponding to cxxrsutil.rs
-namespace rpmostreecxx {
+namespace rpmostreecxx
+{
 
 // Wrapper for an array of GObjects.  This is a hack until
 // cxx-rs gains support for either std::vector<> or Vec<T>
 // with nontrivial types.
-class CxxGObjectArray final {
+class CxxGObjectArray final
+{
 public:
-    CxxGObjectArray(GPtrArray *arr_p) : arr(arr_p) {
-        g_ptr_array_ref(arr);
-    };
-    ~CxxGObjectArray() {
-        g_ptr_array_unref(arr);
-    }
+  CxxGObjectArray (GPtrArray *arr_p) : arr (arr_p) { g_ptr_array_ref (arr); };
+  ~CxxGObjectArray () { g_ptr_array_unref (arr); }
 
-    unsigned int length() {
-        return (unsigned int)arr->len;
-    }
+  unsigned int
+  length ()
+  {
+    return (unsigned int)arr->len;
+  }
 
-    ::GObject& get(unsigned int i) {
-        g_assert_cmpuint(i, <, arr->len);
-        return *(::GObject*)arr->pdata[i];
-    }
-    GPtrArray* arr;
+  ::GObject &
+  get (unsigned int i)
+  {
+    g_assert_cmpuint (i, <, arr->len);
+    return *(::GObject *)arr->pdata[i];
+  }
+  GPtrArray *arr;
 };
 
 } // namespace

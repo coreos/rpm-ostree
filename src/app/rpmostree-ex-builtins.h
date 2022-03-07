@@ -26,18 +26,18 @@
 
 G_BEGIN_DECLS
 
-#define BUILTINPROTO(name) gboolean rpmostree_ex_builtin_ ## name (int argc, char **argv, \
-                                                                   RpmOstreeCommandInvocation *invocation, \
-                                                                   GCancellable *cancellable, GError **error)
+#define BUILTINPROTO(name)                                                                         \
+  gboolean rpmostree_ex_builtin_##name (int argc, char **argv,                                     \
+                                        RpmOstreeCommandInvocation *invocation,                    \
+                                        GCancellable *cancellable, GError **error)
 
-BUILTINPROTO(unpack);
-BUILTINPROTO(apply_live);
-BUILTINPROTO(history);
-BUILTINPROTO(initramfs_etc);
-BUILTINPROTO(module);
-BUILTINPROTO(rebuild);
+BUILTINPROTO (unpack);
+BUILTINPROTO (apply_live);
+BUILTINPROTO (history);
+BUILTINPROTO (initramfs_etc);
+BUILTINPROTO (module);
+BUILTINPROTO (rebuild);
 
 #undef BUILTINPROTO
 
 G_END_DECLS
-

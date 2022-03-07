@@ -1,43 +1,45 @@
 /*
-* Copyright (C) 2015 Red Hat, Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
-*/
+ * Copyright (C) 2015 Red Hat, Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 
 #include "config.h"
 
+#include "rpmostree-util.h"
 #include "rpmostreed-daemon.h"
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-types.h"
 #include "rpmostreed-utils.h"
-#include "rpmostree-util.h"
 
 #include <libglnx.h>
+#include <stdio.h>
+#include <systemd/sd-daemon.h>
 #include <systemd/sd-journal.h>
 #include <systemd/sd-login.h>
-#include <systemd/sd-daemon.h>
-#include <stdio.h>
 
-#define RPMOSTREE_MESSAGE_TRANSACTION_STARTED SD_ID128_MAKE(d5,be,a3,7a,8f,c8,4f,f5,9d,bc,fd,79,17,7b,7d,f8)
+#define RPMOSTREE_MESSAGE_TRANSACTION_STARTED                                                      \
+  SD_ID128_MAKE (d5, be, a3, 7a, 8f, c8, 4f, f5, 9d, bc, fd, 79, 17, 7b, 7d, f8)
 
 #define RPMOSTREED_CONF SYSCONFDIR "/rpm-ostreed.conf"
 #define DAEMON_CONFIG_GROUP "Daemon"
 #define EXPERIMENTAL_CONFIG_GROUP "Experimental"
 
 struct RpmOstreeClient;
-static struct RpmOstreeClient *client_new (RpmostreedDaemon *self, const char *address, const char *id);
+static struct RpmOstreeClient *client_new (RpmostreedDaemon *self, const char *address,
+                                           const char *id);
 
 /**
  * SECTION: daemon
@@ -55,7 +57,8 @@ typedef struct _RpmostreedDaemonClass RpmostreedDaemonClass;
  * The #RpmostreedDaemon structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _RpmostreedDaemon {
+struct _RpmostreedDaemon
+{
   GObject parent_instance;
 
   GHashTable *bus_clients; /* <utf8 busname, struct RpmOstreeClient> */
@@ -76,7 +79,8 @@ struct _RpmostreedDaemon {
   GDBusObjectManagerServer *object_manager;
 };
 
-struct _RpmostreedDaemonClass {
+struct _RpmostreedDaemonClass
+{
   GObjectClass parent_class;
 };
 
@@ -97,7 +101,8 @@ G_DEFINE_TYPE_WITH_CODE (RpmostreedDaemon, rpmostreed_daemon, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 rpmostreed_daemon_initable_iface_init))
 
-struct RpmOstreeClient {
+struct RpmOstreeClient
+{
   char *id;
   char *address;
   guint name_watch_id;
@@ -123,7 +128,7 @@ rpmostree_client_free (struct RpmOstreeClient *client)
 static char *
 rpmostree_client_to_string (struct RpmOstreeClient *client)
 {
-  g_autoptr(GString) buf = g_string_new ("client(");
+  g_autoptr (GString) buf = g_string_new ("client(");
   if (client->id)
     g_string_append_printf (buf, "id:%s ", client->id);
   /* Since DBus addresses have a leading ':', let's avoid another. Yeah it's not
@@ -134,19 +139,19 @@ rpmostree_client_to_string (struct RpmOstreeClient *client)
   if (client->sd_unit)
     g_string_append_printf (buf, " unit:%s", client->sd_unit);
   if (client->uid_valid)
-    g_string_append_printf (buf, " uid:%lu", (unsigned long) client->uid);
+    g_string_append_printf (buf, " uid:%lu", (unsigned long)client->uid);
   else
     g_string_append (buf, " uid:<unknown>");
   g_string_append_c (buf, ')');
   return g_string_free (util::move_nullify (buf), FALSE);
 }
 
-typedef struct {
+typedef struct
+{
   GAsyncReadyCallback callback;
   gpointer callback_data;
   gpointer proxy_source;
 } DaemonTaskData;
-
 
 static void
 daemon_finalize (GObject *object)
@@ -171,12 +176,8 @@ daemon_finalize (GObject *object)
   _daemon_instance = NULL;
 }
 
-
 static void
-daemon_get_property (GObject *object,
-                     guint prop_id,
-                     GValue *value,
-                     GParamSpec *pspec)
+daemon_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
   RpmostreedDaemon *self = RPMOSTREED_DAEMON (object);
 
@@ -192,12 +193,8 @@ daemon_get_property (GObject *object,
     }
 }
 
-
 static void
-daemon_set_property (GObject *object,
-                     guint prop_id,
-                     const GValue *value,
-                     GParamSpec *pspec)
+daemon_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
   RpmostreedDaemon *self = RPMOSTREED_DAEMON (object);
 
@@ -205,7 +202,7 @@ daemon_set_property (GObject *object,
     {
     case PROP_CONNECTION:
       g_assert (self->connection == NULL);
-      self->connection = (GDBusConnection*)g_value_dup_object (value);
+      self->connection = (GDBusConnection *)g_value_dup_object (value);
       break;
     case PROP_SYSROOT_PATH:
       g_assert (self->sysroot_path == NULL);
@@ -217,7 +214,6 @@ daemon_set_property (GObject *object,
     }
 }
 
-
 static void
 rpmostreed_daemon_init (RpmostreedDaemon *self)
 {
@@ -226,16 +222,15 @@ rpmostreed_daemon_init (RpmostreedDaemon *self)
 
   self->sysroot_path = NULL;
   self->sysroot = NULL;
-  self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, (GDestroyNotify)rpmostree_client_free);
+  self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, NULL,
+                                             (GDestroyNotify)rpmostree_client_free);
 }
 
 static void
-on_active_txn_changed (GObject *object,
-                       GParamSpec *pspec,
-                       gpointer user_data)
+on_active_txn_changed (GObject *object, GParamSpec *pspec, gpointer user_data)
 {
-  auto self = static_cast<RpmostreedDaemon *>(user_data);
-  g_autoptr(GVariant) active_txn = NULL;
+  auto self = static_cast<RpmostreedDaemon *> (user_data);
+  g_autoptr (GVariant) active_txn = NULL;
   const char *method, *sender, *path;
 
   g_object_get (rpmostreed_sysroot_get (), "active-transaction", &active_txn, NULL);
@@ -245,7 +240,8 @@ on_active_txn_changed (GObject *object,
       g_variant_get (active_txn, "(&s&s&s)", &method, &sender, &path);
       if (*method)
         {
-          auto clientdata = static_cast<struct RpmOstreeClient *>(g_hash_table_lookup (self->bus_clients, sender));
+          auto clientdata = static_cast<struct RpmOstreeClient *> (
+              g_hash_table_lookup (self->bus_clients, sender));
           struct RpmOstreeClient *clientdata_owned = NULL;
           /* If the caller didn't register (e.g. Cockpit doesn't today),
            * then let's gather the relevant client info now.
@@ -257,11 +253,10 @@ on_active_txn_changed (GObject *object,
           if (clientdata->uid_valid)
             client_data_msg = g_strdup_printf ("CLIENT_UID=%u", clientdata->uid);
           /* TODO: convert other client fields to structured log */
-          sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_TRANSACTION_STARTED),
+          sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR,
+                           SD_ID128_FORMAT_VAL (RPMOSTREE_MESSAGE_TRANSACTION_STARTED),
                            "MESSAGE=Initiated txn %s for %s: %s", method, client_str, path,
-                           "BUS_ADDRESS=%s", sender,
-                           client_data_msg ?: NULL,
-                           NULL);
+                           "BUS_ADDRESS=%s", sender, client_data_msg ?: NULL, NULL);
           rpmostree_client_free (clientdata_owned);
         }
     }
@@ -270,9 +265,7 @@ on_active_txn_changed (GObject *object,
 }
 
 static gboolean
-rpmostreed_daemon_initable_init (GInitable *initable,
-                                 GCancellable *cancellable,
-                                 GError **error)
+rpmostreed_daemon_initable_init (GInitable *initable, GCancellable *cancellable, GError **error)
 {
   RpmostreedDaemon *self = RPMOSTREED_DAEMON (initable);
 
@@ -286,11 +279,9 @@ rpmostreed_daemon_initable_init (GInitable *initable,
   if (!rpmostreed_daemon_reload_config (self, NULL, error))
     return FALSE;
 
-  g_autofree gchar *path =
-    rpmostreed_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
-  self->sysroot = (RpmostreedSysroot*)g_object_new (RPMOSTREED_TYPE_SYSROOT,
-                                "path", self->sysroot_path,
-                                NULL);
+  g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
+  self->sysroot = (RpmostreedSysroot *)g_object_new (RPMOSTREED_TYPE_SYSROOT, "path",
+                                                     self->sysroot_path, NULL);
 
   if (!rpmostreed_sysroot_populate (rpmostreed_sysroot_get (), cancellable, error))
     return glnx_prefix_error (error, "Error setting up sysroot");
@@ -298,16 +289,11 @@ rpmostreed_daemon_initable_init (GInitable *initable,
   g_signal_connect (rpmostreed_sysroot_get (), "notify::active-transaction",
                     G_CALLBACK (on_active_txn_changed), self);
 
-  self->bus_proxy =
-    g_dbus_proxy_new_sync (self->connection,
-                           (GDBusProxyFlags)(G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES |
-                           G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS),
-                           NULL,
-                           "org.freedesktop.DBus",
-                           "/org/freedesktop/DBus",
-                           "org.freedesktop.DBus",
-                           NULL,
-                           error);
+  self->bus_proxy = g_dbus_proxy_new_sync (
+      self->connection,
+      (GDBusProxyFlags)(G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES
+                        | G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS),
+      NULL, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", NULL, error);
   if (!self->bus_proxy)
     return FALSE;
 
@@ -322,12 +308,11 @@ rpmostreed_daemon_initable_init (GInitable *initable,
 /* Returns TRUE if config file exists and could be loaded or if config file doesn't exist.
  * Returns FALSE if config file exists but could not be loaded. */
 static gboolean
-maybe_load_config_keyfile (GKeyFile **out_keyfile,
-                           GError   **error)
+maybe_load_config_keyfile (GKeyFile **out_keyfile, GError **error)
 {
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
 
-  g_autoptr(GKeyFile) keyfile = g_key_file_new ();
+  g_autoptr (GKeyFile) keyfile = g_key_file_new ();
   if (g_key_file_load_from_file (keyfile, RPMOSTREED_CONF, (GKeyFileFlags)0, &local_error))
     {
       *out_keyfile = util::move_nullify (keyfile);
@@ -346,10 +331,8 @@ maybe_load_config_keyfile (GKeyFile **out_keyfile,
   return TRUE;
 }
 
-static char*
-get_config_str (GKeyFile   *keyfile,
-                const char *key,
-                const char *default_val)
+static char *
+get_config_str (GKeyFile *keyfile, const char *key, const char *default_val)
 {
   g_autofree char *val = NULL;
   if (keyfile)
@@ -358,19 +341,17 @@ get_config_str (GKeyFile   *keyfile,
 }
 
 static guint64
-get_config_uint64 (GKeyFile   *keyfile,
-                   const char *key,
-                   guint64     default_val)
+get_config_uint64 (GKeyFile *keyfile, const char *key, guint64 default_val)
 {
   if (keyfile && g_key_file_has_key (keyfile, DAEMON_CONFIG_GROUP, key, NULL))
     {
-      g_autoptr(GError) local_error = NULL;
+      g_autoptr (GError) local_error = NULL;
       guint64 r = g_key_file_get_uint64 (keyfile, DAEMON_CONFIG_GROUP, key, &local_error);
       if (!local_error)
         return r;
       if (g_error_matches (local_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE))
-        sd_journal_print (LOG_WARNING, "Bad uint64 for '%s': %s; using compiled defaults",
-                          key, local_error->message);
+        sd_journal_print (LOG_WARNING, "Bad uint64 for '%s': %s; using compiled defaults", key,
+                          local_error->message);
     }
   return default_val;
 }
@@ -390,11 +371,9 @@ ascii_strdown_inplace (char *str)
 }
 
 gboolean
-rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
-                                 gboolean         *out_changed,
-                                 GError          **error)
+rpmostreed_daemon_reload_config (RpmostreedDaemon *self, gboolean *out_changed, GError **error)
 {
-  g_autoptr(GKeyFile) config = NULL;
+  g_autoptr (GKeyFile) config = NULL;
   if (!maybe_load_config_keyfile (&config, error))
     return FALSE;
 
@@ -403,16 +382,13 @@ rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
   guint64 idle_exit_timeout = get_config_uint64 (config, "IdleExitTimeout", 60);
 
   /* default to off for now; we will change it to "check" in a later release */
-  RpmostreedAutomaticUpdatePolicy auto_update_policy =
-    RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE;
+  RpmostreedAutomaticUpdatePolicy auto_update_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE;
 
-  g_autofree char *auto_update_policy_str =
-    get_config_str (config, "AutomaticUpdatePolicy", NULL);
+  g_autofree char *auto_update_policy_str = get_config_str (config, "AutomaticUpdatePolicy", NULL);
   if (auto_update_policy_str)
     {
       ascii_strdown_inplace (auto_update_policy_str);
-      if (!rpmostree_str_to_auto_update_policy (auto_update_policy_str,
-                                                &auto_update_policy, error))
+      if (!rpmostree_str_to_auto_update_policy (auto_update_policy_str, &auto_update_policy, error))
         return FALSE;
     }
 
@@ -436,7 +412,7 @@ rpmostreed_daemon_class_init (RpmostreedDaemonClass *klass)
 {
   GObjectClass *gobject_class;
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->finalize     = daemon_finalize;
+  gobject_class->finalize = daemon_finalize;
   gobject_class->set_property = daemon_set_property;
   gobject_class->get_property = daemon_get_property;
 
@@ -445,38 +421,29 @@ rpmostreed_daemon_class_init (RpmostreedDaemonClass *klass)
    *
    * The #GDBusConnection the daemon is for.
    */
-  g_object_class_install_property (gobject_class,
-                                   PROP_CONNECTION,
-                                   g_param_spec_object ("connection",
-                                                        "Connection",
-                                                        "The D-Bus connection the daemon is for",
-                                                        G_TYPE_DBUS_CONNECTION,
-                                                        (GParamFlags)(G_PARAM_WRITABLE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property (
+      gobject_class, PROP_CONNECTION,
+      g_param_spec_object (
+          "connection", "Connection", "The D-Bus connection the daemon is for",
+          G_TYPE_DBUS_CONNECTION,
+          (GParamFlags)(G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS)));
   /**
    * Daemon:object-manager:
    *
    * The #GDBusObjectManager used by the daemon
    */
-  g_object_class_install_property (gobject_class,
-                                   PROP_OBJECT_MANAGER,
-                                   g_param_spec_object ("object-manager",
-                                                        "Object Manager",
-                                                        "The D-Bus Object Manager server used by the daemon",
-                                                        G_TYPE_DBUS_OBJECT_MANAGER_SERVER,
-                                                        (GParamFlags)(G_PARAM_READABLE |
-                                                        G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property (
+      gobject_class, PROP_OBJECT_MANAGER,
+      g_param_spec_object ("object-manager", "Object Manager",
+                           "The D-Bus Object Manager server used by the daemon",
+                           G_TYPE_DBUS_OBJECT_MANAGER_SERVER,
+                           (GParamFlags)(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
 
-  g_object_class_install_property (gobject_class,
-                                   PROP_SYSROOT_PATH,
-                                   g_param_spec_string ("sysroot-path",
-                                                        "Sysroot Path",
-                                                        "Sysroot location on the filesystem",
-                                                        FALSE,
-                                                        (GParamFlags)(G_PARAM_WRITABLE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property (
+      gobject_class, PROP_SYSROOT_PATH,
+      g_param_spec_string (
+          "sysroot-path", "Sysroot Path", "Sysroot location on the filesystem", FALSE,
+          (GParamFlags)(G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
@@ -498,24 +465,20 @@ rpmostreed_daemon_get (void)
 }
 
 static void
-on_name_owner_changed (GDBusConnection  *connection,
-                       const gchar      *sender_name,
-                       const gchar      *object_path,
-                       const gchar      *interface_name,
-                       const gchar      *signal_name,
-                       GVariant         *parameters,
-                       gpointer          user_data)
+on_name_owner_changed (GDBusConnection *connection, const gchar *sender_name,
+                       const gchar *object_path, const gchar *interface_name,
+                       const gchar *signal_name, GVariant *parameters, gpointer user_data)
 {
-  auto self = static_cast<RpmostreedDaemon *>(user_data);
+  auto self = static_cast<RpmostreedDaemon *> (user_data);
   const char *name;
   const char *old_owner;
   gboolean has_old_owner;
   const char *new_owner;
   gboolean has_new_owner;
 
-  if (g_strcmp0 (object_path, "/org/freedesktop/DBus") != 0 ||
-      g_strcmp0 (interface_name, "org.freedesktop.DBus") != 0 ||
-      g_strcmp0 (sender_name, "org.freedesktop.DBus") != 0)
+  if (g_strcmp0 (object_path, "/org/freedesktop/DBus") != 0
+      || g_strcmp0 (interface_name, "org.freedesktop.DBus") != 0
+      || g_strcmp0 (sender_name, "org.freedesktop.DBus") != 0)
     return;
 
   g_variant_get (parameters, "(&s&s&s)", &name, &old_owner, &new_owner);
@@ -529,18 +492,17 @@ on_name_owner_changed (GDBusConnection  *connection,
 static gboolean
 idle_update_status (void *data)
 {
-  auto self = static_cast<RpmostreedDaemon *>(data);
+  auto self = static_cast<RpmostreedDaemon *> (data);
 
   update_status (self);
 
   return TRUE;
 }
 
-
 static gboolean
 on_idle_exit (void *data)
 {
-  auto self = static_cast<RpmostreedDaemon *>(data);
+  auto self = static_cast<RpmostreedDaemon *> (data);
 
   g_clear_pointer (&self->idle_exit_source, (GDestroyNotify)g_source_unref);
 
@@ -554,7 +516,7 @@ on_idle_exit (void *data)
 static void
 update_status (RpmostreedDaemon *self)
 {
-  g_autoptr(GVariant) active_txn = NULL;
+  g_autoptr (GVariant) active_txn = NULL;
   gboolean have_active_txn = FALSE;
   const char *method, *sender, *path;
   const guint n_clients = g_hash_table_size (self->bus_clients);
@@ -596,8 +558,8 @@ update_status (RpmostreedDaemon *self)
 
   if (have_active_txn)
     {
-      sd_notifyf (0, "STATUS=clients=%u; txn=%s caller=%s path=%s", g_hash_table_size (self->bus_clients),
-                  method, sender, path);
+      sd_notifyf (0, "STATUS=clients=%u; txn=%s caller=%s path=%s",
+                  g_hash_table_size (self->bus_clients), method, sender, path);
     }
   else if (n_clients > 0)
     sd_notifyf (0, "STATUS=clients=%u; idle", n_clients);
@@ -616,20 +578,16 @@ update_status (RpmostreedDaemon *self)
 }
 
 gboolean
-rpmostreed_get_client_uid (RpmostreedDaemon *self,
-                           const char       *client,
-                           uid_t            *out_uid)
+rpmostreed_get_client_uid (RpmostreedDaemon *self, const char *client, uid_t *out_uid)
 {
-  g_autoptr(GError) local_error = NULL;
-  g_autoptr(GVariant) uidcall = g_dbus_proxy_call_sync (self->bus_proxy,
-                                                        "GetConnectionUnixUser",
-                                                        g_variant_new ("(s)", client),
-                                                        G_DBUS_CALL_FLAGS_NONE,
-                                                        2000, NULL, &local_error);
+  g_autoptr (GError) local_error = NULL;
+  g_autoptr (GVariant) uidcall = g_dbus_proxy_call_sync (
+      self->bus_proxy, "GetConnectionUnixUser", g_variant_new ("(s)", client),
+      G_DBUS_CALL_FLAGS_NONE, 2000, NULL, &local_error);
   if (!uidcall)
     {
-      sd_journal_print (LOG_WARNING, "Failed to GetConnectionUnixUser for client %s: %s",
-                        client, local_error->message);
+      sd_journal_print (LOG_WARNING, "Failed to GetConnectionUnixUser for client %s: %s", client,
+                        local_error->message);
       return FALSE;
     }
 
@@ -638,16 +596,12 @@ rpmostreed_get_client_uid (RpmostreedDaemon *self,
 }
 
 static gboolean
-get_client_pid (RpmostreedDaemon *self,
-                const char       *client,
-                pid_t            *out_pid)
+get_client_pid (RpmostreedDaemon *self, const char *client, pid_t *out_pid)
 {
-  g_autoptr(GError) local_error = NULL;
-  g_autoptr(GVariant) all = g_dbus_proxy_call_sync (self->bus_proxy,
-                                                    "GetConnectionUnixProcessID",
-                                                    g_variant_new ("(s)", client),
-                                                    G_DBUS_CALL_FLAGS_NONE,
-                                                    2000, NULL, &local_error);
+  g_autoptr (GError) local_error = NULL;
+  g_autoptr (GVariant) all = g_dbus_proxy_call_sync (
+      self->bus_proxy, "GetConnectionUnixProcessID", g_variant_new ("(s)", client),
+      G_DBUS_CALL_FLAGS_NONE, 2000, NULL, &local_error);
   if (!all)
     {
       sd_journal_print (LOG_WARNING, "Failed to GetConnectionUnixProcessID for client %s: %s",
@@ -661,8 +615,7 @@ get_client_pid (RpmostreedDaemon *self,
 
 /* Given a DBus address, load metadata for it */
 static struct RpmOstreeClient *
-client_new (RpmostreedDaemon *self, const char *address,
-            const char *client_id)
+client_new (RpmostreedDaemon *self, const char *address, const char *client_id)
 {
   auto client = g_new0 (struct RpmOstreeClient, 1);
   client->address = g_strdup (address);
@@ -673,38 +626,32 @@ client_new (RpmostreedDaemon *self, const char *address,
     {
       client->pid_valid = TRUE;
       if (sd_pid_get_user_unit (client->pid, &client->sd_unit) == 0)
-        {}
+        {
+        }
       else if (sd_pid_get_unit (client->pid, &client->sd_unit) == 0)
-        {}
+        {
+        }
     }
 
   return util::move_nullify (client);
 }
 
 void
-rpmostreed_daemon_add_client (RpmostreedDaemon *self,
-                              const char       *client,
-                              const char       *client_id)
+rpmostreed_daemon_add_client (RpmostreedDaemon *self, const char *client, const char *client_id)
 {
   if (g_hash_table_lookup (self->bus_clients, client))
     return;
 
   struct RpmOstreeClient *clientdata = client_new (self, client, client_id);
-  clientdata->name_watch_id =
-    g_dbus_connection_signal_subscribe (self->connection,
-                                        "org.freedesktop.DBus",
-                                        "org.freedesktop.DBus",
-                                        "NameOwnerChanged",
-                                        "/org/freedesktop/DBus",
-                                        client,
-                                        G_DBUS_SIGNAL_FLAGS_NONE,
-                                        on_name_owner_changed,
-                                        g_object_ref (self),
-                                        g_object_unref);
+  clientdata->name_watch_id = g_dbus_connection_signal_subscribe (
+      self->connection, "org.freedesktop.DBus", "org.freedesktop.DBus", "NameOwnerChanged",
+      "/org/freedesktop/DBus", client, G_DBUS_SIGNAL_FLAGS_NONE, on_name_owner_changed,
+      g_object_ref (self), g_object_unref);
 
-  g_hash_table_insert (self->bus_clients, (char*)clientdata->address, clientdata);
+  g_hash_table_insert (self->bus_clients, (char *)clientdata->address, clientdata);
   g_autofree char *clientstr = rpmostree_client_to_string (clientdata);
-  sd_journal_print (LOG_INFO, "%s added; new total=%u", clientstr, g_hash_table_size (self->bus_clients));
+  sd_journal_print (LOG_INFO, "%s added; new total=%u", clientstr,
+                    g_hash_table_size (self->bus_clients));
   update_status (self);
 }
 
@@ -715,7 +662,8 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
 char *
 rpmostreed_daemon_client_get_string (RpmostreedDaemon *self, const char *client)
 {
-  auto clientdata = static_cast<struct RpmOstreeClient *>(g_hash_table_lookup (self->bus_clients, client));
+  auto clientdata
+      = static_cast<struct RpmOstreeClient *> (g_hash_table_lookup (self->bus_clients, client));
   if (!clientdata)
     return g_strdup_printf ("caller %s", client);
   else
@@ -726,7 +674,8 @@ rpmostreed_daemon_client_get_string (RpmostreedDaemon *self, const char *client)
 char *
 rpmostreed_daemon_client_get_agent_id (RpmostreedDaemon *self, const char *client)
 {
-  auto clientdata = static_cast<struct RpmOstreeClient *>(g_hash_table_lookup (self->bus_clients, client));
+  auto clientdata
+      = static_cast<struct RpmOstreeClient *> (g_hash_table_lookup (self->bus_clients, client));
   if (!clientdata || clientdata->id == NULL || g_str_equal (clientdata->id, "cli"))
     return NULL;
   else
@@ -737,7 +686,8 @@ rpmostreed_daemon_client_get_agent_id (RpmostreedDaemon *self, const char *clien
 char *
 rpmostreed_daemon_client_get_sd_unit (RpmostreedDaemon *self, const char *client)
 {
-  auto clientdata = static_cast<struct RpmOstreeClient *>(g_hash_table_lookup (self->bus_clients, client));
+  auto clientdata
+      = static_cast<struct RpmOstreeClient *> (g_hash_table_lookup (self->bus_clients, client));
   if (clientdata)
     return g_strdup (clientdata->sd_unit);
   /* If the caller didn't register (e.g. Zincati doesn't today because it runs as a
@@ -754,13 +704,12 @@ rpmostreed_daemon_client_get_sd_unit (RpmostreedDaemon *self, const char *client
 }
 
 void
-rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
-                                 const char       *client)
+rpmostreed_daemon_remove_client (RpmostreedDaemon *self, const char *client)
 {
   gpointer origkey, clientdatap;
   if (!g_hash_table_lookup_extended (self->bus_clients, client, &origkey, &clientdatap))
     return;
-  auto clientdata = static_cast<struct RpmOstreeClient *>(clientdatap);
+  auto clientdata = static_cast<struct RpmOstreeClient *> (clientdatap);
   g_dbus_connection_signal_unsubscribe (self->connection, clientdata->name_watch_id);
   g_autofree char *clientstr = rpmostree_client_to_string (clientdata);
   g_hash_table_remove (self->bus_clients, client);
@@ -780,19 +729,21 @@ idle_initiate_reboot (void *_unused)
 {
   sd_journal_print (LOG_INFO, "Initiating reboot requested from transaction");
 
-  /* Note that we synchronously spawn this command, but the command just queues the request and returns.
+  /* Note that we synchronously spawn this command, but the command just queues the request and
+   * returns.
    */
   const char *child_argv[] = { "systemctl", "reboot", NULL };
-  g_autoptr(GError) local_error = NULL;
-  if (!g_spawn_sync (NULL, (char**)child_argv, NULL, (GSpawnFlags)(G_SPAWN_CHILD_INHERITS_STDIN | G_SPAWN_SEARCH_PATH),
-                     NULL, NULL, NULL, NULL, NULL, &local_error))
+  g_autoptr (GError) local_error = NULL;
+  if (!g_spawn_sync (NULL, (char **)child_argv, NULL,
+                     (GSpawnFlags)(G_SPAWN_CHILD_INHERITS_STDIN | G_SPAWN_SEARCH_PATH), NULL, NULL,
+                     NULL, NULL, NULL, &local_error))
     {
       sd_journal_print (LOG_WARNING, "Failed to initate reboot: %s", local_error->message);
-      // And now...not a lot of great choices.  We could loop and retry, but exiting will surface the error
-      // in an obvious way.
+      // And now...not a lot of great choices.  We could loop and retry, but exiting will surface
+      // the error in an obvious way.
       exit (1);
     }
-  
+
   return FALSE;
 }
 
@@ -816,7 +767,7 @@ rpmostreed_daemon_is_rebooting (RpmostreedDaemon *self)
 }
 
 GDBusConnection *
-rpmostreed_daemon_connection(void)
+rpmostreed_daemon_connection (void)
 {
   g_assert (_daemon_instance->connection);
   return _daemon_instance->connection;
@@ -832,26 +783,25 @@ rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self)
 }
 
 void
-rpmostreed_daemon_publish (RpmostreedDaemon *self,
-                           const gchar *path,
-                           gboolean uniquely,
+rpmostreed_daemon_publish (RpmostreedDaemon *self, const gchar *path, gboolean uniquely,
                            gpointer thing)
 {
   GDBusInterface *prev = NULL;
   GDBusInterfaceInfo *info = NULL;
   GDBusObjectSkeleton *object = NULL;
-  g_autoptr(GDBusObjectSkeleton) owned_object = NULL;
+  g_autoptr (GDBusObjectSkeleton) owned_object = NULL;
 
   g_assert (RPMOSTREED_IS_DAEMON (self));
   g_assert (path != NULL);
 
   if (G_IS_DBUS_INTERFACE (thing))
     {
-      auto iface = (GDBusInterface*)thing;
+      auto iface = (GDBusInterface *)thing;
       g_debug ("%spublishing iface: %s %s", uniquely ? "uniquely " : "", path,
                g_dbus_interface_get_info (iface)->name);
 
-      object = G_DBUS_OBJECT_SKELETON (g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (self->object_manager), path));
+      object = G_DBUS_OBJECT_SKELETON (
+          g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (self->object_manager), path));
       if (object != NULL)
         {
           if (uniquely)
@@ -871,7 +821,7 @@ rpmostreed_daemon_publish (RpmostreedDaemon *self,
         object = owned_object = g_dbus_object_skeleton_new (path);
       (void)owned_object; /* Pacify static analysis */
 
-      g_dbus_object_skeleton_add_interface (object, (GDBusInterfaceSkeleton*)iface);
+      g_dbus_object_skeleton_add_interface (object, (GDBusInterfaceSkeleton *)iface);
     }
   else
     {
@@ -886,9 +836,7 @@ rpmostreed_daemon_publish (RpmostreedDaemon *self,
 }
 
 void
-rpmostreed_daemon_unpublish (RpmostreedDaemon *self,
-                             const gchar *path,
-                             gpointer thing)
+rpmostreed_daemon_unpublish (RpmostreedDaemon *self, const gchar *path, gpointer thing)
 {
   GDBusObject *object;
   gboolean unexport = FALSE;
@@ -907,9 +855,9 @@ rpmostreed_daemon_unpublish (RpmostreedDaemon *self,
   path = g_dbus_object_get_object_path (G_DBUS_OBJECT (object));
   if (G_IS_DBUS_INTERFACE (thing))
     {
-      auto skel = (GDBusInterfaceSkeleton*)thing;
+      auto skel = (GDBusInterfaceSkeleton *)thing;
       g_debug ("unpublishing interface: %s %s", path,
-               g_dbus_interface_get_info ((GDBusInterface*)skel)->name);
+               g_dbus_interface_get_info ((GDBusInterface *)skel)->name);
 
       unexport = TRUE;
 
@@ -922,10 +870,10 @@ rpmostreed_daemon_unpublish (RpmostreedDaemon *self,
       g_list_free_full (interfaces, g_object_unref);
 
       /*
-      * HACK: GDBusObjectManagerServer is broken ... and sends InterfaceRemoved
-      * too many times, if you remove all interfaces manually, and then unexport
-      * a GDBusObject. So only do it here if we're not unexporting the object.
-      */
+       * HACK: GDBusObjectManagerServer is broken ... and sends InterfaceRemoved
+       * too many times, if you remove all interfaces manually, and then unexport
+       * a GDBusObject. So only do it here if we're not unexporting the object.
+       */
       if (!unexport)
         g_dbus_object_skeleton_remove_interface (G_DBUS_OBJECT_SKELETON (object), skel);
       else
@@ -958,30 +906,27 @@ rpmostreed_authorize_method_for_uid0 (GDBusMethodInvocation *invocation)
 {
   const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
   const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
-  g_autoptr(GError) local_error = NULL;
-  g_autoptr(GVariant) res =
-        g_dbus_connection_call_sync (g_dbus_method_invocation_get_connection (invocation), 
-                                     "org.freedesktop.DBus", "/org/freedesktop/DBus",
-                                     "org.freedesktop.DBus",
-                                     "GetConnectionUnixUser",
-                                     g_variant_new ("(s)", sender),
-                                     (GVariantType*)"(u)",
-                                     G_DBUS_CALL_FLAGS_NONE, -1,
-                                     NULL, &local_error);
+  g_autoptr (GError) local_error = NULL;
+  g_autoptr (GVariant) res = g_dbus_connection_call_sync (
+      g_dbus_method_invocation_get_connection (invocation), "org.freedesktop.DBus",
+      "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetConnectionUnixUser",
+      g_variant_new ("(s)", sender), (GVariantType *)"(u)", G_DBUS_CALL_FLAGS_NONE, -1, NULL,
+      &local_error);
   if (!res)
     {
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
-                                             "GetConnectionUnixUser failed: %s", local_error->message);
+                                             "GetConnectionUnixUser failed: %s",
+                                             local_error->message);
       return FALSE;
     }
   guint32 uid = 1;
   g_variant_get (res, "(u)", &uid);
   if (uid != 0)
     {
-      g_dbus_method_invocation_return_error (invocation,
-                                             G_DBUS_ERROR,
-                                             G_DBUS_ERROR_ACCESS_DENIED,
-                                             "rpmostreed operation %s not allowed for non-root user (polkit not available)", method_name);
+      g_dbus_method_invocation_return_error (
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED,
+          "rpmostreed operation %s not allowed for non-root user (polkit not available)",
+          method_name);
       return FALSE;
     }
 

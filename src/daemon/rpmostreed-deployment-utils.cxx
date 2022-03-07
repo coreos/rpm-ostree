@@ -18,43 +18,39 @@
 
 #include "config.h"
 
-#include <systemd/sd-journal.h>
 #include <libglnx.h>
+#include <systemd/sd-journal.h>
 
-#include "rpmostree-types.h"
-#include "rpmostreed-deployment-utils.h"
-#include "rpmostree-origin.h"
 #include "rpmostree-core.h"
-#include "rpmostree-util.h"
+#include "rpmostree-cxxrs.h"
+#include "rpmostree-origin.h"
+#include "rpmostree-package-variants.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-sysroot-core.h"
-#include "rpmostree-core.h"
-#include "rpmostree-package-variants.h"
-#include "rpmostreed-utils.h"
-#include "rpmostree-cxxrs.h"
+#include "rpmostree-types.h"
+#include "rpmostree-util.h"
+#include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-errors.h"
+#include "rpmostreed-utils.h"
 
 gboolean
-rpmostreed_deployment_get_for_id (OstreeSysroot     *sysroot,
-                                  const gchar       *deploy_id,
-                                  OstreeDeployment **out_deployment,
-                                  GError           **error)
+rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot, const gchar *deploy_id,
+                                  OstreeDeployment **out_deployment, GError **error)
 {
-  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  g_autoptr (GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   for (guint i = 0; i < deployments->len; i++)
     {
-      auto deployment = static_cast<OstreeDeployment*>(deployments->pdata[i]);
-      auto id = CXX_TRY_VAL(deployment_generate_id(*deployment), error);
-      if (g_strcmp0 (deploy_id, id.c_str()) == 0)
+      auto deployment = static_cast<OstreeDeployment *> (deployments->pdata[i]);
+      auto id = CXX_TRY_VAL (deployment_generate_id (*deployment), error);
+      if (g_strcmp0 (deploy_id, id.c_str ()) == 0)
         {
-          *out_deployment = (OstreeDeployment*)g_object_ref (deployment);
+          *out_deployment = (OstreeDeployment *)g_object_ref (deployment);
           return TRUE;
         }
     }
 
   return glnx_throw (error, "Deployment with id '%s' not found", deploy_id);
 }
-
 
 /* rpmostreed_deployment_get_for_index:
  *
@@ -70,37 +66,33 @@ rpmostreed_deployment_get_for_id (OstreeSysroot     *sysroot,
  * returns: NULL if an error is being made
  */
 OstreeDeployment *
-rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
-                                     const gchar   *index,
-                                     GError       **error)
+rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot, const gchar *index, GError **error)
 {
-  g_autoptr(GError) local_error = NULL;
+  g_autoptr (GError) local_error = NULL;
   int deployment_index = -1;
-  for (int counter = 0; counter < strlen(index); counter++)
+  for (int counter = 0; counter < strlen (index); counter++)
     {
       if (!g_ascii_isdigit (index[counter]))
         {
-          local_error = g_error_new (RPM_OSTREED_ERROR,
-                                     RPM_OSTREED_ERROR_FAILED,
-                                     "Invalid deployment index %s, must be a number and >= 0",
-                                     index);
+          local_error
+              = g_error_new (RPM_OSTREED_ERROR, RPM_OSTREED_ERROR_FAILED,
+                             "Invalid deployment index %s, must be a number and >= 0", index);
           g_propagate_error (error, util::move_nullify (local_error));
           return NULL;
         }
     }
   deployment_index = atoi (index);
 
-  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  g_autoptr (GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   if (deployment_index >= deployments->len)
     {
-      local_error = g_error_new (RPM_OSTREED_ERROR,
-                                 RPM_OSTREED_ERROR_FAILED,
+      local_error = g_error_new (RPM_OSTREED_ERROR, RPM_OSTREED_ERROR_FAILED,
                                  "Out of range deployment index %d, expected < %d",
                                  deployment_index, deployments->len);
       g_propagate_error (error, util::move_nullify (local_error));
       return NULL;
     }
-  return (OstreeDeployment*)g_object_ref (deployments->pdata[deployment_index]);
+  return (OstreeDeployment *)g_object_ref (deployments->pdata[deployment_index]);
 }
 
 GVariant *
@@ -114,13 +106,11 @@ rpmostreed_deployment_generate_blank_variant (void)
 }
 
 static void
-variant_add_metadata_attribute (GVariantDict *dict,
-                                const gchar  *attribute,
-                                const gchar  *new_attribute,
-                                GVariant     *commit)
+variant_add_metadata_attribute (GVariantDict *dict, const gchar *attribute,
+                                const gchar *new_attribute, GVariant *commit)
 {
   g_autofree gchar *attribute_string_value = NULL;
-  g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
+  g_autoptr (GVariant) metadata = g_variant_get_child_value (commit, 0);
 
   if (metadata != NULL)
     {
@@ -131,11 +121,9 @@ variant_add_metadata_attribute (GVariantDict *dict,
 }
 
 static void
-variant_add_commit_details (GVariantDict *dict,
-                            const char   *prefix,
-                            GVariant     *commit)
+variant_add_commit_details (GVariantDict *dict, const char *prefix, GVariant *commit)
 {
-  g_autoptr(GVariant) metadata = NULL;
+  g_autoptr (GVariant) metadata = NULL;
   g_autofree gchar *version_commit = NULL;
   guint64 timestamp = 0;
 
@@ -145,15 +133,13 @@ variant_add_commit_details (GVariantDict *dict,
     g_variant_lookup (metadata, "version", "s", &version_commit);
 
   if (version_commit != NULL)
-    g_variant_dict_insert (dict, glnx_strjoina (prefix ?: "", "version"),
-                           "s", version_commit);
+    g_variant_dict_insert (dict, glnx_strjoina (prefix ?: "", "version"), "s", version_commit);
   if (timestamp > 0)
-    g_variant_dict_insert (dict, glnx_strjoina (prefix ?: "", "timestamp"),
-                           "t", timestamp);
+    g_variant_dict_insert (dict, glnx_strjoina (prefix ?: "", "timestamp"), "t", timestamp);
 }
 
 /* Returns floating GVariant equivalent of `commit_meta` minus keys we don't want. */
-static GVariant*
+static GVariant *
 filter_commit_meta (GVariant *commit_meta)
 {
   GVariantDict dict;
@@ -165,29 +151,21 @@ filter_commit_meta (GVariant *commit_meta)
 }
 
 gboolean
-rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
-                                        OstreeDeployment *deployment,
-                                        const char       *booted_id,
-                                        OstreeRepo       *repo,
-                                        gboolean          filter,
-                                        GVariant        **out_variant,
-                                        GError          **error)
+rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment *deployment,
+                                        const char *booted_id, OstreeRepo *repo, gboolean filter,
+                                        GVariant **out_variant, GError **error)
 {
-  g_autoptr(GVariantDict) dict = g_variant_dict_new (NULL);
+  g_autoptr (GVariantDict) dict = g_variant_dict_new (NULL);
 
-  CXX_TRY(deployment_populate_variant(*sysroot, *deployment, *dict), error);
+  CXX_TRY (deployment_populate_variant (*sysroot, *deployment, *dict), error);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   /* Load the commit object */
-  g_autoptr(GVariant) commit = NULL;
-  if (!ostree_repo_load_variant (repo,
-                                 OSTREE_OBJECT_TYPE_COMMIT,
-                                 csum,
-                                 &commit,
-                                 error))
+  g_autoptr (GVariant) commit = NULL;
+  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, csum, &commit, error))
     return FALSE;
 
   /* And the origin */
-  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
+  g_autoptr (RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
   if (!origin)
     return FALSE;
 
@@ -197,33 +175,32 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
 
   gboolean is_layered = FALSE;
   g_autofree char *base_checksum = NULL;
-  g_auto(GStrv) layered_pkgs = NULL;
-  g_auto(GStrv) layered_modules = NULL;
-  g_autoptr(GVariant) removed_base_pkgs = NULL;
-  g_autoptr(GVariant) replaced_base_pkgs = NULL;
-  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, NULL,
-                                              &base_checksum, &layered_pkgs, &layered_modules,
-                                              &removed_base_pkgs, &replaced_base_pkgs,
-                                              error))
+  g_auto (GStrv) layered_pkgs = NULL;
+  g_auto (GStrv) layered_modules = NULL;
+  g_autoptr (GVariant) removed_base_pkgs = NULL;
+  g_autoptr (GVariant) replaced_base_pkgs = NULL;
+  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, NULL, &base_checksum,
+                                              &layered_pkgs, &layered_modules, &removed_base_pkgs,
+                                              &replaced_base_pkgs, error))
     return FALSE;
 
-  g_autoptr(GVariant) base_commit = NULL;
+  g_autoptr (GVariant) base_commit = NULL;
   if (is_layered)
     {
-      if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                     base_checksum, &base_commit, error))
+      if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, base_checksum, &base_commit,
+                                     error))
         return FALSE;
 
       g_variant_dict_insert (dict, "base-checksum", "s", base_checksum);
       variant_add_commit_details (dict, "base-", base_commit);
       /* for layered commits, check if their base commit has end of life attribute */
-      variant_add_metadata_attribute (dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", base_commit);
+      variant_add_metadata_attribute (dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife",
+                                      base_commit);
 
       /* See below for base commit metadata */
-      g_autoptr(GVariant) layered_metadata = g_variant_get_child_value (commit, 0);
+      g_autoptr (GVariant) layered_metadata = g_variant_get_child_value (commit, 0);
       g_variant_dict_insert (dict, "layered-commit-meta", "@a{sv}",
-                             filter ? filter_commit_meta (layered_metadata)
-                                    : layered_metadata);
+                             filter ? filter_commit_meta (layered_metadata) : layered_metadata);
     }
   else
     {
@@ -235,7 +212,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
   /* We used to bridge individual keys, but that was annoying; just pass through all
    * of the commit metadata that are actually relevant.
    */
-  { g_autoptr(GVariant) base_meta = g_variant_get_child_value (base_commit, 0);
+  {
+    g_autoptr (GVariant) base_meta = g_variant_get_child_value (base_commit, 0);
     g_variant_dict_insert (dict, "base-commit-meta", "@a{sv}",
                            filter ? filter_commit_meta (base_meta) : base_meta);
   }
@@ -246,8 +224,9 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
     case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
       {
         g_variant_dict_insert (dict, "container-image-reference", "s", refspec);
-        auto state = CXX_TRY_VAL(query_container_image (*repo, refspec), error);
-        g_variant_dict_insert (dict, "container-image-reference-digest", "s", state->image_digest.c_str());
+        auto state = CXX_TRY_VAL (query_container_image (*repo, refspec), error);
+        g_variant_dict_insert (dict, "container-image-reference-digest", "s",
+                               state->image_digest.c_str ());
       }
       break;
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
@@ -258,8 +237,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
         rpmostree_origin_get_custom_description (origin, &custom_origin_url,
                                                  &custom_origin_description);
         if (custom_origin_url)
-          g_variant_dict_insert (dict, "custom-origin", "(ss)",
-                                 custom_origin_url,
+          g_variant_dict_insert (dict, "custom-origin", "(ss)", custom_origin_url,
                                  custom_origin_description);
       }
       break;
@@ -269,17 +247,15 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
         CXX_TRY (variant_add_remote_status (*repo, refspec, base_checksum, *dict), error);
 
         g_autofree char *pending_base_commitrev = NULL;
-        if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
-                                      &pending_base_commitrev, error))
+        if (!ostree_repo_resolve_rev (repo, refspec, TRUE, &pending_base_commitrev, error))
           return FALSE;
 
         if (pending_base_commitrev && !g_str_equal (pending_base_commitrev, base_checksum))
           {
-            g_autoptr(GVariant) pending_base_commit = NULL;
+            g_autoptr (GVariant) pending_base_commit = NULL;
 
-            if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                           pending_base_commitrev, &pending_base_commit,
-                                           error))
+            if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, pending_base_commitrev,
+                                           &pending_base_commit, error))
               return FALSE;
 
             g_variant_dict_insert (dict, "pending-base-checksum", "s", pending_base_commitrev);
@@ -311,13 +287,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
  * used to avoid lookups if they're already available.
  * */
 static gboolean
-add_all_commit_details_to_vardict (OstreeDeployment *deployment,
-                                   OstreeRepo       *repo,
-                                   const char       *refspec,  /* allow-none */
-                                   const char       *checksum, /* allow-none */
-                                   GVariant         *commit,   /* allow-none */
-                                   GVariantDict     *dict,     /* allow-none */
-                                   GError          **error)
+add_all_commit_details_to_vardict (OstreeDeployment *deployment, OstreeRepo *repo,
+                                   const char *refspec,  /* allow-none */
+                                   const char *checksum, /* allow-none */
+                                   GVariant *commit,     /* allow-none */
+                                   GVariantDict *dict,   /* allow-none */
+                                   GError **error)
 {
   const gchar *osname = ostree_deployment_get_osname (deployment);
 
@@ -326,8 +301,7 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
   RpmOstreeRefspecType refspec_type;
   if (!refspec)
     {
-      g_autoptr(RpmOstreeOrigin) origin =
-        rpmostree_origin_parse_deployment (deployment, error);
+      g_autoptr (RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
       if (!origin)
         return FALSE;
       refspec = refspec_owned = rpmostree_origin_get_full_refspec (origin, &refspec_type);
@@ -358,11 +332,11 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
       checksum = checksum_owned ?: ostree_deployment_get_csum (deployment);
     }
 
-  g_autoptr(GVariant) commit_owned = NULL;
+  g_autoptr (GVariant) commit_owned = NULL;
   if (!commit)
     {
-      if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
-                                     &commit_owned, error))
+      if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum, &commit_owned,
+                                     error))
         return FALSE;
       commit = commit_owned;
     }
@@ -381,23 +355,21 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
 }
 
 GVariant *
-rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
-                                                   OstreeRepo       *repo,
-                                                   const char       *refspec,
-                                                   const char       *checksum,
-                                                   GError          **error)
+rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment, OstreeRepo *repo,
+                                                   const char *refspec, const char *checksum,
+                                                   GError **error)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  if (!add_all_commit_details_to_vardict (deployment, repo, refspec,
-                                          checksum, NULL, &dict, error))
+  if (!add_all_commit_details_to_vardict (deployment, repo, refspec, checksum, NULL, &dict, error))
     return NULL;
 
   return g_variant_ref_sink (g_variant_dict_end (&dict));
 }
 
-typedef struct {
-  gboolean   initialized;
+typedef struct
+{
+  gboolean initialized;
   GPtrArray *upgraded;
   GPtrArray *downgraded;
   GPtrArray *removed;
@@ -429,69 +401,53 @@ rpm_diff_clear (RpmDiff *diff)
 
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmDiff, rpm_diff_clear);
 
-static GVariant*
-single_pkg_variant_new (RpmOstreePkgTypes type,
-                        RpmOstreePackage *pkg)
+static GVariant *
+single_pkg_variant_new (RpmOstreePkgTypes type, RpmOstreePackage *pkg)
 {
-  return g_variant_ref_sink (
-      g_variant_new ("(usss)", type,
-                     rpm_ostree_package_get_name (pkg),
-                     rpm_ostree_package_get_evr (pkg),
-                     rpm_ostree_package_get_arch (pkg)));
+  return g_variant_ref_sink (g_variant_new ("(usss)", type, rpm_ostree_package_get_name (pkg),
+                                            rpm_ostree_package_get_evr (pkg),
+                                            rpm_ostree_package_get_arch (pkg)));
 }
 
-static GVariant*
-modified_pkg_variant_new (RpmOstreePkgTypes type,
-                          RpmOstreePackage *pkg_old,
+static GVariant *
+modified_pkg_variant_new (RpmOstreePkgTypes type, RpmOstreePackage *pkg_old,
                           RpmOstreePackage *pkg_new)
 {
   const char *name_old = rpm_ostree_package_get_name (pkg_old);
   const char *name_new = rpm_ostree_package_get_name (pkg_new);
   g_assert_cmpstr (name_old, ==, name_new);
   return g_variant_ref_sink (
-      g_variant_new ("(us(ss)(ss))", type, name_old,
-                     rpm_ostree_package_get_evr (pkg_old),
-                     rpm_ostree_package_get_arch (pkg_old),
-                     rpm_ostree_package_get_evr (pkg_new),
+      g_variant_new ("(us(ss)(ss))", type, name_old, rpm_ostree_package_get_evr (pkg_old),
+                     rpm_ostree_package_get_arch (pkg_old), rpm_ostree_package_get_evr (pkg_new),
                      rpm_ostree_package_get_arch (pkg_new)));
 }
 
-static GVariant*
-modified_dnfpkg_variant_new (RpmOstreePkgTypes type,
-                             RpmOstreePackage *pkg_old,
-                             DnfPackage       *pkg_new)
+static GVariant *
+modified_dnfpkg_variant_new (RpmOstreePkgTypes type, RpmOstreePackage *pkg_old, DnfPackage *pkg_new)
 {
   const char *name_old = rpm_ostree_package_get_name (pkg_old);
   const char *name_new = dnf_package_get_name (pkg_new);
   g_assert_cmpstr (name_old, ==, name_new);
   return g_variant_ref_sink (
-      g_variant_new ("(us(ss)(ss))", type, name_old,
-                     rpm_ostree_package_get_evr (pkg_old),
-                     rpm_ostree_package_get_arch (pkg_old),
-                     dnf_package_get_evr (pkg_new),
+      g_variant_new ("(us(ss)(ss))", type, name_old, rpm_ostree_package_get_evr (pkg_old),
+                     rpm_ostree_package_get_arch (pkg_old), dnf_package_get_evr (pkg_new),
                      dnf_package_get_arch (pkg_new)));
 }
 
 static gboolean
-rpm_diff_add_db_diff (RpmDiff      *diff,
-                      OstreeRepo   *repo,
-                      RpmOstreePkgTypes type,
-                      const char   *old_checksum,
-                      const char   *new_checksum,
-                      GPtrArray   **out_modified_new,
-                      GCancellable *cancellable,
-                      GError      **error)
+rpm_diff_add_db_diff (RpmDiff *diff, OstreeRepo *repo, RpmOstreePkgTypes type,
+                      const char *old_checksum, const char *new_checksum,
+                      GPtrArray **out_modified_new, GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GPtrArray) removed = NULL;
-  g_autoptr(GPtrArray) added = NULL;
-  g_autoptr(GPtrArray) modified_old = NULL;
-  g_autoptr(GPtrArray) modified_new = NULL;
+  g_autoptr (GPtrArray) removed = NULL;
+  g_autoptr (GPtrArray) added = NULL;
+  g_autoptr (GPtrArray) modified_old = NULL;
+  g_autoptr (GPtrArray) modified_new = NULL;
 
   /* Use allow_noent; we'll just skip over the rpm diff if there's no data */
   RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
-  if (!rpm_ostree_db_diff_ext (repo, old_checksum, new_checksum, flags,
-                               &removed, &added, &modified_old, &modified_new,
-                               cancellable, error))
+  if (!rpm_ostree_db_diff_ext (repo, old_checksum, new_checksum, flags, &removed, &added,
+                               &modified_old, &modified_new, cancellable, error))
     return FALSE;
 
   /* check if allow_noent kicked in */
@@ -500,19 +456,19 @@ rpm_diff_add_db_diff (RpmDiff      *diff,
 
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
   for (guint i = 0; i < removed->len; i++)
-    g_ptr_array_add (diff->removed, single_pkg_variant_new (type, static_cast<RpmOstreePackage*>(removed->pdata[i])));
+    g_ptr_array_add (diff->removed, single_pkg_variant_new (
+                                        type, static_cast<RpmOstreePackage *> (removed->pdata[i])));
   for (guint i = 0; i < added->len; i++)
-    g_ptr_array_add (diff->added, single_pkg_variant_new (type, static_cast<RpmOstreePackage*>(added->pdata[i])));
+    g_ptr_array_add (diff->added, single_pkg_variant_new (
+                                      type, static_cast<RpmOstreePackage *> (added->pdata[i])));
   for (guint i = 0; i < modified_old->len; i++)
     {
-      auto old_pkg = static_cast<RpmOstreePackage *>(modified_old->pdata[i]);
-      auto new_pkg = static_cast<RpmOstreePackage *>(modified_new->pdata[i]);
+      auto old_pkg = static_cast<RpmOstreePackage *> (modified_old->pdata[i]);
+      auto new_pkg = static_cast<RpmOstreePackage *> (modified_new->pdata[i]);
       if (rpm_ostree_package_cmp (old_pkg, new_pkg) < 0)
-        g_ptr_array_add (diff->upgraded,
-                         modified_pkg_variant_new (type, old_pkg, new_pkg));
+        g_ptr_array_add (diff->upgraded, modified_pkg_variant_new (type, old_pkg, new_pkg));
       else
-        g_ptr_array_add (diff->downgraded,
-                         modified_pkg_variant_new (type, old_pkg, new_pkg));
+        g_ptr_array_add (diff->downgraded, modified_pkg_variant_new (type, old_pkg, new_pkg));
     }
 
   if (out_modified_new)
@@ -521,9 +477,7 @@ rpm_diff_add_db_diff (RpmDiff      *diff,
 }
 
 static void
-rpm_diff_add_layered_diff (RpmDiff  *diff,
-                           RpmOstreePackage *old_pkg,
-                           DnfPackage       *new_pkg)
+rpm_diff_add_layered_diff (RpmDiff *diff, RpmOstreePackage *old_pkg, DnfPackage *new_pkg)
 {
   /* add to upgraded; layered pkgs only go up */
   RpmOstreePkgTypes type = RPM_OSTREE_PKG_TYPE_LAYER;
@@ -531,11 +485,10 @@ rpm_diff_add_layered_diff (RpmDiff  *diff,
 }
 
 static int
-sort_pkgvariant_by_name (gconstpointer  pkga_pp,
-                         gconstpointer  pkgb_pp)
+sort_pkgvariant_by_name (gconstpointer pkga_pp, gconstpointer pkgb_pp)
 {
-  GVariant *pkg_a = *((GVariant**)pkga_pp);
-  GVariant *pkg_b = *((GVariant**)pkgb_pp);
+  GVariant *pkg_a = *((GVariant **)pkga_pp);
+  GVariant *pkg_b = *((GVariant **)pkgb_pp);
 
   const char *pkgname_a;
   g_variant_get_child (pkg_a, 1, "&s", &pkgname_a);
@@ -545,7 +498,7 @@ sort_pkgvariant_by_name (gconstpointer  pkga_pp,
   return strcmp (pkgname_a, pkgname_b);
 }
 
-static GVariant*
+static GVariant *
 array_to_variant_new (const char *format, GPtrArray *array)
 {
   if (array->len == 0)
@@ -554,10 +507,10 @@ array_to_variant_new (const char *format, GPtrArray *array)
   /* make doubly sure it's sorted */
   g_ptr_array_sort (array, sort_pkgvariant_by_name);
 
-  g_auto(GVariantBuilder) builder;
+  g_auto (GVariantBuilder) builder;
   g_variant_builder_init (&builder, G_VARIANT_TYPE (format));
   for (guint i = 0; i < array->len; i++)
-    g_variant_builder_add_value (&builder, static_cast<GVariant*>(array->pdata[i]));
+    g_variant_builder_add_value (&builder, static_cast<GVariant *> (array->pdata[i]));
   return g_variant_builder_end (&builder);
 }
 
@@ -565,33 +518,31 @@ static gboolean
 rpm_diff_is_empty (RpmDiff *diff)
 {
   g_assert (diff->initialized);
-  return !diff->upgraded->len &&
-         !diff->downgraded->len &&
-         !diff->removed->len &&
-         !diff->added->len;
+  return !diff->upgraded->len && !diff->downgraded->len && !diff->removed->len && !diff->added->len;
 }
 
-static GVariant*
+static GVariant *
 rpm_diff_variant_new (RpmDiff *diff)
 {
   g_assert (diff->initialized);
-  g_auto(GVariantDict) dict;
+  g_auto (GVariantDict) dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert_value (&dict, "upgraded", array_to_variant_new (
-                                 RPMOSTREE_DIFF_MODIFIED_GVARIANT_STRING, diff->upgraded));
-  g_variant_dict_insert_value (&dict, "downgraded", array_to_variant_new (
-                                 RPMOSTREE_DIFF_MODIFIED_GVARIANT_STRING, diff->downgraded));
-  g_variant_dict_insert_value (&dict, "removed", array_to_variant_new (
-                                 RPMOSTREE_DIFF_SINGLE_GVARIANT_STRING, diff->removed));
-  g_variant_dict_insert_value (&dict, "added", array_to_variant_new (
-                                 RPMOSTREE_DIFF_SINGLE_GVARIANT_STRING, diff->added));
+  g_variant_dict_insert_value (
+      &dict, "upgraded",
+      array_to_variant_new (RPMOSTREE_DIFF_MODIFIED_GVARIANT_STRING, diff->upgraded));
+  g_variant_dict_insert_value (
+      &dict, "downgraded",
+      array_to_variant_new (RPMOSTREE_DIFF_MODIFIED_GVARIANT_STRING, diff->downgraded));
+  g_variant_dict_insert_value (
+      &dict, "removed",
+      array_to_variant_new (RPMOSTREE_DIFF_SINGLE_GVARIANT_STRING, diff->removed));
+  g_variant_dict_insert_value (
+      &dict, "added", array_to_variant_new (RPMOSTREE_DIFF_SINGLE_GVARIANT_STRING, diff->added));
   return g_variant_dict_end (&dict);
 }
 
-static DnfPackage*
-find_package (DnfSack          *sack,
-              gboolean          newer,
-              RpmOstreePackage *pkg)
+static DnfPackage *
+find_package (DnfSack *sack, gboolean newer, RpmOstreePackage *pkg)
 {
   hy_autoquery HyQuery query = hy_query_create (sack);
   hy_query_filter (query, HY_PKG_NAME, HY_EQ, rpm_ostree_package_get_name (pkg));
@@ -606,31 +557,26 @@ find_package (DnfSack          *sack,
       /* we want an exact match */
       hy_query_filter (query, HY_PKG_NEVRA, HY_EQ, rpm_ostree_package_get_nevra (pkg));
     }
-  g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+  g_autoptr (GPtrArray) pkgs = hy_query_run (query);
   if (pkgs->len == 0)
     return NULL; /* canonicalize to NULL */
   g_ptr_array_sort (pkgs, (GCompareFunc)rpmostree_pkg_array_compare);
-  return (DnfPackage*)g_object_ref (pkgs->pdata[pkgs->len-1]);
+  return (DnfPackage *)g_object_ref (pkgs->pdata[pkgs->len - 1]);
 }
 
 /* For all layered pkgs, check if there are newer versions in the rpmmd. Add diff to
  * @rpm_diff, and all new pkgs in @out_newer_packages (these are used later for advisories).
  * */
 static gboolean
-rpmmd_diff_guess (OstreeRepo       *repo,
-                  const char       *base_checksum,
-                  const char       *layered_checksum,
-                  DnfSack          *sack,
-                  RpmDiff          *rpm_diff,
-                  GPtrArray       **out_newer_packages,
-                  GError          **error)
+rpmmd_diff_guess (OstreeRepo *repo, const char *base_checksum, const char *layered_checksum,
+                  DnfSack *sack, RpmDiff *rpm_diff, GPtrArray **out_newer_packages, GError **error)
 {
   /* Note here that we *don't* actually use layered_pkgs; we want to look at all the RPMs
    * installed, whereas the layered pkgs (actually patterns) just represent top-level
    * entries. IOW, we want to run through all layered RPMs, which include deps of
    * layered_pkgs. */
 
-  g_autoptr(GPtrArray) all_layered_pkgs = NULL;
+  g_autoptr (GPtrArray) all_layered_pkgs = NULL;
   RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
   if (!rpm_ostree_db_diff_ext (repo, base_checksum, layered_checksum, flags, NULL,
                                &all_layered_pkgs, NULL, NULL, NULL, error))
@@ -652,12 +598,12 @@ rpmmd_diff_guess (OstreeRepo       *repo,
    * effort and use the rpmdb of new_checksum if we already have it somehow, though that's
    * probably not the common case */
 
-  g_autoptr(GPtrArray) newer_packages =
-    g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+  g_autoptr (GPtrArray) newer_packages
+      = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   for (guint i = 0; i < all_layered_pkgs->len; i++)
     {
-      auto pkg = static_cast<RpmOstreePackage *>(all_layered_pkgs->pdata[i]);
-      g_autoptr(DnfPackage) newer_pkg = find_package (sack, TRUE, pkg);
+      auto pkg = static_cast<RpmOstreePackage *> (all_layered_pkgs->pdata[i]);
+      g_autoptr (DnfPackage) newer_pkg = find_package (sack, TRUE, pkg);
       if (!newer_pkg)
         continue;
 
@@ -674,22 +620,20 @@ rpmmd_diff_guess (OstreeRepo       *repo,
 }
 
 /* try to find the exact same RpmOstreePackage pkgs in the sack */
-static GPtrArray*
-rpm_ostree_pkgs_to_dnf (DnfSack   *sack,
-                        GPtrArray *rpm_ostree_pkgs)
+static GPtrArray *
+rpm_ostree_pkgs_to_dnf (DnfSack *sack, GPtrArray *rpm_ostree_pkgs)
 {
-  g_autoptr(GPtrArray) dnf_pkgs =
-    g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+  g_autoptr (GPtrArray) dnf_pkgs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
   const guint n = rpm_ostree_pkgs->len;
   for (guint i = 0; i < n; i++)
     {
-      auto pkg = static_cast<RpmOstreePackage*>(rpm_ostree_pkgs->pdata[i]);
+      auto pkg = static_cast<RpmOstreePackage *> (rpm_ostree_pkgs->pdata[i]);
       hy_autoquery HyQuery query = hy_query_create (sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, rpm_ostree_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_EVR, HY_EQ, rpm_ostree_package_get_evr (pkg));
       hy_query_filter (query, HY_PKG_ARCH, HY_EQ, rpm_ostree_package_get_arch (pkg));
-      g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+      g_autoptr (GPtrArray) pkgs = hy_query_run (query);
 
       /* 0 --> ostree stream is out of sync with rpmmd repos probably? */
       if (pkgs->len > 0)
@@ -708,23 +652,21 @@ rpm_ostree_pkgs_to_dnf (DnfSack   *sack,
  * rpmmd metadata. If @staged_deployment is not %NULL, then the update describes the diff
  * between @booted_deployment and @staged_deployment. */
 gboolean
-rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
-                                    OstreeDeployment  *staged_deployment,
-                                    OstreeRepo        *repo,
-                                    DnfSack           *sack, /* allow-none */
-                                    GVariant         **out_update,
-                                    GCancellable      *cancellable,
-                                    GError           **error)
+rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
+                                    OstreeDeployment *staged_deployment, OstreeRepo *repo,
+                                    DnfSack *sack, /* allow-none */
+                                    GVariant **out_update, GCancellable *cancellable,
+                                    GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Generating update variant", error);
 
-  g_autoptr(RpmOstreeOrigin) origin =
-    rpmostree_origin_parse_deployment (booted_deployment, error);
+  g_autoptr (RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (booted_deployment, error);
   if (!origin)
     return FALSE;
 
   const char *refspec = rpmostree_origin_get_refspec (origin);
-  { RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  {
+    RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
     if (!rpmostree_refspec_classify (refspec, &refspectype, error))
       return FALSE;
   }
@@ -733,8 +675,8 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
 
   const char *current_checksum = ostree_deployment_get_csum (booted_deployment);
   g_autofree char *current_base_checksum_owned = NULL;
-  if (!rpmostree_deployment_get_base_layer (repo, booted_deployment,
-                                            &current_base_checksum_owned, error))
+  if (!rpmostree_deployment_get_base_layer (repo, booted_deployment, &current_base_checksum_owned,
+                                            error))
     return FALSE;
   const char *current_base_checksum = current_base_checksum_owned ?: current_checksum;
 
@@ -745,14 +687,15 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
   if (staged_deployment)
     {
       new_checksum = ostree_deployment_get_csum (staged_deployment);
-      if (!rpmostree_deployment_get_base_layer (repo, staged_deployment,
-                                                &new_base_checksum_owned, error))
+      if (!rpmostree_deployment_get_base_layer (repo, staged_deployment, &new_base_checksum_owned,
+                                                error))
         return FALSE;
       new_base_checksum = new_base_checksum_owned ?: new_checksum;
     }
   else
     {
-      if (!ostree_repo_resolve_rev_ext (repo, refspec, TRUE, static_cast<OstreeRepoResolveRevExtFlags>(0),
+      if (!ostree_repo_resolve_rev_ext (repo, refspec, TRUE,
+                                        static_cast<OstreeRepoResolveRevExtFlags> (0),
                                         &new_base_checksum_owned, error))
         return FALSE;
       new_base_checksum = new_base_checksum_owned;
@@ -768,16 +711,16 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
   else
     is_new_checksum = !g_str_equal (new_base_checksum, current_base_checksum);
 
-  g_autoptr(GVariant) commit = NULL;
+  g_autoptr (GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, new_base_checksum, &commit, NULL, error))
     return FALSE;
 
-  g_auto(GVariantDict) dict;
+  g_auto (GVariantDict) dict;
   g_variant_dict_init (&dict, NULL);
 
   /* first get all the traditional/backcompat stuff */
-  if (!add_all_commit_details_to_vardict (booted_deployment, repo, refspec,
-                                          new_base_checksum, commit, &dict, error))
+  if (!add_all_commit_details_to_vardict (booted_deployment, repo, refspec, new_base_checksum,
+                                          commit, &dict, error))
     return FALSE;
 
   /* This may seem trivial, but it's important to keep the final variant as self-contained
@@ -785,21 +728,22 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
    * it easier to consume for UIs like GNOME Software and Cockpit. */
   g_variant_dict_insert (&dict, "ref-has-new-commit", "b", is_new_checksum);
 
-  g_auto(RpmDiff) rpm_diff = {0, };
+  g_auto (RpmDiff) rpm_diff = {
+    0,
+  };
   rpm_diff_init (&rpm_diff);
 
   /* we'll need these later for advisories, so just keep them around */
-  g_autoptr(GPtrArray) ostree_modified_new = NULL;
-  g_autoptr(GPtrArray) rpmmd_modified_new = NULL;
+  g_autoptr (GPtrArray) ostree_modified_new = NULL;
+  g_autoptr (GPtrArray) rpmmd_modified_new = NULL;
 
   if (staged_deployment)
     {
       /* ok we have a staged deployment; we just need to do a simple diff and BOOM done! */
       /* XXX: we're marking all pkgs as BASE right now even though there could be layered
        * pkgs too -- we can tease those out in the future if needed */
-      if (!rpm_diff_add_db_diff (&rpm_diff, repo, RPM_OSTREE_PKG_TYPE_BASE,
-                                 current_checksum, new_checksum, &ostree_modified_new,
-                                 cancellable, error))
+      if (!rpm_diff_add_db_diff (&rpm_diff, repo, RPM_OSTREE_PKG_TYPE_BASE, current_checksum,
+                                 new_checksum, &ostree_modified_new, cancellable, error))
         return FALSE;
     }
   else
@@ -811,8 +755,8 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
       if (is_new_checksum)
         {
           if (!rpm_diff_add_db_diff (&rpm_diff, repo, RPM_OSTREE_PKG_TYPE_BASE,
-                                     current_base_checksum, new_base_checksum,
-                                     &ostree_modified_new, cancellable, error))
+                                     current_base_checksum, new_base_checksum, &ostree_modified_new,
+                                     cancellable, error))
             return FALSE;
         }
 
@@ -822,8 +766,8 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
       /* check that it's actually layered (i.e. the requests are not all just dormant) */
       if (sack && is_new_layered && g_hash_table_size (layered_pkgs) > 0)
         {
-          if (!rpmmd_diff_guess (repo, current_base_checksum, current_checksum, sack,
-                                 &rpm_diff, &rpmmd_modified_new, error))
+          if (!rpmmd_diff_guess (repo, current_base_checksum, current_checksum, sack, &rpm_diff,
+                                 &rpmmd_modified_new, error))
             return FALSE;
         }
     }
@@ -837,14 +781,14 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
   if (sack && (ostree_modified_new || rpmmd_modified_new))
     {
       /* let's just merge the two now for convenience */
-      g_autoptr(GPtrArray) new_packages =
-        g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+      g_autoptr (GPtrArray) new_packages
+          = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
       if (ostree_modified_new)
         {
           /* recall that @ostree_modified_new is an array of RpmOstreePackage; try to find
            * the same pkg in the rpmmd so that we can search for advisories afterwards */
-          g_autoptr(GPtrArray) pkgs = rpm_ostree_pkgs_to_dnf (sack, ostree_modified_new);
+          g_autoptr (GPtrArray) pkgs = rpm_ostree_pkgs_to_dnf (sack, ostree_modified_new);
           for (guint i = 0; i < pkgs->len; i++)
             g_ptr_array_add (new_packages, g_object_ref (pkgs->pdata[i]));
         }
@@ -855,15 +799,15 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
             g_ptr_array_add (new_packages, g_object_ref (rpmmd_modified_new->pdata[i]));
         }
 
-      g_autoptr(GVariant) advisories = rpmostree_advisories_variant (sack, new_packages);
+      g_autoptr (GVariant) advisories = rpmostree_advisories_variant (sack, new_packages);
       if (advisories)
         g_variant_dict_insert (&dict, "advisories", "@a(suuasa{sv})", advisories);
     }
 
   if (staged_deployment)
     {
-      auto id = CXX_TRY_VAL(deployment_generate_id (*staged_deployment), error);
-      g_variant_dict_insert (&dict, "deployment", "s", id.c_str());
+      auto id = CXX_TRY_VAL (deployment_generate_id (*staged_deployment), error);
+      g_variant_dict_insert (&dict, "deployment", "s", id.c_str ());
     }
 
   /* but if there are no updates, then just ditch the whole thing and return NULL */

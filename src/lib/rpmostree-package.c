@@ -30,12 +30,12 @@
 
 #include "config.h"
 
-#include <string.h>
-#include <stdlib.h>
 #include "libglnx.h"
+#include <stdlib.h>
+#include <string.h>
 
-#include "rpmostree-shlib-ipc-private.h"
 #include "rpmostree-package-priv.h"
+#include "rpmostree-shlib-ipc-private.h"
 
 #if BUILDOPT_HAVE_RPMVER
 #include <rpm/rpmver.h>
@@ -60,12 +60,12 @@ struct RpmOstreePackage
   const char *arch;
 };
 
-G_DEFINE_TYPE(RpmOstreePackage, rpm_ostree_package, G_TYPE_OBJECT)
+G_DEFINE_TYPE (RpmOstreePackage, rpm_ostree_package, G_TYPE_OBJECT)
 
 static void
 rpm_ostree_package_finalize (GObject *object)
 {
-  RpmOstreePackage *pkg = (RpmOstreePackage*)object;
+  RpmOstreePackage *pkg = (RpmOstreePackage *)object;
   g_clear_pointer (&pkg->gv_nevra, g_variant_unref);
 
   g_clear_pointer (&pkg->nevra, g_free);
@@ -188,7 +188,7 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
   return strcmp (p1->arch, p2->arch);
 }
 
-RpmOstreePackage*
+RpmOstreePackage *
 _rpm_ostree_package_new_from_variant (GVariant *gv_nevra)
 {
   RpmOstreePackage *p = g_object_new (RPM_OSTREE_TYPE_PACKAGE, NULL);
@@ -211,35 +211,32 @@ _rpm_ostree_package_new_from_variant (GVariant *gv_nevra)
   return p;
 }
 
-static GVariant*
+static GVariant *
 get_commit_rpmdb_pkglist (GVariant *commit)
 {
-  g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
-  g_autoptr(GVariantDict) meta_dict = g_variant_dict_new (meta);
+  g_autoptr (GVariant) meta = g_variant_get_child_value (commit, 0);
+  g_autoptr (GVariantDict) meta_dict = g_variant_dict_new (meta);
   return g_variant_dict_lookup_value (meta_dict, "rpmostree.rpmdb.pkglist",
                                       G_VARIANT_TYPE ("a(sssss)"));
 }
 
 gboolean
-_rpm_ostree_package_variant_list_for_commit (OstreeRepo   *repo,
-                                     const char   *rev,
-                                     gboolean      allow_noent,
-                                     GVariant    **out_pkglist,
-                                     GCancellable *cancellable,
-                                     GError      **error)
+_rpm_ostree_package_variant_list_for_commit (OstreeRepo *repo, const char *rev,
+                                             gboolean allow_noent, GVariant **out_pkglist,
+                                             GCancellable *cancellable, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Loading package list", error);
   g_autofree char *checksum = NULL;
   if (!ostree_repo_resolve_rev (repo, rev, FALSE, &checksum, error))
     return FALSE;
 
-  g_autoptr(GVariant) commit = NULL;
+  g_autoptr (GVariant) commit = NULL;
   if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum, &commit, error))
     return FALSE;
 
   /* If there's no commit metadata, we fallback to checking out the rpmdb from the commit
    * using the IPC mechanism. */
-  g_autoptr(GVariant) pkglist_v = get_commit_rpmdb_pkglist (commit);
+  g_autoptr (GVariant) pkglist_v = get_commit_rpmdb_pkglist (commit);
   if (!pkglist_v)
     {
       /* Yeah we could extend the IPC to support sending a fd too but for
@@ -247,8 +244,9 @@ _rpm_ostree_package_variant_list_for_commit (OstreeRepo   *repo,
        */
       int fd = ostree_repo_get_dfd (repo);
       g_autofree char *fdpath = g_strdup_printf ("/proc/self/fd/%d", fd);
-      char *args[] = { "packagelist-from-commit", (char*)rev, NULL };
-      g_autoptr(GVariant) maybe_pkglist_v = _rpmostree_shlib_ipc_send ("m" RPMOSTREE_SHLIB_IPC_PKGLIST, args, fdpath, error);
+      char *args[] = { "packagelist-from-commit", (char *)rev, NULL };
+      g_autoptr (GVariant) maybe_pkglist_v
+          = _rpmostree_shlib_ipc_send ("m" RPMOSTREE_SHLIB_IPC_PKGLIST, args, fdpath, error);
       if (!maybe_pkglist_v)
         return FALSE;
       pkglist_v = g_variant_get_maybe (maybe_pkglist_v);
@@ -262,31 +260,27 @@ _rpm_ostree_package_variant_list_for_commit (OstreeRepo   *repo,
   return TRUE;
 }
 
-
-
 /* Opportunistically try to use the new rpmostree.rpmdb.pkglist metadata, otherwise fall
  * back to commit rpmdb if available.
  *
  * Let's keep this private for now.
  */
 gboolean
-_rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
-                                     const char   *rev,
-                                     gboolean      allow_noent,
-                                     GPtrArray   **out_pkglist,
-                                     GCancellable *cancellable,
-                                     GError      **error)
+_rpm_ostree_package_list_for_commit (OstreeRepo *repo, const char *rev, gboolean allow_noent,
+                                     GPtrArray **out_pkglist, GCancellable *cancellable,
+                                     GError **error)
 {
 
-  g_autoptr(GVariant) pkglist_v = NULL;
-  if (!_rpm_ostree_package_variant_list_for_commit (repo, rev, allow_noent, &pkglist_v, cancellable, error))
+  g_autoptr (GVariant) pkglist_v = NULL;
+  if (!_rpm_ostree_package_variant_list_for_commit (repo, rev, allow_noent, &pkglist_v, cancellable,
+                                                    error))
     return FALSE;
 
-  g_autoptr(GPtrArray) pkglist = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr (GPtrArray) pkglist = g_ptr_array_new_with_free_func (g_object_unref);
   const guint n = g_variant_n_children (pkglist_v);
   for (guint i = 0; i < n; i++)
     {
-      g_autoptr(GVariant) pkg_v = g_variant_get_child_value (pkglist_v, i);
+      g_autoptr (GVariant) pkg_v = g_variant_get_child_value (pkglist_v, i);
       g_ptr_array_add (pkglist, _rpm_ostree_package_new_from_variant (pkg_v));
     }
 
@@ -312,26 +306,22 @@ next_pkg_has_different_name (const char *name, GPtrArray *pkgs, guint cur_i)
  * multilib) are counted as different packages.
  * */
 gboolean
-_rpm_ostree_diff_package_lists (GPtrArray  *a,
-                                GPtrArray  *b,
-                                GPtrArray **out_unique_a,
-                                GPtrArray **out_unique_b,
-                                GPtrArray **out_modified_a,
-                                GPtrArray **out_modified_b,
-                                GPtrArray **out_common)
+_rpm_ostree_diff_package_lists (GPtrArray *a, GPtrArray *b, GPtrArray **out_unique_a,
+                                GPtrArray **out_unique_b, GPtrArray **out_modified_a,
+                                GPtrArray **out_modified_b, GPtrArray **out_common)
 {
   g_assert (a != NULL && b != NULL);
-  g_return_val_if_fail (out_unique_a || out_unique_b ||
-                        out_modified_a || out_modified_b || out_common, FALSE);
+  g_return_val_if_fail (
+      out_unique_a || out_unique_b || out_modified_a || out_modified_b || out_common, FALSE);
 
   const guint an = a->len;
   const guint bn = b->len;
 
-  g_autoptr(GPtrArray) unique_a = g_ptr_array_new_with_free_func (g_object_unref);
-  g_autoptr(GPtrArray) unique_b = g_ptr_array_new_with_free_func (g_object_unref);
-  g_autoptr(GPtrArray) modified_a = g_ptr_array_new_with_free_func (g_object_unref);
-  g_autoptr(GPtrArray) modified_b = g_ptr_array_new_with_free_func (g_object_unref);
-  g_autoptr(GPtrArray) common = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr (GPtrArray) unique_a = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr (GPtrArray) unique_b = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr (GPtrArray) modified_a = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr (GPtrArray) modified_b = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr (GPtrArray) common = g_ptr_array_new_with_free_func (g_object_unref);
 
   guint cur_a = 0;
   guint cur_b = 0;

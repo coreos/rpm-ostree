@@ -20,17 +20,15 @@
 
 #include "config.h"
 
-#include "rpmostree-json-parsing.h"
 #include "libglnx.h"
+#include "rpmostree-json-parsing.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
 gboolean
-_rpmostree_jsonutil_object_get_optional_string_member (JsonObject     *object,
-                                                       const char     *member_name,
-                                                       const char    **out_value,
-                                                       GError        **error)
+_rpmostree_jsonutil_object_get_optional_string_member (JsonObject *object, const char *member_name,
+                                                       const char **out_value, GError **error)
 {
   *out_value = NULL;
 
@@ -49,23 +47,20 @@ _rpmostree_jsonutil_object_get_optional_string_member (JsonObject     *object,
 }
 
 const char *
-_rpmostree_jsonutil_object_require_string_member (JsonObject     *object,
-                                                  const char     *member_name,
-                                                  GError        **error)
+_rpmostree_jsonutil_object_require_string_member (JsonObject *object, const char *member_name,
+                                                  GError **error)
 {
   const char *ret;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (object, member_name, &ret, error))
     return NULL;
   if (!ret)
-    return (char*)glnx_null_throw (error, "Member '%s' not found", member_name);
+    return (char *)glnx_null_throw (error, "Member '%s' not found", member_name);
   return ret;
 }
 
 gboolean
-_rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject     *object,
-                                                       const char     *member_name,
-                                                       gboolean       *out_value,
-                                                       GError        **error)
+_rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject *object, const char *member_name,
+                                                        gboolean *out_value, GError **error)
 {
   if (!object)
     return TRUE;
@@ -82,12 +77,10 @@ _rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject     *object,
 }
 
 const char *
-_rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
-                                                  guint           i,
-                                                  GError        **error)
+_rpmostree_jsonutil_array_require_string_element (JsonArray *array, guint i, GError **error)
 {
   const char *ret = json_array_get_string_element (array, i);
   if (!ret)
-    return (char*)glnx_null_throw (error, "Element at index %u is not a string", i);
+    return (char *)glnx_null_throw (error, "Element at index %u is not a string", i);
   return ret;
 }

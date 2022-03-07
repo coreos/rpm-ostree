@@ -20,10 +20,10 @@
 
 #include "config.h"
 
-#include "rpmostree-ex-builtins.h"
-#include "rpmostree-libbuiltin.h"
 #include "rpmostree-clientlib.h"
 #include "rpmostree-editor.h"
+#include "rpmostree-ex-builtins.h"
+#include "rpmostree-libbuiltin.h"
 #include "rpmostree-util.h"
 #include <libglnx.h>
 
@@ -35,24 +35,45 @@ static char **opt_kernel_append_strings;
 static char **opt_kernel_delete_if_present_strings;
 static char **opt_kernel_append_if_missing_strings;
 static char **opt_kernel_replace_strings;
-static char  *opt_osname;
-static char  *opt_deploy_index;
+static char *opt_osname;
+static char *opt_deploy_index;
 static gboolean opt_lock_finalization;
 static gboolean opt_unchanged_exit_77;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operation on provided OSNAME", "OSNAME" },
-  { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index, "Modify the kernel args from a specific deployment based on index. Index is in the form of a number (e.g. 0 means the first deployment in the list)", "INDEX"},
-  { "reboot", 0, 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL},
-  { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings, "Append kernel argument; useful with e.g. console= that can be used multiple times. empty value for an argument is allowed", "KEY=VALUE" },
-  { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE if only one value exist for that argument ", "KEY=VALUE=NEWVALUE" },
-  { "delete", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_strings, "Delete a specific kernel argument key/val pair or an entire argument with a single key/value pair", "KEY=VALUE"},
-  { "append-if-missing", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_if_missing_strings, "Like --append, but does nothing if the key is already present", "KEY=VALUE" },
-  { "delete-if-present", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_if_present_strings, "Like --delete, but does nothing if the key is already missing", "KEY=VALUE" },
-  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no kernel args changed, exit 77", NULL },
-  { "import-proc-cmdline", 0, 0, G_OPTION_ARG_NONE, &opt_import_proc_cmdline, "Instead of modifying old kernel arguments, we modify args from current /proc/cmdline (the booted deployment)", NULL },
-  { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Use an editor to modify the kernel arguments", NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
+  { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index,
+    "Modify the kernel args from a specific deployment based on index. Index is in the form of a "
+    "number (e.g. 0 means the first deployment in the list)",
+    "INDEX" },
+  { "reboot", 0, 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete",
+    NULL },
+  { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings,
+    "Append kernel argument; useful with e.g. console= that can be used multiple times. empty "
+    "value for an argument is allowed",
+    "KEY=VALUE" },
+  { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings,
+    "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE "
+    "if only one value exist for that argument ",
+    "KEY=VALUE=NEWVALUE" },
+  { "delete", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_strings,
+    "Delete a specific kernel argument key/val pair or an entire argument with a single key/value "
+    "pair",
+    "KEY=VALUE" },
+  { "append-if-missing", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_if_missing_strings,
+    "Like --append, but does nothing if the key is already present", "KEY=VALUE" },
+  { "delete-if-present", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_if_present_strings,
+    "Like --delete, but does nothing if the key is already missing", "KEY=VALUE" },
+  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77,
+    "If no kernel args changed, exit 77", NULL },
+  { "import-proc-cmdline", 0, 0, G_OPTION_ARG_NONE, &opt_import_proc_cmdline,
+    "Instead of modifying old kernel arguments, we modify args from current /proc/cmdline (the "
+    "booted deployment)",
+    NULL },
+  { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Use an editor to modify the kernel arguments",
+    NULL },
+  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+    "Prevent automatic deployment finalization on shutdown", NULL },
   { NULL }
 };
 
@@ -63,14 +84,11 @@ static GOptionEntry option_entries[] = {
  * is able to modify those args.
  */
 static gboolean
-kernel_arg_handle_editor (const char     *input_kernel_arg,
-                          const char    **out_kernel_arg,
-                          gboolean       *out_kargs_changed,
-                          GCancellable   *cancellable,
-                          GError        **error)
+kernel_arg_handle_editor (const char *input_kernel_arg, const char **out_kernel_arg,
+                          gboolean *out_kargs_changed, GCancellable *cancellable, GError **error)
 {
   g_autofree char *chomped_input = g_strchomp (g_strdup (input_kernel_arg));
-  g_autoptr(OstreeKernelArgs) temp_kargs = ostree_kernel_args_from_string (chomped_input);
+  g_autoptr (OstreeKernelArgs) temp_kargs = ostree_kernel_args_from_string (chomped_input);
 
   *out_kargs_changed = FALSE;
 
@@ -85,7 +103,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
       if (!ostree_kernel_args_delete (temp_kargs, "ostree", error))
         return FALSE;
     }
-  g_autofree char* filtered_input = ostree_kernel_args_to_string (temp_kargs);
+  g_autofree char *filtered_input = ostree_kernel_args_to_string (temp_kargs);
 
   g_autofree char *input_string = g_strdup_printf (
       "# Current kernel arguments are shown below, and can be directly edited.\n"
@@ -95,22 +113,22 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
       "# Also, please note that any changes to the 'ostree=' argument will not be \n"
       "# effective as they are usually regenerated when bootconfig changes.\n"
       "\n"
-      "%s", filtered_input);
+      "%s",
+      filtered_input);
 
   /* Note: the repo here is NULL, as we don't really require it
    * for the edtior process
    */
-  g_autofree char *out_editor_string = ot_editor_prompt (NULL, input_string,
-                                                         cancellable, error);
+  g_autofree char *out_editor_string = ot_editor_prompt (NULL, input_string, cancellable, error);
   if (out_editor_string == NULL)
     return FALSE;
 
   /* We now process the editor output, we ignore empty lines and lines
    * starting with '#'
    */
-  g_auto(GStrv) lines = g_strsplit (out_editor_string, "\n", -1);
+  g_auto (GStrv) lines = g_strsplit (out_editor_string, "\n", -1);
   guint num_lines = g_strv_length (lines);
-  g_autoptr(GString) kernel_arg_buf = g_string_new ("");
+  g_autoptr (GString) kernel_arg_buf = g_string_new ("");
   for (guint i = 0; i < num_lines; i++)
     {
       char *line = lines[i];
@@ -128,7 +146,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
        * because there could be a case where user have
        * args that are in multiple lines.
        */
-      g_string_append (kernel_arg_buf,  " ");
+      g_string_append (kernel_arg_buf, " ");
     }
 
   /* Transfer the ownership to a new string, so we can remove the trailing spaces */
@@ -139,7 +157,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
   *out_kargs_changed = !g_str_equal (filtered_input, kernel_args_str);
 
   /* We check again to see if the ostree argument got added by the user */
-  g_autoptr(OstreeKernelArgs) input_kargs = ostree_kernel_args_from_string (kernel_args_str);
+  g_autoptr (OstreeKernelArgs) input_kargs = ostree_kernel_args_from_string (kernel_args_str);
   if (ostree_kernel_args_get_last_value (input_kargs, "ostree") != NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
@@ -160,36 +178,27 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
   return TRUE;
 }
 
-
 gboolean
-rpmostree_builtin_kargs (int            argc,
-                         char         **argv,
-                         RpmOstreeCommandInvocation *invocation,
-                         GCancellable  *cancellable,
-                         GError       **error)
+rpmostree_builtin_kargs (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                         GCancellable *cancellable, GError **error)
 {
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  g_autoptr (GOptionContext) context = g_option_context_new ("");
   gboolean display_kernel_args = FALSE;
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
-   if (opt_editor && (opt_kernel_delete_strings ||
-       opt_kernel_replace_strings ||  opt_kernel_append_strings ||
-       opt_kernel_delete_if_present_strings || opt_kernel_append_if_missing_strings))
-     {
+  if (opt_editor
+      && (opt_kernel_delete_strings || opt_kernel_replace_strings || opt_kernel_append_strings
+          || opt_kernel_delete_if_present_strings || opt_kernel_append_if_missing_strings))
+    {
       /* We want editor command to achieve all these functionalities
        * Thus erroring out ahead of time when these strings exist
        */
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify --editor with --replace, --delete, --append, --delete-if-present or --append-if-missing");
+                   "Cannot specify --editor with --replace, --delete, --append, "
+                   "--delete-if-present or --append-if-missing");
       return FALSE;
     }
 
@@ -211,9 +220,9 @@ rpmostree_builtin_kargs (int            argc,
                    "Cannot specify both osname and --import-from-proc-cmdline");
       return FALSE;
     }
-  if (!(opt_kernel_delete_strings) && !(opt_kernel_append_strings)
-      && !(opt_kernel_replace_strings) && !(opt_editor) &&
-      !(opt_kernel_delete_if_present_strings) && !(opt_kernel_append_if_missing_strings))
+  if (!(opt_kernel_delete_strings) && !(opt_kernel_append_strings) && !(opt_kernel_replace_strings)
+      && !(opt_editor) && !(opt_kernel_delete_if_present_strings)
+      && !(opt_kernel_append_if_missing_strings))
     display_kernel_args = TRUE;
 
   if (opt_reboot && display_kernel_args)
@@ -224,8 +233,7 @@ rpmostree_builtin_kargs (int            argc,
     }
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
 
   /* The proc cmdline is the kernel args from booted deployment
@@ -240,20 +248,15 @@ rpmostree_builtin_kargs (int            argc,
    * we will parse the string into a number if
    * the index option is there
    */
-  const char* deploy_index_str = opt_deploy_index ?: "";
-  g_autoptr(GVariant) boot_config = NULL;
-  if (!rpmostree_os_call_get_deployment_boot_config_sync (os_proxy,
-                                                          deploy_index_str,
-                                                          is_pending,
-                                                          &boot_config,
-                                                          cancellable,
-                                                          error))
+  const char *deploy_index_str = opt_deploy_index ?: "";
+  g_autoptr (GVariant) boot_config = NULL;
+  if (!rpmostree_os_call_get_deployment_boot_config_sync (os_proxy, deploy_index_str, is_pending,
+                                                          &boot_config, cancellable, error))
     return FALSE;
 
   /* We extract the existing kernel arguments from the boot configuration */
   const char *old_kernel_arg_string = NULL;
-  if (!g_variant_lookup (boot_config, "options",
-                         "&s", &old_kernel_arg_string))
+  if (!g_variant_lookup (boot_config, "options", "&s", &old_kernel_arg_string))
     return FALSE;
 
   if (display_kernel_args)
@@ -262,10 +265,10 @@ rpmostree_builtin_kargs (int            argc,
       return TRUE;
     }
 
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   g_autofree char *transaction_address = NULL;
-  char *empty_strv[] = {NULL};
+  char *empty_strv[] = { NULL };
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -277,12 +280,12 @@ rpmostree_builtin_kargs (int            argc,
     {
       /* We track the kernel arg instance before the editor */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
-      g_autoptr(OstreeSysroot) before_sysroot = ostree_sysroot_new (sysroot_file);
+      g_autoptr (GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+      g_autoptr (OstreeSysroot) before_sysroot = ostree_sysroot_new (sysroot_file);
       if (!ostree_sysroot_load (before_sysroot, cancellable, error))
         return FALSE;
 
-      const char* current_kernel_arg_string = NULL;
+      const char *current_kernel_arg_string = NULL;
       gboolean kargs_changed = FALSE;
       if (!kernel_arg_handle_editor (old_kernel_arg_string, &current_kernel_arg_string,
                                      &kargs_changed, cancellable, error))
@@ -291,7 +294,7 @@ rpmostree_builtin_kargs (int            argc,
         {
           if (opt_unchanged_exit_77)
             {
-              g_print("No changes.\n");
+              g_print ("No changes.\n");
               invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
               return TRUE;
             }
@@ -308,15 +311,13 @@ rpmostree_builtin_kargs (int            argc,
        * out.
        */
       gboolean sysroot_changed = FALSE;
-      if (!ostree_sysroot_load_if_changed (before_sysroot,
-                                           &sysroot_changed,
-                                           cancellable,
-                                           error))
+      if (!ostree_sysroot_load_if_changed (before_sysroot, &sysroot_changed, cancellable, error))
         return FALSE;
       if (sysroot_changed)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                       "Conflict: bootloader configuration changed. Saved kernel arguments: \n%s", current_kernel_arg_string);
+                       "Conflict: bootloader configuration changed. Saved kernel arguments: \n%s",
+                       current_kernel_arg_string);
 
           return FALSE;
         }
@@ -328,17 +329,12 @@ rpmostree_builtin_kargs (int            argc,
        * TODO(lucab): switch all flows to perform client-side assembling, like the
        * editor currently does: https://github.com/coreos/rpm-ostree/issues/2712 */
       g_variant_dict_insert (&dict, "final-kernel-args", "s", current_kernel_arg_string);
-      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+      g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
-      if (!rpmostree_os_call_kernel_args_sync (os_proxy,
-                                               old_kernel_arg_string,
-                                               (const char* const*) empty_strv,
-                                               (const char* const*) empty_strv,
-                                               (const char* const*) empty_strv,
-                                               options,
-                                               &transaction_address,
-                                               cancellable,
-                                               error))
+      if (!rpmostree_os_call_kernel_args_sync (
+              os_proxy, old_kernel_arg_string, (const char *const *)empty_strv,
+              (const char *const *)empty_strv, (const char *const *)empty_strv, options,
+              &transaction_address, cancellable, error))
         return FALSE;
     }
   else
@@ -353,32 +349,28 @@ rpmostree_builtin_kargs (int            argc,
         opt_kernel_delete_strings = empty_strv;
 
       if (opt_kernel_append_if_missing_strings && *opt_kernel_append_if_missing_strings)
-        g_variant_dict_insert (&dict, "append-if-missing", "^as", opt_kernel_append_if_missing_strings);
+        g_variant_dict_insert (&dict, "append-if-missing", "^as",
+                               opt_kernel_append_if_missing_strings);
       if (opt_kernel_delete_if_present_strings && *opt_kernel_delete_if_present_strings)
-        g_variant_dict_insert (&dict, "delete-if-present", "^as", opt_kernel_delete_if_present_strings);
-      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+        g_variant_dict_insert (&dict, "delete-if-present", "^as",
+                               opt_kernel_delete_if_present_strings);
+      g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* call the generated dbus-function */
-      if (!rpmostree_os_call_kernel_args_sync (os_proxy,
-                                               old_kernel_arg_string,
-                                               (const char* const*) opt_kernel_append_strings,
-                                               (const char* const*) opt_kernel_replace_strings,
-                                               (const char* const*) opt_kernel_delete_strings,
-                                               options,
-                                               &transaction_address,
-                                               cancellable,
-                                               error))
+      if (!rpmostree_os_call_kernel_args_sync (os_proxy, old_kernel_arg_string,
+                                               (const char *const *)opt_kernel_append_strings,
+                                               (const char *const *)opt_kernel_replace_strings,
+                                               (const char *const *)opt_kernel_delete_strings,
+                                               options, &transaction_address, cancellable, error))
         return FALSE;
     }
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
                                                 error))
     return FALSE;
 
   if (rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
-    g_print("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
+    g_print ("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
   else if (opt_unchanged_exit_77)
     invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
 

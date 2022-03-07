@@ -20,24 +20,24 @@
 
 #include "config.h"
 
-#include <string.h>
 #include <glib-unix.h>
+#include <string.h>
 
 #include "rpmostree-builtins.h"
-#include "rpmostree-util.h"
+#include "rpmostree-clientlib.h"
 #include "rpmostree-core.h"
 #include "rpmostree-libbuiltin.h"
-#include "rpmostree-clientlib.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_skip_purge;
-static char * opt_branch;
-static char * opt_remote;
-static char * opt_custom_origin_url;
-static char * opt_custom_origin_description;
+static char *opt_branch;
+static char *opt_remote;
+static char *opt_custom_origin_url;
+static char *opt_custom_origin_description;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
 static gboolean opt_experimental;
@@ -45,29 +45,38 @@ static gboolean opt_disallow_downgrade;
 static gboolean opt_lock_finalization;
 static gboolean opt_bypass_driver;
 
-static GOptionEntry option_entries[] = {
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "branch", 'b', 0, G_OPTION_ARG_STRING, &opt_branch, "Rebase to branch BRANCH; use --remote to change remote as well", "BRANCH" },
-  { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote, "Rebase to current branch name using REMOTE; may also be combined with --branch", "REMOTE" },
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
-  { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
-  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
-  { "custom-origin-description", 0, 0, G_OPTION_ARG_STRING, &opt_custom_origin_description, "Human-readable description of custom origin", NULL },
-  { "custom-origin-url", 0, 0, G_OPTION_ARG_STRING, &opt_custom_origin_url, "Machine-readable description of custom origin", NULL },
-  { "experimental", 0, 0, G_OPTION_ARG_NONE, &opt_experimental, "Enable experimental features", NULL },
-  { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade, "Forbid deployment of chronologically older trees", NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
-  { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver, "Force a rebase even if an updates driver is registered", NULL},
-  { NULL }
-};
+static GOptionEntry option_entries[]
+    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+        { "branch", 'b', 0, G_OPTION_ARG_STRING, &opt_branch,
+          "Rebase to branch BRANCH; use --remote to change remote as well", "BRANCH" },
+        { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote,
+          "Rebase to current branch name using REMOTE; may also be combined with --branch",
+          "REMOTE" },
+        { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
+          "Initiate a reboot after operation is complete", NULL },
+        { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge,
+          "Keep previous refspec after rebase", NULL },
+        { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only,
+          "Do not download latest ostree and RPM data", NULL },
+        { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only,
+          "Just download latest ostree and RPM data, don't deploy", NULL },
+        { "custom-origin-description", 0, 0, G_OPTION_ARG_STRING, &opt_custom_origin_description,
+          "Human-readable description of custom origin", NULL },
+        { "custom-origin-url", 0, 0, G_OPTION_ARG_STRING, &opt_custom_origin_url,
+          "Machine-readable description of custom origin", NULL },
+        { "experimental", 0, 0, G_OPTION_ARG_NONE, &opt_experimental,
+          "Enable experimental features", NULL },
+        { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade,
+          "Forbid deployment of chronologically older trees", NULL },
+        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+          "Prevent automatic deployment finalization on shutdown", NULL },
+        { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver,
+          "Force a rebase even if an updates driver is registered", NULL },
+        { NULL } };
 
 gboolean
-rpmostree_builtin_rebase (int             argc,
-                          char          **argv,
-                          RpmOstreeCommandInvocation *invocation,
-                          GCancellable   *cancellable,
-                          GError        **error)
+rpmostree_builtin_rebase (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                          GCancellable *cancellable, GError **error)
 {
   const char *new_provided_refspec;
   g_autofree char *new_refspec_owned = NULL;
@@ -76,21 +85,15 @@ rpmostree_builtin_rebase (int             argc,
   /* forced blank for now */
   const char *packages[] = { NULL };
 
-  g_autoptr(GOptionContext) context = g_option_context_new ("REFSPEC [REVISION]");
+  g_autoptr (GOptionContext) context = g_option_context_new ("REFSPEC [REVISION]");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   g_autofree char *transaction_address = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       &install_pkgs,
-                                       &uninstall_pkgs,
-                                       &sysroot_proxy,
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, &install_pkgs, &uninstall_pkgs, &sysroot_proxy,
                                        error))
     return FALSE;
 
@@ -99,18 +102,19 @@ rpmostree_builtin_rebase (int             argc,
       rpmostree_usage_error (context, "Too many arguments", error);
       return FALSE;
     }
-  
+
   if (!opt_bypass_driver)
     if (!error_if_driver_registered (sysroot_proxy, cancellable, error))
       return FALSE;
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
 
   if (argc < 2 && !(opt_branch || opt_remote))
     {
-      return rpmostree_usage_error (context, "Must specify refspec, or -b branch or -r remote", error), FALSE;
+      return rpmostree_usage_error (context, "Must specify refspec, or -b branch or -r remote",
+                                    error),
+             FALSE;
     }
   else if (argc >= 2)
     {
@@ -124,8 +128,8 @@ rpmostree_builtin_rebase (int             argc,
     {
       if (opt_remote)
         {
-          new_provided_refspec = new_refspec_owned =
-            g_strconcat (opt_remote, ":", opt_branch ?: "", NULL);
+          new_provided_refspec = new_refspec_owned
+              = g_strconcat (opt_remote, ":", opt_branch ?: "", NULL);
         }
       else
         new_provided_refspec = opt_branch;
@@ -143,17 +147,17 @@ rpmostree_builtin_rebase (int             argc,
   if (refspectype == RPMOSTREE_REFSPEC_TYPE_CONTAINER)
     {
       if (!opt_experimental)
-        return glnx_throw (error, "Rebasing to a container image reference requires --experimental");
+        return glnx_throw (error,
+                           "Rebasing to a container image reference requires --experimental");
       /* When using the container refspec type, if rebasing to a specific commit, we expect a
-      * specific digest tag in the refspec, not in a separate argument */
+       * specific digest tag in the refspec, not in a separate argument */
       if (revision)
         return glnx_throw (error, "Unexpected ostree revision alongside container refspec type");
     }
 
   /* Check if remote refers to a local repo */
   g_autofree char *local_repo_remote = NULL;
-  if (G_IN_SET (refspectype, RPMOSTREE_REFSPEC_TYPE_OSTREE,
-                             RPMOSTREE_REFSPEC_TYPE_CHECKSUM))
+  if (G_IN_SET (refspectype, RPMOSTREE_REFSPEC_TYPE_OSTREE, RPMOSTREE_REFSPEC_TYPE_CHECKSUM))
     {
       if (*new_provided_refspec == '/')
         {
@@ -168,7 +172,7 @@ rpmostree_builtin_rebase (int             argc,
         }
     }
 
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -182,30 +186,23 @@ rpmostree_builtin_rebase (int             argc,
   if (opt_custom_origin_url)
     {
       if (!opt_custom_origin_description)
-        return glnx_throw (error, "--custom-origin-description must be supplied with --custom-origin-url");
-      g_variant_dict_insert (&dict, "custom-origin", "(ss)",
-                             opt_custom_origin_url,
+        return glnx_throw (error,
+                           "--custom-origin-description must be supplied with --custom-origin-url");
+      g_variant_dict_insert (&dict, "custom-origin", "(ss)", opt_custom_origin_url,
                              opt_custom_origin_description);
     }
-  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+  g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   /* Use newer D-Bus API only if we have to. */
   if (install_pkgs || uninstall_pkgs || local_repo_remote)
     {
-      if (!rpmostree_update_deployment (os_proxy,
-                                        new_provided_refspec,
-                                        revision,
-                                        install_pkgs,
-                                        NULL, /* install_fileoverride_pkgs */
-                                        uninstall_pkgs,
-                                        NULL, /* override replace */
-                                        NULL, /* override remove */
-                                        NULL, /* override reset */
-                                        local_repo_remote,
-                                        options,
-                                        &transaction_address,
-                                        cancellable,
-                                        error))
+      if (!rpmostree_update_deployment (os_proxy, new_provided_refspec, revision, install_pkgs,
+                                        NULL,                 /* install_fileoverride_pkgs */
+                                        uninstall_pkgs, NULL, /* override replace */
+                                        NULL,                 /* override remove */
+                                        NULL,                 /* override reset */
+                                        local_repo_remote, options, &transaction_address,
+                                        cancellable, error))
         return FALSE;
     }
   else
@@ -213,28 +210,19 @@ rpmostree_builtin_rebase (int             argc,
       /* the original Rebase() call takes the revision through the options */
       if (revision)
         {
-          g_autoptr(GVariant) old_options = options;
-          g_auto(GVariantDict) dict;
+          g_autoptr (GVariant) old_options = options;
+          g_auto (GVariantDict) dict;
           g_variant_dict_init (&dict, old_options);
           g_variant_dict_insert (&dict, "revision", "s", revision);
           options = g_variant_ref_sink (g_variant_dict_end (&dict));
         }
 
-      if (!rpmostree_os_call_rebase_sync (os_proxy,
-                                          options,
-                                          new_provided_refspec,
-                                          packages,
-                                          NULL,
-                                          &transaction_address,
-                                          NULL,
-                                          cancellable,
-                                          error))
+      if (!rpmostree_os_call_rebase_sync (os_proxy, options, new_provided_refspec, packages, NULL,
+                                          &transaction_address, NULL, cancellable, error))
         return FALSE;
     }
 
-  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, FALSE,
-                                           transaction_address,
-                                           previous_deployment,
-                                           cancellable, error);
+  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy, options, FALSE,
+                                           transaction_address, previous_deployment, cancellable,
+                                           error);
 }

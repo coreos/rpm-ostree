@@ -23,18 +23,19 @@
 
 G_BEGIN_DECLS
 
-typedef enum {
-        TREE_VERTICAL,
-        TREE_BRANCH,
-        TREE_RIGHT,
-        TREE_SPACE,
-        TRIANGULAR_BULLET,
-        BLACK_CIRCLE,
-        ARROW,
-        MDASH,
-        _SPECIAL_GLYPH_MAX
+typedef enum
+{
+  TREE_VERTICAL,
+  TREE_BRANCH,
+  TREE_RIGHT,
+  TREE_SPACE,
+  TRIANGULAR_BULLET,
+  BLACK_CIRCLE,
+  ARROW,
+  MDASH,
+  _SPECIAL_GLYPH_MAX
 } SpecialGlyph;
 
-const char *libsd_special_glyph(SpecialGlyph code) __attribute__ ((const));
+const char *libsd_special_glyph (SpecialGlyph code) __attribute__ ((const));
 
 G_END_DECLS

@@ -27,57 +27,51 @@
 
 G_BEGIN_DECLS
 
-#define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, \
-                                                                RpmOstreeCommandInvocation *invocation, \
-                                                                GCancellable *cancellable, GError **error)
+#define BUILTINPROTO(name)                                                                         \
+  gboolean rpmostree_builtin_##name (int argc, char **argv,                                        \
+                                     RpmOstreeCommandInvocation *invocation,                       \
+                                     GCancellable *cancellable, GError **error)
 
-BUILTINPROTO(compose);
-BUILTINPROTO(countme);
-BUILTINPROTO(upgrade);
-BUILTINPROTO(reload);
-BUILTINPROTO(deploy);
-BUILTINPROTO(rebase);
-BUILTINPROTO(cancel);
-BUILTINPROTO(cleanup);
-BUILTINPROTO(rollback);
-BUILTINPROTO(initramfs);
-BUILTINPROTO(status);
-BUILTINPROTO(refresh_md);
-BUILTINPROTO(db);
-BUILTINPROTO(internals);
-BUILTINPROTO(container);
-BUILTINPROTO(install);
-BUILTINPROTO(uninstall);
-BUILTINPROTO(override);
-BUILTINPROTO(kargs);
-BUILTINPROTO(reset);
-BUILTINPROTO(start_daemon);
-BUILTINPROTO(shlib_backend);
-BUILTINPROTO(coreos_rootfs);
-BUILTINPROTO(testutils);
-BUILTINPROTO(ex);
-BUILTINPROTO(finalize_deployment);
-BUILTINPROTO(initramfs_etc);
+BUILTINPROTO (compose);
+BUILTINPROTO (countme);
+BUILTINPROTO (upgrade);
+BUILTINPROTO (reload);
+BUILTINPROTO (deploy);
+BUILTINPROTO (rebase);
+BUILTINPROTO (cancel);
+BUILTINPROTO (cleanup);
+BUILTINPROTO (rollback);
+BUILTINPROTO (initramfs);
+BUILTINPROTO (status);
+BUILTINPROTO (refresh_md);
+BUILTINPROTO (db);
+BUILTINPROTO (internals);
+BUILTINPROTO (container);
+BUILTINPROTO (install);
+BUILTINPROTO (uninstall);
+BUILTINPROTO (override);
+BUILTINPROTO (kargs);
+BUILTINPROTO (reset);
+BUILTINPROTO (start_daemon);
+BUILTINPROTO (shlib_backend);
+BUILTINPROTO (coreos_rootfs);
+BUILTINPROTO (testutils);
+BUILTINPROTO (ex);
+BUILTINPROTO (finalize_deployment);
+BUILTINPROTO (initramfs_etc);
 
 #undef BUILTINPROTO
 
-gboolean
-rpmostree_option_context_parse (GOptionContext *context,
-                                const GOptionEntry *main_entries,
-                                int *argc,
-                                char ***argv,
-                                RpmOstreeCommandInvocation *invocation,
-                                GCancellable *cancellable,
-                                const char *const* *out_install_pkgs,
-                                const char *const* *out_uninstall_pkgs,
-                                RPMOSTreeSysroot **out_sysroot_proxy,
-                                GError **error);
+gboolean rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *main_entries,
+                                         int *argc, char ***argv,
+                                         RpmOstreeCommandInvocation *invocation,
+                                         GCancellable *cancellable,
+                                         const char *const **out_install_pkgs,
+                                         const char *const **out_uninstall_pkgs,
+                                         RPMOSTreeSysroot **out_sysroot_proxy, GError **error);
 
-int
-rpmostree_handle_subcommand (int argc, char **argv,
-                             RpmOstreeCommand *subcommands,
-                             RpmOstreeCommandInvocation *invocation,
-                             GCancellable *cancellable, GError **error);
+int rpmostree_handle_subcommand (int argc, char **argv, RpmOstreeCommand *subcommands,
+                                 RpmOstreeCommandInvocation *invocation, GCancellable *cancellable,
+                                 GError **error);
 
 G_END_DECLS
-

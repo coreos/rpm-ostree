@@ -21,11 +21,11 @@
 #include "config.h"
 
 #include "rpmostree-builtins.h"
-#include "rpmostree-libbuiltin.h"
-#include "rpmostree-util.h"
-#include "rpmostree-rpm-util.h"
 #include "rpmostree-clientlib.h"
 #include "rpmostree-container.h"
+#include "rpmostree-libbuiltin.h"
+#include "rpmostree-rpm-util.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 
@@ -46,44 +46,51 @@ static gboolean opt_unchanged_exit_77;
 static gboolean opt_lock_finalization;
 static gboolean opt_force_replacefiles;
 
-static GOptionEntry option_entries[] = {
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
-  { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
-  { "allow-inactive", 0, 0, G_OPTION_ARG_NONE, &opt_allow_inactive, "Allow inactive package requests", NULL },
-  { "idempotent", 0, 0, G_OPTION_ARG_NONE, &opt_idempotent, "Do nothing if package already (un)installed", NULL },
-  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no overlays were changed, exit 77", NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
-  { NULL }
-};
+static GOptionEntry option_entries[]
+    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+        { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
+          "Initiate a reboot after operation is complete", NULL },
+        { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction",
+          NULL },
+        { "allow-inactive", 0, 0, G_OPTION_ARG_NONE, &opt_allow_inactive,
+          "Allow inactive package requests", NULL },
+        { "idempotent", 0, 0, G_OPTION_ARG_NONE, &opt_idempotent,
+          "Do nothing if package already (un)installed", NULL },
+        { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77,
+          "If no overlays were changed, exit 77", NULL },
+        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+          "Prevent automatic deployment finalization on shutdown", NULL },
+        { NULL } };
 
-static GOptionEntry uninstall_option_entry[] = {
-  { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Overlay additional package", "PKG" },
-  { "all", 0, 0, G_OPTION_ARG_NONE, &opt_uninstall_all, "Remove all overlayed additional packages", NULL },
-  { NULL }
-};
+static GOptionEntry uninstall_option_entry[]
+    = { { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Overlay additional package",
+          "PKG" },
+        { "all", 0, 0, G_OPTION_ARG_NONE, &opt_uninstall_all,
+          "Remove all overlayed additional packages", NULL },
+        { NULL } };
 
-static GOptionEntry install_option_entry[] = {
-  { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Remove overlayed additional package", "PKG" },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
-  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
-  { "apply-live", 'A', 0, G_OPTION_ARG_NONE, &opt_apply_live, "Apply changes to both pending deployment and running filesystem tree", NULL },
-  { "force-replacefiles", 0, 0, G_OPTION_ARG_NONE, &opt_force_replacefiles, "Allow package to replace files from other packages", NULL },
-  { NULL }
-};
+static GOptionEntry install_option_entry[]
+    = { { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall,
+          "Remove overlayed additional package", "PKG" },
+        { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only,
+          "Do not download latest ostree and RPM data", NULL },
+        { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only,
+          "Just download latest ostree and RPM data, don't deploy", NULL },
+        { "apply-live", 'A', 0, G_OPTION_ARG_NONE, &opt_apply_live,
+          "Apply changes to both pending deployment and running filesystem tree", NULL },
+        { "force-replacefiles", 0, 0, G_OPTION_ARG_NONE, &opt_force_replacefiles,
+          "Allow package to replace files from other packages", NULL },
+        { NULL } };
 
 static gboolean
-pkg_change (RpmOstreeCommandInvocation *invocation,
-            RPMOSTreeSysroot *sysroot_proxy,
-            const char *const* packages_to_add,
-            const char *const* packages_to_remove,
-            GCancellable  *cancellable,
-            GError       **error)
+pkg_change (RpmOstreeCommandInvocation *invocation, RPMOSTreeSysroot *sysroot_proxy,
+            const char *const *packages_to_add, const char *const *packages_to_remove,
+            GCancellable *cancellable, GError **error)
 {
   const char *const strv_empty[] = { NULL };
-  const char *const* install_pkgs = strv_empty;
-  const char *const* install_fileoverride_pkgs = strv_empty;
-  const char *const* uninstall_pkgs = strv_empty;
+  const char *const *install_pkgs = strv_empty;
+  const char *const *install_fileoverride_pkgs = strv_empty;
+  const char *const *uninstall_pkgs = strv_empty;
 
   if (packages_to_add && opt_force_replacefiles)
     install_fileoverride_pkgs = packages_to_add;
@@ -93,11 +100,10 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
     uninstall_pkgs = packages_to_remove;
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
 
-  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -113,59 +119,42 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
   if (opt_apply_live)
     g_variant_dict_insert (&dict, "apply-live", "b", opt_apply_live);
-  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+  g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   gboolean met_local_pkg = FALSE;
-  for (const char *const* it = packages_to_add; it && *it; it++)
-    met_local_pkg = met_local_pkg || g_str_has_suffix (*it, ".rpm") || g_str_has_prefix (*it, "file://");
+  for (const char *const *it = packages_to_add; it && *it; it++)
+    met_local_pkg
+        = met_local_pkg || g_str_has_suffix (*it, ".rpm") || g_str_has_prefix (*it, "file://");
 
   /* Use newer D-Bus API only if we have to. */
   g_autofree char *transaction_address = NULL;
   if (met_local_pkg || opt_apply_live || (install_fileoverride_pkgs && *install_fileoverride_pkgs))
     {
-      if (!rpmostree_update_deployment (os_proxy,
-                                        NULL, /* refspec */
-                                        NULL, /* revision */
-                                        install_pkgs,
-                                        install_fileoverride_pkgs,
-                                        uninstall_pkgs,
+      if (!rpmostree_update_deployment (os_proxy, NULL, /* refspec */
+                                        NULL,           /* revision */
+                                        install_pkgs, install_fileoverride_pkgs, uninstall_pkgs,
                                         NULL, /* override replace */
                                         NULL, /* override remove */
                                         NULL, /* override reset */
                                         NULL, /* local_repo_remote */
-                                        options,
-                                        &transaction_address,
-                                        cancellable,
-                                        error))
+                                        options, &transaction_address, cancellable, error))
         return FALSE;
     }
   else
     {
-      if (!rpmostree_os_call_pkg_change_sync (os_proxy,
-                                              options,
-                                              install_pkgs,
-                                              uninstall_pkgs,
-                                              NULL,
-                                              &transaction_address,
-                                              NULL,
-                                              cancellable,
-                                              error))
+      if (!rpmostree_os_call_pkg_change_sync (os_proxy, options, install_pkgs, uninstall_pkgs, NULL,
+                                              &transaction_address, NULL, cancellable, error))
         return FALSE;
     }
 
-  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, opt_unchanged_exit_77,
-                                           transaction_address,
-                                           previous_deployment,
-                                           cancellable, error);
+  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy, options,
+                                           opt_unchanged_exit_77, transaction_address,
+                                           previous_deployment, cancellable, error);
 }
 
 gboolean
-rpmostree_builtin_install (int            argc,
-                           char         **argv,
-                           RpmOstreeCommandInvocation *invocation,
-                           GCancellable  *cancellable,
-                           GError       **error)
+rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                           GCancellable *cancellable, GError **error)
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
@@ -174,14 +163,8 @@ rpmostree_builtin_install (int            argc,
 
   g_option_context_add_main_entries (context, install_option_entry, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
   if (argc < 2)
@@ -192,25 +175,21 @@ rpmostree_builtin_install (int            argc,
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
    * might have moved args around) */
-  argv++; argc--;
+  argv++;
+  argc--;
   argv[argc] = NULL;
 
-  auto is_ostree_container = CXX_TRY_VAL(is_ostree_container(), error);
+  auto is_ostree_container = CXX_TRY_VAL (is_ostree_container (), error);
   if (is_ostree_container)
     return rpmostree_container_install_packages (argv, cancellable, error);
 
-  return pkg_change (invocation, sysroot_proxy,
-                     (const char *const*)argv,
-                     (const char *const*)opt_uninstall,
-                     cancellable, error);
+  return pkg_change (invocation, sysroot_proxy, (const char *const *)argv,
+                     (const char *const *)opt_uninstall, cancellable, error);
 }
 
 gboolean
-rpmostree_builtin_uninstall (int            argc,
-                             char         **argv,
-                             RpmOstreeCommandInvocation *invocation,
-                             GCancellable  *cancellable,
-                             GError       **error)
+rpmostree_builtin_uninstall (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                             GCancellable *cancellable, GError **error)
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
@@ -219,14 +198,8 @@ rpmostree_builtin_uninstall (int            argc,
 
   g_option_context_add_main_entries (context, uninstall_option_entry, NULL);
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL,
-                                       &sysroot_proxy,
-                                       error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
     return FALSE;
 
   if (argc < 2 && !opt_uninstall_all)
@@ -237,7 +210,8 @@ rpmostree_builtin_uninstall (int            argc,
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
    * might have moved args around) */
-  argv++; argc--;
+  argv++;
+  argc--;
   argv[argc] = NULL;
 
   /* If we don't also have to install pkgs, perform uninstalls offline; users don't expect
@@ -245,8 +219,6 @@ rpmostree_builtin_uninstall (int            argc,
   if (!opt_install)
     opt_cache_only = TRUE;
 
-  return pkg_change (invocation, sysroot_proxy,
-                     (const char *const*)opt_install,
-                     (const char *const*)argv,
-                     cancellable, error);
+  return pkg_change (invocation, sysroot_proxy, (const char *const *)opt_install,
+                     (const char *const *)argv, cancellable, error);
 }

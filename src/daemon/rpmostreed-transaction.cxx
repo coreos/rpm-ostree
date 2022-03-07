@@ -20,18 +20,19 @@
 #include "ostree.h"
 
 #include <libglnx.h>
+#include <optional>
+#include <stdexcept>
 #include <systemd/sd-journal.h>
 #include <systemd/sd-login.h>
-#include <stdexcept>
-#include <optional>
 
-#include "rpmostreed-transaction.h"
+#include "rpmostree-cxxrs.h"
+#include "rpmostreed-daemon.h"
 #include "rpmostreed-errors.h"
 #include "rpmostreed-sysroot.h"
-#include "rpmostreed-daemon.h"
-#include "rpmostree-cxxrs.h"
+#include "rpmostreed-transaction.h"
 
-struct _RpmostreedTransactionPrivate {
+struct _RpmostreedTransactionPrivate
+{
   GDBusMethodInvocation *invocation;
   gboolean executed; /* TRUE if the transaction has completed (successfully or not) */
   GCancellable *cancellable;
@@ -48,7 +49,7 @@ struct _RpmostreedTransactionPrivate {
   char *agent_id;
   char *sd_unit;
 
-  std::optional<rust::Box<rpmostreecxx::TokioHandle>> tokio_handle;
+  std::optional<rust::Box<rpmostreecxx::TokioHandle> > tokio_handle;
 
   gint64 last_progress_journal;
 
@@ -63,7 +64,8 @@ struct _RpmostreedTransactionPrivate {
   guint watch_id;
 };
 
-enum {
+enum
+{
   PROP_0,
   PROP_EXECUTED,
   PROP_INVOCATION,
@@ -71,7 +73,8 @@ enum {
   PROP_REDIRECT_OUTPUT
 };
 
-enum {
+enum
+{
   CLOSED,
   LAST_SIGNAL
 };
@@ -85,13 +88,10 @@ static void rpmostreed_transaction_dbus_iface_init (RPMOSTreeTransactionIface *i
  *     on the 2nd instance and valgrind was going crazy with invalid reads
  *     and writes.  So I'm falling back to the allegedly deprecated method
  *     and deferring further investigation. */
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (RpmostreedTransaction,
-                                  rpmostreed_transaction,
-                                  RPMOSTREE_TYPE_TRANSACTION_SKELETON,
-                                  G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                         rpmostreed_transaction_initable_iface_init)
-                                  G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_TRANSACTION,
-                                                         rpmostreed_transaction_dbus_iface_init))
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (
+    RpmostreedTransaction, rpmostreed_transaction, RPMOSTREE_TYPE_TRANSACTION_SKELETON,
+    G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE, rpmostreed_transaction_initable_iface_init)
+        G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_TRANSACTION, rpmostreed_transaction_dbus_iface_init))
 
 /* XXX This is lame but it's meant to keep it simple to
  *     transition to transaction_get_instance_private(). */
@@ -108,7 +108,7 @@ unlock_sysroot (RpmostreedTransaction *self)
 
   if (!(priv->sysroot && priv->sysroot_locked))
     return;
-  
+
   ostree_sysroot_unlock (priv->sysroot);
   sd_journal_print (LOG_INFO, "Unlocked sysroot");
   priv->sysroot_locked = FALSE;
@@ -139,14 +139,13 @@ creds_to_string (GCredentials *creds)
   if (pid != -1)
     sd_pid_get_unit (pid, &unit);
 
-  return g_strdup_printf ("[pid: %u uid: %u unit: %s]", (guint32) pid, (guint32) uid, unit ?: "(unknown)");
+  return g_strdup_printf ("[pid: %u uid: %u unit: %s]", (guint32)pid, (guint32)uid,
+                          unit ?: "(unknown)");
 }
 
 static void
-transaction_connection_closed_cb (GDBusConnection *connection,
-                                  gboolean remote_peer_vanished,
-                                  GError *error,
-                                  RpmostreedTransaction *self)
+transaction_connection_closed_cb (GDBusConnection *connection, gboolean remote_peer_vanished,
+                                  GError *error, RpmostreedTransaction *self)
 {
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
@@ -162,15 +161,14 @@ transaction_connection_closed_cb (GDBusConnection *connection,
 }
 
 static gboolean
-transaction_new_connection_cb (GDBusServer *server,
-                               GDBusConnection *connection,
+transaction_new_connection_cb (GDBusServer *server, GDBusConnection *connection,
                                RpmostreedTransaction *self)
 {
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
   GError *local_error = NULL;
 
-  g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (self),
-                                    connection, "/", &local_error);
+  g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (self), connection, "/",
+                                    &local_error);
 
   if (local_error != NULL)
     {
@@ -179,10 +177,8 @@ transaction_new_connection_cb (GDBusServer *server,
       return FALSE;
     }
 
-  g_signal_connect_object (connection,
-                           "closed",
-                           G_CALLBACK (transaction_connection_closed_cb),
-                           self, static_cast<GConnectFlags>(0));
+  g_signal_connect_object (connection, "closed", G_CALLBACK (transaction_connection_closed_cb),
+                           self, static_cast<GConnectFlags> (0));
 
   g_hash_table_add (priv->peer_connections, g_object_ref (connection));
 
@@ -193,9 +189,7 @@ transaction_new_connection_cb (GDBusServer *server,
 }
 
 static void
-transaction_owner_vanished_cb (GDBusConnection *connection,
-                               const char *name,
-                               gpointer user_data)
+transaction_owner_vanished_cb (GDBusConnection *connection, const char *name, gpointer user_data)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (user_data);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
@@ -207,7 +201,8 @@ transaction_owner_vanished_cb (GDBusConnection *connection,
       g_bus_unwatch_name (priv->watch_id);
       priv->watch_id = 0;
 
-      sd_journal_print (LOG_WARNING, "client disconnected before calling Start; cancelling transaction");
+      sd_journal_print (LOG_WARNING,
+                        "client disconnected before calling Start; cancelling transaction");
 
       /* Emit the signal AFTER unwatching the bus name, since this
        * may finalize the transaction and invalidate the watch_id. */
@@ -218,8 +213,7 @@ transaction_owner_vanished_cb (GDBusConnection *connection,
 }
 
 static void
-transaction_progress_changed_cb (OstreeAsyncProgress *progress,
-                                 RPMOSTreeTransaction *transaction)
+transaction_progress_changed_cb (OstreeAsyncProgress *progress, RPMOSTreeTransaction *transaction)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
@@ -233,21 +227,23 @@ transaction_progress_changed_cb (OstreeAsyncProgress *progress,
   guint64 bytes_sec = 0;
 
   gint64 current_monotonic = g_get_monotonic_time ();
-  gint64 elapsed = MAX(current_monotonic, priv->last_progress_journal) - priv->last_progress_journal;
+  gint64 elapsed
+      = MAX (current_monotonic, priv->last_progress_journal) - priv->last_progress_journal;
   bool emit_journal = (elapsed / G_USEC_PER_SEC) > PROGRESS_JOURNAL_PERIODIC_SECS;
   if (emit_journal)
     priv->last_progress_journal = current_monotonic;
 
   /* If there is a status that is all we output */
   g_autofree char *status = ostree_async_progress_get_status (progress);
-  if (status) {
-    if (emit_journal)
-      {
-        g_print ("%s\n", status);
-      }
-    rpmostree_transaction_emit_message (transaction, g_strdup (status));
-    return;
-  }
+  if (status)
+    {
+      if (emit_journal)
+        {
+          g_print ("%s\n", status);
+        }
+      rpmostree_transaction_emit_message (transaction, g_strdup (status));
+      return;
+    }
 
   if (start_time)
     {
@@ -256,56 +252,48 @@ transaction_progress_changed_cb (OstreeAsyncProgress *progress,
         bytes_sec = bytes_transferred / elapsed_secs;
     }
 
-  g_autoptr(GVariant) arg_time = g_variant_ref_sink (g_variant_new ("(tt)",
-                            start_time,
-                            elapsed_secs));
+  g_autoptr (GVariant) arg_time
+      = g_variant_ref_sink (g_variant_new ("(tt)", start_time, elapsed_secs));
 
-  g_autoptr(GVariant) arg_outstanding = g_variant_ref_sink (g_variant_new ("(uu)",
-                                   ostree_async_progress_get_uint (progress, "outstanding-fetches"),
-                                   ostree_async_progress_get_uint (progress, "outstanding-writes")));
+  g_autoptr (GVariant) arg_outstanding = g_variant_ref_sink (
+      g_variant_new ("(uu)", ostree_async_progress_get_uint (progress, "outstanding-fetches"),
+                     ostree_async_progress_get_uint (progress, "outstanding-writes")));
 
-  g_autoptr(GVariant) arg_metadata = g_variant_ref_sink (g_variant_new ("(uuu)",
-                                ostree_async_progress_get_uint (progress, "scanned-metadata"),
-                                ostree_async_progress_get_uint (progress, "metadata-fetched"),
-                                ostree_async_progress_get_uint (progress, "outstanding-metadata-fetches")));
+  g_autoptr (GVariant) arg_metadata = g_variant_ref_sink (
+      g_variant_new ("(uuu)", ostree_async_progress_get_uint (progress, "scanned-metadata"),
+                     ostree_async_progress_get_uint (progress, "metadata-fetched"),
+                     ostree_async_progress_get_uint (progress, "outstanding-metadata-fetches")));
 
-  g_autoptr(GVariant) arg_delta = g_variant_ref_sink (g_variant_new ("(uuut)",
-                             ostree_async_progress_get_uint (progress, "total-delta-parts"),
-                             ostree_async_progress_get_uint (progress, "fetched-delta-parts"),
-                             ostree_async_progress_get_uint (progress, "total-delta-superblocks"),
-                             ostree_async_progress_get_uint64 (progress, "total-delta-part-size")));
+  g_autoptr (GVariant) arg_delta = g_variant_ref_sink (
+      g_variant_new ("(uuut)", ostree_async_progress_get_uint (progress, "total-delta-parts"),
+                     ostree_async_progress_get_uint (progress, "fetched-delta-parts"),
+                     ostree_async_progress_get_uint (progress, "total-delta-superblocks"),
+                     ostree_async_progress_get_uint64 (progress, "total-delta-part-size")));
 
-  g_autoptr(GVariant) arg_content = g_variant_ref_sink (g_variant_new ("(uu)",
-                               ostree_async_progress_get_uint (progress, "fetched"),
-                               ostree_async_progress_get_uint (progress, "requested")));
+  g_autoptr (GVariant) arg_content = g_variant_ref_sink (
+      g_variant_new ("(uu)", ostree_async_progress_get_uint (progress, "fetched"),
+                     ostree_async_progress_get_uint (progress, "requested")));
 
-  g_autoptr(GVariant) arg_transfer = g_variant_ref_sink (g_variant_new ("(tt)",
-                                bytes_transferred,
-                                bytes_sec));
+  g_autoptr (GVariant) arg_transfer
+      = g_variant_ref_sink (g_variant_new ("(tt)", bytes_transferred, bytes_sec));
 
   if (emit_journal)
     {
-      g_autoptr(GVariant) progress = g_variant_ref_sink (g_variant_new ("(@(tt)@(uu)@(uuu)@(uuut)@(uu)@(tt))", 
-        arg_time, arg_outstanding, arg_metadata, arg_delta, arg_content, arg_transfer));
-      auto msg = rpmostreecxx::client_render_download_progress(*progress);
-      g_print ("%s\n", msg.c_str());
+      g_autoptr (GVariant) progress = g_variant_ref_sink (
+          g_variant_new ("(@(tt)@(uu)@(uuu)@(uuut)@(uu)@(tt))", arg_time, arg_outstanding,
+                         arg_metadata, arg_delta, arg_content, arg_transfer));
+      auto msg = rpmostreecxx::client_render_download_progress (*progress);
+      g_print ("%s\n", msg.c_str ());
     }
 
   /* This sinks the floating GVariant refs (I think...). */
-  rpmostree_transaction_emit_download_progress (transaction,
-                                                arg_time,
-                                                arg_outstanding,
-                                                arg_metadata,
-                                                arg_delta,
-                                                arg_content,
-                                                arg_transfer);
+  rpmostree_transaction_emit_download_progress (transaction, arg_time, arg_outstanding,
+                                                arg_metadata, arg_delta, arg_content, arg_transfer);
 }
 
 static void
-transaction_gpg_verify_result_cb (OstreeRepo *repo,
-                                  const char *checksum,
-                                  OstreeGpgVerifyResult *result,
-                                  RPMOSTreeTransaction *transaction)
+transaction_gpg_verify_result_cb (OstreeRepo *repo, const char *checksum,
+                                  OstreeGpgVerifyResult *result, RPMOSTreeTransaction *transaction)
 {
   guint n, i;
   GVariantBuilder builder;
@@ -316,19 +304,15 @@ transaction_gpg_verify_result_cb (OstreeRepo *repo,
 
   for (i = 0; i < n; i++)
     {
-      g_variant_builder_add (&builder, "v",
-      ostree_gpg_verify_result_get_all (result, i));
+      g_variant_builder_add (&builder, "v", ostree_gpg_verify_result_get_all (result, i));
     }
 
-  rpmostree_transaction_emit_signature_progress (transaction,
-                                                 g_variant_builder_end (&builder),
+  rpmostree_transaction_emit_signature_progress (transaction, g_variant_builder_end (&builder),
                                                  g_strdup (checksum));
 }
 
 static void
-transaction_execute_thread (GTask *task,
-                            gpointer source_object,
-                            gpointer task_data,
+transaction_execute_thread (GTask *task, gpointer source_object, gpointer task_data,
                             GCancellable *cancellable)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (source_object);
@@ -336,7 +320,7 @@ transaction_execute_thread (GTask *task,
   RpmostreedTransactionClass *clazz = RPMOSTREED_TRANSACTION_GET_CLASS (self);
   gboolean success = TRUE;
   GError *local_error = NULL;
-  g_autoptr(GMainContext) mctx = g_main_context_new ();
+  g_autoptr (GMainContext) mctx = g_main_context_new ();
 
   /* libostree iterates and calls quit on main loop
    * so we need to run in our own context.  Having a different
@@ -345,15 +329,18 @@ transaction_execute_thread (GTask *task,
    */
   g_main_context_push_thread_default (mctx);
   // Further, we join the main Tokio async runtime.
-  auto guard = (*priv->tokio_handle)->enter();
+  auto guard = (*priv->tokio_handle)->enter ();
 
   if (clazz->execute != NULL)
     {
-      try {
-        success = clazz->execute (self, cancellable, &local_error);
-      } catch (std::exception& e) {
-        success = glnx_throw (&local_error, "%s", e.what());
-      }
+      try
+        {
+          success = clazz->execute (self, cancellable, &local_error);
+        }
+      catch (std::exception &e)
+        {
+          success = glnx_throw (&local_error, "%s", e.what ());
+        }
     }
 
   if (local_error != NULL)
@@ -380,9 +367,7 @@ transaction_execute_thread (GTask *task,
 }
 
 static void
-transaction_execute_done_cb (GObject *source_object,
-                             GAsyncResult *result,
-                             gpointer user_data)
+transaction_execute_done_cb (GObject *source_object, GAsyncResult *result, gpointer user_data)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (source_object);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
@@ -400,8 +385,7 @@ transaction_execute_done_cb (GObject *source_object,
     }
 
   /* Sanity check */
-  g_warn_if_fail ((success && local_error == NULL) ||
-                  (!success && local_error != NULL));
+  g_warn_if_fail ((success && local_error == NULL) || (!success && local_error != NULL));
 
   if (local_error != NULL)
     error_message = local_error->message;
@@ -409,14 +393,10 @@ transaction_execute_done_cb (GObject *source_object,
   if (error_message == NULL)
     error_message = "";
 
-  g_debug ("%s (%p): Finished%s%s%s",
-           G_OBJECT_TYPE_NAME (self), self,
-           success ? "" : " (error: ",
-           success ? "" : error_message,
-           success ? "" : ")");
+  g_debug ("%s (%p): Finished%s%s%s", G_OBJECT_TYPE_NAME (self), self,
+           success ? "" : " (error: ", success ? "" : error_message, success ? "" : ")");
 
-  rpmostree_transaction_emit_finished (RPMOSTREE_TRANSACTION (self),
-                                       success, error_message);
+  rpmostree_transaction_emit_finished (RPMOSTREE_TRANSACTION (self), success, error_message);
 
   /* Stash the Finished signal parameters in case we need
    * to emit the signal again on subsequent new connections. */
@@ -431,9 +411,7 @@ transaction_execute_done_cb (GObject *source_object,
 }
 
 static void
-transaction_set_property (GObject *object,
-                          guint property_id,
-                          const GValue *value,
+transaction_set_property (GObject *object, guint property_id, const GValue *value,
                           GParamSpec *pspec)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (object);
@@ -441,47 +419,44 @@ transaction_set_property (GObject *object,
 
   switch (property_id)
     {
-      case PROP_INVOCATION:
-        priv->invocation = static_cast<GDBusMethodInvocation*>(g_value_dup_object (value));
-        break;
-      case PROP_SYSROOT_PATH:
-        priv->sysroot_path = g_value_dup_string (value);
-        break;
-      case PROP_REDIRECT_OUTPUT:
-        priv->redirect_output = g_value_get_boolean (value);
-        break;
-      default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-        break;
+    case PROP_INVOCATION:
+      priv->invocation = static_cast<GDBusMethodInvocation *> (g_value_dup_object (value));
+      break;
+    case PROP_SYSROOT_PATH:
+      priv->sysroot_path = g_value_dup_string (value);
+      break;
+    case PROP_REDIRECT_OUTPUT:
+      priv->redirect_output = g_value_get_boolean (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+      break;
     }
 }
 
 static void
-transaction_get_property (GObject *object,
-                          guint property_id,
-                          GValue *value,
-                          GParamSpec *pspec)
+transaction_get_property (GObject *object, guint property_id, GValue *value, GParamSpec *pspec)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (object);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   switch (property_id)
     {
-      case PROP_INVOCATION:
-        g_value_set_object (value, priv->invocation);
-        break;
-      case PROP_SYSROOT_PATH:
-        g_value_set_string (value, priv->sysroot_path);
-        break;
-      case PROP_REDIRECT_OUTPUT:
-        g_value_set_boolean (value, priv->redirect_output);
-        break;
-      case PROP_EXECUTED:
-        g_value_set_boolean (value, priv->executed);
-        break;
-      default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-        break;
+    case PROP_INVOCATION:
+      g_value_set_object (value, priv->invocation);
+      break;
+    case PROP_SYSROOT_PATH:
+      g_value_set_string (value, priv->sysroot_path);
+      break;
+    case PROP_REDIRECT_OUTPUT:
+      g_value_set_boolean (value, priv->redirect_output);
+      break;
+    case PROP_EXECUTED:
+      g_value_set_boolean (value, priv->executed);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+      break;
     }
 }
 
@@ -499,7 +474,7 @@ transaction_dispose (GObject *object)
   g_clear_object (&priv->server);
   g_clear_pointer (&priv->sysroot_path, g_free);
 
-  g_clear_pointer (&priv->finished_params, (GDestroyNotify) g_variant_unref);
+  g_clear_pointer (&priv->finished_params, (GDestroyNotify)g_variant_unref);
 
   G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->dispose (object);
 }
@@ -511,13 +486,13 @@ transaction_finalize (GObject *object)
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   g_debug ("%s (%p): Finalized", G_OBJECT_TYPE_NAME (self), self);
-  
+
   unlock_sysroot (self);
 
   if (priv->watch_id > 0)
     g_bus_unwatch_name (priv->watch_id);
 
-  priv->tokio_handle.~optional();
+  priv->tokio_handle.~optional ();
 
   g_hash_table_destroy (priv->peer_connections);
 
@@ -548,27 +523,23 @@ transaction_constructed (GObject *object)
        * This guards against a process initiating a transaction but then
        * terminating before calling Start().  If the bus name vanishes
        * during this time, we abort the transaction. */
-      priv->watch_id = g_bus_watch_name_on_connection (connection,
-                                                       sender,
-                                                       G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                                       NULL,
-                                                       transaction_owner_vanished_cb,
-                                                       self,
-                                                       NULL);
+      priv->watch_id
+          = g_bus_watch_name_on_connection (connection, sender, G_BUS_NAME_WATCHER_FLAGS_NONE, NULL,
+                                            transaction_owner_vanished_cb, self, NULL);
 
-      priv->client_description = rpmostreed_daemon_client_get_string (rpmostreed_daemon_get(), sender);
-      priv->agent_id = rpmostreed_daemon_client_get_agent_id (rpmostreed_daemon_get(), sender);
-      priv->sd_unit = rpmostreed_daemon_client_get_sd_unit (rpmostreed_daemon_get(), sender);
-      rpmostree_transaction_set_initiating_client_description ((RPMOSTreeTransaction*)self, priv->client_description);
+      priv->client_description
+          = rpmostreed_daemon_client_get_string (rpmostreed_daemon_get (), sender);
+      priv->agent_id = rpmostreed_daemon_client_get_agent_id (rpmostreed_daemon_get (), sender);
+      priv->sd_unit = rpmostreed_daemon_client_get_sd_unit (rpmostreed_daemon_get (), sender);
+      rpmostree_transaction_set_initiating_client_description ((RPMOSTreeTransaction *)self,
+                                                               priv->client_description);
     }
 }
 
 static gboolean
-foreach_close_peer (gpointer key,
-                    gpointer value,
-                    gpointer user_data)
+foreach_close_peer (gpointer key, gpointer value, gpointer user_data)
 {
-  auto conn = static_cast<GDBusConnection *>(key);
+  auto conn = static_cast<GDBusConnection *> (key);
   g_dbus_connection_close_sync (conn, NULL, NULL);
   return TRUE;
 }
@@ -583,46 +554,36 @@ rpmostreed_transaction_force_close (RpmostreedTransaction *transaction)
 }
 
 static void
-on_sysroot_journal_msg (OstreeSysroot *sysroot,
-                        const char    *msg,
-                        void          *opaque)
+on_sysroot_journal_msg (OstreeSysroot *sysroot, const char *msg, void *opaque)
 {
   rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (opaque), msg);
 }
 
-
 static gboolean
-transaction_initable_init (GInitable *initable,
-                           GCancellable *cancellable,
-                           GError **error)
+transaction_initable_init (GInitable *initable, GCancellable *cancellable, GError **error)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (initable);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   if (G_IS_CANCELLABLE (cancellable))
-    priv->cancellable = (GCancellable*)g_object_ref (cancellable);
+    priv->cancellable = (GCancellable *)g_object_ref (cancellable);
 
   /* Set up a private D-Bus server over which to emit
    * progress and informational messages to the caller. */
 
   g_autofree char *guid = g_dbus_generate_guid ();
-  priv->server = g_dbus_server_new_sync ("unix:tmpdir=/tmp/rpm-ostree",
-                                         G_DBUS_SERVER_FLAGS_NONE,
-                                         guid,
-                                         NULL,
-                                         cancellable,
-                                         error);
+  priv->server = g_dbus_server_new_sync ("unix:tmpdir=/tmp/rpm-ostree", G_DBUS_SERVER_FLAGS_NONE,
+                                         guid, NULL, cancellable, error);
   if (priv->server == NULL)
     return FALSE;
 
-  g_signal_connect_object (priv->server,
-                           "new-connection",
-                           G_CALLBACK (transaction_new_connection_cb),
-                           self, static_cast<GConnectFlags>(0));
+  g_signal_connect_object (priv->server, "new-connection",
+                           G_CALLBACK (transaction_new_connection_cb), self,
+                           static_cast<GConnectFlags> (0));
 
   if (priv->sysroot_path != NULL)
     {
-      g_autoptr(GFile) tmp_path = g_file_new_for_path (priv->sysroot_path);
+      g_autoptr (GFile) tmp_path = g_file_new_for_path (priv->sysroot_path);
       gboolean lock_acquired = FALSE;
 
       /* We create a *new* sysroot to avoid threading issues like data
@@ -635,12 +596,11 @@ transaction_initable_init (GInitable *initable,
       if (!ostree_sysroot_initialize (priv->sysroot, error))
         return FALSE;
       /* We use MountFlags=slave in the unit file, which combined
-      * with this ensures we support read-only /sysroot mounts.
-      * https://github.com/ostreedev/ostree/issues/1265
-      **/
+       * with this ensures we support read-only /sysroot mounts.
+       * https://github.com/ostreedev/ostree/issues/1265
+       **/
       ostree_sysroot_set_mount_namespace_in_use (priv->sysroot);
-      g_signal_connect (priv->sysroot, "journal-msg",
-                        G_CALLBACK (on_sysroot_journal_msg), self);
+      g_signal_connect (priv->sysroot, "journal-msg", G_CALLBACK (on_sysroot_journal_msg), self);
 
       if (!ostree_sysroot_load (priv->sysroot, cancellable, error))
         return FALSE;
@@ -661,16 +621,14 @@ transaction_initable_init (GInitable *initable,
 
   g_dbus_server_start (priv->server);
 
-  g_debug ("%s (%p): Initialized, listening on %s",
-           G_OBJECT_TYPE_NAME (self), self,
+  g_debug ("%s (%p): Initialized, listening on %s", G_OBJECT_TYPE_NAME (self), self,
            rpmostreed_transaction_get_client_address (self));
 
   return TRUE;
 }
 
 static gboolean
-transaction_handle_cancel (RPMOSTreeTransaction *transaction,
-                           GDBusMethodInvocation *invocation)
+transaction_handle_cancel (RPMOSTreeTransaction *transaction, GDBusMethodInvocation *invocation)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
@@ -685,8 +643,7 @@ transaction_handle_cancel (RPMOSTreeTransaction *transaction,
 }
 
 static gboolean
-transaction_handle_start (RPMOSTreeTransaction *transaction,
-                          GDBusMethodInvocation *invocation)
+transaction_handle_start (RPMOSTreeTransaction *transaction, GDBusMethodInvocation *invocation)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
@@ -704,10 +661,7 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
       g_bus_unwatch_name (priv->watch_id);
       priv->watch_id = 0;
 
-      GTask *task = g_task_new (transaction,
-                         priv->cancellable,
-                         transaction_execute_done_cb,
-                         NULL);
+      GTask *task = g_task_new (transaction, priv->cancellable, transaction_execute_done_cb, NULL);
       /* Some of the async ops in rpmostree-core.c will cancel,
        * but we want the first error to take precedence.
        */
@@ -727,13 +681,8 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
       const char *interface_name = g_dbus_method_invocation_get_interface_name (invocation);
 
       GError *local_error = NULL;
-      g_dbus_connection_emit_signal (connection,
-                                     NULL,
-                                     object_path,
-                                     interface_name,
-                                     "Finished",
-                                     priv->finished_params,
-                                     &local_error);
+      g_dbus_connection_emit_signal (connection, NULL, object_path, interface_name, "Finished",
+                                     priv->finished_params, &local_error);
 
       if (local_error != NULL)
         {
@@ -759,50 +708,33 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *clazz)
   object_class->finalize = transaction_finalize;
   object_class->constructed = transaction_constructed;
 
-  g_object_class_install_property (object_class,
-                                   PROP_EXECUTED,
-                                   g_param_spec_boolean ("executed",
-                                                         "Executed",
-                                                         "Whether the transaction has finished",
-                                                         FALSE,
-                                                         static_cast<GParamFlags>(G_PARAM_READABLE |
-                                                         G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property (
+      object_class, PROP_EXECUTED,
+      g_param_spec_boolean ("executed", "Executed", "Whether the transaction has finished", FALSE,
+                            static_cast<GParamFlags> (G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
 
-  g_object_class_install_property (object_class,
-                                   PROP_INVOCATION,
-                                   g_param_spec_object ("invocation",
-                                                        "Invocation",
-                                                        "D-Bus method invocation",
-                                                        G_TYPE_DBUS_METHOD_INVOCATION,
-                                                        static_cast<GParamFlags>(G_PARAM_READWRITE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property (
+      object_class, PROP_INVOCATION,
+      g_param_spec_object ("invocation", "Invocation", "D-Bus method invocation",
+                           G_TYPE_DBUS_METHOD_INVOCATION,
+                           static_cast<GParamFlags> (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY
+                                                     | G_PARAM_STATIC_STRINGS)));
 
-  g_object_class_install_property (object_class,
-                                   PROP_SYSROOT_PATH,
-                                   g_param_spec_string ("sysroot-path",
-                                                        "Sysroot path",
-                                                        "An OstreeSysroot path",
-                                                        "",
-                                                        static_cast<GParamFlags>(G_PARAM_READWRITE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property (
+      object_class, PROP_SYSROOT_PATH,
+      g_param_spec_string ("sysroot-path", "Sysroot path", "An OstreeSysroot path", "",
+                           static_cast<GParamFlags> (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY
+                                                     | G_PARAM_STATIC_STRINGS)));
 
-  g_object_class_install_property (object_class,
-                                   PROP_REDIRECT_OUTPUT,
-                                   g_param_spec_boolean ("output-to-self",
-                                                         "Output to self",
-                                                         "Whether to redirect output to daemon itself",
-                                                         FALSE,
-                                                         static_cast<GParamFlags>(G_PARAM_READWRITE |
-                                                         G_PARAM_CONSTRUCT_ONLY |
-                                                         G_PARAM_STATIC_STRINGS)));
+  g_object_class_install_property (
+      object_class, PROP_REDIRECT_OUTPUT,
+      g_param_spec_boolean ("output-to-self", "Output to self",
+                            "Whether to redirect output to daemon itself", FALSE,
+                            static_cast<GParamFlags> (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY
+                                                      | G_PARAM_STATIC_STRINGS)));
 
-  signals[CLOSED] = g_signal_new ("closed",
-                                  RPMOSTREED_TYPE_TRANSACTION,
-                                  G_SIGNAL_RUN_LAST,
-                                  0, NULL, NULL, NULL,
-                                  G_TYPE_NONE, 0);
+  signals[CLOSED] = g_signal_new ("closed", RPMOSTREED_TYPE_TRANSACTION, G_SIGNAL_RUN_LAST, 0, NULL,
+                                  NULL, NULL, G_TYPE_NONE, 0);
 }
 
 static void
@@ -815,23 +747,20 @@ static void
 rpmostreed_transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface)
 {
   iface->handle_cancel = transaction_handle_cancel;
-  iface->handle_start  = transaction_handle_start;
+  iface->handle_start = transaction_handle_start;
 }
 
 static void
 rpmostreed_transaction_init (RpmostreedTransaction *self)
 {
   g_assert (!rpmostreed_sysroot_has_txn (rpmostreed_sysroot_get ()));
-  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-                                            RPMOSTREED_TYPE_TRANSACTION,
+  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, RPMOSTREED_TYPE_TRANSACTION,
                                             RpmostreedTransactionPrivate);
 
-  self->priv->peer_connections = g_hash_table_new_full (g_direct_hash,
-                                                        g_direct_equal,
-                                                        g_object_unref,
-                                                        NULL);
+  self->priv->peer_connections
+      = g_hash_table_new_full (g_direct_hash, g_direct_equal, g_object_unref, NULL);
 
-  self->priv->tokio_handle = rpmostreecxx::tokio_handle_get();
+  self->priv->tokio_handle = rpmostreecxx::tokio_handle_get ();
 }
 
 gboolean
@@ -912,8 +841,7 @@ rpmostreed_transaction_is_compatible (RpmostreedTransaction *transaction,
 
   GVariant *parameters_a = g_dbus_method_invocation_get_parameters (priv->invocation);
   GVariant *parameters_b = g_dbus_method_invocation_get_parameters (invocation);
-  return g_str_equal (method_name_a, method_name_b) &&
-         g_variant_equal (parameters_a, parameters_b);
+  return g_str_equal (method_name_a, method_name_b) && g_variant_equal (parameters_a, parameters_b);
 }
 
 void
@@ -923,10 +851,8 @@ rpmostreed_transaction_connect_download_progress (RpmostreedTransaction *transac
   g_return_if_fail (RPMOSTREED_IS_TRANSACTION (transaction));
   g_return_if_fail (OSTREE_IS_ASYNC_PROGRESS (progress));
 
-  g_signal_connect_object (progress,
-                           "changed",
-                           G_CALLBACK (transaction_progress_changed_cb),
-                           transaction, static_cast<GConnectFlags>(0));
+  g_signal_connect_object (progress, "changed", G_CALLBACK (transaction_progress_changed_cb),
+                           transaction, static_cast<GConnectFlags> (0));
 }
 
 void
@@ -936,7 +862,6 @@ rpmostreed_transaction_connect_signature_progress (RpmostreedTransaction *transa
   g_return_if_fail (RPMOSTREED_IS_TRANSACTION (transaction));
   g_return_if_fail (OSTREE_REPO (repo));
 
-  g_signal_connect_object (repo, "gpg-verify-result",
-                           G_CALLBACK (transaction_gpg_verify_result_cb),
-                           transaction, static_cast<GConnectFlags>(0));
+  g_signal_connect_object (repo, "gpg-verify-result", G_CALLBACK (transaction_gpg_verify_result_cb),
+                           transaction, static_cast<GConnectFlags> (0));
 }
