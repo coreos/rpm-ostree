@@ -57,6 +57,8 @@ j = json.load(open(checksum_file))
 j["files"] = {f:c for f, c in j["files"].items() if not f.startswith(subdir)}
 open(checksum_file, "w").write(json.dumps(j))' $crate_subdir
  done
+ # Remove unneeded Windows binaries
+ rm -rf vendor/winapi*gnu*/lib/*.a
  tar --owner=0 --group=0 --transform="s,^,${PKG_VER}/," -rf ${TARFILE_TMP} * .cargo/
  )
 
