@@ -14,18 +14,7 @@ rm tabdamage.txt
 echo "ok"
 
 echo -n "checking clang-format... "
-rm -f clang-unformatted.txt
-git ls-files 'src/**.c' 'src/**.cxx' 'src/**.h' 'src/**.hpp' | while read f; do
-    if ! clang-format --Werror --ferror-limit=1 --dry-run "$f" > /dev/null 2>&1; then
-        echo "$f" >> clang-unformatted.txt
-    fi
-done
-if test -s clang-unformatted.txt; then
-    echo "Error: clang-format needed on these files:" 1>&2
-    cat clang-unformatted.txt 1>&2
-    exit 1
-fi
-rm -f clang-unformatted.txt
+git ls-files '**.c' '**.cxx' '**.h' '**.hpp' | xargs clang-format --Werror --dry-run
 echo "ok"
 
 echo -n "checking rustfmt... "
