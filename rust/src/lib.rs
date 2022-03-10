@@ -266,6 +266,11 @@ pub mod ffi {
             mut deployment: Pin<&mut OstreeDeployment>,
             mut dict: Pin<&mut GVariantDict>,
         ) -> Result<()>;
+        fn generate_baselayer_refs(
+            mut sysroot: Pin<&mut OstreeSysroot>,
+            mut repo: Pin<&mut OstreeRepo>,
+            cancellable: Pin<&mut GCancellable>,
+        ) -> Result<()>;
         fn variant_add_remote_status(
             mut repo: Pin<&mut OstreeRepo>,
             refspec: &str,
