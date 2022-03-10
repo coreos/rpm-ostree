@@ -718,12 +718,9 @@ write_dfd_thread (gpointer datap)
 {
   auto data = static_cast<struct CommitThreadData *> (datap);
 
-  if (!ostree_repo_write_dfd_to_mtree (data->repo, data->rootfs_fd, ".", data->mtree,
-                                       data->commit_modifier, data->cancellable, data->error))
-    goto out;
-
-  data->success = TRUE;
-out:
+  data->success
+      = ostree_repo_write_dfd_to_mtree (data->repo, data->rootfs_fd, ".", data->mtree,
+                                        data->commit_modifier, data->cancellable, data->error);
   g_atomic_int_inc (&data->done);
   g_main_context_wakeup (NULL);
   return NULL;
