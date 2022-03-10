@@ -232,7 +232,6 @@ rpmostreed_repo_pull_ancestry (OstreeRepo *repo, const char *refspec,
   g_autofree char *ref = NULL;
   g_autofree char *checksum = NULL;
   int depth, ii;
-  gboolean ret = FALSE;
 
   /* Only fetch the HEAD on the first pass. See also:
    * https://github.com/projectatomic/rpm-ostree/pull/557 */
@@ -242,7 +241,7 @@ rpmostreed_repo_pull_ancestry (OstreeRepo *repo, const char *refspec,
   g_assert (refspec != NULL);
 
   if (!ostree_parse_refspec (refspec, &remote, &ref, error))
-    goto out;
+    return FALSE;
 
   /* If no visitor function was provided then we won't be short-circuiting
    * the recursion, so pull everything in one shot. Otherwise pull commits
@@ -272,7 +271,7 @@ rpmostreed_repo_pull_ancestry (OstreeRepo *repo, const char *refspec,
 
           if (!ostree_repo_pull_with_options (repo, remote, g_variant_dict_end (&options), progress,
                                               cancellable, error))
-            goto out;
+            return FALSE;
 
           if (progress)
             ostree_async_progress_finish (progress);
@@ -282,7 +281,7 @@ rpmostreed_repo_pull_ancestry (OstreeRepo *repo, const char *refspec,
       if (checksum == NULL)
         {
           if (!ostree_repo_resolve_rev (repo, refspec, FALSE, &checksum, error))
-            goto out;
+            return FALSE;
         }
 
       if (visitor != NULL)
@@ -293,10 +292,10 @@ rpmostreed_repo_pull_ancestry (OstreeRepo *repo, const char *refspec,
               gboolean stop = FALSE;
 
               if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
-                goto out;
+                return FALSE;
 
               if (!visitor (repo, checksum, commit, visitor_data, &stop, error))
-                goto out;
+                return FALSE;
 
               g_clear_pointer (&checksum, g_free);
 
@@ -317,10 +316,7 @@ rpmostreed_repo_pull_ancestry (OstreeRepo *repo, const char *refspec,
       first_pass = FALSE;
     }
 
-  ret = TRUE;
-
-out:
-  return ret;
+  return TRUE;
 }
 
 typedef struct
