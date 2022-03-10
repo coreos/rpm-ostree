@@ -108,6 +108,15 @@ more recently gained `--copyup` support which acts
 in a similar fashion to the in-kernel `overlayfs`.
 (See also https://github.com/ostreedev/ostree/issues/2281)
 
+Scripts can mutate content in `/etc` and `/usr`, but this should
+generally be restricted to updating "cache files".  Example of this
+are `ldconfig` and `gtk-update-icon-cache`.
+
+Scripts see a minimal, read-only view of `/var`.  It is explicitly
+not writable.  This helps ensure offline updates are possible; a
+package script running client side cannot affect persistent system
+state.
+
 ### Kernel handling
 
 ostree is entirely oriented around bootable filesystem trees;
