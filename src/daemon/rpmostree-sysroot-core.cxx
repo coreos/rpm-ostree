@@ -47,59 +47,6 @@
  * such as cleanup.
  */
 
-/* For each deployment, if they are layered deployments, then create a ref
- * pointing to their bases. This is mostly to work around ostree's auto-ref
- * cleanup. Otherwise we might get into a situation where after the origin ref
- * is updated, we lose our parent, which means that users can no longer
- * add/delete packages on that deployment. (They can always just re-pull it, but
- * let's try to be nice).
- **/
-static gboolean
-generate_baselayer_refs (OstreeSysroot *sysroot, OstreeRepo *repo, GCancellable *cancellable,
-                         GError **error)
-{
-  GLNX_AUTO_PREFIX_ERROR ("baselayer refs", error);
-  g_autoptr (GHashTable) refs = NULL;
-  if (!ostree_repo_list_refs_ext (repo, "rpmostree/base", &refs, OSTREE_REPO_LIST_REFS_EXT_NONE,
-                                  cancellable, error))
-    return FALSE;
-
-  /* delete all the refs */
-  GLNX_HASH_TABLE_FOREACH (refs, const char *, ref)
-  ostree_repo_transaction_set_refspec (repo, ref, NULL);
-
-  g_autoptr (GHashTable) bases = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  /* collect the csums */
-  {
-    guint i = 0;
-    g_autoptr (GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
-
-    /* existing deployments */
-    for (; i < deployments->len; i++)
-      {
-        auto deployment = static_cast<OstreeDeployment *> (deployments->pdata[i]);
-        g_autofree char *base_rev = NULL;
-        if (!rpmostree_deployment_get_base_layer (repo, deployment, &base_rev, error))
-          return FALSE;
-
-        if (base_rev)
-          g_hash_table_add (bases, util::move_nullify (base_rev));
-      }
-  }
-
-  /* create the new refs */
-  {
-    guint i = 0;
-    GLNX_HASH_TABLE_FOREACH (bases, const char *, base)
-    {
-      g_autofree char *ref = g_strdup_printf ("rpmostree/base/%u", i++);
-      ostree_repo_transaction_set_refspec (repo, ref, base);
-    }
-  }
-
-  return TRUE;
-}
-
 /* For all packages in the sack, generate a cached refspec and add it
  * to @referenced_pkgs. This is necessary to implement garbage
  * collection of layered package refs.
@@ -220,8 +167,7 @@ syscore_regenerate_refs (OstreeSysroot *sysroot, OstreeRepo *repo, guint *out_n_
 
   /* regenerate the baselayer refs in case we just kicked out an ancient layered
    * deployment whose base layer is not needed anymore */
-  if (!generate_baselayer_refs (sysroot, repo, cancellable, error))
-    return FALSE;
+  CXX_TRY (generate_baselayer_refs (*sysroot, *repo, *cancellable), error);
 
   /* And the pkgcache refs */
   if (!generate_pkgcache_refs (sysroot, repo, out_n_pkgcache_freed, cancellable, error))

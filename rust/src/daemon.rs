@@ -201,12 +201,21 @@ pub(crate) fn deployment_populate_variant(
 }
 
 /// Load basic layering metadata about a deployment commit.
-pub(crate) fn deployment_layeredmeta_from_commit(
+pub fn deployment_layeredmeta_from_commit(
     mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
     mut commit: Pin<&mut crate::FFIGVariant>,
 ) -> CxxResult<crate::ffi::DeploymentLayeredMeta> {
     let deployment = deployment.gobj_wrap();
     let commit = &commit.gobj_wrap();
+    let layered_meta = deployment_layeredmeta_from_commit_impl(&deployment, commit)?;
+    Ok(layered_meta)
+}
+
+/// Load basic layering metadata about a deployment commit.
+fn deployment_layeredmeta_from_commit_impl(
+    deployment: &ostree::Deployment,
+    commit: &glib::Variant,
+) -> Result<crate::ffi::DeploymentLayeredMeta> {
     let metadata = &commit.child_value(0);
     let dict = &glib::VariantDict::new(Some(metadata));
 
@@ -218,9 +227,11 @@ pub(crate) fn deployment_layeredmeta_from_commit(
         .map_err(anyhow::Error::msg)?
         .unwrap_or_else(|| dict.contains("rpmostree.spec"));
     if !is_layered {
+        // SAFETY: return value is "not nullable".
+        let checksum = deployment.csum().unwrap();
         Ok(crate::ffi::DeploymentLayeredMeta {
             is_layered,
-            base_commit: deployment.csum().unwrap().into(),
+            base_commit: checksum.into(),
             clientlayer_version: 0,
         })
     } else {
@@ -240,18 +251,25 @@ pub(crate) fn deployment_layeredmeta_from_commit(
     }
 }
 
-/// Load basic layering metadata about a deployment
-pub(crate) fn deployment_layeredmeta_load(
+pub fn deployment_layeredmeta_load(
     mut repo: Pin<&mut crate::FFIOstreeRepo>,
     mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
 ) -> CxxResult<crate::ffi::DeploymentLayeredMeta> {
     let repo = repo.gobj_wrap();
     let deployment = deployment.gobj_wrap();
-    let commit = &repo.load_variant(
-        ostree::ObjectType::Commit,
-        deployment.csum().unwrap().as_str(),
-    )?;
-    deployment_layeredmeta_from_commit(deployment.gobj_rewrap(), commit.gobj_rewrap())
+    let layered_meta = deployment_layeredmeta_load_commit(&repo, &deployment)?;
+    Ok(layered_meta)
+}
+
+/// Load basic layering metadata about a deployment.
+pub(crate) fn deployment_layeredmeta_load_commit(
+    repo: &ostree::Repo,
+    deployment: &ostree::Deployment,
+) -> Result<crate::ffi::DeploymentLayeredMeta> {
+    // SAFETY: return value is "not nullable".
+    let checksum = deployment.csum().unwrap();
+    let commit = &repo.load_variant(ostree::ObjectType::Commit, &checksum)?;
+    deployment_layeredmeta_from_commit_impl(&deployment, &commit)
 }
 
 #[context("Loading origin status")]
@@ -418,6 +436,58 @@ pub fn parse_revision(revision: &str) -> CxxResult<ParsedRevision> {
         kind: ParsedRevisionKind::Version,
         value: revision.to_string(),
     })
+}
+
+/// Generate refs for baselayer.
+///
+/// For each deployment, if they are layered deployments, then create a ref
+/// pointing to their bases. This is mostly to work around ostree's auto-ref
+/// cleanup. Otherwise we might get into a situation where after the origin ref
+/// is updated, we lose our parent, which means that users can no longer
+/// add/delete packages on that deployment. (They can always just re-pull it, but
+/// let's try to be nice).
+#[context("Generating baselayer refs")]
+pub fn generate_baselayer_refs(
+    mut ffi_sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+    mut ffi_repo: Pin<&mut crate::ffi::OstreeRepo>,
+    mut ffi_cancellable: Pin<&mut crate::FFIGCancellable>,
+) -> CxxResult<()> {
+    let sysroot = &ffi_sysroot.gobj_wrap();
+    let repo = ffi_repo.gobj_wrap();
+    let cancellable = &ffi_cancellable.gobj_wrap();
+
+    // Delete all the refs.
+    {
+        let refs = repo.list_refs_ext(
+            Some("rpmostree/base"),
+            ostree::RepoListRefsExtFlags::NONE,
+            Some(cancellable),
+        )?;
+
+        for ref_entry in refs.keys() {
+            repo.transaction_set_refspec(ref_entry, None);
+        }
+    }
+
+    // Collect the checksums.
+    let mut bases = vec![];
+    {
+        // Existing deployments.
+        for deployment in sysroot.deployments() {
+            let layered_meta = deployment_layeredmeta_load_commit(&repo, &deployment)?;
+            if layered_meta.is_layered {
+                bases.push(layered_meta.base_commit);
+            }
+        }
+    }
+
+    // Create the new refs.
+    for (index, base_rev) in bases.into_iter().enumerate() {
+        let ref_name = format!("rpmostree/base/{}", index);
+        repo.transaction_set_refspec(&ref_name, Some(&base_rev));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
