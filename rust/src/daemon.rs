@@ -457,32 +457,25 @@ pub fn generate_baselayer_refs(
     let cancellable = &ffi_cancellable.gobj_wrap();
 
     // Delete all the refs.
-    {
-        let refs = repo.list_refs_ext(
+    for ref_entry in repo
+        .list_refs_ext(
             Some("rpmostree/base"),
             ostree::RepoListRefsExtFlags::NONE,
             Some(cancellable),
-        )?;
-
-        for ref_entry in refs.keys() {
-            repo.transaction_set_refspec(ref_entry, None);
-        }
-    }
-
-    // Collect the checksums.
-    let mut bases = vec![];
+        )?
+        .keys()
     {
-        // Existing deployments.
-        for deployment in sysroot.deployments() {
-            let layered_meta = deployment_layeredmeta_load_commit(&repo, &deployment)?;
-            if layered_meta.is_layered {
-                bases.push(layered_meta.base_commit);
-            }
-        }
+        repo.transaction_set_refspec(ref_entry, None);
     }
 
-    // Create the new refs.
-    for (index, base_rev) in bases.into_iter().enumerate() {
+    // Regenerate the refs from the base commits.
+    let bases = sysroot.deployments().into_iter().filter_map(|deployment| {
+        deployment_layeredmeta_load_commit(&repo, &deployment)
+            .map(|meta| meta.is_layered.then(|| meta.base_commit))
+            .transpose()
+    });
+    for (index, base_rev) in bases.enumerate() {
+        let base_rev = base_rev?;
         let ref_name = format!("rpmostree/base/{}", index);
         repo.transaction_set_refspec(&ref_name, Some(&base_rev));
     }
