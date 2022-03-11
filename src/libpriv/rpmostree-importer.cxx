@@ -128,9 +128,8 @@ gboolean
 rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_offset, rpmfi *out_fi,
                                   GError **error)
 {
-  gboolean ret = FALSE;
   g_auto (rpmts) ts = NULL;
-  FD_t rpmfd;
+  g_auto (FD_t) rpmfd = NULL;
   g_auto (Header) ret_header = NULL;
   g_auto (rpmfi) ret_fi = NULL;
   gsize ret_cpio_offset;
@@ -143,22 +142,13 @@ rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_of
   /* librpm needs Fopenfd */
   rpmfd = Fopen (abspath, "r.fdio");
   if (rpmfd == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Failed to open %s", abspath);
-      goto out;
-    }
+    return glnx_throw (error, "Failed to open %s", abspath);
+
   if (Ferror (rpmfd))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Opening %s: %s", abspath,
-                   Fstrerror (rpmfd));
-      goto out;
-    }
+    return glnx_throw (error, "Opening %s: %s", abspath, Fstrerror (rpmfd));
 
   if (rpmReadPackageFile (ts, rpmfd, abspath, &ret_header) != RPMRC_OK)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Verification of %s failed", abspath);
-      goto out;
-    }
+    return glnx_throw (error, "Verification of %s failed", abspath);
 
   ret_cpio_offset = Ftell (rpmfd);
 
@@ -168,17 +158,13 @@ rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_of
       ret_fi = rpmfiInit (ret_fi, 0);
     }
 
-  ret = TRUE;
   if (out_header)
     *out_header = util::move_nullify (ret_header);
   if (out_fi)
     *out_fi = util::move_nullify (ret_fi);
   if (out_cpio_offset)
     *out_cpio_offset = ret_cpio_offset;
-out:
-  if (rpmfd)
-    (void)Fclose (rpmfd);
-  return ret;
+  return TRUE;
 }
 
 static void

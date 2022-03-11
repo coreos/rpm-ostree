@@ -72,6 +72,7 @@ void rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff);
 /* Define cleanup functions for librpm here. Note that this
  * will break if one day librpm ever decides to define these
  * itself. TODO: Move them to libdnf */
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC (FD_t, Fclose, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC (Header, headerFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC (rpmfi, rpmfiFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC (rpmts, rpmtsFree, NULL)
