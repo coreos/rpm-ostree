@@ -334,8 +334,8 @@ new_variant_diff_result (GVariant *diff, GVariant *details)
  */
 
 static gboolean
-os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
-                                    const char *arg_deployid0, const char *arg_deployid1)
+get_deployments_rpm_diff (const char *arg_deployid0, const char *arg_deployid1,
+                          GVariant **out_value, GError **error)
 {
   g_autoptr (GCancellable) cancellable = NULL;
   RpmostreedSysroot *global_sysroot;
@@ -344,7 +344,6 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
   OstreeSysroot *ot_sysroot = NULL;
   OstreeRepo *ot_repo = NULL;
   g_autoptr (GVariant) value = NULL;
-  GError *local_error = NULL;
   const gchar *ref0;
   const gchar *ref1;
 
@@ -353,36 +352,47 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
   ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
-  if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid0, &deployment0, &local_error))
-    goto out;
+  if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid0, &deployment0, error))
+    return FALSE;
   ref0 = ostree_deployment_get_csum (deployment0);
 
-  if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid1, &deployment1, &local_error))
-    goto out;
+  if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid1, &deployment1, error))
+    return FALSE;
   ref1 = ostree_deployment_get_csum (deployment1);
 
-  if (!rpm_ostree_db_diff_variant (ot_repo, ref0, ref1, FALSE, &value, cancellable, &local_error))
-    goto out;
+  if (!rpm_ostree_db_diff_variant (ot_repo, ref0, ref1, FALSE, &value, cancellable, error))
+    return FALSE;
 
-out:
-  if (local_error != NULL)
+  *out_value = util::move_nullify (value);
+  return TRUE;
+}
+
+static gboolean
+os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
+                                    const char *arg_deployid0, const char *arg_deployid1)
+{
+  GError *local_error = NULL;
+  g_autoptr (GVariant) value = NULL;
+
+  gboolean is_ok = get_deployments_rpm_diff (arg_deployid0, arg_deployid1, &value, &local_error);
+  if (!is_ok)
     {
+      g_assert (local_error != NULL);
       g_dbus_method_invocation_take_error (invocation, local_error);
+      return TRUE; /* 🔚 Early return */
     }
-  else
-    {
-      g_dbus_method_invocation_return_value (invocation, g_variant_new ("(@a(sua{sv}))", value));
-    }
+
+  g_assert (value != NULL);
+  g_dbus_method_invocation_return_value (invocation, g_variant_new ("(@a(sua{sv}))", value));
 
   return TRUE;
 }
 
 static gboolean
-os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
-                                      const char *arg_deployid)
+get_cached_update_rpm_diff (const gchar *name, const char *arg_deployid, GVariant **out_value,
+                            GVariant **out_details, GError **error)
 {
   RpmostreedSysroot *global_sysroot;
-  const gchar *name;
   g_autoptr (RpmOstreeOrigin) origin = NULL;
   OstreeSysroot *ot_sysroot = NULL;
   OstreeRepo *ot_repo = NULL;
@@ -390,54 +400,64 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocat
   GCancellable *cancellable = NULL;
   g_autoptr (GVariant) value = NULL;
   g_autoptr (GVariant) details = NULL;
-  GError *local_error = NULL;
 
   global_sysroot = rpmostreed_sysroot_get ();
 
   ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
-  name = rpmostree_os_get_name (interface);
   if (arg_deployid == NULL || arg_deployid[0] == '\0')
     {
       base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
       if (base_deployment == NULL)
-        {
-          local_error
-              = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED, "No deployments found for os %s", name);
-          goto out;
-        }
+        return glnx_throw (error, "No deployments found for os %s", name);
     }
   else
     {
-      if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid, &base_deployment,
-                                             &local_error))
-        goto out;
+      if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid, &base_deployment, error))
+        return FALSE;
     }
 
-  origin = rpmostree_origin_parse_deployment (base_deployment, &local_error);
+  origin = rpmostree_origin_parse_deployment (base_deployment, error);
   if (!origin)
-    goto out;
+    return FALSE;
 
   if (!rpm_ostree_db_diff_variant (ot_repo, ostree_deployment_get_csum (base_deployment),
                                    rpmostree_origin_get_refspec (origin), FALSE, &value,
-                                   cancellable, &local_error))
-    goto out;
+                                   cancellable, error))
+    return FALSE;
 
   details = rpmostreed_commit_generate_cached_details_variant (
-      base_deployment, ot_repo, rpmostree_origin_get_refspec (origin), NULL, &local_error);
+      base_deployment, ot_repo, rpmostree_origin_get_refspec (origin), NULL, error);
   if (!details)
-    goto out;
+    return FALSE;
 
-out:
-  if (local_error != NULL)
+  *out_value = util::move_nullify (value);
+  *out_details = util::move_nullify (details);
+  return TRUE;
+}
+
+static gboolean
+os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
+                                      const char *arg_deployid)
+{
+  GError *local_error = NULL;
+  g_autoptr (GVariant) value = NULL;
+  g_autoptr (GVariant) details = NULL;
+
+  const gchar *name = rpmostree_os_get_name (interface);
+
+  gboolean is_ok = get_cached_update_rpm_diff (name, arg_deployid, &value, &details, &local_error);
+  if (!is_ok)
     {
+      g_assert (local_error != NULL);
       g_dbus_method_invocation_take_error (invocation, local_error);
+      return TRUE; /* 🔚 Early return */
     }
-  else
-    {
-      g_dbus_method_invocation_return_value (invocation, new_variant_diff_result (value, details));
-    }
+
+  g_assert (value != NULL);
+  g_assert (details != NULL);
+  g_dbus_method_invocation_return_value (invocation, new_variant_diff_result (value, details));
 
   return TRUE;
 }
