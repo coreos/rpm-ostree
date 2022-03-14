@@ -36,7 +36,7 @@ cap-std-ext = "0.24.3"
 cap-tempfile = "0.24.1"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "2.34.0"
-curl = "0.4.42"
+curl = "0.4.43"
 cxx = "1.0.65"
 envsubst = "0.2.0"
 either = "1.6.1"
