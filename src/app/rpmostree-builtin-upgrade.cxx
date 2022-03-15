@@ -200,6 +200,8 @@ rpmostree_builtin_upgrade (int argc, char **argv, RpmOstreeCommandInvocation *in
 
   if (check_or_preview)
     {
+      g_print ("Note: --check and --preview may be unreliable.  See "
+               "https://github.com/coreos/rpm-ostree/issues/1579\n");
       g_autoptr (GVariant) cached_update = NULL;
       if (rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
         cached_update = rpmostree_os_dup_cached_update (os_proxy);
