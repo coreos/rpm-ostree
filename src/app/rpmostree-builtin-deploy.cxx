@@ -124,6 +124,8 @@ rpmostree_builtin_deploy (int argc, char **argv, RpmOstreeCommandInvocation *inv
       if (!rpmostree_os_call_download_deploy_rpm_diff_sync (
               os_proxy, revision, packages, &transaction_address, cancellable, error))
         return FALSE;
+      g_print ("Note: The information output from --preview may be unreliable.  See "
+               "https://github.com/coreos/rpm-ostree/issues/1579\n");
     }
   else
     {

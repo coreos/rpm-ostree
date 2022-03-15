@@ -78,7 +78,9 @@ assert_check_preview_rc() {
   local rc=0
   vm_rpmostree upgrade --check > out.txt || rc=$?
   assert_streq $rc $expected_rc
+  assert_file_has_content out.txt "Note:.*may be unreliable"
   vm_rpmostree upgrade --preview > out-verbose.txt || rc=$?
+  assert_file_has_content out-verbose.txt "Note:.*may be unreliable"
   assert_streq $rc $expected_rc
 }
 
