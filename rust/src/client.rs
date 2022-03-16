@@ -156,10 +156,26 @@ pub(crate) fn client_handle_fd_argument(arg: &str, arch: &str) -> CxxResult<Vec<
 /// Basically we load too much data before claiming the bus name,
 /// and dbus doesn't give us a useful error.  Instead, let's talk
 /// to systemd directly and use its client tools to scrape errors.
+///
+/// What we really should do probably is use native socket activation.
 pub(crate) fn client_start_daemon() -> CxxResult<()> {
     let service = "rpm-ostreed.service";
     // Assume non-root can't use systemd right now.
     if rustix::process::getuid().as_raw() != 0 {
+        return Ok(());
+    }
+    // Unfortunately, RHEL8 systemd will count "systemctl start"
+    // invocations against the restart limit, so query the status
+    // first.
+    let activeres = Command::new("systemctl")
+        .args(&["is-active", "rpm-ostreed"])
+        .output()?;
+    // Explicitly don't check the error return value, we don't want to
+    // hard fail on it.
+    if String::from_utf8_lossy(&activeres.stdout).starts_with("active") {
+        // It's active, we're done.  Note that while this is a race
+        // condition, that's fine because it will be handled by DBus
+        // activation.
         return Ok(());
     }
     let res = Command::new("systemctl")
