@@ -42,22 +42,6 @@ pub(crate) fn daemon_sanitycheck_environment(
     Ok(())
 }
 
-/// Get a currently unique (for this host) identifier for the
-/// deployment; TODO - adding the deployment timestamp would make it
-/// persistently unique, needs API in libostree.
-pub(crate) fn deployment_generate_id(
-    mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
-) -> String {
-    let deployment = deployment.gobj_wrap();
-    // unwrap safety: These can't actually return NULL
-    format!(
-        "{}-{}.{}",
-        deployment.osname().unwrap(),
-        deployment.csum().unwrap(),
-        deployment.deployserial()
-    )
-}
-
 /// Insert values from `v` into the target `dict` with key `k`.
 fn vdict_insert_strv<'a>(dict: &glib::VariantDict, k: &str, v: impl IntoIterator<Item = &'a str>) {
     // TODO: drive this into variant_utils in ostree-rs-ext so we don't need
@@ -150,7 +134,7 @@ pub(crate) fn deployment_populate_variant(
     let deployment = &deployment.gobj_wrap();
     let dict = dict.gobj_wrap();
 
-    let id = deployment_generate_id(deployment.gobj_rewrap());
+    let id = crate::deployment_generate_id_impl(deployment);
     // First, basic values from ostree
     dict.insert("id", &id);
 

@@ -33,25 +33,6 @@
 #include "rpmostreed-errors.h"
 #include "rpmostreed-utils.h"
 
-gboolean
-rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot, const gchar *deploy_id,
-                                  OstreeDeployment **out_deployment, GError **error)
-{
-  g_autoptr (GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
-  for (guint i = 0; i < deployments->len; i++)
-    {
-      auto deployment = static_cast<OstreeDeployment *> (deployments->pdata[i]);
-      auto id = rpmostreecxx::deployment_generate_id (*deployment);
-      if (g_strcmp0 (deploy_id, id.c_str ()) == 0)
-        {
-          *out_deployment = (OstreeDeployment *)g_object_ref (deployment);
-          return TRUE;
-        }
-    }
-
-  return glnx_throw (error, "Deployment with id '%s' not found", deploy_id);
-}
-
 /* rpmostreed_deployment_get_for_index:
  *
  * sysroot: A #OstreeSysroot instance

@@ -27,9 +27,6 @@ G_BEGIN_DECLS
 
 char *rpmostreed_deployment_generate_id (OstreeDeployment *deployment);
 
-gboolean rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot, const gchar *deploy_id,
-                                           OstreeDeployment **out_deployment, GError **error);
-
 OstreeDeployment *rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot, const gchar *index,
                                                        GError **error);
 
