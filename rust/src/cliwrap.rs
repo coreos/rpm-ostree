@@ -70,7 +70,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
 
 #[context("Writing wrapper for {:?}", binpath)]
 fn write_one_wrapper(rootfs_dfd: &Dir, binpath: &Path, allow_noent: bool) -> Result<()> {
-    let exists = rootfs_dfd.exists(binpath);
+    let exists = rootfs_dfd.try_exists(binpath)?;
     if !exists && allow_noent {
         return Ok(());
     }
@@ -163,7 +163,7 @@ mod tests {
             "usr/bin/rpm",
             "binary is now located at: usr/libexec/rpm-ostree/wrapped/rpm"
         )?);
-        assert!(!td.exists("usr/sbin/grubby"));
+        assert!(!td.try_exists("usr/sbin/grubby")?);
         assert!(file_contains(
             td,
             "usr/bin/yum",
