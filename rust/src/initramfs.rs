@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use camino::Utf8Path;
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtCommandExt;
+use fn_error_context::context;
 use ostree_ext::{gio, glib, prelude::*};
 use std::collections::BTreeSet;
 use std::collections::HashSet;
@@ -140,6 +141,7 @@ pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
 }
 
 /// cxx-rs entrypoint; we can't use generics and need to return a raw integer for fd
+#[context("Generating initramfs overlay")]
 pub(crate) fn initramfs_overlay_generate(
     files: &Vec<String>,
     mut cancellable: Pin<&mut crate::FFIGCancellable>,

@@ -1339,15 +1339,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       {
         etc_files.push_back (std::string (key));
       }
-      try
-        {
-          fd = CXX_TRY_VAL (initramfs_overlay_generate (etc_files, *cancellable), error);
-        }
-      catch (std::exception &e)
-        {
-          util::rethrow_prefixed (e, "Generating initramfs overlay");
-        }
-
+      fd = CXX_TRY_VAL (initramfs_overlay_generate (etc_files, *cancellable), error);
       if (!ostree_sysroot_stage_overlay_initrd (self->sysroot, fd, &overlay_initrd_checksum,
                                                 cancellable, error))
         return glnx_prefix_error (error, "Staging initramfs overlay");
