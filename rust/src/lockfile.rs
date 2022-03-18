@@ -37,7 +37,7 @@ fn lockfile_parse<P: AsRef<Path>>(filename: P) -> Result<LockfileConfig> {
     let lf = utils::parse_stream(&fmt, &mut f).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Parsing {}: {}", filename.to_string_lossy(), e.to_string()),
+            format!("Parsing {}: {}", filename.to_string_lossy(), e),
         )
     })?;
     Ok(lf)
