@@ -64,7 +64,7 @@ parallel insttests: {
       stage("vmcheck") {
         try {
           timeout(time: 30, unit: 'MINUTES') {
-            shwrap("COSA_DIR=${env.WORKSPACE} JOBS=${nhosts} tests/vmcheck.sh")
+            shwrap("COSA_DIR=${env.WORKSPACE} JOBS=${nhosts} V=1 tests/vmcheck.sh")
           }
         } finally {
           shwrap("""
