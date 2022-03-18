@@ -333,12 +333,15 @@ transaction_execute_thread (GTask *task, gpointer source_object, gpointer task_d
 
   if (clazz->execute != NULL)
     {
+      // This try/catch shouldn't be needed; every CXX call should be wrapped with the CXX macro.
+      // But in case we regress on this, it's better to error out than crash.
       try
         {
           success = clazz->execute (self, cancellable, &local_error);
         }
       catch (std::exception &e)
         {
+          sd_journal_print (LOG_ERR, "Caught exception: %s. Please report this!", e.what ());
           success = glnx_throw (&local_error, "%s", e.what ());
         }
     }

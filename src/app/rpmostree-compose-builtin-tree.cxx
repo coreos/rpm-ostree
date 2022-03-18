@@ -1275,19 +1275,10 @@ rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvoca
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
-  /* Need to handle both GError and C++ exceptions here */
-  try
-    {
-      if (!impl_install_tree (self, &changed, cancellable, error))
-        {
-          self->failed = TRUE;
-          return FALSE;
-        }
-    }
-  catch (std::exception &e)
+  if (!impl_install_tree (self, &changed, cancellable, error))
     {
       self->failed = TRUE;
-      throw;
+      return FALSE;
     }
   if (opt_unified_core)
     {
@@ -1439,19 +1430,10 @@ rpmostree_compose_builtin_tree (int argc, char **argv, RpmOstreeCommandInvocatio
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
-  /* Need to handle both GError and C++ exceptions here */
-  try
-    {
-      if (!impl_install_tree (self, &changed, cancellable, error))
-        {
-          self->failed = TRUE;
-          return FALSE;
-        }
-    }
-  catch (std::exception &e)
+  if (!impl_install_tree (self, &changed, cancellable, error))
     {
       self->failed = TRUE;
-      throw;
+      return FALSE;
     }
   if (changed)
     {
