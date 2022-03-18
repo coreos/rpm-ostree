@@ -691,6 +691,13 @@ impl Treefile {
         self.parsed.packages.clone().unwrap_or_default()
     }
 
+    pub(crate) fn set_packages(&mut self, packages: &Vec<String>) {
+        let _ = self.parsed.packages.take();
+        if !packages.is_empty() {
+            self.parsed.packages = Some(packages.clone());
+        }
+    }
+
     pub(crate) fn get_packages_local(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -2883,13 +2890,6 @@ pub(crate) fn treefile_new_from_string(buf: &str, client: bool) -> CxxResult<Box
         false => r.error_if_deriving()?,
     }
     Ok(r)
-}
-
-/// Create a new treefile from fields.
-pub(crate) fn treefile_new_from_fields(packages: &Vec<String>) -> CxxResult<Box<Treefile>> {
-    let mut cfg = TreeComposeConfig::default();
-    cfg.packages = Some(packages.clone());
-    Ok(Box::new(Treefile::new_from_config(cfg, None)?))
 }
 
 /// Create a new empty treefile.

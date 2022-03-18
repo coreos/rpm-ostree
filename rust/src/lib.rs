@@ -402,7 +402,6 @@ pub mod ffi {
         fn treefile_new(filename: &str, basearch: &str, workdir: i32) -> Result<Box<Treefile>>;
         fn treefile_new_empty() -> Result<Box<Treefile>>;
         fn treefile_new_from_string(buf: &str, client: bool) -> Result<Box<Treefile>>;
-        fn treefile_new_from_fields(packages: &Vec<String>) -> Result<Box<Treefile>>;
         fn treefile_new_compose(
             filename: &str,
             basearch: &str,
@@ -421,6 +420,7 @@ pub mod ffi {
         fn get_all_ostree_layers(&self) -> Vec<String>;
         fn get_repos(&self) -> Vec<String>;
         fn get_packages(&self) -> Vec<String>;
+        fn set_packages(&mut self, packages: &Vec<String>);
         fn get_packages_local(&self) -> Vec<String>;
         fn get_packages_local_fileoverride(&self) -> Vec<String>;
         fn get_packages_override_replace_local(&self) -> Vec<String>;
