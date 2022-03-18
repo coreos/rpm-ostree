@@ -646,8 +646,6 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *cancel
   g_assert (self->rsack);
 
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
-  g_autoptr (GPtrArray) ret_final_removals = g_ptr_array_new_with_free_func (g_free);
-
   g_autoptr (GPtrArray) inactive_removals = g_ptr_array_new ();
   GLNX_HASH_TABLE_FOREACH (removals, const char *, pkgname)
   {
@@ -655,9 +653,7 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *cancel
     if (!rpmostree_sack_get_by_pkgname (self->rsack->sack, pkgname, &pkg, error))
       return FALSE;
 
-    if (pkg)
-      g_ptr_array_add (ret_final_removals, g_strdup (pkgname));
-    else
+    if (!pkg)
       g_ptr_array_add (inactive_removals, (gpointer)pkgname);
   }
 
@@ -684,8 +680,6 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *ca
 
   GHashTable *local_replacements
       = rpmostree_origin_get_overrides_local_replace (self->computed_origin);
-  g_autoptr (GPtrArray) ret_final_local_replacements = g_ptr_array_new_with_free_func (g_free);
-
   g_autoptr (GPtrArray) inactive_replacements = g_ptr_array_new ();
 
   GLNX_HASH_TABLE_FOREACH_KV (local_replacements, const char *, nevra, const char *, sha256)
@@ -699,11 +693,7 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *ca
       return FALSE;
 
     /* make inactive if it's missing or if that exact nevra is already present */
-    if (pkg && !rpmostree_sack_has_subject (self->rsack->sack, nevra))
-      {
-        g_ptr_array_add (ret_final_local_replacements, g_strconcat (sha256, ":", nevra, NULL));
-      }
-    else
+    if (!pkg || rpmostree_sack_has_subject (self->rsack->sack, nevra))
       g_ptr_array_add (inactive_replacements, (gpointer)nevra);
   }
 
