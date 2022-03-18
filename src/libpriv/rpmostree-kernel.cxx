@@ -569,7 +569,7 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
     return glnx_throw_errno_prefix (error, "fnctl");
   bwrap->take_fd (glnx_steal_fd (&tmpf_child), 3);
 
-  bwrap->run (*cancellable);
+  CXX_TRY (bwrap->run (*cancellable), error);
 
   /* For FIPS mode we need /dev/urandom pre-created because the FIPS
    * standards authors require that randomness is tested in a
@@ -591,7 +591,7 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
   if (have_passwd)
     ROSCXX_TRY (complete_rpm_layering (rootfs_dfd), error);
 
-  etc_guard->undo ();
+  CXX_TRY (etc_guard->undo (), error);
 
   *out_initramfs_tmpf = tmpf;
   tmpf.initialized = FALSE; /* Transfer */

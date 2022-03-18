@@ -423,7 +423,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
   if (opt_dry_run)
     return TRUE; /* NB: early return */
 
-  (*self->treefile_rs)->sanitycheck_externals ();
+  CXX_TRY ((*self->treefile_rs)->sanitycheck_externals (), error);
 
   /* --- Downloading packages --- */
   if (!rpmostree_context_download (self->corectx, cancellable, error))
@@ -1564,7 +1564,7 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
 
   // This treefile basically tells the core to download the extension packages
   // from the repos, and that's it.
-  auto extension_tf = extensions->generate_treefile (*src_treefile);
+  auto extension_tf = CXX_TRY_VAL (extensions->generate_treefile (*src_treefile), error);
 
   // notice we don't use a pkgcache repo here like in the treecompose path: we
   // want RPMs, so having them already imported isn't useful to us (and anyway,
@@ -1611,7 +1611,9 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   if (!rpmostree_context_get_state_sha512 (ctx, &state_checksum, error))
     return FALSE;
 
-  if (!extensions->state_checksum_changed (state_checksum, opt_extensions_output_dir))
+  auto changed = CXX_TRY_VAL (
+      extensions->state_checksum_changed (state_checksum, opt_extensions_output_dir), error);
+  if (!changed)
     {
       g_print ("No change.\n");
       return TRUE;
@@ -1672,8 +1674,8 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
     }
 
   // XXX: account for development extensions
-  extensions->update_state_checksum (state_checksum, opt_extensions_output_dir);
-  extensions->serialize_to_dir (opt_extensions_output_dir);
+  CXX_TRY (extensions->update_state_checksum (state_checksum, opt_extensions_output_dir), error);
+  CXX_TRY (extensions->serialize_to_dir (opt_extensions_output_dir), error);
   if (!process_touch_if_changed (error))
     return FALSE;
 
