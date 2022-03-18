@@ -179,10 +179,10 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
   argc--;
   argv[argc] = NULL;
 
-  auto is_ostree_container = CXX_TRY_VAL (is_ostree_container (), error);
+  auto is_ostree_container = ROSCXX_TRY_VAL (is_ostree_container (), error);
   if (is_ostree_container)
     {
-      auto treefile = CXX_TRY_VAL (treefile_new_empty (), error);
+      auto treefile = ROSCXX_TRY_VAL (treefile_new_empty (), error);
       treefile->set_packages (util::rust_stringvec_from_strv (argv));
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }

@@ -81,7 +81,7 @@ throw_gerror (GError *&error)
   ({                                                                                               \
     try                                                                                            \
       {                                                                                            \
-        rpmostreecxx::cxxfn;                                                                       \
+        cxxfn;                                                                                     \
       }                                                                                            \
     catch (std::exception & e)                                                                     \
       {                                                                                            \
@@ -96,10 +96,10 @@ throw_gerror (GError *&error)
 // catch block.
 #define CXX_TRY_VAL(cxxfn, err)                                                                    \
   ({                                                                                               \
-    std::optional<decltype (rpmostreecxx::cxxfn)> v;                                               \
+    std::optional<decltype (cxxfn)> v;                                                             \
     try                                                                                            \
       {                                                                                            \
-        v.emplace (rpmostreecxx::cxxfn);                                                           \
+        v.emplace (cxxfn);                                                                         \
       }                                                                                            \
     catch (std::exception & e)                                                                     \
       {                                                                                            \
@@ -107,6 +107,10 @@ throw_gerror (GError *&error)
       }                                                                                            \
     std::move (v.value ());                                                                        \
   })
+
+// Convenience macros for the common rpmostreecxx:: cases.
+#define ROSCXX_TRY(cxxfn, err) CXX_TRY (rpmostreecxx::cxxfn, err)
+#define ROSCXX_TRY_VAL(cxxfn, err) CXX_TRY_VAL (rpmostreecxx::cxxfn, err)
 
 // Duplicate a non-empty Rust Str to a NUL-terminated C string.
 // The empty string is converted to a NULL pointer.

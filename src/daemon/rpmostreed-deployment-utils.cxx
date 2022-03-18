@@ -41,7 +41,7 @@ rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot, const gchar *deploy_id
   for (guint i = 0; i < deployments->len; i++)
     {
       auto deployment = static_cast<OstreeDeployment *> (deployments->pdata[i]);
-      auto id = CXX_TRY_VAL (deployment_generate_id (*deployment), error);
+      auto id = ROSCXX_TRY_VAL (deployment_generate_id (*deployment), error);
       if (g_strcmp0 (deploy_id, id.c_str ()) == 0)
         {
           *out_deployment = (OstreeDeployment *)g_object_ref (deployment);
@@ -157,7 +157,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
 {
   g_autoptr (GVariantDict) dict = g_variant_dict_new (NULL);
 
-  CXX_TRY (deployment_populate_variant (*sysroot, *deployment, *dict), error);
+  ROSCXX_TRY (deployment_populate_variant (*sysroot, *deployment, *dict), error);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   /* Load the commit object */
   g_autoptr (GVariant) commit = NULL;
@@ -224,7 +224,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
       {
         g_variant_dict_insert (dict, "container-image-reference", "s", refspec);
-        auto state = CXX_TRY_VAL (query_container_image (*repo, refspec), error);
+        auto state = ROSCXX_TRY_VAL (query_container_image (*repo, refspec), error);
         g_variant_dict_insert (dict, "container-image-reference-digest", "s",
                                state->image_digest.c_str ());
       }
@@ -244,7 +244,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
         g_variant_dict_insert (dict, "origin", "s", refspec);
-        CXX_TRY (variant_add_remote_status (*repo, refspec, base_checksum, *dict), error);
+        ROSCXX_TRY (variant_add_remote_status (*repo, refspec, base_checksum, *dict), error);
 
         g_autofree char *pending_base_commitrev = NULL;
         if (!ostree_repo_resolve_rev (repo, refspec, TRUE, &pending_base_commitrev, error))
@@ -343,7 +343,7 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment, OstreeRepo *rep
 
   if (refspec_is_ostree)
     {
-      CXX_TRY (variant_add_remote_status (*repo, refspec, checksum, *dict), error);
+      ROSCXX_TRY (variant_add_remote_status (*repo, refspec, checksum, *dict), error);
     }
 
   if (osname != NULL)
@@ -806,7 +806,7 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
 
   if (staged_deployment)
     {
-      auto id = CXX_TRY_VAL (deployment_generate_id (*staged_deployment), error);
+      auto id = ROSCXX_TRY_VAL (deployment_generate_id (*staged_deployment), error);
       g_variant_dict_insert (&dict, "deployment", "s", id.c_str ());
     }
 

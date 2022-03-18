@@ -178,10 +178,10 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
         return TRUE;
 
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      CXX_TRY (print_treepkg_diff_from_sysroot_path (rust::Str (sysroot_path),
-                                                     RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0,
-                                                     cancellable),
-               error);
+      ROSCXX_TRY (print_treepkg_diff_from_sysroot_path (rust::Str (sysroot_path),
+                                                        RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE,
+                                                        0, cancellable),
+                  error);
 
       if (override_replace || override_remove)
         g_print ("Use \"rpm-ostree override reset\" to undo overrides\n");

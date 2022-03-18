@@ -387,7 +387,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
           rpmostree_context_get_dnf (self->corectx), DNF_REPO_ENABLED_PACKAGES);
       auto pkgs_v = rpmostreecxx::CxxGObjectArray (pkgs);
       auto repos_v = rpmostreecxx::CxxGObjectArray (rpmmd_repos);
-      CXX_TRY (lockfile_write (opt_write_lockfile_to, pkgs_v, repos_v), error);
+      ROSCXX_TRY (lockfile_write (opt_write_lockfile_to, pkgs_v, repos_v), error);
     }
 
   /* FIXME - just do a depsolve here before we compute download requirements */
@@ -442,9 +442,9 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
   g_assert (self->repo);
   auto previous_ref = self->previous_checksum ?: "";
-  CXX_TRY (passwd_compose_prep_repo (rootfs_dfd, **self->treefile_rs, *self->repo,
-                                     std::string (previous_ref), opt_unified_core),
-           error);
+  ROSCXX_TRY (passwd_compose_prep_repo (rootfs_dfd, **self->treefile_rs, *self->repo,
+                                        std::string (previous_ref), opt_unified_core),
+              error);
 
   if (opt_unified_core)
     {
@@ -500,7 +500,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
 
       glnx_console_lock (&console);
 
-      CXX_TRY (composeutil_legacy_prep_dev_and_run (rootfs_dfd), error);
+      ROSCXX_TRY (composeutil_legacy_prep_dev_and_run (rootfs_dfd), error);
 
       if (!dnf_transaction_commit (dnf_context_get_transaction (dnfctx),
                                    dnf_context_get_goal (dnfctx), hifstate, error))
@@ -582,7 +582,7 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
 
   g_autoptr (RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
 
-  CXX_TRY (core_libdnf_process_global_init (), error);
+  ROSCXX_TRY (core_libdnf_process_global_init (), error);
 
   /* Init fds to -1 */
   self->workdir_dfd = self->rootfs_dfd = self->cachedir_dfd = -1;
@@ -590,7 +590,7 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
    * container without --privileged or userns exposed.
    */
   if (!(opt_download_only || opt_download_only_rpms))
-    CXX_TRY (bubblewrap_selftest (), error);
+    ROSCXX_TRY (bubblewrap_selftest (), error);
 
   self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!self->repo)
@@ -699,9 +699,9 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
   self->treefile_rs
-      = CXX_TRY_VAL (treefile_new_compose (gs_file_get_path_cached (self->treefile_path), basearch,
-                                           self->workdir_dfd),
-                     error);
+      = ROSCXX_TRY_VAL (treefile_new_compose (gs_file_get_path_cached (self->treefile_path),
+                                              basearch, self->workdir_dfd),
+                        error);
   self->corectx
       = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo, **self->treefile_rs);
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
@@ -914,7 +914,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
                                   &last_version);
         }
 
-      next_version = CXX_TRY_VAL (
+      next_version = ROSCXX_TRY_VAL (
           util_next_version (ver_prefix, ver_suffix ?: "", last_version ?: ""), error);
       g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
                            g_variant_ref_sink (g_variant_new_string (next_version.c_str ())));
@@ -998,9 +998,9 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
     return FALSE;
 
   /* Start postprocessing */
-  CXX_TRY (compose_postprocess (self->rootfs_dfd, **self->treefile_rs, next_version,
-                                self->unified_core_and_fuse),
-           error);
+  ROSCXX_TRY (compose_postprocess (self->rootfs_dfd, **self->treefile_rs, next_version,
+                                   self->unified_core_and_fuse),
+              error);
 
   /* Until here, we targeted "rootfs.tmp" in the working directory. Most
    * user-configured postprocessing has run. Now, we need to perform required
@@ -1019,8 +1019,8 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
     if (!glnx_opendirat (self->workdir_dfd, final_rootfs_name, TRUE, &target_rootfs_dfd, error))
       return FALSE;
 
-    CXX_TRY (compose_prepare_rootfs (self->rootfs_dfd, target_rootfs_dfd, **self->treefile_rs),
-             error);
+    ROSCXX_TRY (compose_prepare_rootfs (self->rootfs_dfd, target_rootfs_dfd, **self->treefile_rs),
+                error);
 
     glnx_close_fd (&self->rootfs_dfd);
 
@@ -1122,9 +1122,9 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
   if (self->treefile_rs)
     {
       auto previous_rev = self->previous_checksum ?: "";
-      CXX_TRY (check_passwd_group_entries (*self->repo, self->rootfs_dfd, **self->treefile_rs,
-                                           previous_rev),
-               error);
+      ROSCXX_TRY (check_passwd_group_entries (*self->repo, self->rootfs_dfd, **self->treefile_rs,
+                                              previous_rev),
+                  error);
     }
 
   /* See comment above */
@@ -1221,7 +1221,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
       return glnx_prefix_error (error, "Failed to write composejson");
 
   if (opt_write_commitid_to)
-    CXX_TRY (write_commit_id (opt_write_commitid_to, new_revision), error);
+    ROSCXX_TRY (write_commit_id (opt_write_commitid_to, new_revision), error);
 
   return TRUE;
 }
@@ -1249,7 +1249,7 @@ rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvoca
 
   if (opt_print_only)
     {
-      auto treefile = CXX_TRY_VAL (treefile_new (treefile_path, basearch, -1), error);
+      auto treefile = ROSCXX_TRY_VAL (treefile_new (treefile_path, basearch, -1), error);
       treefile->prettyprint_json_stdout ();
       return TRUE;
     }
@@ -1338,7 +1338,7 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
         return FALSE;
       auto treefile_rs
-          = CXX_TRY_VAL (treefile_new_compose (treefile_path, "", workdir_tmp.fd), error);
+          = ROSCXX_TRY_VAL (treefile_new_compose (treefile_path, "", workdir_tmp.fd), error);
       auto serialized = treefile_rs->get_json_string ();
       treefile_parser = json_parser_new ();
       if (!json_parser_load_from_data (treefile_parser, serialized.c_str (), -1, error))
@@ -1423,7 +1423,7 @@ rpmostree_compose_builtin_tree (int argc, char **argv, RpmOstreeCommandInvocatio
 
   if (opt_print_only)
     {
-      auto treefile = CXX_TRY_VAL (treefile_new (treefile_path, basearch, -1), error);
+      auto treefile = ROSCXX_TRY_VAL (treefile_new (treefile_path, basearch, -1), error);
       treefile->prettyprint_json_stdout ();
       return TRUE;
     }
@@ -1502,7 +1502,7 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   const char *extensions_path = argv[2];
 
   auto basearch = rpmostreecxx::get_rpm_basearch ();
-  auto src_treefile = CXX_TRY_VAL (treefile_new_compose (treefile_path, basearch, -1), error);
+  auto src_treefile = ROSCXX_TRY_VAL (treefile_new_compose (treefile_path, basearch, -1), error);
 
   g_autoptr (OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!repo)
@@ -1560,7 +1560,7 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
     }
 
   auto extensions
-      = CXX_TRY_VAL (extensions_load (extensions_path, basearch, *packages_mapping), error);
+      = ROSCXX_TRY_VAL (extensions_load (extensions_path, basearch, *packages_mapping), error);
 
   // This treefile basically tells the core to download the extension packages
   // from the repos, and that's it.

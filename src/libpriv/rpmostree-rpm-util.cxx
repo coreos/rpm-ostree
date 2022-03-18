@@ -815,7 +815,7 @@ get_sack_for_root (int dfd, const char *path, DnfSack **out_sack, GError **error
   GLNX_AUTO_PREFIX_ERROR ("Loading sack", error);
   g_assert (out_sack != NULL);
 
-  CXX_TRY (core_libdnf_process_global_init (), error);
+  ROSCXX_TRY (core_libdnf_process_global_init (), error);
 
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 

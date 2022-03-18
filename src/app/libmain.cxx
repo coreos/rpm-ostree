@@ -247,9 +247,9 @@ rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *mai
     }
 
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0)
-    CXX_TRY (client_require_root (), error);
+    ROSCXX_TRY (client_require_root (), error);
 
-  auto is_ostree_container = CXX_TRY_VAL (is_ostree_container (), error);
+  auto is_ostree_container = ROSCXX_TRY_VAL (is_ostree_container (), error);
   if (use_daemon && !is_ostree_container)
     {
       /* More gracefully handle the case where

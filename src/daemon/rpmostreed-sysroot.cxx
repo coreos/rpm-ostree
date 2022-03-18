@@ -268,7 +268,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self, gboolean *out_ch
       const gchar *os = ostree_deployment_get_osname (booted);
       g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, os, NULL);
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
-      auto bootedid_v = CXX_TRY_VAL (deployment_generate_id (*booted), error);
+      auto bootedid_v = ROSCXX_TRY_VAL (deployment_generate_id (*booted), error);
       booted_id = g_strdup (bootedid_v.c_str ());
     }
   else
@@ -738,7 +738,7 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self, GCancellable *cancellable,
   if (!sysroot_populate_deployments_unlocked (self, NULL, error))
     return FALSE;
 
-  CXX_TRY (daemon_sanitycheck_environment (*self->ot_sysroot), error);
+  ROSCXX_TRY (daemon_sanitycheck_environment (*self->ot_sysroot), error);
 
   if (!reset_config_properties (self, error))
     return FALSE;

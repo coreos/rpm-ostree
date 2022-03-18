@@ -65,6 +65,6 @@ rpmostree_ex_builtin_module (int argc, char **argv, RpmOstreeCommandInvocation *
   rust::Vec<rust::String> rustargv;
   for (int i = 0; i < argc; i++)
     rustargv.push_back (std::string (argv[i]));
-  CXX_TRY (modularity_entrypoint (rustargv), error);
+  ROSCXX_TRY (modularity_entrypoint (rustargv), error);
   return TRUE;
 }
