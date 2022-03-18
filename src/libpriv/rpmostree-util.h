@@ -75,18 +75,29 @@ throw_gerror (GError *&error)
   throw std::runtime_error (s);
 }
 
-// Calls a rpmostreecxx function, returning any error immediately.
-// Similar to Rust's ?  operator.
-#define CXX_TRY(cxxfn, err)                                                                        \
+// Calls a cxx function, converting error handling to glib convention.
+#define CXX(cxxfn, err)                                                                            \
   ({                                                                                               \
+    gboolean r;                                                                                    \
     try                                                                                            \
       {                                                                                            \
         cxxfn;                                                                                     \
+        r = TRUE;                                                                                  \
       }                                                                                            \
     catch (std::exception & e)                                                                     \
       {                                                                                            \
-        return glnx_throw (err, "%s", e.what ());                                                  \
+        glnx_throw (err, "%s", e.what ());                                                         \
+        r = FALSE;                                                                                 \
       }                                                                                            \
+    r;                                                                                             \
+  })
+
+// Calls a cxx function, returning any error immediately.
+// Similar to Rust's ?  operator.
+#define CXX_TRY(cxxfn, err)                                                                        \
+  ({                                                                                               \
+    if (!CXX (cxxfn, err))                                                                         \
+      return FALSE;                                                                                \
   })
 
 // Have to use the optional<> dance here so that we don't implicitly call a constructor
@@ -94,7 +105,7 @@ throw_gerror (GError *&error)
 // Also the constructor might be explicitly deleted (e.g. rust::Box). The C++ compiler
 // doesn't understand that the final value will always be initialized since we return in the
 // catch block.
-#define CXX_TRY_VAL(cxxfn, err)                                                                    \
+#define CXX_VAL(cxxfn, err)                                                                        \
   ({                                                                                               \
     std::optional<decltype (cxxfn)> v;                                                             \
     try                                                                                            \
@@ -103,13 +114,23 @@ throw_gerror (GError *&error)
       }                                                                                            \
     catch (std::exception & e)                                                                     \
       {                                                                                            \
-        return glnx_throw (err, "%s", e.what ());                                                  \
+        glnx_throw (err, "%s", e.what ());                                                         \
       }                                                                                            \
+    std::move (v);                                                                                 \
+  })
+
+#define CXX_TRY_VAL(cxxfn, err)                                                                    \
+  ({                                                                                               \
+    auto v = CXX_VAL (cxxfn, err);                                                                 \
+    if (!v.has_value ())                                                                           \
+      return FALSE;                                                                                \
     std::move (v.value ());                                                                        \
   })
 
 // Convenience macros for the common rpmostreecxx:: cases.
+#define ROSCXX(cxxfn, err) CXX (rpmostreecxx::cxxfn, err)
 #define ROSCXX_TRY(cxxfn, err) CXX_TRY (rpmostreecxx::cxxfn, err)
+#define ROSCXX_VAL(cxxfn, err) CXX_VAL (rpmostreecxx::cxxfn, err)
 #define ROSCXX_TRY_VAL(cxxfn, err) CXX_TRY_VAL (rpmostreecxx::cxxfn, err)
 
 // Duplicate a non-empty Rust Str to a NUL-terminated C string.
