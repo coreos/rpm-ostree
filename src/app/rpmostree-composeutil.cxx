@@ -53,7 +53,7 @@ rpmostree_composeutil_checksum (HyGoal goal, OstreeRepo *repo, const rpmostreecx
 
   /* Hash in the treefile inputs (this includes all externals like postprocess, add-files,
    * etc... and the final flattened treefile -- see treefile.rs for more details). */
-  auto tf_checksum = tf.get_checksum (*repo);
+  auto tf_checksum = CXX_TRY_VAL (tf.get_checksum (*repo), error);
   g_checksum_update (checksum, (const guint8 *)tf_checksum.data (), tf_checksum.size ());
 
   /* Hash in each package */

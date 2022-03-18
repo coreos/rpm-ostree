@@ -1379,7 +1379,7 @@ rpmostree_ex_builtin_history (int argc, char **argv, RpmOstreeCommandInvocation 
   gboolean at_least_one = FALSE;
   while (opt_all || opt_limit--)
     {
-      auto entry = history_ctx->next_entry ();
+      auto entry = CXX_TRY_VAL (history_ctx->next_entry (), error);
       if (entry.eof)
         break;
       if (!print_history_entry (entry, error))

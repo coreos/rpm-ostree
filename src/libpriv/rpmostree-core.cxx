@@ -593,7 +593,7 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
    */
   if (!self->treefile_rs)
     {
-      self->treefile_owned = rpmostreecxx::treefile_new_empty ();
+      self->treefile_owned = ROSCXX_TRY_VAL (treefile_new_empty (), error);
       self->treefile_rs = &**self->treefile_owned;
     }
 
@@ -1606,7 +1606,7 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
 
   g_autoptr (GPtrArray) pkgs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
-  auto locked_src_pkgs = (*self->lockfile)->get_locked_src_packages ();
+  auto locked_src_pkgs = CXX_TRY_VAL ((*self->lockfile)->get_locked_src_packages (), error);
   std::set<rust::String> locked_src_pkgnames;
   for (auto &pkg : locked_src_pkgs)
     {
@@ -1630,7 +1630,7 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
       locked_src_pkgnames.insert (pkg.name);
     }
 
-  auto locked_pkgs = (*self->lockfile)->get_locked_packages ();
+  auto locked_pkgs = CXX_TRY_VAL ((*self->lockfile)->get_locked_packages (), error);
   for (auto &pkg : locked_pkgs)
     {
       /* This essentially makes `source-packages` have higher priority than `packages`. This
@@ -2163,7 +2163,7 @@ gboolean
 rpmostree_context_get_state_sha512 (RpmOstreeContext *self, char **out_checksum, GError **error)
 {
   g_autoptr (GChecksum) state_checksum = g_checksum_new (G_CHECKSUM_SHA512);
-  auto tf_checksum = self->treefile_rs->get_checksum (*self->ostreerepo);
+  auto tf_checksum = CXX_TRY_VAL (self->treefile_rs->get_checksum (*self->ostreerepo), error);
   g_checksum_update (state_checksum, (const guint8 *)tf_checksum.data (), tf_checksum.size ());
 
   if (!self->empty)
@@ -3483,7 +3483,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self, int tmprootfs_dfd, DnfPackage *pk
                            "Could not find user '%s' in passwd file", user);
               return FALSE;
             }
-          uid = passwd_entries.lookup_user_id (user);
+          uid = CXX_TRY_VAL (passwd_entries.lookup_user_id (user), error);
         }
 
       gid_t gid = 0;
@@ -3496,7 +3496,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self, int tmprootfs_dfd, DnfPackage *pk
               return FALSE;
             }
 
-          gid = passwd_entries.lookup_group_id (group);
+          gid = CXX_TRY_VAL (passwd_entries.lookup_group_id (group), error);
         }
 
       if (fchownat (tmprootfs_dfd, fn, uid, gid, AT_SYMLINK_NOFOLLOW) != 0)
@@ -4202,12 +4202,12 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 
       if (faccessat (tmprootfs_dfd, "etc/passwd", F_OK, 0) == 0)
         {
-          passwd_entries->add_passwd_content (tmprootfs_dfd, "etc/passwd");
+          CXX_TRY (passwd_entries->add_passwd_content (tmprootfs_dfd, "etc/passwd"), error);
         }
 
       if (faccessat (tmprootfs_dfd, "etc/group", F_OK, 0) == 0)
         {
-          passwd_entries->add_group_content (tmprootfs_dfd, "etc/group");
+          CXX_TRY (passwd_entries->add_group_content (tmprootfs_dfd, "etc/group"), error);
         }
 
       {
@@ -4283,7 +4283,7 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
         }
 
       // Revert filesystem changes just for scripts.
-      fs_prep->undo ();
+      CXX_TRY (fs_prep->undo (), error);
     }
   else
     {
@@ -4293,7 +4293,7 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
     }
 
   /* Undo the /etc move above */
-  etc_guard->undo ();
+  CXX_TRY (etc_guard->undo (), error);
 
   /* And clean up var/tmp, we don't want it in commits */
   if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, "var/tmp", cancellable, error))
