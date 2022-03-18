@@ -128,7 +128,7 @@ generate_pkgcache_refs (OstreeSysroot *sysroot, OstreeRepo *repo, guint *out_n_f
       GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
       GLNX_HASH_TABLE_FOREACH (local_replace, const char *, nevra)
       {
-        auto cachebranch = CXX_TRY_VAL (nevra_to_cache_branch (std::string (nevra)), error);
+        auto cachebranch = ROSCXX_TRY_VAL (nevra_to_cache_branch (std::string (nevra)), error);
         g_hash_table_add (referenced_pkgs, g_strdup (cachebranch.c_str ()));
       }
     }
@@ -167,7 +167,7 @@ syscore_regenerate_refs (OstreeSysroot *sysroot, OstreeRepo *repo, guint *out_n_
 
   /* regenerate the baselayer refs in case we just kicked out an ancient layered
    * deployment whose base layer is not needed anymore */
-  CXX_TRY (generate_baselayer_refs (*sysroot, *repo, *cancellable), error);
+  ROSCXX_TRY (generate_baselayer_refs (*sysroot, *repo, *cancellable), error);
 
   /* And the pkgcache refs */
   if (!generate_pkgcache_refs (sysroot, repo, out_n_pkgcache_freed, cancellable, error))
@@ -200,7 +200,7 @@ rpmostree_syscore_cleanup (OstreeSysroot *sysroot, OstreeRepo *repo, GCancellabl
   if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR, cancellable, error))
     return glnx_prefix_error (error, "cleaning tmp rootfs");
   /* also delete extra history entries */
-  CXX_TRY (history_prune (), error);
+  ROSCXX_TRY (history_prune (), error);
 
   /* Regenerate all refs */
   guint n_pkgcache_freed = 0;
@@ -208,7 +208,7 @@ rpmostree_syscore_cleanup (OstreeSysroot *sysroot, OstreeRepo *repo, GCancellabl
     return FALSE;
 
   /* Refs for the live state */
-  CXX_TRY (applylive_sync_ref (*sysroot), error);
+  ROSCXX_TRY (applylive_sync_ref (*sysroot), error);
 
   /* And do a prune */
   guint64 freed_space;
@@ -340,7 +340,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot *sysroot, OstreeDeployment *ne
       OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
       if (booted)
         {
-          auto is_live = CXX_TRY_VAL (has_live_apply_state (*sysroot, *booted), error);
+          auto is_live = ROSCXX_TRY_VAL (has_live_apply_state (*sysroot, *booted), error);
           if (is_live)
             flags = static_cast<OstreeSysrootSimpleWriteDeploymentFlags> (
                 flags | OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK);

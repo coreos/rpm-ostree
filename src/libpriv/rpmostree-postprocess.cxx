@@ -161,7 +161,7 @@ process_kernel_and_initramfs (int rootfs_dfd, JsonObject *treefile, gboolean uni
   /* Ensure depmod (kernel modules index) is up to date; because on Fedora we
    * suppress the kernel %posttrans we need to take care of this.
    */
-  CXX_TRY (run_depmod (rootfs_dfd, kver, unified_core_mode), error);
+  ROSCXX_TRY (run_depmod (rootfs_dfd, kver, unified_core_mode), error);
 
   RpmOstreePostprocessBootLocation boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
   const char *boot_location_str = NULL;
@@ -271,7 +271,7 @@ gboolean
 rpmostree_prepare_rootfs_get_sepolicy (int dfd, OstreeSePolicy **out_sepolicy,
                                        GCancellable *cancellable, GError **error)
 {
-  CXX_TRY (workaround_selinux_cross_labeling (dfd, *cancellable), error);
+  ROSCXX_TRY (workaround_selinux_cross_labeling (dfd, *cancellable), error);
 
   g_autoptr (OstreeSePolicy) ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
   if (ret_sepolicy == NULL)
@@ -403,7 +403,7 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
                                                                error))
     return FALSE;
 
-  CXX_TRY (compose_postprocess_final (rootfs_dfd), error);
+  ROSCXX_TRY (compose_postprocess_final (rootfs_dfd), error);
 
   if (selinux)
     {
@@ -412,7 +412,8 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
       /* Now regenerate SELinux policy so that postprocess scripts from users and from us
        * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
       rust::Vec child_argv = { rust::String ("semodule"), rust::String ("-nB") };
-      CXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode), error);
+      ROSCXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode),
+                  error);
     }
 
   gboolean container = FALSE;
@@ -421,7 +422,7 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
     return FALSE;
 
   g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
-  CXX_TRY (migrate_passwd_except_root (rootfs_dfd), error);
+  ROSCXX_TRY (migrate_passwd_except_root (rootfs_dfd), error);
 
   rust::Vec<rust::String> preserve_groups_set;
   if (treefile && json_object_has_member (treefile, "etc-group-members"))
@@ -439,10 +440,10 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
     }
 
   g_print ("Migrating /usr/etc/group to /usr/lib/\n");
-  CXX_TRY (migrate_group_except_root (rootfs_dfd, preserve_groups_set), error);
+  ROSCXX_TRY (migrate_group_except_root (rootfs_dfd, preserve_groups_set), error);
 
   /* NSS configuration to look at the new files */
-  CXX_TRY (composepost_nsswitch_altfiles (rootfs_dfd), error);
+  ROSCXX_TRY (composepost_nsswitch_altfiles (rootfs_dfd), error);
 
   if (selinux)
     {
@@ -450,9 +451,9 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
         return glnx_prefix_error (error, "SELinux postprocess");
     }
 
-  CXX_TRY (rootfs_prepare_links (rootfs_dfd), error);
+  ROSCXX_TRY (rootfs_prepare_links (rootfs_dfd), error);
 
-  CXX_TRY (convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
+  ROSCXX_TRY (convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
 
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
@@ -490,7 +491,7 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
     }
 
   /* we're composing a new tree; copy the rpmdb to the base location */
-  CXX_TRY (prepare_rpmdb_base_location (rootfs_dfd, *cancellable), error);
+  ROSCXX_TRY (prepare_rpmdb_base_location (rootfs_dfd, *cancellable), error);
 
   return TRUE;
 }
@@ -618,7 +619,7 @@ rpmostree_rootfs_postprocess_common (int rootfs_fd, GCancellable *cancellable, G
     }
 
   /* Make sure there is an RPM macro in place pointing to the rpmdb in /usr */
-  CXX_TRY (compose_postprocess_rpm_macro (rootfs_fd), error);
+  ROSCXX_TRY (compose_postprocess_rpm_macro (rootfs_fd), error);
 
   if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
     return FALSE;
@@ -626,7 +627,7 @@ rpmostree_rootfs_postprocess_common (int rootfs_fd, GCancellable *cancellable, G
   if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
     return FALSE;
 
-  CXX_TRY (passwd_cleanup (rootfs_fd), error);
+  ROSCXX_TRY (passwd_cleanup (rootfs_fd), error);
 
   return TRUE;
 }
@@ -784,7 +785,7 @@ rpmostree_compose_commit (int rootfs_fd, OstreeRepo *repo, const char *parent_re
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
-  auto n_bytes = CXX_TRY_VAL (directory_size (rootfs_fd, *cancellable), error);
+  auto n_bytes = ROSCXX_TRY_VAL (directory_size (rootfs_fd, *cancellable), error);
 
   tdata.n_bytes = n_bytes;
   tdata.repo = repo;

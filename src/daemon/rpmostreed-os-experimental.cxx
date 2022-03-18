@@ -209,7 +209,7 @@ prepare_download_pkgs_txn (const gchar *const *queries, const char *source,
     return glnx_prefix_error (error, "Downloading metadata");
 
   DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
-  auto parsed_source = CXX_TRY_VAL (parse_override_source (source), error);
+  auto parsed_source = ROSCXX_TRY_VAL (parse_override_source (source), error);
 
   if (parsed_source.kind == rpmostreecxx::PackageOverrideSourceKind::Repo)
     {

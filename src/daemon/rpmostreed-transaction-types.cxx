@@ -178,7 +178,7 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
   if (refspectype != RPMOSTREE_REFSPEC_TYPE_OSTREE)
     return glnx_throw (error, "Invalid refspec type");
 
-  auto parsed_revision = CXX_TRY_VAL (parse_revision (revision), error);
+  auto parsed_revision = ROSCXX_TRY_VAL (parse_revision (revision), error);
   switch (parsed_revision.kind)
     {
     case rpmostreecxx::ParsedRevisionKind::Version:
@@ -1449,7 +1449,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
 
           OstreeDeployment *deployment = rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
 
-          auto is_live = CXX_TRY_VAL (has_live_apply_state (*sysroot, *deployment), error);
+          auto is_live = ROSCXX_TRY_VAL (has_live_apply_state (*sysroot, *deployment), error);
           if (is_live)
             changed = TRUE;
         }
@@ -1609,7 +1609,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         {
           g_autoptr (GVariantDict) dictv = g_variant_dict_new (NULL);
           g_autoptr (GVariant) live_opts = g_variant_ref_sink (g_variant_dict_end (dictv));
-          CXX_TRY (transaction_apply_live (*sysroot, *live_opts), error);
+          ROSCXX_TRY (transaction_apply_live (*sysroot, *live_opts), error);
         }
       else if (deploy_has_bool_option (self, "reboot"))
         {
@@ -2503,7 +2503,8 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   if (!g_str_equal (ostree_deployment_get_osname (default_deployment), self->osname))
     return glnx_throw (error, "Staged deployment is not for osname '%s'", self->osname);
 
-  auto layeredmeta = CXX_TRY_VAL (deployment_layeredmeta_load (*repo, *default_deployment), error);
+  auto layeredmeta
+      = ROSCXX_TRY_VAL (deployment_layeredmeta_load (*repo, *default_deployment), error);
   const char *checksum = layeredmeta.base_commit.c_str ();
 
   auto expected_checksum = (char *)vardict_lookup_ptr (self->options, "checksum", "&s");

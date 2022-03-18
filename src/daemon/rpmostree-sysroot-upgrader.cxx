@@ -432,7 +432,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
                                     "type refspecs is not supported");
 
         auto refspec_s = std::string (refspec);
-        auto import = CXX_TRY_VAL (pull_container (*self->repo, *cancellable, refspec_s), error);
+        auto import = ROSCXX_TRY_VAL (pull_container (*self->repo, *cancellable, refspec_s), error);
         // Note this duplicates
         // https://github.com/ostreedev/ostree-rs-ext/blob/22a663f64e733e7ba8382f11f853ce4202652254/lib/src/container/store.rs#L64
         if (import->is_layered)
@@ -576,15 +576,15 @@ static gboolean
 try_load_base_rsack_from_pending (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable,
                                   GError **error)
 {
-  auto is_live
-      = CXX_TRY_VAL (has_live_apply_state (*self->sysroot, *self->origin_merge_deployment), error);
+  auto is_live = ROSCXX_TRY_VAL (
+      has_live_apply_state (*self->sysroot, *self->origin_merge_deployment), error);
   /* livefs invalidates the deployment */
   if (is_live)
     return TRUE;
 
   auto repo = ostree_sysroot_repo (self->sysroot);
   auto layeredmeta
-      = CXX_TRY_VAL (deployment_layeredmeta_load (*repo, *self->origin_merge_deployment), error);
+      = ROSCXX_TRY_VAL (deployment_layeredmeta_load (*repo, *self->origin_merge_deployment), error);
   /* older client layers have a bug blocking us from using their base rpmdb:
    * https://github.com/projectatomic/rpm-ostree/pull/1560 */
   if (layeredmeta.is_layered && layeredmeta.clientlayer_version < 4)
@@ -907,7 +907,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
 
   {
     g_autoptr (GKeyFile) computed_origin_kf = rpmostree_origin_dup_keyfile (self->computed_origin);
-    self->treefile = CXX_TRY_VAL (origin_to_treefile (*computed_origin_kf), error);
+    self->treefile = ROSCXX_TRY_VAL (origin_to_treefile (*computed_origin_kf), error);
   }
   rpmostree_context_set_treefile (self->ctx, **self->treefile);
 
@@ -1063,7 +1063,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellabl
   if (rpmostree_context_get_kernel_changed (self->ctx))
     {
       g_assert (kernel_state && kver);
-      CXX_TRY (run_depmod (self->tmprootfs_dfd, kver, true), error);
+      ROSCXX_TRY (run_depmod (self->tmprootfs_dfd, kver, true), error);
     }
 
   if (kernel_or_initramfs_changed)
@@ -1339,7 +1339,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       {
         etc_files.push_back (std::string (key));
       }
-      fd = CXX_TRY_VAL (initramfs_overlay_generate (etc_files, *cancellable), error);
+      fd = ROSCXX_TRY_VAL (initramfs_overlay_generate (etc_files, *cancellable), error);
       if (!ostree_sysroot_stage_overlay_initrd (self->sysroot, fd, &overlay_initrd_checksum,
                                                 cancellable, error))
         return glnx_prefix_error (error, "Staging initramfs overlay");

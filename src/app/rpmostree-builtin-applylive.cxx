@@ -37,6 +37,6 @@ rpmostree_ex_builtin_apply_live (int argc, char **argv, RpmOstreeCommandInvocati
   rust::Vec<rust::String> rustargv;
   for (int i = 0; i < argc; i++)
     rustargv.push_back (std::string (argv[i]));
-  CXX_TRY (applylive_entrypoint (rustargv), error);
+  ROSCXX_TRY (applylive_entrypoint (rustargv), error);
   return TRUE;
 }

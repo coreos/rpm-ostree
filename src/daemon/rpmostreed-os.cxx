@@ -1460,7 +1460,7 @@ get_cached_deploy_rpm_diff (RPMOSTreeOS *interface, const char *arg_revision, GV
 
   const char *base_checksum = ostree_deployment_get_csum (base_deployment);
 
-  auto parsed_revision = CXX_TRY_VAL (parse_revision (arg_revision), error);
+  auto parsed_revision = ROSCXX_TRY_VAL (parse_revision (arg_revision), error);
   g_autofree char *checksum = NULL;
   switch (parsed_revision.kind)
     {
@@ -1653,7 +1653,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
                                                    ot_repo, TRUE, &booted_variant, error))
         return FALSE;
       g_variant_ref_sink (booted_variant);
-      auto bootedid_v = CXX_TRY_VAL (deployment_generate_id (*booted_deployment), error);
+      auto bootedid_v = ROSCXX_TRY_VAL (deployment_generate_id (*booted_deployment), error);
       booted_id = g_strdup (bootedid_v.c_str ());
     }
   else

@@ -585,7 +585,7 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
 
-  CXX_TRY (core_libdnf_process_global_init (), error);
+  ROSCXX_TRY (core_libdnf_process_global_init (), error);
 
   /* Auto-synthesize an empty treefile if none is set; this avoids us
    * having to check for whether it's NULL everywhere.  The empty treefile
@@ -875,7 +875,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo *pkgcache, const char *nevra,
                                     const char *expected_sha256, GVariant **out_header,
                                     GCancellable *cancellable, GError **error)
 {
-  auto cachebranch = CXX_TRY_VAL (nevra_to_cache_branch (nevra), error);
+  auto cachebranch = ROSCXX_TRY_VAL (nevra_to_cache_branch (nevra), error);
 
   if (expected_sha256 != NULL)
     {
@@ -1219,7 +1219,7 @@ find_pkg_in_ostree (RpmOstreeContext *self, DnfPackage *pkg, OstreeSePolicy *sep
   const char *reponame = dnf_package_get_reponame (pkg);
   if (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) != 0)
     {
-      auto expected_chksum_repr = CXX_TRY_VAL (get_repodata_chksum_repr (*pkg), error);
+      auto expected_chksum_repr = ROSCXX_TRY_VAL (get_repodata_chksum_repr (*pkg), error);
 
       gboolean same_pkg_chksum = FALSE;
       if (!commit_has_matching_repodata_chksum_repr (commit, expected_chksum_repr.c_str (),
@@ -1663,7 +1663,7 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
             }
           else
             {
-              auto repodata_chksum = CXX_TRY_VAL (get_repodata_chksum_repr (*match), error);
+              auto repodata_chksum = ROSCXX_TRY_VAL (get_repodata_chksum_repr (*match), error);
               if (pkg.digest != repodata_chksum) /* we're comparing two rust::String here */
                 n_checksum_mismatches++;
               else
@@ -2073,7 +2073,7 @@ rpmostree_context_set_lockfile (RpmOstreeContext *self, char **lockfiles, gboole
   rust::Vec<rust::String> rs_lockfiles;
   for (char **it = lockfiles; it && *it; it++)
     rs_lockfiles.push_back (std::string (*it));
-  self->lockfile = CXX_TRY_VAL (lockfile_read (rs_lockfiles), error);
+  self->lockfile = ROSCXX_TRY_VAL (lockfile_read (rs_lockfiles), error);
   self->lockfile_strict = strict;
   return TRUE;
 }
@@ -2152,7 +2152,7 @@ rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal, OstreeRepo *p
             }
         }
 
-      auto chksum_repr = CXX_TRY_VAL (get_repodata_chksum_repr (*pkg), error);
+      auto chksum_repr = ROSCXX_TRY_VAL (get_repodata_chksum_repr (*pkg), error);
       g_checksum_update (checksum, (guint8 *)chksum_repr.data (), chksum_repr.size ());
     }
 
@@ -3829,7 +3829,7 @@ write_rpmdb (RpmOstreeContext *self, int tmprootfs_dfd, GPtrArray *overlays,
   if (self->treefile_rs && self->treefile_rs->rpmdb_backend_is_target ())
     {
       g_print ("Regenerating rpmdb for target\n");
-      CXX_TRY (
+      ROSCXX_TRY (
           rewrite_rpmdb_for_target (tmprootfs_dfd, self->treefile_rs->should_normalize_rpmdb ()),
           error);
     }
@@ -4116,9 +4116,9 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
    */
   if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "var/tmp", 0755, cancellable, error))
     return FALSE;
-  CXX_TRY (rootfs_prepare_links (tmprootfs_dfd), error);
+  ROSCXX_TRY (rootfs_prepare_links (tmprootfs_dfd), error);
 
-  auto etc_guard = CXX_TRY_VAL (prepare_tempetc_guard (tmprootfs_dfd), error);
+  auto etc_guard = ROSCXX_TRY_VAL (prepare_tempetc_guard (tmprootfs_dfd), error);
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
@@ -4126,12 +4126,12 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
     {
       gboolean have_passwd;
 
-      auto fs_prep = CXX_TRY_VAL (prepare_filesystem_script_prep (tmprootfs_dfd), error);
+      auto fs_prep = ROSCXX_TRY_VAL (prepare_filesystem_script_prep (tmprootfs_dfd), error);
 
       auto passwd_entries = rpmostreecxx::new_passwd_entries ();
 
       std::string passwd_dir (self->passwd_dir ?: "");
-      have_passwd = CXX_TRY_VAL (prepare_rpm_layering (tmprootfs_dfd, passwd_dir), error);
+      have_passwd = ROSCXX_TRY_VAL (prepare_rpm_layering (tmprootfs_dfd, passwd_dir), error);
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
       if (!rpmostree_rootfs_fixup_selinux_store_root (tmprootfs_dfd, cancellable, error))
@@ -4279,7 +4279,7 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 
       if (have_passwd)
         {
-          CXX_TRY (complete_rpm_layering (tmprootfs_dfd), error);
+          ROSCXX_TRY (complete_rpm_layering (tmprootfs_dfd), error);
         }
 
       // Revert filesystem changes just for scripts.
@@ -4318,7 +4318,7 @@ rpmostree_context_assemble_end (RpmOstreeContext *self, GCancellable *cancellabl
   if (!ensure_tmprootfs_dfd (self, error))
     return FALSE;
   if (self->treefile_rs->get_cliwrap ())
-    CXX_TRY (cliwrap_write_wrappers (self->tmprootfs_dfd), error);
+    ROSCXX_TRY (cliwrap_write_wrappers (self->tmprootfs_dfd), error);
   return TRUE;
 }
 

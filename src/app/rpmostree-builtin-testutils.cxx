@@ -62,7 +62,7 @@ rpmostree_builtin_testutils (int argc, char **argv, RpmOstreeCommandInvocation *
   rust::Vec<rust::String> rustargv;
   for (int i = 0; i < argc; i++)
     rustargv.push_back (std::string (argv[i]));
-  CXX_TRY (testutils_entrypoint (rustargv), error);
+  ROSCXX_TRY (testutils_entrypoint (rustargv), error);
   return TRUE;
 }
 
