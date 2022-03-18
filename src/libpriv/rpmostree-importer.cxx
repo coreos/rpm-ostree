@@ -479,34 +479,23 @@ compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpo
       const char *group = NULL;
       get_rpmfi_override (self, path, &user, &group, NULL);
 
-      try
+      auto entry = ROSCXX_VAL (
+          tmpfiles_translate (path, *file_info, user ?: "root", group ?: "root"), error);
+      if (entry.has_value ())
         {
-          auto entry = rpmostreecxx::tmpfiles_translate (path, *file_info, user ?: "root",
-                                                         group ?: "root");
-          g_string_append (self->tmpfiles_d, entry.c_str ());
+          g_string_append (self->tmpfiles_d, entry.value ().c_str ());
           g_string_append_c (self->tmpfiles_d, '\n');
         }
-      catch (std::exception &e)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what ());
-          return OSTREE_REPO_COMMIT_FILTER_SKIP;
-        }
 
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
 
-  try
-    {
-      bool skip_extraneous = (self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) != 0;
-      auto is_ignored = rpmostreecxx::importer_compose_filter (path, *file_info, skip_extraneous);
-      if (is_ignored)
-        return OSTREE_REPO_COMMIT_FILTER_SKIP;
-    }
-  catch (std::exception &e)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what ());
-      return OSTREE_REPO_COMMIT_FILTER_SKIP;
-    }
+  bool skip_extraneous = (self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) != 0;
+  auto is_ignored = ROSCXX_VAL (importer_compose_filter (path, *file_info, skip_extraneous), error);
+  if (!is_ignored.has_value ())
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
+  else if (is_ignored.value ())
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
   bool ro_executables = (self->flags & RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES) != 0;
   rpmostreecxx::tweak_imported_file_info (*file_info, ro_executables);

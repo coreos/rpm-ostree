@@ -333,14 +333,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_
                                            : rpmostreecxx::BubblewrapMutability::RoFiles;
   auto bwrap = ROSCXX_TRY_VAL (bubblewrap_new_with_mutability (rootfs_fd, mutability), error);
   /* Scripts can see a /var with compat links like alternatives */
-  try
-    {
-      bwrap->setup_compat_var ();
-    }
-  catch (std::exception &e)
-    {
-      return glnx_throw (error, "%s", e.what ());
-    }
+  CXX_TRY (bwrap->setup_compat_var (), error);
 
   struct stat stbuf;
   if (glnx_fstatat (rootfs_fd, "usr/lib/opt", &stbuf, AT_SYMLINK_NOFOLLOW, NULL)
@@ -448,20 +441,17 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_
         bwrap->append_child_arg (script_arg);
     }
 
-  try
-    {
-      g_assert (cancellable);
-      bwrap->run (*cancellable);
-    }
-  catch (std::exception &e)
+  g_assert (cancellable);
+  g_autoptr (GError) local_error = NULL;
+  if (!CXX (bwrap->run (*cancellable), &local_error))
     {
       dump_buffered_output_noerr (pkg_script, &buffered_output);
-      auto msg = e.what ();
       /* If errors go to the journal, help the user/admin find them there */
       if (rpmostreecxx::running_in_systemd ())
-        return glnx_throw (error, "%s; run `journalctl -t '%s'` for more information", msg, id);
+        return glnx_throw (error, "%s; run `journalctl -t '%s'` for more information",
+                           local_error->message, id);
       else
-        return glnx_throw (error, "%s", msg);
+        return g_propagate_error (error, util::move_nullify (local_error)), FALSE;
     }
   dump_buffered_output_noerr (pkg_script, &buffered_output);
 
@@ -962,14 +952,8 @@ rpmostree_deployment_sanitycheck_true (int rootfs_fd, GCancellable *cancellable,
       bubblewrap_new_with_mutability (rootfs_fd, rpmostreecxx::BubblewrapMutability::Immutable),
       error);
   bwrap->append_child_arg ("/usr/bin/true");
-  try
-    {
-      bwrap->run (*cancellable);
-    }
-  catch (std::exception &e)
-    {
-      util::rethrow_prefixed (e, "Sanity-checking final rootfs");
-    }
+  if (!CXX (bwrap->run (*cancellable), error))
+    return glnx_prefix_error (error, "Sanity-checking final rootfs");
   sd_journal_print (LOG_INFO, "sanitycheck(/usr/bin/true) successful");
   return TRUE;
 }

@@ -68,14 +68,10 @@ livefs_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
   /* Run the transaction */
-  try
-    {
-      rpmostreecxx::transaction_apply_live (*sysroot, *self->options);
-    }
-  catch (std::exception &e)
+  if (!ROSCXX (transaction_apply_live (*sysroot, *self->options), error))
     {
       (void)rpmostree_syscore_bump_mtime (sysroot, NULL);
-      throw;
+      return FALSE;
     }
 
   /* We use this to notify ourselves of changes, which is a bit silly, but it
