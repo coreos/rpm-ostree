@@ -7,9 +7,13 @@
  */
 
 use anyhow::{bail, Context, Result};
+use cap_std::fs::Dir;
+use cap_std_ext::cap_std;
+use cap_std_ext::dirext::CapStdExtDirExt;
 use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io::Read;
 
 use crate::cxxrsutil::*;
 use crate::ffi::StringMapping;
@@ -142,10 +146,16 @@ impl Extensions {
     }
 
     pub(crate) fn state_checksum_changed(&self, chksum: &str, output_dir: &str) -> CxxResult<bool> {
-        let output_dir = openat::Dir::open(output_dir)?;
-        if let Some(prev_chksum) =
-            output_dir.read_to_string_optional(RPMOSTREE_EXTENSIONS_STATE_FILE)?
-        {
+        let output_dir = Dir::open_ambient_dir(output_dir, cap_std::ambient_authority())?;
+        let f = output_dir.open_optional(RPMOSTREE_EXTENSIONS_STATE_FILE)?;
+        let prev_checksum = f
+            .map(|mut f| -> Result<_> {
+                let mut s = String::new();
+                f.read_to_string(&mut s)?;
+                Ok(s)
+            })
+            .transpose()?;
+        if let Some(prev_chksum) = prev_checksum {
             Ok(prev_chksum != chksum)
         } else {
             Ok(true)
