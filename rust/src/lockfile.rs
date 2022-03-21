@@ -13,7 +13,7 @@
 pub use self::ffi::*;
 use crate::utils;
 use anyhow::{anyhow, bail, Result};
-use cap_std::fs::{Dir, Permissions};
+use cap_std::fs::Permissions;
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use chrono::prelude::*;
@@ -418,21 +418,10 @@ pub(crate) fn lockfile_write(
         lockfile_repos.insert(id, LockfileRepoMetadata { generated });
     }
 
-    let filename = Path::new(filename);
-    let authority = cap_std::ambient_authority();
-    let lockfile_dir = match filename.parent() {
-        Some(p) if p.as_os_str().is_empty() => Path::new("."),
-        Some(p) => p,
-        None => Path::new("/"),
-    };
-    let lockfile_dir = Dir::open_ambient_dir(lockfile_dir, authority)?;
-    let lockfile_name = filename
-        .file_name()
-        .ok_or_else(|| anyhow!("lockfile name is empty"))?;
-    lockfile_dir.replace_file_with_perms(
-        lockfile_name,
-        Permissions::from_mode(0o644),
-        |w| -> Result<()> { Ok(serde_json::to_writer_pretty(w, &lockfile)?) },
-    )?;
+    let (dir, path) =
+        crate::capstdext::open_dir_of(Path::new(filename), cap_std::ambient_authority())?;
+    dir.replace_file_with_perms(path, Permissions::from_mode(0o644), |w| -> Result<()> {
+        Ok(serde_json::to_writer_pretty(w, &lockfile)?)
+    })?;
     Ok(())
 }
