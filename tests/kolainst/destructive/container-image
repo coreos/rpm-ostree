@@ -122,13 +122,18 @@ repo-packages:
     packages:
       - testdaemon
 EOF
+    cat >nonano.yaml << 'EOF'
+override-remove:
+  - nano
+  - nano-default-editor
+EOF
 cat > Dockerfile << 'EOF'
 FROM localhost/fcos
 RUN rm -rf /etc/yum.repos.d/*  # Ensure we work offline
 ADD local.repo /etc/yum.repos.d/
 RUN rpm-ostree install bar
 RUN mkdir -p /etc/rpm-ostree/origin.d
-ADD baz.yaml testdaemon-query.yaml /etc/rpm-ostree/origin.d/
+ADD baz.yaml testdaemon-query.yaml nonano.yaml /etc/rpm-ostree/origin.d/
 RUN rpm-ostree ex rebuild
 RUN echo some config file > /etc/someconfig.conf
 RUN echo somedata > /usr/share/somenewdata
@@ -159,6 +164,7 @@ EOF
       assert_streq $(rpm -q $p) $p-1.0-1.${arch}
       test -f /usr/bin/$p
     done
+    ! rpm -q nano
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:derived\""
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;

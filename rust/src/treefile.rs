@@ -750,6 +750,13 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    pub(crate) fn set_packages_override_remove(&mut self, packages: &Vec<String>) {
+        let _ = self.parsed.derive.override_remove.take();
+        if !packages.is_empty() {
+            self.parsed.derive.override_remove = Some(packages.clone());
+        }
+    }
+
     pub(crate) fn get_packages_override_replace_local(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -1036,7 +1043,8 @@ impl Treefile {
         // this is pretty wasteful but it allows us to make this an opt-in, instead of an opt-out
         // and avoid regressing if we add more fields in the future
         let mut clone = self.parsed.derive.clone();
-        // here in the future, we'll neuter everything we *do* support
+        // neuter everything we *do* support
+        clone.override_remove.take();
         if clone != Default::default() {
             let j = serde_json::to_string_pretty(&clone)?;
             bail!(
