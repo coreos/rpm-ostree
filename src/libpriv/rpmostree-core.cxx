@@ -1737,6 +1737,17 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       g_assert_cmpint (packages_override_remove.size (), ==, 0);
     }
 
+  if (self->is_container)
+    {
+      /* There are things we don't support in the container flow. */
+      g_assert_cmpint (packages_local.size (), ==, 0);
+      g_assert_cmpint (packages_local_fileoverride.size (), ==, 0);
+      g_assert_cmpint (packages_override_replace_local.size (), ==, 0);
+      g_assert_cmpint (exclude_packages.size (), ==, 0);
+      g_assert_cmpint (modules_enable.size (), ==, 0);
+      g_assert_cmpint (modules_install.size (), ==, 0);
+    }
+
   /* setup sack if not yet set up */
   if (dnf_context_get_sack (dnfctx) == NULL)
     {

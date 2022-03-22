@@ -33,6 +33,8 @@ gboolean
 rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *cancellable,
                              GError **error)
 {
+  CXX_TRY (treefile.validate_for_container (), error);
+
   g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_container ();
   rpmostree_context_set_treefile (ctx, treefile);
 

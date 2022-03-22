@@ -1029,6 +1029,23 @@ impl Treefile {
         rootfs_dfd.write_file_contents(target, 0o644, self.serialized.as_bytes())?;
         Ok(())
     }
+
+    pub(crate) fn validate_for_container(&self) -> Result<()> {
+        // this should've already been checked, but just in case
+        self.parsed.base.error_if_nonempty()?;
+        // this is pretty wasteful but it allows us to make this an opt-in, instead of an opt-out
+        // and avoid regressing if we add more fields in the future
+        let mut clone = self.parsed.derive.clone();
+        // here in the future, we'll neuter everything we *do* support
+        if clone != Default::default() {
+            let j = serde_json::to_string_pretty(&clone)?;
+            bail!(
+                "the following non-container derivation fields are not supported:\n{}",
+                j
+            );
+        }
+        Ok(())
+    }
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -1690,7 +1707,7 @@ pub(crate) struct LegacyTreeComposeConfigFields {
     pub(crate) automatic_version_prefix: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DeriveCustom {
     pub(crate) url: String,
@@ -1698,7 +1715,7 @@ pub(crate) struct DeriveCustom {
     pub(crate) description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DeriveInitramfs {
     pub(crate) regenerate: bool,
@@ -1711,7 +1728,7 @@ pub(crate) struct DeriveInitramfs {
 /// These fields are only useful when deriving from a prior ostree commit;
 /// at the moment we only use them when translating an origin file
 /// to a treefile for client side assembly.
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DeriveConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2947,7 +2964,6 @@ pub(crate) fn treefile_new_client_from_etc(basearch: &str) -> CxxResult<Box<Tree
     for tf in tfs {
         let new_cfg = treefile_parse_and_process(tf, basearch)?;
         new_cfg.config.base.error_if_nonempty()?;
-        new_cfg.config.derive.error_if_nonempty()?;
         new_cfg.externals.assert_empty();
         let mut new_cfg = new_cfg.config;
         treefile_merge(&mut new_cfg, &mut cfg);
