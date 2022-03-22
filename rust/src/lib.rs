@@ -452,6 +452,7 @@ pub mod ffi {
         fn print_deprecation_warnings(&self);
         fn print_experimental_notices(&self);
         fn sanitycheck_externals(&self) -> Result<()>;
+        fn validate_for_container(&self) -> Result<()>;
     }
 
     // treefile.rs (split out from above to make &self nice to use)
