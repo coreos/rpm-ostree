@@ -225,6 +225,24 @@ pub mod ffi {
         fn directory_size(dfd: i32, mut cancellable: Pin<&mut GCancellable>) -> Result<u64>;
     }
 
+    // deployment_utils.rs
+    extern "Rust" {
+        fn deployment_for_id(
+            sysroot: Pin<&mut OstreeSysroot>,
+            deploy_id: &str,
+        ) -> Result<*mut OstreeDeployment>;
+        fn deployment_checksum_for_id(
+            sysroot: Pin<&mut OstreeSysroot>,
+            deploy_id: &str,
+        ) -> Result<String>;
+        fn deployment_get_base(
+            sysroot: Pin<&mut OstreeSysroot>,
+            opt_deploy_id: &str,
+            opt_os_name: &str,
+        ) -> Result<*mut OstreeDeployment>;
+
+    }
+
     // A grab-bag of metadata from the deployment's ostree commit
     // around layering/derivation
     #[derive(Debug, Default)]
@@ -718,9 +736,11 @@ mod core;
 use crate::core::*;
 mod capstdext;
 mod daemon;
+pub(crate) use daemon::*;
+mod deployment_utils;
+pub(crate) use deployment_utils::*;
 mod dirdiff;
 pub mod failpoint_bridge;
-pub(crate) use daemon::*;
 use failpoint_bridge::*;
 mod extensions;
 pub(crate) use extensions::*;

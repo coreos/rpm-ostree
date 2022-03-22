@@ -339,28 +339,23 @@ get_deployments_rpm_diff (const char *arg_deployid0, const char *arg_deployid1,
 {
   g_autoptr (GCancellable) cancellable = NULL;
   RpmostreedSysroot *global_sysroot;
-  glnx_unref_object OstreeDeployment *deployment0 = NULL;
-  glnx_unref_object OstreeDeployment *deployment1 = NULL;
   OstreeSysroot *ot_sysroot = NULL;
   OstreeRepo *ot_repo = NULL;
   g_autoptr (GVariant) value = NULL;
-  const gchar *ref0;
-  const gchar *ref1;
 
   global_sysroot = rpmostreed_sysroot_get ();
 
   ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
-  if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid0, &deployment0, error))
-    return FALSE;
-  ref0 = ostree_deployment_get_csum (deployment0);
+  rust::Str deploy_id0 (arg_deployid0 ?: "");
+  auto ref0 = ROSCXX_TRY_VAL (deployment_checksum_for_id (*ot_sysroot, deploy_id0), error);
 
-  if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid1, &deployment1, error))
-    return FALSE;
-  ref1 = ostree_deployment_get_csum (deployment1);
+  rust::Str deploy_id1 (arg_deployid1 ?: "");
+  auto ref1 = ROSCXX_TRY_VAL (deployment_checksum_for_id (*ot_sysroot, deploy_id1), error);
 
-  if (!rpm_ostree_db_diff_variant (ot_repo, ref0, ref1, FALSE, &value, cancellable, error))
+  if (!rpm_ostree_db_diff_variant (ot_repo, ref0.c_str (), ref1.c_str (), FALSE, &value,
+                                   cancellable, error))
     return FALSE;
 
   *out_value = util::move_nullify (value);
@@ -406,17 +401,9 @@ get_cached_update_rpm_diff (const gchar *name, const char *arg_deployid, GVarian
   ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
-  if (arg_deployid == NULL || arg_deployid[0] == '\0')
-    {
-      base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
-      if (base_deployment == NULL)
-        return glnx_throw (error, "No deployments found for os %s", name);
-    }
-  else
-    {
-      if (!rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid, &base_deployment, error))
-        return FALSE;
-    }
+  rust::Str os_name (name ?: "");
+  rust::Str deploy_id (arg_deployid ?: "");
+  base_deployment = ROSCXX_TRY_VAL (deployment_get_base (*ot_sysroot, deploy_id, os_name), error);
 
   origin = rpmostree_origin_parse_deployment (base_deployment, error);
   if (!origin)
