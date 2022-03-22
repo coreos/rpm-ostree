@@ -424,6 +424,8 @@ pub mod ffi {
         fn get_packages_local(&self) -> Vec<String>;
         fn get_packages_local_fileoverride(&self) -> Vec<String>;
         fn get_packages_override_replace_local(&self) -> Vec<String>;
+        fn get_packages_override_replace_local_rpms(&self) -> Vec<String>;
+        fn set_packages_override_replace_local_rpms(&mut self, packages: &Vec<String>);
         fn get_packages_override_remove(&self) -> Vec<String>;
         fn set_packages_override_remove(&mut self, packages: &Vec<String>);
         fn get_modules_enable(&self) -> Vec<String>;
