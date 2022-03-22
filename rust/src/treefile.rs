@@ -767,6 +767,21 @@ impl Treefile {
             .collect()
     }
 
+    pub(crate) fn get_packages_override_replace_local_rpms(&self) -> Vec<String> {
+        self.parsed
+            .derive
+            .override_replace_local_rpms
+            .clone()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn set_packages_override_replace_local_rpms(&mut self, packages: &Vec<String>) {
+        let _ = self.parsed.derive.override_replace_local_rpms.take();
+        if !packages.is_empty() {
+            self.parsed.derive.override_replace_local_rpms = Some(packages.clone());
+        }
+    }
+
     pub(crate) fn get_exclude_packages(&self) -> Vec<String> {
         self.parsed
             .base
@@ -1045,6 +1060,7 @@ impl Treefile {
         let mut clone = self.parsed.derive.clone();
         // neuter everything we *do* support
         clone.override_remove.take();
+        clone.override_replace_local_rpms.take();
         if clone != Default::default() {
             let j = serde_json::to_string_pretty(&clone)?;
             bail!(
@@ -1751,6 +1767,8 @@ pub(crate) struct DeriveConfigFields {
     pub(crate) override_remove: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_replace_local: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) override_replace_local_rpms: Option<Vec<String>>,
 
     // Initramfs
     #[serde(skip_serializing_if = "Option::is_none")]

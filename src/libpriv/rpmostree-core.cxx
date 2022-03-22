@@ -1333,7 +1333,7 @@ sort_packages (RpmOstreeContext *self, GPtrArray *packages, GCancellable *cancel
         if (!find_pkg_in_ostree (self, pkg, self->sepolicy, &in_ostree, &selinux_match, error))
           return FALSE;
 
-        if (is_locally_cached)
+        if (is_locally_cached && !self->is_container)
           g_assert (in_ostree);
 
         if (!in_ostree && !cached)
@@ -1723,6 +1723,8 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   auto packages_local = self->treefile_rs->get_packages_local ();
   auto packages_local_fileoverride = self->treefile_rs->get_packages_local_fileoverride ();
   auto packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local ();
+  auto packages_override_replace_local_rpms
+      = self->treefile_rs->get_packages_override_replace_local_rpms ();
   auto packages_override_remove = self->treefile_rs->get_packages_override_remove ();
   auto exclude_packages = self->treefile_rs->get_exclude_packages ();
   auto modules_enable = self->treefile_rs->get_modules_enable ();
@@ -1734,6 +1736,7 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       g_assert_cmpint (packages_local.size (), ==, 0);
       g_assert_cmpint (packages_local_fileoverride.size (), ==, 0);
       g_assert_cmpint (packages_override_replace_local.size (), ==, 0);
+      g_assert_cmpint (packages_override_replace_local_rpms.size (), ==, 0);
       g_assert_cmpint (packages_override_remove.size (), ==, 0);
     }
 
@@ -1746,6 +1749,14 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       g_assert_cmpint (exclude_packages.size (), ==, 0);
       g_assert_cmpint (modules_enable.size (), ==, 0);
       g_assert_cmpint (modules_install.size (), ==, 0);
+    }
+  else
+    {
+      /* And some things we *only* support in the container flow. */
+
+      /* Though really, this *could* be useful client-side too. It's a mix of repo overrides and
+       * local overrides. */
+      g_assert_cmpint (packages_override_replace_local_rpms.size (), ==, 0);
     }
 
   /* setup sack if not yet set up */
@@ -1783,6 +1794,21 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       g_autoptr (DnfPackage) pkg = NULL;
       if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
         return FALSE;
+      const char *name = dnf_package_get_name (pkg);
+      g_assert (name);
+      g_ptr_array_add (replaced_nevras, (gpointer)nevra);
+      // this is a bit wasteful, but for locking purposes, we need the pkgname to match
+      // against the base, not the nevra which naturally will be different
+      g_ptr_array_add (replaced_pkgnames, g_strdup (name));
+      g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
+    }
+  for (auto &rpm : packages_override_replace_local_rpms)
+    {
+      g_autoptr (DnfPackage) pkg
+          = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->dnfctx), rpm.c_str ());
+      if (!pkg)
+        return glnx_throw (error, "Failed to add local pkg %s to sack", rpm.c_str ());
+      const char *nevra = dnf_package_get_nevra (pkg);
       const char *name = dnf_package_get_name (pkg);
       g_assert (name);
       g_ptr_array_add (replaced_nevras, (gpointer)nevra);
