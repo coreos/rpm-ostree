@@ -20,6 +20,7 @@
 
 #include "config.h"
 
+#include "rpmostree-container.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-override-builtins.h"
 
@@ -251,6 +252,14 @@ rpmostree_override_builtin_remove (int argc, char **argv, RpmOstreeCommandInvoca
   argv++;
   argc--;
   argv[argc] = NULL;
+
+  auto is_ostree_container = ROSCXX_TRY_VAL (is_ostree_container (), error);
+  if (is_ostree_container)
+    {
+      auto treefile = ROSCXX_TRY_VAL (treefile_new_empty (), error);
+      treefile->set_packages_override_remove (util::rust_stringvec_from_strv (argv));
+      return rpmostree_container_rebuild (*treefile, cancellable, error);
+    }
 
   return handle_override (sysroot_proxy, invocation, (const char *const *)argv, opt_replace_pkgs,
                           NULL, cancellable, error);
