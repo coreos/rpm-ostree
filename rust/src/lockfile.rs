@@ -13,13 +13,16 @@
 pub use self::ffi::*;
 use crate::utils;
 use anyhow::{anyhow, bail, Result};
+use cap_std::fs::Permissions;
+use cap_std_ext::cap_std;
+use cap_std_ext::dirext::CapStdExtDirExt;
 use chrono::prelude::*;
-use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::io;
 use std::iter::Extend;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::pin::Pin;
 
@@ -34,7 +37,7 @@ fn lockfile_parse<P: AsRef<Path>>(filename: P) -> Result<LockfileConfig> {
     let lf = utils::parse_stream(&fmt, &mut f).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Parsing {}: {}", filename.to_string_lossy(), e.to_string()),
+            format!("Parsing {}: {}", filename.to_string_lossy(), e),
         )
     })?;
     Ok(lf)
@@ -415,10 +418,9 @@ pub(crate) fn lockfile_write(
         lockfile_repos.insert(id, LockfileRepoMetadata { generated });
     }
 
-    let filename = Path::new(filename);
-    let lockfile_dir = openat::Dir::open(filename.parent().unwrap_or_else(|| Path::new("/")))?;
-    let basename = filename.file_name().expect("filename");
-    lockfile_dir.write_file_with(basename, 0o644, |w| -> Result<()> {
+    let (dir, path) =
+        crate::capstdext::open_dir_of(Path::new(filename), cap_std::ambient_authority())?;
+    dir.replace_file_with_perms(path, Permissions::from_mode(0o644), |w| -> Result<()> {
         Ok(serde_json::to_writer_pretty(w, &lockfile)?)
     })?;
     Ok(())
