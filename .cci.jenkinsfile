@@ -47,7 +47,6 @@ parallel insttests: {
           # include our built rpm-ostree in the image
           mkdir -p overrides/rpm
           mv *.rpm overrides/rpm
-          ${env.WORKSPACE}/ci/cosa-overrides.sh
           coreos-assembler fetch
           coreos-assembler build
            ${env.WORKSPACE}/ci/composepost-checks.sh
