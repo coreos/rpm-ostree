@@ -94,18 +94,9 @@ fi
 
 # get the most recent entry
 entry=$(tail -n 1 entries.txt)
-# And now nuke all the journal entries except the latest, but we don't want to
-# actually lose everything since e.g. some of the previous vmcheck tests that
-# ran on this machine may have failed and we would've rendered the journal
-# useless for debugging. So hack around that... yeah, would be cleaner if we
-# could just spawn individual VMs per test.
-vm_cmd systemctl stop systemd-journald.service
-vm_cmd cp -r /var/log/journal{,.bak}
+# And now nuke all the journal entries except the latest.
 vm_cmd journalctl --vacuum-time=$((entry - 1))s
 vm_rpmostree cleanup -b
-vm_cmd systemctl stop systemd-journald.service
-vm_cmd rm -rf /var/log/journal
-vm_cmd mv /var/log/journal{.bak,}
 
 vm_cmd ls -l /var/lib/rpm-ostree/history > entries.txt
 if [ $(wc -l entries.txt) != 1 ]; then
