@@ -955,6 +955,7 @@ gboolean
 rpmostree_get_refts_for_commit (OstreeRepo *repo, const char *ref, RpmOstreeRefTs **out_ts,
                                 GCancellable *cancellable, GError **error)
 {
+  ROSCXX_TRY (core_libdnf_process_global_init (), error);
   g_auto (GLnxTmpDir) tmpdir = {
     0,
   };
