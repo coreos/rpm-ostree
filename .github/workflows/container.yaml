@@ -1,0 +1,43 @@
+---
+name: Container
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: "Build"
+    runs-on: ubuntu-latest
+    container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Build
+        run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
+      - name: Upload binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: install.tar
+          path: install.tar
+  integration:
+    name: "Integration"
+    needs: build
+    runs-on: ubuntu-latest
+    container: quay.io/coreos-assembler/fcos:testing-devel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Download build
+        uses: actions/download-artifact@v2
+        with:
+          name: install.tar
+      - name: Install
+        run: tar -C / -xf install.tar
+      - name: Integration tests
+        run: ./ci/test-container.sh
