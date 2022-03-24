@@ -1379,6 +1379,7 @@ rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement
   g_autoptr (GPtrArray) ret = g_ptr_array_new ();
   GPtrArray *repos = dnf_context_get_repos (dnfctx);
 
+  g_assert (repos);
   for (guint i = 0; i < repos->len; i++)
     {
       auto repo = static_cast<DnfRepo *> (repos->pdata[i]);
