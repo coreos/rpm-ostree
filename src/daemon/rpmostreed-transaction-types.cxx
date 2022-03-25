@@ -162,7 +162,9 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
                          GCancellable *cancellable, GError **error)
 {
   RpmOstreeRefspecType refspectype;
-  rpmostree_origin_classify_refspec (origin, &refspectype, NULL);
+  const char *refspec = rpmostree_origin_get_refspec (origin);
+  if (!rpmostree_refspec_classify (refspec, &refspectype, error))
+    return FALSE;
 
   if (revision == NULL)
     return glnx_throw (error, "Missing revision");
@@ -187,8 +189,8 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
         const char *version = parsed_revision.value.c_str ();
         /* Perhaps down the line we'll drive history traversal into libostree */
         rpmostree_output_message ("Resolving version '%s'", version);
-        if (!rpmostreed_repo_lookup_version (repo, rpmostree_origin_get_refspec (origin), version,
-                                             progress, cancellable, &checksum, error))
+        if (!rpmostreed_repo_lookup_version (repo, refspec, version, progress, cancellable,
+                                             &checksum, error))
           return FALSE;
 
         rpmostree_origin_set_override_commit (origin, checksum, version);
@@ -200,8 +202,8 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
         if (!skip_branch_check)
           {
             rpmostree_output_message ("Validating checksum '%s'", checksum);
-            if (!rpmostreed_repo_lookup_checksum (repo, rpmostree_origin_get_refspec (origin),
-                                                  checksum, progress, cancellable, error))
+            if (!rpmostreed_repo_lookup_checksum (repo, refspec, checksum, progress,
+                                                  cancellable, error))
               return FALSE;
           }
         rpmostree_origin_set_override_commit (origin, checksum, NULL);
@@ -1504,7 +1506,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
 
   /* Past this point we've computed the origin */
   RpmOstreeRefspecType refspec_type;
-  rpmostree_origin_classify_refspec (origin, &refspec_type, NULL);
+  {
+    const char *refspec = rpmostree_origin_get_refspec (origin);
+    if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
+      return FALSE;
+  }
 
   if (download_metadata_only)
     {

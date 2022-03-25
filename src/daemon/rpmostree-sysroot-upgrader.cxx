@@ -418,8 +418,9 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
   const char *override_commit = rpmostree_origin_get_override_commit (self->computed_origin);
 
   RpmOstreeRefspecType refspec_type;
-  const char *refspec;
-  rpmostree_origin_classify_refspec (self->computed_origin, &refspec_type, &refspec);
+  const char *refspec = rpmostree_origin_get_refspec (self->computed_origin);
+  if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
+    return FALSE;
 
   g_autofree char *new_base_rev = NULL;
 
