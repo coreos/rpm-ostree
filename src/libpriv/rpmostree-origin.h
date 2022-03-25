@@ -66,7 +66,7 @@ bool rpmostree_origin_has_initramfs_etc_files (RpmOstreeOrigin *origin);
 
 bool rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 
-const char *const *rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
+rust::Vec<rust::String> rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
 
 const char *rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 

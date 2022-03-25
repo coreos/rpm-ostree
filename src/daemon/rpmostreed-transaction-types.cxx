@@ -1982,14 +1982,13 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction, GCancel
 
   g_autoptr (RpmOstreeOrigin) origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
   gboolean current_regenerate = rpmostree_origin_get_regenerate_initramfs (origin);
-  const char *const *current_initramfs_args = rpmostree_origin_get_initramfs_args (origin);
+  auto current_initramfs_args = rpmostree_origin_get_initramfs_args (origin);
 
   /* We don't deep-compare the args right now, we assume if you were using them
    * you want to rerun. This can be important if you edited a config file, which
    * we can't really track without actually regenerating anyways.
    */
-  if (current_regenerate == self->regenerate
-      && (current_initramfs_args == NULL || !*current_initramfs_args)
+  if (current_regenerate == self->regenerate && (current_initramfs_args.empty ())
       && (self->args == NULL || !*self->args))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
