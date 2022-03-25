@@ -281,12 +281,6 @@ rpmostree_origin_get_modules_enable (RpmOstreeOrigin *origin)
 }
 
 GHashTable *
-rpmostree_origin_get_modules_install (RpmOstreeOrigin *origin)
-{
-  return origin->cached_modules_install;
-}
-
-GHashTable *
 rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin)
 {
   return origin->cached_local_packages;

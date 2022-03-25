@@ -47,8 +47,6 @@ GHashTable *rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
 
 GHashTable *rpmostree_origin_get_modules_enable (RpmOstreeOrigin *origin);
 
-GHashTable *rpmostree_origin_get_modules_install (RpmOstreeOrigin *origin);
-
 GHashTable *rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin);
 
 GHashTable *rpmostree_origin_get_local_fileoverride_packages (RpmOstreeOrigin *origin);
