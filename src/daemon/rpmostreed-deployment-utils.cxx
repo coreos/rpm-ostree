@@ -150,8 +150,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
   if (!origin)
     return FALSE;
 
-  const char *refspec = rpmostree_origin_get_refspec (origin);
-  auto refspec_type = rpmostreecxx::refspec_classify (refspec);
+  auto refspec = rpmostree_origin_get_refspec (origin);
+  auto refspec_type = rpmostreecxx::refspec_classify (refspec.c_str ());
 
   gboolean is_layered = FALSE;
   g_autofree char *base_checksum = NULL;
@@ -203,15 +203,15 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     {
     case rpmostreecxx::RefspecType::Container:
       {
-        g_variant_dict_insert (dict, "container-image-reference", "s", refspec);
-        auto state = ROSCXX_TRY_VAL (query_container_image (*repo, refspec), error);
+        g_variant_dict_insert (dict, "container-image-reference", "s", refspec.c_str ());
+        auto state = ROSCXX_TRY_VAL (query_container_image (*repo, refspec.c_str ()), error);
         g_variant_dict_insert (dict, "container-image-reference-digest", "s",
                                state->image_digest.c_str ());
       }
       break;
     case rpmostreecxx::RefspecType::Checksum:
       {
-        g_variant_dict_insert (dict, "origin", "s", refspec);
+        g_variant_dict_insert (dict, "origin", "s", refspec.c_str ());
         g_autofree char *custom_origin_url = NULL;
         g_autofree char *custom_origin_description = NULL;
         rpmostree_origin_get_custom_description (origin, &custom_origin_url,
@@ -223,11 +223,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
       break;
     case rpmostreecxx::RefspecType::Ostree:
       {
-        g_variant_dict_insert (dict, "origin", "s", refspec);
-        ROSCXX_TRY (variant_add_remote_status (*repo, refspec, base_checksum, *dict), error);
+        g_variant_dict_insert (dict, "origin", "s", refspec.c_str ());
+        ROSCXX_TRY (variant_add_remote_status (*repo, refspec.c_str (), base_checksum, *dict),
+                    error);
 
         g_autofree char *pending_base_commitrev = NULL;
-        if (!ostree_repo_resolve_rev (repo, refspec, TRUE, &pending_base_commitrev, error))
+        if (!ostree_repo_resolve_rev (repo, refspec.c_str (), TRUE, &pending_base_commitrev, error))
           return FALSE;
 
         if (pending_base_commitrev && !g_str_equal (pending_base_commitrev, base_checksum))
@@ -276,14 +277,15 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment, OstreeRepo *rep
 {
   const gchar *osname = ostree_deployment_get_osname (deployment);
 
-  g_autofree gchar *refspec_owned = NULL;
+  rust::String refspec_owned;
   gboolean refspec_is_ostree = FALSE;
   if (!refspec)
     {
       g_autoptr (RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
       if (!origin)
         return FALSE;
-      refspec = refspec_owned = g_strdup (rpmostree_origin_get_refspec (origin));
+      refspec_owned = rpmostree_origin_get_refspec (origin);
+      refspec = refspec_owned.c_str ();
     }
   auto refspec_type = rpmostreecxx::refspec_classify (refspec);
 
@@ -640,7 +642,7 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
   if (!origin)
     return FALSE;
 
-  const char *refspec = rpmostree_origin_get_refspec (origin);
+  auto refspec = rpmostree_origin_get_refspec (origin);
 
   /* let's start with the ostree side of things */
 
@@ -665,7 +667,7 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
     }
   else
     {
-      if (!ostree_repo_resolve_rev_ext (repo, refspec, TRUE,
+      if (!ostree_repo_resolve_rev_ext (repo, refspec.c_str (), TRUE,
                                         static_cast<OstreeRepoResolveRevExtFlags> (0),
                                         &new_base_checksum_owned, error))
         return FALSE;
@@ -690,8 +692,8 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
   g_variant_dict_init (&dict, NULL);
 
   /* first get all the traditional/backcompat stuff */
-  if (!add_all_commit_details_to_vardict (booted_deployment, repo, refspec, new_base_checksum,
-                                          commit, &dict, error))
+  if (!add_all_commit_details_to_vardict (booted_deployment, repo, refspec.c_str (),
+                                          new_base_checksum, commit, &dict, error))
     return FALSE;
 
   /* This may seem trivial, but it's important to keep the final variant as self-contained

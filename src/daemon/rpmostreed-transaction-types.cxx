@@ -59,9 +59,8 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
 
   auto refspectype = rpmostreecxx::refspec_classify (refspec);
 
-  /* We copy here because we might lower down change the origin refspec. */
-  g_autofree gchar *current_refspec = g_strdup (rpmostree_origin_get_refspec (origin));
-  auto current_refspectype = rpmostreecxx::refspec_classify (current_refspec);
+  auto current_refspec = rpmostree_origin_get_refspec (origin);
+  auto current_refspectype = rpmostreecxx::refspec_classify (current_refspec.c_str ());
 
   switch (refspectype)
     {
@@ -70,11 +69,11 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
         rpmostree_origin_set_rebase (origin, refspec);
 
         if (current_refspectype == rpmostreecxx::RefspecType::Container
-            && strcmp (current_refspec, refspec) == 0)
+            && strcmp (current_refspec.c_str (), refspec) == 0)
           return glnx_throw (error, "Old and new refs are equal: %s", refspec);
 
         if (out_old_refspec != NULL)
-          *out_old_refspec = util::move_nullify (current_refspec);
+          *out_old_refspec = g_strdup (current_refspec.c_str ());
         if (out_new_refspec != NULL)
           *out_new_refspec = g_strdup (refspec);
         return TRUE;
@@ -87,7 +86,7 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
 
   /* The rest of the code assumes TYPE_OSTREE refspec */
   g_autofree gchar *new_refspec = NULL;
-  if (!rpmostreed_refspec_parse_partial (refspec, current_refspec, &new_refspec, error))
+  if (!rpmostreed_refspec_parse_partial (refspec, current_refspec.c_str (), &new_refspec, error))
     return FALSE;
 
   /* Classify to ensure we handle TYPE_CHECKSUM */
@@ -116,7 +115,7 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
        * in separate oscontainers.  We want to support changing
        * the custom origin that might point to the same commit.
        */
-      if (strcmp (current_refspec, new_refspec) == 0)
+      if (strcmp (current_refspec.c_str (), new_refspec) == 0)
         return glnx_throw (error, "Old and new refs are equal: %s", new_refspec);
 
       rpmostree_origin_set_rebase (origin, new_refspec);
@@ -124,7 +123,8 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
 
   g_autofree gchar *current_remote = NULL;
   g_autofree gchar *current_branch = NULL;
-  g_assert (ostree_parse_refspec (current_refspec, &current_remote, &current_branch, NULL));
+  g_assert (
+      ostree_parse_refspec (current_refspec.c_str (), &current_remote, &current_branch, NULL));
 
   g_autofree gchar *new_remote = NULL;
   g_autofree gchar *new_branch = NULL;
@@ -141,7 +141,7 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
     *out_new_refspec = util::move_nullify (new_refspec);
 
   if (out_old_refspec != NULL)
-    *out_old_refspec = util::move_nullify (current_refspec);
+    *out_old_refspec = g_strdup (current_refspec.c_str ());
 
   return TRUE;
 }
@@ -154,8 +154,8 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
                          gboolean skip_branch_check, const char *revision,
                          GCancellable *cancellable, GError **error)
 {
-  const char *refspec = rpmostree_origin_get_refspec (origin);
-  auto refspectype = rpmostreecxx::refspec_classify (refspec);
+  auto refspec = rpmostree_origin_get_refspec (origin);
+  auto refspectype = rpmostreecxx::refspec_classify (refspec.c_str ());
 
   if (revision == NULL)
     return glnx_throw (error, "Missing revision");
@@ -180,7 +180,7 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
         const char *version = parsed_revision.value.c_str ();
         /* Perhaps down the line we'll drive history traversal into libostree */
         rpmostree_output_message ("Resolving version '%s'", version);
-        if (!rpmostreed_repo_lookup_version (repo, refspec, version, progress, cancellable,
+        if (!rpmostreed_repo_lookup_version (repo, refspec.c_str (), version, progress, cancellable,
                                              &checksum, error))
           return FALSE;
 
@@ -193,8 +193,8 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
         if (!skip_branch_check)
           {
             rpmostree_output_message ("Validating checksum '%s'", checksum);
-            if (!rpmostreed_repo_lookup_checksum (repo, refspec, checksum, progress, cancellable,
-                                                  error))
+            if (!rpmostreed_repo_lookup_checksum (repo, refspec.c_str (), checksum, progress,
+                                                  cancellable, error))
               return FALSE;
           }
         rpmostree_origin_set_override_commit (origin, checksum);
@@ -1493,8 +1493,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
   /* Past this point we've computed the origin */
   rpmostreecxx::RefspecType refspec_type;
   {
-    const char *refspec = rpmostree_origin_get_refspec (origin);
-    refspec_type = rpmostreecxx::refspec_classify (refspec);
+    auto refspec = rpmostree_origin_get_refspec (origin);
+    refspec_type = rpmostreecxx::refspec_classify (refspec.c_str ());
   }
 
   if (download_metadata_only)
