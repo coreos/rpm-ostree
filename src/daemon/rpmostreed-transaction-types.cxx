@@ -1515,7 +1515,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         return glnx_throw (error, "Refusing to download rpm-md for offline OS '%s'", self->osname);
 
       g_autoptr (DnfSack) sack = NULL;
-      if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
+      if (rpmostree_origin_has_packages (origin))
         {
           if (!get_sack_for_booted (sysroot, repo, booted_deployment, &sack, cancellable, error))
             return FALSE;

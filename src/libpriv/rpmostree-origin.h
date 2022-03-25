@@ -42,7 +42,9 @@ rust::String rpmostree_origin_get_custom_url (RpmOstreeOrigin *origin);
 
 rust::String rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin);
 
-GHashTable *rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
+rust::Vec<rust::String> rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
+
+bool rpmostree_origin_has_packages (RpmOstreeOrigin *origin);
 
 GHashTable *rpmostree_origin_get_modules_enable (RpmOstreeOrigin *origin);
 

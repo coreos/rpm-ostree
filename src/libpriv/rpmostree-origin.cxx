@@ -318,10 +318,16 @@ rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-GHashTable *
+rust::Vec<rust::String>
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin)
 {
-  return origin->cached_packages;
+  return (*origin->treefile)->get_packages ();
+}
+
+bool
+rpmostree_origin_has_packages (RpmOstreeOrigin *origin)
+{
+  return (*origin->treefile)->has_packages ();
 }
 
 /* Mutability: getter */
