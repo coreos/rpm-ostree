@@ -677,24 +677,28 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *ca
 {
   g_assert (self->rsack);
 
-  GHashTable *local_replacements
-      = rpmostree_origin_get_overrides_local_replace (self->computed_origin);
+  auto local_replacements = rpmostree_origin_get_overrides_local_replace (self->computed_origin);
   g_autoptr (GPtrArray) inactive_replacements = g_ptr_array_new ();
 
-  GLNX_HASH_TABLE_FOREACH_KV (local_replacements, const char *, nevra, const char *, sha256)
-  {
-    g_autofree char *pkgname = NULL;
-    if (!rpmostree_decompose_nevra (nevra, &pkgname, NULL, NULL, NULL, NULL, error))
-      return FALSE;
+  for (auto &nevra_v : local_replacements)
+    {
+      const char *nevra = nevra_v.c_str ();
+      g_autofree char *sha256 = NULL;
+      if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
+        return FALSE;
 
-    g_autoptr (DnfPackage) pkg = NULL;
-    if (!rpmostree_sack_get_by_pkgname (self->rsack->sack, pkgname, &pkg, error))
-      return FALSE;
+      g_autofree char *pkgname = NULL;
+      if (!rpmostree_decompose_nevra (nevra, &pkgname, NULL, NULL, NULL, NULL, error))
+        return FALSE;
 
-    /* make inactive if it's missing or if that exact nevra is already present */
-    if (!pkg || rpmostree_sack_has_subject (self->rsack->sack, nevra))
-      g_ptr_array_add (inactive_replacements, (gpointer)nevra);
-  }
+      g_autoptr (DnfPackage) pkg = NULL;
+      if (!rpmostree_sack_get_by_pkgname (self->rsack->sack, pkgname, &pkg, error))
+        return FALSE;
+
+      /* make inactive if it's missing or if that exact nevra is already present */
+      if (!pkg || rpmostree_sack_has_subject (self->rsack->sack, nevra))
+        g_ptr_array_add (inactive_replacements, (gpointer)nevra);
+    }
 
   if (inactive_replacements->len > 0)
     {

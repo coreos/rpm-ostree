@@ -365,10 +365,10 @@ rpmostree_origin_has_overrides_remove_name (RpmOstreeOrigin *origin, const char 
 }
 
 /* Mutability: getter */
-GHashTable *
+rust::Vec<rust::String>
 rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin)
 {
-  return origin->cached_overrides_local_replace;
+  return (*origin->treefile)->get_packages_override_replace_local ();
 }
 
 /* Mutability: getter */
