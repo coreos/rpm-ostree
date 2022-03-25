@@ -293,10 +293,15 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-const char *
+rust::String
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 {
-  return origin->cached_refspec;
+  // This is awkward: the treefile supports no base refspec being set since none is in the compose
+  // case. But in the derive case, there should *always* be a base refspec, so verify this. Ideally
+  // we'd have a different type for derivation treefiles. It's not the right time to fix this yet.
+  auto r = (*origin->treefile)->get_base_refspec ();
+  g_assert_cmpstr (r.c_str (), !=, "");
+  return r;
 }
 
 static char *

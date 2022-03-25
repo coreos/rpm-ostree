@@ -410,13 +410,13 @@ get_cached_update_rpm_diff (const gchar *name, const char *arg_deployid, GVarian
   if (!origin)
     return FALSE;
 
+  auto refspec = rpmostree_origin_get_refspec (origin);
   if (!rpm_ostree_db_diff_variant (ot_repo, ostree_deployment_get_csum (base_deployment),
-                                   rpmostree_origin_get_refspec (origin), FALSE, &value,
-                                   cancellable, error))
+                                   refspec.c_str (), FALSE, &value, cancellable, error))
     return FALSE;
 
-  details = rpmostreed_commit_generate_cached_details_variant (
-      base_deployment, ot_repo, rpmostree_origin_get_refspec (origin), NULL, error);
+  details = rpmostreed_commit_generate_cached_details_variant (base_deployment, ot_repo,
+                                                               refspec.c_str (), NULL, error);
   if (!details)
     return FALSE;
 
@@ -1327,6 +1327,7 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocat
   GError *local_error = NULL;
   g_autoptr (GVariant) value = NULL;
   g_autoptr (GVariant) details = NULL;
+  rust::String refspec;
 
   /* TODO: Totally ignoring packages for now */
 
@@ -1348,8 +1349,8 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocat
   if (!origin)
     goto out;
 
-  if (!rpmostreed_refspec_parse_partial (arg_refspec, rpmostree_origin_get_refspec (origin),
-                                         &comp_ref, &local_error))
+  refspec = rpmostree_origin_get_refspec (origin);
+  if (!rpmostreed_refspec_parse_partial (arg_refspec, refspec.c_str (), &comp_ref, &local_error))
     goto out;
 
   if (!rpm_ostree_db_diff_variant (ot_repo, ostree_deployment_get_csum (base_deployment), comp_ref,
@@ -1448,6 +1449,7 @@ get_cached_deploy_rpm_diff (RPMOSTreeOS *interface, const char *arg_revision, GV
 
   const char *base_checksum = ostree_deployment_get_csum (base_deployment);
 
+  auto refspec = rpmostree_origin_get_refspec (origin);
   auto parsed_revision = ROSCXX_TRY_VAL (parse_revision (arg_revision), error);
   g_autofree char *checksum = NULL;
   switch (parsed_revision.kind)
@@ -1459,7 +1461,7 @@ get_cached_deploy_rpm_diff (RPMOSTreeOS *interface, const char *arg_revision, GV
       break;
     case rpmostreecxx::ParsedRevisionKind::Version:
       {
-        if (!rpmostreed_repo_lookup_cached_version (ot_repo, rpmostree_origin_get_refspec (origin),
+        if (!rpmostreed_repo_lookup_cached_version (ot_repo, refspec.c_str (),
                                                     parsed_revision.value.c_str (), cancellable,
                                                     &checksum, error))
           return glnx_prefix_error (error, "Looking up cached version");
@@ -1473,8 +1475,8 @@ get_cached_deploy_rpm_diff (RPMOSTreeOS *interface, const char *arg_revision, GV
                                    error))
     return glnx_prefix_error (error, "Assembling diff");
 
-  details = rpmostreed_commit_generate_cached_details_variant (
-      base_deployment, ot_repo, rpmostree_origin_get_refspec (origin), checksum, error);
+  details = rpmostreed_commit_generate_cached_details_variant (base_deployment, ot_repo,
+                                                               refspec.c_str (), checksum, error);
   if (details == NULL)
     return glnx_prefix_error (error, "Generating cached details");
 

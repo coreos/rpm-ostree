@@ -1067,6 +1067,10 @@ impl Treefile {
         }
         Ok(())
     }
+
+    pub(crate) fn get_base_refspec(&self) -> String {
+        self.parsed.derive.base_refspec.clone().unwrap_or_default()
+    }
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -2895,6 +2899,22 @@ conditional-include:
                 })
             );
         }
+    }
+
+    #[test]
+    fn test_derivation() {
+        let buf = indoc! {"
+            base-refspec: fedora:fedora/35/x86_64/silverblue
+        "};
+        let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
+        assert_eq!(
+            treefile.get_base_refspec(),
+            "fedora:fedora/35/x86_64/silverblue"
+        );
+
+        // test some negatives
+        let treefile = treefile_new_empty().unwrap();
+        assert_eq!(treefile.get_base_refspec(), "");
     }
 }
 
