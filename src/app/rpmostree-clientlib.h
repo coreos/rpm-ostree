@@ -54,6 +54,7 @@ public:
 };
 
 void client_require_root ();
+gboolean client_throw_non_ostree_host_error (GError **error);
 
 std::unique_ptr<ClientConnection> new_client_connection ();
 

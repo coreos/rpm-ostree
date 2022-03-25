@@ -38,6 +38,7 @@ typedef enum
   RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT = 1 << 1,
   RPM_OSTREE_BUILTIN_FLAG_HIDDEN = 1 << 2,
   RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS = 1 << 3,
+  RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE = 1 << 4,
 } RpmOstreeBuiltinFlags;
 
 typedef struct RpmOstreeCommand RpmOstreeCommand;

@@ -43,8 +43,8 @@ static RpmOstreeCommand commands[] = {
     static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
                                         | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
     "Commands to compose a tree", rpmostree_builtin_compose },
-  { "cleanup", static_cast<RpmOstreeBuiltinFlags> (0), "Clear cached/pending data",
-    rpmostree_builtin_cleanup },
+  { "cleanup", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
+    "Clear cached/pending data", rpmostree_builtin_cleanup },
   { "db", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD),
     "Commands to query the RPM database", rpmostree_builtin_db },
   { "deploy", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS),
@@ -67,8 +67,8 @@ static RpmOstreeCommand commands[] = {
     rpmostree_builtin_cancel },
   { "initramfs", static_cast<RpmOstreeBuiltinFlags> (0),
     "Enable or disable local initramfs regeneration", rpmostree_builtin_initramfs },
-  { "install", static_cast<RpmOstreeBuiltinFlags> (0), "Overlay additional packages",
-    rpmostree_builtin_install },
+  { "install", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
+    "Overlay additional packages", rpmostree_builtin_install },
   { "uninstall", static_cast<RpmOstreeBuiltinFlags> (0), "Remove overlayed additional packages",
     rpmostree_builtin_uninstall },
   { "override", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD),
@@ -189,6 +189,22 @@ client_require_root (void)
     throw std::runtime_error ("This command requires root privileges");
 }
 
+gboolean
+client_throw_non_ostree_host_error (GError **error)
+{
+  const char *containerenv = getenv ("container");
+  g_autofree char *msg = NULL;
+  if (containerenv != NULL)
+    msg = g_strdup_printf ("; found container=%s environment variable.", containerenv);
+  else
+    msg = g_strdup (".");
+  return glnx_throw (
+      error,
+      "This system was not booted via libostree%s\n"
+      "Currently, most rpm-ostree commands only work on ostree-based host systems.\n",
+      msg);
+}
+
 } /* namespace */
 
 gboolean
@@ -250,7 +266,8 @@ rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *mai
     ROSCXX_TRY (client_require_root (), error);
 
   auto is_ostree_container = ROSCXX_TRY_VAL (is_ostree_container (), error);
-  if (use_daemon && !is_ostree_container)
+  bool container_capable = (flags & RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE) > 0;
+  if (use_daemon && !(is_ostree_container && container_capable))
     {
       /* More gracefully handle the case where
        * no --sysroot option was specified and we're not booted via ostree
@@ -261,18 +278,7 @@ rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *mai
           if (!glnx_fstatat_allow_noent (AT_FDCWD, "/run/ostree-booted", NULL, 0, error))
             return FALSE;
           if (errno == ENOENT)
-            {
-              const char *containerenv = getenv ("container");
-              if (containerenv != NULL)
-                return glnx_throw (
-                    error,
-                    "This system was not booted via libostree; found $container=%s environment "
-                    "variable.\nrpm-ostree is designed to manage host systems, not containers.\n",
-                    containerenv);
-              else
-                return glnx_throw (error,
-                                   "This system was not booted via libostree; cannot operate");
-            }
+            return rpmostreecxx::client_throw_non_ostree_host_error (error);
         }
 
       /* root never needs to auth */

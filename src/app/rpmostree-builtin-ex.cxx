@@ -33,7 +33,9 @@ static RpmOstreeCommand ex_subcommands[] = {
     rpmostree_ex_builtin_initramfs_etc },
   /* This is currently only for CoreOS layering; so hide it to not confuse
    * users. */
-  { "rebuild", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
+  { "rebuild",
+    (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_HIDDEN
+                            | RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
     "Rebuild system based on configuration", rpmostree_ex_builtin_rebuild },
   /* To graduate out of experimental, simply revert:
    * https://github.com/coreos/rpm-ostree/pull/3078 */
