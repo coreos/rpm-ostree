@@ -732,10 +732,9 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
         }
 
       /* now we look at the rpm-md/layering side */
-      GHashTable *layered_pkgs = rpmostree_origin_get_packages (origin);
 
       /* check that it's actually layered (i.e. the requests are not all just dormant) */
-      if (sack && is_new_layered && g_hash_table_size (layered_pkgs) > 0)
+      if (sack && is_new_layered && rpmostree_origin_has_packages (origin))
         {
           if (!rpmmd_diff_guess (repo, current_base_checksum, current_checksum, sack, &rpm_diff,
                                  &rpmmd_modified_new, error))

@@ -768,9 +768,9 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, GE
 {
   g_assert (self->rsack);
 
-  /* request (owned by origin) --> providing nevra */
+  /* request --> providing nevra */
   g_autoptr (GHashTable) inactive_requests
-      = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
   /* Add the local pkgs as if they were installed: since they're unconditionally
    * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
@@ -788,42 +788,43 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, GE
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
 
   /* check for each package if we have a provides or a path match */
-  GLNX_HASH_TABLE_FOREACH (rpmostree_origin_get_packages (self->computed_origin), const char *,
-                           pattern)
-  {
-    g_autoptr (GPtrArray) matches = rpmostree_get_matching_packages (self->rsack->sack, pattern);
+  for (auto &pattern : rpmostree_origin_get_packages (self->computed_origin))
+    {
+      g_autoptr (GPtrArray) matches
+          = rpmostree_get_matching_packages (self->rsack->sack, pattern.c_str ());
 
-    if (matches->len == 0)
-      {
-        /* no matches, so we'll need to layer it (i.e. not remove it from the
-         * computed origin) */
-        continue;
-      }
+      if (matches->len == 0)
+        {
+          /* no matches, so we'll need to layer it (i.e. not remove it from the
+           * computed origin) */
+          continue;
+        }
 
-    /* Error out if it matches a base package that was also requested to be removed.
-     * Conceptually, we want users to use override replacements, not remove+overlay.
-     * Really, we could just not do this check; it'd just end up being dormant, though
-     * that might be confusing to users. */
-    for (guint i = 0; i < matches->len; i++)
-      {
-        auto pkg = static_cast<DnfPackage *> (matches->pdata[i]);
-        const char *name = dnf_package_get_name (pkg);
-        const char *repo = dnf_package_get_reponame (pkg);
+      /* Error out if it matches a base package that was also requested to be removed.
+       * Conceptually, we want users to use override replacements, not remove+overlay.
+       * Really, we could just not do this check; it'd just end up being dormant, though
+       * that might be confusing to users. */
+      for (guint i = 0; i < matches->len; i++)
+        {
+          auto pkg = static_cast<DnfPackage *> (matches->pdata[i]);
+          const char *name = dnf_package_get_name (pkg);
+          const char *repo = dnf_package_get_reponame (pkg);
 
-        if (g_strcmp0 (repo, HY_CMDLINE_REPO_NAME) == 0)
-          continue; /* local RPM added up above */
+          if (g_strcmp0 (repo, HY_CMDLINE_REPO_NAME) == 0)
+            continue; /* local RPM added up above */
 
-        if (g_hash_table_contains (removals, name))
-          return glnx_throw (error, "Cannot request '%s' provided by removed package '%s'", pattern,
-                             dnf_package_get_nevra (pkg));
-      }
+          if (g_hash_table_contains (removals, name))
+            return glnx_throw (error, "Cannot request '%s' provided by removed package '%s'",
+                               pattern.c_str (), dnf_package_get_nevra (pkg));
+        }
 
-    /* Otherwise, it's an inactive request: remember them so we can print a nice notice.
-     * Just use the first package as the "providing" pkg. */
-    const char *providing_nevra
-        = dnf_package_get_nevra (static_cast<DnfPackage *> (matches->pdata[0]));
-    g_hash_table_insert (inactive_requests, (gpointer)pattern, g_strdup (providing_nevra));
-  }
+      /* Otherwise, it's an inactive request: remember them so we can print a nice notice.
+       * Just use the first package as the "providing" pkg. */
+      const char *providing_nevra
+          = dnf_package_get_nevra (static_cast<DnfPackage *> (matches->pdata[0]));
+      g_hash_table_insert (inactive_requests, g_strdup (pattern.c_str ()),
+                           g_strdup (providing_nevra));
+    }
 
   /* XXX: Currently, we don't retain information about which modules were
    * installed in the commit metadata. So we can't really detect "inactive"

@@ -446,6 +446,7 @@ pub mod ffi {
         fn get_all_ostree_layers(&self) -> Vec<String>;
         fn get_repos(&self) -> Vec<String>;
         fn get_packages(&self) -> Vec<String>;
+        fn has_packages(&self) -> bool;
         fn set_packages(&mut self, packages: &Vec<String>);
         fn get_packages_local(&self) -> Vec<String>;
         fn get_packages_local_fileoverride(&self) -> Vec<String>;

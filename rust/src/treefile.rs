@@ -690,6 +690,14 @@ impl Treefile {
         self.parsed.packages.clone().unwrap_or_default()
     }
 
+    pub(crate) fn has_packages(&self) -> bool {
+        self.parsed
+            .packages
+            .as_ref()
+            .map(|p| !p.is_empty())
+            .unwrap_or_default()
+    }
+
     pub(crate) fn set_packages(&mut self, packages: &Vec<String>) {
         let _ = self.parsed.packages.take();
         if !packages.is_empty() {
@@ -2923,11 +2931,15 @@ conditional-include:
     fn test_derivation() {
         let buf = indoc! {"
             base-refspec: fedora:fedora/35/x86_64/silverblue
+            packages:
+              - foobar
             custom:
               url: https://example.com
               description: Managed by Example, Inc.
         "};
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
+        assert!(treefile.has_packages());
+        assert_eq!(treefile.get_packages(), &["foobar"]);
         assert_eq!(
             treefile.get_base_refspec(),
             "fedora:fedora/35/x86_64/silverblue"
@@ -2940,6 +2952,8 @@ conditional-include:
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
+        assert!(!treefile.has_packages());
+        assert!(treefile.get_packages().is_empty());
         assert_eq!(treefile.get_base_refspec(), "");
         assert_eq!(treefile.get_origin_custom_url(), "");
         assert_eq!(treefile.get_origin_custom_description(), "");
