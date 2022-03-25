@@ -97,6 +97,20 @@ parse_packages_strv (GKeyFile *kf, const char *group, const char *key, gboolean 
 }
 
 RpmOstreeOrigin *
+rpmostree_origin_parse_deployment (OstreeDeployment *deployment, GError **error)
+{
+  GKeyFile *origin = ostree_deployment_get_origin (deployment);
+  if (!origin)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No origin known for deployment %s.%d",
+                   ostree_deployment_get_csum (deployment),
+                   ostree_deployment_get_deployserial (deployment));
+      return NULL;
+    }
+  return rpmostree_origin_parse_keyfile (origin, error);
+}
+
+RpmOstreeOrigin *
 rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
 {
   g_autoptr (RpmOstreeOrigin) ret = NULL;
