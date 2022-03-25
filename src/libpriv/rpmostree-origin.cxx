@@ -258,15 +258,6 @@ rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin, RpmOstreeRefspecType
   return g_strdup (origin->cached_refspec);
 }
 
-void
-rpmostree_origin_classify_refspec (RpmOstreeOrigin *origin, RpmOstreeRefspecType *out_type,
-                                   const char **out_refspec)
-{
-  *out_type = origin->refspec_type;
-  if (out_refspec)
-    *out_refspec = rpmostree_origin_get_refspec (origin);
-}
-
 static char *
 keyfile_get_nonempty_string (GKeyFile *kf, const char *section, const char *key)
 {
