@@ -1114,6 +1114,14 @@ impl Treefile {
             .and_then(|c| c.description.as_ref().map(|d| d.to_string()))
             .unwrap_or_default()
     }
+
+    pub(crate) fn get_override_commit(&self) -> String {
+        self.parsed
+            .derive
+            .override_commit
+            .clone()
+            .unwrap_or_default()
+    }
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -2958,6 +2966,7 @@ conditional-include:
             custom:
               url: https://example.com
               description: Managed by Example, Inc.
+            override-commit: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
         "};
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
@@ -2975,6 +2984,10 @@ conditional-include:
             treefile.get_origin_custom_description(),
             "Managed by Example, Inc."
         );
+        assert_eq!(
+            treefile.get_override_commit(),
+            "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
+        );
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
@@ -2985,6 +2998,7 @@ conditional-include:
         assert_eq!(treefile.get_base_refspec(), "");
         assert_eq!(treefile.get_origin_custom_url(), "");
         assert_eq!(treefile.get_origin_custom_description(), "");
+        assert_eq!(treefile.get_override_commit(), "");
     }
 }
 

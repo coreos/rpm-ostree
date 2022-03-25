@@ -58,7 +58,7 @@ bool rpmostree_origin_has_overrides_remove_name (RpmOstreeOrigin *origin, const 
 
 rust::Vec<rust::String> rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin);
 
-const char *rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
+rust::String rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
 
 GHashTable *rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin);
 

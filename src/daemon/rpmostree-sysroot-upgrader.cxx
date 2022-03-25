@@ -415,7 +415,10 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
   const gboolean allow_older = (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
   const gboolean synthetic = (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL) > 0;
 
-  const char *override_commit = rpmostree_origin_get_override_commit (self->computed_origin);
+  auto override_commit_s = rpmostree_origin_get_override_commit (self->computed_origin);
+  const char *override_commit = NULL;
+  if (!override_commit_s.empty ())
+    override_commit = override_commit_s.c_str ();
 
   auto refspec = rpmostree_origin_get_refspec (self->computed_origin);
   auto refspec_type = rpmostreecxx::refspec_classify (refspec.c_str ());
