@@ -493,6 +493,7 @@ pub mod ffi {
         fn get_override_commit(&self) -> String;
         fn get_initramfs_etc_files(&self) -> Vec<String>;
         fn has_initramfs_etc_files(&self) -> bool;
+        fn get_initramfs_regenerate(&self) -> bool;
     }
 
     // treefile.rs (split out from above to make &self nice to use)

@@ -64,7 +64,7 @@ rust::Vec<rust::String> rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigi
 
 bool rpmostree_origin_has_initramfs_etc_files (RpmOstreeOrigin *origin);
 
-gboolean rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
+bool rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 
 const char *const *rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
 

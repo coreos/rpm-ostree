@@ -392,10 +392,10 @@ rpmostree_origin_has_initramfs_etc_files (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-gboolean
+bool
 rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
 {
-  return g_key_file_get_boolean (origin->kf, "rpmostree", "regenerate-initramfs", NULL);
+  return (*origin->treefile)->get_initramfs_regenerate ();
 }
 
 /* Mutability: getter */
