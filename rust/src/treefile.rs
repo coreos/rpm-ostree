@@ -1159,6 +1159,14 @@ impl Treefile {
             .and_then(|i| i.args.clone())
             .unwrap_or_default()
     }
+
+    pub(crate) fn get_unconfigured_state(&self) -> String {
+        self.parsed
+            .derive
+            .unconfigured_state
+            .clone()
+            .unwrap_or_default()
+    }
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -1870,6 +1878,8 @@ pub(crate) struct DeriveConfigFields {
     // Misc
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_commit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) unconfigured_state: Option<String>,
 }
 
 impl BaseComposeConfigFields {
@@ -3011,6 +3021,7 @@ conditional-include:
               args:
                 - -I
                 - /usr/lib/foo
+            unconfigured-state: First register your instance with corpy-tool
         "};
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
@@ -3036,6 +3047,10 @@ conditional-include:
         assert_eq!(treefile.get_initramfs_etc_files(), &["/etc/asdf"]);
         assert!(treefile.get_initramfs_regenerate());
         assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/lib/foo"]);
+        assert_eq!(
+            treefile.get_unconfigured_state(),
+            "First register your instance with corpy-tool"
+        );
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
@@ -3051,6 +3066,7 @@ conditional-include:
         assert!(treefile.get_initramfs_etc_files().is_empty());
         assert!(!treefile.get_initramfs_regenerate());
         assert!(treefile.get_initramfs_args().is_empty());
+        assert_eq!(treefile.get_unconfigured_state(), "");
     }
 }
 

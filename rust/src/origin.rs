@@ -62,6 +62,7 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     }
     cfg.derive.override_remove = parse_stringlist(kf, OVERRIDES, "remove")?;
     cfg.derive.override_replace_local = parse_localpkglist(kf, OVERRIDES, "replace-local")?;
+    cfg.derive.unconfigured_state = keyfile_get_optional_string(kf, ORIGIN, "unconfigured-state")?;
 
     let regenerate_initramfs = kf
         .boolean(RPMOSTREE, "regenerate-initramfs")

@@ -495,6 +495,7 @@ pub mod ffi {
         fn has_initramfs_etc_files(&self) -> bool;
         fn get_initramfs_regenerate(&self) -> bool;
         fn get_initramfs_args(&self) -> Vec<String>;
+        fn get_unconfigured_state(&self) -> String;
     }
 
     // treefile.rs (split out from above to make &self nice to use)
