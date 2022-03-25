@@ -406,10 +406,10 @@ rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-const char *
+rust::String
 rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
 {
-  return origin->cached_unconfigured_state;
+  return (*origin->treefile)->get_unconfigured_state ();
 }
 
 /* Determines whether the origin hints at local assembly being required. In some

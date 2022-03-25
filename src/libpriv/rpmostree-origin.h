@@ -68,7 +68,7 @@ bool rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 
 rust::Vec<rust::String> rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
 
-const char *rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
+rust::String rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 
 gboolean rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin);
 
