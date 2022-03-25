@@ -60,7 +60,9 @@ rust::Vec<rust::String> rpmostree_origin_get_overrides_local_replace (RpmOstreeO
 
 rust::String rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
 
-GHashTable *rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin);
+rust::Vec<rust::String> rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin);
+
+bool rpmostree_origin_has_initramfs_etc_files (RpmOstreeOrigin *origin);
 
 gboolean rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 

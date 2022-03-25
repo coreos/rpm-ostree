@@ -901,7 +901,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
    * that. Just point users at dracut's -I instead. I guess we could auto-convert
    * ourselves? */
   if (rpmostree_origin_get_regenerate_initramfs (self->computed_origin)
-      && g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->computed_origin)) > 0)
+      && rpmostree_origin_has_initramfs_etc_files (self->computed_origin))
     return glnx_throw (
         error, "initramfs regeneration and /etc overlay not compatible; use dracut arg -I instead");
 
@@ -1341,15 +1341,10 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   g_autofree char *overlay_initrd_checksum = NULL;
   const char *overlay_v[] = { NULL, NULL };
-  if (g_hash_table_size (rpmostree_origin_get_initramfs_etc_files (self->computed_origin)) > 0)
+  if (rpmostree_origin_has_initramfs_etc_files (self->computed_origin))
     {
       glnx_fd_close int fd = -1;
-      auto etc_files_gset = rpmostree_origin_get_initramfs_etc_files (self->computed_origin);
-      rust::Vec<rust::String> etc_files;
-      GLNX_HASH_TABLE_FOREACH (etc_files_gset, const char *, key)
-      {
-        etc_files.push_back (std::string (key));
-      }
+      auto etc_files = rpmostree_origin_get_initramfs_etc_files (self->computed_origin);
       fd = ROSCXX_TRY_VAL (initramfs_overlay_generate (etc_files, *cancellable), error);
       if (!ostree_sysroot_stage_overlay_initrd (self->sysroot, fd, &overlay_initrd_checksum,
                                                 cancellable, error))

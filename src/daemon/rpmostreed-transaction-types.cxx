@@ -1161,10 +1161,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
     }
 
   gboolean changed = FALSE;
-  GHashTable *initrd_etc_files = rpmostree_origin_get_initramfs_etc_files (origin);
   if (no_initramfs
       && (rpmostree_origin_get_regenerate_initramfs (origin)
-          || g_hash_table_size (initrd_etc_files) > 0))
+          || rpmostree_origin_has_initramfs_etc_files (origin)))
     {
       rpmostree_origin_set_regenerate_initramfs (origin, FALSE, NULL);
       rpmostree_origin_initramfs_etc_files_untrack_all (origin, NULL);
@@ -1865,13 +1864,13 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction, GCancella
       return TRUE; /* Note early return */
     }
 
-  GHashTable *files = rpmostree_origin_get_initramfs_etc_files (origin);
-  GLNX_HASH_TABLE_FOREACH (files, const char *, file)
-  {
-    if (!g_str_has_prefix (file, "/etc/"))
-      return glnx_throw (error, "Path outside /etc forbidden: %s", file);
-    /* could add more checks here in the future */
-  }
+  auto files = rpmostree_origin_get_initramfs_etc_files (origin);
+  for (auto &file : files)
+    {
+      if (!g_str_has_prefix (file.c_str (), "/etc/"))
+        return glnx_throw (error, "Path outside /etc forbidden: %s", file.c_str ());
+      /* could add more checks here in the future */
+    }
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))

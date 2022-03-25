@@ -379,10 +379,16 @@ rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-GHashTable *
+rust::Vec<rust::String>
 rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin)
 {
-  return origin->cached_initramfs_etc_files;
+  return (*origin->treefile)->get_initramfs_etc_files ();
+}
+
+bool
+rpmostree_origin_has_initramfs_etc_files (RpmOstreeOrigin *origin)
+{
+  return (*origin->treefile)->has_initramfs_etc_files ();
 }
 
 /* Mutability: getter */
