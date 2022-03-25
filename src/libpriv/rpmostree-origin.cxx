@@ -423,11 +423,12 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
 }
 
 static void
-update_string_list_from_hash_table (GKeyFile *kf, const char *group, const char *key,
+update_string_list_from_hash_table (RpmOstreeOrigin *origin, const char *group, const char *key,
                                     GHashTable *values)
 {
   g_autofree char **strv = (char **)g_hash_table_get_keys_as_array (values, NULL);
-  g_key_file_set_string_list (kf, group, key, (const char *const *)strv, g_strv_length (strv));
+  g_key_file_set_string_list (origin->kf, group, key, (const char *const *)strv,
+                              g_strv_length (strv));
 }
 
 void
@@ -439,7 +440,7 @@ rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, char **path
     changed = (g_hash_table_add (origin->cached_initramfs_etc_files, g_strdup (*path)) || changed);
 
   if (changed)
-    update_string_list_from_hash_table (origin->kf, "rpmostree", "initramfs-etc",
+    update_string_list_from_hash_table (origin, "rpmostree", "initramfs-etc",
                                         origin->cached_initramfs_etc_files);
   if (out_changed)
     *out_changed = changed;
@@ -454,7 +455,7 @@ rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin, char **pa
     changed = (g_hash_table_remove (origin->cached_initramfs_etc_files, *path) || changed);
 
   if (changed)
-    update_string_list_from_hash_table (origin->kf, "rpmostree", "initramfs-etc",
+    update_string_list_from_hash_table (origin, "rpmostree", "initramfs-etc",
                                         origin->cached_initramfs_etc_files);
   if (out_changed)
     *out_changed = changed;
@@ -466,7 +467,7 @@ rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin, gbool
   const gboolean changed = (g_hash_table_size (origin->cached_initramfs_etc_files) > 0);
   g_hash_table_remove_all (origin->cached_initramfs_etc_files);
   if (changed)
-    update_string_list_from_hash_table (origin->kf, "rpmostree", "initramfs-etc",
+    update_string_list_from_hash_table (origin, "rpmostree", "initramfs-etc",
                                         origin->cached_initramfs_etc_files);
   if (out_changed)
     *out_changed = changed;
@@ -675,7 +676,7 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin, const char *group, cons
     }
   else
     {
-      update_string_list_from_hash_table (origin->kf, group, key, pkgs);
+      update_string_list_from_hash_table (origin, group, key, pkgs);
     }
 
   sync_baserefspec (origin);
@@ -866,7 +867,7 @@ rpmostree_origin_add_modules (RpmOstreeOrigin *origin, char **modules, gboolean 
     changed = (g_hash_table_add (target, g_strdup (*mod)) || changed);
 
   if (changed)
-    update_string_list_from_hash_table (origin->kf, "modules", key, target);
+    update_string_list_from_hash_table (origin, "modules", key, target);
 
   set_changed (out_changed, changed);
   return TRUE;
@@ -885,7 +886,7 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, char **modules, gboole
     changed = (g_hash_table_remove (target, *mod) || changed);
 
   if (changed)
-    update_string_list_from_hash_table (origin->kf, "modules", key, target);
+    update_string_list_from_hash_table (origin, "modules", key, target);
 
   set_changed (out_changed, changed);
   return TRUE;
