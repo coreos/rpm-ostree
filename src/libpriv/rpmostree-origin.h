@@ -46,7 +46,7 @@ rust::Vec<rust::String> rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
 
 bool rpmostree_origin_has_packages (RpmOstreeOrigin *origin);
 
-GHashTable *rpmostree_origin_get_modules_enable (RpmOstreeOrigin *origin);
+bool rpmostree_origin_has_modules_enable (RpmOstreeOrigin *origin);
 
 GHashTable *rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin);
 

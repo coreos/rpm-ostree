@@ -736,6 +736,14 @@ impl Treefile {
             .collect()
     }
 
+    pub(crate) fn has_modules_enable(&self) -> bool {
+        self.parsed
+            .modules
+            .as_ref()
+            .map(|m| m.enable.is_some())
+            .unwrap_or_default()
+    }
+
     pub(crate) fn get_modules_install(&self) -> Vec<String> {
         self.parsed
             .modules
@@ -2933,6 +2941,9 @@ conditional-include:
             base-refspec: fedora:fedora/35/x86_64/silverblue
             packages:
               - foobar
+            modules:
+              enable:
+                - nodejs:latest
             custom:
               url: https://example.com
               description: Managed by Example, Inc.
@@ -2940,6 +2951,8 @@ conditional-include:
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
         assert_eq!(treefile.get_packages(), &["foobar"]);
+        assert!(treefile.has_modules_enable());
+        assert_eq!(treefile.get_modules_enable(), &["nodejs:latest"]);
         assert_eq!(
             treefile.get_base_refspec(),
             "fedora:fedora/35/x86_64/silverblue"
@@ -2954,6 +2967,8 @@ conditional-include:
         let treefile = treefile_new_empty().unwrap();
         assert!(!treefile.has_packages());
         assert!(treefile.get_packages().is_empty());
+        assert!(!treefile.has_modules_enable());
+        assert!(treefile.get_modules_enable().is_empty());
         assert_eq!(treefile.get_base_refspec(), "");
         assert_eq!(treefile.get_origin_custom_url(), "");
         assert_eq!(treefile.get_origin_custom_description(), "");
