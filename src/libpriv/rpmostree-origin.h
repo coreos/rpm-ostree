@@ -40,9 +40,6 @@ void rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin);
 
 const char *rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
 
-char *rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
-                                         RpmOstreeRefspecType *out_refspectype);
-
 void rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin, char **custom_type,
                                               char **custom_description);
 

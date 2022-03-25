@@ -151,8 +151,9 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     return FALSE;
 
   RpmOstreeRefspecType refspec_type;
-  g_autofree char *refspec = rpmostree_origin_get_full_refspec (origin, &refspec_type);
-  g_assert (refspec);
+  const char *refspec = rpmostree_origin_get_refspec (origin);
+  if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
+    return FALSE;
 
   gboolean is_layered = FALSE;
   g_autofree char *base_checksum = NULL;
@@ -285,13 +286,11 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment, OstreeRepo *rep
       g_autoptr (RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
       if (!origin)
         return FALSE;
-      refspec = refspec_owned = rpmostree_origin_get_full_refspec (origin, &refspec_type);
+      refspec = refspec_owned = g_strdup (rpmostree_origin_get_refspec (origin));
     }
-  else
-    {
-      if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
-        return FALSE;
-    }
+  if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
+    return FALSE;
+
   (void)refspec_owned; /* Pacify static analysis */
   refspec_is_ostree = refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE;
   if (refspec_type == RPMOSTREE_REFSPEC_TYPE_CHECKSUM && !commit)
