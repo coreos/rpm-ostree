@@ -82,10 +82,14 @@ rpmostree_builtin_cleanup (int argc, char **argv, RpmOstreeCommandInvocation *in
     }
 
   auto is_ostree_container = ROSCXX_TRY_VAL (is_ostree_container (), error);
-  if (is_ostree_container && cleanup_types->len == 1 && opt_repomd)
+  if (is_ostree_container)
     {
-      /* just directly nuke the cachedir */
-      return glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error);
+      if (cleanup_types->len == 1 && opt_repomd)
+        {
+          /* just directly nuke the cachedir */
+          return glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error);
+        }
+      return rpmostreecxx::client_throw_non_ostree_host_error (error);
     }
 
   g_ptr_array_add (cleanup_types, NULL);
