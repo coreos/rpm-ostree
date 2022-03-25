@@ -69,7 +69,7 @@ const char *rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 
 gboolean rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin);
 
-gboolean rpmostree_origin_has_packages (RpmOstreeOrigin *origin);
+gboolean rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin);
 
 char *rpmostree_origin_get_string (RpmOstreeOrigin *origin, const char *section, const char *value);
 
