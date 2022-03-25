@@ -125,12 +125,15 @@ generate_pkgcache_refs (OstreeSysroot *sysroot, OstreeRepo *repo, guint *out_n_f
         }
 
       /* also add any inactive local replacements */
-      GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
-      GLNX_HASH_TABLE_FOREACH (local_replace, const char *, nevra)
-      {
-        auto cachebranch = ROSCXX_TRY_VAL (nevra_to_cache_branch (std::string (nevra)), error);
-        g_hash_table_add (referenced_pkgs, g_strdup (cachebranch.c_str ()));
-      }
+      auto local_replace = rpmostree_origin_get_overrides_local_replace (origin);
+      for (auto &nevra_v : local_replace)
+        {
+          const char *nevra = nevra_v.c_str ();
+          if (!rpmostree_decompose_sha256_nevra (&nevra, NULL, error))
+            return FALSE;
+          auto cachebranch = ROSCXX_TRY_VAL (nevra_to_cache_branch (std::string (nevra)), error);
+          g_hash_table_add (referenced_pkgs, g_strdup (cachebranch.c_str ()));
+        }
     }
 
   guint n_freed = 0;

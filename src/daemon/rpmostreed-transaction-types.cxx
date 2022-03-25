@@ -1325,18 +1325,22 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         }
 
       /* and also add mappings from the origin replacements to handle inactive overrides */
-      GHashTable *cur_local_overrides = rpmostree_origin_get_overrides_local_replace (origin);
+      auto cur_local_overrides = rpmostree_origin_get_overrides_local_replace (origin);
       g_autoptr (GPtrArray) names_to_free = g_ptr_array_new_with_free_func (g_free); /* yuck */
-      GLNX_HASH_TABLE_FOREACH (cur_local_overrides, const char *, nevra)
-      {
-        g_autofree char *name = NULL;
-        if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
-          return FALSE;
+      for (auto &nevra_v : cur_local_overrides)
+        {
+          const char *nevra = nevra_v.c_str ();
+          if (!rpmostree_decompose_sha256_nevra (&nevra, NULL, error))
+            return FALSE;
 
-        g_hash_table_insert (name_to_nevra, (gpointer)name, (gpointer)nevra);
-        g_hash_table_insert (nevra_to_name, (gpointer)nevra, (gpointer)name);
-        g_ptr_array_add (names_to_free, g_steal_pointer (&name));
-      }
+          g_autofree char *name = NULL;
+          if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
+            return FALSE;
+
+          g_hash_table_insert (name_to_nevra, (gpointer)name, (gpointer)nevra);
+          g_hash_table_insert (nevra_to_name, (gpointer)nevra, (gpointer)name);
+          g_ptr_array_add (names_to_free, g_steal_pointer (&name));
+        }
 
       for (char **it = override_reset_pkgs; it && *it; it++)
         {
