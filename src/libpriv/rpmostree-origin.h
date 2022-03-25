@@ -52,7 +52,9 @@ rust::Vec<rust::String> rpmostree_origin_get_local_packages (RpmOstreeOrigin *or
 
 rust::Vec<rust::String> rpmostree_origin_get_local_fileoverride_packages (RpmOstreeOrigin *origin);
 
-GHashTable *rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin);
+rust::Vec<rust::String> rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin);
+
+bool rpmostree_origin_has_overrides_remove_name (RpmOstreeOrigin *origin, const char *name);
 
 GHashTable *rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin);
 

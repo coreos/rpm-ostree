@@ -763,6 +763,15 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    pub(crate) fn has_packages_override_remove_name(&self, name: &str) -> bool {
+        self.parsed
+            .derive
+            .override_remove
+            .as_ref()
+            .map(|v| v.iter().any(|e| e == name))
+            .unwrap_or_default()
+    }
+
     pub(crate) fn set_packages_override_remove(&mut self, packages: &Vec<String>) {
         let _ = self.parsed.derive.override_remove.take();
         if !packages.is_empty() {
@@ -2941,6 +2950,8 @@ conditional-include:
             base-refspec: fedora:fedora/35/x86_64/silverblue
             packages:
               - foobar
+            override-remove:
+              - glibc
             modules:
               enable:
                 - nodejs:latest
@@ -2953,6 +2964,8 @@ conditional-include:
         assert_eq!(treefile.get_packages(), &["foobar"]);
         assert!(treefile.has_modules_enable());
         assert_eq!(treefile.get_modules_enable(), &["nodejs:latest"]);
+        assert!(treefile.has_packages_override_remove_name("glibc"));
+        assert!(!treefile.has_packages_override_remove_name("enoent"));
         assert_eq!(
             treefile.get_base_refspec(),
             "fedora:fedora/35/x86_64/silverblue"

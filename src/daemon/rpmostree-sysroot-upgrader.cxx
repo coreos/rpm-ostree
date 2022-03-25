@@ -644,17 +644,17 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *cancel
 {
   g_assert (self->rsack);
 
-  GHashTable *removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
+  auto removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
   g_autoptr (GPtrArray) inactive_removals = g_ptr_array_new ();
-  GLNX_HASH_TABLE_FOREACH (removals, const char *, pkgname)
-  {
-    g_autoptr (DnfPackage) pkg = NULL;
-    if (!rpmostree_sack_get_by_pkgname (self->rsack->sack, pkgname, &pkg, error))
-      return FALSE;
+  for (auto &pkgname : removals)
+    {
+      g_autoptr (DnfPackage) pkg = NULL;
+      if (!rpmostree_sack_get_by_pkgname (self->rsack->sack, pkgname.c_str (), &pkg, error))
+        return FALSE;
 
-    if (!pkg)
-      g_ptr_array_add (inactive_removals, (gpointer)pkgname);
-  }
+      if (!pkg)
+        g_ptr_array_add (inactive_removals, (gpointer)pkgname.c_str ());
+    }
 
   if (inactive_removals->len > 0)
     {
@@ -790,8 +790,6 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, GE
   if (!add_local_pkgset_to_sack (self, local_fileoverride_pkgs, cancellable, error))
     return FALSE;
 
-  GHashTable *removals = rpmostree_origin_get_overrides_remove (self->computed_origin);
-
   /* check for each package if we have a provides or a path match */
   for (auto &pattern : rpmostree_origin_get_packages (self->computed_origin))
     {
@@ -818,7 +816,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, GE
           if (g_strcmp0 (repo, HY_CMDLINE_REPO_NAME) == 0)
             continue; /* local RPM added up above */
 
-          if (g_hash_table_contains (removals, name))
+          if (rpmostree_origin_has_overrides_remove_name (self->computed_origin, name))
             return glnx_throw (error, "Cannot request '%s' provided by removed package '%s'",
                                pattern.c_str (), dnf_package_get_nevra (pkg));
         }
