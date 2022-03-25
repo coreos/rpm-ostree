@@ -212,13 +212,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     case rpmostreecxx::RefspecType::Checksum:
       {
         g_variant_dict_insert (dict, "origin", "s", refspec.c_str ());
-        g_autofree char *custom_origin_url = NULL;
-        g_autofree char *custom_origin_description = NULL;
-        rpmostree_origin_get_custom_description (origin, &custom_origin_url,
-                                                 &custom_origin_description);
-        if (custom_origin_url)
-          g_variant_dict_insert (dict, "custom-origin", "(ss)", custom_origin_url,
-                                 custom_origin_description);
+        auto custom_origin_url = rpmostree_origin_get_custom_url (origin);
+        auto custom_origin_description = rpmostree_origin_get_custom_description (origin);
+        if (!custom_origin_url.empty ())
+          g_variant_dict_insert (dict, "custom-origin", "(ss)", custom_origin_url.c_str (),
+                                 custom_origin_description.c_str ());
       }
       break;
     case rpmostreecxx::RefspecType::Ostree:

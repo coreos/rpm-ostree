@@ -483,6 +483,8 @@ pub mod ffi {
         fn sanitycheck_externals(&self) -> Result<()>;
         fn validate_for_container(&self) -> Result<()>;
         fn get_base_refspec(&self) -> String;
+        fn get_origin_custom_url(&self) -> String;
+        fn get_origin_custom_description(&self) -> String;
     }
 
     // treefile.rs (split out from above to make &self nice to use)

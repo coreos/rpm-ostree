@@ -38,8 +38,9 @@ void rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin);
 
 rust::String rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
 
-void rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin, char **custom_type,
-                                              char **custom_description);
+rust::String rpmostree_origin_get_custom_url (RpmOstreeOrigin *origin);
+
+rust::String rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin);
 
 GHashTable *rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
 

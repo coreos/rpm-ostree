@@ -1614,13 +1614,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
       if (refspec_type == rpmostreecxx::RefspecType::Checksum
           && layering_type < RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
         {
-          g_autofree char *custom_origin_url = NULL;
-          g_autofree char *custom_origin_description = NULL;
-          rpmostree_origin_get_custom_description (origin, &custom_origin_url,
-                                                   &custom_origin_description);
-          if (custom_origin_description)
+          auto custom_origin_url = rpmostree_origin_get_custom_url (origin);
+          auto custom_origin_description = rpmostree_origin_get_custom_description (origin);
+          if (!custom_origin_description.empty ())
             rpmostree_output_message ("Pinned to commit by custom origin: %s",
-                                      custom_origin_description);
+                                      custom_origin_description.c_str ());
           else
             rpmostree_output_message ("Pinned to commit; no upgrade available");
         }

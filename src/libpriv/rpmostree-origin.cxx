@@ -304,23 +304,17 @@ rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
   return r;
 }
 
-static char *
-keyfile_get_nonempty_string (GKeyFile *kf, const char *section, const char *key)
+rust::String
+rpmostree_origin_get_custom_url (RpmOstreeOrigin *origin)
 {
-  char *ret = g_key_file_get_string (kf, section, key, NULL);
-  if (ret && !*ret)
-    g_clear_pointer (&ret, g_free);
-  return ret;
+  return (*origin->treefile)->get_origin_custom_url ();
 }
 
 /* Mutability: getter */
-void
-rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin, char **custom_type,
-                                         char **custom_description)
+rust::String
+rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin)
 {
-  *custom_type = keyfile_get_nonempty_string (origin->kf, "origin", "custom-url");
-  if (*custom_type)
-    *custom_description = keyfile_get_nonempty_string (origin->kf, "origin", "custom-description");
+  return (*origin->treefile)->get_origin_custom_description ();
 }
 
 /* Mutability: getter */
