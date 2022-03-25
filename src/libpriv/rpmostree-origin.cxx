@@ -399,10 +399,10 @@ rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-const char *const *
+rust::Vec<rust::String>
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
 {
-  return (const char *const *)origin->cached_initramfs_args;
+  return (*origin->treefile)->get_initramfs_args ();
 }
 
 /* Mutability: getter */

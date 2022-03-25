@@ -1150,6 +1150,15 @@ impl Treefile {
             .map(|i| i.regenerate)
             .unwrap_or_default()
     }
+
+    pub(crate) fn get_initramfs_args(&self) -> Vec<String> {
+        self.parsed
+            .derive
+            .initramfs
+            .as_ref()
+            .and_then(|i| i.args.clone())
+            .unwrap_or_default()
+    }
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -2999,6 +3008,9 @@ conditional-include:
               etc:
                 - /etc/asdf
               regenerate: true
+              args:
+                - -I
+                - /usr/lib/foo
         "};
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
@@ -3023,6 +3035,7 @@ conditional-include:
         assert!(treefile.has_initramfs_etc_files());
         assert_eq!(treefile.get_initramfs_etc_files(), &["/etc/asdf"]);
         assert!(treefile.get_initramfs_regenerate());
+        assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/lib/foo"]);
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
@@ -3037,6 +3050,7 @@ conditional-include:
         assert!(!treefile.has_initramfs_etc_files());
         assert!(treefile.get_initramfs_etc_files().is_empty());
         assert!(!treefile.get_initramfs_regenerate());
+        assert!(treefile.get_initramfs_args().is_empty());
     }
 }
 

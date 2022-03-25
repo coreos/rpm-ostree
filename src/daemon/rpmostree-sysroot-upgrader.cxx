@@ -1079,11 +1079,11 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellabl
   if (kernel_or_initramfs_changed)
     {
       /* append the extra args */
-      const char *const *add_dracut_argv = NULL;
+      rust::Vec<rust::String> add_dracut_argv;
       if (rpmostree_origin_get_regenerate_initramfs (self->computed_origin))
         add_dracut_argv = rpmostree_origin_get_initramfs_args (self->computed_origin);
-      for (char **it = (char **)add_dracut_argv; it && *it; it++)
-        g_ptr_array_add (initramfs_args, g_strdup (*it));
+      for (auto &arg : add_dracut_argv)
+        g_ptr_array_add (initramfs_args, g_strdup (arg.c_str ()));
       g_ptr_array_add (initramfs_args, NULL);
 
       auto task = rpmostreecxx::progress_begin_task ("Generating initramfs");
