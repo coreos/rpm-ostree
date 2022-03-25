@@ -338,17 +338,17 @@ rpmostree_origin_has_modules_enable (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-GHashTable *
+rust::Vec<rust::String>
 rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin)
 {
-  return origin->cached_local_packages;
+  return (*origin->treefile)->get_packages_local ();
 }
 
 /* Mutability: getter */
-GHashTable *
+rust::Vec<rust::String>
 rpmostree_origin_get_local_fileoverride_packages (RpmOstreeOrigin *origin)
 {
-  return origin->cached_local_fileoverride_packages;
+  return (*origin->treefile)->get_packages_local_fileoverride ();
 }
 
 /* Mutability: getter */

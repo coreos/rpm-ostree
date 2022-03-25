@@ -719,37 +719,42 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, G
 }
 
 static gboolean
-add_local_pkgset_to_sack (RpmOstreeSysrootUpgrader *self, GHashTable *pkgset,
+add_local_pkgset_to_sack (RpmOstreeSysrootUpgrader *self, rust::Vec<rust::String> &pkgset,
                           GCancellable *cancellable, GError **error)
 {
-  if (g_hash_table_size (pkgset) == 0)
+  if (pkgset.empty ())
     return TRUE; /* nothing to do! */
 
   if (!initialize_metatmpdir (self, error))
     return FALSE;
 
-  GLNX_HASH_TABLE_FOREACH_KV (pkgset, const char *, nevra, const char *, sha256)
-  {
-    g_autoptr (GVariant) header = NULL;
-    g_autofree char *path = g_strdup_printf ("%s/%s.rpm", self->metatmpdir.path, nevra);
+  for (auto &nevra_v : pkgset)
+    {
+      const char *nevra = nevra_v.c_str ();
+      g_autofree char *sha256 = NULL;
+      if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
+        return FALSE;
 
-    if (!rpmostree_pkgcache_find_pkg_header (self->repo, nevra, sha256, &header, cancellable,
-                                             error))
-      return FALSE;
+      g_autoptr (GVariant) header = NULL;
+      g_autofree char *path = g_strdup_printf ("%s/%s.rpm", self->metatmpdir.path, nevra);
 
-    if (!glnx_file_replace_contents_at (
-            AT_FDCWD, path, static_cast<const guint8 *> (g_variant_get_data (header)),
-            g_variant_get_size (header), GLNX_FILE_REPLACE_NODATASYNC, cancellable, error))
-      return FALSE;
+      if (!rpmostree_pkgcache_find_pkg_header (self->repo, nevra, sha256, &header, cancellable,
+                                               error))
+        return FALSE;
 
-    /* Also check if that exact NEVRA is already in the root (if the pkg
-     * exists, but is a different EVR, depsolve will catch that). In the
-     * future, we'll allow packages to replace base pkgs. */
-    if (rpmostree_sack_has_subject (self->rsack->sack, nevra))
-      return glnx_throw (error, "Package '%s' is already in the base", nevra);
+      if (!glnx_file_replace_contents_at (
+              AT_FDCWD, path, static_cast<const guint8 *> (g_variant_get_data (header)),
+              g_variant_get_size (header), GLNX_FILE_REPLACE_NODATASYNC, cancellable, error))
+        return FALSE;
 
-    dnf_sack_add_cmdline_package (self->rsack->sack, path);
-  }
+      /* Also check if that exact NEVRA is already in the root (if the pkg
+       * exists, but is a different EVR, depsolve will catch that). In the
+       * future, we'll allow packages to replace base pkgs. */
+      if (rpmostree_sack_has_subject (self->rsack->sack, nevra))
+        return glnx_throw (error, "Package '%s' is already in the base", nevra);
+
+      dnf_sack_add_cmdline_package (self->rsack->sack, path);
+    }
 
   return TRUE;
 }
@@ -776,11 +781,11 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, GE
    * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
    * you can have foo-1.0-1.x86_64 layered, and foo or /usr/bin/foo as dormant.
    * */
-  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->computed_origin);
+  auto local_pkgs = rpmostree_origin_get_local_packages (self->computed_origin);
   if (!add_local_pkgset_to_sack (self, local_pkgs, cancellable, error))
     return FALSE;
 
-  GHashTable *local_fileoverride_pkgs
+  auto local_fileoverride_pkgs
       = rpmostree_origin_get_local_fileoverride_packages (self->computed_origin);
   if (!add_local_pkgset_to_sack (self, local_fileoverride_pkgs, cancellable, error))
     return FALSE;
