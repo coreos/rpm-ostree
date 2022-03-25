@@ -34,6 +34,9 @@ struct RpmOstreeOrigin
   guint refcount;
 
   /* this is the single source of truth */
+  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile;
+
+  /* this is used for convenience while we migrate; we always sync back to the treefile */
   GKeyFile *kf;
 
   /* Branch name or pinned to commit*/
@@ -88,6 +91,16 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_clear_pointer (&origin->cached_overrides_remove, g_hash_table_unref);
   g_clear_pointer (&origin->cached_initramfs_etc_files, g_hash_table_unref);
   g_free (origin);
+}
+
+static gboolean
+sync_treefile (RpmOstreeOrigin *self)
+{
+  self->treefile.reset ();
+  g_autoptr (GError) local_error = NULL;
+  self->treefile = ROSCXX_VAL (origin_to_treefile (*self->kf), &local_error);
+  g_assert_no_error (local_error);
+  return TRUE;
 }
 
 static GKeyFile *
@@ -149,6 +162,7 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   ret = g_new0 (RpmOstreeOrigin, 1);
   ret->refcount = 1;
   ret->kf = keyfile_dup (origin);
+  ret->treefile = ROSCXX_VAL (origin_to_treefile (*ret->kf), error);
 
   ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   ret->cached_modules_enable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -274,6 +288,8 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
 
   /* this is already covered by the above, but the below also updates the cached value */
   rpmostree_origin_set_override_commit (origin, NULL);
+
+  sync_treefile (origin);
 }
 
 /* Mutability: getter */
@@ -442,6 +458,8 @@ rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, char **path
                                         origin->cached_initramfs_etc_files);
   if (out_changed)
     *out_changed = changed;
+
+  sync_treefile (origin);
 }
 
 /* Mutability: setter */
@@ -458,6 +476,8 @@ rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin, char **pa
                                         origin->cached_initramfs_etc_files);
   if (out_changed)
     *out_changed = changed;
+
+  sync_treefile (origin);
 }
 
 /* Mutability: setter */
@@ -471,6 +491,8 @@ rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin, gbool
                                         origin->cached_initramfs_etc_files);
   if (out_changed)
     *out_changed = changed;
+
+  sync_treefile (origin);
 }
 
 /* Mutability: setter */
@@ -503,6 +525,8 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean reg
 
   origin->cached_initramfs_args
       = g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
+
+  sync_treefile (origin);
 }
 
 /* Mutability: setter */
@@ -520,6 +544,8 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *check
 
   g_free (origin->cached_override_commit);
   origin->cached_override_commit = g_strdup (checksum);
+
+  sync_treefile (origin);
 }
 
 /* Mutability: getter */
@@ -539,6 +565,8 @@ rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
     g_key_file_set_boolean (origin->kf, k, v, TRUE);
   else
     g_key_file_remove_key (origin->kf, k, v, NULL);
+
+  sync_treefile (origin);
 }
 
 /* Mutability: setter */
@@ -613,12 +641,15 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
       }
       break;
     }
+
+  sync_treefile (origin);
 }
 
 /* Mutability: setter */
 void
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec)
 {
+  // NB: calls sync_treefile
   return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL);
 }
 
@@ -759,6 +790,8 @@ rpmostree_origin_add_packages (RpmOstreeOrigin *origin, char **packages, gboolea
           ht = origin->cached_local_fileoverride_packages;
         }
       update_keyfile_pkgs_from_cache (origin, "packages", key, ht, local);
+
+      sync_treefile (origin);
     }
 
   set_changed (out_changed, changed);
@@ -847,7 +880,11 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, char **packages, gboo
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local-fileoverride",
                                     origin->cached_local_fileoverride_packages, TRUE);
 
-  set_changed (out_changed, changed || local_changed || local_fileoverride_changed);
+  const gboolean any_changed = changed || local_changed || local_fileoverride_changed;
+
+  set_changed (out_changed, any_changed);
+  if (any_changed)
+    sync_treefile (origin);
   return TRUE;
 }
 
@@ -865,7 +902,10 @@ rpmostree_origin_add_modules (RpmOstreeOrigin *origin, char **modules, gboolean 
     changed = (g_hash_table_add (target, g_strdup (*mod)) || changed);
 
   if (changed)
-    update_string_list_from_hash_table (origin, "modules", key, target);
+    {
+      update_string_list_from_hash_table (origin, "modules", key, target);
+      sync_treefile (origin);
+    }
 
   set_changed (out_changed, changed);
   return TRUE;
@@ -885,7 +925,10 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, char **modules, gboole
     changed = (g_hash_table_remove (target, *mod) || changed);
 
   if (changed)
-    update_string_list_from_hash_table (origin, "modules", key, target);
+    {
+      update_string_list_from_hash_table (origin, "modules", key, target);
+      sync_treefile (origin);
+    }
 
   set_changed (out_changed, changed);
   return TRUE;
@@ -951,6 +994,8 @@ rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin, gboolean *out_cha
   changed = changed || local_changed || local_fileoverride_changed || modules_enable_changed
             || modules_install_changed;
   set_changed (out_changed, changed);
+  if (changed)
+    sync_treefile (origin);
   return TRUE;
 }
 
@@ -999,6 +1044,8 @@ rpmostree_origin_add_overrides (RpmOstreeOrigin *origin, char **packages,
                                         origin->cached_overrides_remove, FALSE);
       else
         g_assert_not_reached ();
+
+      sync_treefile (origin);
     }
 
   return TRUE;
@@ -1027,6 +1074,7 @@ rpmostree_origin_remove_override (RpmOstreeOrigin *origin, const char *package,
   else
     g_assert_not_reached ();
 
+  sync_treefile (origin);
   return TRUE;
 }
 
@@ -1048,6 +1096,9 @@ rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin, gboolean *out_ch
     update_keyfile_pkgs_from_cache (origin, "overrides", "replace-local",
                                     origin->cached_overrides_local_replace, TRUE);
 
-  set_changed (out_changed, remove_changed || local_replace_changed);
+  const gboolean any_changed = remove_changed || local_replace_changed;
+  set_changed (out_changed, any_changed);
+  if (any_changed)
+    sync_treefile (origin);
   return TRUE;
 }
