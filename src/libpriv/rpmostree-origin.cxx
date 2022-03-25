@@ -372,10 +372,10 @@ rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-const char *
+rust::String
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 {
-  return origin->cached_override_commit;
+  return (*origin->treefile)->get_override_commit ();
 }
 
 /* Mutability: getter */

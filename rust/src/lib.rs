@@ -484,10 +484,13 @@ pub mod ffi {
         fn print_deprecation_warnings(&self);
         fn print_experimental_notices(&self);
         fn sanitycheck_externals(&self) -> Result<()>;
+
+        // these functions are more related to derivation
         fn validate_for_container(&self) -> Result<()>;
         fn get_base_refspec(&self) -> String;
         fn get_origin_custom_url(&self) -> String;
         fn get_origin_custom_description(&self) -> String;
+        fn get_override_commit(&self) -> String;
     }
 
     // treefile.rs (split out from above to make &self nice to use)
