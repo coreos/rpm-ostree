@@ -38,6 +38,6 @@ jobs:
         with:
           name: install.tar
       - name: Install
-        run: tar -C / -xf install.tar
+        run: tar -C / -xzvf install.tar
       - name: Integration tests
         run: ./ci/test-container.sh
