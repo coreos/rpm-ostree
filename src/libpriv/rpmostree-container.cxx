@@ -27,6 +27,7 @@
 #include "rpmostree-core.h"
 
 #include "rpmostree-container.h"
+#include "rpmostree-postprocess.h"
 
 #include <libglnx.h>
 
@@ -56,6 +57,12 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
   /* can't use cancellable here because it wants to re-set it on the state,
    * which will trigger an assertion; XXX: tweak libdnf */
   if (!dnf_context_run (dnfctx, NULL, error))
+    return FALSE;
+
+  glnx_autofd int rootfs_fd = -1;
+  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_fd, error))
+    return FALSE;
+  if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
     return FALSE;
 
   return TRUE;
