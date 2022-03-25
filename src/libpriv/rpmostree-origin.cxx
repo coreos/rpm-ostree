@@ -352,10 +352,16 @@ rpmostree_origin_get_local_fileoverride_packages (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-GHashTable *
+rust::Vec<rust::String>
 rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin)
 {
-  return origin->cached_overrides_remove;
+  return (*origin->treefile)->get_packages_override_remove ();
+}
+
+bool
+rpmostree_origin_has_overrides_remove_name (RpmOstreeOrigin *origin, const char *name)
+{
+  return (*origin->treefile)->has_packages_override_remove_name (rust::Str (name));
 }
 
 /* Mutability: getter */
