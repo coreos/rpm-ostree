@@ -62,8 +62,10 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
     return FALSE;
 
   RpmOstreeRefspecType current_refspectype;
-  g_autofree gchar *current_refspec
-      = rpmostree_origin_get_full_refspec (origin, &current_refspectype);
+  /* We copy here because we might lower down change the origin refspec. */
+  g_autofree gchar *current_refspec = g_strdup (rpmostree_origin_get_refspec (origin));
+  if (!rpmostree_refspec_classify (current_refspec, &current_refspectype, error))
+    return FALSE;
 
   switch (refspectype)
     {
@@ -202,8 +204,8 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
         if (!skip_branch_check)
           {
             rpmostree_output_message ("Validating checksum '%s'", checksum);
-            if (!rpmostreed_repo_lookup_checksum (repo, refspec, checksum, progress,
-                                                  cancellable, error))
+            if (!rpmostreed_repo_lookup_checksum (repo, refspec, checksum, progress, cancellable,
+                                                  error))
               return FALSE;
           }
         rpmostree_origin_set_override_commit (origin, checksum, NULL);
