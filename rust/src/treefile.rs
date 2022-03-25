@@ -1122,6 +1122,25 @@ impl Treefile {
             .clone()
             .unwrap_or_default()
     }
+
+    pub(crate) fn get_initramfs_etc_files(&self) -> Vec<String> {
+        self.parsed
+            .derive
+            .initramfs
+            .as_ref()
+            .and_then(|i| i.etc.clone())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn has_initramfs_etc_files(&self) -> bool {
+        self.parsed
+            .derive
+            .initramfs
+            .as_ref()
+            .and_then(|i| i.etc.as_ref())
+            .map(|v| !v.is_empty())
+            .unwrap_or_default()
+    }
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -2967,6 +2986,9 @@ conditional-include:
               url: https://example.com
               description: Managed by Example, Inc.
             override-commit: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+            initramfs:
+              etc:
+                - /etc/asdf
         "};
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
@@ -2988,6 +3010,8 @@ conditional-include:
             treefile.get_override_commit(),
             "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
         );
+        assert!(treefile.has_initramfs_etc_files());
+        assert_eq!(treefile.get_initramfs_etc_files(), &["/etc/asdf"]);
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
@@ -2999,6 +3023,8 @@ conditional-include:
         assert_eq!(treefile.get_origin_custom_url(), "");
         assert_eq!(treefile.get_origin_custom_description(), "");
         assert_eq!(treefile.get_override_commit(), "");
+        assert!(!treefile.has_initramfs_etc_files());
+        assert!(treefile.get_initramfs_etc_files().is_empty());
     }
 }
 
