@@ -32,19 +32,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeOrigin, rpmostree_origin_unref)
 
 RpmOstreeOrigin *rpmostree_origin_parse_keyfile (GKeyFile *keyfile, GError **error);
 
-static inline RpmOstreeOrigin *
-rpmostree_origin_parse_deployment (OstreeDeployment *deployment, GError **error)
-{
-  GKeyFile *origin = ostree_deployment_get_origin (deployment);
-  if (!origin)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No origin known for deployment %s.%d",
-                   ostree_deployment_get_csum (deployment),
-                   ostree_deployment_get_deployserial (deployment));
-      return NULL;
-    }
-  return rpmostree_origin_parse_keyfile (origin, error);
-}
+RpmOstreeOrigin *rpmostree_origin_parse_deployment (OstreeDeployment *deployment, GError **error);
 
 RpmOstreeOrigin *rpmostree_origin_dup (RpmOstreeOrigin *origin);
 
