@@ -10,6 +10,7 @@ use crate::cxxrsutil::*;
 use crate::treefile::Treefile;
 use anyhow::Result;
 use fn_error_context::context;
+use glib::translate::ToGlibPtr;
 use glib::KeyFile;
 use ostree_ext::glib;
 use std::collections::BTreeMap;
@@ -99,6 +100,12 @@ pub(crate) fn origin_to_treefile(
 ) -> CxxResult<Box<Treefile>> {
     let kf = kf.gobj_wrap();
     Ok(origin_to_treefile_inner(&kf)?)
+}
+
+/// Convert a treefile config to an origin keyfile.
+pub(crate) fn treefile_to_origin(tf: &Treefile) -> Result<*mut crate::FFIGKeyFile> {
+    let kf = treefile_to_origin_inner(tf)?;
+    Ok(kf.to_glib_full() as *mut _)
 }
 
 /// Set a keyfile value to a string list.
