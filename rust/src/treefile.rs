@@ -1071,6 +1071,24 @@ impl Treefile {
     pub(crate) fn get_base_refspec(&self) -> String {
         self.parsed.derive.base_refspec.clone().unwrap_or_default()
     }
+
+    pub(crate) fn get_origin_custom_url(&self) -> String {
+        self.parsed
+            .derive
+            .custom
+            .as_ref()
+            .map(|c| c.url.to_string())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn get_origin_custom_description(&self) -> String {
+        self.parsed
+            .derive
+            .custom
+            .as_ref()
+            .and_then(|c| c.description.as_ref().map(|d| d.to_string()))
+            .unwrap_or_default()
+    }
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -2905,16 +2923,26 @@ conditional-include:
     fn test_derivation() {
         let buf = indoc! {"
             base-refspec: fedora:fedora/35/x86_64/silverblue
+            custom:
+              url: https://example.com
+              description: Managed by Example, Inc.
         "};
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert_eq!(
             treefile.get_base_refspec(),
             "fedora:fedora/35/x86_64/silverblue"
         );
+        assert_eq!(treefile.get_origin_custom_url(), "https://example.com");
+        assert_eq!(
+            treefile.get_origin_custom_description(),
+            "Managed by Example, Inc."
+        );
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
         assert_eq!(treefile.get_base_refspec(), "");
+        assert_eq!(treefile.get_origin_custom_url(), "");
+        assert_eq!(treefile.get_origin_custom_description(), "");
     }
 }
 
