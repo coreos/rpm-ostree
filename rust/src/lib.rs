@@ -456,6 +456,7 @@ pub mod ffi {
         fn get_packages_override_remove(&self) -> Vec<String>;
         fn set_packages_override_remove(&mut self, packages: &Vec<String>);
         fn get_modules_enable(&self) -> Vec<String>;
+        fn has_modules_enable(&self) -> bool;
         fn get_modules_install(&self) -> Vec<String>;
         fn get_exclude_packages(&self) -> Vec<String>;
         fn get_platform_module(&self) -> String;

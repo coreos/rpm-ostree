@@ -929,7 +929,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
     {
       /* We still want to prepare() even if there's only enabled modules to validate.
        * See comment in rpmostree_origin_may_require_local_assembly(). */
-      if (g_hash_table_size (rpmostree_origin_get_modules_enable (self->computed_origin)) > 0)
+      if (rpmostree_origin_has_modules_enable (self->computed_origin))
         {
           if (!rpmostree_context_prepare (self->ctx, cancellable, error))
             return FALSE;

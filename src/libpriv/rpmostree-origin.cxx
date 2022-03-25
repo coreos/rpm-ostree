@@ -331,10 +331,10 @@ rpmostree_origin_has_packages (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-GHashTable *
-rpmostree_origin_get_modules_enable (RpmOstreeOrigin *origin)
+bool
+rpmostree_origin_has_modules_enable (RpmOstreeOrigin *origin)
 {
-  return origin->cached_modules_enable;
+  return (*origin->treefile)->has_modules_enable ();
 }
 
 /* Mutability: getter */
