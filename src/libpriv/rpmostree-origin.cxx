@@ -351,7 +351,7 @@ rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
   return rpmostree_origin_get_cliwrap (origin) || rpmostree_origin_get_regenerate_initramfs (origin)
          || (g_hash_table_size (origin->cached_initramfs_etc_files) > 0)
-         || rpmostree_origin_has_packages (origin) ||
+         || rpmostree_origin_has_any_packages (origin) ||
          /* Technically, alone it doesn't require require assembly, but it still
           * requires fetching repo metadata to validate (remember: modules are a
           * pure rpmmd concept). This means we may pay the cost of an unneeded
@@ -361,7 +361,7 @@ rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 
 /* Returns TRUE if this origin contains overlay or override packages */
 gboolean
-rpmostree_origin_has_packages (RpmOstreeOrigin *origin)
+rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin)
 {
   return (g_hash_table_size (origin->cached_packages) > 0)
          || (g_hash_table_size (origin->cached_local_packages) > 0)

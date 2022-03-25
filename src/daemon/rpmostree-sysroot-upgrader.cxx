@@ -916,7 +916,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
                                 error))
     return FALSE;
 
-  if (rpmostree_origin_has_packages (self->computed_origin))
+  if (rpmostree_origin_has_any_packages (self->computed_origin))
     {
       if (!rpmostree_context_prepare (self->ctx, cancellable, error))
         return FALSE;
@@ -941,7 +941,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
 
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN)
     {
-      if (rpmostree_origin_has_packages (self->computed_origin))
+      if (rpmostree_origin_has_any_packages (self->computed_origin))
         rpmostree_print_transaction (rpmostree_context_get_dnf (self->ctx));
     }
 
