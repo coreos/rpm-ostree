@@ -430,7 +430,8 @@ rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin)
 GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
 {
-  return keyfile_dup (origin->kf);
+  // XXX: we should be able to make this conversion infallible
+  return CXX_MUST_VAL (rpmostreecxx::treefile_to_origin (**origin->treefile));
 }
 
 static void
