@@ -579,3 +579,17 @@ pub(crate) fn print_treepkg_diff(sysroot: &str) {
         );
     }
 }
+
+/// Implementation of https://github.com/rust-lang/rust/issues/82901 until it's stable.
+pub(crate) trait OptionExtGetOrInsertDefault<T> {
+    fn ext_get_or_insert_default(&mut self) -> &mut T;
+}
+
+impl<T: Default> OptionExtGetOrInsertDefault<T> for Option<T> {
+    fn ext_get_or_insert_default(&mut self) -> &mut T {
+        match self {
+            Some(ref mut t) => t,
+            None => self.insert(Default::default()),
+        }
+    }
+}
