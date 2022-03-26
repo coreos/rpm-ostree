@@ -59,6 +59,37 @@ struct RpmOstreeOrigin
   GHashTable *cached_overrides_remove;        /* set of pkgnames (no EVRA) */
 };
 
+RpmOstreeOrigin *
+rpmostree_origin_ref (RpmOstreeOrigin *origin)
+{
+  g_assert (origin);
+  origin->refcount++;
+  return origin;
+}
+
+void
+rpmostree_origin_unref (RpmOstreeOrigin *origin)
+{
+  g_assert (origin);
+  g_assert_cmpint (origin->refcount, >, 0);
+  origin->refcount--;
+  if (origin->refcount > 0)
+    return;
+  g_key_file_unref (origin->kf);
+  g_free (origin->cached_refspec);
+  g_free (origin->cached_unconfigured_state);
+  g_strfreev (origin->cached_initramfs_args);
+  g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_modules_enable, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_modules_install, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_local_packages, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_local_fileoverride_packages, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_overrides_local_replace, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_overrides_remove, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_initramfs_etc_files, g_hash_table_unref);
+  g_free (origin);
+}
+
 static GKeyFile *
 keyfile_dup (GKeyFile *kf)
 {
@@ -369,37 +400,6 @@ GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
 {
   return keyfile_dup (origin->kf);
-}
-
-RpmOstreeOrigin *
-rpmostree_origin_ref (RpmOstreeOrigin *origin)
-{
-  g_assert (origin);
-  origin->refcount++;
-  return origin;
-}
-
-void
-rpmostree_origin_unref (RpmOstreeOrigin *origin)
-{
-  g_assert (origin);
-  g_assert_cmpint (origin->refcount, >, 0);
-  origin->refcount--;
-  if (origin->refcount > 0)
-    return;
-  g_key_file_unref (origin->kf);
-  g_free (origin->cached_refspec);
-  g_free (origin->cached_unconfigured_state);
-  g_strfreev (origin->cached_initramfs_args);
-  g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_modules_enable, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_modules_install, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_local_packages, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_local_fileoverride_packages, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_overrides_local_replace, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_overrides_remove, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_initramfs_etc_files, g_hash_table_unref);
-  g_free (origin);
 }
 
 static void
