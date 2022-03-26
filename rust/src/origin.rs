@@ -308,7 +308,10 @@ fn map_keyfile_optional<T>(res: StdResult<T, glib::Error>) -> StdResult<Option<T
     }
 }
 
-fn parse_stringlist(kf: &KeyFile, group: &str, key: &str) -> Result<Option<Vec<String>>> {
+fn parse_stringlist<T>(kf: &KeyFile, group: &str, key: &str) -> Result<Option<T>>
+where
+    T: std::iter::FromIterator<String>,
+{
     let r = map_keyfile_optional(kf.string_list(group, key))?
         .map(|o| o.into_iter().map(|s| s.to_string()).collect());
     Ok(r)
