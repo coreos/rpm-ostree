@@ -127,6 +127,22 @@ throw_gerror (GError *&error)
     std::move (v.value ());                                                                        \
   })
 
+// This is the C equivalent of .unwrap() when we know it's safe to do so.
+#define CXX_MUST(cxxfn)                                                                            \
+  ({                                                                                               \
+    g_autoptr (GError) local_error = NULL;                                                         \
+    CXX (cxxfn, &local_error);                                                                     \
+    g_assert_no_error (local_error);                                                               \
+  })
+
+#define CXX_MUST_VAL(cxxfn)                                                                        \
+  ({                                                                                               \
+    g_autoptr (GError) local_error = NULL;                                                         \
+    auto v = CXX_VAL (cxxfn, &local_error);                                                        \
+    g_assert_no_error (local_error);                                                               \
+    std::move (v.value ());                                                                        \
+  })
+
 // Convenience macros for the common rpmostreecxx:: cases.
 #define ROSCXX(cxxfn, err) CXX (rpmostreecxx::cxxfn, err)
 #define ROSCXX_TRY(cxxfn, err) CXX_TRY (rpmostreecxx::cxxfn, err)
