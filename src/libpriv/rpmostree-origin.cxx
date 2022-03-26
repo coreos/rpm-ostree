@@ -371,12 +371,6 @@ rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
   return keyfile_dup (origin->kf);
 }
 
-char *
-rpmostree_origin_get_string (RpmOstreeOrigin *origin, const char *section, const char *value)
-{
-  return g_key_file_get_string (origin->kf, section, value, NULL);
-}
-
 RpmOstreeOrigin *
 rpmostree_origin_ref (RpmOstreeOrigin *origin)
 {
