@@ -83,8 +83,7 @@ void rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin,
 void rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean regenerate,
                                                 char **args);
 
-void rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum,
-                                           const char *version);
+void rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum);
 
 gboolean rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin);
 void rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap);
