@@ -272,7 +272,7 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
   ostree_deployment_origin_remove_transient_state (origin->kf);
 
   /* this is already covered by the above, but the below also updates the cached value */
-  rpmostree_origin_set_override_commit (origin, NULL, NULL);
+  rpmostree_origin_set_override_commit (origin, NULL);
 }
 
 const char *
@@ -485,19 +485,11 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean reg
 }
 
 void
-rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum,
-                                      const char *version)
+rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum)
 {
   if (checksum != NULL)
     {
       g_key_file_set_string (origin->kf, "origin", "override-commit", checksum);
-
-      /* Add a comment with the version, to be nice. */
-      if (version != NULL)
-        {
-          g_autofree char *comment = g_strdup_printf ("Version %s [%.10s]", version, checksum);
-          g_key_file_set_comment (origin->kf, "origin", "override-commit", comment, NULL);
-        }
     }
   else
     {
@@ -540,7 +532,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
   /* We don't want to carry any commit overrides or version pinning during a
    * rebase by default.
    */
-  rpmostree_origin_set_override_commit (origin, NULL, NULL);
+  rpmostree_origin_set_override_commit (origin, NULL);
 
   /* See related code in rpmostree_origin_parse_keyfile() */
   if (!rpmostree_refspec_classify (new_refspec, &origin->refspec_type, error))

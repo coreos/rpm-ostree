@@ -195,7 +195,7 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
                                              &checksum, error))
           return FALSE;
 
-        rpmostree_origin_set_override_commit (origin, checksum, version);
+        rpmostree_origin_set_override_commit (origin, checksum);
       }
       break;
     case rpmostreecxx::ParsedRevisionKind::Checksum:
@@ -208,7 +208,7 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
                                                   error))
               return FALSE;
           }
-        rpmostree_origin_set_override_commit (origin, checksum, NULL);
+        rpmostree_origin_set_override_commit (origin, checksum);
       }
       break;
     default:
@@ -330,7 +330,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction, GCancellab
     }
   else if (upgrading)
     {
-      rpmostree_origin_set_override_commit (origin, NULL, NULL);
+      rpmostree_origin_set_override_commit (origin, NULL);
     }
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
@@ -1173,7 +1173,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
     }
   else
     {
-      rpmostree_origin_set_override_commit (origin, NULL, NULL);
+      rpmostree_origin_set_override_commit (origin, NULL);
     }
 
   gboolean changed = FALSE;
