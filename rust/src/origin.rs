@@ -38,11 +38,12 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
         Some(r)
     } else if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "baserefspec")? {
         Some(r)
-    } else if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "container-image-reference")? {
-        // TODO - consider this key deprecated and remove it
+    } else if let Some(r) =
+        keyfile_get_optional_string(kf, ORIGIN, ostree_ext::container::deploy::ORIGIN_CONTAINER)?
+    {
         Some(r)
     } else {
-        keyfile_get_optional_string(kf, ORIGIN, ostree_ext::container::deploy::ORIGIN_CONTAINER)?
+        None
     };
     let refspec_str = refspec_str
         .ok_or_else(|| anyhow::anyhow!("Failed to find refspec/baserefspec/container in origin"))?;
