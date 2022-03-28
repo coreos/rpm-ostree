@@ -67,8 +67,7 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
     {
     case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
       {
-        if (!rpmostree_origin_set_rebase (origin, refspec, error))
-          return FALSE;
+        rpmostree_origin_set_rebase (origin, refspec);
 
         if (current_refspectype == RPMOSTREE_REFSPEC_TYPE_CONTAINER
             && strcmp (current_refspec, refspec) == 0)
@@ -106,9 +105,8 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
           if (!*custom_origin_description)
             return glnx_throw (error, "Invalid custom-origin");
         }
-      if (!rpmostree_origin_set_rebase_custom (origin, new_refspec, custom_origin_url,
-                                               custom_origin_description, error))
-        return FALSE;
+      rpmostree_origin_set_rebase_custom (origin, new_refspec, custom_origin_url,
+                                          custom_origin_description);
     }
   else
     {
@@ -121,8 +119,7 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
       if (strcmp (current_refspec, new_refspec) == 0)
         return glnx_throw (error, "Old and new refs are equal: %s", new_refspec);
 
-      if (!rpmostree_origin_set_rebase (origin, new_refspec, error))
-        return FALSE;
+      rpmostree_origin_set_rebase (origin, new_refspec);
     }
 
   g_autofree gchar *current_remote = NULL;
