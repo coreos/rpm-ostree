@@ -79,6 +79,7 @@ static char *opt_parent;
 
 static char *opt_extensions_output_dir;
 static char *opt_extensions_base_rev;
+static char *opt_extensions_rootfs;
 
 /* shared by all subcommands */
 static GOptionEntry common_option_entries[]
@@ -145,6 +146,8 @@ static GOptionEntry extensions_option_entries[]
         { "base-rev", 0, 0, G_OPTION_ARG_STRING, &opt_extensions_base_rev, "Base OSTree revision",
           "REV" },
         { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+        { "rootfs", 0, 0, G_OPTION_ARG_STRING, &opt_extensions_rootfs,
+          "Path to already present rootfs", "ROOTFS" },
         { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed,
           "Update the modification time on FILE if new extensions were downloaded", "FILE" },
         { NULL } };
@@ -1469,11 +1472,6 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
       rpmostree_usage_error (context, "TREEFILE and EXTYAML must be specified", error);
       return FALSE;
     }
-  if (!opt_repo)
-    {
-      rpmostree_usage_error (context, "--repo must be specified", error);
-      return FALSE;
-    }
   if (!opt_extensions_output_dir)
     {
       rpmostree_usage_error (context, "--output-dir must be specified", error);
@@ -1486,11 +1484,32 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   auto basearch = rpmostreecxx::get_rpm_basearch ();
   auto src_treefile = ROSCXX_TRY_VAL (treefile_new_compose (treefile_path, basearch, -1), error);
 
-  g_autoptr (OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
-  if (!repo)
-    return FALSE;
+  g_autoptr (OstreeRepo) repo = NULL;
+  g_auto (GLnxTmpDir) tmp_repo = {
+    0,
+  };
+  // If we're in a running rootfs, we don't need a repo, so make up a fake one for now.
+  if (opt_extensions_rootfs)
+    {
+      if (!glnx_mkdtempat (AT_FDCWD, "/tmp/tmprepo.XXXXX", 0700, &tmp_repo, error))
+        return glnx_prefix_error (error, "Creating temporary repo dir");
+      repo = ostree_repo_create_at (tmp_repo.fd, tmp_repo.path, OSTREE_REPO_MODE_BARE_USER, NULL,
+                                    cancellable, error);
+      if (!repo)
+        return glnx_prefix_error (error, "Creating temporary repo");
+    }
+  else
+    {
+      if (!opt_repo)
+        {
+          rpmostree_usage_error (context, "--repo must be specified", error);
+        }
+      repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
+      if (!repo)
+        return FALSE;
+    }
 
-  if (!opt_extensions_base_rev)
+  if (!opt_extensions_rootfs && !opt_extensions_base_rev)
     {
       auto treeref = src_treefile->get_ostree_ref ();
       if (treeref.length () == 0)
@@ -1519,26 +1538,44 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
         return glnx_throw_errno_prefix (error, "fcntl");
     }
 
+  auto packages_mapping = std::make_unique<rust::Vec<rpmostreecxx::StringMapping> > ();
   g_autofree char *base_rev = NULL;
   if (!ostree_repo_resolve_rev (repo, opt_extensions_base_rev, FALSE, &base_rev, error))
     return FALSE;
 
-  g_autoptr (GVariant) commit = NULL;
-  if (!ostree_repo_load_commit (repo, base_rev, &commit, NULL, error))
-    return FALSE;
-
-  g_autoptr (GPtrArray) packages
-      = rpm_ostree_db_query_all (repo, opt_extensions_base_rev, cancellable, error);
-  if (!packages)
-    return FALSE;
-
-  auto packages_mapping = std::make_unique<rust::Vec<rpmostreecxx::StringMapping> > ();
-  for (guint i = 0; i < packages->len; i++)
+  if (opt_extensions_rootfs)
     {
-      RpmOstreePackage *pkg = (RpmOstreePackage *)packages->pdata[i];
-      const char *name = rpm_ostree_package_get_name (pkg);
-      const char *evr = rpm_ostree_package_get_evr (pkg);
-      packages_mapping->push_back (rpmostreecxx::StringMapping{ name, evr });
+      g_autoptr (RpmOstreeRefSack) rsack
+          = rpmostree_get_refsack_for_root (AT_FDCWD, opt_extensions_rootfs, error);
+      if (!rsack)
+        return FALSE;
+      g_autoptr (GPtrArray) packages = rpmostree_sack_get_packages (rsack->sack);
+
+      for (guint i = 0; i < packages->len; i++)
+        {
+          DnfPackage *pkg = (DnfPackage *)packages->pdata[i];
+          const char *name = dnf_package_get_name (pkg);
+          const char *evr = dnf_package_get_evr (pkg);
+          packages_mapping->push_back (rpmostreecxx::StringMapping{ name, evr });
+        }
+    }
+  else
+    {
+      g_autoptr (GVariant) commit = NULL;
+      if (!ostree_repo_load_commit (repo, base_rev, &commit, NULL, error))
+        return FALSE;
+
+      g_autoptr (GPtrArray) packages = rpm_ostree_db_query_all (repo, base_rev, cancellable, error);
+      if (!packages)
+        return FALSE;
+
+      for (guint i = 0; i < packages->len; i++)
+        {
+          RpmOstreePackage *pkg = (RpmOstreePackage *)packages->pdata[i];
+          const char *name = rpm_ostree_package_get_name (pkg);
+          const char *evr = rpm_ostree_package_get_evr (pkg);
+          packages_mapping->push_back (rpmostreecxx::StringMapping{ name, evr });
+        }
     }
 
   auto extensions
@@ -1566,14 +1603,24 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   if (!glnx_shutil_rm_rf_at (cachedir_dfd, TMP_EXTENSIONS_ROOTFS, cancellable, error))
     return FALSE;
 
-  g_print ("Checking out %.7s... ", base_rev);
-  OstreeRepoCheckoutAtOptions opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_USER };
-  if (!ostree_repo_checkout_at (repo, &opts, cachedir_dfd, TMP_EXTENSIONS_ROOTFS, base_rev,
-                                cancellable, error))
-    return FALSE;
-  g_print ("done!\n");
+  g_autofree char *checkout_path = NULL;
+  if (base_rev)
+    {
+      g_assert (!opt_extensions_rootfs);
+      g_print ("Checking out %.7s... ", base_rev);
+      OstreeRepoCheckoutAtOptions opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_USER };
+      if (!ostree_repo_checkout_at (repo, &opts, cachedir_dfd, TMP_EXTENSIONS_ROOTFS, base_rev,
+                                    cancellable, error))
+        return FALSE;
+      g_print ("done!\n");
 
-  g_autofree char *checkout_path = glnx_fdrel_abspath (cachedir_dfd, TMP_EXTENSIONS_ROOTFS);
+      checkout_path = glnx_fdrel_abspath (cachedir_dfd, TMP_EXTENSIONS_ROOTFS);
+    }
+  else
+    {
+      checkout_path = g_strdup (opt_extensions_rootfs);
+    }
+
   if (!rpmostree_context_setup (ctx, checkout_path, checkout_path, cancellable, error))
     return FALSE;
 
