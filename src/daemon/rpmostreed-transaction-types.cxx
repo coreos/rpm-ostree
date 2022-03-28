@@ -57,19 +57,19 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
   if (g_str_has_prefix (refspec, "ostree://"))
     refspec += strlen ("ostree://");
 
-  RpmOstreeRefspecType refspectype = rpmostree_refspec_classify (refspec);
+  auto refspectype = rpmostreecxx::refspec_classify (refspec);
 
   /* We copy here because we might lower down change the origin refspec. */
   g_autofree gchar *current_refspec = g_strdup (rpmostree_origin_get_refspec (origin));
-  RpmOstreeRefspecType current_refspectype = rpmostree_refspec_classify (current_refspec);
+  auto current_refspectype = rpmostreecxx::refspec_classify (current_refspec);
 
   switch (refspectype)
     {
-    case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+    case rpmostreecxx::RefspecType::Container:
       {
         rpmostree_origin_set_rebase (origin, refspec);
 
-        if (current_refspectype == RPMOSTREE_REFSPEC_TYPE_CONTAINER
+        if (current_refspectype == rpmostreecxx::RefspecType::Container
             && strcmp (current_refspec, refspec) == 0)
           return glnx_throw (error, "Old and new refs are equal: %s", refspec);
 
@@ -79,9 +79,9 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
           *out_new_refspec = g_strdup (refspec);
         return TRUE;
       }
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+    case rpmostreecxx::RefspecType::Ostree:
       break;
-    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
+    case rpmostreecxx::RefspecType::Checksum:
       break;
     }
 
@@ -91,9 +91,9 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
     return FALSE;
 
   /* Classify to ensure we handle TYPE_CHECKSUM */
-  RpmOstreeRefspecType new_refspectype = rpmostree_refspec_classify (new_refspec);
+  auto new_refspectype = rpmostreecxx::refspec_classify (new_refspec);
 
-  if (new_refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
+  if (new_refspectype == rpmostreecxx::RefspecType::Checksum)
     {
       const char *custom_origin_url = NULL;
       const char *custom_origin_description = NULL;
@@ -155,20 +155,20 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
                          GCancellable *cancellable, GError **error)
 {
   const char *refspec = rpmostree_origin_get_refspec (origin);
-  RpmOstreeRefspecType refspectype = rpmostree_refspec_classify (refspec);
+  auto refspectype = rpmostreecxx::refspec_classify (refspec);
 
   if (revision == NULL)
     return glnx_throw (error, "Missing revision");
 
-  if (refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
+  if (refspectype == rpmostreecxx::RefspecType::Checksum)
     return glnx_throw (error, "Cannot look up version while pinned to commit");
 
-  if (refspectype == RPMOSTREE_REFSPEC_TYPE_CONTAINER)
+  if (refspectype == rpmostreecxx::RefspecType::Container)
     /* NB: Not supported for now, but We can perhaps support this if we allow `revision` to
      * possibly be a tag or digest */
     return glnx_throw (error, "Cannot look up version while tracking a container image reference");
 
-  if (refspectype != RPMOSTREE_REFSPEC_TYPE_OSTREE)
+  if (refspectype != rpmostreecxx::RefspecType::Ostree)
     return glnx_throw (error, "Invalid refspec type");
 
   auto parsed_revision = ROSCXX_TRY_VAL (parse_revision (revision), error);
@@ -1491,10 +1491,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
     }
 
   /* Past this point we've computed the origin */
-  RpmOstreeRefspecType refspec_type;
+  rpmostreecxx::RefspecType refspec_type;
   {
     const char *refspec = rpmostree_origin_get_refspec (origin);
-    refspec_type = rpmostree_refspec_classify (refspec);
+    refspec_type = rpmostreecxx::refspec_classify (refspec);
   }
 
   if (download_metadata_only)
@@ -1611,7 +1611,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
     }
   else
     {
-      if (refspec_type == RPMOSTREE_REFSPEC_TYPE_CHECKSUM
+      if (refspec_type == rpmostreecxx::RefspecType::Checksum
           && layering_type < RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
         {
           g_autofree char *custom_origin_url = NULL;

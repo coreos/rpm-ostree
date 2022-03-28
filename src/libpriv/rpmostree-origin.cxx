@@ -37,7 +37,7 @@ struct RpmOstreeOrigin
   GKeyFile *kf;
 
   /* Branch name or pinned to commit*/
-  RpmOstreeRefspecType refspec_type;
+  rpmostreecxx::RefspecType refspec_type;
   char *cached_refspec;
 
   /* Container image digest, if tracking a container image reference */
@@ -193,14 +193,14 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   else if (ost_refspec)
     {
       /* Classify to distinguish between TYPE_CHECKSUM and TYPE_OSTREE */
-      ret->refspec_type = rpmostree_refspec_classify (ost_refspec);
+      ret->refspec_type = rpmostreecxx::refspec_classify (ost_refspec);
       ret->cached_refspec = util::move_nullify (ost_refspec);
       ret->cached_override_commit
           = g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
     }
   else if (imgref)
     {
-      ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_CONTAINER;
+      ret->refspec_type = rpmostreecxx::RefspecType::Container;
       ret->cached_refspec = util::move_nullify (imgref);
 
       ret->cached_digest
@@ -534,7 +534,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
   rpmostree_origin_set_override_commit (origin, NULL);
 
   /* See related code in rpmostree_origin_parse_keyfile() */
-  origin->refspec_type = rpmostree_refspec_classify (new_refspec);
+  origin->refspec_type = rpmostreecxx::refspec_classify (new_refspec);
   g_free (origin->cached_refspec);
   origin->cached_refspec = g_strdup (new_refspec);
   /* Note the following sets different keys depending on the type of refspec;
@@ -543,8 +543,8 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
    * `RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY` key. */
   switch (origin->refspec_type)
     {
-    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+    case rpmostreecxx::RefspecType::Checksum:
+    case rpmostreecxx::RefspecType::Ostree:
       {
         /* Remove `TYPE_CONTAINER`-related keys */
         g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
@@ -564,7 +564,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
         else
           {
             /* Custom origins have to be checksums */
-            g_assert_cmpint (origin->refspec_type, ==, RPMOSTREE_REFSPEC_TYPE_CHECKSUM);
+            g_assert (origin->refspec_type == rpmostreecxx::RefspecType::Checksum);
             g_key_file_set_string (origin->kf, "origin", "custom-url", custom_origin_url);
             if (custom_origin_description)
               g_key_file_set_string (origin->kf, "origin", "custom-description",
@@ -572,7 +572,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
           }
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+    case rpmostreecxx::RefspecType::Container:
       {
         /* Remove `TYPE_OSTREE` and `TYPE_CHECKSUM`-related keys */
         g_assert (!custom_origin_url);
@@ -604,7 +604,7 @@ sync_baserefspec (RpmOstreeOrigin *origin)
   /* If we're based on a container image reference, this is not necessary since
    * `ostree admin upgrade` won't work regardless of whether or not packages are
    * layered. Though this may change in the future. */
-  if (origin->refspec_type == RPMOSTREE_REFSPEC_TYPE_CONTAINER)
+  if (origin->refspec_type == rpmostreecxx::RefspecType::Container)
     return;
   if (rpmostree_origin_may_require_local_assembly (origin))
     {

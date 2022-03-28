@@ -136,13 +136,13 @@ rpmostree_builtin_rebase (int argc, char **argv, RpmOstreeCommandInvocation *inv
     }
   (void)new_refspec_owned; /* Pacify static analysis */
 
-  RpmOstreeRefspecType refspectype = rpmostree_refspec_classify (new_provided_refspec);
+  auto refspectype = rpmostreecxx::refspec_classify (new_provided_refspec);
 
   /* catch empty refspec now; we'd error out much later in the daemon otherwise */
   if (strlen (new_provided_refspec) == 0)
     return glnx_throw (error, "Refspec is empty");
 
-  if (refspectype == RPMOSTREE_REFSPEC_TYPE_CONTAINER)
+  if (refspectype == rpmostreecxx::RefspecType::Container)
     {
       if (!opt_experimental)
         return glnx_throw (error,
@@ -155,7 +155,8 @@ rpmostree_builtin_rebase (int argc, char **argv, RpmOstreeCommandInvocation *inv
 
   /* Check if remote refers to a local repo */
   g_autofree char *local_repo_remote = NULL;
-  if (G_IN_SET (refspectype, RPMOSTREE_REFSPEC_TYPE_OSTREE, RPMOSTREE_REFSPEC_TYPE_CHECKSUM))
+  if (refspectype == rpmostreecxx::RefspecType::Ostree
+      || refspectype == rpmostreecxx::RefspecType::Checksum)
     {
       if (*new_provided_refspec == '/')
         {
