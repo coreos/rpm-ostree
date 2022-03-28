@@ -88,11 +88,10 @@ void rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *
 gboolean rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin);
 void rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap);
 
-gboolean rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec,
-                                      GError **error);
-gboolean rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_refspec,
-                                             const char *custom_origin_url,
-                                             const char *custom_origin_description, GError **error);
+void rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec);
+void rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_refspec,
+                                         const char *custom_origin_url,
+                                         const char *custom_origin_description);
 
 gboolean rpmostree_origin_add_packages (RpmOstreeOrigin *origin, char **packages, gboolean local,
                                         gboolean fileoverride, gboolean allow_existing,

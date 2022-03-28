@@ -516,10 +516,10 @@ rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
     g_key_file_remove_key (origin->kf, k, v, NULL);
 }
 
-gboolean
+void
 rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_refspec,
                                     const char *custom_origin_url,
-                                    const char *custom_origin_description, GError **error)
+                                    const char *custom_origin_description)
 {
   /* Require non-empty strings */
   if (custom_origin_url)
@@ -587,14 +587,12 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
       }
       break;
     }
-
-  return TRUE;
 }
 
-gboolean
-rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec, GError **error)
+void
+rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec)
 {
-  return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL, error);
+  return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL);
 }
 
 /* If necessary, switch to `baserefspec` when changing the origin
