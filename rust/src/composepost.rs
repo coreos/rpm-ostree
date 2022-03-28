@@ -43,7 +43,7 @@ pub(crate) static COMPAT_VARLIB_SYMLINKS: &[&str] = &["alternatives", "vagrant"]
 
 /* See rpmostree-core.h */
 const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
-const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
+pub(crate) const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
 const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
 pub(crate) const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
 
