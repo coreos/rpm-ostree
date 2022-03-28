@@ -57,15 +57,11 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
   if (g_str_has_prefix (refspec, "ostree://"))
     refspec += strlen ("ostree://");
 
-  RpmOstreeRefspecType refspectype;
-  if (!rpmostree_refspec_classify (refspec, &refspectype, error))
-    return FALSE;
+  RpmOstreeRefspecType refspectype = rpmostree_refspec_classify (refspec);
 
-  RpmOstreeRefspecType current_refspectype;
   /* We copy here because we might lower down change the origin refspec. */
   g_autofree gchar *current_refspec = g_strdup (rpmostree_origin_get_refspec (origin));
-  if (!rpmostree_refspec_classify (current_refspec, &current_refspectype, error))
-    return FALSE;
+  RpmOstreeRefspecType current_refspectype = rpmostree_refspec_classify (current_refspec);
 
   switch (refspectype)
     {
@@ -96,9 +92,7 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
     return FALSE;
 
   /* Classify to ensure we handle TYPE_CHECKSUM */
-  RpmOstreeRefspecType new_refspectype;
-  if (!rpmostree_refspec_classify (new_refspec, &new_refspectype, error))
-    return FALSE;
+  RpmOstreeRefspecType new_refspectype = rpmostree_refspec_classify (new_refspec);
 
   if (new_refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
     {
@@ -163,10 +157,8 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
                          gboolean skip_branch_check, const char *revision,
                          GCancellable *cancellable, GError **error)
 {
-  RpmOstreeRefspecType refspectype;
   const char *refspec = rpmostree_origin_get_refspec (origin);
-  if (!rpmostree_refspec_classify (refspec, &refspectype, error))
-    return FALSE;
+  RpmOstreeRefspecType refspectype = rpmostree_refspec_classify (refspec);
 
   if (revision == NULL)
     return glnx_throw (error, "Missing revision");
@@ -1118,11 +1110,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
     {
       /* self->refspec is the rev in the other local repo we'll rebase to */
       g_assert (self->refspec);
-
-      RpmOstreeRefspecType refspectype;
-      if (!rpmostree_refspec_classify (self->refspec, &refspectype, error))
-        return FALSE;
-
       g_autoptr (OstreeRepo) local_repo_remote
           = ostree_repo_open_at (local_repo_remote_dfd, ".", cancellable, error);
       if (!local_repo_remote)
@@ -1510,8 +1497,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
   RpmOstreeRefspecType refspec_type;
   {
     const char *refspec = rpmostree_origin_get_refspec (origin);
-    if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
-      return FALSE;
+    refspec_type = rpmostree_refspec_classify (refspec);
   }
 
   if (download_metadata_only)

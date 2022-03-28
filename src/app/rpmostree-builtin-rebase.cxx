@@ -136,9 +136,7 @@ rpmostree_builtin_rebase (int argc, char **argv, RpmOstreeCommandInvocation *inv
     }
   (void)new_refspec_owned; /* Pacify static analysis */
 
-  RpmOstreeRefspecType refspectype;
-  if (!rpmostree_refspec_classify (new_provided_refspec, &refspectype, error))
-    return FALSE;
+  RpmOstreeRefspecType refspectype = rpmostree_refspec_classify (new_provided_refspec);
 
   /* catch empty refspec now; we'd error out much later in the daemon otherwise */
   if (strlen (new_provided_refspec) == 0)

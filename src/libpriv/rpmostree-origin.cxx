@@ -193,8 +193,7 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   else if (ost_refspec)
     {
       /* Classify to distinguish between TYPE_CHECKSUM and TYPE_OSTREE */
-      if (!rpmostree_refspec_classify (ost_refspec, &ret->refspec_type, error))
-        return FALSE;
+      ret->refspec_type = rpmostree_refspec_classify (ost_refspec);
       ret->cached_refspec = util::move_nullify (ost_refspec);
       ret->cached_override_commit
           = g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
@@ -535,8 +534,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
   rpmostree_origin_set_override_commit (origin, NULL);
 
   /* See related code in rpmostree_origin_parse_keyfile() */
-  if (!rpmostree_refspec_classify (new_refspec, &origin->refspec_type, error))
-    return FALSE;
+  origin->refspec_type = rpmostree_refspec_classify (new_refspec);
   g_free (origin->cached_refspec);
   origin->cached_refspec = g_strdup (new_refspec);
   /* Note the following sets different keys depending on the type of refspec;

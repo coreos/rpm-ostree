@@ -67,8 +67,7 @@ typedef enum
 #define RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY "baserefspec"
 #define RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY "container-image-reference"
 
-gboolean rpmostree_refspec_classify (const char *refspec, RpmOstreeRefspecType *out_type,
-                                     GError **error);
+RpmOstreeRefspecType rpmostree_refspec_classify (const char *refspec);
 
 namespace rpmostreecxx
 {

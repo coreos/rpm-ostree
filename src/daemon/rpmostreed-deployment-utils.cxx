@@ -150,10 +150,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
   if (!origin)
     return FALSE;
 
-  RpmOstreeRefspecType refspec_type;
   const char *refspec = rpmostree_origin_get_refspec (origin);
-  if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
-    return FALSE;
+  RpmOstreeRefspecType refspec_type = rpmostree_refspec_classify (refspec);
 
   gboolean is_layered = FALSE;
   g_autofree char *base_checksum = NULL;
@@ -280,7 +278,6 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment, OstreeRepo *rep
 
   g_autofree gchar *refspec_owned = NULL;
   gboolean refspec_is_ostree = FALSE;
-  RpmOstreeRefspecType refspec_type;
   if (!refspec)
     {
       g_autoptr (RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
@@ -288,8 +285,7 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment, OstreeRepo *rep
         return FALSE;
       refspec = refspec_owned = g_strdup (rpmostree_origin_get_refspec (origin));
     }
-  if (!rpmostree_refspec_classify (refspec, &refspec_type, error))
-    return FALSE;
+  RpmOstreeRefspecType refspec_type = rpmostree_refspec_classify (refspec);
 
   (void)refspec_owned; /* Pacify static analysis */
   refspec_is_ostree = refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE;
@@ -645,11 +641,6 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
     return FALSE;
 
   const char *refspec = rpmostree_origin_get_refspec (origin);
-  {
-    RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
-    if (!rpmostree_refspec_classify (refspec, &refspectype, error))
-      return FALSE;
-  }
 
   /* let's start with the ostree side of things */
 

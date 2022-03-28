@@ -612,8 +612,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   const char *container_image_reference_digest = NULL;
   if (origin_refspec)
     {
-      if (!rpmostree_refspec_classify (origin_refspec, &refspectype, error))
-        return FALSE;
+      refspectype = rpmostree_refspec_classify (origin_refspec);
       switch (refspectype)
         {
         case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
