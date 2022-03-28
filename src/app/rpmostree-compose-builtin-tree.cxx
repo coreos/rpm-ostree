@@ -1478,6 +1478,12 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
       return FALSE;
     }
 
+  if (opt_repo && opt_extensions_rootfs)
+    {
+      rpmostree_usage_error (context, "--repo must not be specified with --rootfs", error);
+      return FALSE;
+    }
+
   const char *treefile_path = argv[1];
   const char *extensions_path = argv[2];
 
@@ -1491,6 +1497,7 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   // If we're in a running rootfs, we don't need a repo, so make up a fake one for now.
   if (opt_extensions_rootfs)
     {
+      g_assert (!opt_repo);
       if (!glnx_mkdtempat (AT_FDCWD, "/tmp/tmprepo.XXXXX", 0700, &tmp_repo, error))
         return glnx_prefix_error (error, "Creating temporary repo dir");
       repo = ostree_repo_create_at (tmp_repo.fd, tmp_repo.path, OSTREE_REPO_MODE_BARE_USER, NULL,

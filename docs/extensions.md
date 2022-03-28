@@ -25,6 +25,10 @@ file describing OS extensions (packages) and a base OSTree
 commit. After performing a depsolve, it downloads the
 extension packages and places them in an output directory.
 
+This can then be used as part of the same (or related)
+pipeline that runs `rpm-ostree compose tree` to ship
+extension packages.
+
 ## extensions.yaml
 
 The format of the `extensions.yaml` file is as follow:
