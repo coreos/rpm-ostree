@@ -58,20 +58,17 @@ static OstreeRepo *get_pkgcache_repo (RpmOstreeContext *self);
  * Could be either an ostree refspec (TYPE_OSTREE)
  * or a bare commit (TYPE_COMMIT).
  */
-gboolean
-rpmostree_refspec_classify (const char *refspec, RpmOstreeRefspecType *out_type, GError **error)
+RpmOstreeRefspecType
+rpmostree_refspec_classify (const char *refspec)
 {
   if (rpmostreecxx::is_container_image_reference (refspec))
-    {
-      *out_type = RPMOSTREE_REFSPEC_TYPE_CONTAINER;
-      return TRUE;
-    }
+    return RPMOSTREE_REFSPEC_TYPE_CONTAINER;
+
+  if (ostree_validate_checksum_string (refspec, NULL))
+    return RPMOSTREE_REFSPEC_TYPE_CHECKSUM;
 
   /* Fall back to TYPE_OSTREE if we cannot infer type */
-  *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
-  if (ostree_validate_checksum_string (refspec, NULL))
-    *out_type = RPMOSTREE_REFSPEC_TYPE_CHECKSUM;
-  return TRUE;
+  return RPMOSTREE_REFSPEC_TYPE_OSTREE;
 }
 
 static int
