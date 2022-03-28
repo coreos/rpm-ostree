@@ -151,7 +151,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     return FALSE;
 
   const char *refspec = rpmostree_origin_get_refspec (origin);
-  RpmOstreeRefspecType refspec_type = rpmostree_refspec_classify (refspec);
+  auto refspec_type = rpmostreecxx::refspec_classify (refspec);
 
   gboolean is_layered = FALSE;
   g_autofree char *base_checksum = NULL;
@@ -201,7 +201,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
 
   switch (refspec_type)
     {
-    case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+    case rpmostreecxx::RefspecType::Container:
       {
         g_variant_dict_insert (dict, "container-image-reference", "s", refspec);
         auto state = ROSCXX_TRY_VAL (query_container_image (*repo, refspec), error);
@@ -209,7 +209,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
                                state->image_digest.c_str ());
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
+    case rpmostreecxx::RefspecType::Checksum:
       {
         g_variant_dict_insert (dict, "origin", "s", refspec);
         g_autofree char *custom_origin_url = NULL;
@@ -221,7 +221,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
                                  custom_origin_description);
       }
       break;
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+    case rpmostreecxx::RefspecType::Ostree:
       {
         g_variant_dict_insert (dict, "origin", "s", refspec);
         ROSCXX_TRY (variant_add_remote_status (*repo, refspec, base_checksum, *dict), error);
@@ -285,11 +285,11 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment, OstreeRepo *rep
         return FALSE;
       refspec = refspec_owned = g_strdup (rpmostree_origin_get_refspec (origin));
     }
-  RpmOstreeRefspecType refspec_type = rpmostree_refspec_classify (refspec);
+  auto refspec_type = rpmostreecxx::refspec_classify (refspec);
 
   (void)refspec_owned; /* Pacify static analysis */
-  refspec_is_ostree = refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE;
-  if (refspec_type == RPMOSTREE_REFSPEC_TYPE_CHECKSUM && !commit)
+  refspec_is_ostree = refspec_type == rpmostreecxx::RefspecType::Ostree;
+  if (refspec_type == rpmostreecxx::RefspecType::Checksum && !commit)
     checksum = refspec;
 
   g_assert (refspec);

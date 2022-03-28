@@ -418,13 +418,13 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
   const char *override_commit = rpmostree_origin_get_override_commit (self->computed_origin);
 
   const char *refspec = rpmostree_origin_get_refspec (self->computed_origin);
-  RpmOstreeRefspecType refspec_type = rpmostree_refspec_classify (refspec);
+  auto refspec_type = rpmostreecxx::refspec_classify (refspec);
 
   g_autofree char *new_base_rev = NULL;
 
   switch (refspec_type)
     {
-    case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+    case rpmostreecxx::RefspecType::Container:
       {
         if (override_commit)
           return glnx_throw (error, "Specifying commit overrides for container-image-reference "
@@ -440,8 +440,8 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
           new_base_rev = strdup (import->base_commit.c_str ());
         break;
       }
-    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+    case rpmostreecxx::RefspecType::Checksum:
+    case rpmostreecxx::RefspecType::Ostree:
       {
         g_autofree char *origin_remote = NULL;
         g_autofree char *origin_ref = NULL;

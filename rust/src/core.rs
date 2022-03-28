@@ -10,6 +10,7 @@ use ffiutil::*;
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use ostree_ext::container::OstreeImageReference;
+use ostree_ext::ostree;
 use std::convert::TryFrom;
 
 /// The binary forked from useradd that pokes the sss cache.
@@ -83,7 +84,20 @@ pub(crate) fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Cxx
 
 /// Infer whether string is a container image reference.
 pub(crate) fn is_container_image_reference(refspec: &str) -> bool {
-    OstreeImageReference::try_from(refspec).is_ok()
+    // this is slightly less efficient than calling just try_from(), but meh...
+    refspec_classify(refspec) == crate::ffi::RefspecType::Container
+}
+
+/// Given a refspec, infer its type and return it.
+pub(crate) fn refspec_classify(refspec: &str) -> crate::ffi::RefspecType {
+    if OstreeImageReference::try_from(refspec).is_ok() {
+        crate::ffi::RefspecType::Container
+    } else if ostree::validate_checksum_string(refspec).is_ok() {
+        crate::ffi::RefspecType::Checksum
+    } else {
+        // fall back to Ostree if we cannot infer type
+        crate::ffi::RefspecType::Ostree
+    }
 }
 
 /// Perform reversible filesystem transformations necessary before we execute scripts.
@@ -190,19 +204,32 @@ mod test {
     }
 
     #[test]
-    fn test_is_container_image_reference() -> Result<()> {
+    fn test_refspecs() -> Result<()> {
         use super::is_container_image_reference;
+        use super::refspec_classify;
 
         let refspec_type_checksum =
             "ee10f8e7ef638d78ba9a9596665067f58021624118875cc4079568da6c63efb0";
         assert!(!is_container_image_reference(refspec_type_checksum));
+        assert_eq!(
+            refspec_classify(refspec_type_checksum),
+            crate::ffi::RefspecType::Checksum
+        );
 
         let refspec_type_ostree_with_remote = "fedora:fedora/x86_64/coreos/testing-devel";
         assert!(!is_container_image_reference(
             refspec_type_ostree_with_remote
         ));
+        assert_eq!(
+            refspec_classify(refspec_type_ostree_with_remote),
+            crate::ffi::RefspecType::Ostree
+        );
         let refspec_type_ostree = "fedora/x86_64/coreos/foo-branch";
         assert!(!is_container_image_reference(refspec_type_ostree));
+        assert_eq!(
+            refspec_classify(refspec_type_ostree),
+            crate::ffi::RefspecType::Ostree
+        );
 
         const REFSPEC_TYPE_CONTAINER: &[&str] = &[
             "containers-storage:localhost/fcos:latest",
@@ -213,10 +240,12 @@ mod test {
         ];
 
         for refspec in REFSPEC_TYPE_CONTAINER {
-            assert!(is_container_image_reference(&format!(
-                "ostree-unverified-image:{}",
-                refspec
-            )));
+            let refspec = format!("ostree-unverified-image:{}", refspec);
+            assert!(is_container_image_reference(&refspec));
+            assert_eq!(
+                refspec_classify(&refspec),
+                crate::ffi::RefspecType::Container
+            );
         }
 
         Ok(())

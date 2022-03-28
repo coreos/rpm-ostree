@@ -175,6 +175,13 @@ pub mod ffi {
     }
 
     // core.rs
+    #[derive(Debug)]
+    enum RefspecType {
+        Ostree,
+        Checksum,
+        Container,
+    }
+
     extern "Rust" {
         type TempEtcGuard;
         type FilesystemScriptPrep;
@@ -190,6 +197,7 @@ pub mod ffi {
         fn log_treefile(tf: &Treefile);
 
         fn is_container_image_reference(refspec: &str) -> bool;
+        fn refspec_classify(refspec: &str) -> RefspecType;
     }
 
     // composepost.rs

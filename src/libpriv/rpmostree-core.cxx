@@ -54,23 +54,6 @@
 
 static OstreeRepo *get_pkgcache_repo (RpmOstreeContext *self);
 
-/* Given a string, infer its type and return it in `out_type`.
- * Could be either an ostree refspec (TYPE_OSTREE)
- * or a bare commit (TYPE_COMMIT).
- */
-RpmOstreeRefspecType
-rpmostree_refspec_classify (const char *refspec)
-{
-  if (rpmostreecxx::is_container_image_reference (refspec))
-    return RPMOSTREE_REFSPEC_TYPE_CONTAINER;
-
-  if (ostree_validate_checksum_string (refspec, NULL))
-    return RPMOSTREE_REFSPEC_TYPE_CHECKSUM;
-
-  /* Fall back to TYPE_OSTREE if we cannot infer type */
-  return RPMOSTREE_REFSPEC_TYPE_OSTREE;
-}
-
 static int
 compare_pkgs (gconstpointer ap, gconstpointer bp)
 {

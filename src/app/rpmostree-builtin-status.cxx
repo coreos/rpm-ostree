@@ -552,7 +552,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
     return TRUE;
 
   const gchar *origin_refspec;
-  RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  auto refspectype = rpmostreecxx::RefspecType::Ostree;
   g_autofree const gchar **origin_packages = NULL;
   g_autofree const gchar **origin_modules = NULL;
   g_autofree const gchar **origin_modules_enabled = NULL;
@@ -612,10 +612,10 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   const char *container_image_reference_digest = NULL;
   if (origin_refspec)
     {
-      refspectype = rpmostree_refspec_classify (origin_refspec);
+      refspectype = rpmostreecxx::refspec_classify (origin_refspec);
       switch (refspectype)
         {
-        case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
+        case rpmostreecxx::RefspecType::Checksum:
           {
             g_variant_dict_lookup (dict, "custom-origin", "(&s&s)", &custom_origin_url,
                                    &custom_origin_description);
@@ -631,12 +631,12 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
               g_print ("%s", origin_refspec);
           }
           break;
-        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+        case rpmostreecxx::RefspecType::Ostree:
           {
             g_print ("%s", origin_refspec);
           }
           break;
-        case RPMOSTREE_REFSPEC_TYPE_CONTAINER:
+        case rpmostreecxx::RefspecType::Container:
           {
             g_assert (g_variant_dict_lookup (dict, "container-image-reference-digest", "s",
                                              &container_image_reference_digest));
@@ -707,7 +707,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
     live_replaced = NULL;
   const gboolean have_live_changes = live_inprogress || live_replaced;
 
-  const gboolean is_ostree_or_verbose = opt_verbose || refspectype == RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  const gboolean is_ostree_or_verbose
+      = opt_verbose || refspectype == rpmostreecxx::RefspecType::Ostree;
   const RpmOstreeDiffPrintFormat diff_format = opt_verbose
                                                    ? RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED
                                                    : RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY;
