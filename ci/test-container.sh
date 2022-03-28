@@ -24,4 +24,8 @@ if rpm-ostree ex rebuild 2>err.txt; then
    fatal "did rebuild with base-refspec"
 fi
 
+# Test the no-op rebuild path
+rm "${origindir}/clienterror.yaml"
+rpm-ostree ex rebuild
+
 echo ok

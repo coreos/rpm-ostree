@@ -533,6 +533,7 @@ cleanup_leftover_files (int rootfs_fd, const char *subpath, const char *files[],
 }
 
 static const char *selinux_leftover_files[] = { "semanage.trans.LOCK", "semanage.read.LOCK", NULL };
+// TODO: move cleanup API into librpm
 static const char *rpmdb_leftover_files[] = { ".dbenv.lock", ".rpm.lock", NULL };
 static const char *rpmdb_leftover_prefixes[] = { "__db.", NULL };
 
