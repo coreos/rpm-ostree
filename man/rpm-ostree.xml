@@ -177,6 +177,7 @@ Boston, MA 02111-1307, USA.
             running filesystem tree. You must reboot for any changes to
             take effect.
           </para>
+          <para>This will also queue an update for any layered packages.</para>
 
           <para>
             <command>
@@ -235,7 +236,8 @@ Boston, MA 02111-1307, USA.
             hybrid mode.  Concretely, rpm-ostree will also start
             fetching all enabled rpm-md (yum) repositories and use
             those for package updates every time
-            <command>rpm-ostree upgrade</command> is invoked.
+            <command>rpm-ostree upgrade</command> is invoked,
+            as well as during other operations such as <command>rebase</command>.
           </para>
 
           <para>
@@ -342,6 +344,7 @@ Boston, MA 02111-1307, USA.
             local branch; in the latter case, the same branch will be used on a
             different remote.
           </para>
+          <para>This will also queue an update for any layered packages.</para>
           <para>
             <command>--branch</command> or <command>-b</command> to
             pick a branch name.
