@@ -107,6 +107,11 @@ BuildRequires:  pkgconfig(modulemd-2.0) >= %{libmodulemd_version}
 BuildRequires:  pkgconfig(smartcols)
 BuildRequires:  gettext
 BuildRequires:  gpgme-devel
+%if 0%{?rhel} <= 8
+# In current Fedora, this is a dependency of gpgme-devel, but
+# not in RHEL8.  Missing this package breaks -znow.
+BuildRequires:  libassuan-devel
+%endif
 
 Requires:       libmodulemd%{?_isa} >= %{libmodulemd_version}
 Requires:       libsolv%{?_isa} >= %{libsolv_version}
