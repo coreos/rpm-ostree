@@ -31,6 +31,30 @@ In other words if e.g. you `rpm-ostree install foo` and then `rpm-ostree install
 the new target filesystem tree will be regenerated "from scratch" and
 all RPM `%post` scripts etc. will rerun.
 
+## Base vs extensions split
+
+rpm-ostree today goes to some lengths to create a distinction between
+the "base image" and optional "layered/extension" packages.  The
+idea is that the base image has been tested on a build server, and
+any overrides or replacements are more likely to break things, and
+should be explicit actions.
+
+This is the reason why on the client side e.g. `rpm-ostree upgrade kernel`
+does not work today.  Instead, this requires an invocation of
+`rpm-ostree override replace`.
+
+Another related rationale for this is that rpm-ostree does not
+have a per-package "user installed" type database as exists in e.g. `dnf`.
+Everything in the base image is always replaced by the contents of the
+new base image, without considering any per-package semantics.
+For more on this topic, see [this blog entry](https://blog.verbum.org/2020/08/22/immutable-%E2%86%92-reprovisionable-anti-hysteresis/).
+
+In some cases, a dependency may "span" the base image and a layered package.
+For discussion related to this, see e.g. https://github.com/coreos/rpm-ostree/issues/415
+A solution chosen for in Fedora is to ensure that such packages have
+versions corresponding to the base image available in the rpm-md repository
+as well; this is implemented via the [updates-archive repository](https://src.fedoraproject.org/rpms/fedora-repos/blob/rawhide/f/fedora-updates-archive.repo).
+
 ## Overall architecture:
 
 - For each package, download and import into OSTree commit if necessary
