@@ -41,7 +41,10 @@ gboolean rpmostreed_sysroot_reload (RpmostreedSysroot *self, GError **error);
 
 OstreeSysroot *rpmostreed_sysroot_get_root (RpmostreedSysroot *self);
 OstreeRepo *rpmostreed_sysroot_get_repo (RpmostreedSysroot *self);
-PolkitAuthority *rpmostreed_sysroot_get_polkit_authority (RpmostreedSysroot *self);
+gboolean rpmostreed_sysroot_authorize_direct (RpmostreedSysroot *self,
+                                              GDBusMethodInvocation *invocation,
+                                              gboolean *out_is_authorized, GError **error);
+PolkitAuthority *rpmostreed_sysroot_get_polkit_authority (RpmostreedSysroot *self, GError **error);
 gboolean rpmostreed_sysroot_is_on_session_bus (RpmostreedSysroot *self);
 
 gboolean rpmostreed_sysroot_load_state (RpmostreedSysroot *self, GCancellable *cancellable,

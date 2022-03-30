@@ -546,17 +546,6 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
 
   self->monitor = NULL;
 
-  /* Only use polkit when running as root on system bus; self-tests don't need it */
-  if (!self->on_session_bus)
-    {
-      g_autoptr (GError) local_error = NULL;
-      self->authority = polkit_authority_get_sync (NULL, &local_error);
-      if (self->authority == NULL)
-        {
-          errx (EXIT_FAILURE, "Can't get polkit authority: %s", local_error->message);
-        }
-    }
-
   rpmostree_output_set_callback (sysroot_output_cb, self);
 }
 
@@ -567,14 +556,19 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocati
   const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
   const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
   gboolean authorized = FALSE;
+  g_autoptr (GError) local_error = NULL;
   const char *action = NULL;
 
-  if (self->on_session_bus)
+  if (!rpmostreed_sysroot_authorize_direct (self, invocation, &authorized, &local_error))
     {
-      /* The daemon is on the session bus, running self tests */
-      authorized = TRUE;
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                             "Failed to load polkit: %s", local_error->message);
+      return FALSE;
     }
-  else if (g_strcmp0 (method_name, "GetOS") == 0 || g_strcmp0 (method_name, "Reload") == 0)
+  if (authorized)
+    return TRUE;
+
+  if (g_strcmp0 (method_name, "GetOS") == 0 || g_strcmp0 (method_name, "Reload") == 0)
     {
       /* GetOS() and Reload() are always allowed */
       authorized = TRUE;
@@ -618,6 +612,15 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocati
       glnx_unref_object PolkitSubject *subject = polkit_system_bus_name_new (sender);
       g_autoptr (GError) local_error = NULL;
 
+      g_autoptr (PolkitAuthority) authority
+          = rpmostreed_sysroot_get_polkit_authority (self, &local_error);
+      if (!authority)
+        {
+          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                                 "Failed to load polkit: %s", local_error->message);
+          return FALSE;
+        }
+
       glnx_unref_object PolkitAuthorizationResult *result
           = polkit_authority_check_authorization_sync (
               self->authority, subject, action, NULL,
@@ -625,15 +628,6 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocati
       if (result == NULL)
         {
           g_assert (local_error);
-          if (g_dbus_error_is_remote_error (local_error))
-            {
-              g_autofree char *remote_err = g_dbus_error_get_remote_error (local_error);
-              if (g_str_equal (remote_err, "org.freedesktop.DBus.Error.NameHasNoOwner")
-                  || g_str_equal (remote_err, "org.freedesktop.DBus.Error.ServiceUnknown"))
-                {
-                  return rpmostreed_authorize_method_for_uid0 (invocation);
-                }
-            }
           g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
                                                  "Authorization error: %s", local_error->message);
           return FALSE;
@@ -923,10 +917,69 @@ rpmostreed_sysroot_get_repo (RpmostreedSysroot *self)
   return self->repo;
 }
 
-PolkitAuthority *
-rpmostreed_sysroot_get_polkit_authority (RpmostreedSysroot *self)
+// Default method that always authorizes a caller with uid 0 for anything.
+// systemd upstream today goes to a next level of getting the remote pid,
+// then from there gathering the capabilities
+// from /proc to check for CAP_SYS_ADMIN in most cases.  That's nice but also currently
+// racy if the process exits or forks and passes the dbus connection around for example.
+// We'll just be OK with uid == 0.  SELinux should put a stop to processes
+// that run as uid 0 but shouldn't talk to us from working.
+static gboolean
+authorize_method_for_uid0 (GDBusMethodInvocation *invocation, gboolean *out_authorized,
+                           GError **error)
 {
-  return self->authority;
+  *out_authorized = FALSE;
+
+  const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
+  g_autoptr (GVariant) res = g_dbus_connection_call_sync (
+      g_dbus_method_invocation_get_connection (invocation), "org.freedesktop.DBus",
+      "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetConnectionUnixUser",
+      g_variant_new ("(s)", sender), (GVariantType *)"(u)", G_DBUS_CALL_FLAGS_NONE, -1, NULL,
+      error);
+  if (!res)
+    return FALSE;
+  guint32 uid = 1;
+  g_variant_get (res, "(u)", &uid);
+  *out_authorized = (uid == 0);
+  return TRUE;
+}
+
+// Check whether a method call is authorized without consulting PolicyKit.
+gboolean
+rpmostreed_sysroot_authorize_direct (RpmostreedSysroot *self, GDBusMethodInvocation *invocation,
+                                     gboolean *out_is_authorized, GError **error)
+{
+  *out_is_authorized = FALSE;
+  if (self->on_session_bus)
+    {
+      /* The daemon is on the session bus, running self tests */
+      *out_is_authorized = TRUE;
+      return TRUE;
+    }
+  // Now, we check via direct credentials
+  // https://github.com/coreos/rpm-ostree/issues/3554
+  return authorize_method_for_uid0 (invocation, out_is_authorized, error);
+}
+
+// Acquire a reference to the polkit authority; this may successfully return
+// NULL for *out_authority if polkit is not needed.
+PolkitAuthority *
+rpmostreed_sysroot_get_polkit_authority (RpmostreedSysroot *self, GError **error)
+{
+  if (!self->authority)
+    {
+      /* Note that confusingly, this method will *not* error out if polkit isn't installed.
+       * This is because glib has logic to assume that e.g. "NameHasNoOwner" is non-fatal,
+       * and to instead wait for the name to appear, only erroring when one tries to invoke
+       * a method.
+       *
+       * https://gitlab.gnome.org/GNOME/glib/-/blob/bd63436fadf5f36001fa5223d3f4e6dc0a7d56cc/gio/gdbusproxy.c#L1534
+       * */
+      self->authority = polkit_authority_get_sync (NULL, error);
+      if (!self->authority)
+        return NULL;
+    }
+  return (PolkitAuthority *)g_object_ref (self->authority);
 }
 
 gboolean
