@@ -47,7 +47,7 @@ pub(crate) fn cache_branch_to_nevra(nevra: &str) -> String {
         } else {
             return ret;
         };
-        let l = if let Some(l) = chariter.next().map(hexval).flatten() {
+        let l = if let Some(l) = chariter.next().and_then(hexval) {
             l
         } else {
             return ret;

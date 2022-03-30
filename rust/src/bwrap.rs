@@ -164,7 +164,7 @@ impl Bubblewrap {
         let rootfs_fd = rootfs_fd.sub_dir(".")?;
 
         let lang = std::env::var_os("LANG");
-        let lang = lang.as_ref().map(|s| s.to_str()).flatten().unwrap_or("C");
+        let lang = lang.as_ref().and_then(|s| s.to_str()).unwrap_or("C");
         let lang_var = format!("LANG={}", lang);
         let lang_var = Path::new(&lang_var);
 
