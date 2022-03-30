@@ -229,8 +229,11 @@ extensions:
         assert!(extensions.get_os_extension_packages() == vec!["bazboo"]);
         assert!(extensions.get_development_packages().is_empty());
 
-        let src_tf =
-            crate::Treefile::new_from_string(crate::treefile::tests::VALID_PRELUDE_JS).unwrap();
+        let src_tf = crate::Treefile::new_from_string(
+            crate::utils::InputFormat::JSON,
+            crate::treefile::tests::VALID_PRELUDE_JS,
+        )
+        .unwrap();
         let tf = extensions.generate_treefile(&src_tf).unwrap();
 
         assert_ne!(src_tf.parsed, tf.parsed);

@@ -594,9 +594,8 @@ impl Treefile {
         }))
     }
 
-    pub(crate) fn new_from_string(buf: &str) -> Result<Box<Self>> {
-        let mut treefile =
-            treefile_parse_stream(utils::InputFormat::JSON, &mut buf.as_bytes(), None)?;
+    pub(crate) fn new_from_string(fmt: utils::InputFormat, buf: &str) -> Result<Box<Self>> {
+        let mut treefile = treefile_parse_stream(fmt, &mut buf.as_bytes(), None)?;
         treefile = treefile.substitute_vars()?;
         let serialized = CUtf8Buf::from(buf);
         let td = tempfile::tempdir()?;
@@ -1980,7 +1979,7 @@ pub(crate) mod tests {
 
     #[test]
     fn from_string() {
-        let _ = Treefile::new_from_string("{}").unwrap();
+        let _ = Treefile::new_from_string(utils::InputFormat::JSON, "{}").unwrap();
     }
 
     #[test]
@@ -2925,7 +2924,8 @@ pub(crate) fn treefile_new(
 /// Create a new treefile from a string.
 // Make `client` into an enum?
 pub(crate) fn treefile_new_from_string(buf: &str, client: bool) -> CxxResult<Box<Treefile>> {
-    let r = Treefile::new_from_string(buf).context("Parsing treefile from string")?;
+    let r = Treefile::new_from_string(utils::InputFormat::JSON, buf)
+        .context("Parsing treefile from string")?;
     match client {
         true => r.error_if_base()?,
         false => r.error_if_deriving()?,
@@ -2935,7 +2935,7 @@ pub(crate) fn treefile_new_from_string(buf: &str, client: bool) -> CxxResult<Box
 
 /// Create a new empty treefile.
 pub(crate) fn treefile_new_empty() -> CxxResult<Box<Treefile>> {
-    Ok(Treefile::new_from_string("{}")?)
+    Ok(Treefile::new_from_string(utils::InputFormat::JSON, "{}")?)
 }
 
 /// Create a new treefile, returning an error if any (currently) client-side options are set.
