@@ -80,17 +80,30 @@ static gboolean
 os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *invocation)
 {
   RpmostreedSysroot *sysroot = rpmostreed_sysroot_get ();
-  PolkitAuthority *authority = rpmostreed_sysroot_get_polkit_authority (sysroot);
   const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
   const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
   GVariant *parameters = g_dbus_method_invocation_get_parameters (invocation);
   g_autoptr (GPtrArray) actions = g_ptr_array_new ();
   gboolean authorized = FALSE;
+  g_autoptr (GError) local_error = NULL;
 
-  if (rpmostreed_sysroot_is_on_session_bus (sysroot))
+  if (!rpmostreed_sysroot_authorize_direct (sysroot, invocation, &authorized, &local_error))
     {
-      /* The daemon is on the session bus, running self tests */
-      return TRUE;
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                             "Failed direct authorization: %s",
+                                             local_error->message);
+      return FALSE;
+    }
+  if (authorized)
+    return TRUE;
+
+  g_autoptr (PolkitAuthority) authority
+      = rpmostreed_sysroot_get_polkit_authority (sysroot, &local_error);
+  if (!authority)
+    {
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                             "Failed to load polkit: %s", local_error->message);
+      return FALSE;
     }
 
   if (g_strcmp0 (method_name, "GetDeploymentsRpmDiff") == 0
@@ -240,15 +253,6 @@ os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *i
       if (result == NULL)
         {
           g_assert (error);
-          if (g_dbus_error_is_remote_error (error))
-            {
-              g_autofree char *remote_err = g_dbus_error_get_remote_error (error);
-              if (g_str_equal (remote_err, "org.freedesktop.DBus.Error.NameHasNoOwner")
-                  || g_str_equal (remote_err, "org.freedesktop.DBus.Error.ServiceUnknown"))
-                {
-                  return rpmostreed_authorize_method_for_uid0 (invocation);
-                }
-            }
           g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
                                                  "Authorization error: %s", error->message);
           return FALSE;

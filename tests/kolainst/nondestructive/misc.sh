@@ -98,12 +98,12 @@ runuser -u bin rpm-ostree status
 if runuser -u core rpm-ostree reload 2>err.txt; then
     assert_not_reached "Was able to reload as non-root!"
 fi
-assert_file_has_content_literal err.txt 'not allowed for non-root user (polkit not available)'
+assert_file_has_content err.txt 'error: Authorization error:.*unit is masked'
 rm -f err.txt
 if runuser -u core -- rpm-ostree initramfs --enable 2>err.txt; then
     assert_not_reached "Was able to enable initramfs as non-root!"
 fi
-assert_file_has_content_literal err.txt 'not allowed for non-root user (polkit not available)'
+assert_file_has_content err.txt 'error: Authorization error:.*unit is masked'
 systemctl unmask polkit
 echo "ok worked without polkit"
 
