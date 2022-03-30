@@ -252,6 +252,7 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   return util::move_nullify (ret);
 }
 
+/* Mutability: getter */
 RpmOstreeOrigin *
 rpmostree_origin_dup (RpmOstreeOrigin *origin)
 {
@@ -264,6 +265,7 @@ rpmostree_origin_dup (RpmOstreeOrigin *origin)
 /* This is useful if the origin is meant to be used to generate a *new* deployment, as
  * opposed to simply gathering information about an existing one. In such cases, there are
  * some things that we do not generally want to apply to a new deployment. */
+/* Mutability: setter */
 void
 rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
 {
@@ -274,6 +276,7 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
   rpmostree_origin_set_override_commit (origin, NULL);
 }
 
+/* Mutability: getter */
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 {
@@ -289,6 +292,7 @@ keyfile_get_nonempty_string (GKeyFile *kf, const char *section, const char *key)
   return ret;
 }
 
+/* Mutability: getter */
 void
 rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin, char **custom_type,
                                          char **custom_description)
@@ -298,66 +302,77 @@ rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin, char **custom_
     *custom_description = keyfile_get_nonempty_string (origin->kf, "origin", "custom-description");
 }
 
+/* Mutability: getter */
 GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin)
 {
   return origin->cached_packages;
 }
 
+/* Mutability: getter */
 GHashTable *
 rpmostree_origin_get_modules_enable (RpmOstreeOrigin *origin)
 {
   return origin->cached_modules_enable;
 }
 
+/* Mutability: getter */
 GHashTable *
 rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin)
 {
   return origin->cached_local_packages;
 }
 
+/* Mutability: getter */
 GHashTable *
 rpmostree_origin_get_local_fileoverride_packages (RpmOstreeOrigin *origin)
 {
   return origin->cached_local_fileoverride_packages;
 }
 
+/* Mutability: getter */
 GHashTable *
 rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin)
 {
   return origin->cached_overrides_remove;
 }
 
+/* Mutability: getter */
 GHashTable *
 rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin)
 {
   return origin->cached_overrides_local_replace;
 }
 
+/* Mutability: getter */
 const char *
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 {
   return origin->cached_override_commit;
 }
 
+/* Mutability: getter */
 GHashTable *
 rpmostree_origin_get_initramfs_etc_files (RpmOstreeOrigin *origin)
 {
   return origin->cached_initramfs_etc_files;
 }
 
+/* Mutability: getter */
 gboolean
 rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
 {
   return g_key_file_get_boolean (origin->kf, "rpmostree", "regenerate-initramfs", NULL);
 }
 
+/* Mutability: getter */
 const char *const *
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
 {
   return (const char *const *)origin->cached_initramfs_args;
 }
 
+/* Mutability: getter */
 const char *
 rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
 {
@@ -370,6 +385,7 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
  *    FALSE --> definitely does not require local assembly
  *    TRUE  --> maybe requires assembly, need to investigate further by doing work
  */
+/* Mutability: getter */
 gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
@@ -384,6 +400,7 @@ rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 }
 
 /* Returns TRUE if this origin contains overlay or override packages */
+/* Mutability: getter */
 gboolean
 rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin)
 {
@@ -395,6 +412,7 @@ rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin)
          || (g_hash_table_size (origin->cached_modules_install) > 0);
 }
 
+/* Mutability: getter */
 GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
 {
@@ -410,6 +428,7 @@ update_string_list_from_hash_table (RpmOstreeOrigin *origin, const char *group, 
                               g_strv_length (strv));
 }
 
+/* Mutability: setter */
 void
 rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, char **paths,
                                             gboolean *out_changed)
@@ -425,6 +444,7 @@ rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, char **path
     *out_changed = changed;
 }
 
+/* Mutability: setter */
 void
 rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin, char **paths,
                                               gboolean *out_changed)
@@ -440,6 +460,7 @@ rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin, char **pa
     *out_changed = changed;
 }
 
+/* Mutability: setter */
 void
 rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin, gboolean *out_changed)
 {
@@ -452,6 +473,7 @@ rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin, gbool
     *out_changed = changed;
 }
 
+/* Mutability: setter */
 void
 rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean regenerate,
                                            char **args)
@@ -483,6 +505,7 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean reg
       = g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
 }
 
+/* Mutability: setter */
 void
 rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum)
 {
@@ -499,12 +522,14 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *check
   origin->cached_override_commit = g_strdup (checksum);
 }
 
+/* Mutability: getter */
 gboolean
 rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin)
 {
   return g_key_file_get_boolean (origin->kf, "rpmostree", "ex-cliwrap", NULL);
 }
 
+/* Mutability: setter */
 void
 rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
 {
@@ -516,6 +541,7 @@ rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
     g_key_file_remove_key (origin->kf, k, v, NULL);
 }
 
+/* Mutability: setter */
 void
 rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_refspec,
                                     const char *custom_origin_url,
@@ -589,6 +615,7 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
     }
 }
 
+/* Mutability: setter */
 void
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec)
 {
@@ -658,6 +685,7 @@ set_changed (gboolean *out, gboolean c)
   *out = *out || c;
 }
 
+/* Mutability: setter */
 gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin *origin, char **packages, gboolean local,
                                gboolean fileoverride, gboolean allow_existing,
@@ -754,6 +782,7 @@ build_name_to_nevra_map (GHashTable *nevras, GHashTable **out_name_to_nevra, GEr
   return TRUE;
 }
 
+/* Mutability: setter */
 gboolean
 rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, char **packages, gboolean allow_noent,
                                   gboolean *out_changed, GError **error)
@@ -822,6 +851,7 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, char **packages, gboo
   return TRUE;
 }
 
+/* Mutability: setter */
 gboolean
 rpmostree_origin_add_modules (RpmOstreeOrigin *origin, char **modules, gboolean enable_only,
                               gboolean *out_changed, GError **error)
@@ -841,6 +871,7 @@ rpmostree_origin_add_modules (RpmOstreeOrigin *origin, char **modules, gboolean 
   return TRUE;
 }
 
+/* Mutability: setter */
 gboolean
 rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, char **modules, gboolean enable_only,
                                  gboolean *out_changed, GError **error)
@@ -860,6 +891,7 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, char **modules, gboole
   return TRUE;
 }
 
+/* Mutability: setter */
 gboolean
 rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin, gboolean *out_changed,
                                       GError **error)
@@ -922,6 +954,7 @@ rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin, gboolean *out_cha
   return TRUE;
 }
 
+/* Mutability: setter */
 gboolean
 rpmostree_origin_add_overrides (RpmOstreeOrigin *origin, char **packages,
                                 RpmOstreeOriginOverrideType type, GError **error)
@@ -972,6 +1005,7 @@ rpmostree_origin_add_overrides (RpmOstreeOrigin *origin, char **packages,
 }
 
 /* Returns FALSE if the override does not exist. */
+/* Mutability: setter */
 gboolean
 rpmostree_origin_remove_override (RpmOstreeOrigin *origin, const char *package,
                                   RpmOstreeOriginOverrideType type)
@@ -996,6 +1030,7 @@ rpmostree_origin_remove_override (RpmOstreeOrigin *origin, const char *package,
   return TRUE;
 }
 
+/* Mutability: setter */
 gboolean
 rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin, gboolean *out_changed,
                                        GError **error)
