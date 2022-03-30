@@ -496,6 +496,7 @@ pub mod ffi {
         fn get_initramfs_regenerate(&self) -> bool;
         fn get_initramfs_args(&self) -> Vec<String>;
         fn get_unconfigured_state(&self) -> String;
+        fn has_any_packages(&self) -> bool;
     }
 
     // treefile.rs (split out from above to make &self nice to use)

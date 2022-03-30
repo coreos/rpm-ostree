@@ -1167,6 +1167,46 @@ impl Treefile {
             .clone()
             .unwrap_or_default()
     }
+
+    /// Returns true if this origin contains overlay or override packages.
+    pub(crate) fn has_any_packages(&self) -> bool {
+        // XXX: make a generic helper for querying optional vecs
+        self.has_packages()
+            || self
+                .parsed
+                .derive
+                .packages_local
+                .as_ref()
+                .map(|m| !m.is_empty())
+                .unwrap_or_default()
+            || self
+                .parsed
+                .derive
+                .packages_local_fileoverride
+                .as_ref()
+                .map(|m| !m.is_empty())
+                .unwrap_or_default()
+            || self
+                .parsed
+                .derive
+                .override_replace_local
+                .as_ref()
+                .map(|m| !m.is_empty())
+                .unwrap_or_default()
+            || self
+                .parsed
+                .derive
+                .override_remove
+                .as_ref()
+                .map(|m| !m.is_empty())
+                .unwrap_or_default()
+            || self
+                .parsed
+                .modules
+                .as_ref()
+                .and_then(|m| m.install.as_ref().map(|i| !i.is_empty()))
+                .unwrap_or_default()
+    }
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -3051,6 +3091,7 @@ conditional-include:
             treefile.get_unconfigured_state(),
             "First register your instance with corpy-tool"
         );
+        assert!(treefile.has_any_packages());
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
@@ -3067,6 +3108,7 @@ conditional-include:
         assert!(!treefile.get_initramfs_regenerate());
         assert!(treefile.get_initramfs_args().is_empty());
         assert_eq!(treefile.get_unconfigured_state(), "");
+        assert!(!treefile.has_any_packages());
     }
 }
 
