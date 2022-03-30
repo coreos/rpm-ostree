@@ -23,8 +23,6 @@
 #include "rpmostree-core.h"
 #include <ostree.h>
 
-G_BEGIN_DECLS
-
 typedef struct RpmOstreeOrigin RpmOstreeOrigin;
 RpmOstreeOrigin *rpmostree_origin_ref (RpmOstreeOrigin *origin);
 void rpmostree_origin_unref (RpmOstreeOrigin *origin);
@@ -125,5 +123,3 @@ gboolean rpmostree_origin_remove_override (RpmOstreeOrigin *origin, const char *
 
 gboolean rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin, gboolean *out_changed,
                                                 GError **error);
-
-G_END_DECLS
