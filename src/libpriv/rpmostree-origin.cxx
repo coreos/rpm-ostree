@@ -432,17 +432,11 @@ rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
          (g_hash_table_size (origin->cached_modules_enable) > 0);
 }
 
-/* Returns TRUE if this origin contains overlay or override packages */
 /* Mutability: getter */
-gboolean
+bool
 rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin)
 {
-  return (g_hash_table_size (origin->cached_packages) > 0)
-         || (g_hash_table_size (origin->cached_local_packages) > 0)
-         || (g_hash_table_size (origin->cached_local_fileoverride_packages) > 0)
-         || (g_hash_table_size (origin->cached_overrides_local_replace) > 0)
-         || (g_hash_table_size (origin->cached_overrides_remove) > 0)
-         || (g_hash_table_size (origin->cached_modules_install) > 0);
+  return (*origin->treefile)->has_any_packages ();
 }
 
 /* Mutability: getter */

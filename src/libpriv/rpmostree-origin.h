@@ -72,7 +72,7 @@ rust::String rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 
 gboolean rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin);
 
-gboolean rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin);
+bool rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin);
 
 GKeyFile *rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin);
 
