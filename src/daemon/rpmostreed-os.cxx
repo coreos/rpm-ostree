@@ -247,7 +247,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *i
           if (g_dbus_error_is_remote_error (error))
             {
               g_autofree char *remote_err = g_dbus_error_get_remote_error (error);
-              if (g_str_equal (remote_err, "org.freedesktop.DBus.Error.NameHasNoOwner"))
+              if (g_str_equal (remote_err, "org.freedesktop.DBus.Error.NameHasNoOwner")
+                  || g_str_equal (remote_err, "org.freedesktop.DBus.Error.ServiceUnknown"))
                 {
                   return rpmostreed_authorize_method_for_uid0 (invocation);
                 }
