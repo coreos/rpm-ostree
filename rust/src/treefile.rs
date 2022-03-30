@@ -722,8 +722,7 @@ impl Treefile {
         self.parsed
             .modules
             .as_ref()
-            .map(|m| m.enable.as_ref())
-            .flatten()
+            .and_then(|m| m.enable.as_ref())
             .cloned()
             .into_iter()
             .flatten()
@@ -734,8 +733,7 @@ impl Treefile {
         self.parsed
             .modules
             .as_ref()
-            .map(|m| m.install.as_ref())
-            .flatten()
+            .and_then(|m| m.install.as_ref())
             .cloned()
             .into_iter()
             .flatten()

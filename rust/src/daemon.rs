@@ -77,12 +77,12 @@ fn deployment_populate_variant_origin(
     vdict_insert_optvec(
         dict,
         "requested-modules",
-        tf.modules.as_ref().map(|m| m.install.as_ref()).flatten(),
+        tf.modules.as_ref().and_then(|m| m.install.as_ref()),
     );
     vdict_insert_optvec(
         dict,
         "modules-enabled",
-        tf.modules.as_ref().map(|m| m.enable.as_ref()).flatten(),
+        tf.modules.as_ref().and_then(|m| m.enable.as_ref()),
     );
     vdict_insert_optmap(
         dict,
@@ -224,8 +224,7 @@ fn deployment_layeredmeta_from_commit_impl(
             .into();
         let clientlayer_version = dict
             .lookup_value("rpmostree.clientlayer_version", None)
-            .map(|u| u.get::<u32>())
-            .flatten()
+            .and_then(|u| u.get::<u32>())
             .unwrap_or_default();
         Ok(crate::ffi::DeploymentLayeredMeta {
             is_layered,
