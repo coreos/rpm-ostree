@@ -412,24 +412,11 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
   return (*origin->treefile)->get_unconfigured_state ();
 }
 
-/* Determines whether the origin hints at local assembly being required. In some
- * cases, no assembly might actually be required (e.g. if requested packages are
- * already in the base). IOW:
- *    FALSE --> definitely does not require local assembly
- *    TRUE  --> maybe requires assembly, need to investigate further by doing work
- */
 /* Mutability: getter */
-gboolean
+bool
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
-  return rpmostree_origin_get_cliwrap (origin) || rpmostree_origin_get_regenerate_initramfs (origin)
-         || (g_hash_table_size (origin->cached_initramfs_etc_files) > 0)
-         || rpmostree_origin_has_any_packages (origin) ||
-         /* Technically, alone it doesn't require require assembly, but it still
-          * requires fetching repo metadata to validate (remember: modules are a
-          * pure rpmmd concept). This means we may pay the cost of an unneeded
-          * tree checkout, but it's not worth trying to optimize for it. */
-         (g_hash_table_size (origin->cached_modules_enable) > 0);
+  return (*origin->treefile)->may_require_local_assembly ();
 }
 
 /* Mutability: getter */
