@@ -1168,6 +1168,23 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    /// Determines whether the origin hints at local assembly being required. In some
+    /// cases, no assembly might actually be required (e.g. if requested packages are
+    /// already in the base). IOW:
+    ///    false --> definitely does not require local assembly
+    ///    true  --> maybe requires assembly, need to investigate further by doing work
+    pub(crate) fn may_require_local_assembly(&self) -> bool {
+        self.parsed.cliwrap.unwrap_or_default() ||
+            self.get_initramfs_regenerate() ||
+            self.has_initramfs_etc_files() ||
+            self.has_any_packages() ||
+            // Technically, alone it doesn't require require assembly, but it still
+            // requires fetching repo metadata to validate (remember: modules are a
+            // pure rpmmd concept). This means we may pay the cost of an unneeded
+            // tree checkout, but it's not worth trying to optimize for it.
+            self.has_modules_enable()
+    }
+
     /// Returns true if this origin contains overlay or override packages.
     pub(crate) fn has_any_packages(&self) -> bool {
         // XXX: make a generic helper for querying optional vecs
@@ -3091,6 +3108,7 @@ conditional-include:
             treefile.get_unconfigured_state(),
             "First register your instance with corpy-tool"
         );
+        assert!(treefile.may_require_local_assembly());
         assert!(treefile.has_any_packages());
 
         // test some negatives
@@ -3109,6 +3127,7 @@ conditional-include:
         assert!(treefile.get_initramfs_args().is_empty());
         assert_eq!(treefile.get_unconfigured_state(), "");
         assert!(!treefile.has_any_packages());
+        assert!(!treefile.may_require_local_assembly());
     }
 }
 
