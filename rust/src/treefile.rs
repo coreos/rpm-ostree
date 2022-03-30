@@ -3079,6 +3079,7 @@ conditional-include:
                 - -I
                 - /usr/lib/foo
             unconfigured-state: First register your instance with corpy-tool
+            cliwrap: true
         "};
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
@@ -3110,6 +3111,7 @@ conditional-include:
         );
         assert!(treefile.may_require_local_assembly());
         assert!(treefile.has_any_packages());
+        assert!(treefile.get_cliwrap());
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
@@ -3128,6 +3130,7 @@ conditional-include:
         assert_eq!(treefile.get_unconfigured_state(), "");
         assert!(!treefile.has_any_packages());
         assert!(!treefile.may_require_local_assembly());
+        assert!(!treefile.get_cliwrap());
     }
 }
 
