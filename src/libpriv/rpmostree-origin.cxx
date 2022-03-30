@@ -548,10 +548,10 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *check
 }
 
 /* Mutability: getter */
-gboolean
+bool
 rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin)
 {
-  return g_key_file_get_boolean (origin->kf, "rpmostree", "ex-cliwrap", NULL);
+  return (*origin->treefile)->get_cliwrap ();
 }
 
 /* Mutability: setter */

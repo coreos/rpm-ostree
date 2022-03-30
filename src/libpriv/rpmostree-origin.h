@@ -90,7 +90,7 @@ void rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolea
 
 void rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum);
 
-gboolean rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin);
+bool rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin);
 void rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap);
 
 void rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec);
