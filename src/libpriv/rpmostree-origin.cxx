@@ -100,6 +100,14 @@ sync_treefile (RpmOstreeOrigin *self)
   self->treefile = CXX_MUST_VAL (rpmostreecxx::origin_to_treefile (*self->kf));
 }
 
+static void
+sync_origin (RpmOstreeOrigin *self)
+{
+  g_autoptr (GKeyFile) kf = CXX_MUST_VAL (rpmostreecxx::treefile_to_origin (**self->treefile));
+  g_clear_pointer (&self->kf, g_key_file_unref);
+  self->kf = g_key_file_ref (kf);
+}
+
 static GKeyFile *
 keyfile_dup (GKeyFile *kf)
 {
