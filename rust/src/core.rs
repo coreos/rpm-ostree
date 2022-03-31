@@ -6,12 +6,16 @@
 use crate::cxxrsutil::CxxResult;
 use crate::ffiutil;
 use anyhow::Result;
+use cap_std::fs::Dir;
+use cap_std::fs::Permissions;
+use cap_std_ext::cap_std;
+use cap_std_ext::prelude::CapStdExtDirExt;
 use ffiutil::*;
 use fn_error_context::context;
-use openat_ext::OpenatDirExt;
 use ostree_ext::container::OstreeImageReference;
 use ostree_ext::ostree;
 use std::convert::TryFrom;
+use std::os::unix::prelude::PermissionsExt;
 
 /// The binary forked from useradd that pokes the sss cache.
 /// It spews warnings (and sometimes fatal errors) when used
@@ -37,21 +41,21 @@ pub(crate) const OSTREE_BOOTED: &str = "/run/ostree-booted";
 /// any code.
 #[derive(Debug)]
 pub struct TempEtcGuard {
-    rootfs: openat::Dir,
+    rootfs: Dir,
     renamed_etc: bool,
 }
 
 /// Detect if we have /usr/etc and no /etc, and rename if so.
 pub(crate) fn prepare_tempetc_guard(rootfs: i32) -> CxxResult<Box<TempEtcGuard>> {
-    let rootfs = ffi_view_openat_dir(rootfs);
-    let has_etc = rootfs.exists("etc")?;
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs)? };
+    let has_etc = rootfs.try_exists("etc")?;
     let mut renamed_etc = false;
-    if !has_etc && rootfs.exists("usr/etc")? {
+    if !has_etc && rootfs.try_exists("usr/etc")? {
         // In general now, we place contents in /etc when running scripts
-        rootfs.local_rename("usr/etc", "etc")?;
+        rootfs.rename("usr/etc", &rootfs, "etc")?;
         // But leave a compat symlink, as we used to bind mount, so scripts
         // could still use that too.
-        rootfs.symlink("usr/etc", "../etc")?;
+        rootfs.symlink("../etc", "usr/etc")?;
         renamed_etc = true;
     }
     Ok(Box::new(TempEtcGuard {
@@ -66,7 +70,7 @@ impl TempEtcGuard {
         if self.renamed_etc {
             /* Remove the symlink and swap back */
             self.rootfs.remove_file("usr/etc")?;
-            self.rootfs.local_rename("etc", "usr/etc")?;
+            self.rootfs.rename("etc", &self.rootfs, "usr/etc")?;
         }
         Ok(())
     }
@@ -102,11 +106,11 @@ pub(crate) fn refspec_classify(refspec: &str) -> crate::ffi::RefspecType {
 
 /// Perform reversible filesystem transformations necessary before we execute scripts.
 pub(crate) struct FilesystemScriptPrep {
-    rootfs: openat::Dir,
+    rootfs: Dir,
 }
 
 pub(crate) fn prepare_filesystem_script_prep(rootfs: i32) -> CxxResult<Box<FilesystemScriptPrep>> {
-    let rootfs = ffi_view_openat_dir(rootfs);
+    let rootfs = unsafe { ffi_dirfd(rootfs)? };
     Ok(FilesystemScriptPrep::new(rootfs)?)
 }
 
@@ -126,13 +130,18 @@ impl FilesystemScriptPrep {
     }
 
     #[context("Preparing filesystem for scripts")]
-    pub(crate) fn new(rootfs: openat::Dir) -> Result<Box<Self>> {
+    pub(crate) fn new(rootfs: Dir) -> Result<Box<Self>> {
         for &path in Self::OPTIONAL_PATHS {
-            rootfs.local_rename_optional(path, &Self::saved_name(path))?;
+            if rootfs.try_exists(path)? {
+                rootfs.rename(path, &rootfs, &Self::saved_name(path))?;
+            }
         }
         for &(path, contents) in Self::REPLACE_OPTIONAL_PATHS {
-            if rootfs.local_rename_optional(path, &Self::saved_name(path))? {
-                rootfs.write_file_contents(path, 0o755, contents)?;
+            let mode = Permissions::from_mode(0o755);
+            let saved = &Self::saved_name(path);
+            if rootfs.try_exists(path)? {
+                rootfs.rename(path, &rootfs, saved)?;
+                rootfs.replace_contents_with_perms(path, contents, mode)?;
             }
         }
         Ok(Box::new(Self { rootfs }))
@@ -145,8 +154,10 @@ impl FilesystemScriptPrep {
             .iter()
             .chain(Self::REPLACE_OPTIONAL_PATHS.iter().map(|x| &x.0))
         {
-            self.rootfs
-                .local_rename_optional(&Self::saved_name(path), path)?;
+            let saved = &Self::saved_name(path);
+            if self.rootfs.try_exists(saved)? {
+                self.rootfs.rename(saved, &self.rootfs, path)?;
+            }
         }
         Ok(())
     }
@@ -154,51 +165,56 @@ impl FilesystemScriptPrep {
 
 #[cfg(test)]
 mod test {
+    use crate::capstdext::dirbuilder_from_mode;
+
     use super::*;
     use anyhow::Result;
     use std::os::unix::prelude::*;
 
     #[test]
     fn etcguard() -> Result<()> {
-        let td = tempfile::tempdir()?;
-        let d = openat::Dir::open(td.path())?;
+        let d = cap_tempfile::tempdir(cap_std::ambient_authority())?;
         let g = super::prepare_tempetc_guard(d.as_raw_fd())?;
         g.undo()?;
-        d.ensure_dir_all("usr/etc/foo", 0o755)?;
-        assert!(!d.exists("etc/foo")?);
+        let mut db = dirbuilder_from_mode(0o755);
+        db.recursive(true);
+        d.ensure_dir_with("usr/etc/foo", &db)?;
+        assert!(!d.try_exists("etc/foo")?);
         let g = super::prepare_tempetc_guard(d.as_raw_fd())?;
-        assert!(d.exists("etc/foo")?);
+        assert!(d.try_exists("etc/foo")?);
         g.undo()?;
-        assert!(!d.exists("etc")?);
-        assert!(d.exists("usr/etc/foo")?);
+        assert!(!d.try_exists("etc")?);
+        assert!(d.try_exists("usr/etc/foo")?);
         Ok(())
     }
 
     #[test]
     fn rootfs() -> Result<()> {
-        let td = tempfile::tempdir()?;
-        let d = openat::Dir::open(td.path())?;
+        let d = cap_tempfile::tempdir(cap_std::ambient_authority())?;
         // The no-op case
         {
             let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             g.undo()?;
         }
-        d.ensure_dir_all("usr/bin", 0o755)?;
-        d.ensure_dir_all("usr/sbin", 0o755)?;
-        d.write_file_contents(super::SSS_CACHE_PATH, 0o755, "sss binary")?;
+        let mut db = dirbuilder_from_mode(0o755);
+        let mode = Permissions::from_mode(0o755);
+        db.recursive(true);
+        d.ensure_dir_with("usr/bin", &db)?;
+        d.ensure_dir_with("usr/sbin", &db)?;
+        d.replace_contents_with_perms(super::SSS_CACHE_PATH, "sss binary", mode.clone())?;
         let original_systemctl = "original systemctl";
-        d.write_file_contents(super::SYSTEMCTL_PATH, 0o755, original_systemctl)?;
+        d.replace_contents_with_perms(super::SYSTEMCTL_PATH, original_systemctl, mode.clone())?;
         // Replaced systemctl
         {
-            assert!(d.exists(super::SSS_CACHE_PATH)?);
+            assert!(d.try_exists(super::SSS_CACHE_PATH)?);
             let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
-            assert!(!d.exists(super::SSS_CACHE_PATH)?);
+            assert!(!d.try_exists(super::SSS_CACHE_PATH)?);
             let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
             assert_eq!(contents.as_bytes(), super::SYSTEMCTL_WRAPPER);
             g.undo()?;
             let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
             assert_eq!(contents, original_systemctl);
-            assert!(d.exists(super::SSS_CACHE_PATH)?);
+            assert!(d.try_exists(super::SSS_CACHE_PATH)?);
         }
         Ok(())
     }
