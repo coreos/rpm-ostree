@@ -9,13 +9,14 @@ use crate::ffi::{
     PackageOverrideSource, PackageOverrideSourceKind, ParsedRevision, ParsedRevisionKind,
 };
 use anyhow::{anyhow, format_err, Result};
-use cap_std_ext::cap_std;
+use cap_std::fs::Dir;
 use cap_std_ext::dirext::CapStdExtDirExt;
-use cap_std_ext::rustix::fs::MetadataExt;
+use cap_std_ext::{cap_std, rustix};
 use fn_error_context::context;
 use glib::prelude::*;
-use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib, ostree};
+use rustix::fd::BorrowedFd;
+use rustix::fs::MetadataExt;
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
@@ -29,14 +30,11 @@ pub(crate) fn daemon_sanitycheck_environment(
     mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
 ) -> CxxResult<()> {
     let sysroot = &sysroot.gobj_wrap();
-    let sysroot_dir = openat::Dir::open(format!("/proc/self/fd/{}", sysroot.fd()))?;
+    let sysroot_dir = Dir::reopen_dir(unsafe { &BorrowedFd::borrow_raw_fd(sysroot.fd()) })?;
     let loc = crate::composepost::TRADITIONAL_RPMDB_LOCATION;
-    if let Some(metadata) = sysroot_dir.metadata_optional(loc)? {
-        let t = metadata.simple_type();
-        if t != openat::SimpleType::Symlink {
-            return Err(
-                anyhow::anyhow!("/{} must be a symbolic link, but is: {:?}", loc, t).into(),
-            );
+    if let Some(metadata) = sysroot_dir.symlink_metadata_optional(loc)? {
+        if !metadata.is_symlink() {
+            return Err(anyhow::anyhow!("/{} must be a symbolic link", loc).into());
         }
     }
     Ok(())

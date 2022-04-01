@@ -11,15 +11,20 @@
 
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
+use cap_std::fs::FileType;
+use cap_std::fs::{Dir, Permissions};
+use cap_std_ext::cap_std;
+use cap_std_ext::prelude::CapStdExtDirExt;
+use cap_std_ext::rustix::fs::{MetadataExt, Mode};
 use fn_error_context::context;
 use glib::{ToVariant, Variant};
-use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib, ostree};
 use rand::Rng;
 use std::fs;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::os::unix::fs::FileExt as UnixFileExt;
+use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 use structopt::StructOpt;
@@ -69,13 +74,12 @@ pub(crate) fn is_elf(f: &mut File) -> Result<bool> {
 pub(crate) fn mutate_one_executable_to(
     f: &mut File,
     name: &std::ffi::OsStr,
-    dest: &openat::Dir,
+    dest: &Dir,
     notepath: &str,
     have_objcopy: bool,
 ) -> Result<()> {
-    let mut destf = dest
-        .write_file(name, 0o755)
-        .context("Failed to open for write")?;
+    let mut destf = dest.create(name).context("Failed to open for write")?;
+    destf.set_permissions(Permissions::from_mode(0o755))?;
     std::io::copy(f, &mut destf).context("Failed to copy")?;
     if have_objcopy {
         std::mem::drop(destf);
@@ -101,43 +105,42 @@ pub(crate) fn mutate_one_executable_to(
 
 /// Find ELF files in the srcdir, write new copies to dest (only percentage)
 pub(crate) fn mutate_executables_to(
-    src: &openat::Dir,
-    dest: &openat::Dir,
+    src: &Dir,
+    dest: &Dir,
     percentage: u32,
     notepath: &str,
     have_objcopy: bool,
 ) -> Result<u32> {
-    use nix::sys::stat::Mode as NixMode;
     assert!(percentage > 0 && percentage <= 100);
     let mut mutated = 0;
-    for entry in src.list_dir(".")? {
+    for entry in src.entries()? {
         let entry = entry?;
-        if src.get_file_type(&entry)? != openat::SimpleType::File {
+        if entry.file_type()? != FileType::file() {
             continue;
         }
         let meta = src.metadata(entry.file_name())?;
-        let st = meta.stat();
-        let mode = NixMode::from_bits_truncate(st.st_mode);
+        let stmode = meta.mode();
+        let mode = Mode::from_bits_truncate(stmode);
         // Must be executable
-        if !mode.intersects(NixMode::S_IXUSR | NixMode::S_IXGRP | NixMode::S_IXOTH) {
+        if !mode.intersects(Mode::XUSR | Mode::XGRP | Mode::XOTH) {
             continue;
         }
         // Not suid
-        if mode.intersects(NixMode::S_ISUID | NixMode::S_ISGID) {
+        if mode.intersects(Mode::SUID | Mode::SGID) {
             continue;
         }
         // Greater than 1k in size
-        if st.st_size < 1024 {
+        if meta.size() < 1024 {
             continue;
         }
-        let mut f = src.open_file(entry.file_name())?;
+        let mut f = src.open(entry.file_name())?.into_std();
         if !is_elf(&mut f)? {
             continue;
         }
         if !rand::thread_rng().gen_ratio(percentage, 100) {
             continue;
         }
-        mutate_one_executable_to(&mut f, entry.file_name(), dest, notepath, have_objcopy)
+        mutate_one_executable_to(&mut f, &entry.file_name(), dest, notepath, have_objcopy)
             .with_context(|| format!("Failed updating {:?}", entry.file_name()))?;
         mutated += 1;
     }
@@ -169,15 +172,15 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     // depend on https://lib.rs/crates/goblin
     let have_objcopy = Path::new("/usr/bin/objcopy").exists();
     {
-        let tempdir = openat::Dir::open(&tmp_rootfs)?;
+        let tempdir = Dir::open_ambient_dir(&tmp_rootfs, cap_std::ambient_authority())?;
         let binary_dirs = &["usr/bin", "usr/sbin", "usr/lib", "usr/lib64"];
-        let rootfs = openat::Dir::open("/")?;
+        let rootfs = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
         for v in binary_dirs {
             let v = *v;
-            if let Some(src) = rootfs.sub_dir_optional(v)? {
-                tempdir.ensure_dir("usr", 0o755)?;
-                tempdir.ensure_dir(v, 0o755)?;
-                let dest = tempdir.sub_dir(v)?;
+            if let Some(src) = rootfs.open_dir_optional(v)? {
+                tempdir.create_dir_all("usr")?;
+                tempdir.create_dir_all(v)?;
+                let dest = tempdir.open_dir(v)?;
                 mutated += mutate_executables_to(
                     &src,
                     &dest,
