@@ -8,12 +8,13 @@
 
 use anyhow::{bail, Context, Result};
 use cap_std::fs::Dir;
+use cap_std::fs::Permissions;
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
-use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Read;
+use std::os::unix::prelude::PermissionsExt;
 
 use crate::cxxrsutil::*;
 use crate::ffi::StringMapping;
@@ -163,18 +164,24 @@ impl Extensions {
     }
 
     pub(crate) fn update_state_checksum(&self, chksum: &str, output_dir: &str) -> CxxResult<()> {
-        let output_dir = openat::Dir::open(output_dir)?;
+        let output_dir = Dir::open_ambient_dir(output_dir, cap_std::ambient_authority())?;
         Ok(output_dir
-            .write_file_contents(RPMOSTREE_EXTENSIONS_STATE_FILE, 0o644, chksum)
+            .replace_contents_with_perms(
+                RPMOSTREE_EXTENSIONS_STATE_FILE,
+                chksum,
+                Permissions::from_mode(0o644),
+            )
             .with_context(|| format!("updating state file {}", RPMOSTREE_EXTENSIONS_STATE_FILE))?)
     }
 
     pub(crate) fn serialize_to_dir(&self, output_dir: &str) -> CxxResult<()> {
-        let output_dir = openat::Dir::open(output_dir)?;
+        let output_dir = Dir::open_ambient_dir(output_dir, cap_std::ambient_authority())?;
         Ok(output_dir
-            .write_file_with("extensions.json", 0o644, |w| -> Result<_> {
-                Ok(serde_json::to_writer_pretty(w, self)?)
-            })
+            .replace_file_with_perms(
+                "extensions.json",
+                Permissions::from_mode(0o644),
+                |w| -> Result<_> { Ok(serde_json::to_writer_pretty(w, self)?) },
+            )
             .context("while serializing")?)
     }
 
