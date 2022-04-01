@@ -198,6 +198,8 @@ pub mod ffi {
 
         fn is_container_image_reference(refspec: &str) -> bool;
         fn refspec_classify(refspec: &str) -> RefspecType;
+
+        fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> Result<()>;
     }
 
     // composepost.rs

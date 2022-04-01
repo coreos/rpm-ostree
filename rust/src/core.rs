@@ -15,7 +15,10 @@ use fn_error_context::context;
 use ostree_ext::container::OstreeImageReference;
 use ostree_ext::ostree;
 use std::convert::TryFrom;
+use std::ffi::OsStr;
+use std::io::{BufReader, Read};
 use std::os::unix::prelude::PermissionsExt;
+use std::path::Path;
 
 /// The binary forked from useradd that pokes the sss cache.
 /// It spews warnings (and sometimes fatal errors) when used
@@ -163,6 +166,83 @@ impl FilesystemScriptPrep {
     }
 }
 
+/// Some Fedora/RHEL kernels ship .hmac files with absolute paths inside,
+/// which breaks when we relocate them into ostree/.  This function
+/// changes them to be relative.
+///
+/// Fixes are pending to ensure the kernels are doing this from the start,
+/// but we can't rely on that landing for a while. In addition, there are
+/// many 3rd-party kernels that have replicated the behavior in the ARK
+/// kernel.spec.
+fn verify_kernel_hmac_impl(moddir: &Dir) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+
+    // FIXME: in 2023
+    // This method is intentionally a misnomer because it should eventually
+    // be changed to the "sanity check" (below). It currently patches absolute
+    // paths to give kernel package maintainers time to update their .spec files.
+
+    const SEPARATOR: &[u8] = b"  ";
+
+    let hmac_path = ".vmlinuz.hmac";
+
+    let hmac_contents = if let Some(f) = moddir.open_optional(hmac_path)? {
+        let mut f = BufReader::new(f);
+        let mut s = Vec::new();
+        f.read_to_end(&mut s)?;
+        s
+    } else {
+        return Ok(());
+    };
+
+    if !hmac_contents.contains(&b'/') {
+        return Ok(());
+    }
+
+    let split_index = hmac_contents
+        .windows(SEPARATOR.len())
+        .position(|v| v == SEPARATOR)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Missing path in .vmlinuz.hmac: {}",
+                String::from_utf8_lossy(hmac_contents.as_slice())
+            )
+        })?;
+
+    let (hmac, path) = hmac_contents.split_at(split_index + SEPARATOR.len());
+    let path = OsStr::from_bytes(path);
+
+    let file_name = Path::new(path).file_name().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Missing filename in .vmlinuz.hmac: {}",
+            String::from_utf8_lossy(hmac_contents.as_slice())
+        )
+    })?;
+
+    let mut new_contents = Vec::with_capacity(hmac.len() + file_name.len());
+    new_contents.extend_from_slice(hmac);
+    new_contents.extend_from_slice(file_name.as_bytes());
+
+    // sanity check
+    if new_contents.contains(&b'/') {
+        return Err(anyhow::anyhow!(
+            "Unexpected '/' in .vmlinuz.hmac: {}",
+            String::from_utf8_lossy(new_contents.as_slice())
+        ));
+    }
+
+    let perms = Permissions::from_mode(0o644);
+    moddir.replace_contents_with_perms(hmac_path, new_contents, perms)?;
+
+    Ok(())
+}
+
+pub(crate) fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> CxxResult<()> {
+    let d = unsafe { &ffi_dirfd(rootfs)? };
+    let moddir = d.open_dir(moddir)?;
+    verify_kernel_hmac_impl(&moddir).map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
     use crate::capstdext::dirbuilder_from_mode;
@@ -263,6 +343,33 @@ mod test {
                 crate::ffi::RefspecType::Container
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn verify_hmac() -> Result<()> {
+        let d = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // No file is no-op
+        verify_kernel_hmac_impl(&d).unwrap();
+
+        // When the file is relative expect the function to be identity
+        d.write(".vmlinuz.hmac", "abc123  a-relative-filename")?;
+        verify_kernel_hmac_impl(&d).unwrap();
+        assert_eq!(
+            d.read_to_string(".vmlinuz.hmac")?,
+            "abc123  a-relative-filename"
+        );
+
+        // Backwards compatability behavior
+        d.write(".vmlinuz.hmac", "abc123  /an/absolute/filename.txt")?;
+        verify_kernel_hmac_impl(&d).unwrap();
+        assert_eq!(d.read_to_string(".vmlinuz.hmac")?, "abc123  filename.txt");
+
+        // Sanity check compatability behavior
+        d.write(".vmlinuz.hmac", "abc/123  /an/absolute/filename.txt")?;
+        assert!(verify_kernel_hmac_impl(&d).is_err());
 
         Ok(())
     }
