@@ -188,7 +188,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
                     notepath.to_str().unwrap(),
                     have_objcopy,
                 )
-                .with_context(|| format!("Replacing binaries in {}", v))?;
+                .with_context(|| format!("Replacing binaries in {v}"))?;
             }
         }
     }

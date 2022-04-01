@@ -165,7 +165,7 @@ impl Bubblewrap {
 
         let lang = std::env::var_os("LANG");
         let lang = lang.as_ref().and_then(|s| s.to_str()).unwrap_or("C");
-        let lang_var = format!("LANG={}", lang);
+        let lang_var = format!("LANG={lang}");
         let lang_var = Path::new(&lang_var);
 
         let launcher = gio::SubprocessLauncher::new(gio::SubprocessFlags::NONE);
@@ -247,8 +247,8 @@ impl Bubblewrap {
                 }
 
                 argv.push("--symlink".to_string());
-                argv.push(format!("usr/{}", name));
-                argv.push(format!("/{}", name));
+                argv.push(format!("usr/{name}"));
+                argv.push(format!("/{name}"));
             }
         }
 
