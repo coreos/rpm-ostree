@@ -1547,8 +1547,6 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
 
   auto packages_mapping = std::make_unique<rust::Vec<rpmostreecxx::StringMapping> > ();
   g_autofree char *base_rev = NULL;
-  if (!ostree_repo_resolve_rev (repo, opt_extensions_base_rev, FALSE, &base_rev, error))
-    return FALSE;
 
   if (opt_extensions_rootfs)
     {
@@ -1568,6 +1566,9 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
     }
   else
     {
+      if (!ostree_repo_resolve_rev (repo, opt_extensions_base_rev, FALSE, &base_rev, error))
+        return FALSE;
+
       g_autoptr (GVariant) commit = NULL;
       if (!ostree_repo_load_commit (repo, base_rev, &commit, NULL, error))
         return FALSE;
