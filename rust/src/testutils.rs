@@ -15,7 +15,7 @@ use cap_std::fs::FileType;
 use cap_std::fs::{Dir, Permissions};
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
-use cap_std_ext::rustix::fs::MetadataExt;
+use cap_std_ext::rustix::fs::{MetadataExt, Mode};
 use fn_error_context::context;
 use glib::{ToVariant, Variant};
 use ostree_ext::{gio, glib, ostree};
@@ -111,7 +111,6 @@ pub(crate) fn mutate_executables_to(
     notepath: &str,
     have_objcopy: bool,
 ) -> Result<u32> {
-    use nix::sys::stat::Mode as NixMode;
     assert!(percentage > 0 && percentage <= 100);
     let mut mutated = 0;
     for entry in src.entries()? {
@@ -121,13 +120,13 @@ pub(crate) fn mutate_executables_to(
         }
         let meta = src.metadata(entry.file_name())?;
         let stmode = meta.mode();
-        let mode = NixMode::from_bits_truncate(stmode);
+        let mode = Mode::from_bits_truncate(stmode);
         // Must be executable
-        if !mode.intersects(NixMode::S_IXUSR | NixMode::S_IXGRP | NixMode::S_IXOTH) {
+        if !mode.intersects(Mode::XUSR | Mode::XGRP | Mode::XOTH) {
             continue;
         }
         // Not suid
-        if mode.intersects(NixMode::S_ISUID | NixMode::S_ISGID) {
+        if mode.intersects(Mode::SUID | Mode::SGID) {
             continue;
         }
         // Greater than 1k in size
