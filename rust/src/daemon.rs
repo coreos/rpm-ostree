@@ -464,6 +464,63 @@ pub fn generate_baselayer_refs(
     Ok(())
 }
 
+/// Appends `part` to `base` in a way such that only characters that
+/// can be used in a D-Bus object path will be used. E.g. a character
+/// not in `[A-Z][a-z][0-9]_` will be escaped as `_HEX` where HEX is a
+/// two-digit hexadecimal number.
+///
+/// Note that his mapping is not bijective - e.g. you cannot go back
+/// to the original string.
+///
+/// # Arguments
+///
+/// * `base` - The base object path (without trailing '/').
+/// * `segment` - The UTF-8 string.
+pub(crate) fn append_to_object_path(base: &mut String, segment: impl AsRef<str>) {
+    for c in segment.as_ref().as_bytes() {
+        match *c {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => base.push(*c as char),
+            b'/' | b'-' => base.push('_'),
+            c => base.push_str(format!("_{c:02X}").as_str()),
+        }
+    }
+}
+
+/// Appends `parts` to `base` in a way such that only characters that
+/// can be used in a D-Bus object path will be used. E.g. a character
+/// not in `[A-Z][a-z][0-9]_` will be escaped as `_HEX` where HEX is a
+/// two-digit hexadecimal number.
+///
+/// Note that his mapping is not bijective - e.g. you cannot go back
+/// to the original string.
+///
+/// # Arguments
+///
+/// * `base` - The base object path (without trailing '/').
+/// * `segments` - The UTF-8 strings.
+fn generate_object_path_impl(
+    base: impl std::string::ToString,
+    next_segment: impl AsRef<str>,
+) -> Result<String> {
+    let mut base = base.to_string();
+    if !crate::ffiwrappers::is_object_path(&base)? {
+        return Err(anyhow::anyhow!("Value is not an object path: {base}"));
+    }
+
+    let segment = next_segment.as_ref();
+    if segment.len() == 0 {
+        return Err(anyhow::anyhow!("Cannot append empty segment: {base}"));
+    }
+    base.push('/');
+    append_to_object_path(&mut base, segment);
+
+    return Ok(base);
+}
+
+pub(crate) fn generate_object_path(base: &str, next_segment: &str) -> CxxResult<String> {
+    generate_object_path_impl(base, next_segment).map_err(Into::into)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -538,5 +595,18 @@ mod test {
         for input in err_cases {
             parse_override_source(input).unwrap_err();
         }
+    }
+
+    #[test]
+    fn test_generate_object_path_impl() {
+        assert!(generate_object_path_impl("/invalid", "").is_err());
+        assert_eq!(
+            generate_object_path_impl("/base", "single").unwrap(),
+            "/base/single".to_string()
+        );
+        assert_eq!(
+            generate_object_path_impl("/base", "first!").unwrap(),
+            "/base/first_21".to_string()
+        );
     }
 }

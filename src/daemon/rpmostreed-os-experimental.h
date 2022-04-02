@@ -30,5 +30,5 @@ G_BEGIN_DECLS
 
 GType rpmostreed_osexperimental_get_type (void) G_GNUC_CONST;
 RPMOSTreeOSExperimental *rpmostreed_osexperimental_new (OstreeSysroot *sysroot, OstreeRepo *repo,
-                                                        const char *name);
+                                                        const char *name, GError **error);
 G_END_DECLS

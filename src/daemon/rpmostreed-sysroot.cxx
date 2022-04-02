@@ -265,9 +265,12 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self, gboolean *out_ch
   OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (self->ot_sysroot);
   if (booted)
     {
-      const gchar *os = ostree_deployment_get_osname (booted);
-      g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, os, NULL);
-      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
+      auto os = ostree_deployment_get_osname (booted);
+
+      auto path = ROSCXX_TRY_VAL (generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str (os)),
+                                  error);
+
+      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path.c_str ());
       auto bootedid_v = rpmostreecxx::deployment_generate_id (*booted);
       booted_id = g_strdup (bootedid_v.c_str ());
     }
@@ -296,11 +299,16 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self, gboolean *out_ch
        */
       if (!g_hash_table_contains (self->os_interfaces, deployment_os))
         {
-          RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, self->repo, deployment_os);
+          RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, self->repo, deployment_os, error);
+          if (!obj)
+            return FALSE;
+
           g_hash_table_insert (self->os_interfaces, g_strdup (deployment_os), obj);
 
           RPMOSTreeOSExperimental *eobj
-              = rpmostreed_osexperimental_new (self->ot_sysroot, self->repo, deployment_os);
+              = rpmostreed_osexperimental_new (self->ot_sysroot, self->repo, deployment_os, error);
+          if (!eobj)
+            return FALSE;
           g_hash_table_insert (self->osexperimental_interfaces, g_strdup (deployment_os), eobj);
         }
       /* Owned by deployment, hash lifetime is smaller */
