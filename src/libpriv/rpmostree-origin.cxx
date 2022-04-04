@@ -97,9 +97,7 @@ static void
 sync_treefile (RpmOstreeOrigin *self)
 {
   self->treefile.reset ();
-  g_autoptr (GError) local_error = NULL;
-  self->treefile = ROSCXX_VAL (origin_to_treefile (*self->kf), &local_error);
-  g_assert_no_error (local_error);
+  self->treefile = CXX_MUST_VAL (rpmostreecxx::origin_to_treefile (*self->kf));
 }
 
 static GKeyFile *
