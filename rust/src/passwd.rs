@@ -51,7 +51,7 @@ pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResul
     // Break hardlinks for the shadow files, since shadow-utils currently uses
     // O_RDWR unconditionally.
     for filename in PWGRP_SHADOW_FILES {
-        let src = format!("etc/{}", filename);
+        let src = format!("etc/{filename}");
         if rootfs.exists(&src)? {
             ostree::break_hardlink(rootfs.as_raw_fd(), &src, true, gio::NONE_CANCELLABLE)?;
         };

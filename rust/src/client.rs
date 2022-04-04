@@ -246,9 +246,9 @@ pub(crate) fn client_render_download_progress(
             )
         }
     } else if outstanding_writes > 0 {
-        format!("Writing objects: {}", outstanding_writes)
+        format!("Writing objects: {outstanding_writes}")
     } else {
-        format!("Scanning metadata: {}", n_scanned_metadata)
+        format!("Scanning metadata: {n_scanned_metadata}")
     }
 }
 

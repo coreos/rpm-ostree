@@ -457,7 +457,7 @@ pub fn generate_baselayer_refs(
     });
     for (index, base_rev) in bases.enumerate() {
         let base_rev = base_rev?;
-        let ref_name = format!("rpmostree/base/{}", index);
+        let ref_name = format!("rpmostree/base/{index}");
         repo.transaction_set_refspec(&ref_name, Some(&base_rev));
     }
 

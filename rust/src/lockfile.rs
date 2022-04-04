@@ -380,7 +380,7 @@ pub(crate) fn lockfile_write(
         output_pkgs.insert(
             name.as_str().to_string(),
             LockedPackage::Evra {
-                evra: format!("{}.{}", evr.as_str(), arch.as_str()),
+                evra: format!("{evr}.{arch}"),
                 digest: Some(chksum),
                 metadata: None,
             },

@@ -85,13 +85,13 @@ fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Resul
     TOPLEVEL_DIRS.par_iter().try_for_each(|&d| {
         rootfs_dfd
             .ensure_dir_with(d, default_dirbuilder)
-            .with_context(|| format!("Creating {}", d))
+            .with_context(|| format!("Creating {d}"))
             .map(|_: bool| ())
     })?;
     TOPLEVEL_SYMLINKS.par_iter().try_for_each(|&(dest, src)| {
         rootfs_dfd
             .symlink(dest, src)
-            .with_context(|| format!("Creating {}", src))
+            .with_context(|| format!("Creating {src}"))
     })?;
 
     if tmp_is_dir {
@@ -292,7 +292,7 @@ fn compose_postprocess_units(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) 
         }
 
         println!("Adding {} to multi-user.target.wants", unit);
-        let target = format!("/usr/lib/systemd/system/{}", unit);
+        let target = format!("/usr/lib/systemd/system/{unit}");
         rootfs_dfd.symlink(&dest, &target)?;
     }
     Ok(())
@@ -307,7 +307,7 @@ fn compose_postprocess_default_target(rootfs_dfd: &openat::Dir, target: &str) ->
      */
     let default_target_path = "usr/lib/systemd/system/default.target";
     rootfs_dfd.remove_file_optional(default_target_path)?;
-    let dest = format!("/usr/lib/systemd/system/{}", target);
+    let dest = format!("/usr/lib/systemd/system/{target}");
     rootfs_dfd.symlink(default_target_path, dest)?;
 
     Ok(())
@@ -519,11 +519,11 @@ fn compose_postprocess_mutate_os_release(
     println!("Updating {}", path);
     let contents = rootfs_dfd
         .read_to_string(path)
-        .with_context(|| format!("Reading {}", path))?;
+        .with_context(|| format!("Reading {path}"))?;
     let new_contents = mutate_os_release_contents(&contents, base_version, next_version);
     rootfs_dfd
         .write_file_contents(path, 0o644, new_contents.as_bytes())
-        .with_context(|| format!("Writing {}", path))?;
+        .with_context(|| format!("Writing {path}"))?;
     Ok(())
 }
 
@@ -1372,9 +1372,9 @@ OSTREE_VERSION='33.4'
 
         let mut metas = vec![];
         for fname in files {
-            let binpath = format!("{}/{}.bin", PREFIX, fname);
+            let binpath = format!("{PREFIX}/{fname}.bin");
             rootfs.new_file(&binpath, 0o755).unwrap();
-            let fpath = format!("{}/{}", PREFIX, fname);
+            let fpath = format!("{PREFIX}/{fname}");
             rootfs.new_file(&fpath, 0o755).unwrap();
             let before_meta = rootfs.metadata(fpath).unwrap();
             metas.push(before_meta);
