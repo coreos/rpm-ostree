@@ -93,14 +93,13 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_free (origin);
 }
 
-static gboolean
+static void
 sync_treefile (RpmOstreeOrigin *self)
 {
   self->treefile.reset ();
   g_autoptr (GError) local_error = NULL;
   self->treefile = ROSCXX_VAL (origin_to_treefile (*self->kf), &local_error);
   g_assert_no_error (local_error);
-  return TRUE;
 }
 
 static GKeyFile *
