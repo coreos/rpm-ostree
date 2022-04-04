@@ -6,6 +6,7 @@
 use crate::cxxrsutil::CxxResult;
 use crate::ffiutil;
 use anyhow::Result;
+use camino::Utf8Path;
 use cap_std::fs::Dir;
 use cap_std::fs::Permissions;
 use cap_std_ext::cap_std;
@@ -15,10 +16,8 @@ use fn_error_context::context;
 use ostree_ext::container::OstreeImageReference;
 use ostree_ext::ostree;
 use std::convert::TryFrom;
-use std::ffi::OsStr;
 use std::io::{BufReader, Read};
 use std::os::unix::prelude::PermissionsExt;
-use std::path::Path;
 
 /// The binary forked from useradd that pokes the sss cache.
 /// It spews warnings (and sometimes fatal errors) when used
@@ -175,59 +174,44 @@ impl FilesystemScriptPrep {
 /// many 3rd-party kernels that have replicated the behavior in the ARK
 /// kernel.spec.
 fn verify_kernel_hmac_impl(moddir: &Dir) -> Result<()> {
-    use std::os::unix::ffi::OsStrExt;
-
     // FIXME: in 2023
     // This method is intentionally a misnomer because it should eventually
     // be changed to the "sanity check" (below). It currently patches absolute
     // paths to give kernel package maintainers time to update their .spec files.
 
-    const SEPARATOR: &[u8] = b"  ";
+    const SEPARATOR: &str = "  ";
 
     let hmac_path = ".vmlinuz.hmac";
 
     let hmac_contents = if let Some(f) = moddir.open_optional(hmac_path)? {
         let mut f = BufReader::new(f);
-        let mut s = Vec::new();
-        f.read_to_end(&mut s)?;
+        let mut s = String::new();
+        f.read_to_string(&mut s)?;
         s
     } else {
         return Ok(());
     };
 
-    if !hmac_contents.contains(&b'/') {
+    // If the path is already relative, we're good.
+    if !hmac_contents.contains('/') {
         return Ok(());
     }
 
-    let split_index = hmac_contents
-        .windows(SEPARATOR.len())
-        .position(|v| v == SEPARATOR)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Missing path in .vmlinuz.hmac: {}",
-                String::from_utf8_lossy(hmac_contents.as_slice())
-            )
-        })?;
+    let (hmac, path) = hmac_contents
+        .split_once(SEPARATOR)
+        .ok_or_else(|| anyhow::anyhow!("Missing path in .vmlinuz.hmac: {}", hmac_contents))?;
+    let path = Utf8Path::new(path);
 
-    let (hmac, path) = hmac_contents.split_at(split_index + SEPARATOR.len());
-    let path = OsStr::from_bytes(path);
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| anyhow::anyhow!("Missing filename in .vmlinuz.hmac: {}", hmac_contents))?;
 
-    let file_name = Path::new(path).file_name().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Missing filename in .vmlinuz.hmac: {}",
-            String::from_utf8_lossy(hmac_contents.as_slice())
-        )
-    })?;
-
-    let mut new_contents = Vec::with_capacity(hmac.len() + file_name.len());
-    new_contents.extend_from_slice(hmac);
-    new_contents.extend_from_slice(file_name.as_bytes());
-
+    let new_contents = [hmac, SEPARATOR, file_name].concat();
     // sanity check
-    if new_contents.contains(&b'/') {
+    if new_contents.contains('/') {
         return Err(anyhow::anyhow!(
             "Unexpected '/' in .vmlinuz.hmac: {}",
-            String::from_utf8_lossy(new_contents.as_slice())
+            new_contents
         ));
     }
 
