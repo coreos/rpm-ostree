@@ -443,21 +443,24 @@ update_string_list_from_hash_table (RpmOstreeOrigin *origin, const char *group, 
 }
 
 /* Mutability: setter */
-void
-rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, char **paths,
-                                            gboolean *out_changed)
+bool
+rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, rust::Vec<rust::String> paths)
 {
   gboolean changed = FALSE;
-  for (char **path = paths; path && *path; path++)
-    changed = (g_hash_table_add (origin->cached_initramfs_etc_files, g_strdup (*path)) || changed);
+  for (auto &path : paths)
+    {
+      changed = (g_hash_table_add (origin->cached_initramfs_etc_files, g_strdup (path.c_str ()))
+                 || changed);
+    }
 
   if (changed)
-    update_string_list_from_hash_table (origin, "rpmostree", "initramfs-etc",
-                                        origin->cached_initramfs_etc_files);
-  if (out_changed)
-    *out_changed = changed;
+    {
+      update_string_list_from_hash_table (origin, "rpmostree", "initramfs-etc",
+                                          origin->cached_initramfs_etc_files);
+      g_assert ((*origin->treefile)->initramfs_etc_files_track (paths));
+    }
 
-  sync_treefile (origin);
+  return changed;
 }
 
 /* Mutability: setter */
