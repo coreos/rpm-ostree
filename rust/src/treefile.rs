@@ -29,7 +29,7 @@ use ostree_ext::{glib, ostree};
 use regex::Regex;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::fs::{read_dir, File};
 use std::io::prelude::*;
@@ -1135,7 +1135,7 @@ impl Treefile {
             .derive
             .initramfs
             .as_ref()
-            .and_then(|i| i.etc.clone())
+            .and_then(|i| i.etc.as_ref().map(|h| h.iter().cloned().collect()))
             .unwrap_or_default()
     }
 
@@ -1905,7 +1905,7 @@ pub(crate) struct DeriveCustom {
 pub(crate) struct DeriveInitramfs {
     pub(crate) regenerate: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) etc: Option<Vec<String>>,
+    pub(crate) etc: Option<BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) args: Option<Vec<String>>,
 }

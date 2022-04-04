@@ -85,8 +85,8 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     rpm-ostree status --json > status.json
     assert_jq status.json \
       '.deployments[0]["initramfs-etc"]|length == 2' \
-      '.deployments[0]["initramfs-etc"][0] == "/etc/foo/bar/baz/boo"' \
-      '.deployments[0]["initramfs-etc"][1] == "/etc/cmdline.d"'
+      '.deployments[0]["initramfs-etc"][0] == "/etc/cmdline.d"' \
+      '.deployments[0]["initramfs-etc"][1] == "/etc/foo/bar/baz/boo"'
 
     /tmp/autopkgtest-reboot-prepare 3
     rpm-ostree finalize-deployment --allow-missing-checksum

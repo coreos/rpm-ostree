@@ -17,7 +17,7 @@ use glib::prelude::*;
 use ostree_ext::{gio, glib, ostree};
 use rustix::fd::BorrowedFd;
 use rustix::fs::MetadataExt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -57,6 +57,12 @@ fn vdict_insert_optvec(dict: &glib::VariantDict, k: &str, v: Option<&Vec<String>
 /// Insert keys from the provided map into the target `dict` with key `k`.
 fn vdict_insert_optmap(dict: &glib::VariantDict, k: &str, v: Option<&BTreeMap<String, String>>) {
     let v = v.iter().map(|s| s.keys()).flatten().map(|s| s.as_str());
+    vdict_insert_strv(dict, k, v);
+}
+
+/// Insert keys from the provided map into the target `dict` with key `k`.
+fn vdict_insert_optset(dict: &glib::VariantDict, k: &str, v: Option<&BTreeSet<String>>) {
+    let v = v.iter().map(|s| s.iter()).flatten().map(|s| s.as_str());
     vdict_insert_strv(dict, k, v);
 }
 
@@ -107,7 +113,7 @@ fn deployment_populate_variant_origin(
     if let Some(initramfs) = tf.derive.initramfs.as_ref() {
         dict.insert("regenerate-initramfs", &initramfs.regenerate);
         vdict_insert_optvec(dict, "initramfs-args", initramfs.args.as_ref());
-        vdict_insert_optvec(dict, "initramfs-etc", initramfs.etc.as_ref());
+        vdict_insert_optset(dict, "initramfs-etc", initramfs.etc.as_ref());
     } else {
         // This key is also always injected.
         dict.insert("regenerate-initramfs", &false);

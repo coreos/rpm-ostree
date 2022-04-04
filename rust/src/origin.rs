@@ -188,7 +188,7 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
         if initramfs.regenerate {
             kf.set_boolean(RPMOSTREE, "regenerate-initramfs", true);
         }
-        if let Some(etc) = initramfs.etc.as_deref() {
+        if let Some(etc) = initramfs.etc.as_ref() {
             let etc = etc.iter().map(|s| s.as_str());
             kf_set_string_list(&kf, RPMOSTREE, "initramfs-etc", etc)
         }
