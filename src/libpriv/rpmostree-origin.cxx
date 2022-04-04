@@ -46,9 +46,6 @@ struct RpmOstreeOrigin
   /* Container image digest, if tracking a container image reference */
   char *cached_digest;
 
-  /* Version data that goes along with the refspec */
-  char *cached_override_commit;
-
   char *cached_unconfigured_state;
   char **cached_initramfs_args;
   GHashTable *cached_initramfs_etc_files;         /* set of paths */
@@ -214,8 +211,6 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
       /* Classify to distinguish between TYPE_CHECKSUM and TYPE_OSTREE */
       ret->refspec_type = rpmostreecxx::refspec_classify (ost_refspec);
       ret->cached_refspec = util::move_nullify (ost_refspec);
-      ret->cached_override_commit
-          = g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
     }
   else if (imgref)
     {
@@ -536,19 +531,8 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean reg
 void
 rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum)
 {
-  if (checksum != NULL)
-    {
-      g_key_file_set_string (origin->kf, "origin", "override-commit", checksum);
-    }
-  else
-    {
-      g_key_file_remove_key (origin->kf, "origin", "override-commit", NULL);
-    }
-
-  g_free (origin->cached_override_commit);
-  origin->cached_override_commit = g_strdup (checksum);
-
   (*origin->treefile)->set_override_commit (checksum ?: "");
+  sync_origin (origin);
 }
 
 /* Mutability: getter */
