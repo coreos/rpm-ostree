@@ -76,8 +76,8 @@ bool rpmostree_origin_has_any_packages (RpmOstreeOrigin *origin);
 
 GKeyFile *rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin);
 
-void rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, char **paths,
-                                                 gboolean *out_changed);
+bool rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin,
+                                                 rust::Vec<rust::String> paths);
 
 void rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin, char **paths,
                                                    gboolean *out_changed);

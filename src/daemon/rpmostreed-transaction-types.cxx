@@ -1853,9 +1853,8 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction, GCancella
 
   if (self->track)
     {
-      gboolean subchanged = FALSE;
-      rpmostree_origin_initramfs_etc_files_track (origin, self->track, &subchanged);
-      changed = changed || subchanged;
+      auto files = util::rust_stringvec_from_strv (self->track);
+      changed = rpmostree_origin_initramfs_etc_files_track (origin, files) || changed;
     }
 
   if (!changed && !self->force_sync)

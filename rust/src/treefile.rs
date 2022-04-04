@@ -42,6 +42,7 @@ use std::{fs, io};
 use tracing::{event, instrument, Level};
 
 use crate::utils;
+use crate::utils::OptionExtGetOrInsertDefault;
 
 const INCLUDE_MAXDEPTH: u32 = 50;
 
@@ -1147,6 +1148,20 @@ impl Treefile {
             .and_then(|i| i.etc.as_ref())
             .map(|v| !v.is_empty())
             .unwrap_or_default()
+    }
+
+    // Returns true if new files were added.
+    pub(crate) fn initramfs_etc_files_track(&mut self, files: Vec<String>) -> bool {
+        let set = self
+            .parsed
+            .derive
+            .initramfs
+            .ext_get_or_insert_default()
+            .etc
+            .ext_get_or_insert_default();
+        let n = set.len();
+        set.extend(files);
+        set.len() != n
     }
 
     pub(crate) fn get_initramfs_regenerate(&self) -> bool {
@@ -3119,6 +3134,30 @@ conditional-include:
         assert!(treefile.parsed.derive.override_commit.is_none());
         assert!(treefile.has_initramfs_etc_files());
         assert_eq!(treefile.get_initramfs_etc_files(), &["/etc/asdf"]);
+        assert!(treefile
+            .initramfs_etc_files_track(vec!["/etc/new".to_string(), "/etc/boo".to_string()]));
+        assert!(!treefile.initramfs_etc_files_track(vec!["/etc/new".to_string()]));
+        assert!(!treefile.initramfs_etc_files_track(vec!["/etc/boo".to_string()]));
+        let etc = treefile
+            .parsed
+            .derive
+            .initramfs
+            .as_ref()
+            .unwrap()
+            .etc
+            .as_ref()
+            .unwrap();
+        assert!(etc.contains("/etc/new"));
+        assert!(treefile
+            .parsed
+            .derive
+            .initramfs
+            .as_ref()
+            .unwrap()
+            .etc
+            .as_ref()
+            .unwrap()
+            .contains("/etc/new"));
         assert!(treefile.get_initramfs_regenerate());
         assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/lib/foo"]);
         assert_eq!(
