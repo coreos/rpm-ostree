@@ -1180,6 +1180,18 @@ impl Treefile {
         changed
     }
 
+    // Returns true if files were removed.
+    pub(crate) fn initramfs_etc_files_untrack_all(&mut self) -> bool {
+        self.parsed
+            .derive
+            .initramfs
+            .ext_get_or_insert_default()
+            .etc
+            .take()
+            .map(|set| !set.is_empty())
+            .unwrap_or_default()
+    }
+
     pub(crate) fn get_initramfs_regenerate(&self) -> bool {
         self.parsed
             .derive
@@ -3180,6 +3192,16 @@ conditional-include:
             .unwrap();
         assert!(!etc.contains("/etc/new"));
         assert!(!etc.contains("/etc/boo"));
+        assert!(treefile.initramfs_etc_files_untrack_all());
+        assert!(!treefile.initramfs_etc_files_untrack_all());
+        assert!(treefile
+            .parsed
+            .derive
+            .initramfs
+            .as_ref()
+            .unwrap()
+            .etc
+            .is_none());
         assert!(treefile.get_initramfs_regenerate());
         assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/lib/foo"]);
         assert_eq!(

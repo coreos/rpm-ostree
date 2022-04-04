@@ -498,6 +498,7 @@ pub mod ffi {
         fn has_initramfs_etc_files(&self) -> bool;
         fn initramfs_etc_files_track(&mut self, files: Vec<String>) -> bool;
         fn initramfs_etc_files_untrack(&mut self, files: Vec<String>) -> bool;
+        fn initramfs_etc_files_untrack_all(&mut self) -> bool;
         fn get_initramfs_regenerate(&self) -> bool;
         fn get_initramfs_args(&self) -> Vec<String>;
         fn get_unconfigured_state(&self) -> String;

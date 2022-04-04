@@ -82,8 +82,7 @@ bool rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin,
 bool rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin,
                                                    rust::Vec<rust::String> paths);
 
-void rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin,
-                                                       gboolean *out_changed);
+bool rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin);
 
 void rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean regenerate,
                                                 char **args);

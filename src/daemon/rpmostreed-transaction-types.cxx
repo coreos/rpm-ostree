@@ -1166,7 +1166,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
           || rpmostree_origin_has_initramfs_etc_files (origin)))
     {
       rpmostree_origin_set_regenerate_initramfs (origin, FALSE, NULL);
-      rpmostree_origin_initramfs_etc_files_untrack_all (origin, NULL);
+      rpmostree_origin_initramfs_etc_files_untrack_all (origin);
       changed = TRUE;
     }
 
@@ -1840,9 +1840,7 @@ initramfs_etc_transaction_execute (RpmostreedTransaction *transaction, GCancella
   gboolean changed = FALSE;
   if (self->untrack_all)
     {
-      gboolean subchanged = FALSE;
-      rpmostree_origin_initramfs_etc_files_untrack_all (origin, &subchanged);
-      changed = changed || subchanged;
+      changed = rpmostree_origin_initramfs_etc_files_untrack_all (origin) || changed;
     }
   else if (self->untrack)
     {
