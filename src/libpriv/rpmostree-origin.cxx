@@ -486,18 +486,18 @@ rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin,
 }
 
 /* Mutability: setter */
-void
-rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin, gboolean *out_changed)
+bool
+rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin)
 {
   const gboolean changed = (g_hash_table_size (origin->cached_initramfs_etc_files) > 0);
   g_hash_table_remove_all (origin->cached_initramfs_etc_files);
   if (changed)
-    update_string_list_from_hash_table (origin, "rpmostree", "initramfs-etc",
-                                        origin->cached_initramfs_etc_files);
-  if (out_changed)
-    *out_changed = changed;
-
-  sync_treefile (origin);
+    {
+      update_string_list_from_hash_table (origin, "rpmostree", "initramfs-etc",
+                                          origin->cached_initramfs_etc_files);
+      g_assert ((*origin->treefile)->initramfs_etc_files_untrack_all ());
+    }
+  return changed;
 }
 
 /* Mutability: setter */
