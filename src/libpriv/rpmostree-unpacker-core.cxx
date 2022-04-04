@@ -38,10 +38,33 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void
-propagate_libarchive_error (GError **error, struct archive *a)
+/**
+ * throw_libarchive_error:
+ * @ar: An archive
+ * @error: GError
+ * @prefix: Optional error prefix
+ *
+ * Transform a libarchive error into a Glib one, then clean up the input archive.
+ *
+ * Return: Always NULL
+ */
+static struct archive *
+throw_libarchive_error (struct archive *ar, GError **error, char const *prefix)
 {
-  g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, archive_error_string (a));
+  if (ar != NULL)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, archive_error_string (ar));
+      (void)archive_read_free (ar);
+    }
+  else
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Unknown libarchive error");
+    }
+
+  if (prefix != NULL)
+    glnx_prefix_error (error, "%s", prefix);
+
+  return NULL;
 }
 
 typedef int (*archive_setup_func) (struct archive *);
@@ -58,12 +81,9 @@ typedef int (*archive_setup_func) (struct archive *);
 struct archive *
 rpmostree_unpack_rpm2cpio (int fd, GError **error)
 {
-  gboolean success = FALSE;
-  struct archive *ret = NULL;
-  guint i;
-
-  ret = archive_read_new ();
-  g_assert (ret);
+  struct archive *ar = archive_read_new ();
+  if (ar == NULL)
+    return throw_libarchive_error (ar, error, "Initializing rpm2cpio archive object");
 
   /* We only do the subset necessary for RPM */
   {
@@ -76,31 +96,15 @@ rpmostree_unpack_rpm2cpio (int fd, GError **error)
 #endif
             archive_read_support_format_cpio };
 
-    for (i = 0; i < G_N_ELEMENTS (archive_setup_funcs); i++)
+    for (guint i = 0; i < G_N_ELEMENTS (archive_setup_funcs); i++)
       {
-        if (archive_setup_funcs[i](ret) != ARCHIVE_OK)
-          {
-            propagate_libarchive_error (error, ret);
-            goto out;
-          }
+        if (archive_setup_funcs[i](ar) != ARCHIVE_OK)
+          return throw_libarchive_error (ar, error, "Setting up rpm2cpio");
       }
   }
 
-  if (archive_read_open_fd (ret, fd, 10240) != ARCHIVE_OK)
-    {
-      propagate_libarchive_error (error, ret);
-      glnx_prefix_error (error, "rpmostree_unpack_rpm2cpio");
-      goto out;
-    }
+  if (archive_read_open_fd (ar, fd, 10240) != ARCHIVE_OK)
+    return throw_libarchive_error (ar, error, "Reading rpm2cpio");
 
-  success = TRUE;
-out:
-  if (success)
-    return util::move_nullify (ret);
-  else
-    {
-      if (ret)
-        (void)archive_read_free (ret);
-      return NULL;
-    }
+  return util::move_nullify (ar);
 }
