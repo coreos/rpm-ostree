@@ -493,6 +493,7 @@ pub mod ffi {
         fn get_origin_custom_url(&self) -> String;
         fn get_origin_custom_description(&self) -> String;
         fn get_override_commit(&self) -> String;
+        fn set_override_commit(&mut self, checksum: &str);
         fn get_initramfs_etc_files(&self) -> Vec<String>;
         fn has_initramfs_etc_files(&self) -> bool;
         fn get_initramfs_regenerate(&self) -> bool;

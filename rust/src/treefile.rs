@@ -1123,6 +1123,13 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    pub(crate) fn set_override_commit(&mut self, checksum: &str) {
+        let _ = self.parsed.derive.override_commit.take();
+        if !checksum.is_empty() {
+            self.parsed.derive.override_commit = Some(checksum.into());
+        }
+    }
+
     pub(crate) fn get_initramfs_etc_files(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -3081,7 +3088,7 @@ conditional-include:
             unconfigured-state: First register your instance with corpy-tool
             cliwrap: true
         "};
-        let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
+        let mut treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
         assert_eq!(treefile.get_packages(), &["foobar"]);
         assert!(treefile.has_modules_enable());
@@ -3101,6 +3108,15 @@ conditional-include:
             treefile.get_override_commit(),
             "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
         );
+        treefile.set_override_commit(
+            "9763c41704cedf0321ce591e16b3c7ddc8d8789b3f0084ee83236677864ab1cf",
+        );
+        assert_eq!(
+            treefile.get_override_commit(),
+            "9763c41704cedf0321ce591e16b3c7ddc8d8789b3f0084ee83236677864ab1cf"
+        );
+        treefile.set_override_commit("");
+        assert!(treefile.parsed.derive.override_commit.is_none());
         assert!(treefile.has_initramfs_etc_files());
         assert_eq!(treefile.get_initramfs_etc_files(), &["/etc/asdf"]);
         assert!(treefile.get_initramfs_regenerate());
