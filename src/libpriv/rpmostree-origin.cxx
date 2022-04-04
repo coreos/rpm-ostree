@@ -292,9 +292,8 @@ rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
   ostree_deployment_origin_remove_transient_state (origin->kf);
 
   /* this is already covered by the above, but the below also updates the cached value */
+  /* NB: this also updates the treefile */
   rpmostree_origin_set_override_commit (origin, NULL);
-
-  sync_treefile (origin);
 }
 
 /* Mutability: getter */
@@ -549,7 +548,7 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *check
   g_free (origin->cached_override_commit);
   origin->cached_override_commit = g_strdup (checksum);
 
-  sync_treefile (origin);
+  (*origin->treefile)->set_override_commit (checksum ?: "");
 }
 
 /* Mutability: getter */
