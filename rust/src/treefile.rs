@@ -1164,6 +1164,22 @@ impl Treefile {
         set.len() != n
     }
 
+    // Returns true if files were removed.
+    pub(crate) fn initramfs_etc_files_untrack(&mut self, files: Vec<String>) -> bool {
+        let set = self
+            .parsed
+            .derive
+            .initramfs
+            .ext_get_or_insert_default()
+            .etc
+            .ext_get_or_insert_default();
+        let mut changed = false;
+        for f in files {
+            changed = set.remove(&f) || changed;
+        }
+        changed
+    }
+
     pub(crate) fn get_initramfs_regenerate(&self) -> bool {
         self.parsed
             .derive
@@ -3148,7 +3164,12 @@ conditional-include:
             .as_ref()
             .unwrap();
         assert!(etc.contains("/etc/new"));
+        assert!(etc.contains("/etc/boo"));
         assert!(treefile
+            .initramfs_etc_files_untrack(vec!["/etc/new".to_string(), "/etc/boo".to_string()]));
+        assert!(!treefile.initramfs_etc_files_untrack(vec!["/etc/new".to_string()]));
+        assert!(!treefile.initramfs_etc_files_untrack(vec!["/etc/boo".to_string()]));
+        let etc = treefile
             .parsed
             .derive
             .initramfs
@@ -3156,8 +3177,9 @@ conditional-include:
             .unwrap()
             .etc
             .as_ref()
-            .unwrap()
-            .contains("/etc/new"));
+            .unwrap();
+        assert!(!etc.contains("/etc/new"));
+        assert!(!etc.contains("/etc/boo"));
         assert!(treefile.get_initramfs_regenerate());
         assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/lib/foo"]);
         assert_eq!(
