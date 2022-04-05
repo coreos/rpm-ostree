@@ -221,22 +221,22 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
 {
   RpmOstreeImporter *ret = NULL;
   g_auto (Header) hdr = NULL;
-  rpmfi fi = NULL;
+  g_auto (rpmfi) fi = NULL;
   gsize cpio_offset;
 
-  struct archive *archive = rpmostree_unpack_rpm2cpio (*fd, error);
-  if (archive == NULL)
+  g_autoptr (archive) ar = rpmostree_unpack_rpm2cpio (*fd, error);
+  if (ar == NULL)
     return NULL;
 
   if (!rpmostree_importer_read_metainfo (*fd, &hdr, &cpio_offset, &fi, error))
-    goto out;
+    return (RpmOstreeImporter *)glnx_prefix_error_null (error, "Reading metainfo");
 
   ret = (RpmOstreeImporter *)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
   ret->fd = glnx_steal_fd (fd);
   ret->repo = (OstreeRepo *)g_object_ref (repo);
   ret->sepolicy = (OstreeSePolicy *)(sepolicy ? g_object_ref (sepolicy) : NULL);
   ret->fi = util::move_nullify (fi);
-  ret->archive = util::move_nullify (archive);
+  ret->archive = util::move_nullify (ar);
   ret->flags = flags;
   ret->hdr = util::move_nullify (hdr);
   ret->cpio_offset = cpio_offset;
@@ -248,11 +248,6 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   build_rpmfi_overrides (ret);
 
-out:
-  if (archive)
-    archive_read_free (archive);
-  if (fi)
-    rpmfiFree (fi);
   return ret;
 }
 

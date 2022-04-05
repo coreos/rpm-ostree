@@ -51,15 +51,11 @@
 static struct archive *
 throw_libarchive_error (struct archive *ar, GError **error, char const *prefix)
 {
-  if (ar != NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, archive_error_string (ar));
-      (void)archive_read_free (ar);
-    }
-  else
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, "Unknown libarchive error");
-    }
+  g_assert (ar != NULL);
+
+  const char *err_string = archive_error_string (ar);
+  g_assert (err_string != NULL);
+  g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, err_string);
 
   if (prefix != NULL)
     glnx_prefix_error (error, "%s", prefix);
@@ -81,9 +77,10 @@ typedef int (*archive_setup_func) (struct archive *);
 struct archive *
 rpmostree_unpack_rpm2cpio (int fd, GError **error)
 {
-  struct archive *ar = archive_read_new ();
+  g_autoptr (archive) ar = archive_read_new ();
   if (ar == NULL)
-    return throw_libarchive_error (ar, error, "Initializing rpm2cpio archive object");
+    return (struct archive *)glnx_null_throw (error,
+                                              "Failed to initialize rpm2cpio archive object");
 
   /* We only do the subset necessary for RPM */
   {
