@@ -1722,12 +1722,13 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
  */
 
 RPMOSTreeOS *
-rpmostreed_os_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name)
+rpmostreed_os_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name, GError **error)
 {
   g_assert (OSTREE_IS_SYSROOT (sysroot));
   g_assert (name != NULL);
 
-  g_autofree char *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
+  auto path
+      = ROSCXX_TRY_VAL (generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str (name)), error);
 
   auto obj = (RpmostreedOS *)g_object_new (RPMOSTREED_TYPE_OS, "name", name, NULL);
 
@@ -1738,7 +1739,7 @@ rpmostreed_os_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name)
       g_warning ("%s", local_error->message);
   }
 
-  rpmostreed_daemon_publish (rpmostreed_daemon_get (), path, FALSE, obj);
+  rpmostreed_daemon_publish (rpmostreed_daemon_get (), path.c_str (), FALSE, obj);
 
   return RPMOSTREE_OS (obj);
 }

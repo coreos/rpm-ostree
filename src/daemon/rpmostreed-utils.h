@@ -24,10 +24,6 @@
 
 G_BEGIN_DECLS
 
-gchar *rpmostreed_generate_object_path (const gchar *base, const gchar *part, ...);
-
-gchar *rpmostreed_generate_object_path_from_va (const gchar *base, const gchar *part, va_list va);
-
 gboolean rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
                                            const gchar *base_refspec, gchar **out_refspec,
                                            GError **error);

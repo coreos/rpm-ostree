@@ -16,6 +16,7 @@
 // pub(crate) utilities
 mod cxxrsutil;
 mod ffiutil;
+pub(crate) mod ffiwrappers;
 pub(crate) use cxxrsutil::*;
 
 /// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
@@ -315,6 +316,7 @@ pub mod ffi {
         ) -> Result<DeploymentLayeredMeta>;
         fn parse_override_source(source: &str) -> Result<PackageOverrideSource>;
         fn parse_revision(source: &str) -> Result<ParsedRevision>;
+        fn generate_object_path(base: &str, next_segment: &str) -> Result<String>;
     }
 
     // failpoint_bridge.rs

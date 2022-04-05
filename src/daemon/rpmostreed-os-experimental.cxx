@@ -294,16 +294,18 @@ rpmostreed_osexperimental_iface_init (RPMOSTreeOSExperimentalIface *iface)
  */
 
 RPMOSTreeOSExperimental *
-rpmostreed_osexperimental_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name)
+rpmostreed_osexperimental_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name,
+                               GError **error)
 {
   g_assert (OSTREE_IS_SYSROOT (sysroot));
   g_assert (name != NULL);
 
-  g_autofree char *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
+  auto path
+      = ROSCXX_TRY_VAL (generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str (name)), error);
 
   auto obj = (RpmostreedOSExperimental *)g_object_new (RPMOSTREED_TYPE_OSEXPERIMENTAL, NULL);
 
-  rpmostreed_daemon_publish (rpmostreed_daemon_get (), path, FALSE, obj);
+  rpmostreed_daemon_publish (rpmostreed_daemon_get (), path.c_str (), FALSE, obj);
 
   return RPMOSTREE_OSEXPERIMENTAL (obj);
 }

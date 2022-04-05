@@ -30,5 +30,6 @@ typedef GVariant RpmOstreeUpdateDeploymentModifiers;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeUpdateDeploymentModifiers, g_variant_unref)
 
 GType rpmostreed_os_get_type (void) G_GNUC_CONST;
-RPMOSTreeOS *rpmostreed_os_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name);
+RPMOSTreeOS *rpmostreed_os_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name,
+                                GError **error);
 G_END_DECLS
