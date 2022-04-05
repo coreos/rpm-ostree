@@ -197,9 +197,9 @@ dependencies = [
 
 [[package]]
 name = "cap-tempfile"
-version = "0.24.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f92b21a6075b9e31c8eefe76c6985392a00c5cd2f2d466e45e1eba90ea029c0c"
+checksum = "e1857f2acd81cd0dafd729ec386032900863bc0c542188df48f761b6fab5bb41"
 dependencies = [
  "cap-std",
  "rand",
