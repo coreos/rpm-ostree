@@ -1,5 +1,5 @@
 ---
-name: Container and legacy compose
+name: CI
 
 on:
   push:
@@ -41,8 +41,8 @@ jobs:
         run: tar -C / -xzvf install.tar
       - name: Integration tests
         run: ./ci/test-container.sh
-  legacy-compose:
-    name: "Legacy compose tests"
+  compose:
+    name: "Compose tests"
     needs: build
     runs-on: ubuntu-latest
     container:
