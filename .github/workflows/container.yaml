@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+      - name: Codestyle
+        run: ./ci/codestyle.sh
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
       - name: Upload binary
