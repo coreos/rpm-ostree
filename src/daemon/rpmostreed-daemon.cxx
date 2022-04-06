@@ -78,6 +78,8 @@ struct _RpmostreedDaemon
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
+
+  std::optional<rust::Box<rpmostreecxx::TokioHandle> > tokio_handle;
 };
 
 struct _RpmostreedDaemonClass
@@ -165,6 +167,8 @@ daemon_finalize (GObject *object)
   g_clear_object (&self->sysroot);
   g_clear_object (&self->bus_proxy);
 
+  self->tokio_handle.~optional ();
+
   g_object_unref (self->connection);
   g_hash_table_unref (self->bus_clients);
   g_clear_pointer (&self->idle_exit_source, (GDestroyNotify)g_source_unref);
@@ -225,6 +229,8 @@ rpmostreed_daemon_init (RpmostreedDaemon *self)
   self->sysroot = NULL;
   self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, NULL,
                                              (GDestroyNotify)rpmostree_client_free);
+
+  self->tokio_handle = rpmostreecxx::tokio_handle_get ();
 }
 
 static void
@@ -357,6 +363,15 @@ get_config_uint64 (GKeyFile *keyfile, const char *key, guint64 default_val)
                           local_error->message);
     }
   return default_val;
+}
+
+namespace rpmostreecxx
+{
+rust::Box<TokioEnterGuard>
+rpmostreed_daemon_tokio_enter (RpmostreedDaemon *self)
+{
+  return (*self->tokio_handle)->enter ();
+}
 }
 
 RpmostreedAutomaticUpdatePolicy

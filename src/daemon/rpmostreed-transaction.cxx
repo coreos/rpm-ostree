@@ -49,8 +49,6 @@ struct _RpmostreedTransactionPrivate
   char *agent_id;
   char *sd_unit;
 
-  std::optional<rust::Box<rpmostreecxx::TokioHandle> > tokio_handle;
-
   gint64 last_progress_journal;
 
   gboolean redirect_output;
@@ -329,7 +327,7 @@ transaction_execute_thread (GTask *task, gpointer source_object, gpointer task_d
    */
   g_main_context_push_thread_default (mctx);
   // Further, we join the main Tokio async runtime.
-  auto guard = (*priv->tokio_handle)->enter ();
+  auto guard = rpmostreecxx::rpmostreed_daemon_tokio_enter (rpmostreed_daemon_get ());
 
   if (clazz->execute != NULL)
     {
@@ -494,8 +492,6 @@ transaction_finalize (GObject *object)
 
   if (priv->watch_id > 0)
     g_bus_unwatch_name (priv->watch_id);
-
-  priv->tokio_handle.~optional ();
 
   g_hash_table_destroy (priv->peer_connections);
 
@@ -762,8 +758,6 @@ rpmostreed_transaction_init (RpmostreedTransaction *self)
 
   self->priv->peer_connections
       = g_hash_table_new_full (g_direct_hash, g_direct_equal, g_object_unref, NULL);
-
-  self->priv->tokio_handle = rpmostreecxx::tokio_handle_get ();
 }
 
 gboolean

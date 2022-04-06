@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include "rpmostree-cxxrs.h"
 #include "rpmostree-util.h"
 #include "rpmostreed-types.h"
 
@@ -62,3 +63,8 @@ gboolean rpmostreed_authorize_method_for_uid0 (GDBusMethodInvocation *invocation
 RpmostreedAutomaticUpdatePolicy rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self);
 
 G_END_DECLS
+
+namespace rpmostreecxx
+{
+rust::Box<TokioEnterGuard> rpmostreed_daemon_tokio_enter (RpmostreedDaemon *self);
+}
