@@ -498,6 +498,12 @@ pub mod ffi {
         // these functions are more related to derivation
         fn validate_for_container(&self) -> Result<()>;
         fn get_base_refspec(&self) -> Refspec;
+        fn rebase(
+            &mut self,
+            new_refspec: &str,
+            custom_origin_url: &str,
+            custom_origin_description: &str,
+        );
         fn get_origin_custom_url(&self) -> String;
         fn get_origin_custom_description(&self) -> String;
         fn get_override_commit(&self) -> String;

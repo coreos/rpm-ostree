@@ -41,6 +41,7 @@ use std::str::FromStr;
 use std::{fs, io};
 use tracing::{event, instrument, Level};
 
+use crate::core;
 use crate::utils;
 use crate::utils::OptionExtGetOrInsertDefault;
 
@@ -1117,6 +1118,42 @@ impl Treefile {
             }
         } else {
             unreachable!()
+        }
+    }
+
+    pub(crate) fn rebase(
+        &mut self,
+        new_refspec: &str,
+        custom_origin_url: &str,
+        custom_origin_description: &str,
+    ) {
+        // We don't want to carry any commit overrides or version pinning during a
+        // rebase by default.
+        let _ = self.parsed.derive.override_commit.take();
+
+        match core::refspec_classify(new_refspec) {
+            crate::ffi::RefspecType::Checksum | crate::ffi::RefspecType::Ostree => {
+                self.parsed.derive.base_refspec = Some(new_refspec.to_string());
+                self.parsed.derive.container_image_reference = None;
+            }
+            crate::ffi::RefspecType::Container => {
+                self.parsed.derive.base_refspec = None;
+                self.parsed.derive.container_image_reference = Some(new_refspec.to_string());
+            }
+            _ => unreachable!(),
+        }
+
+        if custom_origin_url.is_empty() {
+            self.parsed.derive.custom = None;
+        } else {
+            self.parsed.derive.custom = Some(DeriveCustom {
+                url: custom_origin_url.to_string(),
+                description: if custom_origin_description.is_empty() {
+                    None
+                } else {
+                    Some(custom_origin_description.to_string())
+                },
+            });
         }
     }
 
@@ -3189,6 +3226,43 @@ conditional-include:
         );
         treefile.set_override_commit("");
         assert!(treefile.parsed.derive.override_commit.is_none());
+        // test rebase after override commit since this resets it
+        treefile.rebase(
+            "ostree-unverified-image:docker://quay.io/fedora/coreos:stable",
+            "",
+            "",
+        );
+        assert_eq!(
+            treefile.get_base_refspec(),
+            crate::ffi::Refspec {
+                kind: crate::ffi::RefspecType::Container,
+                refspec: "ostree-unverified-image:docker://quay.io/fedora/coreos:stable"
+                    .to_string(),
+            }
+        );
+        assert_eq!(treefile.get_origin_custom_url(), "");
+        assert_eq!(treefile.get_origin_custom_description(), "");
+        treefile.rebase(
+            "cc0bef0ea3ef368a9c99e35d273abff3a86b7f3811840ddbde90a2fcc6047935",
+            "https://another.example.com",
+            "Managed by MegaCorp, Inc.",
+        );
+        assert_eq!(
+            treefile.get_base_refspec(),
+            crate::ffi::Refspec {
+                kind: crate::ffi::RefspecType::Checksum,
+                refspec: "cc0bef0ea3ef368a9c99e35d273abff3a86b7f3811840ddbde90a2fcc6047935"
+                    .to_string(),
+            }
+        );
+        assert_eq!(
+            treefile.get_origin_custom_url(),
+            "https://another.example.com"
+        );
+        assert_eq!(
+            treefile.get_origin_custom_description(),
+            "Managed by MegaCorp, Inc."
+        );
         assert!(treefile.has_initramfs_etc_files());
         assert_eq!(treefile.get_initramfs_etc_files(), &["/etc/asdf"]);
         assert!(treefile

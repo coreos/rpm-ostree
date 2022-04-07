@@ -39,13 +39,6 @@ struct RpmOstreeOrigin
   /* this is used for convenience while we migrate; we always sync back to the treefile */
   GKeyFile *kf;
 
-  /* Branch name or pinned to commit*/
-  rpmostreecxx::RefspecType refspec_type;
-  char *cached_refspec;
-
-  /* Container image digest, if tracking a container image reference */
-  char *cached_digest;
-
   char *cached_unconfigured_state;
   char **cached_initramfs_args;
   GHashTable *cached_packages;                    /* set of reldeps */
@@ -75,7 +68,6 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   if (origin->refcount > 0)
     return;
   g_key_file_unref (origin->kf);
-  g_free (origin->cached_refspec);
   g_free (origin->cached_unconfigured_state);
   g_strfreev (origin->cached_initramfs_args);
   g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
@@ -167,51 +159,6 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
 
   ret->cached_unconfigured_state
       = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
-
-  /* Note that the refspec type can be inferred from the key in the origin file, where
-   * the `RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY` and `RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY` keys
-   * may correspond to either TYPE_OSTREE or TYPE_CHECKSUM (further classification is required), and
-   * `RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY` always only corresponds to TYPE_CONTAINER. */
-  g_autofree char *ost_refspec
-      = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
-  g_autofree char *imgref
-      = g_key_file_get_string (ret->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
-  if (!ost_refspec)
-    {
-      /* See if ostree refspec is baserefspec. */
-      ost_refspec = g_key_file_get_string (ret->kf, "origin",
-                                           RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL);
-      if (!ost_refspec && !imgref)
-        return (RpmOstreeOrigin *)glnx_null_throw (
-            error,
-            "No origin/%s, origin/%s, or origin/%s "
-            "in current deployment origin; cannot handle via rpm-ostree",
-            RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
-            RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY);
-    }
-  if (ost_refspec && imgref)
-    {
-      return (RpmOstreeOrigin *)glnx_null_throw (
-          error, "Refspec expressed by multiple keys in deployment origin");
-    }
-  else if (ost_refspec)
-    {
-      /* Classify to distinguish between TYPE_CHECKSUM and TYPE_OSTREE */
-      ret->refspec_type = rpmostreecxx::refspec_classify (ost_refspec);
-      ret->cached_refspec = util::move_nullify (ost_refspec);
-    }
-  else if (imgref)
-    {
-      ret->refspec_type = rpmostreecxx::RefspecType::Container;
-      ret->cached_refspec = util::move_nullify (imgref);
-
-      ret->cached_digest
-          = g_key_file_get_string (ret->kf, "origin", "container-image-reference-digest", NULL);
-    }
-  else
-    {
-      g_assert_not_reached ();
-    }
 
   if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE, ret->cached_packages, error))
     return FALSE;
@@ -505,82 +452,16 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
                                     const char *custom_origin_url,
                                     const char *custom_origin_description)
 {
-  /* Require non-empty strings */
-  if (custom_origin_url)
-    {
-      g_assert (*custom_origin_url);
-      g_assert (custom_origin_description && *custom_origin_description);
-    }
-
-  /* We don't want to carry any commit overrides or version pinning during a
-   * rebase by default.
-   */
-  rpmostree_origin_set_override_commit (origin, NULL);
-
-  /* See related code in rpmostree_origin_parse_keyfile() */
-  origin->refspec_type = rpmostreecxx::refspec_classify (new_refspec);
-  g_free (origin->cached_refspec);
-  origin->cached_refspec = g_strdup (new_refspec);
-  /* Note the following sets different keys depending on the type of refspec;
-   * TYPE_OSTREE and TYPE_CHECKSUM may set either `RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY`
-   * or `RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY`, while TYPE_CONTAINER will set the
-   * `RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY` key. */
-  switch (origin->refspec_type)
-    {
-    case rpmostreecxx::RefspecType::Checksum:
-    case rpmostreecxx::RefspecType::Ostree:
-      {
-        /* Remove `TYPE_CONTAINER`-related keys */
-        g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY, NULL);
-        g_key_file_remove_key (origin->kf, "origin", "container-image-reference-digest", NULL);
-
-        const char *refspec_key
-            = g_key_file_has_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
-                                  NULL)
-                  ? RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY
-                  : RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY;
-        g_key_file_set_string (origin->kf, "origin", refspec_key, origin->cached_refspec);
-        if (!custom_origin_url)
-          {
-            g_key_file_remove_key (origin->kf, "origin", "custom-url", NULL);
-            g_key_file_remove_key (origin->kf, "origin", "custom-description", NULL);
-          }
-        else
-          {
-            /* Custom origins have to be checksums */
-            g_assert (origin->refspec_type == rpmostreecxx::RefspecType::Checksum);
-            g_key_file_set_string (origin->kf, "origin", "custom-url", custom_origin_url);
-            if (custom_origin_description)
-              g_key_file_set_string (origin->kf, "origin", "custom-description",
-                                     custom_origin_description);
-          }
-      }
-      break;
-    case rpmostreecxx::RefspecType::Container:
-      {
-        /* Remove `TYPE_OSTREE` and `TYPE_CHECKSUM`-related keys */
-        g_assert (!custom_origin_url);
-        g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
-        g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
-                               NULL);
-        g_key_file_remove_key (origin->kf, "origin", "custom-url", NULL);
-        g_key_file_remove_key (origin->kf, "origin", "custom-description", NULL);
-
-        g_key_file_set_string (origin->kf, "origin", RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY,
-                               origin->cached_refspec);
-      }
-      break;
-    }
-
-  sync_treefile (origin);
+  (*origin->treefile)
+      ->rebase (new_refspec, custom_origin_url ?: "", custom_origin_description ?: "");
+  sync_origin (origin);
 }
 
 /* Mutability: setter */
 void
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec)
 {
-  // NB: calls sync_treefile
-  return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL);
+  rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL);
 }
 
 static void
