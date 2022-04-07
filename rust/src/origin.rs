@@ -8,7 +8,7 @@
 
 use crate::cxxrsutil::*;
 use crate::treefile::Treefile;
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use fn_error_context::context;
 use glib::translate::ToGlibPtr;
 use glib::KeyFile;
@@ -34,20 +34,29 @@ static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
 #[context("Parsing origin")]
 pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     let mut cfg: crate::treefile::TreeComposeConfig = Default::default();
-    let refspec_str = if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "refspec")? {
+    let base_refspec = if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "refspec")? {
         Some(r)
     } else if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "baserefspec")? {
-        Some(r)
-    } else if let Some(r) =
-        keyfile_get_optional_string(kf, ORIGIN, ostree_ext::container::deploy::ORIGIN_CONTAINER)?
-    {
         Some(r)
     } else {
         None
     };
-    let refspec_str = refspec_str
-        .ok_or_else(|| anyhow::anyhow!("Failed to find refspec/baserefspec/container in origin"))?;
-    cfg.derive.base_refspec = Some(refspec_str);
+
+    let container_image_reference =
+        keyfile_get_optional_string(kf, ORIGIN, ostree_ext::container::deploy::ORIGIN_CONTAINER)?;
+
+    match (base_refspec, container_image_reference) {
+        (Some(_), Some(_)) => bail!(
+            "Found both refspec/baserefspec and {}",
+            ostree_ext::container::deploy::ORIGIN_CONTAINER
+        ),
+        (None, None) => bail!(
+            "Failed to find refspec/baserefspec/{} in origin",
+            ostree_ext::container::deploy::ORIGIN_CONTAINER
+        ),
+        (Some(s), None) => cfg.derive.base_refspec = Some(s),
+        (None, Some(s)) => cfg.derive.container_image_reference = Some(s),
+    }
     cfg.packages = parse_stringlist(kf, PACKAGES, "requested")?;
     cfg.derive.packages_local = parse_localpkglist(kf, PACKAGES, "requested-local")?;
     cfg.derive.packages_local_fileoverride =
@@ -152,8 +161,12 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
         } else {
             "refspec"
         };
-        kf.set_string(ORIGIN, k, r)
-    };
+        kf.set_string(ORIGIN, k, r);
+    } else if let Some(r) = tf.derive.container_image_reference.as_deref() {
+        kf.set_string(ORIGIN, ostree_ext::container::deploy::ORIGIN_CONTAINER, r);
+    } else {
+        unreachable!();
+    }
 
     // Packages
     if let Some(pkgs) = tf.packages.as_deref() {
@@ -255,7 +268,7 @@ fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
         }
     }
     if !errs.is_empty() {
-        return Err(anyhow::anyhow!(errs.join("; ")));
+        return Err(anyhow!(errs.join("; ")));
     }
     Ok(())
 }

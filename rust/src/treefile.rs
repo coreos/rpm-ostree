@@ -1095,7 +1095,13 @@ impl Treefile {
     }
 
     pub(crate) fn get_base_refspec(&self) -> String {
-        self.parsed.derive.base_refspec.clone().unwrap_or_default()
+        self.parsed
+            .derive
+            .base_refspec
+            .as_deref()
+            .or(self.parsed.derive.container_image_reference.as_deref())
+            .unwrap_or_default()
+            .to_string()
     }
 
     pub(crate) fn get_origin_custom_url(&self) -> String {
@@ -1959,8 +1965,12 @@ pub(crate) struct DeriveInitramfs {
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct DeriveConfigFields {
+    // this is used for ref types ostree/checksum
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) base_refspec: Option<String>,
+    // this is used for ref types ostree/checksum
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) container_image_reference: Option<String>,
 
     // Packages
     #[serde(skip_serializing_if = "Option::is_none")]
