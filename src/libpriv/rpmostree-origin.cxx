@@ -104,17 +104,6 @@ sync_origin (RpmOstreeOrigin *self)
   self->kf = g_key_file_ref (kf);
 }
 
-static GKeyFile *
-keyfile_dup (GKeyFile *kf)
-{
-  GKeyFile *ret = g_key_file_new ();
-  gsize length = 0;
-  g_autofree char *data = g_key_file_to_data (kf, &length, NULL);
-
-  g_key_file_load_from_data (ret, data, length, G_KEY_FILE_KEEP_COMMENTS, NULL);
-  return ret;
-}
-
 /* take <nevra:sha256> entries from keyfile and inserts them into hash table */
 static gboolean
 parse_packages_strv (GKeyFile *kf, const char *group, const char *key, gboolean has_sha256,
@@ -162,8 +151,9 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
 
   ret = g_new0 (RpmOstreeOrigin, 1);
   ret->refcount = 1;
-  ret->kf = keyfile_dup (origin);
-  ret->treefile = ROSCXX_VAL (origin_to_treefile (*ret->kf), error);
+  ret->treefile = ROSCXX_VAL (origin_to_treefile (*origin), error);
+  CXX_TRY_VAR (kfv, rpmostreecxx::treefile_to_origin (**ret->treefile), error);
+  ret->kf = std::move (kfv);
 
   ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   ret->cached_modules_enable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
