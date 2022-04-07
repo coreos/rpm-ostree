@@ -24,55 +24,52 @@ codestyle: {
 }
 }
 
-stage("Test") {
-parallel insttests: {
-    def nhosts = 6
-    def mem = (nhosts * 1024) + 512
-    cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
-      stage("Unit tests") {
-        checkout scm
-        unstash 'rpms'
-        // run this stage first without installing deps, so we match exactly the cosa pkgset
-        // (+ our built rpm-ostree)
-        shwrap("""
-          dnf install -y *.rpm
-          # Cross check we enabled the unit tests
-          rpm-ostree --version | grep bin-unit-tests
-          rpm-ostree testutils c-units
-        """)
+def nhosts = 6
+def mem = (nhosts * 1024) + 512
+cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
+  stage("Unit Tests") {
+    checkout scm
+    unstash 'rpms'
+    // run this stage first without installing deps, so we match exactly the cosa pkgset
+    // (+ our built rpm-ostree)
+    shwrap("""
+      dnf install -y *.rpm
+      # Cross check we enabled the unit tests
+      rpm-ostree --version | grep bin-unit-tests
+      rpm-ostree testutils c-units
+    """)
+  }
+  stage("Build FCOS") {
+    shwrap("""
+      coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
+      # include our built rpm-ostree in the image
+      mkdir -p overrides/rpm
+      mv *.rpm overrides/rpm
+      coreos-assembler fetch
+      coreos-assembler build
+       ${env.WORKSPACE}/ci/composepost-checks.sh
+    """)
+  }
+  stage("Install Deps") {
+    shwrap("ci/install-test-deps.sh")
+  }
+  stage("Kola") {
+    // TODO upstream this into coreos-ci-lib
+    shwrap("make -C tests/kolainst install")
+    fcosKola(cosaDir: "${env.WORKSPACE}", extraArgs: "ext.rpm-ostree.*", parallel: nhosts)
+  }
+  stage("vmcheck") {
+    try {
+      timeout(time: 30, unit: 'MINUTES') {
+        shwrap("COSA_DIR=${env.WORKSPACE} JOBS=${nhosts} tests/vmcheck.sh")
       }
-      stage("Build FCOS") {
-        shwrap("""
-          coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
-          # include our built rpm-ostree in the image
-          mkdir -p overrides/rpm
-          mv *.rpm overrides/rpm
-          coreos-assembler fetch
-          coreos-assembler build
-           ${env.WORKSPACE}/ci/composepost-checks.sh
-        """)
-      }
-      stage("Install Deps") {
-        shwrap("ci/install-test-deps.sh")
-      }
-      stage("Kola") {
-        // TODO upstream this into coreos-ci-lib
-        shwrap("make -C tests/kolainst install")
-        fcosKola(cosaDir: "${env.WORKSPACE}", extraArgs: "ext.rpm-ostree.*", parallel: nhosts)
-      }
-      stage("vmcheck") {
-        try {
-          timeout(time: 30, unit: 'MINUTES') {
-            shwrap("COSA_DIR=${env.WORKSPACE} JOBS=${nhosts} tests/vmcheck.sh")
-          }
-        } finally {
-          shwrap("""
-            if [ -d vmcheck-logs ]; then
-              tar -C vmcheck-logs -cf- . | xz -c9 > vmcheck-logs.tar.xz
-            fi
-          """)
-          archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
-        }
-      }
+    } finally {
+      shwrap("""
+        if [ -d vmcheck-logs ]; then
+          tar -C vmcheck-logs -cf- . | xz -c9 > vmcheck-logs.tar.xz
+        fi
+      """)
+      archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
     }
-}}
+  }
+}
