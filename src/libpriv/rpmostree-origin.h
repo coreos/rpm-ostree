@@ -34,7 +34,7 @@ RpmOstreeOrigin *rpmostree_origin_parse_deployment (OstreeDeployment *deployment
 
 RpmOstreeOrigin *rpmostree_origin_dup (RpmOstreeOrigin *origin);
 
-rust::String rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
+rpmostreecxx::Refspec rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
 
 rust::String rpmostree_origin_get_custom_url (RpmOstreeOrigin *origin);
 

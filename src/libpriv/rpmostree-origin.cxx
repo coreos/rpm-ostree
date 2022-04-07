@@ -260,15 +260,10 @@ rpmostree_origin_dup (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-rust::String
+rpmostreecxx::Refspec
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 {
-  // This is awkward: the treefile supports no base refspec being set since none is in the compose
-  // case. But in the derive case, there should *always* be a base refspec, so verify this. Ideally
-  // we'd have a different type for derivation treefiles. It's not the right time to fix this yet.
-  auto r = (*origin->treefile)->get_base_refspec ();
-  g_assert_cmpstr (r.c_str (), !=, "");
-  return r;
+  return (*origin->treefile)->get_base_refspec ();
 }
 
 rust::String

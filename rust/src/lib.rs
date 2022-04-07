@@ -176,7 +176,7 @@ pub mod ffi {
     }
 
     // core.rs
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Eq)]
     enum RefspecType {
         Ostree,
         Checksum,
@@ -426,6 +426,12 @@ pub mod ffi {
         Disabled,
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    struct Refspec {
+        kind: RefspecType,
+        refspec: String,
+    }
+
     extern "Rust" {
         type Treefile;
 
@@ -491,7 +497,7 @@ pub mod ffi {
 
         // these functions are more related to derivation
         fn validate_for_container(&self) -> Result<()>;
-        fn get_base_refspec(&self) -> String;
+        fn get_base_refspec(&self) -> Refspec;
         fn get_origin_custom_url(&self) -> String;
         fn get_origin_custom_description(&self) -> String;
         fn get_override_commit(&self) -> String;
