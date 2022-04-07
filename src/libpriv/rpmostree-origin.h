@@ -83,7 +83,7 @@ bool rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin,
 bool rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin);
 
 void rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean regenerate,
-                                                char **args);
+                                                rust::Vec<rust::String> args);
 
 void rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum);
 
