@@ -141,7 +141,7 @@ parse_origin_deployment (RpmOstreeSysrootUpgrader *self, OstreeDeployment *deplo
   self->original_origin = rpmostree_origin_parse_deployment (deployment, error);
   if (!self->original_origin)
     return FALSE;
-  rpmostree_origin_remove_transient_state (self->original_origin);
+  rpmostree_origin_set_override_commit (self->original_origin, NULL);
 
   auto unconfigured = rpmostree_origin_get_unconfigured_state (self->original_origin);
   if (!unconfigured.empty ()

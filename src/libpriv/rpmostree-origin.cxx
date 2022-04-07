@@ -259,21 +259,6 @@ rpmostree_origin_dup (RpmOstreeOrigin *origin)
   return ret;
 }
 
-/* This is useful if the origin is meant to be used to generate a *new* deployment, as
- * opposed to simply gathering information about an existing one. In such cases, there are
- * some things that we do not generally want to apply to a new deployment. */
-/* Mutability: setter */
-void
-rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
-{
-  /* first libostree-known things */
-  ostree_deployment_origin_remove_transient_state (origin->kf);
-
-  /* this is already covered by the above, but the below also updates the cached value */
-  /* NB: this also updates the treefile */
-  rpmostree_origin_set_override_commit (origin, NULL);
-}
-
 /* Mutability: getter */
 rust::String
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
