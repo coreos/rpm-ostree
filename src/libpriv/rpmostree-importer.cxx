@@ -222,7 +222,7 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   RpmOstreeImporter *ret = NULL;
   g_auto (Header) hdr = NULL;
   g_auto (rpmfi) fi = NULL;
-  gsize cpio_offset;
+  gsize cpio_offset = 0;
 
   g_autoptr (archive) ar = rpmostree_unpack_rpm2cpio (*fd, error);
   if (ar == NULL)
