@@ -583,31 +583,6 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec)
   return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL);
 }
 
-/* If necessary, switch to `baserefspec` when changing the origin
- * to something core ostree doesnt't understand, i.e.
- * when `ostree admin upgrade` would no longer do the right thing. */
-static void
-sync_baserefspec (RpmOstreeOrigin *origin)
-{
-  /* If we're based on a container image reference, this is not necessary since
-   * `ostree admin upgrade` won't work regardless of whether or not packages are
-   * layered. Though this may change in the future. */
-  if (origin->refspec_type == rpmostreecxx::RefspecType::Container)
-    return;
-  if (rpmostree_origin_may_require_local_assembly (origin))
-    {
-      g_key_file_set_value (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY,
-                            origin->cached_refspec);
-      g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY, NULL);
-    }
-  else
-    {
-      g_key_file_set_value (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_ORIGIN_KEY,
-                            origin->cached_refspec);
-      g_key_file_remove_key (origin->kf, "origin", RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY, NULL);
-    }
-}
-
 static void
 update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin, const char *group, const char *key,
                                 GHashTable *pkgs, gboolean has_csum)
@@ -618,7 +593,6 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin, const char *group, cons
   if (g_hash_table_size (pkgs) == 0)
     {
       g_key_file_remove_key (origin->kf, group, key, NULL);
-      sync_baserefspec (origin);
       return;
     }
 
@@ -634,8 +608,6 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin, const char *group, cons
     {
       update_string_list_from_hash_table (origin, group, key, pkgs);
     }
-
-  sync_baserefspec (origin);
 }
 
 static void
