@@ -404,16 +404,10 @@ rpmostree_origin_get_cliwrap (RpmOstreeOrigin *origin)
 
 /* Mutability: setter */
 void
-rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, gboolean cliwrap)
+rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, bool cliwrap)
 {
-  const char k[] = "rpmostree";
-  const char v[] = "ex-cliwrap";
-  if (cliwrap)
-    g_key_file_set_boolean (origin->kf, k, v, TRUE);
-  else
-    g_key_file_remove_key (origin->kf, k, v, NULL);
-
-  sync_treefile (origin);
+  (*origin->treefile)->set_cliwrap (cliwrap);
+  sync_origin (origin);
 }
 
 /* Mutability: setter */

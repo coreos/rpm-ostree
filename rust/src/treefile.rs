@@ -848,6 +848,13 @@ impl Treefile {
         self.parsed.cliwrap.unwrap_or(false)
     }
 
+    pub(crate) fn set_cliwrap(&mut self, enabled: bool) {
+        let _ = self.parsed.cliwrap.take();
+        if enabled {
+            self.parsed.cliwrap = Some(true);
+        }
+    }
+
     pub(crate) fn get_readonly_executables(&self) -> bool {
         self.parsed.base.readonly_executables.unwrap_or(false)
     }
@@ -3334,6 +3341,8 @@ conditional-include:
         assert!(treefile.may_require_local_assembly());
         assert!(treefile.has_any_packages());
         assert!(treefile.get_cliwrap());
+        treefile.set_cliwrap(false);
+        assert!(!treefile.get_cliwrap());
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
