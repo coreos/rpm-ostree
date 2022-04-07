@@ -1094,14 +1094,30 @@ impl Treefile {
         Ok(())
     }
 
-    pub(crate) fn get_base_refspec(&self) -> String {
-        self.parsed
-            .derive
-            .base_refspec
-            .as_deref()
-            .or(self.parsed.derive.container_image_reference.as_deref())
-            .unwrap_or_default()
-            .to_string()
+    // Unlike other simple getters, this is an abstraction over the `base_refspec` and
+    // `container_image_reference` fields. The result would normally be a composite enum except
+    // cxx.rs doesn't support that so we return a struct (see
+    // https://github.com/dtolnay/cxx/issues/217).
+    pub(crate) fn get_base_refspec(&self) -> crate::ffi::Refspec {
+        if let Some(ref s) = self.parsed.derive.container_image_reference {
+            crate::ffi::Refspec {
+                kind: crate::ffi::RefspecType::Container,
+                refspec: s.clone(),
+            }
+        } else if let Some(ref s) = self.parsed.derive.base_refspec {
+            let kind = if ostree::validate_checksum_string(s).is_ok() {
+                crate::ffi::RefspecType::Checksum
+            } else {
+                // fall back to Ostree if we cannot infer type
+                crate::ffi::RefspecType::Ostree
+            };
+            crate::ffi::Refspec {
+                kind,
+                refspec: s.clone(),
+            }
+        } else {
+            unreachable!()
+        }
     }
 
     pub(crate) fn get_origin_custom_url(&self) -> String {
@@ -3150,7 +3166,10 @@ conditional-include:
         assert!(!treefile.has_packages_override_remove_name("enoent"));
         assert_eq!(
             treefile.get_base_refspec(),
-            "fedora:fedora/35/x86_64/silverblue"
+            crate::ffi::Refspec {
+                kind: crate::ffi::RefspecType::Ostree,
+                refspec: "fedora:fedora/35/x86_64/silverblue".to_string(),
+            }
         );
         assert_eq!(treefile.get_origin_custom_url(), "https://example.com");
         assert_eq!(
@@ -3228,7 +3247,6 @@ conditional-include:
         assert!(treefile.get_packages().is_empty());
         assert!(!treefile.has_modules_enable());
         assert!(treefile.get_modules_enable().is_empty());
-        assert_eq!(treefile.get_base_refspec(), "");
         assert_eq!(treefile.get_origin_custom_url(), "");
         assert_eq!(treefile.get_origin_custom_description(), "");
         assert_eq!(treefile.get_override_commit(), "");

@@ -421,12 +421,11 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
   if (!override_commit_s.empty ())
     override_commit = override_commit_s.c_str ();
 
-  auto refspec = rpmostree_origin_get_refspec (self->computed_origin);
-  auto refspec_type = rpmostreecxx::refspec_classify (refspec.c_str ());
+  auto r = rpmostree_origin_get_refspec (self->computed_origin);
 
   g_autofree char *new_base_rev = NULL;
 
-  switch (refspec_type)
+  switch (r.kind)
     {
     case rpmostreecxx::RefspecType::Container:
       {
@@ -434,7 +433,8 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
           return glnx_throw (error, "Specifying commit overrides for container-image-reference "
                                     "type refspecs is not supported");
 
-        CXX_TRY_VAR (import, rpmostreecxx::pull_container (*self->repo, *cancellable, refspec),
+        CXX_TRY_VAR (import,
+                     rpmostreecxx::pull_container (*self->repo, *cancellable, r.refspec.c_str ()),
                      error);
         // Note this duplicates
         // https://github.com/ostreedev/ostree-rs-ext/blob/22a663f64e733e7ba8382f11f853ce4202652254/lib/src/container/store.rs#L64
@@ -449,7 +449,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
       {
         g_autofree char *origin_remote = NULL;
         g_autofree char *origin_ref = NULL;
-        if (!ostree_parse_refspec (refspec.c_str (), &origin_remote, &origin_ref, error))
+        if (!ostree_parse_refspec (r.refspec.c_str (), &origin_remote, &origin_ref, error))
           return FALSE;
 
         const gboolean is_commit = ostree_validate_checksum_string (origin_ref, NULL);
@@ -501,7 +501,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
           new_base_rev = g_strdup (override_commit);
         else
           {
-            if (!ostree_repo_resolve_rev (self->repo, refspec.c_str (), FALSE, &new_base_rev,
+            if (!ostree_repo_resolve_rev (self->repo, r.refspec.c_str (), FALSE, &new_base_rev,
                                           error))
               return FALSE;
           }
@@ -1262,14 +1262,14 @@ write_history (RpmOstreeSysrootUpgrader *self, OstreeDeployment *new_deployment,
     version = rpmostree_checksum_version (commit);
   }
 
-  auto refspec = rpmostree_origin_get_refspec (self->computed_origin);
+  auto r = rpmostree_origin_get_refspec (self->computed_origin);
   sd_journal_send (
       "MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL (RPMOSTREE_NEW_DEPLOYMENT_MSG),
       "MESSAGE=Created new deployment /%s", deployment_dirpath, "DEPLOYMENT_PATH=/%s",
       deployment_dirpath, "DEPLOYMENT_TIMESTAMP=%" PRIu64, (uint64_t)stbuf.st_ctime,
       "DEPLOYMENT_DEVICE=%" PRIu64, (uint64_t)stbuf.st_dev, "DEPLOYMENT_INODE=%" PRIu64,
       (uint64_t)stbuf.st_ino, "DEPLOYMENT_CHECKSUM=%s", ostree_deployment_get_csum (new_deployment),
-      "DEPLOYMENT_REFSPEC=%s", refspec.c_str (),
+      "DEPLOYMENT_REFSPEC=%s", r.refspec.c_str (),
       /* we could use iovecs here and sd_journal_sendv to make these truly
        * conditional, but meh, empty field works fine too */
       "DEPLOYMENT_VERSION=%s", version ?: "", "COMMAND_LINE=%s", self->command_line ?: "",
