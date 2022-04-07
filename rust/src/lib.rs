@@ -515,6 +515,7 @@ pub mod ffi {
         fn initramfs_etc_files_untrack_all(&mut self) -> bool;
         fn get_initramfs_regenerate(&self) -> bool;
         fn get_initramfs_args(&self) -> Vec<String>;
+        fn set_initramfs_regenerate(&mut self, enabled: bool, args: Vec<String>);
         fn get_unconfigured_state(&self) -> String;
         fn may_require_local_assembly(&self) -> bool;
         fn has_any_packages(&self) -> bool;

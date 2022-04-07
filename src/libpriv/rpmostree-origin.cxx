@@ -40,7 +40,6 @@ struct RpmOstreeOrigin
   GKeyFile *kf;
 
   char *cached_unconfigured_state;
-  char **cached_initramfs_args;
   GHashTable *cached_packages;                    /* set of reldeps */
   GHashTable *cached_modules_enable;              /* set of module specs to enable */
   GHashTable *cached_modules_install;             /* set of module specs to install */
@@ -69,7 +68,6 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
     return;
   g_key_file_unref (origin->kf);
   g_free (origin->cached_unconfigured_state);
-  g_strfreev (origin->cached_initramfs_args);
   g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
   g_clear_pointer (&origin->cached_modules_enable, g_hash_table_unref);
   g_clear_pointer (&origin->cached_modules_install, g_hash_table_unref);
@@ -185,9 +183,6 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   if (!parse_packages_strv (ret->kf, "overrides", "replace-local", TRUE,
                             ret->cached_overrides_local_replace, error))
     return FALSE;
-
-  ret->cached_initramfs_args
-      = g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
 
   // We will eventually start converting origin to treefile, this helps us
   // debug cases that may fail currently.
@@ -386,35 +381,10 @@ rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin)
 /* Mutability: setter */
 void
 rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean regenerate,
-                                           char **args)
+                                           rust::Vec<rust::String> args)
 {
-  const char *section = "rpmostree";
-  const char *regeneratek = "regenerate-initramfs";
-  const char *argsk = "initramfs-args";
-
-  g_strfreev (origin->cached_initramfs_args);
-
-  if (regenerate)
-    {
-      g_key_file_set_boolean (origin->kf, section, regeneratek, TRUE);
-      if (args && *args)
-        {
-          g_key_file_set_string_list (origin->kf, section, argsk, (const char *const *)args,
-                                      g_strv_length (args));
-        }
-      else
-        g_key_file_remove_key (origin->kf, section, argsk, NULL);
-    }
-  else
-    {
-      g_key_file_remove_key (origin->kf, section, regeneratek, NULL);
-      g_key_file_remove_key (origin->kf, section, argsk, NULL);
-    }
-
-  origin->cached_initramfs_args
-      = g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
-
-  sync_treefile (origin);
+  (*origin->treefile)->set_initramfs_regenerate (regenerate, args);
+  sync_origin (origin);
 }
 
 /* Mutability: setter */

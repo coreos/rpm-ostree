@@ -1269,6 +1269,20 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    pub(crate) fn set_initramfs_regenerate(&mut self, enabled: bool, args: Vec<String>) {
+        if !enabled {
+            // implicitly leaves empty if already empty
+            if let Some(ref mut initrd) = self.parsed.derive.initramfs {
+                initrd.regenerate = false;
+                initrd.args = None;
+            }
+        } else {
+            let initrd = self.parsed.derive.initramfs.ext_get_or_insert_default();
+            initrd.regenerate = true;
+            initrd.args = Some(args);
+        }
+    }
+
     pub(crate) fn get_unconfigured_state(&self) -> String {
         self.parsed
             .derive
@@ -3307,6 +3321,12 @@ conditional-include:
             .is_none());
         assert!(treefile.get_initramfs_regenerate());
         assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/lib/foo"]);
+        treefile.set_initramfs_regenerate(false, vec![]);
+        assert!(!treefile.get_initramfs_regenerate());
+        assert!(treefile.get_initramfs_args().is_empty());
+        treefile.set_initramfs_regenerate(true, vec!["-a".to_string(), "40foo".to_string()]);
+        assert!(treefile.get_initramfs_regenerate());
+        assert_eq!(treefile.get_initramfs_args(), &["-a", "40foo"]);
         assert_eq!(
             treefile.get_unconfigured_state(),
             "First register your instance with corpy-tool"
