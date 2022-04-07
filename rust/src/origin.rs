@@ -142,15 +142,16 @@ fn set_sha256_nevra_pkgs(
 /// Convert a treefile to an origin file.
 #[context("Parsing treefile origin")]
 fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
+    let may_require_local_assembly = tf.may_require_local_assembly();
     let tf = &tf.parsed;
     let kf = glib::KeyFile::new();
 
-    // refspec (note special handling right now for layering)
-    let deriving = tf.packages.is_some()
-        || tf.derive.packages_local.is_some()
-        || tf.derive.packages_local_fileoverride.is_some();
     if let Some(r) = tf.derive.base_refspec.as_deref() {
-        let k = if deriving { "baserefspec" } else { "refspec" };
+        let k = if may_require_local_assembly {
+            "baserefspec"
+        } else {
+            "refspec"
+        };
         kf.set_string(ORIGIN, k, r)
     };
 
