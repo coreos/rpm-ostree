@@ -253,7 +253,10 @@ fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
             match newkf.value(grp, k) {
                 Ok(newv) => {
                     if !kf_diff_value(grp, k, origv.as_str(), newv.as_str()) {
-                        errs.push(format!("Mismatched value for {}/{}: {}", grp, k, newv));
+                        errs.push(format!(
+                            "Mismatched value for {}/{}: {} vs {}",
+                            grp, k, origv, newv
+                        ));
                     }
                 }
                 Err(e) => errs.push(format!("Fetching {}/{}: {}", grp, k, e)),
