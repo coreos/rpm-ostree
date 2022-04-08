@@ -54,52 +54,58 @@ get_editor (void)
   return editor;
 }
 
-char *
-ot_editor_prompt (OstreeRepo *repo, const char *input, GCancellable *cancellable, GError **error)
+static char *
+run_editor (GFile *file, GFileIOStream *io, const char *input, GCancellable *cancellable,
+            GError **error)
 {
-  glnx_unref_object GSubprocess *proc = NULL;
-  g_autoptr (GFile) file = NULL;
-  g_autoptr (GFileIOStream) io = NULL;
-  GOutputStream *output;
-  const char *editor;
-  char *ret = NULL;
-  g_autofree char *args = NULL;
+  g_assert (file != NULL);
+  g_assert (io != NULL);
 
-  editor = get_editor ();
+  g_autofree char *content = NULL;
+
+  const char *editor = get_editor ();
   if (editor == NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Terminal is dumb, but EDITOR unset");
-      goto out;
-    }
+    return (char *)glnx_null_throw (error, "Terminal is dumb, but EDITOR unset");
 
-  file = g_file_new_tmp (NULL, &io, error);
-  if (file == NULL)
-    goto out;
+  GOutputStream *output = g_io_stream_get_output_stream (G_IO_STREAM (io));
+  if (!g_output_stream_write_all (output, input, strlen (input), NULL, cancellable, error))
+    return (char *)glnx_prefix_error_null (error, "Writing output content");
 
-  output = g_io_stream_get_output_stream (G_IO_STREAM (io));
-  if (!g_output_stream_write_all (output, input, strlen (input), NULL, cancellable, error)
-      || !g_io_stream_close (G_IO_STREAM (io), cancellable, error))
-    goto out;
+  if (!g_io_stream_close (G_IO_STREAM (io), cancellable, error))
+    return (char *)glnx_prefix_error_null (error, "Closing stream");
 
+  g_autofree char *args = NULL;
   {
     g_autofree char *quoted_file = g_shell_quote (gs_file_get_path_cached (file));
     args = g_strconcat (editor, " ", quoted_file, NULL);
   }
 
-  proc = g_subprocess_new (G_SUBPROCESS_FLAGS_STDIN_INHERIT, error, "/bin/sh", "-c", args, NULL);
+  glnx_unref_object GSubprocess *proc
+      = g_subprocess_new (G_SUBPROCESS_FLAGS_STDIN_INHERIT, error, "/bin/sh", "-c", args, NULL);
 
   if (!g_subprocess_wait_check (proc, cancellable, error))
-    {
-      g_prefix_error (error, "There was a problem with the editor '%s': ", editor);
-      goto out;
-    }
+    return (char *)glnx_prefix_error_null (error, "Running editor '%s'", editor);
 
-  ret = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (file), NULL, cancellable,
-                                        error);
+  content = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (file), NULL,
+                                            cancellable, error);
+  if (content == NULL)
+    return (char *)glnx_prefix_error_null (error, "Reading content");
 
-out:
-  if (file)
-    (void)g_file_delete (file, NULL, NULL);
-  return ret;
+  return util::move_nullify (content);
+}
+
+char *
+ot_editor_prompt (OstreeRepo *repo, const char *input, GCancellable *cancellable, GError **error)
+{
+  g_assert (input != NULL);
+
+  g_autoptr (GFileIOStream) io = NULL;
+  g_autoptr (GFile) file = g_file_new_tmp (NULL, &io, error);
+  if (file == NULL)
+    return (char *)glnx_prefix_error_null (error, "Creating temporary file");
+
+  char *content = run_editor (file, io, input, cancellable, error);
+  (void)g_file_delete (file, NULL, NULL);
+
+  return content;
 }
