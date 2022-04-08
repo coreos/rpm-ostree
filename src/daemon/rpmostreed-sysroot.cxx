@@ -664,22 +664,21 @@ static gboolean
 sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self, gboolean *out_changed,
                                                GError **error)
 {
-  gboolean ret = FALSE;
-  gboolean did_change;
+  gboolean did_change = FALSE;
 
   /* reload ostree repo first so we pick up e.g. new remotes */
   if (!ostree_repo_reload_config (self->repo, NULL, error))
-    goto out;
+    return FALSE;
   if (!sysroot_populate_deployments_unlocked (self, &did_change, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
-  if (out_changed)
+  if (out_changed != NULL)
     *out_changed = did_change;
-out:
-  if (ret && did_change)
+
+  if (did_change)
     g_signal_emit (self, signals[UPDATED], 0);
-  return ret;
+
+  return TRUE;
 }
 
 gboolean
@@ -699,12 +698,8 @@ on_deploy_changed (GFileMonitor *monitor, GFile *file, GFile *other_file,
   if (event_type == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED)
     {
       if (!rpmostreed_sysroot_reload (self, &error))
-        goto out;
+        sd_journal_print (LOG_ERR, "Unable to update state: %s", error->message);
     }
-
-out:
-  if (error)
-    sd_journal_print (LOG_ERR, "Unable to update state: %s", error->message);
 }
 
 static void
