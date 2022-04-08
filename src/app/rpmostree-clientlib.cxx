@@ -288,9 +288,13 @@ transaction_progress_new (void)
 static void
 transaction_progress_free (TransactionProgress *self)
 {
+  if (self == NULL)
+    return;
+
   g_main_loop_unref (self->loop);
   g_slice_free (TransactionProgress, self);
 }
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (TransactionProgress, transaction_progress_free)
 
 static void
 transaction_progress_end (TransactionProgress *self)
@@ -518,15 +522,12 @@ static gboolean
 impl_transaction_get_response_sync (GDBusConnection *connection, const char *transaction_address,
                                     GCancellable *cancellable, GError **error)
 {
-  guint sigintid = 0;
   glnx_unref_object GDBusObjectManager *object_manager = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
 
-  TransactionProgress *tp = transaction_progress_new ();
+  g_autoptr (TransactionProgress) tp = transaction_progress_new ();
 
   const char *bus_name = NULL;
-  gint cancel_handler;
-  gulong signal_handler = 0;
   gboolean success = FALSE;
   gboolean just_started = FALSE;
 
@@ -542,7 +543,7 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
           "/org/projectatomic/rpmostree1", cancellable, error);
 
       if (object_manager == NULL)
-        goto out;
+        return FALSE;
 
       g_signal_connect (object_manager, "notify::name-owner", G_CALLBACK (on_owner_changed), tp);
     }
@@ -551,15 +552,15 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
 
   transaction = transaction_connect (transaction_address, cancellable, error);
   if (!transaction)
-    goto out;
+    return FALSE;
 
-  sigintid = g_unix_signal_add (SIGINT, on_sigint, cancellable);
+  guint sigintid = g_unix_signal_add (SIGINT, on_sigint, cancellable);
 
   /* setup cancel handler */
-  cancel_handler
+  gint cancel_handler
       = g_cancellable_connect (cancellable, G_CALLBACK (cancelled_handler), transaction, NULL);
 
-  signal_handler
+  gulong signal_handler
       = g_signal_connect (transaction, "g-signal", G_CALLBACK (on_transaction_progress), tp);
 
   /* Tell the server we're ready to receive signals. */
@@ -597,7 +598,6 @@ out:
   if (signal_handler)
     g_signal_handler_disconnect (transaction, signal_handler);
 
-  transaction_progress_free (tp);
   return success;
 }
 
