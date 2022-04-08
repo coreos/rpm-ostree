@@ -527,7 +527,7 @@ pub mod ffi {
         type RepoPackage;
 
         fn get_repo(&self) -> &str;
-        fn get_packages(&self) -> &[String];
+        fn get_packages(&self) -> Vec<String>;
     }
 
     // utils.rs

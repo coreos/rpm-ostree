@@ -137,7 +137,7 @@ fn treefile_parse_stream<R: io::Read>(
     }
 
     // remove from packages-${arch} keys from the extra keys
-    let mut archful_pkgs: Option<Vec<String>> = take_archful_pkgs(basearch, &mut treefile)?;
+    let mut archful_pkgs: Option<BTreeSet<String>> = take_archful_pkgs(basearch, &mut treefile)?;
 
     if fmt == utils::InputFormat::YAML && !treefile.base.extra.is_empty() {
         let keys: Vec<&str> = treefile.base.extra.keys().map(|k| k.as_str()).collect();
@@ -151,18 +151,19 @@ fn treefile_parse_stream<R: io::Read>(
     // Special handling for packages, since we allow whitespace within items.
     // We also canonicalize bootstrap_packages to packages here so it's
     // easier to append the basearch packages after.
-    let mut pkgs: Vec<String> = vec![];
-    {
+    let pkgs = {
+        let mut pkgs: BTreeSet<String> = BTreeSet::new();
         if let Some(base_pkgs) = treefile.packages.take() {
-            pkgs.extend_from_slice(&whitespace_split_packages(&base_pkgs)?);
+            pkgs.append(&mut whitespace_split_packages(&base_pkgs)?);
         }
         if let Some(bootstrap_pkgs) = treefile.base.bootstrap_packages.take() {
-            pkgs.extend_from_slice(&whitespace_split_packages(&bootstrap_pkgs)?);
+            pkgs.append(&mut whitespace_split_packages(&bootstrap_pkgs)?);
         }
         if let Some(archful_pkgs) = archful_pkgs.take() {
-            pkgs.extend_from_slice(&whitespace_split_packages(&archful_pkgs)?);
+            pkgs.append(&mut whitespace_split_packages(&archful_pkgs)?);
         }
-    }
+        pkgs
+    };
 
     // to be consistent, we also support whitespace-separated modules
     if let Some(mut modules) = treefile.modules.take() {
@@ -199,8 +200,8 @@ fn treefile_parse_stream<R: io::Read>(
 fn take_archful_pkgs(
     basearch: Option<&str>,
     treefile: &mut TreeComposeConfig,
-) -> Result<Option<Vec<String>>> {
-    let mut archful_pkgs: Option<Vec<String>> = None;
+) -> Result<Option<BTreeSet<String>>> {
+    let mut archful_pkgs: Option<BTreeSet<String>> = None;
 
     for key in treefile
         .base
@@ -353,13 +354,13 @@ fn merge_map_field<T>(
 }
 
 /// Merge an hashset field by extending.
-fn merge_hashset_field<T: Eq + std::hash::Hash>(
-    dest: &mut Option<HashSet<T>>,
-    src: &mut Option<HashSet<T>>,
+fn merge_hashset_field<T: Eq + std::hash::Hash + std::cmp::Ord>(
+    dest: &mut Option<BTreeSet<T>>,
+    src: &mut Option<BTreeSet<T>>,
 ) {
     if let Some(mut srcv) = src.take() {
-        if let Some(destv) = dest.take() {
-            srcv.extend(destv);
+        if let Some(mut destv) = dest.take() {
+            srcv.append(&mut destv);
         }
         *dest = Some(srcv);
     }
@@ -369,8 +370,8 @@ fn merge_hashset_field<T: Eq + std::hash::Hash>(
 pub(crate) fn merge_modules(dest: &mut Option<ModulesConfig>, src: &mut Option<ModulesConfig>) {
     if let Some(mut srcv) = src.take() {
         if let Some(mut destv) = dest.take() {
-            merge_vec_field(&mut destv.enable, &mut srcv.enable);
-            merge_vec_field(&mut destv.install, &mut srcv.install);
+            merge_hashset_field(&mut destv.enable, &mut srcv.enable);
+            merge_hashset_field(&mut destv.install, &mut srcv.install);
             srcv = destv;
         }
         *dest = Some(srcv);
@@ -432,7 +433,6 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     merge_vecs!(
         repos,
         lockfile_repos,
-        bootstrap_packages,
         exclude_packages,
         ostree_layers,
         ostree_override_layers,
@@ -446,7 +446,8 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         remove_from_packages
     );
 
-    merge_vec_field(&mut dest.packages, &mut src.packages);
+    merge_hashset_field(&mut dest.bootstrap_packages, &mut src.bootstrap_packages);
+    merge_hashset_field(&mut dest.packages, &mut src.packages);
     merge_vec_field(&mut dest.repo_packages, &mut src.repo_packages);
     merge_basic_field(&mut dest.cliwrap, &mut src.cliwrap);
     merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
@@ -689,7 +690,11 @@ impl Treefile {
     }
 
     pub(crate) fn get_packages(&self) -> Vec<String> {
-        self.parsed.packages.clone().unwrap_or_default()
+        self.parsed
+            .packages
+            .as_ref()
+            .map(|h| h.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     pub(crate) fn has_packages(&self) -> bool {
@@ -703,7 +708,7 @@ impl Treefile {
     pub(crate) fn set_packages(&mut self, packages: &Vec<String>) {
         let _ = self.parsed.packages.take();
         if !packages.is_empty() {
-            self.parsed.packages = Some(packages.clone());
+            self.parsed.packages = Some(packages.iter().cloned().collect());
         }
     }
 
@@ -1370,8 +1375,8 @@ impl RepoPackage {
         self.repo.as_str()
     }
 
-    pub(crate) fn get_packages(&self) -> &[String] {
-        self.packages.as_slice()
+    pub(crate) fn get_packages(&self) -> Vec<String> {
+        self.packages.iter().map(|k| k.to_string()).collect()
     }
 }
 
@@ -1440,9 +1445,9 @@ impl TreefileExternals {
 
 /// For increased readability in YAML/JSON, we support whitespace in individual
 /// array elements.
-fn whitespace_split_packages(pkgs: &[String]) -> Result<Vec<String>> {
-    let mut ret = vec![];
-    for element in pkgs.iter() {
+fn whitespace_split_packages<'a>(pkgs: &BTreeSet<String>) -> Result<BTreeSet<String>> {
+    let mut ret = BTreeSet::new();
+    for element in pkgs {
         ret.extend(split_whitespace_unless_quoted(element)?.map(String::from));
     }
 
@@ -1820,7 +1825,7 @@ pub(crate) enum RpmdbBackend {
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) packages: Option<Vec<String>>,
+    pub(crate) packages: Option<BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) repo_packages: Option<Vec<RepoPackage>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1887,7 +1892,7 @@ pub(crate) struct BaseComposeConfigFields {
     // Core content
     // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) bootstrap_packages: Option<Vec<String>>,
+    pub(crate) bootstrap_packages: Option<BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ostree_layers: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1946,9 +1951,9 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) check_groups: Option<CheckGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) ignore_removed_users: Option<HashSet<String>>,
+    pub(crate) ignore_removed_users: Option<BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) ignore_removed_groups: Option<HashSet<String>>,
+    pub(crate) ignore_removed_groups: Option<BTreeSet<String>>,
 
     // Content manipulation
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1992,15 +1997,15 @@ pub(crate) struct BaseComposeConfigFields {
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RepoPackage {
     pub(crate) repo: String,
-    pub(crate) packages: Vec<String>,
+    pub(crate) packages: BTreeSet<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
 pub(crate) struct ModulesConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) enable: Option<Vec<String>>,
+    pub(crate) enable: Option<BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) install: Option<Vec<String>>,
+    pub(crate) install: Option<BTreeSet<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
@@ -2287,7 +2292,7 @@ pub(crate) mod tests {
             treefile.repo_packages,
             Some(vec![RepoPackage {
                 repo: "baserepo".into(),
-                packages: vec!["blah".into(), "bloo".into()],
+                packages: maplit::btreeset!("blah".into(), "bloo".into()),
             }])
         );
     }
@@ -2641,24 +2646,24 @@ pub(crate) mod tests {
             Some(vec![
                 RepoPackage {
                     repo: "foo2".into(),
-                    packages: vec!["qwert".into()],
+                    packages: maplit::btreeset!("qwert".into()),
                 },
                 RepoPackage {
                     repo: "baserepo".into(),
-                    packages: vec!["blah".into(), "bloo".into()],
+                    packages: maplit::btreeset!("blah".into(), "bloo".into()),
                 }
             ])
         );
         assert_eq!(
             tf.parsed.modules,
             Some(ModulesConfig {
-                enable: Some(vec!["dodo".into(), "foobar:2.0".into()]),
-                install: Some(vec![
+                enable: Some(maplit::btreeset!("dodo".into(), "foobar:2.0".into())),
+                install: Some(maplit::btreeset!(
                     "bazboo".into(),
                     "nodejs:15".into(),
                     "swig:3.0/complete".into(),
                     "sway:rolling".into(),
-                ])
+                ))
             },)
         );
         Ok(())

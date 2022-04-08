@@ -830,7 +830,7 @@ impl PasswdEntries {
         &self,
         old_subset: &PasswdEntries,
         rootfs: i32,
-        ignored_users: &Option<HashSet<String>>,
+        ignored_users: &Option<BTreeSet<String>>,
     ) -> Result<()> {
         let old_user_names: BTreeSet<&str> = old_subset.users.keys().map(|s| s.as_str()).collect();
         let new_keys: BTreeSet<&str> = self.users.keys().map(|s| s.as_str()).collect();
@@ -908,7 +908,7 @@ impl PasswdEntries {
         &self,
         old_subset: &PasswdEntries,
         rootfs: i32,
-        ignored_groups: &Option<HashSet<String>>,
+        ignored_groups: &Option<BTreeSet<String>>,
     ) -> Result<()> {
         let old_group_names: BTreeSet<&str> =
             old_subset.groups.keys().map(|s| s.as_str()).collect();

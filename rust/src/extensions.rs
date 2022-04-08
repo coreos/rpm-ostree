@@ -195,7 +195,7 @@ impl Extensions {
                 releasever: src.parsed.base.releasever.clone(),
                 ..Default::default()
             },
-            packages: Some(self.get_os_extension_packages()),
+            packages: Some(self.get_os_extension_packages().into_iter().collect()),
             modules: self.modules.clone(),
             ..Default::default()
         };
@@ -336,7 +336,7 @@ extensions:
         assert_eq!(extensions.get_repos().len(), 2);
         assert_eq!(extensions.get_repos()[1], "bazboo-repo");
         let modules = extensions.modules.unwrap();
-        assert_eq!(modules.enable.unwrap(), vec!["virt:av"]);
+        assert!(modules.enable.unwrap().contains("virt:av"));
         assert!(modules.install.is_none());
 
         let mut input = std::io::BufReader::new(buf.as_bytes());
@@ -351,7 +351,8 @@ extensions:
         assert_eq!(extensions.get_repos().len(), 2);
         assert_eq!(extensions.get_repos()[1], "foo-repo");
         let modules = extensions.modules.unwrap();
-        assert_eq!(modules.enable.unwrap(), vec!["foo:stable", "virt:av"]);
+        assert!(modules.enable.as_ref().unwrap().contains("foo:stable"));
+        assert!(modules.enable.as_ref().unwrap().contains("virt:av"));
         assert!(modules.install.is_none());
     }
 
