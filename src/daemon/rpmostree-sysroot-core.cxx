@@ -131,7 +131,8 @@ generate_pkgcache_refs (OstreeSysroot *sysroot, OstreeRepo *repo, guint *out_n_f
           const char *nevra = nevra_v.c_str ();
           if (!rpmostree_decompose_sha256_nevra (&nevra, NULL, error))
             return FALSE;
-          auto cachebranch = ROSCXX_TRY_VAL (nevra_to_cache_branch (std::string (nevra)), error);
+          CXX_TRY_VAR (cachebranch, rpmostreecxx::nevra_to_cache_branch (std::string (nevra)),
+                       error);
           g_hash_table_add (referenced_pkgs, g_strdup (cachebranch.c_str ()));
         }
     }
@@ -343,7 +344,7 @@ rpmostree_syscore_write_deployment (OstreeSysroot *sysroot, OstreeDeployment *ne
       OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
       if (booted)
         {
-          auto is_live = ROSCXX_TRY_VAL (has_live_apply_state (*sysroot, *booted), error);
+          CXX_TRY_VAR (is_live, rpmostreecxx::has_live_apply_state (*sysroot, *booted), error);
           if (is_live)
             flags = static_cast<OstreeSysrootSimpleWriteDeploymentFlags> (
                 flags | OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK);

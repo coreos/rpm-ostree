@@ -1372,14 +1372,14 @@ rpmostree_ex_builtin_history (int argc, char **argv, RpmOstreeCommandInvocation 
   /* initiate a history context, then iterate over each (boot time, deploy time), then print */
 
   /* XXX: enhance with option for going in reverse (oldest first) */
-  auto history_ctx = ROSCXX_TRY_VAL (history_ctx_new (), error);
+  CXX_TRY_VAR (history_ctx, rpmostreecxx::history_ctx_new (), error);
 
   /* XXX: use pager here */
 
   gboolean at_least_one = FALSE;
   while (opt_all || opt_limit--)
     {
-      auto entry = CXX_TRY_VAL (history_ctx->next_entry (), error);
+      CXX_TRY_VAR (entry, history_ctx->next_entry (), error);
       if (entry.eof)
         break;
       if (!print_history_entry (entry, error))

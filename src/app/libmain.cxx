@@ -265,7 +265,7 @@ rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *mai
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0)
     ROSCXX_TRY (client_require_root (), error);
 
-  auto is_ostree_container = ROSCXX_TRY_VAL (is_ostree_container (), error);
+  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
   bool container_capable = (flags & RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE) > 0;
   if (use_daemon && !(is_ostree_container && container_capable))
     {

@@ -209,7 +209,7 @@ prepare_download_pkgs_txn (const gchar *const *queries, const char *source,
     return glnx_prefix_error (error, "Downloading metadata");
 
   DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
-  auto parsed_source = ROSCXX_TRY_VAL (parse_override_source (source), error);
+  CXX_TRY_VAR (parsed_source, rpmostreecxx::parse_override_source (source), error);
 
   if (parsed_source.kind == rpmostreecxx::PackageOverrideSourceKind::Repo)
     {
@@ -300,8 +300,9 @@ rpmostreed_osexperimental_new (OstreeSysroot *sysroot, OstreeRepo *repo, const c
   g_assert (OSTREE_IS_SYSROOT (sysroot));
   g_assert (name != NULL);
 
-  auto path
-      = ROSCXX_TRY_VAL (generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str (name)), error);
+  CXX_TRY_VAR (path,
+               rpmostreecxx::generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str (name)),
+               error);
 
   auto obj = (RpmostreedOSExperimental *)g_object_new (RPMOSTREED_TYPE_OSEXPERIMENTAL, NULL);
 

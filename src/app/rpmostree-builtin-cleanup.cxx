@@ -81,7 +81,7 @@ rpmostree_builtin_cleanup (int argc, char **argv, RpmOstreeCommandInvocation *in
       return FALSE;
     }
 
-  auto is_ostree_container = ROSCXX_TRY_VAL (is_ostree_container (), error);
+  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
   if (is_ostree_container)
     {
       if (cleanup_types->len == 1 && opt_repomd)

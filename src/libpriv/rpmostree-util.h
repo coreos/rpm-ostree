@@ -119,13 +119,18 @@ throw_gerror (GError *&error)
     std::move (v);                                                                                 \
   })
 
-#define CXX_TRY_VAL(cxxfn, err)                                                                    \
-  ({                                                                                               \
-    auto v = CXX_VAL (cxxfn, err);                                                                 \
-    if (!v.has_value ())                                                                           \
+#define CXX_TRY_VAR(varname, cxxfn, err)                                                           \
+  std::optional<decltype (cxxfn)> varname##_res;                                                   \
+  try                                                                                              \
+    {                                                                                              \
+      varname##_res.emplace (cxxfn);                                                               \
+    }                                                                                              \
+  catch (std::exception & e)                                                                       \
+    {                                                                                              \
+      glnx_throw (err, "%s", e.what ());                                                           \
       return FALSE;                                                                                \
-    std::move (v.value ());                                                                        \
-  })
+    }                                                                                              \
+  auto varname = std::move (varname##_res.value ());
 
 // This is the C equivalent of .unwrap() when we know it's safe to do so.
 #define CXX_MUST(cxxfn)                                                                            \
@@ -135,19 +140,10 @@ throw_gerror (GError *&error)
     g_assert_no_error (local_error);                                                               \
   })
 
-#define CXX_MUST_VAL(cxxfn)                                                                        \
-  ({                                                                                               \
-    g_autoptr (GError) local_error = NULL;                                                         \
-    auto v = CXX_VAL (cxxfn, &local_error);                                                        \
-    g_assert_no_error (local_error);                                                               \
-    std::move (v.value ());                                                                        \
-  })
-
 // Convenience macros for the common rpmostreecxx:: cases.
 #define ROSCXX(cxxfn, err) CXX (rpmostreecxx::cxxfn, err)
 #define ROSCXX_TRY(cxxfn, err) CXX_TRY (rpmostreecxx::cxxfn, err)
 #define ROSCXX_VAL(cxxfn, err) CXX_VAL (rpmostreecxx::cxxfn, err)
-#define ROSCXX_TRY_VAL(cxxfn, err) CXX_TRY_VAL (rpmostreecxx::cxxfn, err)
 
 // Duplicate a non-empty Rust Str to a NUL-terminated C string.
 // The empty string is converted to a NULL pointer.
@@ -180,7 +176,6 @@ rust_stringvec_from_strv (const char *const *strv)
     ret.push_back (*it);
   return ret;
 }
-
 }
 
 namespace rpmostreecxx

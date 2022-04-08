@@ -464,9 +464,9 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
    * today.  Though maybe in the future we should add it, but
    * in the end we want to use systemd-sysusers of course.
    **/
-  auto etc_guard = ROSCXX_TRY_VAL (prepare_tempetc_guard (rootfs_dfd), error);
+  CXX_TRY_VAR (etc_guard, rpmostreecxx::prepare_tempetc_guard (rootfs_dfd), error);
 
-  gboolean have_passwd = ROSCXX_TRY_VAL (prepare_rpm_layering (rootfs_dfd, ""), error);
+  CXX_TRY_VAR (have_passwd, rpmostreecxx::prepare_rpm_layering (rootfs_dfd, ""), error);
 
   /* Note rebuild_from_initramfs now is only used as a fallback in the client-side regen
    * path when we can't fetch the canonical initramfs args to use. */
@@ -508,7 +508,7 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
   if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".", O_RDWR | O_CLOEXEC, &tmpf, error))
     return FALSE;
 
-  auto bwrap = ROSCXX_TRY_VAL (bubblewrap_new (rootfs_dfd), error);
+  CXX_TRY_VAR (bwrap, rpmostreecxx::bubblewrap_new (rootfs_dfd), error);
   if (use_root_etc)
     {
       bwrap->bind_read ("/etc", "/etc");

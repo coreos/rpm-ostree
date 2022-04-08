@@ -286,8 +286,9 @@ rpmostreed_daemon_initable_init (GInitable *initable, GCancellable *cancellable,
   if (!rpmostreed_daemon_reload_config (self, NULL, error))
     return FALSE;
 
-  auto path = ROSCXX_TRY_VAL (
-      generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str ("Sysroot")), error);
+  CXX_TRY_VAR (
+      path, rpmostreecxx::generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str ("Sysroot")),
+      error);
 
   self->sysroot = (RpmostreedSysroot *)g_object_new (RPMOSTREED_TYPE_SYSROOT, "path",
                                                      self->sysroot_path, NULL);
