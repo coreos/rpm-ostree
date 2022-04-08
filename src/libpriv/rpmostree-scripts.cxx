@@ -331,7 +331,7 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_
   rpmostreecxx::BubblewrapMutability mutability
       = (is_glibc_locales || !enable_fuse) ? rpmostreecxx::BubblewrapMutability::MutateFreely
                                            : rpmostreecxx::BubblewrapMutability::RoFiles;
-  auto bwrap = ROSCXX_TRY_VAL (bubblewrap_new_with_mutability (rootfs_fd, mutability), error);
+  CXX_TRY_VAR (bwrap, rpmostreecxx::bubblewrap_new_with_mutability (rootfs_fd, mutability), error);
   /* Scripts can see a /var with compat links like alternatives */
   CXX_TRY (bwrap->setup_compat_var (), error);
 
@@ -400,8 +400,8 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_
   else
     {
       rust::Slice<const uint8_t> scriptslice{ (guint8 *)script, strlen (script) };
-      glnx_fd_close int script_memfd
-          = ROSCXX_TRY_VAL (sealed_memfd (pkg_script, scriptslice), error);
+      CXX_TRY_VAR (script_memfdv, rpmostreecxx::sealed_memfd (pkg_script, scriptslice), error);
+      glnx_fd_close int script_memfd = script_memfdv;
 
       /* Only try to log to the journal if we're already set up that way (normally
        * rpm-ostreed for host system management). Otherwise we might be in a Docker
@@ -948,9 +948,10 @@ rpmostree_deployment_sanitycheck_true (int rootfs_fd, GCancellable *cancellable,
     return TRUE;
 
   g_assert (cancellable);
-  auto bwrap = ROSCXX_TRY_VAL (
-      bubblewrap_new_with_mutability (rootfs_fd, rpmostreecxx::BubblewrapMutability::Immutable),
-      error);
+  CXX_TRY_VAR (bwrap,
+               rpmostreecxx::bubblewrap_new_with_mutability (
+                   rootfs_fd, rpmostreecxx::BubblewrapMutability::Immutable),
+               error);
   bwrap->append_child_arg ("/usr/bin/true");
   if (!CXX (bwrap->run (*cancellable), error))
     return glnx_prefix_error (error, "Sanity-checking final rootfs");

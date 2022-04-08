@@ -848,7 +848,7 @@ rpmostree_sort_pkgs_strv (const char *const *pkgs, GUnixFDList *fd_list, GPtrArr
   for (const char *const *pkgiter = pkgs; pkgiter && *pkgiter; pkgiter++)
     {
       auto pkg = *pkgiter;
-      auto fds = ROSCXX_TRY_VAL (client_handle_fd_argument (pkg, basearch), error);
+      CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (pkg, basearch), error);
       if (fds.size () > 0)
         {
           for (const auto &fd : fds)

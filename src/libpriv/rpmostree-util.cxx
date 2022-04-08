@@ -505,8 +505,8 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
   if (!ostree_repo_load_commit (repo, csum, &commit, NULL, error))
     return FALSE;
 
-  auto layeredmeta
-      = ROSCXX_TRY_VAL (deployment_layeredmeta_from_commit (*deployment, *commit), error);
+  CXX_TRY_VAR (layeredmeta, rpmostreecxx::deployment_layeredmeta_from_commit (*deployment, *commit),
+               error);
 
   g_autoptr (GVariant) metadata = g_variant_get_child_value (commit, 0);
   g_autoptr (GVariantDict) dict = g_variant_dict_new (metadata);

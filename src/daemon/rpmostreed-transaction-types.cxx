@@ -171,7 +171,7 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
   if (refspectype != rpmostreecxx::RefspecType::Ostree)
     return glnx_throw (error, "Invalid refspec type");
 
-  auto parsed_revision = ROSCXX_TRY_VAL (parse_revision (revision), error);
+  CXX_TRY_VAR (parsed_revision, rpmostreecxx::parse_revision (revision), error);
   switch (parsed_revision.kind)
     {
     case rpmostreecxx::ParsedRevisionKind::Version:
@@ -1440,7 +1440,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
 
           OstreeDeployment *deployment = rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
 
-          auto is_live = ROSCXX_TRY_VAL (has_live_apply_state (*sysroot, *deployment), error);
+          CXX_TRY_VAR (is_live, rpmostreecxx::has_live_apply_state (*sysroot, *deployment), error);
           if (is_live)
             changed = TRUE;
         }
@@ -2490,8 +2490,8 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   if (!g_str_equal (ostree_deployment_get_osname (default_deployment), self->osname))
     return glnx_throw (error, "Staged deployment is not for osname '%s'", self->osname);
 
-  auto layeredmeta
-      = ROSCXX_TRY_VAL (deployment_layeredmeta_load (*repo, *default_deployment), error);
+  CXX_TRY_VAR (layeredmeta, rpmostreecxx::deployment_layeredmeta_load (*repo, *default_deployment),
+               error);
   const char *checksum = layeredmeta.base_commit.c_str ();
 
   auto expected_checksum = (char *)vardict_lookup_ptr (self->options, "checksum", "&s");

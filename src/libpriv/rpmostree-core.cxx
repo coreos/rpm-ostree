@@ -573,7 +573,8 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
    */
   if (!self->treefile_rs)
     {
-      self->treefile_owned = ROSCXX_TRY_VAL (treefile_new_empty (), error);
+      CXX_TRY_VAR (tf, rpmostreecxx::treefile_new_empty (), error);
+      self->treefile_owned = std::move (tf);
       self->treefile_rs = &**self->treefile_owned;
     }
 
@@ -855,7 +856,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo *pkgcache, const char *nevra,
                                     const char *expected_sha256, GVariant **out_header,
                                     GCancellable *cancellable, GError **error)
 {
-  auto cachebranch = ROSCXX_TRY_VAL (nevra_to_cache_branch (nevra), error);
+  CXX_TRY_VAR (cachebranch, rpmostreecxx::nevra_to_cache_branch (nevra), error);
 
   if (expected_sha256 != NULL)
     {
@@ -1199,7 +1200,7 @@ find_pkg_in_ostree (RpmOstreeContext *self, DnfPackage *pkg, OstreeSePolicy *sep
   const char *reponame = dnf_package_get_reponame (pkg);
   if (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) != 0)
     {
-      auto expected_chksum_repr = ROSCXX_TRY_VAL (get_repodata_chksum_repr (*pkg), error);
+      CXX_TRY_VAR (expected_chksum_repr, rpmostreecxx::get_repodata_chksum_repr (*pkg), error);
 
       gboolean same_pkg_chksum = FALSE;
       if (!commit_has_matching_repodata_chksum_repr (commit, expected_chksum_repr.c_str (),
@@ -1586,7 +1587,7 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
 
   g_autoptr (GPtrArray) pkgs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
-  auto locked_src_pkgs = CXX_TRY_VAL ((*self->lockfile)->get_locked_src_packages (), error);
+  CXX_TRY_VAR (locked_src_pkgs, (*self->lockfile)->get_locked_src_packages (), error);
   std::set<rust::String> locked_src_pkgnames;
   for (auto &pkg : locked_src_pkgs)
     {
@@ -1610,7 +1611,7 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
       locked_src_pkgnames.insert (pkg.name);
     }
 
-  auto locked_pkgs = CXX_TRY_VAL ((*self->lockfile)->get_locked_packages (), error);
+  CXX_TRY_VAR (locked_pkgs, (*self->lockfile)->get_locked_packages (), error);
   for (auto &pkg : locked_pkgs)
     {
       /* This essentially makes `source-packages` have higher priority than `packages`. This
@@ -1643,7 +1644,7 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
             }
           else
             {
-              auto repodata_chksum = ROSCXX_TRY_VAL (get_repodata_chksum_repr (*match), error);
+              CXX_TRY_VAR (repodata_chksum, rpmostreecxx::get_repodata_chksum_repr (*match), error);
               if (pkg.digest != repodata_chksum) /* we're comparing two rust::String here */
                 n_checksum_mismatches++;
               else
@@ -2090,7 +2091,8 @@ rpmostree_context_set_lockfile (RpmOstreeContext *self, char **lockfiles, gboole
   rust::Vec<rust::String> rs_lockfiles;
   for (char **it = lockfiles; it && *it; it++)
     rs_lockfiles.push_back (std::string (*it));
-  self->lockfile = ROSCXX_TRY_VAL (lockfile_read (rs_lockfiles), error);
+  CXX_TRY_VAR (lockfile, rpmostreecxx::lockfile_read (rs_lockfiles), error);
+  self->lockfile = std::move (lockfile);
   self->lockfile_strict = strict;
   return TRUE;
 }
@@ -2169,7 +2171,7 @@ rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal, OstreeRepo *p
             }
         }
 
-      auto chksum_repr = ROSCXX_TRY_VAL (get_repodata_chksum_repr (*pkg), error);
+      CXX_TRY_VAR (chksum_repr, rpmostreecxx::get_repodata_chksum_repr (*pkg), error);
       g_checksum_update (checksum, (guint8 *)chksum_repr.data (), chksum_repr.size ());
     }
 
@@ -2180,7 +2182,7 @@ gboolean
 rpmostree_context_get_state_sha512 (RpmOstreeContext *self, char **out_checksum, GError **error)
 {
   g_autoptr (GChecksum) state_checksum = g_checksum_new (G_CHECKSUM_SHA512);
-  auto tf_checksum = CXX_TRY_VAL (self->treefile_rs->get_checksum (*self->ostreerepo), error);
+  CXX_TRY_VAR (tf_checksum, self->treefile_rs->get_checksum (*self->ostreerepo), error);
   g_checksum_update (state_checksum, (const guint8 *)tf_checksum.data (), tf_checksum.size ());
 
   if (!self->empty)
@@ -3500,7 +3502,8 @@ apply_rpmfi_overrides (RpmOstreeContext *self, int tmprootfs_dfd, DnfPackage *pk
                            "Could not find user '%s' in passwd file", user);
               return FALSE;
             }
-          uid = CXX_TRY_VAL (passwd_entries.lookup_user_id (user), error);
+          CXX_TRY_VAR (uidv, passwd_entries.lookup_user_id (user), error);
+          uid = std::move (uidv);
         }
 
       gid_t gid = 0;
@@ -3513,7 +3516,8 @@ apply_rpmfi_overrides (RpmOstreeContext *self, int tmprootfs_dfd, DnfPackage *pk
               return FALSE;
             }
 
-          gid = CXX_TRY_VAL (passwd_entries.lookup_group_id (group), error);
+          CXX_TRY_VAR (gidv, passwd_entries.lookup_group_id (group), error);
+          gid = std::move (gidv);
         }
 
       if (fchownat (tmprootfs_dfd, fn, uid, gid, AT_SYMLINK_NOFOLLOW) != 0)
@@ -4135,20 +4139,19 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
     return FALSE;
   ROSCXX_TRY (rootfs_prepare_links (tmprootfs_dfd), error);
 
-  auto etc_guard = ROSCXX_TRY_VAL (prepare_tempetc_guard (tmprootfs_dfd), error);
+  CXX_TRY_VAR (etc_guard, rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd), error);
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
   if (overlays->len > 0 || overrides_replace->len > 0)
     {
-      gboolean have_passwd;
-
-      auto fs_prep = ROSCXX_TRY_VAL (prepare_filesystem_script_prep (tmprootfs_dfd), error);
+      CXX_TRY_VAR (fs_prep, rpmostreecxx::prepare_filesystem_script_prep (tmprootfs_dfd), error);
 
       auto passwd_entries = rpmostreecxx::new_passwd_entries ();
 
       std::string passwd_dir (self->passwd_dir ?: "");
-      have_passwd = ROSCXX_TRY_VAL (prepare_rpm_layering (tmprootfs_dfd, passwd_dir), error);
+      CXX_TRY_VAR (have_passwd, rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dir),
+                   error);
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
       if (!rpmostree_rootfs_fixup_selinux_store_root (tmprootfs_dfd, cancellable, error))

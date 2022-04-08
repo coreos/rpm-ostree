@@ -44,14 +44,14 @@ rpmostree_ex_builtin_rebuild (int argc, char **argv, RpmOstreeCommandInvocation 
   bool in_container = false;
   if (rpmostreecxx::running_in_container ())
     {
-      auto is_ostree_container = ROSCXX_TRY_VAL (is_ostree_container (), error);
+      CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
       if (!is_ostree_container)
         return glnx_throw (error, "This command can only run in an OSTree container.");
       in_container = true;
     }
 
   auto basearch = rpmostreecxx::get_rpm_basearch ();
-  auto treefile = ROSCXX_TRY_VAL (treefile_new_client_from_etc (basearch), error);
+  CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_client_from_etc (basearch), error);
 
   /* This is the big switch: we support running this command in two modes:
    * "client containers", where the effect takes place in the active rootfs, and
@@ -64,7 +64,7 @@ rpmostree_ex_builtin_rebuild (int argc, char **argv, RpmOstreeCommandInvocation 
 
       /* In the container flow, we effectively "consume" the treefiles after
        * modifying the rootfs. */
-      auto n = ROSCXX_TRY_VAL (treefile_delete_client_etc (), error);
+      CXX_TRY_VAR (n, rpmostreecxx::treefile_delete_client_etc (), error);
       if (n == 0)
         {
           g_print ("No changes to apply.\n");

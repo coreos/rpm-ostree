@@ -350,10 +350,10 @@ get_deployments_rpm_diff (const char *arg_deployid0, const char *arg_deployid1,
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
   rust::Str deploy_id0 (arg_deployid0 ?: "");
-  auto ref0 = ROSCXX_TRY_VAL (deployment_checksum_for_id (*ot_sysroot, deploy_id0), error);
+  CXX_TRY_VAR (ref0, rpmostreecxx::deployment_checksum_for_id (*ot_sysroot, deploy_id0), error);
 
   rust::Str deploy_id1 (arg_deployid1 ?: "");
-  auto ref1 = ROSCXX_TRY_VAL (deployment_checksum_for_id (*ot_sysroot, deploy_id1), error);
+  CXX_TRY_VAR (ref1, rpmostreecxx::deployment_checksum_for_id (*ot_sysroot, deploy_id1), error);
 
   if (!rpm_ostree_db_diff_variant (ot_repo, ref0.c_str (), ref1.c_str (), FALSE, &value,
                                    cancellable, error))
@@ -392,7 +392,6 @@ get_cached_update_rpm_diff (const gchar *name, const char *arg_deployid, GVarian
   g_autoptr (RpmOstreeOrigin) origin = NULL;
   OstreeSysroot *ot_sysroot = NULL;
   OstreeRepo *ot_repo = NULL;
-  glnx_unref_object OstreeDeployment *base_deployment = NULL;
   GCancellable *cancellable = NULL;
   g_autoptr (GVariant) value = NULL;
   g_autoptr (GVariant) details = NULL;
@@ -404,7 +403,9 @@ get_cached_update_rpm_diff (const gchar *name, const char *arg_deployid, GVarian
 
   rust::Str os_name (name ?: "");
   rust::Str deploy_id (arg_deployid ?: "");
-  base_deployment = ROSCXX_TRY_VAL (deployment_get_base (*ot_sysroot, deploy_id, os_name), error);
+  CXX_TRY_VAR (base_deploymentv,
+               rpmostreecxx::deployment_get_base (*ot_sysroot, deploy_id, os_name), error);
+  glnx_unref_object OstreeDeployment *base_deployment = base_deploymentv;
 
   origin = rpmostree_origin_parse_deployment (base_deployment, error);
   if (!origin)
@@ -1450,7 +1451,7 @@ get_cached_deploy_rpm_diff (RPMOSTreeOS *interface, const char *arg_revision, GV
   const char *base_checksum = ostree_deployment_get_csum (base_deployment);
 
   auto refspec = rpmostree_origin_get_refspec (origin);
-  auto parsed_revision = ROSCXX_TRY_VAL (parse_revision (arg_revision), error);
+  CXX_TRY_VAR (parsed_revision, rpmostreecxx::parse_revision (arg_revision), error);
   g_autofree char *checksum = NULL;
   switch (parsed_revision.kind)
     {
@@ -1727,8 +1728,9 @@ rpmostreed_os_new (OstreeSysroot *sysroot, OstreeRepo *repo, const char *name, G
   g_assert (OSTREE_IS_SYSROOT (sysroot));
   g_assert (name != NULL);
 
-  auto path
-      = ROSCXX_TRY_VAL (generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str (name)), error);
+  CXX_TRY_VAR (path,
+               rpmostreecxx::generate_object_path (rust::Str (BASE_DBUS_PATH), rust::Str (name)),
+               error);
 
   auto obj = (RpmostreedOS *)g_object_new (RPMOSTREED_TYPE_OS, "name", name, NULL);
 

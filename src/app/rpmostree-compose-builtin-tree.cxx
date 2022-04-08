@@ -701,10 +701,12 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
     }
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
-  self->treefile_rs
-      = ROSCXX_TRY_VAL (treefile_new_compose (gs_file_get_path_cached (self->treefile_path),
-                                              basearch, self->workdir_dfd),
-                        error);
+
+  CXX_TRY_VAR (tf,
+               rpmostreecxx::treefile_new_compose (gs_file_get_path_cached (self->treefile_path),
+                                                   basearch, self->workdir_dfd),
+               error);
+  self->treefile_rs = std::move (tf);
   self->corectx
       = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo, **self->treefile_rs);
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
@@ -917,8 +919,11 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
                                   &last_version);
         }
 
-      next_version = ROSCXX_TRY_VAL (
-          util_next_version (ver_prefix, ver_suffix ?: "", last_version ?: ""), error);
+      CXX_TRY_VAR (
+          next_versionv,
+          rpmostreecxx::util_next_version (ver_prefix, ver_suffix ?: "", last_version ?: ""),
+          error);
+      next_version = std::move (next_versionv);
       g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
                            g_variant_ref_sink (g_variant_new_string (next_version.c_str ())));
     }
@@ -1252,7 +1257,7 @@ rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvoca
 
   if (opt_print_only)
     {
-      auto treefile = ROSCXX_TRY_VAL (treefile_new (treefile_path, basearch, -1), error);
+      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new (treefile_path, basearch, -1), error);
       treefile->prettyprint_json_stdout ();
       return TRUE;
     }
@@ -1331,8 +1336,8 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
     {
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
         return FALSE;
-      auto treefile_rs
-          = ROSCXX_TRY_VAL (treefile_new_compose (treefile_path, "", workdir_tmp.fd), error);
+      CXX_TRY_VAR (treefile_rs,
+                   rpmostreecxx::treefile_new_compose (treefile_path, "", workdir_tmp.fd), error);
       auto serialized = treefile_rs->get_json_string ();
       treefile_parser = json_parser_new ();
       if (!json_parser_load_from_data (treefile_parser, serialized.c_str (), -1, error))
@@ -1417,7 +1422,7 @@ rpmostree_compose_builtin_tree (int argc, char **argv, RpmOstreeCommandInvocatio
 
   if (opt_print_only)
     {
-      auto treefile = ROSCXX_TRY_VAL (treefile_new (treefile_path, basearch, -1), error);
+      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new (treefile_path, basearch, -1), error);
       treefile->prettyprint_json_stdout ();
       return TRUE;
     }
@@ -1488,7 +1493,8 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   const char *extensions_path = argv[2];
 
   auto basearch = rpmostreecxx::get_rpm_basearch ();
-  auto src_treefile = ROSCXX_TRY_VAL (treefile_new_compose (treefile_path, basearch, -1), error);
+  CXX_TRY_VAR (src_treefile, rpmostreecxx::treefile_new_compose (treefile_path, basearch, -1),
+               error);
 
   g_autoptr (OstreeRepo) repo = NULL;
   g_auto (GLnxTmpDir) tmp_repo = {
@@ -1586,12 +1592,11 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
         }
     }
 
-  auto extensions
-      = ROSCXX_TRY_VAL (extensions_load (extensions_path, basearch, *packages_mapping), error);
+  CXX_TRY_VAR (extensions, extensions_load (extensions_path, basearch, *packages_mapping), error);
 
   // This treefile basically tells the core to download the extension packages
   // from the repos, and that's it.
-  auto extension_tf = CXX_TRY_VAL (extensions->generate_treefile (*src_treefile), error);
+  CXX_TRY_VAR (extension_tf, extensions->generate_treefile (*src_treefile), error);
 
   // notice we don't use a pkgcache repo here like in the treecompose path: we
   // want RPMs, so having them already imported isn't useful to us (and anyway,
@@ -1648,8 +1653,9 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   if (!rpmostree_context_get_state_sha512 (ctx, &state_checksum, error))
     return FALSE;
 
-  auto changed = CXX_TRY_VAL (
-      extensions->state_checksum_changed (state_checksum, opt_extensions_output_dir), error);
+  CXX_TRY_VAR (changed,
+               extensions->state_checksum_changed (state_checksum, opt_extensions_output_dir),
+               error);
   if (!changed)
     {
       g_print ("No change.\n");

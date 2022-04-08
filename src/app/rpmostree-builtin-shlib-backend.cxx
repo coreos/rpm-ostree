@@ -105,7 +105,7 @@ rpmostree_builtin_shlib_backend (int argc, char **argv, RpmOstreeCommandInvocati
       const char *src = argv[2];
       g_autoptr (DnfContext) ctx = dnf_context_new ();
       auto varsubsts = rpmostree_dnfcontext_get_varsubsts (ctx);
-      auto rets = ROSCXX_TRY_VAL (varsubstitute (src, *varsubsts), error);
+      CXX_TRY_VAR (rets, rpmostreecxx::varsubstitute (src, *varsubsts), error);
       ret = g_variant_new_string (rets.c_str ());
     }
   else if (g_str_equal (arg, "packagelist-from-commit"))
@@ -123,7 +123,7 @@ rpmostree_builtin_shlib_backend (int argc, char **argv, RpmOstreeCommandInvocati
 
   rust::Slice<const uint8_t> dataslice{ (guint8 *)g_variant_get_data (ret),
                                         g_variant_get_size (ret) };
-  glnx_fd_close int ret_memfd
-      = ROSCXX_TRY_VAL (sealed_memfd ("rpm-ostree-shlib-backend", dataslice), error);
-  return send_memfd_result (ipc_sock, glnx_steal_fd (&ret_memfd), error);
+  CXX_TRY_VAR (ret_memfd, rpmostreecxx::sealed_memfd ("rpm-ostree-shlib-backend", dataslice),
+               error);
+  return send_memfd_result (ipc_sock, ret_memfd, error);
 }
