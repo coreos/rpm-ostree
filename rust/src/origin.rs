@@ -26,8 +26,11 @@ const OVERRIDES: &str = "overrides";
 
 /// The set of keys that we parse as BTreeMap and need to ignore ordering changes.
 static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
+    "packages/requested",
     "packages/local",
     "packages/local-fileoverride",
+    "modules/enable",
+    "modules/install",
     "overrides/replace-local"
 };
 
@@ -169,7 +172,7 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     }
 
     // Packages
-    if let Some(pkgs) = tf.packages.as_deref() {
+    if let Some(pkgs) = tf.packages.as_ref() {
         let pkgs = pkgs.iter().map(|s| s.as_str());
         kf_set_string_list(&kf, PACKAGES, "requested", pkgs)
     }
@@ -187,11 +190,11 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
         set_sha256_nevra_pkgs(&kf, OVERRIDES, "replace-local", pkgs)
     }
     if let Some(ref modcfg) = tf.modules {
-        if let Some(modules) = modcfg.enable.as_deref() {
+        if let Some(modules) = modcfg.enable.as_ref() {
             let modules = modules.iter().map(|s| s.as_str());
             kf_set_string_list(&kf, MODULES, "enable", modules)
         }
-        if let Some(modules) = modcfg.install.as_deref() {
+        if let Some(modules) = modcfg.install.as_ref() {
             let modules = modules.iter().map(|s| s.as_str());
             kf_set_string_list(&kf, MODULES, "install", modules)
         }
@@ -448,7 +451,7 @@ pub(crate) mod test {
         );
         let pkgs = tf.parsed.packages.as_ref().unwrap();
         assert_eq!(pkgs.len(), 3);
-        assert_eq!(pkgs[1], "libvirt");
+        assert!(pkgs.contains("libvirt"));
 
         let kf = kf_from_str(COMPLEX)?;
         let tf = origin_to_treefile_inner(&kf)?;
@@ -459,8 +462,8 @@ pub(crate) mod test {
         assert_eq!(
             tf.parsed.modules,
             Some(crate::treefile::ModulesConfig {
-                enable: Some(vec!["foo:2.0".into(), "bar:rolling".into()]),
-                install: Some(vec!["baz:next/development".into()]),
+                enable: Some(maplit::btreeset!("foo:2.0".into(), "bar:rolling".into(),)),
+                install: Some(maplit::btreeset!("baz:next/development".into())),
             })
         );
         Ok(())
