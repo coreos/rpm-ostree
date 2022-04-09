@@ -86,8 +86,7 @@ RpmTs::packages_providing_file (const rust::Str path) const
       Header h;
       while ((h = rpmdbNextIterator (mi)) != NULL)
         {
-          g_autofree char *name = headerGetAsString (h, RPMTAG_NEVRA);
-          ret.push_back (rust::String (name));
+          ret.push_back (rpmostreecxx::header_get_nevra (h));
         }
     }
   return ret;
@@ -104,14 +103,14 @@ RpmTs::package_meta (const rust::Str name) const
       throw std::runtime_error (err);
     }
   Header h;
-  g_autofree char *previous = NULL;
+  std::optional<rust::String> previous;
   auto retval = std::make_unique<PackageMeta> ();
   while ((h = rpmdbNextIterator (mi)) != NULL)
     {
-      g_autofree char *nevra = headerGetAsString (h, RPMTAG_NEVRA);
-      if (previous == NULL)
+      auto nevra = rpmostreecxx::header_get_nevra (h);
+      if (!previous.has_value ())
         {
-          previous = util::move_nullify (nevra);
+          previous = std::move (nevra);
           retval->_size = headerGetNumber (h, RPMTAG_LONGARCHIVESIZE);
           retval->_buildtime = headerGetNumber (h, RPMTAG_BUILDTIME);
           retval->_src_pkg = headerGetString (h, RPMTAG_SOURCERPM);
@@ -120,10 +119,11 @@ RpmTs::package_meta (const rust::Str name) const
         {
           // TODO: Somehow we get two `libgcc-8.5.0-10.el8.x86_64` in current RHCOS, I don't
           // understand that.
-          if (!g_str_equal (previous, nevra))
+          if (previous != nevra)
             {
-              g_autofree char *buf = g_strdup_printf ("Multiple installed '%s' (%s, %s)",
-                                                      name_c.c_str (), previous, nevra);
+              g_autofree char *buf
+                  = g_strdup_printf ("Multiple installed '%s' (%s, %s)", name_c.c_str (),
+                                     previous.value ().c_str (), nevra.c_str ());
               throw std::runtime_error (buf);
             }
         }

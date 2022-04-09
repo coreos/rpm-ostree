@@ -199,3 +199,8 @@ GPtrArray *rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled
 GVariant *rpmostree_advisories_variant (DnfSack *sack, GPtrArray *pkgs);
 
 G_END_DECLS
+
+namespace rpmostreecxx
+{
+rust::String header_get_nevra (Header h);
+}
