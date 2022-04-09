@@ -1237,8 +1237,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
             }
         }
 
-      if (!rpmostree_origin_add_packages (origin, install_pkgs, FALSE, FALSE, idempotent_layering,
-                                          &changed, error))
+      auto pkgsv = util::rust_stringvec_from_strv (install_pkgs);
+      if (!rpmostree_origin_add_packages (origin, pkgsv, idempotent_layering, &changed, error))
         return FALSE;
     }
 
@@ -1257,8 +1257,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         {
           g_ptr_array_add (pkgs, NULL);
 
-          if (!rpmostree_origin_add_packages (origin, (char **)pkgs->pdata, TRUE, FALSE,
-                                              idempotent_layering, &changed, error))
+          auto pkgsv = util::rust_stringvec_from_strv ((char **)pkgs->pdata);
+          if (!rpmostree_origin_add_local_packages (origin, pkgsv, idempotent_layering, &changed,
+                                                    error))
             return FALSE;
         }
     }
@@ -1274,8 +1275,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         {
           g_ptr_array_add (pkgs, NULL);
 
-          if (!rpmostree_origin_add_packages (origin, (char **)pkgs->pdata, TRUE, TRUE,
-                                              idempotent_layering, &changed, error))
+          auto pkgsv = util::rust_stringvec_from_strv ((char **)pkgs->pdata);
+          if (!rpmostree_origin_add_local_fileoverride_packages (origin, pkgsv, idempotent_layering,
+                                                                 &changed, error))
             return FALSE;
         }
     }

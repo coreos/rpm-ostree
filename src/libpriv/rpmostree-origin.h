@@ -95,9 +95,19 @@ void rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *ne
                                          const char *custom_origin_url,
                                          const char *custom_origin_description);
 
-gboolean rpmostree_origin_add_packages (RpmOstreeOrigin *origin, char **packages, gboolean local,
-                                        gboolean fileoverride, gboolean allow_existing,
-                                        gboolean *out_changed, GError **error);
+gboolean rpmostree_origin_add_packages (RpmOstreeOrigin *origin, rust::Vec<rust::String> packages,
+                                        gboolean allow_existing, gboolean *out_changed,
+                                        GError **error);
+
+gboolean rpmostree_origin_add_local_packages (RpmOstreeOrigin *origin,
+                                              rust::Vec<rust::String> packages,
+                                              gboolean allow_existing, gboolean *out_changed,
+                                              GError **error);
+
+gboolean rpmostree_origin_add_local_fileoverride_packages (RpmOstreeOrigin *origin,
+                                                           rust::Vec<rust::String> packages,
+                                                           gboolean allow_existing,
+                                                           gboolean *out_changed, GError **error);
 
 gboolean rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, char **packages,
                                            gboolean allow_noent, gboolean *out_changed,
