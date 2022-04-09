@@ -471,77 +471,23 @@ rpmostree_origin_add_packages (RpmOstreeOrigin *origin, char **packages, gboolea
 {
   if (!packages)
     return TRUE;
-  gboolean changed = FALSE;
 
-  for (char **it = packages; it && *it; it++)
-    {
-      gboolean requested, requested_local, requested_local_fileoverride;
-      const char *pkg = *it;
-      g_autofree char *sha256 = NULL;
+  auto packagesv = util::rust_stringvec_from_strv (packages);
 
-      if (local)
-        {
-          if (!rpmostree_decompose_sha256_nevra (&pkg, &sha256, error))
-            return glnx_throw (error, "Invalid SHA-256 NEVRA string: %s", pkg);
-        }
-
-      requested = g_hash_table_contains (origin->cached_packages, pkg);
-      requested_local = g_hash_table_contains (origin->cached_local_packages, pkg);
-      requested_local_fileoverride
-          = g_hash_table_contains (origin->cached_local_fileoverride_packages, pkg);
-
-      /* The list of packages is really a list of provides, so string equality
-       * is a bit weird here. Multiple provides can resolve to the same package
-       * and we allow that. But still, let's make sure that silly users don't
-       * request the exact string. */
-
-      /* Also note that we check in *both* the requested and the requested-local
-       * list: requested-local pkgs are treated like requested pkgs in the core.
-       * The only "magical" thing about them is that requested-local pkgs are
-       * specifically looked for in the pkgcache. Additionally, making sure the
-       * strings are unique allow `rpm-ostree uninstall` to know exactly what
-       * the user means. */
-
-      if (requested || requested_local || requested_local_fileoverride)
-        {
-          if (allow_existing)
-            continue;
-
-          if (requested)
-            return glnx_throw (error, "Package/capability '%s' is already requested", pkg);
-          else
-            return glnx_throw (error, "Package '%s' is already layered", pkg);
-        }
-
-      if (local)
-        g_hash_table_insert (fileoverride ? origin->cached_local_fileoverride_packages
-                                          : origin->cached_local_packages,
-                             g_strdup (pkg), util::move_nullify (sha256));
-      else
-        g_hash_table_add (origin->cached_packages, g_strdup (pkg));
-      changed = TRUE;
-    }
-
-  if (changed)
-    {
-      const char *key = "requested";
-      GHashTable *ht = origin->cached_packages;
-      if (local && !fileoverride)
-        {
-          key = "requested-local";
-          ht = origin->cached_local_packages;
-        }
-      else if (local && fileoverride)
-        {
-          key = "requested-local-fileoverride";
-          ht = origin->cached_local_fileoverride_packages;
-        }
-      update_keyfile_pkgs_from_cache (origin, "packages", key, ht, local);
-
-      sync_treefile (origin);
-    }
-
-  set_changed (out_changed, changed);
+  std::optional<bool> changed;
+  if (!local)
+    changed = CXX_VAL ((*origin->treefile)->add_packages (packagesv, allow_existing), error);
+  else if (!fileoverride)
+    changed = CXX_VAL ((*origin->treefile)->add_local_packages (packagesv, allow_existing), error);
+  else
+    changed = CXX_VAL (
+        (*origin->treefile)->add_local_fileoverride_packages (packagesv, allow_existing), error);
+  if (!changed.has_value ())
+    return FALSE;
+  if (changed.value ())
+    sync_origin (origin);
+  if (out_changed)
+    *out_changed = changed.value ();
   return TRUE;
 }
 

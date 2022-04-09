@@ -600,6 +600,8 @@ unixfdlist_to_ptrarray (GUnixFDList *fdl)
   return ret;
 }
 
+// XXX: Convert out_pkgs to return a rust::Vec<StringMapping> once all the related origin fields
+// have migrated to the treefile. Then simplify related treefile APIs.
 static gboolean
 import_many_local_rpms (OstreeRepo *repo, GUnixFDList *fdl, GPtrArray **out_pkgs,
                         GCancellable *cancellable, GError **error)
