@@ -465,29 +465,44 @@ set_changed (gboolean *out, gboolean c)
 
 /* Mutability: setter */
 gboolean
-rpmostree_origin_add_packages (RpmOstreeOrigin *origin, char **packages, gboolean local,
-                               gboolean fileoverride, gboolean allow_existing,
-                               gboolean *out_changed, GError **error)
+rpmostree_origin_add_packages (RpmOstreeOrigin *origin, rust::Vec<rust::String> packages,
+                               gboolean allow_existing, gboolean *out_changed, GError **error)
 {
-  if (!packages)
-    return TRUE;
-
-  auto packagesv = util::rust_stringvec_from_strv (packages);
-
-  std::optional<bool> changed;
-  if (!local)
-    changed = CXX_VAL ((*origin->treefile)->add_packages (packagesv, allow_existing), error);
-  else if (!fileoverride)
-    changed = CXX_VAL ((*origin->treefile)->add_local_packages (packagesv, allow_existing), error);
-  else
-    changed = CXX_VAL (
-        (*origin->treefile)->add_local_fileoverride_packages (packagesv, allow_existing), error);
-  if (!changed.has_value ())
-    return FALSE;
-  if (changed.value ())
+  CXX_TRY_VAR (changed, (*origin->treefile)->add_packages (packages, allow_existing), error);
+  if (changed)
     sync_origin (origin);
   if (out_changed)
-    *out_changed = changed.value ();
+    *out_changed = changed;
+  return TRUE;
+}
+
+/* Mutability: setter */
+gboolean
+rpmostree_origin_add_local_packages (RpmOstreeOrigin *origin, rust::Vec<rust::String> packages,
+                                     gboolean allow_existing, gboolean *out_changed, GError **error)
+{
+  CXX_TRY_VAR (changed, (*origin->treefile)->add_local_packages (packages, allow_existing), error);
+  if (changed)
+    sync_origin (origin);
+  if (out_changed)
+    *out_changed = changed;
+  return TRUE;
+}
+
+/* Mutability: setter */
+gboolean
+rpmostree_origin_add_local_fileoverride_packages (RpmOstreeOrigin *origin,
+                                                  rust::Vec<rust::String> packages,
+                                                  gboolean allow_existing, gboolean *out_changed,
+                                                  GError **error)
+{
+  CXX_TRY_VAR (changed,
+               (*origin->treefile)->add_local_fileoverride_packages (packages, allow_existing),
+               error);
+  if (changed)
+    sync_origin (origin);
+  if (out_changed)
+    *out_changed = changed;
   return TRUE;
 }
 
