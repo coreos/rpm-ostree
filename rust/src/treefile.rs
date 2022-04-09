@@ -705,6 +705,67 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    pub(crate) fn has_package(&self, pkg: &str) -> bool {
+        self.parsed
+            .packages
+            .as_ref()
+            .map(|p| p.contains(pkg))
+            .unwrap_or_default()
+    }
+
+    // The list of packages is really a list of provides, so string equality
+    // is a bit weird here. Multiple provides can resolve to the same package
+    // and we allow that. But still, let's make sure that silly users don't
+    // request the exact string.
+    //
+    // Also note that we check in *both* the requested and the requested-local
+    // list: requested-local pkgs are treated like requested pkgs in the core.
+    // The only "magical" thing about them is that requested-local pkgs are
+    // specifically looked for in the pkgcache. Additionally, making sure the
+    // strings are unique allow `rpm-ostree uninstall` to know exactly what
+    // the user means.
+    pub(crate) fn filter_package_requests(
+        &self,
+        packages: Vec<String>,
+        sha256_split: bool,
+        allow_existing: bool,
+    ) -> Result<Vec<String>> {
+        let mut rpackages = Vec::new();
+        for pkg in packages.into_iter() {
+            let pkgname = if sha256_split {
+                crate::utils::decompose_sha256_nevra(pkg.as_str())?.0
+            } else {
+                pkg.as_str()
+            };
+            if self.has_package(pkgname) {
+                if !allow_existing {
+                    bail!("Package/capability '{pkg}' is already requested");
+                }
+                continue;
+            }
+            if self.has_local_package(pkgname) || self.has_local_fileoverride_package(pkgname) {
+                if !allow_existing {
+                    bail!("Package '{pkg}' is already layered");
+                }
+                continue;
+            }
+            rpackages.push(pkg);
+        }
+        Ok(rpackages)
+    }
+
+    pub(crate) fn add_packages(
+        &mut self,
+        packages: Vec<String>,
+        allow_existing: bool,
+    ) -> Result<bool> {
+        let packages = self.filter_package_requests(packages, false, allow_existing)?;
+        let set = self.parsed.packages.ext_get_or_insert_default();
+        let n = set.len();
+        set.extend(packages.into_iter());
+        Ok(set.len() != n)
+    }
+
     pub(crate) fn set_packages(&mut self, packages: Vec<String>) {
         let _ = self.parsed.packages.take();
         if !packages.is_empty() {
@@ -722,6 +783,29 @@ impl Treefile {
             .collect()
     }
 
+    pub(crate) fn has_local_package(&self, pkg: &str) -> bool {
+        self.parsed
+            .derive
+            .packages_local
+            .as_ref()
+            .map(|p| p.contains_key(pkg))
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn add_local_packages(
+        &mut self,
+        packages: Vec<String>,
+        allow_existing: bool,
+    ) -> Result<bool> {
+        let packages = self.filter_package_requests(packages, true, allow_existing)?;
+        let map = self
+            .parsed
+            .derive
+            .packages_local
+            .ext_get_or_insert_default();
+        add_sha256_nevra_to_map(map, packages)
+    }
+
     pub(crate) fn get_local_fileoverride_packages(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -730,6 +814,29 @@ impl Treefile {
             .flatten()
             .map(|(k, v)| format!("{}:{}", v, k))
             .collect()
+    }
+
+    pub(crate) fn has_local_fileoverride_package(&self, pkg: &str) -> bool {
+        self.parsed
+            .derive
+            .packages_local_fileoverride
+            .as_ref()
+            .map(|p| p.contains_key(pkg))
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn add_local_fileoverride_packages(
+        &mut self,
+        packages: Vec<String>,
+        allow_existing: bool,
+    ) -> Result<bool> {
+        let packages = self.filter_package_requests(packages, true, allow_existing)?;
+        let map = self
+            .parsed
+            .derive
+            .packages_local_fileoverride
+            .ext_get_or_insert_default();
+        add_sha256_nevra_to_map(map, packages)
     }
 
     pub(crate) fn get_modules_enable(&self) -> Vec<String> {
@@ -1359,6 +1466,15 @@ impl Treefile {
                 .and_then(|m| m.install.as_ref().map(|i| !i.is_empty()))
                 .unwrap_or_default()
     }
+}
+
+fn add_sha256_nevra_to_map(map: &mut BTreeMap<String, String>, pkgs: Vec<String>) -> Result<bool> {
+    let mut changed = false;
+    for pkg in pkgs.into_iter() {
+        let (nevra, sha256) = crate::utils::decompose_sha256_nevra(pkg.as_str())?;
+        changed = map.insert(nevra.to_string(), sha256.to_string()).is_none() || changed;
+    }
+    Ok(changed)
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
