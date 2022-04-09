@@ -1701,8 +1701,8 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   DnfContext *dnfctx = self->dnfctx;
 
   auto packages = self->treefile_rs->get_packages ();
-  auto packages_local = self->treefile_rs->get_packages_local ();
-  auto packages_local_fileoverride = self->treefile_rs->get_packages_local_fileoverride ();
+  auto packages_local = self->treefile_rs->get_local_packages ();
+  auto packages_local_fileoverride = self->treefile_rs->get_local_fileoverride_packages ();
   auto packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local ();
   auto packages_override_replace_local_rpms
       = self->treefile_rs->get_packages_override_replace_local_rpms ();
