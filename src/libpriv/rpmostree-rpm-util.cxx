@@ -138,6 +138,20 @@ pkg_nevra_strdup (Header h1)
       (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME | PKG_NEVRA_FLAGS_EVR | PKG_NEVRA_FLAGS_ARCH));
 }
 
+namespace rpmostreecxx
+{
+
+// Return a canonicalized NEVRA string.  Crucially this differs from the librpm
+// version which may or may not return an explicit `0` epoch.  This version
+// always omits both unset and zero epoch.
+rust::String
+header_get_nevra (Header h)
+{
+  g_autofree char *v = pkg_nevra_strdup (h);
+  return rust::String (v);
+}
+}
+
 static char *
 pkg_na_strdup (Header h1)
 {
