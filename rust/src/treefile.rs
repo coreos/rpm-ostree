@@ -705,10 +705,10 @@ impl Treefile {
             .unwrap_or_default()
     }
 
-    pub(crate) fn set_packages(&mut self, packages: &Vec<String>) {
+    pub(crate) fn set_packages(&mut self, packages: Vec<String>) {
         let _ = self.parsed.packages.take();
         if !packages.is_empty() {
-            self.parsed.packages = Some(packages.iter().cloned().collect());
+            self.parsed.packages = Some(packages.into_iter().collect());
         }
     }
 
@@ -779,10 +779,10 @@ impl Treefile {
             .unwrap_or_default()
     }
 
-    pub(crate) fn set_packages_override_remove(&mut self, packages: &Vec<String>) {
+    pub(crate) fn set_packages_override_remove(&mut self, packages: Vec<String>) {
         let _ = self.parsed.derive.override_remove.take();
         if !packages.is_empty() {
-            self.parsed.derive.override_remove = Some(packages.clone());
+            self.parsed.derive.override_remove = Some(packages.into_iter().collect());
         }
     }
 
@@ -804,10 +804,10 @@ impl Treefile {
             .unwrap_or_default()
     }
 
-    pub(crate) fn set_packages_override_replace_local_rpms(&mut self, packages: &Vec<String>) {
+    pub(crate) fn set_packages_override_replace_local_rpms(&mut self, packages: Vec<String>) {
         let _ = self.parsed.derive.override_replace_local_rpms.take();
         if !packages.is_empty() {
-            self.parsed.derive.override_replace_local_rpms = Some(packages.clone());
+            self.parsed.derive.override_replace_local_rpms = Some(packages.into_iter().collect());
         }
     }
 
