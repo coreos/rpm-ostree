@@ -712,7 +712,7 @@ impl Treefile {
         }
     }
 
-    pub(crate) fn get_packages_local(&self) -> Vec<String> {
+    pub(crate) fn get_local_packages(&self) -> Vec<String> {
         self.parsed
             .derive
             .packages_local
@@ -722,7 +722,7 @@ impl Treefile {
             .collect()
     }
 
-    pub(crate) fn get_packages_local_fileoverride(&self) -> Vec<String> {
+    pub(crate) fn get_local_fileoverride_packages(&self) -> Vec<String> {
         self.parsed
             .derive
             .packages_local_fileoverride

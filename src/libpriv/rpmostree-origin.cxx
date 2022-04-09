@@ -245,14 +245,14 @@ rpmostree_origin_has_modules_enable (RpmOstreeOrigin *origin)
 rust::Vec<rust::String>
 rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin)
 {
-  return (*origin->treefile)->get_packages_local ();
+  return (*origin->treefile)->get_local_packages ();
 }
 
 /* Mutability: getter */
 rust::Vec<rust::String>
 rpmostree_origin_get_local_fileoverride_packages (RpmOstreeOrigin *origin)
 {
-  return (*origin->treefile)->get_packages_local_fileoverride ();
+  return (*origin->treefile)->get_local_fileoverride_packages ();
 }
 
 /* Mutability: getter */
