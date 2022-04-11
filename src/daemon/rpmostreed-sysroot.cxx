@@ -429,37 +429,47 @@ handle_reload (RPMOSTreeSysroot *object, GDBusMethodInvocation *invocation)
   return TRUE;
 }
 
+static gboolean
+reload_config (RpmostreedSysroot *self, GError **error)
+{
+  g_assert (self != NULL);
+
+  gboolean config_changed = FALSE;
+  if (!rpmostreed_daemon_reload_config (rpmostreed_daemon_get (), &config_changed, error))
+    return glnx_prefix_error (error, "Reloading daemon configuration");
+
+  if (config_changed && !reset_config_properties (self, error))
+    return glnx_prefix_error (error, "Remapping properties");
+
+  gboolean sysroot_changed = FALSE;
+  if (!sysroot_reload_ostree_configs_and_deployments (self, &sysroot_changed, error))
+    return glnx_prefix_error (error, "Reloading ostree details");
+
+  /* also send an UPDATED signal if configs changed to cause OS interfaces to reload; we do
+   * it here if not done already in `rpmostreed_sysroot_reload` */
+  if (config_changed && !sysroot_changed)
+    g_signal_emit (self, signals[UPDATED], 0);
+
+  return TRUE;
+}
+
 /* reloads *everything*: ostree configs, rpm-ostreed.conf, deployments, os internals */
 static gboolean
 handle_reload_config (RPMOSTreeSysroot *object, GDBusMethodInvocation *invocation)
 {
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   g_autoptr (GError) local_error = NULL;
-  GError **error = &local_error;
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
 
-  gboolean changed = FALSE;
-  if (!rpmostreed_daemon_reload_config (rpmostreed_daemon_get (), &changed, error))
-    goto out;
-
-  if (changed && !reset_config_properties (self, error))
-    goto out;
-
-  gboolean sysroot_changed;
-  if (!sysroot_reload_ostree_configs_and_deployments (self, &sysroot_changed, error))
-    goto out;
-
-  /* also send an UPDATED signal if configs changed to cause OS interfaces to reload; we do
-   * it here if not done already in `rpmostreed_sysroot_reload` */
-  if (changed && !sysroot_changed)
-    g_signal_emit (self, signals[UPDATED], 0);
-
-  rpmostree_sysroot_complete_reload_config (object, invocation);
-out:
-  if (local_error)
+  gboolean is_ok = reload_config (self, &local_error);
+  if (!is_ok)
     {
+      g_assert (local_error != NULL);
       g_prefix_error (&local_error, "Handling config reload: ");
       g_dbus_method_invocation_take_error (invocation, util::move_nullify (local_error));
+      return TRUE; /* 🔚 Early return */
     }
+
+  rpmostree_sysroot_complete_reload_config (object, invocation);
 
   return TRUE;
 }
