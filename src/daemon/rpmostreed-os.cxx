@@ -73,10 +73,6 @@ sysroot_changed (RpmostreedSysroot *sysroot, gpointer user_data)
   GError **error = &local_error;
 
   if (!rpmostreed_os_load_internals (self, error))
-    goto out;
-
-out:
-  if (local_error)
     g_warning ("%s", local_error->message);
 }
 
@@ -303,6 +299,18 @@ os_constructed (GObject *object)
   G_OBJECT_CLASS (rpmostreed_os_parent_class)->constructed (object);
 }
 
+static gboolean
+os_throw_dbus_invocation_error (GDBusMethodInvocation *invocation, GError **error)
+{
+  g_assert (invocation != NULL);
+  g_assert (error != NULL);
+
+  g_dbus_method_invocation_take_error (invocation, util::move_nullify (*error));
+
+  /* We always return TRUE to signal that we handled the invocation. */
+  return TRUE;
+}
+
 static void
 rpmostreed_os_class_init (RpmostreedOSClass *klass)
 {
@@ -372,11 +380,7 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
 
   gboolean is_ok = get_deployments_rpm_diff (arg_deployid0, arg_deployid1, &value, &local_error);
   if (!is_ok)
-    {
-      g_assert (local_error != NULL);
-      g_dbus_method_invocation_take_error (invocation, local_error);
-      return TRUE; /* 🔚 Early return */
-    }
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   g_assert (value != NULL);
   g_dbus_method_invocation_return_value (invocation, g_variant_new ("(@a(sua{sv}))", value));
@@ -438,11 +442,7 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocat
 
   gboolean is_ok = get_cached_update_rpm_diff (name, arg_deployid, &value, &details, &local_error);
   if (!is_ok)
-    {
-      g_assert (local_error != NULL);
-      g_dbus_method_invocation_take_error (invocation, local_error);
-      return TRUE; /* 🔚 Early return */
-    }
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   g_assert (value != NULL);
   g_assert (details != NULL);
@@ -477,13 +477,13 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -493,7 +493,7 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
                                                  cancellable, &local_error);
 
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
 
@@ -558,7 +558,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS *interface, GDBusMethodInvocation 
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto err;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   if (!transaction)
     {
@@ -566,13 +566,13 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS *interface, GDBusMethodInvocation 
       g_autoptr (GCancellable) cancellable = g_cancellable_new ();
       if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                           &local_error))
-        goto err;
+        return os_throw_dbus_invocation_error (invocation, &local_error);
 
       transaction = rpmostreed_transaction_new_deploy (
           invocation, ot_sysroot, rpmostree_os_get_name (interface), default_flags, options,
           modifiers, fd_list, cancellable, &local_error);
       if (!transaction)
-        goto err;
+        return os_throw_dbus_invocation_error (invocation, &local_error);
 
       /* We should be able to loop through the options and determine the exact transaction
        * title earlier in the path here as well, but that would duplicate a lot of the work that
@@ -594,12 +594,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS *interface, GDBusMethodInvocation 
 
   client_address = rpmostreed_transaction_get_client_address (transaction);
   completer (interface, invocation, NULL, client_address);
-  return TRUE;
-err:
-  if (!local_error) /* we should've gotten an error, but let's be safe */
-    glnx_throw (&local_error, "Failed to start the transaction");
-  g_dbus_method_invocation_take_error (invocation, util::move_nullify (local_error));
-  /* We always return TRUE to signal that we handled the invocation. */
+
   return TRUE;
 }
 
@@ -781,13 +776,13 @@ os_handle_rollback (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -801,7 +796,7 @@ os_handle_rollback (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
                                                      cancellable, &local_error);
 
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "rollback");
 
@@ -838,13 +833,13 @@ os_handle_refresh_md (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -858,7 +853,7 @@ os_handle_refresh_md (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
       invocation, ot_sysroot, static_cast<RpmOstreeTransactionRefreshMdFlags> (flags), osname,
       cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   if (force)
     g_string_append (title, " (force)");
@@ -891,20 +886,20 @@ os_handle_modify_yum_repo (RPMOSTreeOS *interface, GDBusMethodInvocation *invoca
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
   transaction = rpmostreed_transaction_new_modify_yum_repo (
       invocation, ot_sysroot, osname, arg_repo_id, arg_settings, cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "modify-yum-repo");
 
@@ -937,19 +932,19 @@ os_handle_finalize_deployment (RPMOSTreeOS *interface, GDBusMethodInvocation *in
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
 
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rsysroot, cancellable, &sysroot, NULL, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
   transaction = rpmostreed_transaction_new_finalize_deployment (
       invocation, sysroot, osname, arg_options, cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (
       rsysroot, transaction,
@@ -986,13 +981,13 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface, GDBusMethodInvocation *
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -1004,7 +999,7 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface, GDBusMethodInvocation *
   transaction = rpmostreed_transaction_new_cleanup (invocation, ot_sysroot, osname, flags,
                                                     cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "clear-rollback");
 
@@ -1037,13 +1032,13 @@ os_handle_initramfs_etc (RPMOSTreeOS *interface, GDBusMethodInvocation *invocati
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -1051,7 +1046,7 @@ os_handle_initramfs_etc (RPMOSTreeOS *interface, GDBusMethodInvocation *invocati
       invocation, ot_sysroot, osname, (char **)track, (char **)untrack, untrack_all, force_sync,
       options, cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (
       rsysroot, transaction,
@@ -1087,13 +1082,13 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface, GDBusMethodInvocation *in
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -1101,7 +1096,7 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface, GDBusMethodInvocation *in
                                                             regenerate, (char **)args, arg_options,
                                                             cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (
       rsysroot, transaction,
@@ -1139,20 +1134,20 @@ os_handle_kernel_args (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   osname = rpmostree_os_get_name (interface);
 
   transaction = rpmostreed_transaction_new_kernel_arg (
       invocation, ot_sysroot, osname, existing_kernel_args, kernel_args_added, kernel_args_replaced,
       kernel_args_deleted, arg_options, cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (
       rsysroot, transaction,
@@ -1192,7 +1187,7 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface, GDBusMethodInvocat
   /* Load the sysroot */
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   osname = rpmostree_os_get_name (interface);
   if (!*arg_deploy_index || arg_deploy_index[0] == '\0')
     {
@@ -1204,7 +1199,7 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface, GDBusMethodInvocat
         {
           local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
                                      "No deployments found for os %s", osname);
-          goto out;
+          return os_throw_dbus_invocation_error (invocation, &local_error);
         }
     }
   else
@@ -1213,7 +1208,7 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface, GDBusMethodInvocat
       target_deployment
           = rpmostreed_deployment_get_for_index (ot_sysroot, arg_deploy_index, &local_error);
       if (target_deployment == NULL)
-        goto out;
+        return os_throw_dbus_invocation_error (invocation, &local_error);
     }
   bootconfig = ostree_deployment_get_bootconfig (target_deployment);
 
@@ -1238,12 +1233,8 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface, GDBusMethodInvocat
     }
   boot_config_result = g_variant_dict_end (&boot_config_dict);
 
-out:
-  if (local_error != NULL)
-    g_dbus_method_invocation_take_error (invocation, local_error);
-  else
-    g_dbus_method_invocation_return_value (invocation,
-                                           g_variant_new ("(@a{sv})", boot_config_result));
+  g_dbus_method_invocation_return_value (invocation,
+                                         g_variant_new ("(@a{sv})", boot_config_result));
 
   return TRUE;
 }
@@ -1263,13 +1254,13 @@ os_handle_cleanup (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -1287,7 +1278,7 @@ os_handle_cleanup (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
       else
         {
           g_set_error (&local_error, G_IO_ERROR, G_IO_ERROR_FAILED, "Invalid cleanup type: %s", v);
-          goto out;
+          return os_throw_dbus_invocation_error (invocation, &local_error);
         }
     }
 
@@ -1295,7 +1286,7 @@ os_handle_cleanup (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
       invocation, ot_sysroot, osname, static_cast<RpmOstreeTransactionCleanupFlags> (flags),
       cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "cleanup");
 
@@ -1343,35 +1334,27 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocat
     {
       local_error
           = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED, "No deployments found for os %s", name);
-      goto out;
+      return os_throw_dbus_invocation_error (invocation, &local_error);
     }
 
   origin = rpmostree_origin_parse_deployment (base_deployment, &local_error);
   if (!origin)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   refspec = rpmostree_origin_get_refspec (origin);
   if (!rpmostreed_refspec_parse_partial (arg_refspec, refspec.c_str (), &comp_ref, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   if (!rpm_ostree_db_diff_variant (ot_repo, ostree_deployment_get_csum (base_deployment), comp_ref,
                                    FALSE, &value, cancellable, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment, ot_repo, comp_ref,
                                                                NULL, &local_error);
   if (!details)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
-out:
-  if (local_error == NULL)
-    {
-      g_dbus_method_invocation_return_value (invocation, new_variant_diff_result (value, details));
-    }
-  else
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
+  g_dbus_method_invocation_return_value (invocation, new_variant_diff_result (value, details));
 
   return TRUE;
 }
@@ -1390,13 +1373,13 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -1405,7 +1388,7 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
                                                          cancellable, &local_error);
 
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
 
@@ -1498,11 +1481,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocat
   gboolean is_ok
       = get_cached_deploy_rpm_diff (interface, arg_revision, &value, &details, &local_error);
   if (!is_ok)
-    {
-      g_assert (local_error != NULL);
-      g_dbus_method_invocation_take_error (invocation, local_error);
-      return TRUE; /* 🔚 Early return */
-    }
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   g_assert (value != NULL);
   g_assert (details != NULL);
@@ -1526,13 +1505,13 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
   if (transaction)
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
                                       &local_error))
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   osname = rpmostree_os_get_name (interface);
 
@@ -1540,7 +1519,7 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
       = rpmostreed_transaction_new_package_diff (invocation, ot_sysroot, osname, NULL, /* refspec */
                                                  arg_revision, cancellable, &local_error);
   if (transaction == NULL)
-    goto out;
+    return os_throw_dbus_invocation_error (invocation, &local_error);
 
   rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
 
