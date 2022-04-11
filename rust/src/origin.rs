@@ -18,6 +18,8 @@ use std::collections::BTreeSet;
 use std::pin::Pin;
 use std::result::Result as StdResult;
 
+use ostree_ext::container::deploy::ORIGIN_CONTAINER;
+
 const ORIGIN: &str = "origin";
 const RPMOSTREE: &str = "rpmostree";
 const PACKAGES: &str = "packages";
@@ -45,17 +47,13 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
         None
     };
 
-    let container_image_reference =
-        keyfile_get_optional_string(kf, ORIGIN, ostree_ext::container::deploy::ORIGIN_CONTAINER)?;
+    let container_image_reference = keyfile_get_optional_string(kf, ORIGIN, ORIGIN_CONTAINER)?;
 
     match (base_refspec, container_image_reference) {
-        (Some(_), Some(_)) => bail!(
-            "Found both refspec/baserefspec and {}",
-            ostree_ext::container::deploy::ORIGIN_CONTAINER
-        ),
+        (Some(_), Some(_)) => bail!("Found both refspec/baserefspec and {}", ORIGIN_CONTAINER),
         (None, None) => bail!(
             "Failed to find refspec/baserefspec/{} in origin",
-            ostree_ext::container::deploy::ORIGIN_CONTAINER
+            ORIGIN_CONTAINER
         ),
         (Some(s), None) => cfg.derive.base_refspec = Some(s),
         (None, Some(s)) => cfg.derive.container_image_reference = Some(s),
@@ -166,7 +164,7 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
         };
         kf.set_string(ORIGIN, k, r);
     } else if let Some(r) = tf.derive.container_image_reference.as_deref() {
-        kf.set_string(ORIGIN, ostree_ext::container::deploy::ORIGIN_CONTAINER, r);
+        kf.set_string(ORIGIN, ORIGIN_CONTAINER, r);
     } else {
         unreachable!();
     }
