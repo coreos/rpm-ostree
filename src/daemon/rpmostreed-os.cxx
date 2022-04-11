@@ -478,41 +478,34 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  transaction
-      = rpmostreed_transaction_new_package_diff (invocation, ot_sysroot, osname, NULL, /* refspec */
-                                                 NULL, /* revision */
-                                                 cancellable, &local_error);
-
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
+    {
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
 
-  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
+      osname = rpmostree_os_get_name (interface);
+
+      transaction = rpmostreed_transaction_new_package_diff (invocation, ot_sysroot, osname,
+                                                             NULL, /* refspec */
+                                                             NULL, /* revision */
+                                                             cancellable, &local_error);
+
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
+    }
+  g_assert (transaction != NULL);
 
   /* Make sure we refresh CachedUpdate after the transaction. This normally happens
    * automatically if new data was downloaded (through the repo mtime bump --> UPDATED
    * signal), but we also want to do this even if the data was already present. */
   g_signal_connect (transaction, "closed", G_CALLBACK (on_auto_update_done), self);
 
-out:
-  if (local_error != NULL)
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_download_update_rpm_diff (interface, invocation, client_address);
-    }
+  const char *client_address;
+  client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_download_update_rpm_diff (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -559,8 +552,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS *interface, GDBusMethodInvocation 
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  if (!transaction)
+  if (transaction == NULL)
     {
       glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
       g_autoptr (GCancellable) cancellable = g_cancellable_new ();
@@ -591,6 +583,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS *interface, GDBusMethodInvocation 
                  | RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY)))
         g_signal_connect (transaction, "closed", G_CALLBACK (on_auto_update_done), self);
     }
+  g_assert (transaction != NULL);
 
   client_address = rpmostreed_transaction_get_client_address (transaction);
   completer (interface, invocation, NULL, client_address);
@@ -777,40 +770,33 @@ os_handle_rollback (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  g_variant_dict_init (&options_dict, arg_options);
-
-  g_variant_dict_lookup (&options_dict, "reboot", "b", &opt_reboot);
-
-  g_variant_dict_clear (&options_dict);
-
-  transaction = rpmostreed_transaction_new_rollback (invocation, ot_sysroot, osname, opt_reboot,
-                                                     cancellable, &local_error);
-
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "rollback");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      g_variant_dict_init (&options_dict, arg_options);
+
+      g_variant_dict_lookup (&options_dict, "reboot", "b", &opt_reboot);
+
+      g_variant_dict_clear (&options_dict);
+
+      transaction = rpmostreed_transaction_new_rollback (invocation, ot_sysroot, osname, opt_reboot,
+                                                         cancellable, &local_error);
+
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "rollback");
     }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_rollback (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address;
+  client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_rollback (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -834,41 +820,34 @@ os_handle_refresh_md (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  if (vardict_lookup_bool (&dict, "force", FALSE))
-    {
-      flags |= RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE;
-      force = TRUE;
-    }
-
-  transaction = rpmostreed_transaction_new_refresh_md (
-      invocation, ot_sysroot, static_cast<RpmOstreeTransactionRefreshMdFlags> (flags), osname,
-      cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  if (force)
-    g_string_append (title, " (force)");
-  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, title->str);
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      if (vardict_lookup_bool (&dict, "force", FALSE))
+        {
+          flags |= RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE;
+          force = TRUE;
+        }
+
+      transaction = rpmostreed_transaction_new_refresh_md (
+          invocation, ot_sysroot, static_cast<RpmOstreeTransactionRefreshMdFlags> (flags), osname,
+          cancellable, &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      if (force)
+        g_string_append (title, " (force)");
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, title->str);
     }
-  else
-    {
-      const char *client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_refresh_md (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_refresh_md (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -887,32 +866,25 @@ os_handle_modify_yum_repo (RPMOSTreeOS *interface, GDBusMethodInvocation *invoca
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  transaction = rpmostreed_transaction_new_modify_yum_repo (
-      invocation, ot_sysroot, osname, arg_repo_id, arg_settings, cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "modify-yum-repo");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      transaction = rpmostreed_transaction_new_modify_yum_repo (
+          invocation, ot_sysroot, osname, arg_repo_id, arg_settings, cancellable, &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "modify-yum-repo");
     }
-  else
-    {
-      const char *client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_modify_yum_repo (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_modify_yum_repo (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -933,35 +905,29 @@ os_handle_finalize_deployment (RPMOSTreeOS *interface, GDBusMethodInvocation *in
 
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rsysroot, cancellable, &sysroot, NULL, &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  transaction = rpmostreed_transaction_new_finalize_deployment (
-      invocation, sysroot, osname, arg_options, cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (
-      rsysroot, transaction,
-      g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line)
-          ? command_line
-          : "finalize-deployment");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+
+      if (!rpmostreed_sysroot_load_state (rsysroot, cancellable, &sysroot, NULL, &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      transaction = rpmostreed_transaction_new_finalize_deployment (
+          invocation, sysroot, osname, arg_options, cancellable, &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (
+          rsysroot, transaction,
+          g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line)
+              ? command_line
+              : "finalize-deployment");
     }
-  else
-    {
-      const char *client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_finalize_deployment (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_finalize_deployment (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -982,38 +948,32 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface, GDBusMethodInvocation *
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  /* Note - intentionally ignoring the reboot option since I don't
-   * know why anyone would want that.
-   */
-
-  flags = RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY;
-  transaction = rpmostreed_transaction_new_cleanup (invocation, ot_sysroot, osname, flags,
-                                                    cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "clear-rollback");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      /* Note - intentionally ignoring the reboot option since I don't
+       * know why anyone would want that.
+       */
+
+      flags = RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY;
+      transaction = rpmostreed_transaction_new_cleanup (invocation, ot_sysroot, osname, flags,
+                                                        cancellable, &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "clear-rollback");
     }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_clear_rollback_target (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address;
+  client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_clear_rollback_target (interface, invocation, client_address);
+
   return TRUE;
 }
 
@@ -1033,37 +993,31 @@ os_handle_initramfs_etc (RPMOSTreeOS *interface, GDBusMethodInvocation *invocati
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  transaction = rpmostreed_transaction_new_initramfs_etc (
-      invocation, ot_sysroot, osname, (char **)track, (char **)untrack, untrack_all, force_sync,
-      options, cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (
-      rsysroot, transaction,
-      g_variant_lookup (options, "initiating-command-line", "&s", &command_line) ? command_line
-                                                                                 : "initramfs-etc");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      transaction = rpmostreed_transaction_new_initramfs_etc (
+          invocation, ot_sysroot, osname, (char **)track, (char **)untrack, untrack_all, force_sync,
+          options, cancellable, &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (
+          rsysroot, transaction,
+          g_variant_lookup (options, "initiating-command-line", "&s", &command_line)
+              ? command_line
+              : "initramfs-etc");
     }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_initramfs_etc (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address;
+  client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_initramfs_etc (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -1083,37 +1037,31 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface, GDBusMethodInvocation *in
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  transaction = rpmostreed_transaction_new_initramfs_state (invocation, ot_sysroot, osname,
-                                                            regenerate, (char **)args, arg_options,
-                                                            cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (
-      rsysroot, transaction,
-      g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ? command_line
-                                                                                     : "initramfs");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      transaction = rpmostreed_transaction_new_initramfs_state (
+          invocation, ot_sysroot, osname, regenerate, (char **)args, arg_options, cancellable,
+          &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (
+          rsysroot, transaction,
+          g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line)
+              ? command_line
+              : "initramfs");
     }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_set_initramfs_state (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address;
+  client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_set_initramfs_state (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -1135,33 +1083,29 @@ os_handle_kernel_args (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-  osname = rpmostree_os_get_name (interface);
-
-  transaction = rpmostreed_transaction_new_kernel_arg (
-      invocation, ot_sysroot, osname, existing_kernel_args, kernel_args_added, kernel_args_replaced,
-      kernel_args_deleted, arg_options, cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (
-      rsysroot, transaction,
-      g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line) ? command_line
-                                                                                     : "kargs");
-
-out:
-  if (local_error != NULL)
-    g_dbus_method_invocation_take_error (invocation, local_error);
-  else
     {
-      const char *client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_kernel_args (interface, invocation, client_address);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+      osname = rpmostree_os_get_name (interface);
+
+      transaction = rpmostreed_transaction_new_kernel_arg (
+          invocation, ot_sysroot, osname, existing_kernel_args, kernel_args_added,
+          kernel_args_replaced, kernel_args_deleted, arg_options, cancellable, &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (
+          rsysroot, transaction,
+          g_variant_lookup (arg_options, "initiating-command-line", "&s", &command_line)
+              ? command_line
+              : "kargs");
     }
+  g_assert (transaction != NULL);
+
+  const char *client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_kernel_args (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -1255,51 +1199,45 @@ os_handle_cleanup (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  for (char **iter = (char **)args; iter && *iter; iter++)
-    {
-      const char *v = *iter;
-      if (strcmp (v, "base") == 0)
-        flags |= RPMOSTREE_TRANSACTION_CLEANUP_BASE;
-      else if (strcmp (v, "pending-deploy") == 0)
-        flags |= RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY;
-      else if (strcmp (v, "rollback-deploy") == 0)
-        flags |= RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY;
-      else if (strcmp (v, "repomd") == 0)
-        flags |= RPMOSTREE_TRANSACTION_CLEANUP_REPOMD;
-      else
-        {
-          g_set_error (&local_error, G_IO_ERROR, G_IO_ERROR_FAILED, "Invalid cleanup type: %s", v);
-          return os_throw_dbus_invocation_error (invocation, &local_error);
-        }
-    }
-
-  transaction = rpmostreed_transaction_new_cleanup (
-      invocation, ot_sysroot, osname, static_cast<RpmOstreeTransactionCleanupFlags> (flags),
-      cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "cleanup");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      for (char **iter = (char **)args; iter && *iter; iter++)
+        {
+          const char *v = *iter;
+          if (strcmp (v, "base") == 0)
+            flags |= RPMOSTREE_TRANSACTION_CLEANUP_BASE;
+          else if (strcmp (v, "pending-deploy") == 0)
+            flags |= RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY;
+          else if (strcmp (v, "rollback-deploy") == 0)
+            flags |= RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY;
+          else if (strcmp (v, "repomd") == 0)
+            flags |= RPMOSTREE_TRANSACTION_CLEANUP_REPOMD;
+          else
+            {
+              g_set_error (&local_error, G_IO_ERROR, G_IO_ERROR_FAILED, "Invalid cleanup type: %s",
+                           v);
+              return os_throw_dbus_invocation_error (invocation, &local_error);
+            }
+        }
+
+      transaction = rpmostreed_transaction_new_cleanup (
+          invocation, ot_sysroot, osname, static_cast<RpmOstreeTransactionCleanupFlags> (flags),
+          cancellable, &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "cleanup");
     }
-  else
-    {
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_cleanup (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_cleanup (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -1374,35 +1312,28 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  transaction = rpmostreed_transaction_new_package_diff (invocation, ot_sysroot, osname,
-                                                         arg_refspec, NULL, /* revision */
-                                                         cancellable, &local_error);
-
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      transaction = rpmostreed_transaction_new_package_diff (invocation, ot_sysroot, osname,
+                                                             arg_refspec, NULL, /* revision */
+                                                             cancellable, &local_error);
+
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
     }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_download_rebase_rpm_diff (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address;
+  client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_download_rebase_rpm_diff (interface, invocation, client_address);
 
   return TRUE;
 }
@@ -1506,34 +1437,27 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface, GDBusMethodInvocatio
   RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
   if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  osname = rpmostree_os_get_name (interface);
-
-  transaction
-      = rpmostreed_transaction_new_package_diff (invocation, ot_sysroot, osname, NULL, /* refspec */
-                                                 arg_revision, cancellable, &local_error);
   if (transaction == NULL)
-    return os_throw_dbus_invocation_error (invocation, &local_error);
-
-  rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
-
-out:
-  if (local_error != NULL)
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                          &local_error))
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      osname = rpmostree_os_get_name (interface);
+
+      transaction = rpmostreed_transaction_new_package_diff (
+          invocation, ot_sysroot, osname, NULL, /* refspec */
+          arg_revision, cancellable, &local_error);
+      if (transaction == NULL)
+        return os_throw_dbus_invocation_error (invocation, &local_error);
+
+      rpmostreed_sysroot_set_txn_and_title (rsysroot, transaction, "package-diff");
     }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_download_deploy_rpm_diff (interface, invocation, client_address);
-    }
+  g_assert (transaction != NULL);
+
+  const char *client_address;
+  client_address = rpmostreed_transaction_get_client_address (transaction);
+  rpmostree_os_complete_download_deploy_rpm_diff (interface, invocation, client_address);
 
   return TRUE;
 }
