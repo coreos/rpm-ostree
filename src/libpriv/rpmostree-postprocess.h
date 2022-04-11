@@ -26,9 +26,6 @@
 
 G_BEGIN_DECLS
 
-gboolean rpmostree_cleanup_leftover_rpmdb_files (int rootfs_fd, GCancellable *cancellable,
-                                                 GError **error);
-
 gboolean rpmostree_rootfs_postprocess_common (int rootfs_fd, GCancellable *cancellable,
                                               GError **error);
 

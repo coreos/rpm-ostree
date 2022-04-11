@@ -15,7 +15,7 @@ use crate::passwd::PasswdDB;
 use crate::treefile::Treefile;
 use crate::{bwrap, importer};
 use anyhow::{anyhow, bail, format_err, Context, Result};
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::Dir;
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
@@ -33,7 +33,7 @@ use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::IntoRawFd;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::Stdio;
 
@@ -252,6 +252,29 @@ fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
         })?;
     }
     Ok(())
+}
+
+#[context("Cleaning up rpmdb leftovers")]
+fn postprocess_cleanup_rpmdb_impl(rootfs_dfd: &Dir) -> Result<()> {
+    let d = if let Some(d) = rootfs_dfd.open_dir_optional(RPMOSTREE_RPMDB_LOCATION)? {
+        d
+    } else {
+        return Ok(());
+    };
+    for ent in d.entries()? {
+        let ent = ent?;
+        let name: Utf8PathBuf = PathBuf::from(ent.file_name()).try_into()?;
+        if matches!(name.as_str(), ".dbenv.lock" | ".rpm.lock")
+            || name.as_str().starts_with("__db.")
+        {
+            d.remove_file(&name)?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn postprocess_cleanup_rpmdb(rootfs_dfd: i32) -> CxxResult<()> {
+    postprocess_cleanup_rpmdb_impl(unsafe { &ffi_dirfd(rootfs_dfd)? }).map_err(Into::into)
 }
 
 /// Final processing steps.

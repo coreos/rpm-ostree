@@ -533,9 +533,6 @@ cleanup_leftover_files (int rootfs_fd, const char *subpath, const char *files[],
 }
 
 static const char *selinux_leftover_files[] = { "semanage.trans.LOCK", "semanage.read.LOCK", NULL };
-// TODO: move cleanup API into librpm
-static const char *rpmdb_leftover_files[] = { ".dbenv.lock", ".rpm.lock", NULL };
-static const char *rpmdb_leftover_prefixes[] = { "__db.", NULL };
 
 static gboolean
 cleanup_selinux_lockfiles (int rootfs_fd, GCancellable *cancellable, GError **error)
@@ -570,13 +567,6 @@ cleanup_selinux_lockfiles (int rootfs_fd, GCancellable *cancellable, GError **er
     }
 
   return TRUE;
-}
-
-gboolean
-rpmostree_cleanup_leftover_rpmdb_files (int rootfs_fd, GCancellable *cancellable, GError **error)
-{
-  return cleanup_leftover_files (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, rpmdb_leftover_files,
-                                 rpmdb_leftover_prefixes, cancellable, error);
 }
 
 /**
@@ -622,8 +612,7 @@ rpmostree_rootfs_postprocess_common (int rootfs_fd, GCancellable *cancellable, G
   /* Make sure there is an RPM macro in place pointing to the rpmdb in /usr */
   ROSCXX_TRY (compose_postprocess_rpm_macro (rootfs_fd), error);
 
-  if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
-    return FALSE;
+  CXX_TRY (rpmostreecxx::postprocess_cleanup_rpmdb (rootfs_fd), error);
 
   if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
     return FALSE;

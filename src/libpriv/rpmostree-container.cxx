@@ -28,6 +28,7 @@
 
 #include "rpmostree-container.h"
 #include "rpmostree-postprocess.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 
@@ -62,8 +63,7 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
   glnx_autofd int rootfs_fd = -1;
   if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_fd, error))
     return FALSE;
-  if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
-    return FALSE;
+  CXX_TRY (rpmostreecxx::postprocess_cleanup_rpmdb (rootfs_fd), error);
 
   return TRUE;
 }
