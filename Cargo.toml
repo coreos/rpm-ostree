@@ -49,7 +49,7 @@ indicatif = "0.16.2"
 libc = "0.2.121"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
-memfd = "0.4.1"
+memfd = "0.5.0"
 nix = "0.23.1"
 openat = "0.1.21"
 openat-ext = "^0.2.3"
