@@ -91,7 +91,10 @@ rpmostree_custom_nevra (GString *buffer, const char *name, uint64_t epoch, const
   gsize original_len = buffer->len;
 
   if (flags & PKG_NEVRA_FLAGS_NAME)
-    g_string_append (buffer, name);
+    {
+      g_assert (name);
+      g_string_append (buffer, name);
+    }
 
   if (flags & (PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE | PKG_NEVRA_FLAGS_VERSION_RELEASE))
     {
@@ -1300,6 +1303,10 @@ nevra_to_cache_branch (const std::string &nevra)
   if (!rpmostree_decompose_nevra (nevra.c_str (), &name, &epoch, &version, &release, &arch,
                                   &local_error))
     util::throw_gerror (local_error);
+  g_assert (name);
+  g_assert (version);
+  g_assert (release);
+  g_assert (arch);
 
   g_autofree char *evr
       = rpmostree_custom_nevra_strdup (name, epoch, version, release, arch, PKG_NEVRA_FLAGS_EVR);
