@@ -514,6 +514,20 @@ rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy, char **ou
   return FALSE;
 }
 
+static void
+transaction_disconnect (RPMOSTreeTransaction *transaction, guint signal_id, gulong signal_handler)
+{
+  g_assert (transaction != NULL);
+
+  if (signal_id > 0)
+    g_source_remove (signal_id);
+
+  if (signal_handler > 0)
+    g_signal_handler_disconnect (transaction, signal_handler);
+
+  return;
+}
+
 /* Transactions need an explicit Start call so we can set up watches for signals
  * beforehand and avoid losing information.  We monitor the transaction,
  * printing output it sends, and handle Ctrl-C, etc.
@@ -528,7 +542,6 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
   g_autoptr (TransactionProgress) tp = transaction_progress_new ();
 
   const char *bus_name = NULL;
-  gboolean success = FALSE;
   gboolean just_started = FALSE;
 
   if (g_dbus_connection_get_unique_name (connection) != NULL)
@@ -565,7 +578,10 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
 
   /* Tell the server we're ready to receive signals. */
   if (!rpmostree_transaction_call_start_sync (transaction, &just_started, cancellable, error))
-    goto out;
+    {
+      transaction_disconnect (transaction, sigintid, signal_handler);
+      return FALSE;
+    }
 
   /* FIXME Use the 'just_started' flag to determine whether to print
    *       a message about reattaching to an in-progress transaction,
@@ -578,8 +594,8 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
    */
   g_main_loop_run (tp->loop);
 
+  gboolean success = FALSE;
   g_cancellable_disconnect (cancellable, cancel_handler);
-
   if (!g_cancellable_set_error_if_cancelled (cancellable, error))
     {
       if (tp->error)
@@ -592,11 +608,7 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
         }
     }
 
-out:
-  if (sigintid)
-    g_source_remove (sigintid);
-  if (signal_handler)
-    g_signal_handler_disconnect (transaction, signal_handler);
+  transaction_disconnect (transaction, sigintid, signal_handler);
 
   return success;
 }
