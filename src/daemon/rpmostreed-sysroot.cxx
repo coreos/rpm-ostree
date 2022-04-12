@@ -398,19 +398,17 @@ handle_reload_via_idle (gpointer data)
 
   g_autoptr (GError) local_error = NULL;
   if (!sysroot_populate_deployments_unlocked (self, NULL, &local_error))
-    goto out;
+    {
+      g_prefix_error (&local_error, "Handling reload: ");
+      g_dbus_method_invocation_take_error (invocation, util::move_nullify (local_error));
+      return G_SOURCE_REMOVE;
+    }
 
   /* always send an UPDATED signal to also force OS interfaces to reload */
   g_signal_emit (self, signals[UPDATED], 0);
 
   rpmostree_sysroot_complete_reload (idata->object, invocation);
 
-out:
-  if (local_error)
-    {
-      g_prefix_error (&local_error, "Handling reload: ");
-      g_dbus_method_invocation_take_error (invocation, util::move_nullify (local_error));
-    }
   return G_SOURCE_REMOVE;
 }
 
