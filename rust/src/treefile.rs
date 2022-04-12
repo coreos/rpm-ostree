@@ -911,6 +911,16 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    pub(crate) fn get_packages_override_replace(&self) -> Vec<crate::ffi::OverrideReplacement> {
+        self.parsed
+            .derive
+            .override_replace
+            .iter()
+            .flatten()
+            .map(|r| r.clone().into())
+            .collect()
+    }
+
     pub(crate) fn set_packages_override_replace_local_rpms(&mut self, packages: Vec<String>) {
         let _ = self.parsed.derive.override_replace_local_rpms.take();
         if !packages.is_empty() {
@@ -1202,6 +1212,7 @@ impl Treefile {
         // and avoid regressing if we add more fields in the future
         let mut clone = self.parsed.derive.clone();
         // neuter everything we *do* support
+        clone.override_replace.take();
         clone.override_remove.take();
         clone.override_replace_local_rpms.take();
         if clone != Default::default() {
@@ -2154,6 +2165,34 @@ pub(crate) struct DeriveInitramfs {
     pub(crate) args: Option<Vec<String>>,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum RemoteOverrideReplaceFrom {
+    Repo(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct RemoteOverrideReplace {
+    pub(crate) from: RemoteOverrideReplaceFrom,
+    // in the future, some `from`s could support not specifying packages
+    // see discussions in https://github.com/coreos/rpm-ostree/issues/1265
+    pub(crate) packages: BTreeSet<String>,
+}
+
+impl From<RemoteOverrideReplace> for crate::ffi::OverrideReplacement {
+    fn from(o: RemoteOverrideReplace) -> crate::ffi::OverrideReplacement {
+        let packages = o.packages.into_iter().collect();
+        match o.from {
+            RemoteOverrideReplaceFrom::Repo(repo) => crate::ffi::OverrideReplacement {
+                from: repo,
+                from_kind: crate::ffi::OverrideReplacementType::Repo,
+                packages,
+            },
+        }
+    }
+}
+
 /// These fields are only useful when deriving from a prior ostree commit;
 /// at the moment we only use them when translating an origin file
 /// to a treefile for client side assembly.
@@ -2174,6 +2213,9 @@ pub(crate) struct DeriveConfigFields {
     pub(crate) packages_local_fileoverride: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_remove: Option<Vec<String>>,
+    #[serde(rename = "ex-override-replace")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) override_replace: Option<Vec<RemoteOverrideReplace>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_replace_local: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3482,6 +3524,30 @@ conditional-include:
         assert!(!treefile.has_any_packages());
         assert!(!treefile.may_require_local_assembly());
         assert!(!treefile.get_cliwrap());
+    }
+
+    #[test]
+    fn test_override_replace() {
+        let buf = indoc! {"
+            base-refspec: fedora:fedora/35/x86_64/silverblue
+            ex-override-replace:
+                - from:
+                    repo: foobar
+                  packages:
+                    - foo
+                    - bar
+        "};
+        let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
+        assert!(treefile.parsed.derive.override_replace.is_some());
+        let replacements = treefile.parsed.derive.override_replace.unwrap();
+        assert_eq!(replacements.len(), 1);
+        assert_eq!(
+            replacements[0],
+            RemoteOverrideReplace {
+                from: RemoteOverrideReplaceFrom::Repo("foobar".into()),
+                packages: maplit::btreeset!["foo".into(), "bar".into()],
+            }
+        );
     }
 }
 
