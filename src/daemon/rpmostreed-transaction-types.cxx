@@ -1339,6 +1339,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
           g_autofree char *name = NULL;
           if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
             return FALSE;
+          g_assert (name);
 
           g_hash_table_insert (name_to_nevra, (gpointer)name, (gpointer)nevra);
           g_hash_table_insert (nevra_to_name, (gpointer)nevra, (gpointer)name);
