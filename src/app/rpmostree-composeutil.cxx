@@ -107,7 +107,7 @@ metadata_conversion_start (GHashTable *metadata)
   GVariantBuilder *builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
 
   GLNX_HASH_TABLE_FOREACH_KV (metadata, const char *, strkey, GVariant *, v)
-  g_variant_builder_add (builder, "{sv}", strkey, v);
+    g_variant_builder_add (builder, "{sv}", strkey, v);
 
   return builder;
 }

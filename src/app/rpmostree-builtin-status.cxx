@@ -830,19 +830,19 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
       g_ptr_array_add (active_removals, NULL);
 
       GLNX_HASH_TABLE_FOREACH_KV (grouped_evrs, const char *, evr, GPtrArray *, pkgs)
-      {
-        g_autoptr (GString) pkggroup_buf = g_string_new ("");
-        for (guint i = 0, n = pkgs->len; i < n; i++)
-          {
-            auto pkgname = static_cast<const char *> (g_ptr_array_index (pkgs, i));
-            if (i > 0)
-              g_string_append_c (pkggroup_buf, ' ');
-            g_string_append (pkggroup_buf, pkgname);
-          }
-        g_string_append_printf (pkggroup_buf, " %s", evr);
+        {
+          g_autoptr (GString) pkggroup_buf = g_string_new ("");
+          for (guint i = 0, n = pkgs->len; i < n; i++)
+            {
+              auto pkgname = static_cast<const char *> (g_ptr_array_index (pkgs, i));
+              if (i > 0)
+                g_string_append_c (pkggroup_buf, ' ');
+              g_string_append (pkggroup_buf, pkgname);
+            }
+          g_string_append_printf (pkggroup_buf, " %s", evr);
 
-        g_ptr_array_add (active_removals_grouped, g_strdup (pkggroup_buf->str));
-      }
+          g_ptr_array_add (active_removals_grouped, g_strdup (pkggroup_buf->str));
+        }
 
       g_ptr_array_add (active_removals_grouped, NULL);
 
@@ -908,20 +908,20 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
         }
 
       GLNX_HASH_TABLE_FOREACH_KV (grouped_diffs, const char *, diff, GPtrArray *, pkgs)
-      {
-        g_autoptr (GString) pkggroup_buf = g_string_new ("");
-        for (guint i = 0, n = pkgs->len; i < n; i++)
-          {
-            auto pkgname = static_cast<const char *> (g_ptr_array_index (pkgs, i));
-            if (i > 0)
-              g_string_append_c (pkggroup_buf, ' ');
-            g_string_append (pkggroup_buf, pkgname);
-          }
-        g_string_append_c (pkggroup_buf, ' ');
-        g_string_append (pkggroup_buf, diff);
+        {
+          g_autoptr (GString) pkggroup_buf = g_string_new ("");
+          for (guint i = 0, n = pkgs->len; i < n; i++)
+            {
+              auto pkgname = static_cast<const char *> (g_ptr_array_index (pkgs, i));
+              if (i > 0)
+                g_string_append_c (pkggroup_buf, ' ');
+              g_string_append (pkggroup_buf, pkgname);
+            }
+          g_string_append_c (pkggroup_buf, ' ');
+          g_string_append (pkggroup_buf, diff);
 
-        g_ptr_array_add (active_replacements_grouped, g_strdup (pkggroup_buf->str));
-      }
+          g_ptr_array_add (active_replacements_grouped, g_strdup (pkggroup_buf->str));
+        }
 
       g_ptr_array_add (active_replacements, NULL);
       g_ptr_array_add (active_replacements_grouped, NULL);

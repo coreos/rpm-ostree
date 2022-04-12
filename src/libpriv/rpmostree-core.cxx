@@ -1471,17 +1471,18 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
         rpmostree_output_message ("Forbidden base package replacements:");
         GLNX_HASH_TABLE_FOREACH_KV (forbidden_replacements, DnfPackage *, old_pkg, DnfPackage *,
                                     new_pkg)
-        {
-          const char *old_name = dnf_package_get_name (old_pkg);
-          const char *new_name = dnf_package_get_name (new_pkg);
-          const char *new_repo = dnf_package_get_reponame (new_pkg);
-          if (g_str_equal (old_name, new_name))
-            rpmostree_output_message ("  %s %s -> %s (%s)", old_name, dnf_package_get_evr (old_pkg),
-                                      dnf_package_get_evr (new_pkg), new_repo);
-          else
-            rpmostree_output_message ("  %s -> %s (%s)", dnf_package_get_nevra (old_pkg),
-                                      dnf_package_get_nevra (new_pkg), new_repo);
-        }
+          {
+            const char *old_name = dnf_package_get_name (old_pkg);
+            const char *new_name = dnf_package_get_name (new_pkg);
+            const char *new_repo = dnf_package_get_reponame (new_pkg);
+            if (g_str_equal (old_name, new_name))
+              rpmostree_output_message ("  %s %s -> %s (%s)", old_name,
+                                        dnf_package_get_evr (old_pkg),
+                                        dnf_package_get_evr (new_pkg), new_repo);
+            else
+              rpmostree_output_message ("  %s -> %s (%s)", dnf_package_get_nevra (old_pkg),
+                                        dnf_package_get_nevra (new_pkg), new_repo);
+          }
         rpmostree_output_message ("This likely means that some of your layered packages "
                                   "have requirements on newer or older versions of some "
                                   "base packages. Doing `rpm-ostree cleanup -m` and "
@@ -1498,12 +1499,12 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
     g_autoptr (GPtrArray) forbidden = g_ptr_array_new_with_free_func (g_free);
 
     GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant *, newv, GVariant *, old)
-    {
-      g_autoptr (GVariant) nevra_v = g_variant_get_child_value (newv, 0);
-      const char *nevra = g_variant_get_string (nevra_v, NULL);
-      if (!rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
-        g_ptr_array_add (forbidden, g_strdup (nevra));
-    }
+      {
+        g_autoptr (GVariant) nevra_v = g_variant_get_child_value (newv, 0);
+        const char *nevra = g_variant_get_string (nevra_v, NULL);
+        if (!rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
+          g_ptr_array_add (forbidden, g_strdup (nevra));
+      }
 
     if (forbidden->len > 0)
       return throw_package_list (error, "Base packages not marked to be installed", forbidden);
@@ -1555,23 +1556,24 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self, GHashTable *already_added,
     return FALSE;
 
   GLNX_HASH_TABLE_FOREACH (refs, const char *, ref)
-  {
-    auto nevra = std::string (rpmostreecxx::cache_branch_to_nevra (ref));
-    if (g_hash_table_contains (already_added, nevra.c_str ()))
-      continue;
+    {
+      auto nevra = std::string (rpmostreecxx::cache_branch_to_nevra (ref));
+      if (g_hash_table_contains (already_added, nevra.c_str ()))
+        continue;
 
-    g_autoptr (GVariant) header = NULL;
-    if (!get_header_variant (pkgcache_repo, ref, &header, cancellable, error))
-      return FALSE;
+      g_autoptr (GVariant) header = NULL;
+      if (!get_header_variant (pkgcache_repo, ref, &header, cancellable, error))
+        return FALSE;
 
-    if (!checkout_pkg_metadata (self, nevra.c_str (), header, cancellable, error))
-      return FALSE;
+      if (!checkout_pkg_metadata (self, nevra.c_str (), header, cancellable, error))
+        return FALSE;
 
-    g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra.c_str ());
-    g_autoptr (DnfPackage) pkg = dnf_sack_add_cmdline_package (sack, rpm);
-    if (!pkg)
-      return glnx_throw (error, "Failed to add local pkg %s to sack", nevra.c_str ());
-  }
+      g_autofree char *rpm
+          = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra.c_str ());
+      g_autoptr (DnfPackage) pkg = dnf_sack_add_cmdline_package (sack, rpm);
+      if (!pkg)
+        return glnx_throw (error, "Failed to add local pkg %s to sack", nevra.c_str ());
+    }
 
   return TRUE;
 }
@@ -1938,7 +1940,7 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
 
   /* Then, handle local packages to install */
   GLNX_HASH_TABLE_FOREACH_V (local_pkgs_to_install, DnfPackage *, pkg)
-  hy_goal_install (goal, pkg);
+    hy_goal_install (goal, pkg);
 
   /* All modules are opt-in, so start off with everything disabled. We'll
    * enable/install user-provided ones down below. */
@@ -2233,23 +2235,23 @@ rpmostree_download_packages (GPtrArray *packages, GCancellable *cancellable, GEr
   guint progress_sigid;
   g_autoptr (GHashTable) source_to_packages = gather_source_to_packages (packages);
   GLNX_HASH_TABLE_FOREACH_KV (source_to_packages, DnfRepo *, src, GPtrArray *, src_packages)
-  {
-    glnx_unref_object DnfState *hifstate = dnf_state_new ();
-    auto msg = g_strdup_printf ("Downloading from '%s'", dnf_repo_get_id (src));
-    auto progress = rpmostreecxx::progress_percent_begin (msg);
-    progress_sigid
-        = g_signal_connect (hifstate, "percentage-changed",
-                            G_CALLBACK (on_hifstate_percentage_changed), (void *)progress.get ());
-    g_autofree char *target_dir
-        = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
-    if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
-      return FALSE;
+    {
+      glnx_unref_object DnfState *hifstate = dnf_state_new ();
+      auto msg = g_strdup_printf ("Downloading from '%s'", dnf_repo_get_id (src));
+      auto progress = rpmostreecxx::progress_percent_begin (msg);
+      progress_sigid
+          = g_signal_connect (hifstate, "percentage-changed",
+                              G_CALLBACK (on_hifstate_percentage_changed), (void *)progress.get ());
+      g_autofree char *target_dir
+          = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
+      if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
+        return FALSE;
 
-    if (!dnf_repo_download_packages (src, src_packages, target_dir, hifstate, error))
-      return FALSE;
+      if (!dnf_repo_download_packages (src, src_packages, target_dir, hifstate, error))
+        return FALSE;
 
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-  }
+      g_signal_handler_disconnect (hifstate, progress_sigid);
+    }
 
   return TRUE;
 }
@@ -2563,14 +2565,14 @@ handle_file_dispositions (RpmOstreeContext *self, int tmprootfs_dfd, rpmts ts,
 
   /* skip added files whose colors aren't in our rainbow */
   GLNX_HASH_TABLE_FOREACH_KV (files_added, const char *, nevra, GHashTable *, paths)
-  {
-    GLNX_HASH_TABLE_FOREACH_KV (paths, const char *, path, gpointer, colorp)
     {
-      rpm_color_t color = GPOINTER_TO_UINT (colorp);
-      if (ts_color && !(ts_color & color))
-        ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (path), NULL);
+      GLNX_HASH_TABLE_FOREACH_KV (paths, const char *, path, gpointer, colorp)
+        {
+          rpm_color_t color = GPOINTER_TO_UINT (colorp);
+          if (ts_color && !(ts_color & color))
+            ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (path), NULL);
+        }
     }
-  }
 
   g_auto (rpmdbMatchIterator) it = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
   Header h;
@@ -2614,30 +2616,30 @@ handle_file_dispositions (RpmOstreeContext *self, int tmprootfs_dfd, rpmts ts,
 
           /* check if any of the pkgs to install want to overwrite our file */
           GLNX_HASH_TABLE_FOREACH_KV (files_added, const char *, nevra, GHashTable *, paths)
-          {
-            gpointer other_colorp = NULL;
-            if (!g_hash_table_lookup_extended (paths, fn, NULL, &other_colorp))
-              continue;
+            {
+              gpointer other_colorp = NULL;
+              if (!g_hash_table_lookup_extended (paths, fn, NULL, &other_colorp))
+                continue;
 
-            rpm_color_t other_color = GPOINTER_TO_UINT (other_colorp);
-            other_color &= ts_color;
+              rpm_color_t other_color = GPOINTER_TO_UINT (other_colorp);
+              other_color &= ts_color;
 
-            /* see handleColorConflict() */
-            if (color && other_color && (color != other_color))
-              {
-                /* do we already have the preferred color installed? */
-                if (color & ts_prefcolor)
-                  ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (fn),
-                                            NULL);
-                else if (other_color & ts_prefcolor)
-                  {
-                    /* the new pkg is bringing our favourite color, give way now so we let
-                     * checkout silently write into it */
-                    if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, fn_rel, cancellable, error))
-                      return FALSE;
-                  }
-              }
-          }
+              /* see handleColorConflict() */
+              if (color && other_color && (color != other_color))
+                {
+                  /* do we already have the preferred color installed? */
+                  if (color & ts_prefcolor)
+                    ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (fn),
+                                              NULL);
+                  else if (other_color & ts_prefcolor)
+                    {
+                      /* the new pkg is bringing our favourite color, give way now so we let
+                       * checkout silently write into it */
+                      if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, fn_rel, cancellable, error))
+                        return FALSE;
+                    }
+                }
+            }
         }
     }
 
@@ -2645,37 +2647,43 @@ handle_file_dispositions (RpmOstreeContext *self, int tmprootfs_dfd, rpmts ts,
    * differing rpm colors for which we have to pick one */
   g_autoptr (GHashTable) path_to_nevra = g_hash_table_new (g_str_hash, g_str_equal);
   g_autoptr (GHashTable) path_to_color = g_hash_table_new (g_str_hash, g_str_equal);
-  GLNX_HASH_TABLE_FOREACH_KV (files_added, const char *, nevra, GHashTable *, paths){
-    GLNX_HASH_TABLE_FOREACH_KV (paths, const char *, path, gpointer,
-                                colorp){ if (!g_hash_table_contains (path_to_nevra, path)){
-        g_hash_table_insert (path_to_nevra, (gpointer)path, (gpointer)nevra);
-  g_hash_table_insert (path_to_color, (gpointer)path, colorp);
-  continue;
-}
+  GLNX_HASH_TABLE_FOREACH_KV (files_added, const char *, nevra, GHashTable *, paths)
+    {
+      GLNX_HASH_TABLE_FOREACH_KV (paths, const char *, path, gpointer, colorp)
+        {
+          if (!g_hash_table_contains (path_to_nevra, path))
+            {
+              g_hash_table_insert (path_to_nevra, (gpointer)path, (gpointer)nevra);
+              g_hash_table_insert (path_to_color, (gpointer)path, colorp);
+              continue;
+            }
 
-rpm_color_t color = GPOINTER_TO_UINT (colorp) & ts_color;
-const char *other_nevra = static_cast<const char *> (g_hash_table_lookup (path_to_nevra, path));
-rpm_color_t other_color = GPOINTER_TO_UINT (g_hash_table_lookup (path_to_color, path)) & ts_color;
+          rpm_color_t color = GPOINTER_TO_UINT (colorp) & ts_color;
+          const char *other_nevra
+              = static_cast<const char *> (g_hash_table_lookup (path_to_nevra, path));
+          rpm_color_t other_color
+              = GPOINTER_TO_UINT (g_hash_table_lookup (path_to_color, path)) & ts_color;
 
-/* see handleColorConflict() */
-if (color && other_color && (color != other_color))
-  {
-    if (color & ts_prefcolor)
-      {
-        ht_insert_path_for_nevra (files_skip_add, other_nevra, canonicalize_rpmfi_path (path),
-                                  NULL);
-        g_hash_table_insert (path_to_nevra, (gpointer)path, (gpointer)nevra);
-        g_hash_table_insert (path_to_color, (gpointer)path, colorp);
-      }
-    else if (other_color & ts_prefcolor)
-      ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (path), NULL);
-  }
-}
-}
+          /* see handleColorConflict() */
+          if (color && other_color && (color != other_color))
+            {
+              if (color & ts_prefcolor)
+                {
+                  ht_insert_path_for_nevra (files_skip_add, other_nevra,
+                                            canonicalize_rpmfi_path (path), NULL);
+                  g_hash_table_insert (path_to_nevra, (gpointer)path, (gpointer)nevra);
+                  g_hash_table_insert (path_to_color, (gpointer)path, colorp);
+                }
+              else if (other_color & ts_prefcolor)
+                ht_insert_path_for_nevra (files_skip_add, nevra, canonicalize_rpmfi_path (path),
+                                          NULL);
+            }
+        }
+    }
 
-*out_files_skip_add = util::move_nullify (files_skip_add);
-*out_files_skip_delete = util::move_nullify (files_skip_delete);
-return TRUE;
+  *out_files_skip_add = util::move_nullify (files_skip_add);
+  *out_files_skip_delete = util::move_nullify (files_skip_delete);
+  return TRUE;
 }
 
 typedef struct
@@ -4417,7 +4425,7 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
         if (self->pkgs_to_remove)
           {
             GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_remove, const char *, name, GVariant *, nevra)
-            g_variant_builder_add (&removed_base_pkgs, "v", nevra);
+              g_variant_builder_add (&removed_base_pkgs, "v", nevra);
           }
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.removed-base-packages",
                                g_variant_builder_end (&removed_base_pkgs));
@@ -4429,7 +4437,7 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
           {
             GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant *, new_nevra, GVariant *,
                                         old_nevra)
-            g_variant_builder_add (&replaced_base_pkgs, "(vv)", new_nevra, old_nevra);
+              g_variant_builder_add (&replaced_base_pkgs, "(vv)", new_nevra, old_nevra);
           }
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.replaced-base-packages",
                                g_variant_builder_end (&replaced_base_pkgs));

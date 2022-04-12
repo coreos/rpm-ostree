@@ -318,15 +318,15 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self, gboolean *out_ch
 
   /* Remove dead os paths */
   GLNX_HASH_TABLE_FOREACH_IT (self->os_interfaces, it, const char *, k, GObject *, v)
-  {
-    if (!g_hash_table_contains (seen_osnames, k))
-      {
-        g_object_run_dispose (G_OBJECT (v));
-        g_hash_table_iter_remove (&it);
+    {
+      if (!g_hash_table_contains (seen_osnames, k))
+        {
+          g_object_run_dispose (G_OBJECT (v));
+          g_hash_table_iter_remove (&it);
 
-        g_hash_table_remove (self->osexperimental_interfaces, k);
-      }
-  }
+          g_hash_table_remove (self->osexperimental_interfaces, k);
+        }
+    }
 
   rpmostree_sysroot_set_deployments (RPMOSTREE_SYSROOT (self), g_variant_builder_end (&builder));
   g_debug ("finished deployments");
@@ -507,7 +507,7 @@ sysroot_dispose (GObject *object)
 
   /* Tracked os paths are responsible to unpublish themselves */
   GLNX_HASH_TABLE_FOREACH_KV (self->os_interfaces, const char *, k, GObject *, value)
-  g_object_run_dispose (value);
+    g_object_run_dispose (value);
   g_hash_table_remove_all (self->os_interfaces);
   g_hash_table_remove_all (self->osexperimental_interfaces);
 
