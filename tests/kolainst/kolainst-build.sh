@@ -22,6 +22,8 @@ build_rpm foo version 1.2 release 3
 build_rpm bar
 build_rpm baz
 build_rpm baz version 2.0
+build_rpm boo
+build_rpm boo version 2.0
 # And from here we lose our creativity and name things starting
 # with `testpkg` and grow more content.
 # This one has various files in /etc

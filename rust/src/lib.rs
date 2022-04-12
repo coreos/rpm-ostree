@@ -432,6 +432,19 @@ pub mod ffi {
         refspec: String,
     }
 
+    // This is an awkward almost duplicate of the types in treefile.rs, but cxx.rs-compatible.
+    #[derive(Debug)]
+    enum OverrideReplacementType {
+        Repo,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct OverrideReplacement {
+        from: String,
+        from_kind: OverrideReplacementType,
+        packages: Vec<String>,
+    }
+
     extern "Rust" {
         type Treefile;
 
@@ -471,6 +484,7 @@ pub mod ffi {
             packages: Vec<String>,
             allow_existing: bool,
         ) -> Result<bool>;
+        fn get_packages_override_replace(&self) -> Vec<OverrideReplacement>;
         fn get_packages_override_replace_local(&self) -> Vec<String>;
         fn get_packages_override_replace_local_rpms(&self) -> Vec<String>;
         fn set_packages_override_replace_local_rpms(&mut self, packages: Vec<String>);

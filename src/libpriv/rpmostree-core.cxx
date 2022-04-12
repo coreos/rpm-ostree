@@ -43,6 +43,8 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-scripts.h"
 
+#include "libdnf/nevra.hpp"
+
 #define RPMOSTREE_MESSAGE_COMMIT_STATS                                                             \
   SD_ID128_MAKE (e6, 37, 2e, 38, 41, 21, 42, a9, bc, 13, b6, 32, b3, f8, 93, 44)
 #define RPMOSTREE_MESSAGE_SELINUX_RELABEL                                                          \
@@ -1705,6 +1707,7 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   auto packages = self->treefile_rs->get_packages ();
   auto packages_local = self->treefile_rs->get_local_packages ();
   auto packages_local_fileoverride = self->treefile_rs->get_local_fileoverride_packages ();
+  auto packages_override_replace = self->treefile_rs->get_packages_override_replace ();
   auto packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local ();
   auto packages_override_replace_local_rpms
       = self->treefile_rs->get_packages_override_replace_local_rpms ();
@@ -1970,6 +1973,46 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
           if (!hy_goal_install_selector (goal, selector, error))
             return FALSE;
           map_or (pinned_pkgs_map, dnf_packageset_get_map (pset));
+        }
+    }
+
+  /* And remote replacement packages */
+  for (auto &override_replace : packages_override_replace)
+    {
+      switch (override_replace.from_kind)
+        {
+        case rpmostreecxx::OverrideReplacementType::Repo:
+          {
+            const char *repo = override_replace.from.c_str ();
+            for (auto &pkg : override_replace.packages)
+              {
+                g_auto (HySubject) subject = hy_subject_create (pkg.c_str ());
+                HyNevra nevra = NULL;
+                // We don't support provides or filenames: we need a concrete package name that
+                // matches the base. Nevras or partial nevras (e.g. foobar.x86_64 or foobar-1.2) are
+                // supported.
+                hy_autoquery HyQuery query = hy_subject_get_best_solution (
+                    subject, sack, NULL, &nevra, FALSE, TRUE, FALSE, FALSE, FALSE);
+                auto pkgname = nevra->getName ();
+                // this should never happen, but just in case
+                if (pkgname.empty ())
+                  return glnx_throw (error, "Invalid subject '%s': no package name found",
+                                     pkg.c_str ());
+                hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo);
+                g_autoptr (DnfPackageSet) pset = hy_query_run_set (query);
+                if (dnf_packageset_count (pset) == 0)
+                  return glnx_throw (error, "No matches for '%s' in repo '%s'", pkg.c_str (), repo);
+                g_auto (HySelector) selector = hy_selector_create (sack);
+                hy_selector_pkg_set (selector, pset);
+                if (!hy_goal_install_selector (goal, selector, error))
+                  return FALSE;
+                map_or (pinned_pkgs_map, dnf_packageset_get_map (pset));
+                g_ptr_array_add (replaced_pkgnames, g_strdup (pkgname.c_str ()));
+              }
+          }
+          break;
+        default:
+          g_assert_not_reached ();
         }
     }
 
