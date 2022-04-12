@@ -1382,7 +1382,7 @@ gv_nevra_hash (gconstpointer v)
  */
 static gboolean
 check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
-                     GPtrArray *replaced_nevras, GError **error)
+                     GPtrArray *replaced_pkgnames, GError **error)
 {
   HyGoal goal = dnf_context_get_goal (self->dnfctx);
 
@@ -1451,15 +1451,15 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
     for (guint i = 0; i < packages->len; i++)
       {
         auto pkg = static_cast<DnfPackage *> (packages->pdata[i]);
-        const char *nevra = dnf_package_get_nevra (pkg);
+        const char *name = dnf_package_get_name (pkg);
 
         /* just pick the first pkg */
         g_autoptr (GPtrArray) old = hy_goal_list_obsoleted_by_package (goal, pkg);
         g_assert_cmpint (old->len, >, 0);
         auto old_pkg = static_cast<DnfPackage *> (old->pdata[0]);
 
-        /* did we expect this nevra to replace a base pkg? */
-        if (rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
+        /* did we expect this base pkg to be replaced? */
+        if (rpmostree_str_ptrarray_contains (replaced_pkgnames, name))
           g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
                                gv_nevra_from_pkg (old_pkg));
         else
@@ -1500,10 +1500,10 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
 
     GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant *, newv, GVariant *, old)
       {
-        g_autoptr (GVariant) nevra_v = g_variant_get_child_value (newv, 0);
-        const char *nevra = g_variant_get_string (nevra_v, NULL);
-        if (!rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
-          g_ptr_array_add (forbidden, g_strdup (nevra));
+        g_autoptr (GVariant) name_v = g_variant_get_child_value (newv, 1);
+        const char *name = g_variant_get_string (name_v, NULL);
+        if (!rpmostree_str_ptrarray_contains (replaced_pkgnames, name))
+          g_ptr_array_add (forbidden, g_strdup (name));
       }
 
     if (forbidden->len > 0)
@@ -1766,7 +1766,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_object_unref);
 
   /* Handle packages to replace; only add them to the sack for now */
-  g_autoptr (GPtrArray) replaced_nevras = g_ptr_array_new ();
   g_autoptr (GPtrArray) replaced_pkgnames = g_ptr_array_new_with_free_func (g_free);
   for (auto &nevra_v : packages_override_replace_local)
     {
@@ -1779,7 +1778,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
         return FALSE;
       const char *name = dnf_package_get_name (pkg);
       g_assert (name);
-      g_ptr_array_add (replaced_nevras, (gpointer)nevra);
       // this is a bit wasteful, but for locking purposes, we need the pkgname to match
       // against the base, not the nevra which naturally will be different
       g_ptr_array_add (replaced_pkgnames, g_strdup (name));
@@ -1794,7 +1792,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       const char *nevra = dnf_package_get_nevra (pkg);
       const char *name = dnf_package_get_name (pkg);
       g_assert (name);
-      g_ptr_array_add (replaced_nevras, (gpointer)nevra);
       // this is a bit wasteful, but for locking purposes, we need the pkgname to match
       // against the base, not the nevra which naturally will be different
       g_ptr_array_add (replaced_pkgnames, g_strdup (name));
@@ -2056,7 +2053,7 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   auto task = rpmostreecxx::progress_begin_task ("Resolving dependencies");
   /* XXX: consider a --allow-uninstall switch? */
   if (!dnf_goal_depsolve (goal, actions, error)
-      || !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
+      || !check_goal_solution (self, removed_pkgnames, replaced_pkgnames, error))
     return FALSE;
   g_clear_pointer (&self->pkgs, (GDestroyNotify)g_ptr_array_unref);
   self->pkgs = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_INSTALL, DNF_PACKAGE_INFO_UPDATE,
