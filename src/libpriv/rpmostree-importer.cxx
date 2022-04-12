@@ -586,23 +586,23 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, GCancellable *canc
     }
 
   GLNX_HASH_TABLE_FOREACH (self->opt_direntries, const char *, filename)
-  {
-    g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
-    auto quoted = rpmostreecxx::maybe_shell_quote (opt);
-    /* Note that the destination can't be quoted as systemd just
-     * parses the remainder of the line, and doesn't expand quotes.
-     **/
-    g_string_append_printf (self->tmpfiles_d, "L %s - - - - /usr/lib/opt/%s\n", quoted.c_str (),
-                            filename);
-  }
+    {
+      g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
+      auto quoted = rpmostreecxx::maybe_shell_quote (opt);
+      /* Note that the destination can't be quoted as systemd just
+       * parses the remainder of the line, and doesn't expand quotes.
+       **/
+      g_string_append_printf (self->tmpfiles_d, "L %s - - - - /usr/lib/opt/%s\n", quoted.c_str (),
+                              filename);
+    }
 
   GLNX_HASH_TABLE_FOREACH (self->varlib_direntries, const char *, dirname)
-  {
-    g_autofree char *linkpath = g_strconcat ("/var/lib/", dirname, NULL);
-    auto quoted = rpmostreecxx::maybe_shell_quote (linkpath);
-    g_string_append_printf (self->tmpfiles_d, "L %s - - - - ../../usr/lib/%s\n", quoted.c_str (),
-                            dirname);
-  }
+    {
+      g_autofree char *linkpath = g_strconcat ("/var/lib/", dirname, NULL);
+      auto quoted = rpmostreecxx::maybe_shell_quote (linkpath);
+      g_string_append_printf (self->tmpfiles_d, "L %s - - - - ../../usr/lib/%s\n", quoted.c_str (),
+                              dirname);
+    }
 
   /* Handle any data we've accumulated to write to tmpfiles.d.
    * I originally tried to do this entirely in memory but things

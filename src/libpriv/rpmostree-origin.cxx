@@ -445,7 +445,7 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin, const char *group, cons
     {
       g_autoptr (GPtrArray) pkg_csum = g_ptr_array_new_with_free_func (g_free);
       GLNX_HASH_TABLE_FOREACH_KV (pkgs, const char *, k, const char *, v)
-      g_ptr_array_add (pkg_csum, g_strconcat (v, ":", k, NULL));
+        g_ptr_array_add (pkg_csum, g_strconcat (v, ":", k, NULL));
       g_key_file_set_string_list (origin->kf, group, key, (const char *const *)pkg_csum->pdata,
                                   pkg_csum->len);
     }
@@ -512,12 +512,12 @@ build_name_to_nevra_map (GHashTable *nevras, GHashTable **out_name_to_nevra, GEr
   g_autoptr (GHashTable) name_to_nevra = /* nevra vals owned by @nevras */
       g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   GLNX_HASH_TABLE_FOREACH (nevras, const char *, nevra)
-  {
-    g_autofree char *name = NULL;
-    if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
-      return FALSE;
-    g_hash_table_insert (name_to_nevra, util::move_nullify (name), (gpointer)nevra);
-  }
+    {
+      g_autofree char *name = NULL;
+      if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
+        return FALSE;
+      g_hash_table_insert (name_to_nevra, util::move_nullify (name), (gpointer)nevra);
+    }
 
   *out_name_to_nevra = util::move_nullify (name_to_nevra);
   return TRUE;

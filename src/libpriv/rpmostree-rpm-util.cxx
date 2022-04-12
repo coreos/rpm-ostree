@@ -1617,7 +1617,7 @@ rpmostree_advisories_variant (DnfSack *sack, GPtrArray *pkgs)
   g_auto (GVariantBuilder) builder;
   g_variant_builder_init (&builder, RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT);
   GLNX_HASH_TABLE_FOREACH_KV (advisories, DnfAdvisory *, advisory, GPtrArray *, pkgs)
-  g_variant_builder_add_value (&builder, advisory_variant_new (advisory, pkgs));
+    g_variant_builder_add_value (&builder, advisory_variant_new (advisory, pkgs));
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 

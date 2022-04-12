@@ -144,13 +144,13 @@ generate_pkgcache_refs (OstreeSysroot *sysroot, OstreeRepo *repo, guint *out_n_f
                                   cancellable, error))
     return FALSE;
   GLNX_HASH_TABLE_FOREACH (pkg_refs, const char *, ref)
-  {
-    if (g_hash_table_contains (referenced_pkgs, ref))
-      continue;
+    {
+      if (g_hash_table_contains (referenced_pkgs, ref))
+        continue;
 
-    ostree_repo_transaction_set_ref (repo, NULL, ref, NULL);
-    n_freed++;
-  }
+      ostree_repo_transaction_set_ref (repo, NULL, ref, NULL);
+      n_freed++;
+    }
 
   *out_n_freed = n_freed;
   return TRUE;
