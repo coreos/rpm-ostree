@@ -404,6 +404,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         basearch,
         rojig,
         selinux,
+        ima,
         gpg_key,
         include,
         container,
@@ -1255,6 +1256,10 @@ impl Treefile {
 
     pub(crate) fn get_selinux(&self) -> bool {
         self.parsed.base.selinux.unwrap_or(true)
+    }
+
+    pub(crate) fn get_ima(&self) -> bool {
+        self.parsed.base.ima.unwrap_or(false)
     }
 
     pub(crate) fn get_releasever(&self) -> String {
@@ -2276,6 +2281,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) lockfile_repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) selinux: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) ima: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) gpg_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

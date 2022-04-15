@@ -2425,6 +2425,9 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg, GCancel
   if (self->treefile_rs->get_readonly_executables ())
     flags |= RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES;
 
+  if (self->treefile_rs->get_ima ())
+    flags |= RPMOSTREE_IMPORTER_FLAGS_IMA;
+
   /* TODO - tweak the unpacker flags for containers */
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autoptr (RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (

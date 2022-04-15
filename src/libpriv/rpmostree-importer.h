@@ -45,12 +45,14 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeImporter, g_object_unref)
  * ostree-compliant paths rather than erroring out
  * @RPMOSTREE_IMPORTER_FLAGS_NODOCS: Skip documentation files
  * @RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES: Make executable files readonly
+ * @RPMOSTREE_IMPORTER_FLAGS_IMA: Enable IMA
  */
 typedef enum
 {
   RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS = (1 << 0),
   RPMOSTREE_IMPORTER_FLAGS_NODOCS = (1 << 1),
   RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES = (1 << 2),
+  RPMOSTREE_IMPORTER_FLAGS_IMA = (1 << 3),
 } RpmOstreeImporterFlags;
 
 RpmOstreeImporter *rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,

@@ -32,6 +32,9 @@ It supports the following parameters:
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
 
+ * `ima`: boolean, optional: Defaults to `false`.  Propagate any
+   IMA signatures in input RPMs into the final OSTree commit.
+
  * `boot-location` (or `boot_location`): string, optional:
     There are 2 possible values:
     * "new": A misnomer, this value is no longer "new".  Kernel data

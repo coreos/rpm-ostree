@@ -40,6 +40,7 @@
 #include <grp.h>
 #include <pwd.h>
 #include <rpm/rpmfi.h>
+#include <rpm/rpmfiles.h>
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
 #include <rpm/rpmts.h>
@@ -146,7 +147,7 @@ rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_of
 
   if (out_fi)
     {
-      ret_fi = rpmfiNew (ts, ret_header, RPMTAG_BASENAMES, (RPMFI_NOHEADER | RPMFI_FLAGS_INSTALL));
+      ret_fi = rpmfiNew (ts, ret_header, RPMTAG_BASENAMES, RPMFI_NOHEADER | RPMFI_FLAGS_QUERY);
       ret_fi = rpmfiInit (ret_fi, 0);
     }
 
@@ -157,6 +158,30 @@ rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_of
   if (out_cpio_offset)
     *out_cpio_offset = ret_cpio_offset;
   return TRUE;
+}
+
+/*
+ * ima_heck_zero_hdr: Check the signature for a zero header
+ *
+ * Check whether the given signature has a header with all zeros
+ *
+ * Returns -1 in case the signature is too short to compare
+ * (invalid signature), 0 in case the header is not only zeroes,
+ * and 1 if it is only zeroes.
+ */
+static int
+ima_check_zero_hdr (const unsigned char *fsig, size_t siglen)
+{
+  /*
+   * Every signature has a header signature_v2_hdr as defined in
+   * Linux's (4.5) security/integrity/integtrity.h. The following
+   * 9 bytes represent this header in front of the signature.
+   */
+  static const uint8_t zero_hdr[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+  if (siglen < sizeof (zero_hdr))
+    return -1;
+  return (memcmp (fsig, &zero_hdr, sizeof (zero_hdr)) == 0);
 }
 
 static void
@@ -179,10 +204,14 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
       const char *fn = rpmfiFN (self->fi);
       rpmfileAttrs fattrs = rpmfiFFlags (self->fi);
 
+      size_t siglen = 0;
+      const unsigned char *fsig = rpmfiFSignature (self->fi, &siglen);
+      const bool have_ima = (siglen > 0 && fsig && (ima_check_zero_hdr (fsig, siglen) == 0));
+
       const gboolean user_is_root = (user == NULL || g_str_equal (user, "root"));
       const gboolean group_is_root = (group == NULL || g_str_equal (group, "root"));
       const gboolean fcaps_is_unset = (fcaps == NULL || fcaps[0] == '\0');
-      if (!(user_is_root && group_is_root && fcaps_is_unset))
+      if (!(user_is_root && group_is_root && fcaps_is_unset) || have_ima)
         {
           g_hash_table_insert (self->rpmfi_overrides, g_strdup (fn), GINT_TO_POINTER (i));
         }
@@ -249,7 +278,7 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
 
 static void
 get_rpmfi_override (RpmOstreeImporter *self, const char *path, const char **out_user,
-                    const char **out_group, const char **out_fcaps)
+                    const char **out_group, const char **out_fcaps, GVariant **out_ima)
 {
   gpointer v;
 
@@ -266,6 +295,18 @@ get_rpmfi_override (RpmOstreeImporter *self, const char *path, const char **out_
     *out_group = rpmfiFGroup (self->fi);
   if (out_fcaps)
     *out_fcaps = rpmfiFCaps (self->fi);
+
+  if (out_ima)
+    {
+      size_t siglen;
+      const guint8 *fsig = rpmfiFSignature (self->fi, &siglen);
+      if (siglen > 0 && fsig && (ima_check_zero_hdr (fsig, siglen) == 0))
+        {
+          GVariant *ima_signature
+              = g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE, fsig, siglen, 1);
+          *out_ima = g_variant_ref_sink (ima_signature);
+        }
+    }
 }
 
 static gboolean
@@ -461,7 +502,7 @@ compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpo
       /* Lookup any rpmfi overrides (was parsed from the header) */
       const char *user = NULL;
       const char *group = NULL;
-      get_rpmfi_override (self, path, &user, &group, NULL);
+      get_rpmfi_override (self, path, &user, &group, NULL, NULL);
 
       auto entry = ROSCXX_VAL (
           tmpfiles_translate (path, *file_info, user ?: "root", group ?: "root"), error);
@@ -501,12 +542,25 @@ xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer use
   auto self = static_cast<RpmOstreeImporter *> (user_data);
   const char *fcaps = NULL;
 
-  get_rpmfi_override (self, path, NULL, NULL, &fcaps);
+  GVariant *imasig = NULL;
+  const bool use_ima = self->flags & RPMOSTREE_IMPORTER_FLAGS_IMA;
+  get_rpmfi_override (self, path, NULL, NULL, &fcaps, use_ima ? &imasig : NULL);
 
+  g_auto (GVariantBuilder) builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
   if (fcaps != NULL && fcaps[0] != '\0')
-    return rpmostree_fcap_to_xattr_variant (fcaps);
+    {
+      g_autoptr (GVariant) fcaps_v = rpmostree_fcap_to_ostree_xattr (fcaps);
+      g_variant_builder_add_value (&builder, fcaps_v);
+    }
 
-  return NULL;
+  if (imasig)
+    {
+      g_variant_builder_add (&builder, "(@ay@ay)", g_variant_new_bytestring (RPMOSTREE_SYSTEM_IMA),
+                             imasig);
+    }
+
+  return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
 /* Given a path in an RPM archive, possibly translate it for ostree convention. */

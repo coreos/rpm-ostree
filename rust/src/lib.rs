@@ -534,6 +534,7 @@ pub mod ffi {
         fn get_documentation(&self) -> bool;
         fn get_recommends(&self) -> bool;
         fn get_selinux(&self) -> bool;
+        fn get_ima(&self) -> bool;
         fn get_releasever(&self) -> String;
         fn get_repo_metadata_target(&self) -> RepoMetadataTarget;
         fn rpmdb_backend_is_target(&self) -> bool;
