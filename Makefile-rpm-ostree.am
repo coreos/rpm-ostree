@@ -135,11 +135,15 @@ librpmostreecxxrs_la_CXXFLAGS = $(AM_CXXFLAGS) $(SANITIZER_FLAGS) $(rpmostree_co
 librpmostreecxxrs_la_LIBADD = -lstdc++
 BUILT_SOURCES += $(binding_generated_sources)
 
+ostreeextdir = $(DESTDIR)$(libexecdir)/libostree/ext
+
 # And install our binary
 install-rpmostree-hook:
 	install -d -m 0755 $(DESTDIR)$(bindir)
 	install -m 0755 -t $(DESTDIR)$(bindir) rpm-ostree
-	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(DESTDIR)$(bindir)/ostree-container
+	install -d -m 0755 $(ostreeextdir)
+	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(ostreeextdir)/ostree-ima-sign 
+	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(ostreeextdir)/ostree-container
 INSTALL_EXEC_HOOKS += install-rpmostree-hook
 
 # Wraps `cargo test`.  This is always a debug non-release build;
