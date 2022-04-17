@@ -73,8 +73,8 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
     .await?
 }
 
-/// Multicall entrypoint for `ostree-container`.
-async fn multicall_ostree_container(args: Vec<String>) -> Result<i32> {
+/// Invoke the ostree-ext CLI code.
+async fn dispatch_ostree_ext(args: Vec<String>) -> Result<i32> {
     ostree_ext::cli::run_from_iter(args).await?;
     Ok(0)
 }
@@ -82,7 +82,7 @@ async fn multicall_ostree_container(args: Vec<String>) -> Result<i32> {
 /// Dispatch multicall binary to relevant logic, based on callname from `argv[0]`.
 async fn dispatch_multicall(callname: String, args: Vec<String>) -> Result<i32> {
     match callname.as_str() {
-        "ostree-container" => multicall_ostree_container(args).await,
+        "ostree-container" | "ostree-ima-sign" => dispatch_ostree_ext(args).await,
         _ => inner_async_main(args).await, // implicitly includes "rpm-ostree"
     }
 }
