@@ -34,6 +34,9 @@ if rpm -q foo 2>/dev/null; then
   fatal "found foo"
 fi
 
+# Turn off zincati since we're rebasing
+systemctl mask --now zincati
+
 rpm -qa | sort > original-rpmdb.txt
 
 rpm-ostree install foo
