@@ -46,18 +46,6 @@ _rpmostree_jsonutil_object_get_optional_string_member (JsonObject *object, const
   return TRUE;
 }
 
-const char *
-_rpmostree_jsonutil_object_require_string_member (JsonObject *object, const char *member_name,
-                                                  GError **error)
-{
-  const char *ret;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (object, member_name, &ret, error))
-    return NULL;
-  if (!ret)
-    return (char *)glnx_null_throw (error, "Member '%s' not found", member_name);
-  return ret;
-}
-
 gboolean
 _rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject *object, const char *member_name,
                                                         gboolean *out_value, GError **error)
