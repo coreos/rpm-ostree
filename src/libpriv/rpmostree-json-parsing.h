@@ -30,10 +30,6 @@ gboolean _rpmostree_jsonutil_object_get_optional_string_member (JsonObject *obje
                                                                 const char **out_value,
                                                                 GError **error);
 
-const char *_rpmostree_jsonutil_object_require_string_member (JsonObject *object,
-                                                              const char *member_name,
-                                                              GError **error);
-
 gboolean _rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject *object,
                                                                  const char *member_name,
                                                                  gboolean *out_value,

@@ -469,6 +469,7 @@ pub mod ffi {
         fn get_all_ostree_layers(&self) -> Vec<String>;
         fn get_repos(&self) -> Vec<String>;
         fn get_packages(&self) -> Vec<String>;
+        fn get_automatic_version_prefix(&self) -> Result<String>;
         fn add_packages(&mut self, packages: Vec<String>, allow_existing: bool) -> Result<bool>;
         fn has_packages(&self) -> bool;
         fn set_packages(&mut self, packages: Vec<String>);

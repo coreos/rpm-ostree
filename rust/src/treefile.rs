@@ -713,6 +713,15 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    /// Return the `automatic-version-prefix` field, or an error if missing.
+    pub fn get_automatic_version_prefix(&self) -> CxxResult<String> {
+        self.parsed
+            .base
+            .automatic_version_prefix
+            .clone()
+            .ok_or_else(|| anyhow!("Member 'automatic-version-prefix' not found").into())
+    }
+
     // The list of packages is really a list of provides, so string equality
     // is a bit weird here. Multiple provides can resolve to the same package
     // and we allow that. But still, let's make sure that silly users don't
