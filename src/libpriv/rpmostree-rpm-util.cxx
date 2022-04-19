@@ -1108,6 +1108,7 @@ rpmostree_fcap_to_xattr_variant (const char *fcap)
   int vfscap_size;
 
   cap_t_to_vfs (caps, &vfscap, &vfscap_size);
+  cap_free (caps);
   vfsbytes = g_bytes_new (&vfscap, vfscap_size);
 
   g_variant_builder_init (&builder, (GVariantType *)"a(ayay)");
