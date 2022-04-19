@@ -10,11 +10,12 @@ use ostree_container::store::ImageImporter;
 use ostree_container::store::PrepareResult;
 use ostree_container::OstreeImageReference;
 use ostree_ext::container as ostree_container;
-use ostree_ext::container::store::ManifestLayerState;
+use ostree_ext::container::store::{ImportProgress, ManifestLayerState};
 use ostree_ext::ostree;
 use std::convert::TryFrom;
 use std::pin::Pin;
 use tokio::runtime::Handle;
+use tokio::sync::mpsc::Receiver;
 
 impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::ContainerImageState {
     fn from(s: Box<ostree_container::store::LayeredImageState>) -> crate::ffi::ContainerImageState {
@@ -42,16 +43,26 @@ fn layer_counts<'a>(layers: impl Iterator<Item = &'a ManifestLayerState>) -> (u3
     )
 }
 
+async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
+    while let Some(v) = r.recv().await {
+        let msg = ostree_ext::cli::layer_progress_format(&v);
+        output_message(&msg);
+    }
+}
+
 async fn pull_container_async(
     repo: &ostree::Repo,
     imgref: &OstreeImageReference,
 ) -> Result<ContainerImageState> {
     output_message(&format!("Pulling manifest: {}", &imgref));
     let mut imp = ImageImporter::new(repo, imgref, Default::default()).await?;
+    let layer_progress = imp.request_progress();
     let prep = match imp.prepare().await? {
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
         PrepareResult::Ready(r) => r,
     };
+    let progress_printer =
+        tokio::task::spawn(async move { layer_progress_print(layer_progress).await });
     let digest = prep.manifest_digest.clone();
     output_message(&format!("Importing: {} (digest: {})", &imgref, &digest));
     let ostree_layers = prep
@@ -72,9 +83,10 @@ async fn pull_container_async(
             "custom layers stored: {stored} needed: {n_to_fetch} ({size})"
         ));
     }
-    let import = imp.import(prep).await?;
+    let import = imp.import(prep).await;
+    let _ = progress_printer.await;
     // TODO log the discarded bits from import
-    Ok(import.into())
+    Ok(import?.into())
 }
 
 /// Import ostree commit in container image using ostree-rs-ext's API.
