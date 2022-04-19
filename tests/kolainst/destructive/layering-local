@@ -33,6 +33,8 @@ fi
 
 # Disable repos, no Internet access should be required
 rm -rf /etc/yum.repos.d/
+# Also disable zincati since we're rebasing
+systemctl mask --now zincati
 booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
 ostree refs ${booted_commit} --create vmcheck
 rpm-ostree rebase :vmcheck

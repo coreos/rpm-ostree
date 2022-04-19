@@ -41,6 +41,9 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
     rm ${image_dir} -rf
     
+    # Since we're switching OS update stream, turn off zincati
+    systemctl mask --now zincati
+
     rpm-ostree ex-container 'export' --repo=/ostree/repo ${checksum} "${image}"
     rpm-ostree rebase "$image_pull" --experimental | tee out.txt
     assert_file_has_content out.txt 'Importing.*'"$image_pull"

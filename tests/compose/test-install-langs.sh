@@ -36,6 +36,6 @@ assert_file_has_content out.txt 'opérande de fichier manquant'
 if ostree --repo=${repo} ls ${treeref} /usr/bin/rpmostree-postprocess-lang-test.sh 2>err.txt; then
     assert_not_reached "we failed to unlink?"
 fi
-assert_file_has_content err.txt "error: No such file or directory"
+assert_file_has_content err.txt "error:.*No such file or directory"
 
 echo "ok install-langs"
