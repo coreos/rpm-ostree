@@ -1372,9 +1372,9 @@ checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
 
 [[package]]
 name = "memfd"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "374bce63139e5fc4403951f8f6e56f81a3538c43a420d24d3138f96e36476799"
+checksum = "7960eed87959a281913fdbfda7b49ada3a47923f1dcc07846bf30659387b2438"
 dependencies = [
  "rustix 0.34.2",
 ]
