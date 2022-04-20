@@ -112,8 +112,7 @@ gboolean rpmostree_origin_add_local_fileoverride_packages (RpmOstreeOrigin *orig
 gboolean rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, char **packages,
                                            gboolean allow_noent, gboolean *out_changed,
                                            GError **error);
-gboolean rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin, gboolean *out_changed,
-                                               GError **error);
+gboolean rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin);
 
 gboolean rpmostree_origin_add_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
                                        gboolean enable_only);

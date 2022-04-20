@@ -497,6 +497,7 @@ pub mod ffi {
         fn get_modules_install(&self) -> Vec<String>;
         fn add_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool;
         fn remove_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool;
+        fn remove_all_packages(&mut self) -> bool;
         fn get_exclude_packages(&self) -> Vec<String>;
         fn get_platform_module(&self) -> String;
         fn get_install_langs(&self) -> Vec<String>;

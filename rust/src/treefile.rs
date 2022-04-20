@@ -962,6 +962,44 @@ impl Treefile {
         }
     }
 
+    pub(crate) fn remove_all_packages(&mut self) -> bool {
+        let mut changed = false;
+        changed = self
+            .parsed
+            .packages
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed = self
+            .parsed
+            .derive
+            .packages_local
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed = self
+            .parsed
+            .derive
+            .packages_local_fileoverride
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed = self
+            .parsed
+            .modules
+            .take()
+            .map(|mut x| {
+                x.enable.take().map(|y| !y.is_empty()).unwrap_or_default()
+                    || x.install.take().map(|y| !y.is_empty()).unwrap_or_default()
+            })
+            .unwrap_or_default()
+            || changed;
+        changed
+    }
+
     pub(crate) fn get_exclude_packages(&self) -> Vec<String> {
         self.parsed
             .base
@@ -3431,6 +3469,13 @@ conditional-include:
         assert!(treefile.get_modules_install().is_empty());
         assert!(treefile.has_packages_override_remove_name("glibc"));
         assert!(!treefile.has_packages_override_remove_name("enoent"));
+        assert!(treefile.remove_all_packages());
+        assert!(treefile.get_packages().is_empty());
+        assert!(treefile.get_local_packages().is_empty());
+        assert!(treefile.get_local_fileoverride_packages().is_empty());
+        assert!(treefile.get_modules_enable().is_empty());
+        assert!(treefile.get_modules_install().is_empty());
+        assert!(!treefile.remove_all_packages());
         assert_eq!(
             treefile.get_base_refspec(),
             crate::ffi::Refspec {

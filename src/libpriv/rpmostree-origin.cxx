@@ -620,67 +620,12 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String
 
 /* Mutability: setter */
 gboolean
-rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin, gboolean *out_changed,
-                                      GError **error)
+rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin)
 {
-  gboolean changed = FALSE;
-  gboolean local_changed = FALSE;
-  gboolean local_fileoverride_changed = FALSE;
-  gboolean modules_enable_changed = FALSE;
-  gboolean modules_install_changed = FALSE;
-
-  if (g_hash_table_size (origin->cached_packages) > 0)
-    {
-      g_hash_table_remove_all (origin->cached_packages);
-      changed = TRUE;
-    }
-
-  if (g_hash_table_size (origin->cached_local_packages) > 0)
-    {
-      g_hash_table_remove_all (origin->cached_local_packages);
-      local_changed = TRUE;
-    }
-
-  if (g_hash_table_size (origin->cached_local_fileoverride_packages) > 0)
-    {
-      g_hash_table_remove_all (origin->cached_local_fileoverride_packages);
-      local_fileoverride_changed = TRUE;
-    }
-
-  if (g_hash_table_size (origin->cached_modules_enable) > 0)
-    {
-      g_hash_table_remove_all (origin->cached_modules_enable);
-      modules_enable_changed = TRUE;
-    }
-
-  if (g_hash_table_size (origin->cached_modules_install) > 0)
-    {
-      g_hash_table_remove_all (origin->cached_modules_install);
-      modules_install_changed = TRUE;
-    }
-
+  auto changed = (*origin->treefile)->remove_all_packages ();
   if (changed)
-    update_keyfile_pkgs_from_cache (origin, "packages", "requested", origin->cached_packages,
-                                    FALSE);
-  if (local_changed)
-    update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
-                                    origin->cached_local_packages, TRUE);
-  if (local_fileoverride_changed)
-    update_keyfile_pkgs_from_cache (origin, "packages", "requested-local-fileoverride",
-                                    origin->cached_local_fileoverride_packages, TRUE);
-  if (modules_enable_changed)
-    update_keyfile_pkgs_from_cache (origin, "modules", "enable", origin->cached_modules_enable,
-                                    FALSE);
-  if (modules_install_changed)
-    update_keyfile_pkgs_from_cache (origin, "modules", "install", origin->cached_modules_install,
-                                    FALSE);
-
-  changed = changed || local_changed || local_fileoverride_changed || modules_enable_changed
-            || modules_install_changed;
-  set_changed (out_changed, changed);
-  if (changed)
-    sync_treefile (origin);
-  return TRUE;
+    sync_origin (origin);
+  return changed;
 }
 
 /* Mutability: setter */
