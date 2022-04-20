@@ -1199,10 +1199,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
       if (!rpmostree_origin_remove_packages (origin, uninstall_pkgs, idempotent_layering, &changed,
                                              error))
         return FALSE;
-      if (!rpmostree_origin_remove_modules (origin, disable_modules, TRUE, &changed, error))
-        return FALSE;
-      if (!rpmostree_origin_remove_modules (origin, uninstall_modules, FALSE, &changed, error))
-        return FALSE;
+      if (rpmostree_origin_remove_modules (origin, util::rust_stringvec_from_strv (disable_modules),
+                                           TRUE))
+        changed = TRUE;
+      if (rpmostree_origin_remove_modules (
+              origin, util::rust_stringvec_from_strv (uninstall_modules), FALSE))
+        changed = TRUE;
     }
 
   /* lazily loaded cache that's used in a few conditional blocks */

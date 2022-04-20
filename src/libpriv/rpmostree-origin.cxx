@@ -609,25 +609,13 @@ rpmostree_origin_add_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> m
 
 /* Mutability: setter */
 gboolean
-rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, char **modules, gboolean enable_only,
-                                 gboolean *out_changed, GError **error)
+rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
+                                 gboolean enable_only)
 {
-  if (!modules)
-    return TRUE;
-  const char *key = enable_only ? "enable" : "install";
-  GHashTable *target = enable_only ? origin->cached_modules_enable : origin->cached_modules_install;
-  gboolean changed = FALSE;
-  for (char **mod = modules; mod && *mod; mod++)
-    changed = (g_hash_table_remove (target, *mod) || changed);
-
+  auto changed = (*origin->treefile)->remove_modules (modules, enable_only);
   if (changed)
-    {
-      update_string_list_from_hash_table (origin, "modules", key, target);
-      sync_treefile (origin);
-    }
-
-  set_changed (out_changed, changed);
-  return TRUE;
+    sync_origin (origin);
+  return changed;
 }
 
 /* Mutability: setter */
