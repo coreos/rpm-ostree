@@ -1246,10 +1246,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         return FALSE;
     }
 
-  if (!rpmostree_origin_add_modules (origin, enable_modules, TRUE, &changed, error))
-    return FALSE;
-  if (!rpmostree_origin_add_modules (origin, install_modules, FALSE, &changed, error))
-    return FALSE;
+  if (rpmostree_origin_add_modules (origin, util::rust_stringvec_from_strv (enable_modules), TRUE))
+    changed = TRUE;
+  if (rpmostree_origin_add_modules (origin, util::rust_stringvec_from_strv (install_modules),
+                                    FALSE))
+    changed = TRUE;
 
   if (install_local_pkgs != NULL)
     {
