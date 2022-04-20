@@ -897,7 +897,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
       /* let --add-metadata-string=version=... take precedence */
       !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
     {
-      CXX_TRY_VAR (ver_prefix, (*self->treefile_rs)->get_automatic_version_prefix (), error);
+      CXX_TRY_VAR (ver_prefix, (*self->treefile_rs)->require_automatic_version_prefix (), error);
       const char *ver_suffix = NULL;
       if (!_rpmostree_jsonutil_object_get_optional_string_member (
               self->treefile, "automatic-version-suffix", &ver_suffix, error))

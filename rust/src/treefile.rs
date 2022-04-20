@@ -714,7 +714,7 @@ impl Treefile {
     }
 
     /// Return the `automatic-version-prefix` field, or an error if missing.
-    pub fn get_automatic_version_prefix(&self) -> CxxResult<String> {
+    pub fn require_automatic_version_prefix(&self) -> CxxResult<String> {
         self.parsed
             .base
             .automatic_version_prefix
