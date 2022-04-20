@@ -106,8 +106,7 @@ rpmverOverlap (rpmver v1, rpmsenseFlags f1, rpmver v2, rpmsenseFlags f2)
               if ((v1->r && *v1->r && (f2 & RPMSENSE_EQUAL))
                   || (v2->r && *v2->r && (f1 & RPMSENSE_EQUAL)))
                 {
-                  result = 1;
-                  goto exit;
+                  return 1;
                 }
             }
         }
@@ -130,7 +129,6 @@ rpmverOverlap (rpmver v1, rpmsenseFlags f1, rpmver v2, rpmsenseFlags f2)
       result = 1;
     }
 
-exit:
   return result;
 }
 
