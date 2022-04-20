@@ -1184,8 +1184,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
 
   if (no_layering)
     {
-      if (!rpmostree_origin_remove_all_packages (origin, &changed, error))
-        return FALSE;
+      if (rpmostree_origin_remove_all_packages (origin))
+        changed = TRUE;
     }
   else
     {
