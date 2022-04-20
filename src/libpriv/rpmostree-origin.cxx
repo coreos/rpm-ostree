@@ -41,8 +41,6 @@ struct RpmOstreeOrigin
 
   char *cached_unconfigured_state;
   GHashTable *cached_packages;                    /* set of reldeps */
-  GHashTable *cached_modules_enable;              /* set of module specs to enable */
-  GHashTable *cached_modules_install;             /* set of module specs to install */
   GHashTable *cached_local_packages;              /* NEVRA --> header sha256 */
   GHashTable *cached_local_fileoverride_packages; /* NEVRA --> header sha256 */
   /* GHashTable *cached_overrides_replace;         XXX: NOT IMPLEMENTED YET */
@@ -69,8 +67,6 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_key_file_unref (origin->kf);
   g_free (origin->cached_unconfigured_state);
   g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_modules_enable, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_modules_install, g_hash_table_unref);
   g_clear_pointer (&origin->cached_local_packages, g_hash_table_unref);
   g_clear_pointer (&origin->cached_local_fileoverride_packages, g_hash_table_unref);
   g_clear_pointer (&origin->cached_overrides_local_replace, g_hash_table_unref);
@@ -146,8 +142,6 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   ret->kf = std::move (kfv);
 
   ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  ret->cached_modules_enable = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  ret->cached_modules_install = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   ret->cached_local_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
   ret->cached_local_fileoverride_packages
       = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
@@ -167,13 +161,6 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
 
   if (!parse_packages_strv (ret->kf, "packages", "requested-local-fileoverride", TRUE,
                             ret->cached_local_fileoverride_packages, error))
-    return FALSE;
-
-  if (!parse_packages_strv (ret->kf, "modules", "enable", FALSE, ret->cached_modules_enable, error))
-    return FALSE;
-
-  if (!parse_packages_strv (ret->kf, "modules", "install", FALSE, ret->cached_modules_install,
-                            error))
     return FALSE;
 
   if (!parse_packages_strv (ret->kf, "overrides", "remove", FALSE, ret->cached_overrides_remove,
