@@ -890,6 +890,19 @@ impl Treefile {
         n != map.len()
     }
 
+    pub(crate) fn remove_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool {
+        let modules_cfg = self.parsed.modules.ext_get_or_insert_default();
+        let map = if enable_only {
+            modules_cfg.enable.ext_get_or_insert_default()
+        } else {
+            modules_cfg.install.ext_get_or_insert_default()
+        };
+        let modules: BTreeSet<String> = modules.into_iter().collect();
+        let n = map.len();
+        map.retain(|module| !modules.contains(module));
+        n != map.len()
+    }
+
     pub(crate) fn get_packages_override_remove(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -3410,6 +3423,12 @@ conditional-include:
         assert!(!treefile.add_modules(vec!["baz:boo/minimal".into()], false));
         assert_eq!(treefile.get_modules_enable(), &["foo:bar", "nodejs:latest"]);
         assert_eq!(treefile.get_modules_install(), &["baz:boo/minimal"]);
+        assert!(treefile.remove_modules(vec!["foo:bar".into()], true));
+        assert!(!treefile.remove_modules(vec!["foo:bar".into()], true));
+        assert!(treefile.remove_modules(vec!["baz:boo/minimal".into()], false));
+        assert!(!treefile.remove_modules(vec!["baz:boo/minimal".into()], false));
+        assert_eq!(treefile.get_modules_enable(), &["nodejs:latest"]);
+        assert!(treefile.get_modules_install().is_empty());
         assert!(treefile.has_packages_override_remove_name("glibc"));
         assert!(!treefile.has_packages_override_remove_name("enoent"));
         assert_eq!(

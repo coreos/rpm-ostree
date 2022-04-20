@@ -118,9 +118,8 @@ gboolean rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin, gboolean
 gboolean rpmostree_origin_add_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
                                        gboolean enable_only);
 
-gboolean rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, char **modules,
-                                          gboolean enable_only, gboolean *out_changed,
-                                          GError **error);
+gboolean rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
+                                          gboolean enable_only);
 
 typedef enum
 {
