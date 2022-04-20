@@ -35,3 +35,10 @@ git ls-files '*.rs' | while read f; do
     fi
 done
 echo "ok"
+
+echo 'checking for goto...'
+if git grep 'goto [a-z]*;' '*.c' '*.cxx'; then
+    echo "error: found goto usage" 1>&2
+    exit 1
+fi
+echo "ok"
