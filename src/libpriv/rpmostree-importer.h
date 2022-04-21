@@ -60,8 +60,6 @@ RpmOstreeImporter *rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, Dn
 gboolean rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_offset,
                                            rpmfi *out_fi, GError **error);
 
-const char *rpmostree_importer_get_ostree_branch (RpmOstreeImporter *unpacker);
-
 gboolean rpmostree_importer_run (RpmOstreeImporter *unpacker, char **out_commit,
                                  GCancellable *cancellable, GError **error);
 
