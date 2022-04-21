@@ -75,7 +75,6 @@ struct RpmOstreeImporter
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
   DnfPackage *pkg;
-  char *hdr_sha256;
 
   char *ostree_branch;
 };
@@ -102,8 +101,6 @@ rpmostree_importer_finalize (GObject *object)
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->opt_direntries, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->varlib_direntries, (GDestroyNotify)g_hash_table_unref);
-
-  g_free (self->hdr_sha256);
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
 }
@@ -333,9 +330,10 @@ repo_metadata_for_package (DnfRepo *repo)
 }
 
 static gboolean
-build_metadata_variant (RpmOstreeImporter *self, GVariant **out_variant, GCancellable *cancellable,
-                        GError **error)
+build_metadata_variant (RpmOstreeImporter *self, GVariant **out_variant, char **out_metadata_sha256,
+                        GCancellable *cancellable, GError **error)
 {
+  g_autofree char *metadata_sha256 = NULL;
   g_autoptr (GChecksum) pkg_checksum = g_checksum_new (G_CHECKSUM_SHA256);
   g_auto (GVariantBuilder) metadata_builder;
   g_variant_builder_init (&metadata_builder, (GVariantType *)"a{sv}");
@@ -359,10 +357,10 @@ build_metadata_variant (RpmOstreeImporter *self, GVariant **out_variant, GCancel
     g_checksum_update (pkg_checksum, (const guint8 *)g_bytes_get_data (metadata, NULL),
                        g_bytes_get_size (metadata));
 
-    self->hdr_sha256 = g_strdup (g_checksum_get_string (pkg_checksum));
+    metadata_sha256 = g_strdup (g_checksum_get_string (pkg_checksum));
 
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.metadata_sha256",
-                           g_variant_new_string (self->hdr_sha256));
+                           g_variant_new_string (metadata_sha256));
   }
 
   /* include basic NEVRA information so we don't have to write out and read back the header
@@ -415,6 +413,10 @@ build_metadata_variant (RpmOstreeImporter *self, GVariant **out_variant, GCancel
     }
 
   *out_variant = g_variant_builder_end (&metadata_builder);
+
+  if (out_metadata_sha256)
+    *out_metadata_sha256 = util::move_nullify (metadata_sha256);
+
   return TRUE;
 }
 
@@ -547,8 +549,8 @@ handle_translate_pathname (OstreeRepo *repo, const struct stat *stbuf, const cha
 }
 
 static gboolean
-import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, GCancellable *cancellable,
-                    GError **error)
+import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadata_sha256,
+                    GCancellable *cancellable, GError **error)
 {
   OstreeRepo *repo = self->repo;
   /* Passed to the commit modifier */
@@ -637,8 +639,9 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, GCancellable *canc
   if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
     return glnx_prefix_error (error, "Writing mtree");
 
+  g_autofree char *metadata_sha256 = NULL;
   g_autoptr (GVariant) metadata = NULL;
-  if (!build_metadata_variant (self, &metadata, cancellable, error))
+  if (!build_metadata_variant (self, &metadata, &metadata_sha256, cancellable, error))
     return FALSE;
   g_variant_ref_sink (metadata);
 
@@ -652,18 +655,22 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, GCancellable *canc
                                            buildtime, out_csum, cancellable, error))
     return glnx_prefix_error (error, "Writing commit");
 
+  if (out_metadata_sha256)
+    *out_metadata_sha256 = util::move_nullify (metadata_sha256);
+
   return TRUE;
 }
 
 gboolean
-rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, GCancellable *cancellable,
-                        GError **error)
+rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, char **out_metadata_sha256,
+                        GCancellable *cancellable, GError **error)
 {
   if (g_cancellable_set_error_if_cancelled (cancellable, error))
     return FALSE;
 
+  g_autofree char *metadata_sha256 = NULL;
   g_autofree char *csum = NULL;
-  if (!import_rpm_to_repo (self, &csum, cancellable, error))
+  if (!import_rpm_to_repo (self, &csum, &metadata_sha256, cancellable, error))
     {
       g_autofree char *name = headerGetAsString (self->hdr, RPMTAG_NAME);
       return glnx_prefix_error (error, "Importing package '%s'", name);
@@ -673,6 +680,9 @@ rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, GCancellable *
 
   if (out_csum)
     *out_csum = util::move_nullify (csum);
+  if (out_metadata_sha256)
+    *out_metadata_sha256 = util::move_nullify (metadata_sha256);
+
   return TRUE;
 }
 
@@ -683,7 +693,7 @@ import_in_thread (GTask *task, gpointer source, gpointer task_data, GCancellable
   auto self = static_cast<RpmOstreeImporter *> (source);
   g_autofree char *rev = NULL;
 
-  if (!rpmostree_importer_run (self, &rev, cancellable, &local_error))
+  if (!rpmostree_importer_run (self, &rev, NULL, cancellable, &local_error))
     g_task_return_error (task, local_error);
   else
     g_task_return_pointer (task, util::move_nullify (rev), g_free);
@@ -713,10 +723,4 @@ rpmostree_importer_get_nevra (RpmOstreeImporter *self)
       self->hdr,
       (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME | PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE
                                | PKG_NEVRA_FLAGS_ARCH));
-}
-
-const char *
-rpmostree_importer_get_header_sha256 (RpmOstreeImporter *self)
-{
-  return self->hdr_sha256;
 }
