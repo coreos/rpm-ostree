@@ -231,6 +231,10 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   if (!rpmostree_importer_read_metainfo (*fd, &hdr, &cpio_offset, &fi, error))
     return (RpmOstreeImporter *)glnx_prefix_error_null (error, "Reading metainfo");
 
+  g_assert (hdr != NULL);
+  g_autofree char *ostree_branch = rpmostree_get_cache_branch_header (hdr);
+  g_assert (ostree_branch != NULL);
+
   ret = (RpmOstreeImporter *)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
   ret->fd = glnx_steal_fd (fd);
   ret->repo = (OstreeRepo *)g_object_ref (repo);
@@ -247,6 +251,8 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   build_rpmfi_overrides (ret);
+
+  ret->ostree_branch = util::move_nullify (ostree_branch);
 
   return ret;
 }
@@ -270,17 +276,6 @@ get_rpmfi_override (RpmOstreeImporter *self, const char *path, const char **out_
     *out_group = rpmfiFGroup (self->fi);
   if (out_fcaps)
     *out_fcaps = rpmfiFCaps (self->fi);
-}
-
-const char *
-rpmostree_importer_get_ostree_branch (RpmOstreeImporter *self)
-{
-  if (!self->ostree_branch)
-    {
-      self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
-    }
-
-  return self->ostree_branch;
 }
 
 static gboolean
@@ -674,8 +669,7 @@ rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, GCancellable *
       return glnx_prefix_error (error, "Importing package '%s'", name);
     }
 
-  const char *branch = rpmostree_importer_get_ostree_branch (self);
-  ostree_repo_transaction_set_ref (self->repo, NULL, branch, csum);
+  ostree_repo_transaction_set_ref (self->repo, NULL, self->ostree_branch, csum);
 
   if (out_csum)
     *out_csum = util::move_nullify (csum);
@@ -713,8 +707,8 @@ rpmostree_importer_run_async_finish (RpmOstreeImporter *self, GAsyncResult *resu
 char *
 rpmostree_importer_get_nevra (RpmOstreeImporter *self)
 {
-  if (self->hdr == NULL)
-    return NULL;
+  g_assert (self->hdr != NULL);
+
   return rpmostree_header_custom_nevra_strdup (
       self->hdr,
       (RpmOstreePkgNevraFlags)(PKG_NEVRA_FLAGS_NAME | PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE
