@@ -662,7 +662,7 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
 }
 
 gboolean
-rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, char **out_sha256_nevra,
+rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, char **out_metadata_sha256,
                         GCancellable *cancellable, GError **error)
 {
   if (g_cancellable_set_error_if_cancelled (cancellable, error))
@@ -678,13 +678,10 @@ rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, char **out_sha
 
   ostree_repo_transaction_set_ref (self->repo, NULL, self->ostree_branch, csum);
 
-  g_autofree char *nevra = rpmostree_importer_get_nevra (self);
-  g_autofree char *sha256_nevra = g_strconcat (metadata_sha256, ":", nevra, NULL);
-
   if (out_csum)
     *out_csum = util::move_nullify (csum);
-  if (out_sha256_nevra)
-    *out_sha256_nevra = util::move_nullify (sha256_nevra);
+  if (out_metadata_sha256)
+    *out_metadata_sha256 = util::move_nullify (metadata_sha256);
 
   return TRUE;
 }

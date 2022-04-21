@@ -61,7 +61,7 @@ gboolean rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *ou
                                            rpmfi *out_fi, GError **error);
 
 gboolean rpmostree_importer_run (RpmOstreeImporter *unpacker, char **out_commit,
-                                 char **out_sha256_nevra, GCancellable *cancellable,
+                                 char **out_metadata_sha256, GCancellable *cancellable,
                                  GError **error);
 
 void rpmostree_importer_run_async (RpmOstreeImporter *unpacker, GCancellable *cancellable,

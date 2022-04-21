@@ -572,9 +572,12 @@ import_local_rpm (OstreeRepo *repo, OstreeSePolicy *policy, int *fd, char **out_
   if (unpacker == NULL)
     return FALSE;
 
-  g_autofree char *sha256_nevra = NULL;
-  if (!rpmostree_importer_run (unpacker, NULL, &sha256_nevra, cancellable, error))
+  g_autofree char *metadata_sha256 = NULL;
+  if (!rpmostree_importer_run (unpacker, NULL, &metadata_sha256, cancellable, error))
     return FALSE;
+
+  g_autofree char *nevra = rpmostree_importer_get_nevra (unpacker);
+  g_autofree char *sha256_nevra = g_strconcat (metadata_sha256, ":", nevra, NULL);
 
   if (out_sha256_nevra)
     *out_sha256_nevra = util::move_nullify (sha256_nevra);
