@@ -863,7 +863,7 @@ impl Treefile {
         self.parsed
             .modules
             .as_ref()
-            .map(|m| m.enable.is_some())
+            .map(|m| m.enable.as_ref().map(|e| !e.is_empty()).unwrap_or_default())
             .unwrap_or_default()
     }
 
