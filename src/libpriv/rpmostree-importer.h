@@ -61,7 +61,8 @@ gboolean rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *ou
                                            rpmfi *out_fi, GError **error);
 
 gboolean rpmostree_importer_run (RpmOstreeImporter *unpacker, char **out_commit,
-                                 GCancellable *cancellable, GError **error);
+                                 char **out_sha256_nevra, GCancellable *cancellable,
+                                 GError **error);
 
 void rpmostree_importer_run_async (RpmOstreeImporter *unpacker, GCancellable *cancellable,
                                    GAsyncReadyCallback callback, gpointer user_data);
@@ -70,7 +71,5 @@ char *rpmostree_importer_run_async_finish (RpmOstreeImporter *self, GAsyncResult
                                            GError **error);
 
 char *rpmostree_importer_get_nevra (RpmOstreeImporter *self);
-
-const char *rpmostree_importer_get_header_sha256 (RpmOstreeImporter *self);
 
 G_END_DECLS

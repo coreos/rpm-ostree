@@ -564,7 +564,7 @@ deploy_transaction_finalize (GObject *object)
 }
 
 static gboolean
-import_local_rpm (OstreeRepo *repo, OstreeSePolicy *policy, int *fd, char **sha256_nevra,
+import_local_rpm (OstreeRepo *repo, OstreeSePolicy *policy, int *fd, char **out_sha256_nevra,
                   GCancellable *cancellable, GError **error)
 {
   g_autoptr (RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (
@@ -572,11 +572,12 @@ import_local_rpm (OstreeRepo *repo, OstreeSePolicy *policy, int *fd, char **sha2
   if (unpacker == NULL)
     return FALSE;
 
-  if (!rpmostree_importer_run (unpacker, NULL, cancellable, error))
+  g_autofree char *sha256_nevra = NULL;
+  if (!rpmostree_importer_run (unpacker, NULL, &sha256_nevra, cancellable, error))
     return FALSE;
 
-  g_autofree char *nevra = rpmostree_importer_get_nevra (unpacker);
-  *sha256_nevra = g_strconcat (rpmostree_importer_get_header_sha256 (unpacker), ":", nevra, NULL);
+  if (out_sha256_nevra)
+    *out_sha256_nevra = util::move_nullify (sha256_nevra);
 
   return TRUE;
 }
