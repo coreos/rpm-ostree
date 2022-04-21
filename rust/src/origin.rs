@@ -121,7 +121,7 @@ pub(crate) fn treefile_to_origin(tf: &Treefile) -> Result<*mut crate::FFIGKeyFil
 }
 
 /// Set a keyfile value to a string list.
-fn kf_set_string_list<'a>(
+fn kf_set_string_list_optional<'a>(
     kf: &glib::KeyFile,
     group: impl AsRef<str>,
     k: impl AsRef<str>,
@@ -132,7 +132,9 @@ fn kf_set_string_list<'a>(
         v.push_str(elt);
         v.push(';');
     }
-    kf.set_value(group.as_ref(), k.as_ref(), v.as_str())
+    if !v.is_empty() {
+        kf.set_value(group.as_ref(), k.as_ref(), v.as_str())
+    }
 }
 
 fn set_sha256_nevra_pkgs(
@@ -146,7 +148,7 @@ fn set_sha256_nevra_pkgs(
         .map(|(nevra, sha256)| format!("{}:{}", sha256, nevra))
         .collect();
     let pkgs = pkgs.iter().map(|s| s.as_str());
-    kf_set_string_list(kf, group, k, pkgs)
+    kf_set_string_list_optional(kf, group, k, pkgs)
 }
 
 /// Convert a treefile to an origin file.
@@ -172,7 +174,7 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     // Packages
     if let Some(pkgs) = tf.packages.as_ref() {
         let pkgs = pkgs.iter().map(|s| s.as_str());
-        kf_set_string_list(&kf, PACKAGES, "requested", pkgs)
+        kf_set_string_list_optional(&kf, PACKAGES, "requested", pkgs)
     }
     if let Some(pkgs) = tf.derive.packages_local.as_ref() {
         set_sha256_nevra_pkgs(&kf, PACKAGES, "requested-local", pkgs)
@@ -182,7 +184,7 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     }
     if let Some(pkgs) = tf.derive.override_remove.as_deref() {
         let pkgs = pkgs.iter().map(|s| s.as_str());
-        kf_set_string_list(&kf, OVERRIDES, "remove", pkgs)
+        kf_set_string_list_optional(&kf, OVERRIDES, "remove", pkgs)
     }
     if let Some(pkgs) = tf.derive.override_replace_local.as_ref() {
         set_sha256_nevra_pkgs(&kf, OVERRIDES, "replace-local", pkgs)
@@ -190,11 +192,11 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     if let Some(ref modcfg) = tf.modules {
         if let Some(modules) = modcfg.enable.as_ref() {
             let modules = modules.iter().map(|s| s.as_str());
-            kf_set_string_list(&kf, MODULES, "enable", modules)
+            kf_set_string_list_optional(&kf, MODULES, "enable", modules)
         }
         if let Some(modules) = modcfg.install.as_ref() {
             let modules = modules.iter().map(|s| s.as_str());
-            kf_set_string_list(&kf, MODULES, "install", modules)
+            kf_set_string_list_optional(&kf, MODULES, "install", modules)
         }
     }
 
@@ -205,11 +207,11 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
         }
         if let Some(etc) = initramfs.etc.as_ref() {
             let etc = etc.iter().map(|s| s.as_str());
-            kf_set_string_list(&kf, RPMOSTREE, "initramfs-etc", etc)
+            kf_set_string_list_optional(&kf, RPMOSTREE, "initramfs-etc", etc)
         }
         if let Some(args) = initramfs.args.as_deref() {
             let args = args.iter().map(|s| s.as_str());
-            kf_set_string_list(&kf, RPMOSTREE, "initramfs-args", args)
+            kf_set_string_list_optional(&kf, RPMOSTREE, "initramfs-args", args)
         }
     }
 
