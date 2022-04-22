@@ -442,8 +442,7 @@ rpmostree_origin_add_packages (RpmOstreeOrigin *origin, rust::Vec<rust::String> 
   CXX_TRY_VAR (changed, (*origin->treefile)->add_packages (packages, allow_existing), error);
   if (changed)
     sync_origin (origin);
-  if (out_changed)
-    *out_changed = changed;
+  set_changed (out_changed, changed);
   return TRUE;
 }
 
@@ -455,8 +454,7 @@ rpmostree_origin_add_local_packages (RpmOstreeOrigin *origin, rust::Vec<rust::St
   CXX_TRY_VAR (changed, (*origin->treefile)->add_local_packages (packages, allow_existing), error);
   if (changed)
     sync_origin (origin);
-  if (out_changed)
-    *out_changed = changed;
+  set_changed (out_changed, changed);
   return TRUE;
 }
 
@@ -472,8 +470,7 @@ rpmostree_origin_add_local_fileoverride_packages (RpmOstreeOrigin *origin,
                error);
   if (changed)
     sync_origin (origin);
-  if (out_changed)
-    *out_changed = changed;
+  set_changed (out_changed, changed);
   return TRUE;
 }
 
