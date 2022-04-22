@@ -638,28 +638,21 @@ rpmostree_origin_add_override_replace_local (RpmOstreeOrigin *origin,
 /* Returns FALSE if the override does not exist. */
 /* Mutability: setter */
 gboolean
-rpmostree_origin_remove_override (RpmOstreeOrigin *origin, const char *package,
-                                  RpmOstreeOriginOverrideType type)
+rpmostree_origin_remove_override_remove (RpmOstreeOrigin *origin, const char *package)
 {
-  if (type == RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL)
-    {
-      if (!g_hash_table_remove (origin->cached_overrides_local_replace, package))
-        return FALSE;
-      update_keyfile_pkgs_from_cache (origin, "overrides", "replace-local",
-                                      origin->cached_overrides_local_replace, TRUE);
-    }
-  else if (type == RPMOSTREE_ORIGIN_OVERRIDE_REMOVE)
-    {
-      if (!g_hash_table_remove (origin->cached_overrides_remove, package))
-        return FALSE;
-      update_keyfile_pkgs_from_cache (origin, "overrides", "remove",
-                                      origin->cached_overrides_remove, FALSE);
-    }
-  else
-    g_assert_not_reached ();
+  auto changed = (*origin->treefile)->remove_package_override_remove (package);
+  if (changed)
+    sync_origin (origin);
+  return changed;
+}
 
-  sync_treefile (origin);
-  return TRUE;
+gboolean
+rpmostree_origin_remove_override_replace_local (RpmOstreeOrigin *origin, const char *package)
+{
+  auto changed = (*origin->treefile)->remove_package_override_replace_local (package);
+  if (changed)
+    sync_origin (origin);
+  return changed;
 }
 
 /* Mutability: setter */

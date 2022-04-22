@@ -1379,11 +1379,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
               g_assert_not_reached ();
             }
 
-          if (rpmostree_origin_remove_override (origin, name, RPMOSTREE_ORIGIN_OVERRIDE_REMOVE))
+          if (rpmostree_origin_remove_override_remove (origin, name))
             continue; /* override found; move on to the next one */
 
-          if (rpmostree_origin_remove_override (origin, nevra,
-                                                RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL))
+          if (rpmostree_origin_remove_override_replace_local (origin, nevra))
             continue; /* override found; move on to the next one */
 
           return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);
@@ -1412,8 +1411,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
               auto nevra = static_cast<const char *> (g_hash_table_lookup (name_to_nevra, name));
 
               if (nevra)
-                rpmostree_origin_remove_override (origin, nevra,
-                                                  RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL);
+                rpmostree_origin_remove_override_replace_local (origin, nevra);
             }
           if (pkgs->len > 0)
             {

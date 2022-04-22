@@ -983,6 +983,15 @@ impl Treefile {
         Ok(())
     }
 
+    pub(crate) fn remove_package_override_replace_local(&mut self, package: &str) -> bool {
+        self.parsed
+            .derive
+            .override_replace_local
+            .as_mut()
+            .and_then(|map| Some(map.remove(package).is_some()))
+            .unwrap_or_default()
+    }
+
     pub(crate) fn get_packages_override_replace_local_rpms(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -1022,6 +1031,15 @@ impl Treefile {
                 .insert(pkg));
         }
         Ok(())
+    }
+
+    pub(crate) fn remove_package_override_remove(&mut self, package: &str) -> bool {
+        self.parsed
+            .derive
+            .override_remove
+            .as_mut()
+            .and_then(|set| Some(set.remove(package)))
+            .unwrap_or_default()
     }
 
     pub(crate) fn remove_all_packages(&mut self) -> bool {
@@ -3536,6 +3554,9 @@ conditional-include:
             .add_packages_override_remove(vec!["systemd".into()])
             .unwrap();
         assert!(treefile.has_packages_override_remove_name("systemd"));
+        assert!(treefile.remove_package_override_remove("systemd"));
+        assert!(!treefile.has_packages_override_remove_name("systemd"));
+        assert!(!treefile.remove_package_override_remove("systemd"));
         treefile
             .add_packages_override_replace_local(vec![
                 "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foo-1.0-1.x86_64"
@@ -3549,6 +3570,10 @@ conditional-include:
                     .to_string(),
             ]
         );
+        assert!(treefile.remove_package_override_replace_local("foo-1.0-1.x86_64"));
+        assert!(!treefile.remove_package_override_replace_local("foo-1.0-1.x86_64"));
+        assert!(!treefile.remove_package_override_replace_local("enoent"));
+        assert!(treefile.get_packages_override_replace_local().is_empty());
         assert!(treefile.get_packages().is_empty());
         assert!(treefile.get_local_packages().is_empty());
         assert!(treefile.get_local_fileoverride_packages().is_empty());
