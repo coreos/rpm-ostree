@@ -907,7 +907,8 @@ impl Treefile {
         self.parsed
             .derive
             .override_remove
-            .clone()
+            .as_ref()
+            .map(|h| h.iter().cloned().collect())
             .unwrap_or_default()
     }
 
@@ -916,7 +917,7 @@ impl Treefile {
             .derive
             .override_remove
             .as_ref()
-            .map(|v| v.iter().any(|e| e == name))
+            .map(|set| set.contains(name))
             .unwrap_or_default()
     }
 
@@ -2284,7 +2285,7 @@ pub(crate) struct DeriveConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) packages_local_fileoverride: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) override_remove: Option<Vec<String>>,
+    pub(crate) override_remove: Option<BTreeSet<String>>,
     #[serde(rename = "ex-override-replace")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_replace: Option<Vec<RemoteOverrideReplace>>,
@@ -2756,8 +2757,8 @@ pub(crate) mod tests {
         "});
         let v = treefile.derive.override_remove.unwrap();
         assert_eq!(v.len(), 2);
-        assert_eq!(v[0], "foo");
-        assert_eq!(v[1], "bar");
+        assert!(v.contains("foo"));
+        assert!(v.contains("bar"));
     }
 
     #[test]

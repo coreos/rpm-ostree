@@ -33,6 +33,7 @@ static UNORDERED_LIST_KEYS: phf::Set<&'static str> = phf::phf_set! {
     "packages/local-fileoverride",
     "modules/enable",
     "modules/install",
+    "overrides/remove",
     "overrides/replace-local"
 };
 
@@ -182,7 +183,7 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     if let Some(pkgs) = tf.derive.packages_local_fileoverride.as_ref() {
         set_sha256_nevra_pkgs(&kf, PACKAGES, "requested-local-fileoverride", pkgs)
     }
-    if let Some(pkgs) = tf.derive.override_remove.as_deref() {
+    if let Some(pkgs) = tf.derive.override_remove.as_ref() {
         let pkgs = pkgs.iter().map(|s| s.as_str());
         kf_set_string_list_optional(&kf, OVERRIDES, "remove", pkgs)
     }

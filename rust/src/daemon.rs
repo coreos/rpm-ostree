@@ -98,7 +98,7 @@ fn deployment_populate_variant_origin(
         "requested-local-fileoverride-packages",
         tf.derive.packages_local_fileoverride.as_ref(),
     );
-    vdict_insert_optvec(
+    vdict_insert_optset(
         dict,
         "requested-base-removals",
         tf.derive.override_remove.as_ref(),
