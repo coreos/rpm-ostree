@@ -891,15 +891,15 @@ impl Treefile {
     }
 
     pub(crate) fn remove_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool {
+        let modules_to_remove: BTreeSet<String> = modules.into_iter().collect();
         let modules_cfg = self.parsed.modules.ext_get_or_insert_default();
         let map = if enable_only {
             modules_cfg.enable.ext_get_or_insert_default()
         } else {
             modules_cfg.install.ext_get_or_insert_default()
         };
-        let modules: BTreeSet<String> = modules.into_iter().collect();
         let n = map.len();
-        map.retain(|module| !modules.contains(module));
+        map.retain(|module| !modules_to_remove.contains(module));
         n != map.len()
     }
 
@@ -907,7 +907,8 @@ impl Treefile {
         self.parsed
             .derive
             .override_remove
-            .clone()
+            .as_ref()
+            .map(|h| h.iter().cloned().collect())
             .unwrap_or_default()
     }
 
@@ -916,8 +917,32 @@ impl Treefile {
             .derive
             .override_remove
             .as_ref()
-            .map(|v| v.iter().any(|e| e == name))
+            .map(|set| set.contains(name))
             .unwrap_or_default()
+    }
+
+    // Check that the same overrides don't already exist. Of course, in the local replace
+    // case, this doesn't catch same pkg name but different EVRA; we'll just barf at that
+    // later on in the core. This is an early easy sanity check.
+    fn has_override(&self, name_or_nevra: &str) -> bool {
+        self.has_packages_override_remove_name(name_or_nevra)
+            || self
+                .parsed
+                .derive
+                .override_replace_local
+                .as_ref()
+                .map(|map| map.contains_key(name_or_nevra))
+                .unwrap_or_default()
+            || self
+                .parsed
+                .derive
+                .override_replace
+                .as_ref()
+                .map(|v| {
+                    v.iter()
+                        .fold(false, |prev, o| prev || o.packages.contains(name_or_nevra))
+                })
+                .unwrap_or_default()
     }
 
     pub(crate) fn set_packages_override_remove(&mut self, packages: Vec<String>) {
@@ -935,6 +960,36 @@ impl Treefile {
             .flatten()
             .map(|(k, v)| format!("{}:{}", v, k))
             .collect()
+    }
+
+    pub(crate) fn add_packages_override_replace_local(
+        &mut self,
+        packages: Vec<String>,
+    ) -> Result<()> {
+        for pkg in packages {
+            let (nevra, sha256) = crate::utils::decompose_sha256_nevra(&pkg)?;
+            // unfortunately this API wasn't designed to be idempotent by default
+            if self.has_override(nevra) {
+                bail!("Override already exists for package '{}'", pkg);
+            }
+            assert!(self
+                .parsed
+                .derive
+                .override_replace_local
+                .ext_get_or_insert_default()
+                .insert(nevra.into(), sha256.into())
+                .is_none());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn remove_package_override_replace_local(&mut self, package: &str) -> bool {
+        self.parsed
+            .derive
+            .override_replace_local
+            .as_mut()
+            .and_then(|map| Some(map.remove(package).is_some()))
+            .unwrap_or_default()
     }
 
     pub(crate) fn get_packages_override_replace_local_rpms(&self) -> Vec<String> {
@@ -960,6 +1015,60 @@ impl Treefile {
         if !packages.is_empty() {
             self.parsed.derive.override_replace_local_rpms = Some(packages.into_iter().collect());
         }
+    }
+
+    pub(crate) fn add_packages_override_remove(&mut self, packages: Vec<String>) -> Result<()> {
+        for pkg in packages {
+            // unfortunately this API wasn't designed to be idempotent by default
+            if self.has_override(&pkg) {
+                bail!("Override already exists for package '{}'", &pkg);
+            }
+            assert!(self
+                .parsed
+                .derive
+                .override_remove
+                .ext_get_or_insert_default()
+                .insert(pkg));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn remove_package_override_remove(&mut self, package: &str) -> bool {
+        self.parsed
+            .derive
+            .override_remove
+            .as_mut()
+            .and_then(|set| Some(set.remove(package)))
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn remove_all_overrides(&mut self) -> bool {
+        let mut changed = false;
+        changed = self
+            .parsed
+            .derive
+            .override_remove
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed = self
+            .parsed
+            .derive
+            .override_replace
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed = self
+            .parsed
+            .derive
+            .override_replace_local
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed
     }
 
     pub(crate) fn remove_all_packages(&mut self) -> bool {
@@ -2284,7 +2393,7 @@ pub(crate) struct DeriveConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) packages_local_fileoverride: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) override_remove: Option<Vec<String>>,
+    pub(crate) override_remove: Option<BTreeSet<String>>,
     #[serde(rename = "ex-override-replace")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_replace: Option<Vec<RemoteOverrideReplace>>,
@@ -2756,8 +2865,8 @@ pub(crate) mod tests {
         "});
         let v = treefile.derive.override_remove.unwrap();
         assert_eq!(v.len(), 2);
-        assert_eq!(v[0], "foo");
-        assert_eq!(v[1], "bar");
+        assert!(v.contains("foo"));
+        assert!(v.contains("bar"));
     }
 
     #[test]
@@ -3467,9 +3576,33 @@ conditional-include:
         assert!(!treefile.remove_modules(vec!["baz:boo/minimal".into()], false));
         assert_eq!(treefile.get_modules_enable(), &["nodejs:latest"]);
         assert!(treefile.get_modules_install().is_empty());
+        assert!(treefile.remove_all_packages());
         assert!(treefile.has_packages_override_remove_name("glibc"));
         assert!(!treefile.has_packages_override_remove_name("enoent"));
-        assert!(treefile.remove_all_packages());
+        treefile
+            .add_packages_override_remove(vec!["systemd".into()])
+            .unwrap();
+        assert!(treefile.has_packages_override_remove_name("systemd"));
+        assert!(treefile.remove_package_override_remove("systemd"));
+        assert!(!treefile.has_packages_override_remove_name("systemd"));
+        assert!(!treefile.remove_package_override_remove("systemd"));
+        treefile
+            .add_packages_override_replace_local(vec![
+                "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foo-1.0-1.x86_64"
+                    .to_string(),
+            ])
+            .unwrap();
+        assert_eq!(
+            treefile.get_packages_override_replace_local(),
+            vec![
+                "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foo-1.0-1.x86_64"
+                    .to_string(),
+            ]
+        );
+        assert!(treefile.remove_package_override_replace_local("foo-1.0-1.x86_64"));
+        assert!(!treefile.remove_package_override_replace_local("foo-1.0-1.x86_64"));
+        assert!(!treefile.remove_package_override_replace_local("enoent"));
+        assert!(treefile.get_packages_override_replace_local().is_empty());
         assert!(treefile.get_packages().is_empty());
         assert!(treefile.get_local_packages().is_empty());
         assert!(treefile.get_local_fileoverride_packages().is_empty());
@@ -3597,6 +3730,20 @@ conditional-include:
         assert!(treefile.get_cliwrap());
         treefile.set_cliwrap(false);
         assert!(!treefile.get_cliwrap());
+        // test this after has_any_packages() test above since it nukes everything
+        treefile
+            .add_packages_override_remove(vec!["systemd".into()])
+            .unwrap();
+        treefile
+            .add_packages_override_replace_local(vec![
+                "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foo-1.0-1.x86_64"
+                    .to_string(),
+            ])
+            .unwrap();
+        assert!(treefile.remove_all_overrides());
+        assert!(treefile.get_packages_override_remove().is_empty());
+        assert!(treefile.get_packages_override_replace_local().is_empty());
+        assert!(!treefile.remove_all_overrides());
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();

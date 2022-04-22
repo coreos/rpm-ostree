@@ -670,8 +670,7 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *cancel
         {
           const char *item = (const char *)inactive_removals->pdata[i];
           rpmostree_output_message ("  %s", item);
-          rpmostree_origin_remove_override (self->computed_origin, item,
-                                            RPMOSTREE_ORIGIN_OVERRIDE_REMOVE);
+          rpmostree_origin_remove_override_remove (self->computed_origin, item);
         }
     }
 
@@ -714,8 +713,7 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *ca
         {
           const char *item = (const char *)inactive_replacements->pdata[i];
           rpmostree_output_message ("  %s", item);
-          rpmostree_origin_remove_override (self->computed_origin, item,
-                                            RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL);
+          rpmostree_origin_remove_override_replace_local (self->computed_origin, item);
         }
     }
 
