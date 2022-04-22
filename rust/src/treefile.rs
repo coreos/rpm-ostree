@@ -3766,6 +3766,74 @@ conditional-include:
     }
 
     #[test]
+    fn test_add_package_filtering() {
+        let buf = indoc! {"
+            packages:
+              - foobar-1.0-1.x86_64
+            packages-local:
+              bazboo-1.0-1.x86_64: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+            packages-local-fileoverride:
+              dodo-1.0-1.x86_64: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+        "};
+        let mut treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
+        assert!(treefile.has_packages());
+        assert!(treefile
+            .add_packages(vec!["foobar-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(treefile
+            .add_packages(vec!["bazboo-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(treefile
+            .add_packages(vec!["dodo-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(!treefile
+            .add_packages(vec!["foobar-1.0-1.x86_64".into()], true)
+            .unwrap());
+        assert!(!treefile
+            .add_packages(vec!["bazboo-1.0-1.x86_64".into()], true)
+            .unwrap());
+        assert!(!treefile
+            .add_packages(vec!["dodo-1.0-1.x86_64".into()], true)
+            .unwrap());
+        assert!(treefile
+            .add_local_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foobar-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(treefile
+            .add_local_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:bazboo-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(treefile
+            .add_local_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:dodo-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(!treefile
+            .add_local_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foobar-1.0-1.x86_64".into()], true)
+            .unwrap());
+        assert!(!treefile
+            .add_local_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:bazboo-1.0-1.x86_64".into()], true)
+            .unwrap());
+        assert!(!treefile
+            .add_local_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:dodo-1.0-1.x86_64".into()], true)
+            .unwrap());
+        assert!(treefile
+            .add_local_fileoverride_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foobar-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(treefile
+            .add_local_fileoverride_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:bazboo-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(treefile
+            .add_local_fileoverride_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:dodo-1.0-1.x86_64".into()], false)
+            .is_err());
+        assert!(!treefile
+            .add_local_fileoverride_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foobar-1.0-1.x86_64".into()], true)
+            .unwrap());
+        assert!(!treefile
+            .add_local_fileoverride_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:bazboo-1.0-1.x86_64".into()], true)
+            .unwrap());
+        assert!(!treefile
+            .add_local_fileoverride_packages(vec!["d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:dodo-1.0-1.x86_64".into()], true)
+            .unwrap());
+    }
+
+    #[test]
     fn test_override_replace() {
         let buf = indoc! {"
             base-refspec: fedora:fedora/35/x86_64/silverblue
