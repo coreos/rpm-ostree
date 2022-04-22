@@ -657,25 +657,10 @@ rpmostree_origin_remove_override_replace_local (RpmOstreeOrigin *origin, const c
 
 /* Mutability: setter */
 gboolean
-rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin, gboolean *out_changed,
-                                       GError **error)
+rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin)
 {
-  gboolean remove_changed = (g_hash_table_size (origin->cached_overrides_remove) > 0);
-  g_hash_table_remove_all (origin->cached_overrides_remove);
-
-  gboolean local_replace_changed = (g_hash_table_size (origin->cached_overrides_local_replace) > 0);
-  g_hash_table_remove_all (origin->cached_overrides_local_replace);
-
-  if (remove_changed)
-    update_keyfile_pkgs_from_cache (origin, "overrides", "remove", origin->cached_overrides_remove,
-                                    FALSE);
-  if (local_replace_changed)
-    update_keyfile_pkgs_from_cache (origin, "overrides", "replace-local",
-                                    origin->cached_overrides_local_replace, TRUE);
-
-  const gboolean any_changed = remove_changed || local_replace_changed;
-  set_changed (out_changed, any_changed);
-  if (any_changed)
-    sync_treefile (origin);
-  return TRUE;
+  auto changed = (*origin->treefile)->remove_all_overrides ();
+  if (changed)
+    sync_origin (origin);
+  return changed;
 }

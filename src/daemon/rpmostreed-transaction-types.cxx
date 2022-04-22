@@ -1291,8 +1291,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
 
   if (no_overrides)
     {
-      if (!rpmostree_origin_remove_all_overrides (origin, &changed, error))
-        return FALSE;
+      if (rpmostree_origin_remove_all_overrides (origin))
+        changed = TRUE;
     }
   else if (override_reset_pkgs || override_replace_local_pkgs)
     {

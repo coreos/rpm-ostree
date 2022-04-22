@@ -1042,6 +1042,35 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    pub(crate) fn remove_all_overrides(&mut self) -> bool {
+        let mut changed = false;
+        changed = self
+            .parsed
+            .derive
+            .override_remove
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed = self
+            .parsed
+            .derive
+            .override_replace
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed = self
+            .parsed
+            .derive
+            .override_replace_local
+            .take()
+            .map(|x| !x.is_empty())
+            .unwrap_or_default()
+            || changed;
+        changed
+    }
+
     pub(crate) fn remove_all_packages(&mut self) -> bool {
         let mut changed = false;
         changed = self
@@ -3701,6 +3730,20 @@ conditional-include:
         assert!(treefile.get_cliwrap());
         treefile.set_cliwrap(false);
         assert!(!treefile.get_cliwrap());
+        // test this after has_any_packages() test above since it nukes everything
+        treefile
+            .add_packages_override_remove(vec!["systemd".into()])
+            .unwrap();
+        treefile
+            .add_packages_override_replace_local(vec![
+                "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foo-1.0-1.x86_64"
+                    .to_string(),
+            ])
+            .unwrap();
+        assert!(treefile.remove_all_overrides());
+        assert!(treefile.get_packages_override_remove().is_empty());
+        assert!(treefile.get_packages_override_replace_local().is_empty());
+        assert!(!treefile.remove_all_overrides());
 
         // test some negatives
         let treefile = treefile_new_empty().unwrap();
