@@ -35,9 +35,6 @@ struct RpmOstreeOrigin
 
   /* this is the single source of truth */
   std::optional<rust::Box<rpmostreecxx::Treefile> > treefile;
-
-  /* this is used for convenience while we migrate; we always sync back to the treefile */
-  GKeyFile *kf;
 };
 
 RpmOstreeOrigin *
@@ -56,16 +53,7 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   origin->refcount--;
   if (origin->refcount > 0)
     return;
-  g_key_file_unref (origin->kf);
   g_free (origin);
-}
-
-static void
-sync_origin (RpmOstreeOrigin *self)
-{
-  g_autoptr (GKeyFile) kf = rpmostreecxx::treefile_to_origin (**self->treefile);
-  g_clear_pointer (&self->kf, g_key_file_unref);
-  self->kf = g_key_file_ref (kf);
 }
 
 RpmOstreeOrigin *
@@ -86,17 +74,9 @@ RpmOstreeOrigin *
 rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
 {
   g_autoptr (RpmOstreeOrigin) ret = NULL;
-
   ret = g_new0 (RpmOstreeOrigin, 1);
   ret->refcount = 1;
   ret->treefile = ROSCXX_VAL (origin_to_treefile (*origin), error);
-  CXX_TRY_VAR (kfv, rpmostreecxx::treefile_to_origin (**ret->treefile), error);
-  ret->kf = std::move (kfv);
-
-  // We will eventually start converting origin to treefile, this helps us
-  // debug cases that may fail currently.
-  rpmostreecxx::origin_validate_roundtrip (*ret->kf);
-
   return util::move_nullify (ret);
 }
 
@@ -104,8 +84,9 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
 RpmOstreeOrigin *
 rpmostree_origin_dup (RpmOstreeOrigin *origin)
 {
+  g_autoptr (GKeyFile) kf = rpmostreecxx::treefile_to_origin (**origin->treefile);
   g_autoptr (GError) local_error = NULL;
-  RpmOstreeOrigin *ret = rpmostree_origin_parse_keyfile (origin->kf, &local_error);
+  RpmOstreeOrigin *ret = rpmostree_origin_parse_keyfile (kf, &local_error);
   g_assert_no_error (local_error);
   return ret;
 }
@@ -251,10 +232,7 @@ rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
 bool
 rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, rust::Vec<rust::String> paths)
 {
-  auto changed = (*origin->treefile)->initramfs_etc_files_track (paths);
-  if (changed)
-    sync_origin (origin);
-  return changed;
+  return (*origin->treefile)->initramfs_etc_files_track (paths);
 }
 
 /* Mutability: setter */
@@ -262,20 +240,14 @@ bool
 rpmostree_origin_initramfs_etc_files_untrack (RpmOstreeOrigin *origin,
                                               rust::Vec<rust::String> paths)
 {
-  auto changed = (*origin->treefile)->initramfs_etc_files_untrack (paths);
-  if (changed)
-    sync_origin (origin);
-  return changed;
+  return (*origin->treefile)->initramfs_etc_files_untrack (paths);
 }
 
 /* Mutability: setter */
 bool
 rpmostree_origin_initramfs_etc_files_untrack_all (RpmOstreeOrigin *origin)
 {
-  auto changed = (*origin->treefile)->initramfs_etc_files_untrack_all ();
-  if (changed)
-    sync_origin (origin);
-  return changed;
+  return (*origin->treefile)->initramfs_etc_files_untrack_all ();
 }
 
 /* Mutability: setter */
@@ -284,7 +256,6 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin, gboolean reg
                                            rust::Vec<rust::String> args)
 {
   (*origin->treefile)->set_initramfs_regenerate (regenerate, args);
-  sync_origin (origin);
 }
 
 /* Mutability: setter */
@@ -292,7 +263,6 @@ void
 rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin, const char *checksum)
 {
   (*origin->treefile)->set_override_commit (checksum ?: "");
-  sync_origin (origin);
 }
 
 /* Mutability: getter */
@@ -307,7 +277,6 @@ void
 rpmostree_origin_set_cliwrap (RpmOstreeOrigin *origin, bool cliwrap)
 {
   (*origin->treefile)->set_cliwrap (cliwrap);
-  sync_origin (origin);
 }
 
 /* Mutability: setter */
@@ -318,7 +287,6 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin, const char *new_ref
 {
   (*origin->treefile)
       ->rebase (new_refspec, custom_origin_url ?: "", custom_origin_description ?: "");
-  sync_origin (origin);
 }
 
 /* Mutability: setter */
@@ -342,8 +310,6 @@ rpmostree_origin_add_packages (RpmOstreeOrigin *origin, rust::Vec<rust::String> 
                                gboolean allow_existing, gboolean *out_changed, GError **error)
 {
   CXX_TRY_VAR (changed, (*origin->treefile)->add_packages (packages, allow_existing), error);
-  if (changed)
-    sync_origin (origin);
   set_changed (out_changed, changed);
   return TRUE;
 }
@@ -354,8 +320,6 @@ rpmostree_origin_add_local_packages (RpmOstreeOrigin *origin, rust::Vec<rust::St
                                      gboolean allow_existing, gboolean *out_changed, GError **error)
 {
   CXX_TRY_VAR (changed, (*origin->treefile)->add_local_packages (packages, allow_existing), error);
-  if (changed)
-    sync_origin (origin);
   set_changed (out_changed, changed);
   return TRUE;
 }
@@ -370,8 +334,6 @@ rpmostree_origin_add_local_fileoverride_packages (RpmOstreeOrigin *origin,
   CXX_TRY_VAR (changed,
                (*origin->treefile)->add_local_fileoverride_packages (packages, allow_existing),
                error);
-  if (changed)
-    sync_origin (origin);
   set_changed (out_changed, changed);
   return TRUE;
 }
@@ -382,8 +344,6 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, rust::Vec<rust::Strin
                                   gboolean allow_noent, gboolean *out_changed, GError **error)
 {
   CXX_TRY_VAR (changed, (*origin->treefile)->remove_packages (packages, allow_noent), error);
-  if (changed)
-    sync_origin (origin);
   set_changed (out_changed, changed);
   return TRUE;
 }
@@ -394,8 +354,6 @@ rpmostree_origin_add_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> m
                               gboolean enable_only)
 {
   auto changed = (*origin->treefile)->add_modules (modules, enable_only);
-  if (changed)
-    sync_origin (origin);
   return changed;
 }
 
@@ -405,8 +363,6 @@ rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String
                                  gboolean enable_only)
 {
   auto changed = (*origin->treefile)->remove_modules (modules, enable_only);
-  if (changed)
-    sync_origin (origin);
   return changed;
 }
 
@@ -415,8 +371,6 @@ gboolean
 rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin)
 {
   auto changed = (*origin->treefile)->remove_all_packages ();
-  if (changed)
-    sync_origin (origin);
   return changed;
 }
 
@@ -426,7 +380,6 @@ rpmostree_origin_add_override_remove (RpmOstreeOrigin *origin, rust::Vec<rust::S
                                       GError **error)
 {
   CXX_TRY ((*origin->treefile)->add_packages_override_remove (packages), error);
-  sync_origin (origin);
   return TRUE;
 }
 
@@ -436,7 +389,6 @@ rpmostree_origin_add_override_replace_local (RpmOstreeOrigin *origin,
                                              rust::Vec<rust::String> packages, GError **error)
 {
   CXX_TRY ((*origin->treefile)->add_packages_override_replace_local (packages), error);
-  sync_origin (origin);
   return TRUE;
 }
 
@@ -446,8 +398,6 @@ gboolean
 rpmostree_origin_remove_override_remove (RpmOstreeOrigin *origin, const char *package)
 {
   auto changed = (*origin->treefile)->remove_package_override_remove (package);
-  if (changed)
-    sync_origin (origin);
   return changed;
 }
 
@@ -455,8 +405,6 @@ gboolean
 rpmostree_origin_remove_override_replace_local (RpmOstreeOrigin *origin, const char *package)
 {
   auto changed = (*origin->treefile)->remove_package_override_replace_local (package);
-  if (changed)
-    sync_origin (origin);
   return changed;
 }
 
@@ -465,7 +413,5 @@ gboolean
 rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin)
 {
   auto changed = (*origin->treefile)->remove_all_overrides ();
-  if (changed)
-    sync_origin (origin);
   return changed;
 }
