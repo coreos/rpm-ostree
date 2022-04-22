@@ -859,8 +859,9 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, GE
           const char *pkgs[] = { req, NULL };
           g_autoptr (GError) local_error = NULL;
           rpmostree_output_message ("  %s (already provided by %s)", req, nevra);
-          if (!rpmostree_origin_remove_packages (self->computed_origin, (char **)pkgs, FALSE,
-                                                 &changed, &local_error))
+          if (!rpmostree_origin_remove_packages (self->computed_origin,
+                                                 util::rust_stringvec_from_strv ((char **)pkgs),
+                                                 FALSE, &changed, &local_error))
             g_error ("%s", local_error->message);
           g_assert (changed);
           changed = FALSE;

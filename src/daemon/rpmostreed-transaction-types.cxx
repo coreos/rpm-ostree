@@ -1196,8 +1196,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
       /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
        * (if e.g. we're removing a duplicate provides). But the origin has changed so we need to
        * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
-      if (!rpmostree_origin_remove_packages (origin, uninstall_pkgs, idempotent_layering, &changed,
-                                             error))
+      if (!rpmostree_origin_remove_packages (origin,
+                                             util::rust_stringvec_from_strv (uninstall_pkgs),
+                                             idempotent_layering, &changed, error))
         return FALSE;
       if (rpmostree_origin_remove_modules (origin, util::rust_stringvec_from_strv (disable_modules),
                                            TRUE))

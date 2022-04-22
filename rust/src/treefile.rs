@@ -848,6 +848,90 @@ impl Treefile {
         add_sha256_nevra_to_map(map, packages)
     }
 
+    pub(crate) fn remove_packages(
+        &mut self,
+        packages: Vec<String>,
+        allow_noent: bool,
+    ) -> Result<bool> {
+        let mut changed = false;
+        let mut lazy_name_to_nevra: Option<BTreeMap<String, String>> = None;
+        let mut lazy_name_to_nevra_fileoverride: Option<BTreeMap<String, String>> = None;
+        // really, either a NEVRA (local RPM) or freeform provides request (from repo)
+        for package in packages {
+            if self
+                .parsed
+                .packages
+                .as_mut()
+                .map(|set| set.remove(&package))
+                .unwrap_or_default()
+            {
+                changed = true;
+            } else if self
+                .parsed
+                .derive
+                .packages_local
+                .as_mut()
+                .map(|m| m.remove(&package).is_some())
+                .unwrap_or_default()
+            {
+                changed = true;
+            } else if self
+                .parsed
+                .derive
+                .packages_local_fileoverride
+                .as_mut()
+                .map(|m| m.remove(&package).is_some())
+                .unwrap_or_default()
+            {
+                changed = true;
+            } else {
+                // this is almost get_or_insert_with(), but because `build_name_to_nevra_map`
+                // returns a Result, it's not that simple
+                let name_to_nevra = if let Some(ref mut m) = lazy_name_to_nevra {
+                    m
+                } else {
+                    lazy_name_to_nevra
+                        .insert(build_name_to_nevra_map(&self.parsed.derive.packages_local)?)
+                };
+                let name_to_nevra_fileoverride =
+                    if let Some(ref mut m) = lazy_name_to_nevra_fileoverride {
+                        m
+                    } else {
+                        lazy_name_to_nevra_fileoverride.insert(build_name_to_nevra_map(
+                            &self.parsed.derive.packages_local_fileoverride,
+                        )?)
+                    };
+                if let Some(nevra) = name_to_nevra.get(&package) {
+                    changed = self
+                        .parsed
+                        .derive
+                        .packages_local
+                        .as_mut()
+                        .map(|m| m.remove(nevra))
+                        .unwrap_or_default()
+                        .is_some();
+                    assert!(changed);
+                } else if let Some(nevra) = name_to_nevra_fileoverride.get(&package) {
+                    changed = self
+                        .parsed
+                        .derive
+                        .packages_local_fileoverride
+                        .as_mut()
+                        .map(|m| m.remove(nevra))
+                        .unwrap_or_default()
+                        .is_some();
+                    assert!(changed);
+                } else if !allow_noent {
+                    bail!(
+                        "Package/capability '{}' is not currently requested",
+                        package
+                    );
+                }
+            }
+        }
+        Ok(changed)
+    }
+
     pub(crate) fn get_modules_enable(&self) -> Vec<String> {
         self.parsed
             .modules
@@ -1668,6 +1752,16 @@ fn add_sha256_nevra_to_map(map: &mut BTreeMap<String, String>, pkgs: Vec<String>
         changed = map.insert(nevra.to_string(), sha256.to_string()).is_none() || changed;
     }
     Ok(changed)
+}
+
+fn build_name_to_nevra_map(
+    nevras: &Option<BTreeMap<String, String>>,
+) -> Result<BTreeMap<String, String>> {
+    nevras
+        .iter()
+        .flatten()
+        .map(|(nevra, _)| Ok((libdnf_sys::hy_split_nevra(&nevra)?.name, nevra.clone())))
+        .collect()
 }
 
 fn print_experimental_notice(print: bool, key: &str) {
@@ -3766,7 +3860,7 @@ conditional-include:
     }
 
     #[test]
-    fn test_add_package_filtering() {
+    fn test_add_packages() {
         let buf = indoc! {"
             packages:
               - foobar-1.0-1.x86_64
@@ -3834,6 +3928,44 @@ conditional-include:
     }
 
     #[test]
+    fn test_remove_packages() {
+        let buf = indoc! {"
+            packages:
+              - regular
+            packages-local:
+              local1-1.0-1.x86_64: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+              local2-1.0-1.x86_64: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+            packages-local-fileoverride:
+              local-fileoverride1-1.0-1.x86_64: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+              local-fileoverride2-1.0-1.x86_64: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+        "};
+        let mut treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
+        assert!(treefile.has_any_packages());
+        assert!(treefile
+            .remove_packages(
+                vec![
+                    "regular".into(),
+                    // test removing local pkgs by nevra
+                    "local1-1.0-1.x86_64".into(),
+                    "local-fileoverride1-1.0-1.x86_64".into(),
+                    // test removing local pkgs by name only
+                    "local2".into(),
+                    "local-fileoverride2".into(),
+                ],
+                false
+            )
+            .unwrap());
+        assert!(!treefile.has_any_packages());
+        // idempotency checks
+        assert!(treefile
+            .remove_packages(vec!["foobar".into()], false)
+            .is_err());
+        assert!(!treefile
+            .remove_packages(vec!["foobar".into()], true)
+            .unwrap());
+    }
+
+    #[test]
     fn test_override_replace() {
         let buf = indoc! {"
             base-refspec: fedora:fedora/35/x86_64/silverblue
@@ -3855,6 +3987,23 @@ conditional-include:
                 packages: maplit::btreeset!["foo".into(), "bar".into()],
             }
         );
+    }
+
+    #[test]
+    fn test_build_name_to_nevra_map() {
+        let nevras = Some(maplit::btreemap!(
+            "foobar-1.0-1.x86_64".into() => "sha256".into(),
+            "dodo-0:1.0-1.aarch64".into() => "sha256".into(),
+            "bazboo-2:1.0-1.mips".into() => "sha256".into(),
+        ));
+        let map = build_name_to_nevra_map(&nevras).unwrap();
+        assert_eq!(map.get("foobar").unwrap(), "foobar-1.0-1.x86_64");
+        assert_eq!(map.get("dodo").unwrap(), "dodo-0:1.0-1.aarch64");
+        assert_eq!(map.get("bazboo").unwrap(), "bazboo-2:1.0-1.mips");
+        let nevras = Some(maplit::btreemap!(
+            "invalid".into() => "sha256".into(),
+        ));
+        assert!(build_name_to_nevra_map(&nevras).is_err());
     }
 }
 

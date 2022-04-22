@@ -491,6 +491,7 @@ pub mod ffi {
             packages: Vec<String>,
             allow_existing: bool,
         ) -> Result<bool>;
+        fn remove_packages(&mut self, packages: Vec<String>, allow_noent: bool) -> Result<bool>;
         fn get_packages_override_replace(&self) -> Vec<OverrideReplacement>;
         fn get_packages_override_replace_local(&self) -> Vec<String>;
         fn add_packages_override_replace_local(&mut self, packages: Vec<String>) -> Result<()>;

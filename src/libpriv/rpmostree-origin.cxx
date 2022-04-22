@@ -474,93 +474,15 @@ rpmostree_origin_add_local_fileoverride_packages (RpmOstreeOrigin *origin,
   return TRUE;
 }
 
-static gboolean
-build_name_to_nevra_map (GHashTable *nevras, GHashTable **out_name_to_nevra, GError **error)
-{
-  g_autoptr (GHashTable) name_to_nevra = /* nevra vals owned by @nevras */
-      g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  GLNX_HASH_TABLE_FOREACH (nevras, const char *, nevra)
-    {
-      g_autofree char *name = NULL;
-      if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
-        return FALSE;
-      g_hash_table_insert (name_to_nevra, util::move_nullify (name), (gpointer)nevra);
-    }
-
-  *out_name_to_nevra = util::move_nullify (name_to_nevra);
-  return TRUE;
-}
-
 /* Mutability: setter */
 gboolean
-rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, char **packages, gboolean allow_noent,
-                                  gboolean *out_changed, GError **error)
+rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, rust::Vec<rust::String> packages,
+                                  gboolean allow_noent, gboolean *out_changed, GError **error)
 {
-  if (!packages)
-    return TRUE;
-  gboolean changed = FALSE;
-  gboolean local_changed = FALSE;
-  gboolean local_fileoverride_changed = FALSE;
-
-  /* lazily calculated */
-  g_autoptr (GHashTable) name_to_nevra = NULL;
-  g_autoptr (GHashTable) name_to_nevra_fileoverride = NULL;
-
-  for (char **it = packages; it && *it; it++)
-    {
-      /* really, either a NEVRA (local RPM) or freeform provides request (from repo) */
-      const char *package = *it;
-      if (g_hash_table_remove (origin->cached_local_packages, package))
-        local_changed = TRUE;
-      else if (g_hash_table_remove (origin->cached_local_fileoverride_packages, package))
-        local_fileoverride_changed = TRUE;
-      else if (g_hash_table_remove (origin->cached_packages, package))
-        changed = TRUE;
-      else
-        {
-          if (!name_to_nevra)
-            {
-              if (!build_name_to_nevra_map (origin->cached_local_packages, &name_to_nevra, error))
-                return FALSE;
-              if (!build_name_to_nevra_map (origin->cached_local_fileoverride_packages,
-                                            &name_to_nevra_fileoverride, error))
-                return FALSE;
-            }
-
-          if (g_hash_table_contains (name_to_nevra, package))
-            {
-              g_assert (g_hash_table_remove (origin->cached_local_packages,
-                                             g_hash_table_lookup (name_to_nevra, package)));
-              local_changed = TRUE;
-            }
-          else if (g_hash_table_contains (name_to_nevra_fileoverride, package))
-            {
-              g_assert (
-                  g_hash_table_remove (origin->cached_local_fileoverride_packages,
-                                       g_hash_table_lookup (name_to_nevra_fileoverride, package)));
-              local_fileoverride_changed = TRUE;
-            }
-          else if (!allow_noent)
-            return glnx_throw (error, "Package/capability '%s' is not currently requested",
-                               package);
-        }
-    }
-
+  CXX_TRY_VAR (changed, (*origin->treefile)->remove_packages (packages, allow_noent), error);
   if (changed)
-    update_keyfile_pkgs_from_cache (origin, "packages", "requested", origin->cached_packages,
-                                    FALSE);
-  if (local_changed)
-    update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
-                                    origin->cached_local_packages, TRUE);
-  if (local_fileoverride_changed)
-    update_keyfile_pkgs_from_cache (origin, "packages", "requested-local-fileoverride",
-                                    origin->cached_local_fileoverride_packages, TRUE);
-
-  const gboolean any_changed = changed || local_changed || local_fileoverride_changed;
-
-  set_changed (out_changed, any_changed);
-  if (any_changed)
-    sync_treefile (origin);
+    sync_origin (origin);
+  set_changed (out_changed, changed);
   return TRUE;
 }
 
