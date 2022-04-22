@@ -921,6 +921,30 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    // Check that the same overrides don't already exist. Of course, in the local replace
+    // case, this doesn't catch same pkg name but different EVRA; we'll just barf at that
+    // later on in the core. This is an early easy sanity check.
+    fn has_override(&self, name_or_nevra: &str) -> bool {
+        self.has_packages_override_remove_name(name_or_nevra)
+            || self
+                .parsed
+                .derive
+                .override_replace_local
+                .as_ref()
+                .map(|map| map.contains_key(name_or_nevra))
+                .unwrap_or_default()
+            || self
+                .parsed
+                .derive
+                .override_replace
+                .as_ref()
+                .map(|v| {
+                    v.iter()
+                        .fold(false, |prev, o| prev || o.packages.contains(name_or_nevra))
+                })
+                .unwrap_or_default()
+    }
+
     pub(crate) fn set_packages_override_remove(&mut self, packages: Vec<String>) {
         let _ = self.parsed.derive.override_remove.take();
         if !packages.is_empty() {
@@ -936,6 +960,27 @@ impl Treefile {
             .flatten()
             .map(|(k, v)| format!("{}:{}", v, k))
             .collect()
+    }
+
+    pub(crate) fn add_packages_override_replace_local(
+        &mut self,
+        packages: Vec<String>,
+    ) -> Result<()> {
+        for pkg in packages {
+            let (nevra, sha256) = crate::utils::decompose_sha256_nevra(&pkg)?;
+            // unfortunately this API wasn't designed to be idempotent by default
+            if self.has_override(nevra) {
+                bail!("Override already exists for package '{}'", pkg);
+            }
+            assert!(self
+                .parsed
+                .derive
+                .override_replace_local
+                .ext_get_or_insert_default()
+                .insert(nevra.into(), sha256.into())
+                .is_none());
+        }
+        Ok(())
     }
 
     pub(crate) fn get_packages_override_replace_local_rpms(&self) -> Vec<String> {
@@ -961,6 +1006,22 @@ impl Treefile {
         if !packages.is_empty() {
             self.parsed.derive.override_replace_local_rpms = Some(packages.into_iter().collect());
         }
+    }
+
+    pub(crate) fn add_packages_override_remove(&mut self, packages: Vec<String>) -> Result<()> {
+        for pkg in packages {
+            // unfortunately this API wasn't designed to be idempotent by default
+            if self.has_override(&pkg) {
+                bail!("Override already exists for package '{}'", &pkg);
+            }
+            assert!(self
+                .parsed
+                .derive
+                .override_remove
+                .ext_get_or_insert_default()
+                .insert(pkg));
+        }
+        Ok(())
     }
 
     pub(crate) fn remove_all_packages(&mut self) -> bool {
@@ -3468,9 +3529,26 @@ conditional-include:
         assert!(!treefile.remove_modules(vec!["baz:boo/minimal".into()], false));
         assert_eq!(treefile.get_modules_enable(), &["nodejs:latest"]);
         assert!(treefile.get_modules_install().is_empty());
+        assert!(treefile.remove_all_packages());
         assert!(treefile.has_packages_override_remove_name("glibc"));
         assert!(!treefile.has_packages_override_remove_name("enoent"));
-        assert!(treefile.remove_all_packages());
+        treefile
+            .add_packages_override_remove(vec!["systemd".into()])
+            .unwrap();
+        assert!(treefile.has_packages_override_remove_name("systemd"));
+        treefile
+            .add_packages_override_replace_local(vec![
+                "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foo-1.0-1.x86_64"
+                    .to_string(),
+            ])
+            .unwrap();
+        assert_eq!(
+            treefile.get_packages_override_replace_local(),
+            vec![
+                "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1:foo-1.0-1.x86_64"
+                    .to_string(),
+            ]
+        );
         assert!(treefile.get_packages().is_empty());
         assert!(treefile.get_local_packages().is_empty());
         assert!(treefile.get_local_fileoverride_packages().is_empty());

@@ -1418,8 +1418,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
           if (pkgs->len > 0)
             {
               g_ptr_array_add (pkgs, NULL);
-              if (!rpmostree_origin_add_overrides (origin, (char **)pkgs->pdata,
-                                                   RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL, error))
+              auto pkgsv = util::rust_stringvec_from_strv ((char **)pkgs->pdata);
+              if (!rpmostree_origin_add_override_replace_local (origin, pkgsv, error))
                 return FALSE;
             }
         }
@@ -1497,8 +1497,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         }
 
       g_ptr_array_add (pkgnames, NULL);
-      if (!rpmostree_origin_add_overrides (origin, (char **)pkgnames->pdata,
-                                           RPMOSTREE_ORIGIN_OVERRIDE_REMOVE, error))
+      auto pkgnamesv = util::rust_stringvec_from_strv ((char **)pkgnames->pdata);
+      if (!rpmostree_origin_add_override_remove (origin, pkgnamesv, error))
         return FALSE;
 
       rpmostree_sysroot_upgrader_set_origin (upgrader, origin);

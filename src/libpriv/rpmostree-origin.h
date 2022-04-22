@@ -127,8 +127,11 @@ typedef enum
   RPMOSTREE_ORIGIN_OVERRIDE_REMOVE
 } RpmOstreeOriginOverrideType;
 
-gboolean rpmostree_origin_add_overrides (RpmOstreeOrigin *origin, char **packages,
-                                         RpmOstreeOriginOverrideType type, GError **error);
+gboolean rpmostree_origin_add_override_remove (RpmOstreeOrigin *origin,
+                                               rust::Vec<rust::String> packages, GError **error);
+gboolean rpmostree_origin_add_override_replace_local (RpmOstreeOrigin *origin,
+                                                      rust::Vec<rust::String> packages,
+                                                      GError **error);
 
 gboolean rpmostree_origin_remove_override (RpmOstreeOrigin *origin, const char *package,
                                            RpmOstreeOriginOverrideType type);
