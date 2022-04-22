@@ -28,6 +28,15 @@ unsafe impl ExternType for DnfRepo {
 
 #[cxx::bridge(namespace = "dnfcxx")]
 pub mod ffi {
+
+    struct Nevra {
+        name: String,
+        epoch: u64,
+        version: String,
+        release: String,
+        arch: String,
+    }
+
     unsafe extern "C++" {
         include!("libdnf.hpp");
 
@@ -40,7 +49,31 @@ pub mod ffi {
         type DnfRepo = crate::DnfRepo;
         fn dnf_repo_get_id(repo: &mut DnfRepo) -> Result<String>;
         fn dnf_repo_get_timestamp_generated(repo: &mut DnfRepo) -> Result<u64>;
+
+        fn hy_split_nevra(nevra: &str) -> Result<Nevra>;
     }
 }
 
 pub use ffi::*;
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hy_split_nevra() {
+        let n = hy_split_nevra("foobar-1.0-1.x86_64").unwrap();
+        assert_eq!(n.name, "foobar");
+        assert_eq!(n.epoch, 0);
+        assert_eq!(n.version, "1.0");
+        assert_eq!(n.release, "1");
+        assert_eq!(n.arch, "x86_64");
+
+        let n = hy_split_nevra("baz-boo-2:1.0.g123abc-3.mips").unwrap();
+        assert_eq!(n.name, "baz-boo");
+        assert_eq!(n.epoch, 2);
+        assert_eq!(n.version, "1.0.g123abc");
+        assert_eq!(n.release, "3");
+        assert_eq!(n.arch, "mips");
+    }
+}

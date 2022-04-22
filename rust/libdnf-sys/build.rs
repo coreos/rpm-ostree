@@ -44,6 +44,7 @@ fn main() -> Result<()> {
         libdnf.display()
     );
     println!("cargo:rustc-link-lib=static=dnf");
+    println!("cargo:rustc-link-lib=glib-2.0");
 
     // now, our thin cxx.rs bridge wrapper
     let mut libdnfcxx = cxx_build::bridge("lib.rs");
