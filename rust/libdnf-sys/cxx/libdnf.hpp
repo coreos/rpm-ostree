@@ -25,14 +25,15 @@
 
 #include "rust/cxx.h"
 
-namespace dnfcxx {
-  typedef ::DnfPackage DnfPackage;
-  rust::String dnf_package_get_nevra(DnfPackage &pkg);
-  rust::String dnf_package_get_name(DnfPackage &pkg);
-  rust::String dnf_package_get_evr(DnfPackage &pkg);
-  rust::String dnf_package_get_arch(DnfPackage &pkg);
+namespace dnfcxx
+{
+typedef ::DnfPackage DnfPackage;
+rust::String dnf_package_get_nevra (DnfPackage &pkg);
+rust::String dnf_package_get_name (DnfPackage &pkg);
+rust::String dnf_package_get_evr (DnfPackage &pkg);
+rust::String dnf_package_get_arch (DnfPackage &pkg);
 
-  typedef ::DnfRepo DnfRepo;
-  rust::String dnf_repo_get_id(DnfRepo &repo);
-  guint64 dnf_repo_get_timestamp_generated(DnfRepo &repo);
+typedef ::DnfRepo DnfRepo;
+rust::String dnf_repo_get_id (DnfRepo &repo);
+guint64 dnf_repo_get_timestamp_generated (DnfRepo &repo);
 }
