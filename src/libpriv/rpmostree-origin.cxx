@@ -43,9 +43,6 @@ struct RpmOstreeOrigin
   GHashTable *cached_packages;                    /* set of reldeps */
   GHashTable *cached_local_packages;              /* NEVRA --> header sha256 */
   GHashTable *cached_local_fileoverride_packages; /* NEVRA --> header sha256 */
-  /* GHashTable *cached_overrides_replace;         XXX: NOT IMPLEMENTED YET */
-  GHashTable *cached_overrides_local_replace; /* NEVRA --> header sha256 */
-  GHashTable *cached_overrides_remove;        /* set of pkgnames (no EVRA) */
 };
 
 RpmOstreeOrigin *
@@ -69,8 +66,6 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
   g_clear_pointer (&origin->cached_local_packages, g_hash_table_unref);
   g_clear_pointer (&origin->cached_local_fileoverride_packages, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_overrides_local_replace, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_overrides_remove, g_hash_table_unref);
   g_free (origin);
 }
 
@@ -145,9 +140,6 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   ret->cached_local_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
   ret->cached_local_fileoverride_packages
       = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-  ret->cached_overrides_local_replace
-      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-  ret->cached_overrides_remove = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   ret->cached_unconfigured_state
       = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
@@ -161,14 +153,6 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
 
   if (!parse_packages_strv (ret->kf, "packages", "requested-local-fileoverride", TRUE,
                             ret->cached_local_fileoverride_packages, error))
-    return FALSE;
-
-  if (!parse_packages_strv (ret->kf, "overrides", "remove", FALSE, ret->cached_overrides_remove,
-                            error))
-    return FALSE;
-
-  if (!parse_packages_strv (ret->kf, "overrides", "replace-local", TRUE,
-                            ret->cached_overrides_local_replace, error))
     return FALSE;
 
   // We will eventually start converting origin to treefile, this helps us
