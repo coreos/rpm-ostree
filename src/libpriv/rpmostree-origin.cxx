@@ -38,8 +38,6 @@ struct RpmOstreeOrigin
 
   /* this is used for convenience while we migrate; we always sync back to the treefile */
   GKeyFile *kf;
-
-  char *cached_unconfigured_state;
 };
 
 RpmOstreeOrigin *
@@ -59,7 +57,6 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   if (origin->refcount > 0)
     return;
   g_key_file_unref (origin->kf);
-  g_free (origin->cached_unconfigured_state);
   g_free (origin);
 }
 
@@ -129,9 +126,6 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   ret->treefile = ROSCXX_VAL (origin_to_treefile (*origin), error);
   CXX_TRY_VAR (kfv, rpmostreecxx::treefile_to_origin (**ret->treefile), error);
   ret->kf = std::move (kfv);
-
-  ret->cached_unconfigured_state
-      = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
   // We will eventually start converting origin to treefile, this helps us
   // debug cases that may fail currently.
