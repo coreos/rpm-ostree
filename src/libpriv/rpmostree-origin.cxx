@@ -53,6 +53,7 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   origin->refcount--;
   if (origin->refcount > 0)
     return;
+  origin->treefile.reset ();
   g_free (origin);
 }
 
