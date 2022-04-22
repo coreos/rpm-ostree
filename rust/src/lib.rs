@@ -326,6 +326,12 @@ pub mod ffi {
 
     // importer.rs
     extern "Rust" {
+        type RpmImporter;
+
+        fn rpm_importer_new() -> Box<RpmImporter>;
+        fn inspect_varlib_path(self: &mut RpmImporter, path: &str) -> bool;
+        fn varlib_tmpfiles_symlinks(self: &RpmImporter) -> Vec<String>;
+
         fn importer_compose_filter(
             path: &str,
             mut file_info: Pin<&mut GFileInfo>,

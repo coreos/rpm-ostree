@@ -69,12 +69,10 @@ struct RpmOstreeImporter
   // Hashset of filepath entries which are direct children of /opt;
   // each key is a plain path fragment, e.g. 'foo' for '/opt/foo/bar'.
   GHashTable *opt_direntries;
-  // Hashset of directories which got moved from '/var/lib' to '/usr/lib';
-  // each key is a plain directory name, e.g. 'foo' for '/var/lib/foo/'.
-  GHashTable *varlib_direntries;
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
   DnfPackage *pkg;
+  rust::Box<rpmostreecxx::RpmImporter> importer_rs;
 
   char *ostree_branch;
 };
@@ -100,7 +98,7 @@ rpmostree_importer_finalize (GObject *object)
   g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->opt_direntries, (GDestroyNotify)g_hash_table_unref);
-  g_clear_pointer (&self->varlib_direntries, (GDestroyNotify)g_hash_table_unref);
+  self->importer_rs.~Box ();
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
 }
@@ -119,6 +117,7 @@ rpmostree_importer_init (RpmOstreeImporter *self)
   self->fd = -1;
   self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   self->tmpfiles_d = g_string_new ("");
+  self->importer_rs = rpmostreecxx::rpm_importer_new ();
 }
 
 gboolean
@@ -243,7 +242,6 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage *)(pkg ? g_object_ref (pkg) : NULL);
   ret->opt_direntries = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  ret->varlib_direntries = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -542,8 +540,8 @@ handle_translate_pathname (OstreeRepo *repo, const struct stat *stbuf, const cha
 
   if (g_str_has_prefix (path, "opt/"))
     g_hash_table_add (self->opt_direntries, get_first_path_element (path + strlen ("opt/")));
-  else if ((strcmp (path, "var/lib/alternatives") == 0) || (strcmp (path, "var/lib/vagrant") == 0))
-    g_hash_table_add (self->varlib_direntries, g_strdup (path + strlen ("var/lib/")));
+  else
+    self->importer_rs->inspect_varlib_path (path);
 
   return rpmostree_translate_path_for_ostree (path);
 }
@@ -593,13 +591,8 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
                               filename);
     }
 
-  GLNX_HASH_TABLE_FOREACH (self->varlib_direntries, const char *, dirname)
-    {
-      g_autofree char *linkpath = g_strconcat ("/var/lib/", dirname, NULL);
-      auto quoted = rpmostreecxx::maybe_shell_quote (linkpath);
-      g_string_append_printf (self->tmpfiles_d, "L %s - - - - ../../usr/lib/%s\n", quoted.c_str (),
-                              dirname);
-    }
+  for (auto &line : self->importer_rs->varlib_tmpfiles_symlinks ())
+    g_string_append_printf (self->tmpfiles_d, "%s\n", line.c_str ());
 
   /* Handle any data we've accumulated to write to tmpfiles.d.
    * I originally tried to do this entirely in memory but things
