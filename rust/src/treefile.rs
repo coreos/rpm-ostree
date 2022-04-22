@@ -972,13 +972,13 @@ impl Treefile {
             if self.has_override(nevra) {
                 bail!("Override already exists for package '{}'", pkg);
             }
-            assert!(self
+            let prev = self
                 .parsed
                 .derive
                 .override_replace_local
                 .ext_get_or_insert_default()
-                .insert(nevra.into(), sha256.into())
-                .is_none());
+                .insert(nevra.into(), sha256.into());
+            assert!(prev.is_none()); // otherwise, `has_override()` would've triggered
         }
         Ok(())
     }
@@ -1023,12 +1023,13 @@ impl Treefile {
             if self.has_override(&pkg) {
                 bail!("Override already exists for package '{}'", &pkg);
             }
-            assert!(self
+            let is_new = self
                 .parsed
                 .derive
                 .override_remove
                 .ext_get_or_insert_default()
-                .insert(pkg));
+                .insert(pkg);
+            assert!(is_new); // otherwise, `has_override()` would've triggered
         }
         Ok(())
     }
