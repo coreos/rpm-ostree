@@ -61,45 +61,11 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
 }
 
 static void
-sync_treefile (RpmOstreeOrigin *self)
-{
-  self->treefile.reset ();
-  // Note this may throw a C++ exception
-  self->treefile = rpmostreecxx::origin_to_treefile (*self->kf);
-}
-
-static void
 sync_origin (RpmOstreeOrigin *self)
 {
   g_autoptr (GKeyFile) kf = rpmostreecxx::treefile_to_origin (**self->treefile);
   g_clear_pointer (&self->kf, g_key_file_unref);
   self->kf = g_key_file_ref (kf);
-}
-
-/* take <nevra:sha256> entries from keyfile and inserts them into hash table */
-static gboolean
-parse_packages_strv (GKeyFile *kf, const char *group, const char *key, gboolean has_sha256,
-                     GHashTable *ht, GError **error)
-{
-  g_auto (GStrv) packages = g_key_file_get_string_list (kf, group, key, NULL, NULL);
-
-  for (char **it = packages; it && *it; it++)
-    {
-      if (has_sha256)
-        {
-          const char *nevra = *it;
-          g_autofree char *sha256 = NULL;
-          if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
-            return glnx_throw (error, "Invalid SHA-256 NEVRA string: %s", nevra);
-          g_hash_table_replace (ht, g_strdup (nevra), util::move_nullify (sha256));
-        }
-      else
-        {
-          g_hash_table_add (ht, util::move_nullify (*it));
-        }
-    }
-
-  return TRUE;
 }
 
 RpmOstreeOrigin *
@@ -281,15 +247,6 @@ rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
   return rpmostreecxx::treefile_to_origin (**origin->treefile);
 }
 
-static void
-update_string_list_from_hash_table (RpmOstreeOrigin *origin, const char *group, const char *key,
-                                    GHashTable *values)
-{
-  g_autofree char **strv = (char **)g_hash_table_get_keys_as_array (values, NULL);
-  g_key_file_set_string_list (origin->kf, group, key, (const char *const *)strv,
-                              g_strv_length (strv));
-}
-
 /* Mutability: setter */
 bool
 rpmostree_origin_initramfs_etc_files_track (RpmOstreeOrigin *origin, rust::Vec<rust::String> paths)
@@ -369,33 +326,6 @@ void
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin, const char *new_refspec)
 {
   rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL);
-}
-
-static void
-update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin, const char *group, const char *key,
-                                GHashTable *pkgs, gboolean has_csum)
-{
-  /* we're abusing a bit the concept of cache here, though
-   * it's just easier to go from cache to origin */
-
-  if (g_hash_table_size (pkgs) == 0)
-    {
-      g_key_file_remove_key (origin->kf, group, key, NULL);
-      return;
-    }
-
-  if (has_csum)
-    {
-      g_autoptr (GPtrArray) pkg_csum = g_ptr_array_new_with_free_func (g_free);
-      GLNX_HASH_TABLE_FOREACH_KV (pkgs, const char *, k, const char *, v)
-        g_ptr_array_add (pkg_csum, g_strconcat (v, ":", k, NULL));
-      g_key_file_set_string_list (origin->kf, group, key, (const char *const *)pkg_csum->pdata,
-                                  pkg_csum->len);
-    }
-  else
-    {
-      update_string_list_from_hash_table (origin, group, key, pkgs);
-    }
 }
 
 static void
