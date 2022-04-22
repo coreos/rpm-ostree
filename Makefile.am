@@ -90,7 +90,7 @@ CARGO_RELEASE_ARGS=--release
 endif
 
 check-local-cargo:
-	cargo test
+	cargo test --workspace
 CHECK_LOCAL_HOOKS += check-local-cargo
 
 clean-local-cargo:

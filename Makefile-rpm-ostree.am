@@ -150,7 +150,7 @@ INSTALL_EXEC_HOOKS += install-rpmostree-hook
 # the main thing here is we still drop the `target` dir in our build
 # directory, since we nominally support srcdir != builddir.
 rust-test: $(binding_generated_sources) $(dbus_built_sources) $(librpmostree_rust_path) librpmostreecxxrs.la librpmostreeinternals.la
-	LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:@abs_top_builddir@/.libs/" cargo test
+	LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:@abs_top_builddir@/.libs/" cargo test --workspace
 rust-test-%: $(binding_generated_sources) $(dbus_built_sources) $(librpmostree_rust_path) librpmostreecxxrs.la librpmostreeinternals.la
-	LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:@abs_top_builddir@/.libs/" cargo test -- $*
+	LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:@abs_top_builddir@/.libs/" cargo test --workspace -- $*
 .PHONY: rust-test rust-test-%
