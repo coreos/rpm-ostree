@@ -39,7 +39,7 @@ typedef ::GVariantDict GVariantDict;
 typedef ::GKeyFile GKeyFile;
 }
 
-// XXX: really should just include! libdnf.hxx in the bridge
+// XXX: really should just include! libdnf.hpp in the bridge
 #include <libdnf/libdnf.h>
 namespace dnfcxx
 {

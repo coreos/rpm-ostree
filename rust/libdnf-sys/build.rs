@@ -50,7 +50,7 @@ fn main() -> Result<()> {
     libdnfcxx
         .file("cxx/libdnf.cxx")
         .flag("-std=c++17")
-        .include("cxx") // this is needed for cxx.rs' `include!("libdnf.hxx")` to work
+        .include("cxx") // this is needed for cxx.rs' `include!("libdnf.hpp")` to work
         .include("../../libdnf");
     libdnfcxx.includes(libs.all_include_paths());
     libdnfcxx.compile("libdnfcxx.a");

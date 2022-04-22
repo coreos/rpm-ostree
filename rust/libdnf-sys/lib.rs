@@ -29,7 +29,7 @@ unsafe impl ExternType for DnfRepo {
 #[cxx::bridge(namespace = "dnfcxx")]
 pub mod ffi {
     unsafe extern "C++" {
-        include!("libdnf.hxx");
+        include!("libdnf.hpp");
 
         type DnfPackage = crate::DnfPackage;
         fn dnf_package_get_nevra(pkg: &mut DnfPackage) -> Result<String>;
