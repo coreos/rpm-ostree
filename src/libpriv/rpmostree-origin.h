@@ -120,13 +120,6 @@ gboolean rpmostree_origin_add_modules (RpmOstreeOrigin *origin, rust::Vec<rust::
 gboolean rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
                                           gboolean enable_only);
 
-typedef enum
-{
-  /* RPMOSTREE_ORIGIN_OVERRIDE_REPLACE, */
-  RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL,
-  RPMOSTREE_ORIGIN_OVERRIDE_REMOVE
-} RpmOstreeOriginOverrideType;
-
 gboolean rpmostree_origin_add_override_remove (RpmOstreeOrigin *origin,
                                                rust::Vec<rust::String> packages, GError **error);
 gboolean rpmostree_origin_add_override_replace_local (RpmOstreeOrigin *origin,
