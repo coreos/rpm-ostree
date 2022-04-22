@@ -40,9 +40,6 @@ struct RpmOstreeOrigin
   GKeyFile *kf;
 
   char *cached_unconfigured_state;
-  GHashTable *cached_packages;                    /* set of reldeps */
-  GHashTable *cached_local_packages;              /* NEVRA --> header sha256 */
-  GHashTable *cached_local_fileoverride_packages; /* NEVRA --> header sha256 */
 };
 
 RpmOstreeOrigin *
@@ -63,9 +60,6 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
     return;
   g_key_file_unref (origin->kf);
   g_free (origin->cached_unconfigured_state);
-  g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_local_packages, g_hash_table_unref);
-  g_clear_pointer (&origin->cached_local_fileoverride_packages, g_hash_table_unref);
   g_free (origin);
 }
 
@@ -136,24 +130,8 @@ rpmostree_origin_parse_keyfile (GKeyFile *origin, GError **error)
   CXX_TRY_VAR (kfv, rpmostreecxx::treefile_to_origin (**ret->treefile), error);
   ret->kf = std::move (kfv);
 
-  ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  ret->cached_local_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-  ret->cached_local_fileoverride_packages
-      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-
   ret->cached_unconfigured_state
       = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
-
-  if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE, ret->cached_packages, error))
-    return FALSE;
-
-  if (!parse_packages_strv (ret->kf, "packages", "requested-local", TRUE,
-                            ret->cached_local_packages, error))
-    return FALSE;
-
-  if (!parse_packages_strv (ret->kf, "packages", "requested-local-fileoverride", TRUE,
-                            ret->cached_local_fileoverride_packages, error))
-    return FALSE;
 
   // We will eventually start converting origin to treefile, this helps us
   // debug cases that may fail currently.
