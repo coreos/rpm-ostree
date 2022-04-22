@@ -891,15 +891,15 @@ impl Treefile {
     }
 
     pub(crate) fn remove_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool {
+        let modules_to_remove: BTreeSet<String> = modules.into_iter().collect();
         let modules_cfg = self.parsed.modules.ext_get_or_insert_default();
         let map = if enable_only {
             modules_cfg.enable.ext_get_or_insert_default()
         } else {
             modules_cfg.install.ext_get_or_insert_default()
         };
-        let modules: BTreeSet<String> = modules.into_iter().collect();
         let n = map.len();
-        map.retain(|module| !modules.contains(module));
+        map.retain(|module| !modules_to_remove.contains(module));
         n != map.len()
     }
 
