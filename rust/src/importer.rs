@@ -15,8 +15,61 @@ use gio::{FileInfo, FileType};
 use ostree::RepoCommitFilterResult;
 use ostree_ext::{gio, ostree};
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::pin::Pin;
+
+#[derive(Debug)]
+pub struct RpmImporter {
+    /// Set of directories which got moved from '/var/lib/' to '/usr/lib/';
+    /// each key is a plain directory name, e.g. 'foo' for '/var/lib/foo/'.
+    varlib_direntries: BTreeSet<String>,
+}
+
+pub fn rpm_importer_new() -> Box<RpmImporter> {
+    Box::new(RpmImporter::new())
+}
+
+impl RpmImporter {
+    pub(crate) fn new() -> Self {
+        Self {
+            varlib_direntries: BTreeSet::new(),
+        }
+    }
+
+    /// Inspect a given path for special `/var/lib/<foo>` entries.
+    ///
+    /// This returns whether the input path matched one of the special
+    /// cases.
+    pub fn inspect_varlib_path(&mut self, path: &str) -> bool {
+        let dirname = match path {
+            "var/lib/alternatives" => Some("alternatives".to_string()),
+            "var/lib/vagrant" => Some("vagrant".to_string()),
+            _ => None,
+        };
+
+        if let Some(entry) = dirname {
+            self.varlib_direntries.insert(entry);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Format tmpfiles.d lines for `/var/lib/<foo>` entries.
+    pub fn varlib_tmpfiles_symlinks(&self) -> Vec<String> {
+        let mut tmpfiles_lines = Vec::with_capacity(self.varlib_direntries.len());
+        for dirname in &self.varlib_direntries {
+            let linkpath = format!("/var/lib/{}", dirname);
+            let quoted = crate::maybe_shell_quote(&linkpath);
+            // NOTE(lucab): destination (dirname) can't be quoted as systemd just
+            // parses the remainder of the line, and doesn't expand quotes.
+            let line = format!("L {quoted} - - - - ../../usr/lib/{dirname}");
+            tmpfiles_lines.push(line);
+        }
+        tmpfiles_lines
+    }
+}
 
 /// Canonicalize a path, e.g. replace `//` with `/` and `././` with `./`.
 // For some background behind this, see https://github.com/alexcrichton/tar-rs/pull/274
@@ -305,6 +358,34 @@ mod tests {
             let file_info = FileInfo::new();
             file_info.set_file_type(FileType::Unknown);
             translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap_err();
+        }
+    }
+
+    #[test]
+    fn test_importer_varlib_tmpfiles() {
+        let mut importer = RpmImporter::new();
+
+        {
+            let normal_paths = ["usr/lib/foo", "var/lib/foo", "var/lib/alternatives/foo"];
+            for testcase in normal_paths {
+                let matched = importer.inspect_varlib_path(testcase);
+                assert!(!matched);
+            }
+            let lines = importer.varlib_tmpfiles_symlinks();
+            assert!(lines.is_empty());
+        }
+        {
+            let special_paths = ["var/lib/vagrant", "var/lib/alternatives"];
+            for testcase in special_paths {
+                let matched = importer.inspect_varlib_path(testcase);
+                assert!(matched);
+            }
+            let lines = importer.varlib_tmpfiles_symlinks();
+            let expected = vec![
+                "L /var/lib/alternatives - - - - ../../usr/lib/alternatives".to_string(),
+                "L /var/lib/vagrant - - - - ../../usr/lib/vagrant".to_string(),
+            ];
+            assert_eq!(lines, expected);
         }
     }
 }
