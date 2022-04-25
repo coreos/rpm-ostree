@@ -336,7 +336,7 @@ dependencies = [
  "fn-error-context",
  "futures-util",
  "libc",
- "nix",
+ "nix 0.23.1",
  "oci-spec",
  "once_cell",
  "semver",
@@ -1458,6 +1458,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f17df307904acd05aa8e32e97bb20f2a0df1728bbc2d771ae8f9a90463441e9"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "libc",
+ "memoffset",
+]
+
+[[package]]
 name = "nom"
 version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1546,7 +1558,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cf3e4baa7f516441f58373f58aaf6e91a5dfa2e2b50e68a0d313b082014c61d"
 dependencies = [
  "libc",
- "nix",
+ "nix 0.23.1",
  "openat",
  "rand",
 ]
@@ -2058,7 +2070,7 @@ dependencies = [
  "libdnf-sys",
  "maplit",
  "memfd",
- "nix",
+ "nix 0.24.1",
  "once_cell",
  "openat",
  "openat-ext",
