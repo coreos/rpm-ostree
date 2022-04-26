@@ -329,8 +329,8 @@ pub mod ffi {
         type RpmImporter;
 
         fn rpm_importer_new() -> Box<RpmImporter>;
-        fn inspect_varlib_path(self: &mut RpmImporter, path: &str) -> bool;
-        fn varlib_tmpfiles_symlinks(self: &RpmImporter) -> Vec<String>;
+        fn inspect_path_for_symlink_translation(self: &mut RpmImporter, path: &str) -> bool;
+        fn tmpfiles_symlink_entries(self: &RpmImporter) -> Vec<String>;
 
         fn importer_compose_filter(
             path: &str,
