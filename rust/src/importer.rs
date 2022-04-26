@@ -96,26 +96,19 @@ impl RpmImporter {
     // NOTE(lucab): destinations (dirname) can't be quoted as systemd just
     // parses the remainder of the line, and doesn't expand quotes.
     pub fn tmpfiles_symlink_entries(&self) -> Vec<String> {
-        let mut tmpfiles_lines =
-            Vec::with_capacity(self.varlib_direntries.len() + self.opt_direntries.len());
-
         // /opt/ symlinks
-        for dirname in &self.opt_direntries {
-            let linkpath = format!("/opt/{}", dirname);
-            let quoted = crate::maybe_shell_quote(&linkpath);
-            let line = format!("L {quoted} - - - - ../../usr/lib/opt/{dirname}");
-            tmpfiles_lines.push(line);
-        }
+        let opt_entries = self.opt_direntries.iter().map(|dirname| {
+            let quoted = crate::maybe_shell_quote(&format!("/opt/{dirname}"));
+            format!("L {quoted} - - - - ../../usr/lib/opt/{dirname}")
+        });
 
         // /var/lib/ symlinks
-        for dirname in &self.varlib_direntries {
-            let linkpath = format!("/var/lib/{}", dirname);
-            let quoted = crate::maybe_shell_quote(&linkpath);
-            let line = format!("L {quoted} - - - - ../../usr/lib/{dirname}");
-            tmpfiles_lines.push(line);
-        }
+        let varlib_entries = self.varlib_direntries.iter().map(|dirname| {
+            let quoted = crate::maybe_shell_quote(&format!("/var/lib/{dirname}"));
+            format!("L {quoted} - - - - ../../usr/lib/{dirname}")
+        });
 
-        tmpfiles_lines
+        opt_entries.chain(varlib_entries).collect()
     }
 }
 
