@@ -66,9 +66,6 @@ struct RpmOstreeImporter
   // Hashset of all file entries marked as 'doc' in an RPM;
   // each key is the absolute full path of the file.
   GHashTable *doc_files;
-  // Hashset of filepath entries which are direct children of /opt;
-  // each key is a plain path fragment, e.g. 'foo' for '/opt/foo/bar'.
-  GHashTable *opt_direntries;
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
   DnfPackage *pkg;
@@ -97,7 +94,6 @@ rpmostree_importer_finalize (GObject *object)
 
   g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
-  g_clear_pointer (&self->opt_direntries, (GDestroyNotify)g_hash_table_unref);
   self->importer_rs.~Box ();
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
@@ -241,7 +237,6 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   ret->hdr = util::move_nullify (hdr);
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage *)(pkg ? g_object_ref (pkg) : NULL);
-  ret->opt_direntries = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -514,17 +509,6 @@ xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer use
   return NULL;
 }
 
-static char *
-get_first_path_element (const char *rel_path)
-{
-  const char *end = strchr (rel_path, '/');
-
-  if (end == NULL)
-    return g_strdup (rel_path);
-  else
-    return g_strndup (rel_path, end - rel_path);
-}
-
 /* Given a path in an RPM archive, possibly translate it
  * for ostree convention.
  */
@@ -538,10 +522,7 @@ handle_translate_pathname (OstreeRepo *repo, const struct stat *stbuf, const cha
 
   auto self = static_cast<RpmOstreeImporter *> (user_data);
 
-  if (g_str_has_prefix (path, "opt/"))
-    g_hash_table_add (self->opt_direntries, get_first_path_element (path + strlen ("opt/")));
-  else
-    self->importer_rs->inspect_varlib_path (path);
+  self->importer_rs->inspect_path_for_symlink_translation (path);
 
   return rpmostree_translate_path_for_ostree (path);
 }
@@ -580,18 +561,7 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
       return FALSE;
     }
 
-  GLNX_HASH_TABLE_FOREACH (self->opt_direntries, const char *, filename)
-    {
-      g_autofree char *opt = g_strconcat ("/opt/", filename, NULL);
-      auto quoted = rpmostreecxx::maybe_shell_quote (opt);
-      /* Note that the destination can't be quoted as systemd just
-       * parses the remainder of the line, and doesn't expand quotes.
-       **/
-      g_string_append_printf (self->tmpfiles_d, "L %s - - - - /usr/lib/opt/%s\n", quoted.c_str (),
-                              filename);
-    }
-
-  for (auto &line : self->importer_rs->varlib_tmpfiles_symlinks ())
+  for (auto &line : self->importer_rs->tmpfiles_symlink_entries ())
     g_string_append_printf (self->tmpfiles_d, "%s\n", line.c_str ());
 
   /* Handle any data we've accumulated to write to tmpfiles.d.

@@ -21,6 +21,9 @@ use std::pin::Pin;
 
 #[derive(Debug)]
 pub struct RpmImporter {
+    // Hashset of filepath entries which are direct children of /opt;
+    // each key is a plain path fragment, e.g. 'foo' for '/opt/foo/bar'.
+    opt_direntries: BTreeSet<String>,
     /// Set of directories which got moved from '/var/lib/' to '/usr/lib/';
     /// each key is a plain directory name, e.g. 'foo' for '/var/lib/foo/'.
     varlib_direntries: BTreeSet<String>,
@@ -33,15 +36,48 @@ pub fn rpm_importer_new() -> Box<RpmImporter> {
 impl RpmImporter {
     pub(crate) fn new() -> Self {
         Self {
+            opt_direntries: BTreeSet::new(),
             varlib_direntries: BTreeSet::new(),
         }
     }
 
-    /// Inspect a given path for special `/var/lib/<foo>` entries.
+    fn get_first_path_element(rel_path: &str) -> String {
+        match rel_path.split_once("/") {
+            Some((dirname, _rest)) => dirname.to_string(),
+            None => rel_path.to_string(),
+        }
+    }
+
+    /// Process special paths which need symlink translation.
+    ///
+    /// This detects cases where an RPM does ship content under `/opt` or `/var`.
+    /// Those paths are translated back under `/usr`, and a compatibility symlink
+    /// is created through `systemd-tmpfiles`.
+    pub fn inspect_path_for_symlink_translation(&mut self, path: &str) -> bool {
+        let special_handlers = [Self::inspect_opt_path, Self::inspect_varlib_path];
+        special_handlers.iter().any(|handler| handler(self, path))
+    }
+
+    /// Inspect a given path for special `opt/<foo>` entries.
     ///
     /// This returns whether the input path matched one of the special
     /// cases.
-    pub fn inspect_varlib_path(&mut self, path: &str) -> bool {
+    fn inspect_opt_path(&mut self, path: &str) -> bool {
+        if let Some(prefixless) = path.strip_prefix("opt/") {
+            let dirname = Self::get_first_path_element(prefixless);
+            if !dirname.is_empty() {
+                self.opt_direntries.insert(dirname);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Inspect a given path for special `var/lib/<foo>` entries.
+    ///
+    /// This returns whether the input path matched one of the special
+    /// cases.
+    fn inspect_varlib_path(&mut self, path: &str) -> bool {
         let dirname = match path {
             "var/lib/alternatives" => Some("alternatives".to_string()),
             "var/lib/vagrant" => Some("vagrant".to_string()),
@@ -56,18 +92,23 @@ impl RpmImporter {
         }
     }
 
-    /// Format tmpfiles.d lines for `/var/lib/<foo>` entries.
-    pub fn varlib_tmpfiles_symlinks(&self) -> Vec<String> {
-        let mut tmpfiles_lines = Vec::with_capacity(self.varlib_direntries.len());
-        for dirname in &self.varlib_direntries {
-            let linkpath = format!("/var/lib/{}", dirname);
-            let quoted = crate::maybe_shell_quote(&linkpath);
-            // NOTE(lucab): destination (dirname) can't be quoted as systemd just
-            // parses the remainder of the line, and doesn't expand quotes.
-            let line = format!("L {quoted} - - - - ../../usr/lib/{dirname}");
-            tmpfiles_lines.push(line);
-        }
-        tmpfiles_lines
+    /// Format tmpfiles.d lines for symlinked entries.
+    // NOTE(lucab): destinations (dirname) can't be quoted as systemd just
+    // parses the remainder of the line, and doesn't expand quotes.
+    pub fn tmpfiles_symlink_entries(&self) -> Vec<String> {
+        // /opt/ symlinks
+        let opt_entries = self.opt_direntries.iter().map(|dirname| {
+            let quoted = crate::maybe_shell_quote(&format!("/opt/{dirname}"));
+            format!("L {quoted} - - - - ../../usr/lib/opt/{dirname}")
+        });
+
+        // /var/lib/ symlinks
+        let varlib_entries = self.varlib_direntries.iter().map(|dirname| {
+            let quoted = crate::maybe_shell_quote(&format!("/var/lib/{dirname}"));
+            format!("L {quoted} - - - - ../../usr/lib/{dirname}")
+        });
+
+        opt_entries.chain(varlib_entries).collect()
     }
 }
 
@@ -362,30 +403,52 @@ mod tests {
     }
 
     #[test]
-    fn test_importer_varlib_tmpfiles() {
+    fn test_importer_tmpfiles_symlinks() {
         let mut importer = RpmImporter::new();
 
         {
-            let normal_paths = ["usr/lib/foo", "var/lib/foo", "var/lib/alternatives/foo"];
+            let normal_paths = [
+                "usr/lib/foo",
+                "var/lib/foo",
+                "var/lib/alternatives/foo",
+                "usr/opt/foo",
+            ];
             for testcase in normal_paths {
-                let matched = importer.inspect_varlib_path(testcase);
+                let matched = importer.inspect_path_for_symlink_translation(testcase);
                 assert!(!matched);
             }
-            let lines = importer.varlib_tmpfiles_symlinks();
+            let lines = importer.tmpfiles_symlink_entries();
             assert!(lines.is_empty());
         }
         {
-            let special_paths = ["var/lib/vagrant", "var/lib/alternatives"];
+            let special_paths = [
+                "var/lib/vagrant",
+                "var/lib/alternatives",
+                "opt/foo",
+                "opt/bar/first",
+            ];
             for testcase in special_paths {
-                let matched = importer.inspect_varlib_path(testcase);
+                let matched = importer.inspect_path_for_symlink_translation(testcase);
                 assert!(matched);
             }
-            let lines = importer.varlib_tmpfiles_symlinks();
+            let lines = importer.tmpfiles_symlink_entries();
             let expected = vec![
+                "L /opt/bar - - - - ../../usr/lib/opt/bar".to_string(),
+                "L /opt/foo - - - - ../../usr/lib/opt/foo".to_string(),
                 "L /var/lib/alternatives - - - - ../../usr/lib/alternatives".to_string(),
                 "L /var/lib/vagrant - - - - ../../usr/lib/vagrant".to_string(),
             ];
             assert_eq!(lines, expected);
+        }
+    }
+
+    #[test]
+    fn test_importer_get_first_path_element() {
+        let cases = [("foo", "foo"), ("bar/", "bar"), ("xxx/yyy/zzz", "xxx")];
+
+        for (input, expected) in cases {
+            let output = RpmImporter::get_first_path_element(input);
+            assert_eq!(output, expected, "Input: {input}");
         }
     }
 }
