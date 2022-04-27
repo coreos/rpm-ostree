@@ -2,11 +2,9 @@
 //! main library used by the executable, which also links to the
 //! C/C++ `librpmostreeinternals.a` static library.
 
-/*
- * Copyright (C) 2018 Red Hat, Inc.
- *
- * SPDX-License-Identifier: Apache-2.0 OR MIT
- */
+// Copyright (C) 2018 Red Hat, Inc.
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 // See https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html
 #![deny(missing_debug_implementations)]
 #![deny(unsafe_op_in_unsafe_fn)]
