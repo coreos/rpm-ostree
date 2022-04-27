@@ -116,33 +116,6 @@ rpmostree_check_size_within_limit (guint64 actual, guint64 limit, const char *su
                      found_formatted);
 }
 
-/* Convert a "traditional" path (normally from e.g. an RPM) into its final location in
- * ostree */
-char *
-rpmostree_translate_path_for_ostree (const char *path)
-{
-  if (g_str_has_prefix (path, "etc/"))
-    return g_strconcat ("usr/", path, NULL);
-  else if (g_str_has_prefix (path, "boot/"))
-    return g_strconcat ("usr/lib/ostree-boot/", path + strlen ("boot/"), NULL);
-  /* Special hack for https://bugzilla.redhat.com/show_bug.cgi?id=1290659
-   * See also commit 4a86bdd19665700fa308461510c9decd63e31a03
-   * and rpmostree_postprocess_selinux_policy_store_location().
-   */
-  else if (g_str_has_prefix (path, VAR_SELINUX_TARGETED_PATH))
-    return g_strconcat ("usr/etc/selinux/targeted/", path + strlen (VAR_SELINUX_TARGETED_PATH),
-                        NULL);
-  else if (g_str_has_prefix (path, "opt/"))
-    return g_strconcat ("usr/lib/", path, NULL);
-  else if ((strcmp (path, "var/lib/alternatives/") == 0)
-           || g_str_has_prefix (path, "var/lib/alternatives")
-           || (strcmp (path, "var/lib/vagrant/") == 0)
-           || g_str_has_prefix (path, "var/lib/vagrant"))
-    return g_strconcat ("usr/", path + strlen ("var/"), NULL);
-
-  return NULL;
-}
-
 /* Replace [match_start, match_end) in version with rendered date_fmt.
  *
  * Returns TRUE on success, FALSE otherwise.

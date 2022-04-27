@@ -2503,11 +2503,16 @@ rpmostree_context_consume_package (RpmOstreeContext *self, DnfPackage *pkg, int 
 static char *
 canonicalize_rpmfi_path (const char *path)
 {
+  g_assert (path != NULL);
+
   /* this is a bit awkward; we relativize for the translation, but then make it absolute
    * again to match libostree */
   path += strspn (path, "/");
-  g_autofree char *translated = rpmostree_translate_path_for_ostree (path) ?: g_strdup (path);
-  return g_build_filename ("/", translated, NULL);
+  auto translated = rpmostreecxx::translate_path_for_ostree (path);
+  if (translated.size () != 0)
+    return g_build_filename ("/", translated.c_str (), NULL);
+  else
+    return g_build_filename ("/", path, NULL);
 }
 
 /* Convert e.g. lib/foo/bar → usr/lib/foo/bar */

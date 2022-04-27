@@ -48,6 +48,12 @@ impl RpmImporter {
         }
     }
 
+    /// Callback for ostree importer `translate_pathname`.
+    pub fn handle_translate_pathname(&mut self, path: &str) -> String {
+        self.inspect_path_for_symlink_translation(path);
+        utils::translate_path_for_ostree(path)
+    }
+
     /// Process special paths which need symlink translation.
     ///
     /// This detects cases where an RPM does ship content under `/opt` or `/var`.

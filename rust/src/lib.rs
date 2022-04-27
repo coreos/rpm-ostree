@@ -329,7 +329,7 @@ pub mod ffi {
         type RpmImporter;
 
         fn rpm_importer_new() -> Box<RpmImporter>;
-        fn inspect_path_for_symlink_translation(self: &mut RpmImporter, path: &str) -> bool;
+        fn handle_translate_pathname(self: &mut RpmImporter, path: &str) -> String;
         fn tmpfiles_symlink_entries(self: &RpmImporter) -> Vec<String>;
 
         fn importer_compose_filter(
@@ -583,6 +583,7 @@ pub mod ffi {
             checksum_from: &str,
             checksum_to: &str,
         ) -> Result<*mut GVariant>;
+        fn translate_path_for_ostree(path: &str) -> String;
     }
 
     #[derive(Debug, Default)]
