@@ -268,6 +268,56 @@ pub(crate) fn openat_to_dirfd(f: &openat::Dir) -> Result<cap_std::fs::Dir> {
     Ok(r)
 }
 
+/// Translate a relative unprefixed path according to ostree rules, if needed.
+///
+/// This returns an ostree-compatible path, or an empty string if no translation
+/// was performed.
+pub fn translate_path_for_ostree(path: &str) -> String {
+    translate_path_for_ostree_impl(path).unwrap_or_default()
+}
+
+/// Translate a relative unprefixed path according to ostree rules, if needed.
+pub(crate) fn translate_path_for_ostree_impl(path: &str) -> Option<String> {
+    assert!(!path.starts_with("/"));
+    assert!(!path.starts_with("./"));
+
+    // etc/foo -> usr/etc/foo
+    if path.starts_with("etc/") {
+        return Some("usr/".to_string() + path);
+    }
+
+    // boot/foo -> usr/lib/ostree-boot/foo
+    if let Some(prefixless) = path.strip_prefix("boot/") {
+        return Some("usr/lib/ostree-boot/".to_string() + prefixless);
+    }
+
+    /* Special hack for https://bugzilla.redhat.com/show_bug.cgi?id=1290659
+     * See also commit 4a86bdd19665700fa308461510c9decd63e31a03
+     * and rpmostree_postprocess_selinux_policy_store_location().
+     */
+    if let Some(prefixless) = path.strip_prefix("var/lib/selinux/targeted/") {
+        return Some("usr/etc/selinux/targeted/".to_string() + prefixless);
+    }
+
+    // opt/foo -> usr/lib/opt/foo
+    if path.starts_with("opt/") {
+        return Some("usr/lib/".to_string() + path);
+    }
+
+    // var/lib/{special}/foo -> usr/lib/{special}/foo
+    if let Some(prefixless) = path.strip_prefix("var/lib/") {
+        let varlib_cases = &["alternatives", "vagrant"];
+        for entry in varlib_cases {
+            if prefixless.starts_with(entry) {
+                return Some("usr/lib/".to_string() + prefixless);
+            }
+        }
+    }
+
+    // All remaining cases do not need translation.
+    return None;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,6 +510,32 @@ mod tests {
 
         // Test invalid format
         assert!(util_next_version("10.<date:%E>", "", "10.20001010").is_err());
+    }
+
+    #[test]
+    fn test_translate_path_for_ostree() {
+        let cases = [
+            ("usr/lib/foo", None),
+            ("var/lib/foo", None),
+            ("etc/foo", Some("usr/etc/foo")),
+            ("boot/foo", Some("usr/lib/ostree-boot/foo")),
+            (
+                "var/lib/selinux/targeted/foo",
+                Some("usr/etc/selinux/targeted/foo"),
+            ),
+            ("opt/foo", Some("usr/lib/opt/foo")),
+            ("var/lib/alternatives/foo", Some("usr/lib/alternatives/foo")),
+            ("var/lib/vagrant/foo", Some("usr/lib/vagrant/foo")),
+        ];
+
+        for (input, expected) in cases {
+            let translated = translate_path_for_ostree_impl(input);
+            assert_eq!(
+                translated,
+                expected.map(|v| v.to_string()),
+                "Input: {input}"
+            );
+        }
     }
 }
 

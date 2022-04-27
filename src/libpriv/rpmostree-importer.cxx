@@ -509,22 +509,23 @@ xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer use
   return NULL;
 }
 
-/* Given a path in an RPM archive, possibly translate it
- * for ostree convention.
- */
+/* Given a path in an RPM archive, possibly translate it for ostree convention. */
 static char *
-handle_translate_pathname (OstreeRepo *repo, const struct stat *stbuf, const char *path,
+handle_translate_pathname (OstreeRepo *_repo, const struct stat *_stbuf, const char *path,
                            gpointer user_data)
 {
-  // Sanity check that path is relative (i.e. no leading slash).
+  // Sanity checks: path is relative (i.e. no leading slash), data pointer is ok.
   g_assert (path != NULL);
   g_assert (*path != '/');
+  g_assert (user_data != NULL);
 
   auto self = static_cast<RpmOstreeImporter *> (user_data);
 
-  self->importer_rs->inspect_path_for_symlink_translation (path);
-
-  return rpmostree_translate_path_for_ostree (path);
+  auto translated = self->importer_rs->handle_translate_pathname (path);
+  if (translated.size () != 0)
+    return g_strdup (translated.c_str ());
+  else
+    return NULL;
 }
 
 static gboolean
