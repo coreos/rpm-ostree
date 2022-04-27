@@ -24,7 +24,7 @@ codestyle: {
 }
 }
 
-def nhosts = 6
+def nhosts = 5
 def mem = (nhosts * 1024) + 512
 cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
   stage("Unit Tests") {
