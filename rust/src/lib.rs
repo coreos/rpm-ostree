@@ -77,11 +77,21 @@ pub mod ffi {
         v: String,
     }
 
+    /// Classify the running system.
+    #[derive(Clone, Debug)]
+    enum SystemHostType {
+        OstreeContainer,
+        OstreeHost,
+        Unknown,
+    }
+
     // client.rs
     extern "Rust" {
         fn is_bare_split_xattrs() -> Result<bool>;
         fn is_http_arg(arg: &str) -> bool;
         fn is_ostree_container() -> Result<bool>;
+        fn get_system_host_type() -> Result<SystemHostType>;
+        fn require_system_host_type(t: SystemHostType) -> Result<()>;
         fn is_rpm_arg(arg: &str) -> bool;
         fn client_start_daemon() -> Result<()>;
         fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
