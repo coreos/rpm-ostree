@@ -2,7 +2,9 @@
 //! to rpm-ostreed.service.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use crate::core::OSTREE_BOOTED;
 use crate::cxxrsutil::*;
+use crate::ffi::SystemHostType;
 use crate::utils;
 use anyhow::{anyhow, Result};
 use cap_std_ext::rustix;
@@ -262,6 +264,36 @@ pub(crate) fn is_bare_split_xattrs() -> CxxResult<bool> {
 
 pub(crate) fn is_ostree_container() -> CxxResult<bool> {
     Ok(ostree_ext::container_utils::is_ostree_container()?)
+}
+
+pub(crate) fn get_system_host_type() -> CxxResult<SystemHostType> {
+    let r = if ostree_ext::container_utils::is_ostree_container()? {
+        SystemHostType::OstreeContainer
+    } else if std::path::Path::new(OSTREE_BOOTED).exists() {
+        SystemHostType::OstreeHost
+    } else {
+        SystemHostType::Unknown
+    };
+    Ok(r)
+}
+
+pub(crate) fn system_host_type_str(t: &SystemHostType) -> &'static str {
+    match t {
+        &SystemHostType::OstreeContainer => "ostree container",
+        &SystemHostType::OstreeHost => "ostree host",
+        _ => "unknown",
+    }
+}
+
+/// Return an error if the current system host type does not match expected.
+pub(crate) fn require_system_host_type(expected: SystemHostType) -> CxxResult<()> {
+    let current = get_system_host_type()?;
+    if current != expected {
+        let expected = system_host_type_str(&expected);
+        let current = system_host_type_str(&current);
+        return Err(format!("Current system type: {current} Expected: {expected}").into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
