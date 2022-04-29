@@ -4,6 +4,7 @@ use clap::{App, Arg};
 
 use crate::cliwrap::cliutil;
 use crate::cliwrap::RunDisposition;
+use crate::ffi::SystemHostType;
 
 fn new_rpm_app<'r>() -> App<'r, 'static> {
     let name = "cli-ostree-wrapper-rpm";
@@ -41,7 +42,14 @@ fn has_query(argv: &[&str]) -> bool {
     false
 }
 
-fn disposition(argv: &[&str]) -> Result<RunDisposition> {
+fn disposition(host: SystemHostType, argv: &[&str]) -> Result<RunDisposition> {
+    // For now, all rpm invocations are directly passed through
+    match host {
+        SystemHostType::OstreeContainer => return Ok(RunDisposition::Ok),
+        SystemHostType::OstreeHost => {}
+        _ => return Ok(RunDisposition::Unsupported),
+    };
+
     // Today rpm has --query take precendence over --erase and --install
     // apparently, so let's just accept anything with --query as there
     // are a lot of sub-options for that.
@@ -74,15 +82,18 @@ fn disposition(argv: &[&str]) -> Result<RunDisposition> {
 }
 
 /// Primary entrypoint to running our wrapped `rpm` handling.
-pub(crate) fn main(argv: &[&str]) -> Result<()> {
-    if cliutil::is_unlocked()? {
+pub(crate) fn main(host: SystemHostType, argv: &[&str]) -> Result<()> {
+    if host == SystemHostType::OstreeHost && cliutil::is_unlocked()? {
         // For now if we're unlocked, just directly exec rpm. In the future we
         // may choose to take over installing a package live.
         cliutil::exec_real_binary("rpm", argv)
     } else {
-        match disposition(argv)? {
+        match disposition(host, argv)? {
             RunDisposition::Ok => cliutil::run_unprivileged(false, "rpm", argv),
             RunDisposition::Warn => cliutil::run_unprivileged(true, "rpm", argv),
+            RunDisposition::Unsupported => Err(anyhow::anyhow!(
+                "This command is only supported on ostree-based systems."
+            )),
             RunDisposition::Notice(ref s) => {
                 println!("{}", s);
                 Ok(())
@@ -97,20 +108,29 @@ mod tests {
 
     #[test]
     fn test_version() -> Result<()> {
-        assert_eq!(disposition(&["--version"])?, RunDisposition::Ok);
+        assert_eq!(
+            disposition(SystemHostType::OstreeHost, &["--version"])?,
+            RunDisposition::Ok
+        );
         Ok(())
     }
 
     #[test]
     fn test_query_all() -> Result<()> {
-        assert_eq!(disposition(&["-qa"])?, RunDisposition::Ok);
+        assert_eq!(
+            disposition(SystemHostType::OstreeHost, &["-qa"])?,
+            RunDisposition::Ok
+        );
         Ok(())
     }
 
     #[test]
     fn test_query_file() -> Result<()> {
         assert_eq!(
-            disposition(&["--query", "-f", "/usr/bin/bash"])?,
+            disposition(
+                SystemHostType::OstreeHost,
+                &["--query", "-f", "/usr/bin/bash"]
+            )?,
             RunDisposition::Ok
         );
         Ok(())
@@ -119,7 +139,7 @@ mod tests {
     #[test]
     fn test_query_requires() -> Result<()> {
         assert_eq!(
-            disposition(&["--requires", "-q", "blah"])?,
+            disposition(SystemHostType::OstreeHost, &["--requires", "-q", "blah"])?,
             RunDisposition::Ok
         );
         Ok(())
@@ -128,26 +148,35 @@ mod tests {
     #[test]
     fn test_query_erase() -> Result<()> {
         // Note --query overrides --erase today
-        assert_eq!(disposition(&["-qea", "bash"])?, RunDisposition::Ok);
+        assert_eq!(
+            disposition(SystemHostType::OstreeHost, &["-qea", "bash"])?,
+            RunDisposition::Ok
+        );
         Ok(())
     }
 
     #[test]
     fn test_erase() -> Result<()> {
-        assert_eq!(disposition(&["--erase", "bash"])?, RunDisposition::Warn);
+        assert_eq!(
+            disposition(SystemHostType::OstreeHost, &["--erase", "bash"])?,
+            RunDisposition::Warn
+        );
         Ok(())
     }
 
     #[test]
     fn test_shorterase() -> Result<()> {
-        assert_eq!(disposition(&["-e", "bash"])?, RunDisposition::Warn);
+        assert_eq!(
+            disposition(SystemHostType::OstreeHost, &["-e", "bash"])?,
+            RunDisposition::Warn
+        );
         Ok(())
     }
 
     #[test]
     fn test_verify() -> Result<()> {
         assert!(matches!(
-            disposition(&["--verify", "bash"])?,
+            disposition(SystemHostType::OstreeHost, &["--verify", "bash"])?,
             RunDisposition::Notice(_)
         ));
         Ok(())

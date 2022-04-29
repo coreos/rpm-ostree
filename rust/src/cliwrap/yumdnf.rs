@@ -7,6 +7,8 @@ use std::path::Path;
 use std::process::Command;
 use structopt::StructOpt;
 
+use crate::ffi::SystemHostType;
+
 /// Emitted at the first line.
 pub(crate) const IMAGEBASED: &str = "Note: This system is image (rpm-ostree) based.";
 
@@ -57,8 +59,10 @@ enum Opt {
     /// Will return an error suggesting other approaches.
     Install {
         /// Set of packages to install
-        #[allow(dead_code)]
         packages: Vec<String>,
+    },
+    Clean {
+        subargs: Vec<String>,
     },
 }
 
@@ -68,10 +72,25 @@ enum RunDisposition {
     ExecRpmOstree(Vec<String>),
     UseSomethingElse,
     NotImplementedYet(&'static str),
+    Unsupported,
     Unhandled,
 }
 
-fn disposition(argv: &[&str]) -> Result<RunDisposition> {
+fn run_clean(argv: &Vec<String>) -> Result<RunDisposition> {
+    let arg = if let Some(subarg) = argv.get(0) {
+        subarg
+    } else {
+        anyhow::bail!("Missing required argument");
+    };
+    match arg.as_str() {
+        "all" | "metadata" | "packages" => Ok(RunDisposition::ExecRpmOstree(
+            ["cleanup", "-m"].iter().map(|&s| String::from(s)).collect(),
+        )),
+        o => anyhow::bail!("Unknown argument: {o}"),
+    }
+}
+
+fn disposition(hosttype: SystemHostType, argv: &[&str]) -> Result<RunDisposition> {
     let opt = match Opt::from_iter_safe(std::iter::once(&"yum").chain(argv.iter())) {
         Ok(v) => v,
         Err(e)
@@ -85,25 +104,45 @@ fn disposition(argv: &[&str]) -> Result<RunDisposition> {
         }
     };
 
-    let disp = match opt {
-        Opt::Upgrade | Opt::Update => RunDisposition::ExecRpmOstree(vec!["upgrade".into()]),
-        Opt::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
-        Opt::Install { packages: _ } => {
-            // TODO analyze packages to find e.g. `gcc` (not ok, use `toolbox`) versus `libvirt` (ok)
-            RunDisposition::UseSomethingElse
-        }
-        Opt::Search { .. } => RunDisposition::NotImplementedYet(indoc! { r##"
+    let disp = match hosttype {
+        SystemHostType::OstreeHost => {
+            match opt {
+                Opt::Upgrade | Opt::Update => RunDisposition::ExecRpmOstree(vec!["upgrade".into()]),
+                Opt::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
+                Opt::Install { packages: _ } => {
+                    // TODO analyze packages to find e.g. `gcc` (not ok, use `toolbox`) versus `libvirt` (ok)
+                    RunDisposition::UseSomethingElse
+                },
+                Opt::Clean { subargs } => {
+                    run_clean(&subargs)?
+                }
+                Opt::Search { .. } => RunDisposition::NotImplementedYet(indoc! { r##"
             Package search is not yet implemented.
             For now, it's recommended to use e.g. `toolbox` and `dnf search` inside there.
             "##}),
+            }
+        },
+        SystemHostType::OstreeContainer => match opt {
+            Opt::Upgrade | Opt::Update => RunDisposition::NotImplementedYet("At the current time, it is not supported to update packages independently of the base image."),
+            Opt::Install { mut packages } => {
+                packages.insert(0, "install".into());
+                RunDisposition::ExecRpmOstree(packages)
+            },
+            Opt::Clean { subargs } => run_clean(&subargs)?,
+            Opt::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
+            Opt::Search { .. } => {
+                RunDisposition::NotImplementedYet("Package search is not yet implemented.")
+            }
+        },
+        _ => RunDisposition::Unsupported
     };
 
     Ok(disp)
 }
 
 /// Primary entrypoint to running our wrapped `yum`/`dnf` handling.
-pub(crate) fn main(argv: &[&str]) -> Result<()> {
-    match disposition(argv)? {
+pub(crate) fn main(hosttype: SystemHostType, argv: &[&str]) -> Result<()> {
+    match disposition(hosttype, argv)? {
         RunDisposition::HelpOrVersionDisplayed => Ok(()),
         RunDisposition::ExecRpmOstree(args) => {
             eprintln!("{}", IMAGEBASED);
@@ -132,6 +171,9 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
             Err(anyhow!("not implemented"))
         }
         RunDisposition::Unhandled => Err(anyhow!("{}", UNHANDLED)),
+        RunDisposition::Unsupported => Err(anyhow!(
+            "This command is only supported on ostree-based systems."
+        )),
         RunDisposition::NotImplementedYet(msg) => Err(anyhow!("{}\n{}", IMAGEBASED, msg)),
     }
 }
@@ -142,32 +184,56 @@ mod tests {
 
     #[test]
     fn test_yumdnf() -> Result<()> {
+        for common in [SystemHostType::OstreeContainer, SystemHostType::OstreeHost] {
+            assert!(matches!(
+                disposition(common, &["--version"])?,
+                RunDisposition::HelpOrVersionDisplayed
+            ));
+            assert!(matches!(
+                disposition(common, &["--help"])?,
+                RunDisposition::HelpOrVersionDisplayed
+            ));
+            assert!(matches!(
+                disposition(common, &["unknown", "--other"])?,
+                RunDisposition::Unhandled
+            ));
+            assert!(matches!(
+                disposition(common, &["search", "foo", "bar"])?,
+                RunDisposition::NotImplementedYet(_)
+            ));
+        }
+
+        // Tests for the ostree host case
+        let host = SystemHostType::OstreeHost;
         assert!(matches!(
-            disposition(&["--version"])?,
-            RunDisposition::HelpOrVersionDisplayed
-        ));
-        assert!(matches!(
-            disposition(&["--help"])?,
-            RunDisposition::HelpOrVersionDisplayed
-        ));
-        assert!(matches!(
-            disposition(&["unknown", "--other"])?,
-            RunDisposition::Unhandled
-        ));
-        assert!(matches!(
-            disposition(&["upgrade"])?,
+            disposition(host, &["upgrade"])?,
             RunDisposition::ExecRpmOstree(_)
         ));
         assert!(matches!(
-            disposition(&["install", "foo"])?,
+            disposition(host, &["install", "foo"])?,
             RunDisposition::UseSomethingElse
         ));
         assert!(matches!(
-            disposition(&["install", "foo", "bar"])?,
+            disposition(host, &["install", "foo", "bar"])?,
             RunDisposition::UseSomethingElse
         ));
+
+        fn strvec(s: impl IntoIterator<Item = &'static str>) -> Vec<String> {
+            s.into_iter().map(|s| String::from(s)).collect()
+        }
+
+        // Tests for the ostree container case
+        let host = SystemHostType::OstreeContainer;
+        assert_eq!(
+            disposition(host, &["install", "foo", "bar"])?,
+            RunDisposition::ExecRpmOstree(strvec(["install", "foo", "bar"]))
+        );
+        assert_eq!(
+            disposition(host, &["clean", "all"])?,
+            RunDisposition::ExecRpmOstree(strvec(["cleanup", "-m"]))
+        );
         assert!(matches!(
-            disposition(&["search", "foo", "bar"])?,
+            disposition(host, &["upgrade"])?,
             RunDisposition::NotImplementedYet(_)
         ));
         Ok(())

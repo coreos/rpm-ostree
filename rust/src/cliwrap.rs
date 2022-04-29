@@ -37,6 +37,7 @@ pub(crate) enum RunDisposition {
     Ok,
     Warn,
     Notice(String),
+    Unsupported,
 }
 
 /// Main entrypoint for cliwrap
@@ -68,8 +69,8 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
         SystemHostType::OstreeHost | SystemHostType::OstreeContainer
     ) {
         match name {
-            "rpm" => Ok(self::rpm::main(args)?),
-            "yum" | "dnf" => Ok(self::yumdnf::main(args)?),
+            "rpm" => Ok(self::rpm::main(host_type, args)?),
+            "yum" | "dnf" => Ok(self::yumdnf::main(host_type, args)?),
             "dracut" => Ok(self::dracut::main(args)?),
             "grubby" => Ok(self::grubby::main(args)?),
             _ => Err(anyhow!("Unknown wrapped binary: {}", name)),
