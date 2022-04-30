@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{anyhow, Result};
+use camino::Utf8Path;
 use cap_std::fs::{Dir, DirBuilder, Permissions};
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
@@ -19,6 +20,7 @@ mod grubby;
 mod rpm;
 mod yumdnf;
 use crate::cxxrsutil::CxxResult;
+use crate::ffi::SystemHostType;
 use crate::ffiutil::*;
 
 /// Location for the underlying (not wrapped) binaries.
@@ -41,9 +43,15 @@ pub(crate) enum RunDisposition {
 pub fn entrypoint(args: &[&str]) -> Result<()> {
     // Skip the initial bits
     let args = &args[2..];
-    // We'll panic here if the vector is empty, but that is intentional;
-    // the outer code should always pass us at least one arg.
-    let name = args[0];
+    // The outer code should always pass us at least one arg.
+    let name = args
+        .get(0)
+        .map(|&x| x)
+        .ok_or_else(|| anyhow!("Missing required argument"))?;
+    // Handle this case early, it's not like the other cliwrap bits.
+    if name == "install-to-root" {
+        return install_to_root(&args[1..]);
+    }
     let name = match std::path::Path::new(name).file_name() {
         Some(name) => name,
         None => return Err(anyhow!("Invalid wrapped binary: {}", name)),
@@ -54,10 +62,11 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
     // And now these are the args for the command
     let args = &args[1..];
 
-    // If we're not booted into ostree, just run the child directly.
-    if !cliutil::is_ostree_booted() {
-        Ok(cliutil::exec_real_binary(name, args)?)
-    } else {
+    let host_type = crate::get_system_host_type()?;
+    if matches!(
+        host_type,
+        SystemHostType::OstreeHost | SystemHostType::OstreeContainer
+    ) {
         match name {
             "rpm" => Ok(self::rpm::main(args)?),
             "yum" | "dnf" => Ok(self::yumdnf::main(args)?),
@@ -65,7 +74,22 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
             "grubby" => Ok(self::grubby::main(args)?),
             _ => Err(anyhow!("Unknown wrapped binary: {}", name)),
         }
+    } else {
+        // If we're not booted into ostree, just run the child directly.
+        Ok(cliutil::exec_real_binary(name, args)?)
     }
+}
+
+/// Write wrappers to the target root filesystem.
+fn install_to_root(args: &[&str]) -> Result<()> {
+    let root = args
+        .get(0)
+        .map(Utf8Path::new)
+        .ok_or_else(|| anyhow!("Missing required argument: ROOTDIR"))?;
+    let rootdir = &Dir::open_ambient_dir(root, cap_std::ambient_authority())?;
+    write_wrappers(rootdir)?;
+    println!("Successfully enabled cliwrap for {root}");
+    Ok(())
 }
 
 #[context("Writing wrapper for {:?}", binpath)]
