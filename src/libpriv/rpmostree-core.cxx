@@ -555,8 +555,8 @@ core_libdnf_process_global_init ()
  * As a workaround, this inserts a relevant amount of `..` in order to cancel
  * out the path prefix.
  */
-static void
-rpmostree_dnfcontext_fix_vars_dir (DnfContext *context)
+static gboolean
+rpmostree_dnfcontext_fix_vars_dir (DnfContext *context, GError **error)
 {
   g_assert (context != NULL);
 
@@ -564,18 +564,22 @@ rpmostree_dnfcontext_fix_vars_dir (DnfContext *context)
 
   // Check whether we actually need to cancel out `install_root`.
   if (install_root == NULL || strcmp (install_root, "/") == 0)
-    return; /* 🔚 Early return */
+    return TRUE; /* 🔚 Early return */
+
+  g_autofree char *canon_install_root = realpath (install_root, NULL);
+  if (canon_install_root == NULL)
+    return glnx_throw_errno_prefix (error, "realpath(%s)", install_root);
 
   const gchar *const *orig_dirs = dnf_context_get_vars_dir (context);
 
   // Check whether there are vars_dir entries to tweak.
   if (orig_dirs == NULL || orig_dirs[0] == NULL)
-    return; /* 🔚 Early return */
+    return TRUE; /* 🔚 Early return */
 
   // Count how many levels need to be canceled, prepare the prefix string.
   g_autoptr (GString) slashdotdot_prefix = g_string_new (NULL);
-  for (int char_index = 0; char_index < strlen (install_root); char_index++)
-    if (install_root[char_index] == '/')
+  for (int char_index = 0; char_index < strlen (canon_install_root); char_index++)
+    if (canon_install_root[char_index] == '/')
       g_string_append (slashdotdot_prefix, "/..");
 
   // Tweak each directory, prepending the relevant amount of `..`.
@@ -593,6 +597,8 @@ rpmostree_dnfcontext_fix_vars_dir (DnfContext *context)
 
   auto tweaked_vars_dir = (const gchar *const *)tweaked_dirs->pdata;
   dnf_context_set_vars_dir (context, tweaked_vars_dir);
+
+  return TRUE;
 }
 
 /* Wraps `dnf_context_setup()`, and initializes state based on the treespec
@@ -650,7 +656,8 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
    * from the host environment instead of the install_root:
    * https://github.com/rpm-software-management/libdnf/issues/1503
    */
-  rpmostree_dnfcontext_fix_vars_dir (self->dnfctx);
+  if (!rpmostree_dnfcontext_fix_vars_dir (self->dnfctx, error))
+    return glnx_prefix_error (error, "Setting DNF vars directories");
 
   /* Set the RPM _install_langs macro, which gets processed by librpm; this is
    * currently only referenced in the traditional or non-"unified core" code.
