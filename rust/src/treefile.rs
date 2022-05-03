@@ -177,18 +177,10 @@ fn treefile_parse_stream<R: io::Read>(
     }
 
     // Whitespace split repo packages
-    if let Some(repo_packages) = treefile.repo_packages.take() {
-        treefile.repo_packages = Some(
-            repo_packages
-                .into_iter()
-                .map(|rp| -> Result<RepoPackage> {
-                    Ok(RepoPackage {
-                        repo: rp.repo,
-                        packages: whitespace_split_packages(&rp.packages)?,
-                    })
-                })
-                .collect::<Result<Vec<RepoPackage>>>()?,
-        );
+    if let Some(repo_packages) = treefile.repo_packages.as_mut() {
+        for rp in repo_packages {
+            rp.packages = whitespace_split_packages(&rp.packages)?;
+        }
     }
     if let Some(repo_packages) = treefile.derive.override_replace.as_mut() {
         for rp in repo_packages {
