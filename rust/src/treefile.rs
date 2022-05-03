@@ -176,18 +176,16 @@ fn treefile_parse_stream<R: io::Read>(
         treefile.modules = Some(modules);
     }
 
-    if let Some(repo_packages) = treefile.repo_packages.take() {
-        treefile.repo_packages = Some(
-            repo_packages
-                .into_iter()
-                .map(|rp| -> Result<RepoPackage> {
-                    Ok(RepoPackage {
-                        repo: rp.repo,
-                        packages: whitespace_split_packages(&rp.packages)?,
-                    })
-                })
-                .collect::<Result<Vec<RepoPackage>>>()?,
-        );
+    // Whitespace split repo packages
+    if let Some(repo_packages) = treefile.repo_packages.as_mut() {
+        for rp in repo_packages {
+            rp.packages = whitespace_split_packages(&rp.packages)?;
+        }
+    }
+    if let Some(repo_packages) = treefile.derive.override_replace.as_mut() {
+        for rp in repo_packages {
+            rp.packages = whitespace_split_packages(&rp.packages)?;
+        }
     }
 
     treefile.packages = Some(pkgs);
@@ -3975,6 +3973,7 @@ conditional-include:
                   packages:
                     - foo
                     - bar
+                    - baz blah
         "};
         let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.parsed.derive.override_replace.is_some());
@@ -3984,7 +3983,12 @@ conditional-include:
             replacements[0],
             RemoteOverrideReplace {
                 from: RemoteOverrideReplaceFrom::Repo("foobar".into()),
-                packages: maplit::btreeset!["foo".into(), "bar".into()],
+                packages: maplit::btreeset![
+                    "foo".into(),
+                    "bar".into(),
+                    "baz".into(),
+                    "blah".into()
+                ],
             }
         );
     }
