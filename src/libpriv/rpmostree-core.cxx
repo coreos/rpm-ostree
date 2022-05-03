@@ -550,6 +550,51 @@ core_libdnf_process_global_init ()
 
 } /* namespace */
 
+/* libdnf internally adds an `install_root` prefix to vars directories,
+ * resulting in misplaced lookups to `<install_root>/etc/dnf/vars`.
+ * As a workaround, this inserts a relevant amount of `..` in order to cancel
+ * out the path prefix.
+ */
+static void
+rpmostree_dnfcontext_fix_vars_dir (DnfContext *context)
+{
+  g_assert (context != NULL);
+
+  const gchar *install_root = dnf_context_get_install_root (context);
+
+  // Check whether we actually need to cancel out `install_root`.
+  if (install_root == NULL || strcmp (install_root, "/") == 0)
+    return; /* 🔚 Early return */
+
+  const gchar *const *orig_dirs = dnf_context_get_vars_dir (context);
+
+  // Check whether there are vars_dir entries to tweak.
+  if (orig_dirs == NULL || orig_dirs[0] == NULL)
+    return; /* 🔚 Early return */
+
+  // Count how many levels need to be canceled, prepare the prefix string.
+  g_autoptr (GString) slashdotdot_prefix = g_string_new (NULL);
+  for (int char_index = 0; char_index < strlen (install_root); char_index++)
+    if (install_root[char_index] == '/')
+      g_string_append (slashdotdot_prefix, "/..");
+
+  // Tweak each directory, prepending the relevant amount of `..`.
+  g_autoptr (GPtrArray) tweaked_dirs = g_ptr_array_new ();
+  for (int dir_index = 0; orig_dirs[dir_index] != NULL; dir_index++)
+    {
+      const gchar *dir = orig_dirs[dir_index];
+
+      g_autoptr (GString) tweaked_path = g_string_new (dir);
+      g_string_prepend (tweaked_path, slashdotdot_prefix->str);
+
+      g_ptr_array_add (tweaked_dirs, g_strdup (tweaked_path->str));
+    }
+  g_ptr_array_add (tweaked_dirs, NULL);
+
+  auto tweaked_vars_dir = (const gchar *const *)tweaked_dirs->pdata;
+  dnf_context_set_vars_dir (context, tweaked_vars_dir);
+}
+
 /* Wraps `dnf_context_setup()`, and initializes state based on the treespec
  * @spec. Another way to say it is we pair `DnfContext` with an
  * `RpmOstreeTreespec`. For example, we handle "instlangs", set the rpmdb root
@@ -600,6 +645,12 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
 
   dnf_context_set_install_root (self->dnfctx, install_root);
   dnf_context_set_source_root (self->dnfctx, source_root);
+
+  /* Hackaround libdnf logic, ensuring that `/etc/dnf/vars` gets sourced
+   * from the host environment instead of the install_root:
+   * https://github.com/rpm-software-management/libdnf/issues/1503
+   */
+  rpmostree_dnfcontext_fix_vars_dir (self->dnfctx);
 
   /* Set the RPM _install_langs macro, which gets processed by librpm; this is
    * currently only referenced in the traditional or non-"unified core" code.
