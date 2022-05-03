@@ -1963,6 +1963,8 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
           HyNevra nevra = NULL;
           hy_autoquery HyQuery query = hy_subject_get_best_solution (
               subject, sack, NULL, &nevra, FALSE, TRUE, TRUE, TRUE, FALSE);
+          if (!nevra)
+            return glnx_throw (error, "Failed to parse selector: %s", pkg.c_str ());
           hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo.c_str ());
           g_autoptr (DnfPackageSet) pset = hy_query_run_set (query);
           if (dnf_packageset_count (pset) == 0)
@@ -1993,6 +1995,8 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
                 // supported.
                 hy_autoquery HyQuery query = hy_subject_get_best_solution (
                     subject, sack, NULL, &nevra, FALSE, TRUE, FALSE, FALSE, FALSE);
+                if (!nevra)
+                  return glnx_throw (error, "Failed to parse selector: %s", pkg.c_str ());
                 auto pkgname = nevra->getName ();
                 // this should never happen, but just in case
                 if (pkgname.empty ())
