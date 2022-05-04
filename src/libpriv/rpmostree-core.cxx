@@ -4577,9 +4577,7 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.state-sha512",
                            g_variant_new_string (state_checksum));
 
-    /* And finally, make sure we clean up rpmdb left over files */
-    if (!rpmostree_cleanup_leftover_rpmdb_files (self->tmprootfs_dfd, cancellable, error))
-      return FALSE;
+    CXX_TRY (rpmostreecxx::postprocess_cleanup_rpmdb (self->tmprootfs_dfd), error);
 
     auto modflags
         = static_cast<OstreeRepoCommitModifierFlags> (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE);

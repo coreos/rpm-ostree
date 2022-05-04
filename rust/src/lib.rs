@@ -242,6 +242,7 @@ pub mod ffi {
             cancellable: Pin<&mut GCancellable>,
         ) -> Result<()>;
         fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> Result<()>;
+        fn postprocess_cleanup_rpmdb(rootfs_dfd: i32) -> Result<()>;
         fn rewrite_rpmdb_for_target(rootfs_dfd: i32, normalize: bool) -> Result<()>;
         fn directory_size(dfd: i32, mut cancellable: Pin<&mut GCancellable>) -> Result<u64>;
     }
