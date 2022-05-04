@@ -13,7 +13,6 @@ use rayon::prelude::*;
 use std::io::prelude::*;
 use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::prelude::PermissionsExt;
-use std::path::Path;
 mod cliutil;
 mod dracut;
 mod grubby;
@@ -91,13 +90,15 @@ fn install_to_root(args: &[&str]) -> Result<()> {
 }
 
 #[context("Writing wrapper for {:?}", binpath)]
-fn write_one_wrapper(rootfs_dfd: &Dir, binpath: &Path, allow_noent: bool) -> Result<()> {
+fn write_one_wrapper(rootfs_dfd: &Dir, binpath: &Utf8Path, allow_noent: bool) -> Result<()> {
     let exists = rootfs_dfd.try_exists(binpath)?;
     if !exists && allow_noent {
         return Ok(());
     }
 
-    let name = binpath.file_name().unwrap().to_str().unwrap();
+    let name = binpath
+        .file_name()
+        .ok_or_else(|| anyhow!("Invalid file name {}", binpath))?;
 
     let perms = Permissions::from_mode(0o755);
     if exists {
@@ -129,7 +130,7 @@ exec /usr/bin/rpm-ostree cliwrap $0 "$@"
 /// Move the real binaries to a subdir, and replace them with
 /// a shell script that calls our wrapping code.
 fn write_wrappers(rootfs_dfd: &Dir) -> Result<()> {
-    let destdir = std::path::Path::new(CLIWRAP_DESTDIR);
+    let destdir = Utf8Path::new(CLIWRAP_DESTDIR);
     let mut dirbuilder = DirBuilder::new();
     dirbuilder.mode(0o755);
     rootfs_dfd.ensure_dir_with(destdir.parent().unwrap(), &dirbuilder)?;
@@ -137,8 +138,12 @@ fn write_wrappers(rootfs_dfd: &Dir) -> Result<()> {
 
     WRAPPED_BINARIES
         .par_iter()
-        .map(|p| (Path::new(p), true))
-        .chain(MUSTWRAP_BINARIES.par_iter().map(|p| (Path::new(p), false)))
+        .map(|p| (Utf8Path::new(p), true))
+        .chain(
+            MUSTWRAP_BINARIES
+                .par_iter()
+                .map(|p| (Utf8Path::new(p), false)),
+        )
         .try_for_each(|(binpath, allow_noent)| write_one_wrapper(rootfs_dfd, binpath, allow_noent))
 }
 
@@ -155,6 +160,7 @@ pub(crate) fn cliwrap_destdir() -> String {
 mod tests {
     use super::*;
     use anyhow::Context;
+    use std::path::Path;
 
     fn file_contains(
         d: &Dir,
