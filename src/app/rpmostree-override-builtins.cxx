@@ -225,7 +225,7 @@ rpmostree_override_builtin_replace (int argc, char **argv, RpmOstreeCommandInvoc
   if (is_ostree_container)
     {
       CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
-      treefile->set_packages_override_remove (util::rust_stringvec_from_strv (opt_remove_pkgs));
+      treefile->add_packages_override_remove (util::rust_stringvec_from_strv (opt_remove_pkgs));
       treefile->set_packages_override_replace_local_rpms (util::rust_stringvec_from_strv (argv));
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
@@ -268,7 +268,7 @@ rpmostree_override_builtin_remove (int argc, char **argv, RpmOstreeCommandInvoca
       CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
       treefile->set_packages_override_replace_local_rpms (
           util::rust_stringvec_from_strv (opt_replace_pkgs));
-      treefile->set_packages_override_remove (util::rust_stringvec_from_strv (argv));
+      treefile->add_packages_override_remove (util::rust_stringvec_from_strv (argv));
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
 
