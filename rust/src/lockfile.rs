@@ -13,7 +13,6 @@
 pub use self::ffi::*;
 use crate::utils;
 use anyhow::{anyhow, bail, Result};
-use cap_std::fs::Permissions;
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use chrono::prelude::*;
@@ -22,7 +21,6 @@ use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::io;
 use std::iter::Extend;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::pin::Pin;
 
@@ -420,7 +418,7 @@ pub(crate) fn lockfile_write(
 
     let (dir, path) =
         crate::capstdext::open_dir_of(Path::new(filename), cap_std::ambient_authority())?;
-    dir.replace_file_with_perms(path, Permissions::from_mode(0o644), |w| -> Result<()> {
+    dir.atomic_replace_with(path, |w| -> Result<()> {
         Ok(serde_json::to_writer_pretty(w, &lockfile)?)
     })?;
     Ok(())

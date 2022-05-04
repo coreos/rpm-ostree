@@ -173,9 +173,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3430d1b5ba78fa381eb227525578d2b85d77b42ff49be85d1e72a94f305e603c"
+checksum = "5d684df5773e4af5c343c466f47151db7e7a4366daab609b4a6bb7a75aecf732"
 dependencies = [
  "cap-primitives",
  "io-extras",
@@ -186,13 +186,13 @@ dependencies = [
 
 [[package]]
 name = "cap-std-ext"
-version = "0.24.3"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35542c3139ae910606e9de752706b6ebd676ae31f35c963d6e64dd07f8f18c7c"
+checksum = "b1dcfdda606dc44a9bf48efc76bbe48a49a4e9ccf84cbbaafbe7e5a6d891d3e6"
 dependencies = [
  "cap-std",
+ "cap-tempfile",
  "rustix 0.33.0",
- "uuid 0.8.2",
 ]
 
 [[package]]
@@ -204,7 +204,7 @@ dependencies = [
  "cap-std",
  "rand",
  "rustix 0.33.0",
- "uuid 1.0.0",
+ "uuid",
 ]
 
 [[package]]
@@ -2744,15 +2744,6 @@ name = "utf8-cstr"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55bcbb425141152b10d5693095950b51c3745d019363fc2929ffd8f61449b628"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
-dependencies = [
- "getrandom",
-]
 
 [[package]]
 name = "uuid"

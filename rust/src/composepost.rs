@@ -162,7 +162,8 @@ fn postprocess_useradd(rootfs_dfd: &cap_std::fs::Dir) -> Result<()> {
     let perms = cap_std::fs::Permissions::from_mode(0o644);
     if let Some(f) = rootfs_dfd.open_optional(path).context("opening")? {
         rootfs_dfd
-            .replace_file_with_perms(&path, perms, |bufw| -> Result<_> {
+            .atomic_replace_with(&path, |bufw| -> Result<_> {
+                bufw.get_mut().as_file_mut().set_permissions(perms)?;
                 let f = BufReader::new(&f);
                 for line in f.lines() {
                     let line = line?;
@@ -216,7 +217,8 @@ fn postprocess_rpm_macro(rootfs_dfd: &Dir) -> Result<()> {
     rootfs_dfd.create_dir_with(RPM_MACROS_DIR, &db)?;
     let rpm_macros_dfd = rootfs_dfd.open_dir(RPM_MACROS_DIR)?;
     let perms = cap_std::fs::Permissions::from_mode(0o644);
-    rpm_macros_dfd.replace_file_with_perms(&MACRO_FILENAME, perms, |w| -> Result<()> {
+    rpm_macros_dfd.atomic_replace_with(&MACRO_FILENAME, |w| -> Result<()> {
+        w.get_mut().as_file_mut().set_permissions(perms)?;
         w.write_all(b"%_dbpath /")?;
         w.write_all(RPMOSTREE_RPMDB_LOCATION.as_bytes())?;
         w.write_all(b"\n")?;
@@ -234,7 +236,8 @@ fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
     let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
     if let Some(f) = rootfs_dfd.open_optional(path)? {
         let perms = cap_std::fs::Permissions::from_mode(0o644);
-        rootfs_dfd.replace_file_with_perms(&path, perms, |w| -> Result<()> {
+        rootfs_dfd.atomic_replace_with(&path, |w| -> Result<()> {
+            w.get_mut().as_file_mut().set_permissions(perms)?;
             let f = BufReader::new(&f);
             for line in f.lines() {
                 let line = line?;
