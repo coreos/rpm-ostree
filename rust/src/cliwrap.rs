@@ -53,12 +53,9 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
     if name == "install-to-root" {
         return install_to_root(&args[1..]);
     }
-    let name = match std::path::Path::new(name).file_name() {
-        Some(name) => name,
-        None => return Err(anyhow!("Invalid wrapped binary: {}", name)),
-    };
-    // We know we had a string from above
-    let name = name.to_str().unwrap();
+    let name = Utf8Path::new(name)
+        .file_name()
+        .ok_or_else(|| anyhow!("Invalid wrapped binary: {}", name))?;
 
     // And now these are the args for the command
     let args = &args[1..];
