@@ -515,7 +515,6 @@ pub mod ffi {
         fn add_packages_override_remove(&mut self, packages: Vec<String>) -> Result<()>;
         fn remove_package_override_remove(&mut self, package: &str) -> bool;
         fn has_packages_override_remove_name(&self, name: &str) -> bool;
-        fn set_packages_override_remove(&mut self, packages: Vec<String>);
         fn remove_all_overrides(&mut self) -> bool;
         fn get_modules_enable(&self) -> Vec<String>;
         fn has_modules_enable(&self) -> bool;

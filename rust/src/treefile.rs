@@ -1028,13 +1028,6 @@ impl Treefile {
                 .unwrap_or_default()
     }
 
-    pub(crate) fn set_packages_override_remove(&mut self, packages: Vec<String>) {
-        let _ = self.parsed.derive.override_remove.take();
-        if !packages.is_empty() {
-            self.parsed.derive.override_remove = Some(packages.into_iter().collect());
-        }
-    }
-
     pub(crate) fn get_packages_override_replace_local(&self) -> Vec<String> {
         self.parsed
             .derive
