@@ -639,6 +639,36 @@ struct CommitThreadData
   GError **error;
 };
 
+// In unified core mode, we'll see user-mode checkout files.
+// What we want for now is to access the embedded xattr values
+// which (along with other canonical file metadata) have been serialized
+// into the `user.ostreemeta` extended attribute.  What we should
+// actually do is add nice support for this in core ostree, and also
+// automatically pick up file owner for example.  This would be a key
+// thing to unblock fully unprivileged builds.
+//
+// But for now, just slurp up the xattrs so we get IMA in particular.
+static void
+extend_ostree_xattrs (GVariantBuilder *builder, GVariant *vbytes)
+{
+  g_autoptr (GBytes) bytes = g_variant_get_data_as_bytes (vbytes);
+  g_autoptr (GVariant) filemeta = g_variant_ref_sink (
+      g_variant_new_from_bytes (OSTREE_FILEMETA_GVARIANT_FORMAT, bytes, false));
+  g_autoptr (GVariant) xattrs = g_variant_get_child_value (filemeta, 3);
+  g_autoptr (GVariantIter) viter = g_variant_iter_new (xattrs);
+  GVariant *key, *value;
+  while (g_variant_iter_loop (viter, "(@ay@ay)", &key, &value))
+    {
+      const char *attrkey = g_variant_get_bytestring (key);
+      // Don't try to add the SELinux label - that's handled by the full
+      // relabel we do, although in the future it may be interesting to
+      // try canonically relying on the labeled pkgcache.
+      if (g_str_equal (attrkey, "security.selinux"))
+        continue;
+      g_variant_builder_add (builder, "(@ay@ay)", key, value);
+    }
+}
+
 /* Filters out all xattrs that aren't accepted. */
 static GVariant *
 filter_xattrs_cb (OstreeRepo *repo, const char *relpath, GFileInfo *file_info, gpointer user_data)
@@ -651,19 +681,15 @@ filter_xattrs_cb (OstreeRepo *repo, const char *relpath, GFileInfo *file_info, g
   static const char *accepted_xattrs[] = {
     "security.capability", /* https://lwn.net/Articles/211883/ */
     "user.pax.flags",      /* https://github.com/projectatomic/rpm-ostree/issues/412 */
-    "user.ima"             /* will be replaced with security.ima */
+    RPMOSTREE_USER_IMA,    /* will be replaced with security.ima */
   };
   g_autoptr (GVariant) existing_xattrs = NULL;
-  g_autoptr (GVariantIter) viter = NULL;
   GError *local_error = NULL;
   GError **error = &local_error;
-  GVariant *key, *value;
-  GVariantBuilder builder;
 
+  // From here, ensure the path is relative
   if (relpath[0] == '/')
     relpath++;
-
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
 
   if (!*relpath)
     {
@@ -682,19 +708,45 @@ filter_xattrs_cb (OstreeRepo *repo, const char *relpath, GFileInfo *file_info, g
       g_atomic_int_set (&tdata->percent, (gint)((100.0 * tdata->n_processed) / tdata->n_bytes));
     }
 
-  viter = g_variant_iter_new (existing_xattrs);
+  GVariantBuilder builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
 
-  while (g_variant_iter_loop (viter, "(@ay@ay)", &key, &value))
+  GVariantIter viter;
+  g_variant_iter_init (&viter, existing_xattrs);
+  // Look for the special user.ostreemeta xattr; if present then it wins
+  GVariant *key, *value;
+  while (g_variant_iter_loop (&viter, "(@ay@ay)", &key, &value))
     {
+      const char *attrkey = g_variant_get_bytestring (key);
+
+      // If it's the special bare-user xattr, then slurp out the embedded
+      // xattrs.
+      if (g_str_equal (attrkey, "user.ostreemeta"))
+        {
+          extend_ostree_xattrs (&builder, value);
+          return g_variant_ref_sink (g_variant_builder_end (&builder));
+        }
+    }
+
+  // Otherwise, find the physical xattrs; this happens in the unified core case.
+  g_variant_iter_init (&viter, existing_xattrs);
+  while (g_variant_iter_loop (&viter, "(@ay@ay)", &key, &value))
+    {
+      const char *attrkey = g_variant_get_bytestring (key);
+
       for (guint i = 0; i < G_N_ELEMENTS (accepted_xattrs); i++)
         {
           const char *validkey = accepted_xattrs[i];
-          const char *attrkey = g_variant_get_bytestring (key);
           if (g_str_equal (validkey, attrkey))
             {
-              if (g_str_equal (validkey, "user.ima"))
-                g_variant_builder_add (&builder, "(@ay@ay)",
-                                       g_variant_new_bytestring ("security.ima"), value);
+              // Translate user.ima to its final security.ima value.  This allows handling
+              // IMA outside of rpm-ostree, without needing IMA to be enabled on the
+              // "host" system.
+              if (g_str_equal (validkey, RPMOSTREE_USER_IMA))
+                {
+                  g_variant_builder_add (&builder, "(@ay@ay)",
+                                         g_variant_new_bytestring (RPMOSTREE_SYSTEM_IMA), value);
+                }
               else
                 g_variant_builder_add (&builder, "(@ay@ay)", key, value);
             }
