@@ -131,6 +131,7 @@ G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmSighandlerResetCleanup, rpmostree_sighandle
     0,                                                                                             \
   };
 
+GVariant *rpmostree_fcap_to_ostree_xattr (const char *fcap);
 GVariant *rpmostree_fcap_to_xattr_variant (const char *fcap);
 
 typedef enum
