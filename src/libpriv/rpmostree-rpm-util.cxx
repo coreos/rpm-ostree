@@ -1096,24 +1096,36 @@ cap_t_to_vfs (cap_t cap_d, struct vfs_cap_data *rawvfscap, int *out_size)
     rawvfscap->magic_etc = GUINT32_TO_LE (magic | VFS_CAP_FLAGS_EFFECTIVE);
 }
 
+// Given a file capability string, convert it to the convention ostree uses
+// to an store extended attribute value: (@ay@ay)
 GVariant *
-rpmostree_fcap_to_xattr_variant (const char *fcap)
+rpmostree_fcap_to_ostree_xattr (const char *fcap)
 {
-  g_auto (GVariantBuilder) builder;
   cap_t caps = cap_from_text (fcap);
   struct vfs_cap_data vfscap = {
     0,
   };
-  g_autoptr (GBytes) vfsbytes = NULL;
-  int vfscap_size;
 
+  int vfscap_size;
   cap_t_to_vfs (caps, &vfscap, &vfscap_size);
   cap_free (caps);
-  vfsbytes = g_bytes_new (&vfscap, vfscap_size);
+  g_autoptr (GBytes) vfsbytes = g_bytes_new (&vfscap, vfscap_size);
 
+  return g_variant_ref_sink (
+      g_variant_new ("(@ay@ay)", g_variant_new_bytestring ("security.capability"),
+                     g_variant_new_from_bytes ((GVariantType *)"ay", vfsbytes, FALSE)));
+}
+
+// Given a file capability string, convert it to a single-element array
+// of ostree-convention GVariant format.
+GVariant *
+rpmostree_fcap_to_xattr_variant (const char *fcap)
+{
+
+  g_autoptr (GVariant) v = rpmostree_fcap_to_ostree_xattr (fcap);
+  g_auto (GVariantBuilder) builder;
   g_variant_builder_init (&builder, (GVariantType *)"a(ayay)");
-  g_variant_builder_add (&builder, "(@ay@ay)", g_variant_new_bytestring ("security.capability"),
-                         g_variant_new_from_bytes ((GVariantType *)"ay", vfsbytes, FALSE));
+  g_variant_builder_add_value (&builder, v);
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
