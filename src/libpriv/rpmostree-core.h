@@ -40,6 +40,10 @@ G_BEGIN_DECLS
 #define RPMOSTREE_DIR_CACHE_SOLV "solv"
 #define RPMOSTREE_DIR_LOCK "lock"
 
+// Extended attribute used at build time.
+#define RPMOSTREE_USER_IMA "user.ima"
+#define RPMOSTREE_SYSTEM_IMA "security.ima"
+
 /* See http://lists.rpm.org/pipermail/rpm-maint/2017-October/006681.html */
 /* This is also defined on the Rust side. */
 #define RPMOSTREE_RPMDB_LOCATION "usr/share/rpm"
