@@ -45,6 +45,7 @@
 #include <rpm/rpmlog.h>
 #include <rpm/rpmts.h>
 
+#include <optional>
 #include <stdlib.h>
 #include <string.h>
 
@@ -70,9 +71,8 @@ struct RpmOstreeImporter
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
   DnfPackage *pkg;
-  rust::Box<rpmostreecxx::RpmImporter> importer_rs;
 
-  char *ostree_branch;
+  std::optional<rust::Box<rpmostreecxx::RpmImporter> > importer_rs;
 };
 
 G_DEFINE_TYPE (RpmOstreeImporter, rpmostree_importer, G_TYPE_OBJECT)
@@ -89,13 +89,12 @@ rpmostree_importer_finalize (GObject *object)
     (void)rpmfiFree (self->fi);
   glnx_close_fd (&self->fd);
   g_string_free (self->tmpfiles_d, TRUE);
-  g_free (self->ostree_branch);
   g_clear_object (&self->repo);
   g_clear_object (&self->sepolicy);
 
   g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
-  self->importer_rs.~Box ();
+  self->importer_rs.~optional ();
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
 }
@@ -114,7 +113,7 @@ rpmostree_importer_init (RpmOstreeImporter *self)
   self->fd = -1;
   self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   self->tmpfiles_d = g_string_new ("");
-  self->importer_rs = rpmostreecxx::rpm_importer_new ();
+  self->importer_rs = std::nullopt;
 }
 
 gboolean
@@ -257,6 +256,7 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   g_assert (ostree_branch != NULL);
 
   ret = (RpmOstreeImporter *)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
+  ret->importer_rs.emplace (rpmostreecxx::rpm_importer_new (ostree_branch));
   ret->fd = glnx_steal_fd (fd);
   ret->repo = (OstreeRepo *)g_object_ref (repo);
   ret->sepolicy = (OstreeSePolicy *)(sepolicy ? g_object_ref (sepolicy) : NULL);
@@ -270,8 +270,6 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   build_rpmfi_overrides (ret);
-
-  ret->ostree_branch = util::move_nullify (ostree_branch);
 
   return ret;
 }
@@ -575,7 +573,7 @@ handle_translate_pathname (OstreeRepo *_repo, const struct stat *_stbuf, const c
 
   auto self = static_cast<RpmOstreeImporter *> (user_data);
 
-  auto translated = self->importer_rs->handle_translate_pathname (path);
+  auto translated = (*self->importer_rs)->handle_translate_pathname (path);
   if (translated.size () != 0)
     return g_strdup (translated.c_str ());
   else
@@ -616,7 +614,7 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
       return FALSE;
     }
 
-  for (auto &line : self->importer_rs->tmpfiles_symlink_entries ())
+  for (auto &line : (*self->importer_rs)->tmpfiles_symlink_entries ())
     g_string_append_printf (self->tmpfiles_d, "%s\n", line.c_str ());
 
   /* Handle any data we've accumulated to write to tmpfiles.d.
@@ -694,7 +692,8 @@ rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, char **out_met
       return glnx_prefix_error (error, "Importing package '%s'", name);
     }
 
-  ostree_repo_transaction_set_ref (self->repo, NULL, self->ostree_branch, csum);
+  auto branch = (*self->importer_rs)->ostree_branch ();
+  ostree_repo_transaction_set_ref (self->repo, NULL, branch.c_str (), csum);
 
   if (out_csum)
     *out_csum = util::move_nullify (csum);
