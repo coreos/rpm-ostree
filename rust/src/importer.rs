@@ -24,19 +24,22 @@ pub struct RpmImporter {
     // Hashset of filepath entries which are direct children of /opt;
     // each key is a plain path fragment, e.g. 'foo' for '/opt/foo/bar'.
     opt_direntries: BTreeSet<String>,
+    // OSTree branch.
+    ostree_branch: String,
     /// Set of directories which got moved from '/var/lib/' to '/usr/lib/';
     /// each key is a plain directory name, e.g. 'foo' for '/var/lib/foo/'.
     varlib_direntries: BTreeSet<String>,
 }
 
-pub fn rpm_importer_new() -> Box<RpmImporter> {
-    Box::new(RpmImporter::new())
+pub fn rpm_importer_new(ostree_branch: &str) -> Box<RpmImporter> {
+    Box::new(RpmImporter::new(ostree_branch))
 }
 
 impl RpmImporter {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(ostree_branch: &str) -> Self {
         Self {
             opt_direntries: BTreeSet::new(),
+            ostree_branch: ostree_branch.to_string(),
             varlib_direntries: BTreeSet::new(),
         }
     }
@@ -96,6 +99,11 @@ impl RpmImporter {
         } else {
             false
         }
+    }
+
+    /// Return the ostree branch.
+    pub fn ostree_branch(&self) -> String {
+        self.ostree_branch.clone()
     }
 
     /// Format tmpfiles.d lines for symlinked entries.
@@ -410,7 +418,7 @@ mod tests {
 
     #[test]
     fn test_importer_tmpfiles_symlinks() {
-        let mut importer = RpmImporter::new();
+        let mut importer = RpmImporter::new("testbranch");
 
         {
             let normal_paths = [
