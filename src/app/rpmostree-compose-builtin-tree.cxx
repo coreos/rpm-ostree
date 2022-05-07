@@ -702,10 +702,10 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
 
-  CXX_TRY_VAR (tf,
-               rpmostreecxx::treefile_new_compose (gs_file_get_path_cached (self->treefile_path),
-                                                   basearch, self->workdir_dfd),
-               error);
+  CXX_TRY_VAR (
+      tf,
+      rpmostreecxx::treefile_new_compose (gs_file_get_path_cached (self->treefile_path), basearch),
+      error);
   self->treefile_rs = std::move (tf);
   self->corectx
       = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo, **self->treefile_rs);
@@ -1254,7 +1254,7 @@ rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvoca
 
   if (opt_print_only)
     {
-      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new (treefile_path, basearch, -1), error);
+      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new (treefile_path, basearch), error);
       treefile->prettyprint_json_stdout ();
       return TRUE;
     }
@@ -1333,8 +1333,7 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
     {
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
         return FALSE;
-      CXX_TRY_VAR (treefile_rs,
-                   rpmostreecxx::treefile_new_compose (treefile_path, "", workdir_tmp.fd), error);
+      CXX_TRY_VAR (treefile_rs, rpmostreecxx::treefile_new_compose (treefile_path, ""), error);
       auto serialized = treefile_rs->get_json_string ();
       treefile_parser = json_parser_new ();
       if (!json_parser_load_from_data (treefile_parser, serialized.c_str (), -1, error))
@@ -1419,7 +1418,7 @@ rpmostree_compose_builtin_tree (int argc, char **argv, RpmOstreeCommandInvocatio
 
   if (opt_print_only)
     {
-      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new (treefile_path, basearch, -1), error);
+      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new (treefile_path, basearch), error);
       treefile->prettyprint_json_stdout ();
       return TRUE;
     }
@@ -1490,8 +1489,7 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   const char *extensions_path = argv[2];
 
   auto basearch = rpmostreecxx::get_rpm_basearch ();
-  CXX_TRY_VAR (src_treefile, rpmostreecxx::treefile_new_compose (treefile_path, basearch, -1),
-               error);
+  CXX_TRY_VAR (src_treefile, rpmostreecxx::treefile_new_compose (treefile_path, basearch), error);
 
   g_autoptr (OstreeRepo) repo = NULL;
   g_auto (GLnxTmpDir) tmp_repo = {
