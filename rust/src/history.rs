@@ -36,15 +36,13 @@
 use crate::cxxrsutil::*;
 use crate::ffi::HistoryEntry;
 use anyhow::{anyhow, Result};
+use cap_std::fs::{Dir, FileType};
+use cap_std_ext::cap_std;
 use fn_error_context::context;
-use openat::{self, Dir, SimpleType};
 use std::collections::VecDeque;
-use std::fs;
 use std::ops::Deref;
 use std::path::Path;
 use systemd::journal::JournalRecord;
-
-use openat_ext::OpenatDirExt;
 
 #[cfg(test)]
 use self::mock_journal as journal;
@@ -188,14 +186,13 @@ pub(crate) fn history_prune() -> CxxResult<()> {
 
     // Cleanup any entry older than the oldest entry in the journal. Also nuke anything else that
     // doesn't belong here; we own this dir.
-    let dir = Dir::open(RPMOSTREE_HISTORY_DIR)?;
-    for entry in dir.list_dir(".")? {
+    let dir = Dir::open_ambient_dir(RPMOSTREE_HISTORY_DIR, cap_std::ambient_authority())?;
+    for entry in dir.entries()? {
         let entry = entry?;
-        let ftype = dir.get_file_type(&entry)?;
-
+        let ftype = entry.file_type()?;
         let fname = entry.file_name();
         if let Some(oldest_ts) = oldest_timestamp {
-            if ftype == SimpleType::File {
+            if ftype == FileType::file() {
                 if let Some(ts) = map_to_u64(fname.to_str().as_ref()) {
                     if ts >= oldest_ts {
                         continue;
@@ -204,8 +201,8 @@ pub(crate) fn history_prune() -> CxxResult<()> {
             }
         }
 
-        if ftype == SimpleType::Dir {
-            fs::remove_dir_all(Path::new(RPMOSTREE_HISTORY_DIR).join(fname))?;
+        if ftype == FileType::dir() {
+            dir.remove_dir_all(fname)?;
         } else {
             dir.remove_file(fname)?;
         }
