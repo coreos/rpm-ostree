@@ -68,8 +68,6 @@ pub(crate) struct TreefileExternals {
 // This type name is exposed through ffi.
 #[derive(Debug)]
 pub struct Treefile {
-    // This one isn't used today, but we may do more in the future.
-    _workdir: Option<openat::Dir>,
     primary_dfd: openat::Dir,
     #[allow(dead_code)] // Not used in tests
     pub(crate) parsed: TreeComposeConfig,
@@ -578,19 +576,14 @@ fn add_files_path_is_valid(path: &str) -> bool {
 
 impl Treefile {
     /// The main treefile creation entrypoint.
-    #[instrument(skip(workdir))]
-    fn new_boxed(
-        filename: &Path,
-        basearch: Option<&str>,
-        workdir: Option<openat::Dir>,
-    ) -> Result<Box<Treefile>> {
+    #[instrument]
+    fn new_boxed(filename: &Path, basearch: Option<&str>) -> Result<Box<Treefile>> {
         let parsed = treefile_parse_and_process(filename, basearch)?;
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
-            _workdir: workdir,
             serialized,
             externals: parsed.externals,
         }))
@@ -605,7 +598,6 @@ impl Treefile {
         Ok(Box::new(Treefile {
             primary_dfd,
             parsed: treefile,
-            _workdir: None,
             serialized,
             externals: Default::default(),
         }))
@@ -628,7 +620,6 @@ impl Treefile {
         Ok(Treefile {
             primary_dfd,
             parsed,
-            _workdir: None,
             serialized,
             externals: Default::default(),
         })
@@ -3001,11 +2992,7 @@ pub(crate) mod tests {
     ) -> Result<Box<Treefile>> {
         let tf_path = workdir.join("treefile.yaml");
         std::fs::write(&tf_path, contents)?;
-        Ok(Treefile::new_boxed(
-            tf_path.as_path(),
-            basearch,
-            Some(openat::Dir::open(workdir)?),
-        )?)
+        Ok(Treefile::new_boxed(tf_path.as_path(), basearch)?)
     }
 
     pub(crate) fn new_test_tf_basic(contents: impl AsRef<str>) -> Result<Box<Treefile>> {
@@ -4027,18 +4014,9 @@ fn raw_seeked_fd(fd: &mut std::fs::File) -> RawFd {
     fd.as_raw_fd()
 }
 
-pub(crate) fn treefile_new(
-    filename: &str,
-    basearch: &str,
-    workdir: i32,
-) -> CxxResult<Box<Treefile>> {
+pub(crate) fn treefile_new(filename: &str, basearch: &str) -> CxxResult<Box<Treefile>> {
     let basearch = opt_string(basearch);
-    let workdir = if workdir != -1 {
-        Some(crate::ffiutil::ffi_view_openat_dir(workdir))
-    } else {
-        None
-    };
-    Ok(Treefile::new_boxed(filename.as_ref(), basearch, workdir)?)
+    Ok(Treefile::new_boxed(filename.as_ref(), basearch)?)
 }
 
 /// Create a new treefile from a string.
@@ -4059,12 +4037,8 @@ pub(crate) fn treefile_new_empty() -> CxxResult<Box<Treefile>> {
 }
 
 /// Create a new treefile, returning an error if any (currently) client-side options are set.
-pub(crate) fn treefile_new_compose(
-    filename: &str,
-    basearch: &str,
-    workdir: i32,
-) -> CxxResult<Box<Treefile>> {
-    let r = treefile_new(filename, basearch, workdir)?;
+pub(crate) fn treefile_new_compose(filename: &str, basearch: &str) -> CxxResult<Box<Treefile>> {
+    let r = treefile_new(filename, basearch)?;
     Treefile::validate_base_config(&r.parsed)?;
     r.error_if_deriving()?;
     Ok(r)
@@ -4072,7 +4046,7 @@ pub(crate) fn treefile_new_compose(
 
 /// Create a new treefile, returning an error if any (currently) compose-side options are set.
 pub(crate) fn treefile_new_client(filename: &str, basearch: &str) -> CxxResult<Box<Treefile>> {
-    let r = treefile_new(filename, basearch, -1)?;
+    let r = treefile_new(filename, basearch)?;
     r.error_if_base()?;
     Ok(r)
 }
