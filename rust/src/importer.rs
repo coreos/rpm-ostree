@@ -26,22 +26,37 @@ pub struct RpmImporter {
     opt_direntries: BTreeSet<String>,
     // OSTree branch.
     ostree_branch: String,
+    // Package name.
+    pkg_name: String,
     /// Set of directories which got moved from '/var/lib/' to '/usr/lib/';
     /// each key is a plain directory name, e.g. 'foo' for '/var/lib/foo/'.
     varlib_direntries: BTreeSet<String>,
 }
 
-pub fn rpm_importer_new(ostree_branch: &str) -> Box<RpmImporter> {
-    Box::new(RpmImporter::new(ostree_branch))
+/// Build a new RPM importer for a given package.
+pub fn rpm_importer_new(pkg_name: &str, ostree_branch: &str) -> CxxResult<Box<RpmImporter>> {
+    let importer = RpmImporter::new(pkg_name, ostree_branch)?;
+    Ok(Box::new(importer))
 }
 
 impl RpmImporter {
-    pub(crate) fn new(ostree_branch: &str) -> Self {
-        Self {
+    /// Build a new RPM importer for a given package.
+    pub(crate) fn new(pkg_name: &str, ostree_branch: &str) -> Result<Self> {
+        // TODO(lucab): OSTree branch could be directly computed in Rust
+        // starting from package NEVRA. Later on, let's rework arguments
+        // and port the existing branch-naming logic to here.
+
+        if pkg_name.is_empty() {
+            bail!("Empty package name");
+        }
+
+        let importer = Self {
             opt_direntries: BTreeSet::new(),
             ostree_branch: ostree_branch.to_string(),
+            pkg_name: pkg_name.to_string(),
             varlib_direntries: BTreeSet::new(),
-        }
+        };
+        Ok(importer)
     }
 
     fn get_first_path_element(rel_path: &str) -> String {
@@ -104,6 +119,11 @@ impl RpmImporter {
     /// Return the ostree branch.
     pub fn ostree_branch(&self) -> String {
         self.ostree_branch.clone()
+    }
+
+    /// Return the package name.
+    pub fn pkg_name(&self) -> String {
+        self.pkg_name.clone()
     }
 
     /// Format tmpfiles.d lines for symlinked entries.
@@ -418,7 +438,7 @@ mod tests {
 
     #[test]
     fn test_importer_tmpfiles_symlinks() {
-        let mut importer = RpmImporter::new("testbranch");
+        let mut importer = RpmImporter::new("testpkg", "testbranch").unwrap();
 
         {
             let normal_paths = [
