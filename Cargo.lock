@@ -192,18 +192,19 @@ checksum = "35542c3139ae910606e9de752706b6ebd676ae31f35c963d6e64dd07f8f18c7c"
 dependencies = [
  "cap-std",
  "rustix 0.33.0",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
 name = "cap-tempfile"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1857f2acd81cd0dafd729ec386032900863bc0c542188df48f761b6fab5bb41"
+checksum = "1def2a81a97ba5f361944b55a96ab0ccf0b3b64bd829c12f20f4bf709ce2ab03"
 dependencies = [
  "cap-std",
  "rand",
- "uuid",
+ "rustix 0.33.0",
+ "uuid 1.0.0",
 ]
 
 [[package]]
@@ -2749,6 +2750,15 @@ name = "uuid"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom",
+]
+
+[[package]]
+name = "uuid"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
 dependencies = [
  "getrandom",
 ]
