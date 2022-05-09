@@ -250,13 +250,16 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
 
   if (!rpmostree_importer_read_metainfo (*fd, &hdr, &cpio_offset, &fi, error))
     return (RpmOstreeImporter *)glnx_prefix_error_null (error, "Reading metainfo");
-
   g_assert (hdr != NULL);
+
+  const char *pkg_name = headerGetString (hdr, RPMTAG_NAME);
+  g_assert (pkg_name != NULL);
   g_autofree char *ostree_branch = rpmostree_get_cache_branch_header (hdr);
   g_assert (ostree_branch != NULL);
+  CXX_TRY_VAR (importer_rs, rpmostreecxx::rpm_importer_new (pkg_name, ostree_branch), error);
 
   ret = (RpmOstreeImporter *)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
-  ret->importer_rs.emplace (rpmostreecxx::rpm_importer_new (ostree_branch));
+  ret->importer_rs.emplace (std::move (importer_rs));
   ret->fd = glnx_steal_fd (fd);
   ret->repo = (OstreeRepo *)g_object_ref (repo);
   ret->sepolicy = (OstreeSePolicy *)(sepolicy ? g_object_ref (sepolicy) : NULL);
@@ -398,8 +401,9 @@ build_metadata_variant (RpmOstreeImporter *self, GVariant **out_variant, char **
   /* include basic NEVRA information so we don't have to write out and read back the header
    * just to get e.g. the pkgname */
   g_autofree char *nevra = rpmostree_importer_get_nevra (self);
+  auto pkg_name = (*self->importer_rs)->pkg_name ();
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.nevra",
-                         g_variant_new ("(sstsss)", nevra, headerGetString (self->hdr, RPMTAG_NAME),
+                         g_variant_new ("(sstsss)", nevra, pkg_name.c_str (),
                                         headerGetNumber (self->hdr, RPMTAG_EPOCH),
                                         headerGetString (self->hdr, RPMTAG_VERSION),
                                         headerGetString (self->hdr, RPMTAG_RELEASE),
@@ -627,14 +631,14 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
   };
   if (self->tmpfiles_d->len > 0)
     {
-      g_autofree char *pkgname = headerGetAsString (self->hdr, RPMTAG_NAME);
+      auto pkg_name = (*self->importer_rs)->pkg_name ();
 
       if (!glnx_mkdtemp ("rpm-ostree-import.XXXXXX", 0700, &tmpdir, error))
         return FALSE;
       if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
         return FALSE;
       if (!glnx_file_replace_contents_at (
-              tmpdir.fd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkgname, ".conf"),
+              tmpdir.fd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkg_name.c_str (), ".conf"),
               (guint8 *)self->tmpfiles_d->str, self->tmpfiles_d->len, GLNX_FILE_REPLACE_NODATASYNC,
               cancellable, error))
         return FALSE;
@@ -688,8 +692,8 @@ rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, char **out_met
   g_autofree char *csum = NULL;
   if (!import_rpm_to_repo (self, &csum, &metadata_sha256, cancellable, error))
     {
-      g_autofree char *name = headerGetAsString (self->hdr, RPMTAG_NAME);
-      return glnx_prefix_error (error, "Importing package '%s'", name);
+      auto pkg_name = (*self->importer_rs)->pkg_name ();
+      return glnx_prefix_error (error, "Importing package '%s'", pkg_name.c_str ());
     }
 
   auto branch = (*self->importer_rs)->ostree_branch ();

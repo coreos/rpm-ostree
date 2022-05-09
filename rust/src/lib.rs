@@ -339,9 +339,10 @@ pub mod ffi {
     extern "Rust" {
         type RpmImporter;
 
-        fn rpm_importer_new(ostree_branch: &str) -> Box<RpmImporter>;
+        fn rpm_importer_new(pkg_name: &str, ostree_branch: &str) -> Result<Box<RpmImporter>>;
         fn handle_translate_pathname(self: &mut RpmImporter, path: &str) -> String;
         fn ostree_branch(self: &RpmImporter) -> String;
+        fn pkg_name(self: &RpmImporter) -> String;
         fn tmpfiles_symlink_entries(self: &RpmImporter) -> Vec<String>;
 
         fn importer_compose_filter(
