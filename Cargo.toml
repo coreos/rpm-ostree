@@ -33,7 +33,7 @@ binread = "2.2.0"
 c_utf8 = "0.1.0"
 camino = "1.0.7"
 cap-std-ext = "0.24.3"
-cap-tempfile = "0.24.2"
+cap-tempfile = "0.24.3"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = "2.34.0"
 curl = "0.4.43"
@@ -44,7 +44,7 @@ env_logger = "0.9.0"
 fail = { version = "0.5", features = ["failpoints"] }
 fn-error-context = "0.2.0"
 futures = "0.3.21"
-indoc = "1.0.4"
+indoc = "1.0.6"
 indicatif = "0.16.2"
 libc = "0.2.125"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
