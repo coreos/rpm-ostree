@@ -15,12 +15,16 @@ use gio::{FileInfo, FileType};
 use ostree::RepoCommitFilterResult;
 use ostree_ext::{gio, ostree};
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write;
 use std::pin::Pin;
 
 #[derive(Debug)]
 pub struct RpmImporter {
+    // Hashset of all file entries marked as 'doc' in an RPM;
+    // each key is the absolute full path of the file. This is `None`
+    // if docs filtering is not enabled.
+    doc_files: Option<HashSet<String>>,
     // Hashset of filepath entries which are direct children of /opt;
     // each key is a plain path fragment, e.g. 'foo' for '/opt/foo/bar'.
     opt_direntries: BTreeSet<String>,
@@ -34,14 +38,22 @@ pub struct RpmImporter {
 }
 
 /// Build a new RPM importer for a given package.
-pub fn rpm_importer_new(pkg_name: &str, ostree_branch: &str) -> CxxResult<Box<RpmImporter>> {
-    let importer = RpmImporter::new(pkg_name, ostree_branch)?;
+pub fn rpm_importer_new(
+    pkg_name: &str,
+    ostree_branch: &str,
+    doc_files_are_filtered: bool,
+) -> CxxResult<Box<RpmImporter>> {
+    let importer = RpmImporter::new(pkg_name, ostree_branch, doc_files_are_filtered)?;
     Ok(Box::new(importer))
 }
 
 impl RpmImporter {
     /// Build a new RPM importer for a given package.
-    pub(crate) fn new(pkg_name: &str, ostree_branch: &str) -> Result<Self> {
+    pub(crate) fn new(
+        pkg_name: &str,
+        ostree_branch: &str,
+        doc_files_are_filtered: bool,
+    ) -> Result<Self> {
         // TODO(lucab): OSTree branch could be directly computed in Rust
         // starting from package NEVRA. Later on, let's rework arguments
         // and port the existing branch-naming logic to here.
@@ -50,7 +62,14 @@ impl RpmImporter {
             bail!("Empty package name");
         }
 
+        let doc_files = if doc_files_are_filtered {
+            Some(HashSet::new())
+        } else {
+            None
+        };
+
         let importer = Self {
+            doc_files,
             opt_direntries: BTreeSet::new(),
             ostree_branch: ostree_branch.to_string(),
             pkg_name: pkg_name.to_string(),
@@ -143,6 +162,24 @@ impl RpmImporter {
         });
 
         opt_entries.chain(varlib_entries).collect()
+    }
+
+    /// Return whether 'doc' files get filtered during importing.
+    pub fn doc_files_are_filtered(&self) -> bool {
+        self.doc_files.is_some()
+    }
+
+    pub fn doc_files_insert(self: &mut RpmImporter, path: &str) {
+        if let Some(ref mut set) = self.doc_files {
+            set.insert(path.to_string());
+        }
+    }
+
+    pub fn doc_files_contains(self: &RpmImporter, path: &str) -> bool {
+        self.doc_files
+            .as_ref()
+            .map(|set| set.contains(path))
+            .unwrap_or(false)
     }
 }
 
@@ -438,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_importer_tmpfiles_symlinks() {
-        let mut importer = RpmImporter::new("testpkg", "testbranch").unwrap();
+        let mut importer = RpmImporter::new("testpkg", "testbranch", false).unwrap();
 
         {
             let normal_paths = [

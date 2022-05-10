@@ -65,9 +65,6 @@ struct RpmOstreeImporter
   //  - [K] absolute full path of the file
   //  - [V] iterator index in RPM header for this file
   GHashTable *rpmfi_overrides;
-  // Hashset of all file entries marked as 'doc' in an RPM;
-  // each key is the absolute full path of the file.
-  GHashTable *doc_files;
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
   DnfPackage *pkg;
@@ -93,7 +90,6 @@ rpmostree_importer_finalize (GObject *object)
   g_clear_object (&self->sepolicy);
 
   g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
-  g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
   self->importer_rs.~optional ();
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
@@ -194,13 +190,15 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
    * Otherwise we can just use the CPIO data.  Though for handling
    * NODOCS, we gather a hashset of the files with doc flags.
    */
-  const gboolean docs_are_filtered = self->doc_files != NULL;
+  const gboolean doc_files_are_filtered = (*self->importer_rs)->doc_files_are_filtered ();
   while ((i = rpmfiNext (self->fi)) >= 0)
     {
       const char *user = rpmfiFUser (self->fi);
       const char *group = rpmfiFGroup (self->fi);
       const char *fcaps = rpmfiFCaps (self->fi);
-      const char *fn = rpmfiFN (self->fi);
+      const char *abs_filepath = rpmfiFN (self->fi);
+      g_assert (abs_filepath != NULL);
+      g_assert (abs_filepath[0] == '/');
       rpmfileAttrs fattrs = rpmfiFFlags (self->fi);
 
       size_t siglen = 0;
@@ -212,12 +210,12 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
       const gboolean fcaps_is_unset = (fcaps == NULL || fcaps[0] == '\0');
       if (!(user_is_root && group_is_root && fcaps_is_unset) || have_ima)
         {
-          g_hash_table_insert (self->rpmfi_overrides, g_strdup (fn), GINT_TO_POINTER (i));
+          g_hash_table_insert (self->rpmfi_overrides, g_strdup (abs_filepath), GINT_TO_POINTER (i));
         }
 
       const gboolean is_doc = (fattrs & RPMFILE_DOC) > 0;
-      if (docs_are_filtered && is_doc)
-        g_hash_table_add (self->doc_files, g_strdup (fn));
+      if (doc_files_are_filtered && is_doc)
+        (*self->importer_rs)->doc_files_insert (abs_filepath);
     }
 }
 
@@ -256,7 +254,10 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   g_assert (pkg_name != NULL);
   g_autofree char *ostree_branch = rpmostree_get_cache_branch_header (hdr);
   g_assert (ostree_branch != NULL);
-  CXX_TRY_VAR (importer_rs, rpmostreecxx::rpm_importer_new (pkg_name, ostree_branch), error);
+  bool doc_files_are_filtered = (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS) != 0;
+  CXX_TRY_VAR (importer_rs,
+               rpmostreecxx::rpm_importer_new (pkg_name, ostree_branch, doc_files_are_filtered),
+               error);
 
   ret = (RpmOstreeImporter *)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
   ret->importer_rs.emplace (std::move (importer_rs));
@@ -270,8 +271,6 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage *)(pkg ? g_object_ref (pkg) : NULL);
 
-  if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
-    ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   build_rpmfi_overrides (ret);
 
   return ret;
@@ -442,7 +441,7 @@ build_metadata_variant (RpmOstreeImporter *self, GVariant **out_variant, char **
                              g_variant_new_string (chksum_repr.c_str ()));
     }
 
-  if (self->doc_files)
+  if ((*self->importer_rs)->doc_files_are_filtered ())
     {
       g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.nodocs",
                              g_variant_new_boolean (TRUE));
@@ -478,7 +477,8 @@ compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpo
   GError **error = ((cb_data *)user_data)->error;
 
   /* Are we filtering out docs?  Let's check that first */
-  if (self->doc_files && g_hash_table_contains (self->doc_files, path))
+  if ((*self->importer_rs)->doc_files_are_filtered ()
+      && (*self->importer_rs)->doc_files_contains (path))
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
   /* Directly convert /run and /var entries to tmpfiles.d.
