@@ -1590,7 +1590,7 @@ add_pkg_from_cache (RpmOstreeContext *self, const char *nevra, const char *sha25
   g_autoptr (DnfPackage) pkg
       = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->dnfctx), rpm);
   if (!pkg)
-    return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
+    return glnx_throw (error, "Failed to add local pkg %s to sack; check for warnings", nevra);
 
   *out_pkg = util::move_nullify (pkg);
   return TRUE;
