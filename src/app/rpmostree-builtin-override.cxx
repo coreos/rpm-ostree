@@ -24,9 +24,13 @@
 #include "rpmostree-override-builtins.h"
 
 static RpmOstreeCommand override_subcommands[]
-    = { { "replace", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    = { { "replace",
+          (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS
+                                  | RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
           "Replace packages in the base layer", rpmostree_override_builtin_replace },
-        { "remove", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+        { "remove",
+          (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS
+                                  | RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
           "Remove packages from the base layer", rpmostree_override_builtin_remove },
         { "reset", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
           "Reset currently active package overrides", rpmostree_override_builtin_reset },
