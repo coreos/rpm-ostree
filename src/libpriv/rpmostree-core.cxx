@@ -934,7 +934,8 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo *pkgcache, const char *nevra,
         return FALSE;
 
       if (!g_str_equal (expected_sha256, actual_sha256))
-        return glnx_throw (error, "Checksum mismatch for package %s", nevra);
+        return glnx_throw (error, "Checksum mismatch for package %s: expected %s, found %s", nevra,
+                           expected_sha256, actual_sha256);
     }
 
   return get_header_variant (pkgcache, cachebranch.c_str (), out_header, cancellable, error);
