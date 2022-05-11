@@ -2060,6 +2060,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "binread",
+ "bitflags",
  "c_utf8",
  "camino",
  "cap-std-ext",
