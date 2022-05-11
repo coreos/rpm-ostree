@@ -143,7 +143,7 @@ impl FilesystemScriptPrep {
             let saved = &Self::saved_name(path);
             if rootfs.try_exists(path)? {
                 rootfs.rename(path, &rootfs, saved)?;
-                rootfs.replace_contents_with_perms(path, contents, mode)?;
+                rootfs.atomic_write_with_perms(path, contents, mode)?;
             }
         }
         Ok(Box::new(Self { rootfs }))
@@ -216,7 +216,7 @@ fn verify_kernel_hmac_impl(moddir: &Dir) -> Result<()> {
     }
 
     let perms = Permissions::from_mode(0o644);
-    moddir.replace_contents_with_perms(hmac_path, new_contents, perms)?;
+    moddir.atomic_write_with_perms(hmac_path, new_contents, perms)?;
 
     Ok(())
 }
@@ -265,9 +265,9 @@ mod test {
         db.recursive(true);
         d.ensure_dir_with("usr/bin", &db)?;
         d.ensure_dir_with("usr/sbin", &db)?;
-        d.replace_contents_with_perms(super::SSS_CACHE_PATH, "sss binary", mode.clone())?;
+        d.atomic_write_with_perms(super::SSS_CACHE_PATH, "sss binary", mode.clone())?;
         let original_systemctl = "original systemctl";
-        d.replace_contents_with_perms(super::SYSTEMCTL_PATH, original_systemctl, mode.clone())?;
+        d.atomic_write_with_perms(super::SYSTEMCTL_PATH, original_systemctl, mode.clone())?;
         // Replaced systemctl
         {
             assert!(d.try_exists(super::SSS_CACHE_PATH)?);

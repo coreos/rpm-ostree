@@ -350,7 +350,7 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
     if let Some(v) = opt.write_contentmeta_json {
         let v = v.strip_prefix("/").unwrap_or(&v);
         let root = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
-        root.replace_file_with(v, |w| {
+        root.atomic_replace_with(v, |w| {
             serde_json::to_writer(w, &meta.sizes).map_err(anyhow::Error::msg)
         })?;
     }

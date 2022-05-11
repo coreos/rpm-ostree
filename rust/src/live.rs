@@ -12,7 +12,7 @@ use crate::ffi::LiveApplyState;
 use crate::isolation;
 use crate::progress::progress_task;
 use anyhow::{anyhow, Context, Result};
-use cap_std::fs::{Dir, Permissions};
+use cap_std::fs::Dir;
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
@@ -24,7 +24,6 @@ use ostree_ext::{gio, glib, ostree};
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
-use std::os::unix::prelude::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
@@ -102,8 +101,7 @@ fn write_live_state(
 
     // Ensure the stamp file exists
     if !found_live_stamp && commit.or(inprogress_commit).is_some() {
-        let perms = Permissions::from_mode(0o644);
-        rundir.replace_contents_with_perms(LIVE_STATE_NAME, b"", perms)?;
+        rundir.atomic_write(LIVE_STATE_NAME, b"")?;
     }
 
     Ok(())

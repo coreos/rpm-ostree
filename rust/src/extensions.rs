@@ -166,7 +166,7 @@ impl Extensions {
     pub(crate) fn update_state_checksum(&self, chksum: &str, output_dir: &str) -> CxxResult<()> {
         let output_dir = Dir::open_ambient_dir(output_dir, cap_std::ambient_authority())?;
         Ok(output_dir
-            .replace_contents_with_perms(
+            .atomic_write_with_perms(
                 RPMOSTREE_EXTENSIONS_STATE_FILE,
                 chksum,
                 Permissions::from_mode(0o644),
@@ -177,11 +177,9 @@ impl Extensions {
     pub(crate) fn serialize_to_dir(&self, output_dir: &str) -> CxxResult<()> {
         let output_dir = Dir::open_ambient_dir(output_dir, cap_std::ambient_authority())?;
         Ok(output_dir
-            .replace_file_with_perms(
-                "extensions.json",
-                Permissions::from_mode(0o644),
-                |w| -> Result<_> { Ok(serde_json::to_writer_pretty(w, self)?) },
-            )
+            .atomic_replace_with("extensions.json", |w| -> Result<_> {
+                Ok(serde_json::to_writer_pretty(w, self)?)
+            })
             .context("while serializing")?)
     }
 

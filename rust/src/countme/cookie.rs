@@ -3,12 +3,10 @@
 use anyhow::{bail, Result};
 use cap_std::fs::Dir;
 use cap_std_ext::cap_std;
-use cap_std_ext::cap_std::fs::Permissions;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
-use std::os::unix::prelude::PermissionsExt;
 
 /// State directory used to store the countme cookie
 const STATE_DIR: &str = "var/lib/rpm-ostree-countme";
@@ -146,8 +144,7 @@ impl Cookie {
             window: self.now,
         };
         let statedir = Dir::open_ambient_dir(STATE_DIR, cap_std::ambient_authority())?;
-        let perms = Permissions::from_mode(0o644);
-        statedir.replace_file_with_perms(COUNTME_COOKIE, perms, |w| -> Result<_> {
+        statedir.atomic_replace_with(COUNTME_COOKIE, |w| -> Result<_> {
             Ok(serde_json::to_writer(w, &cookie)?)
         })
     }

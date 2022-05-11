@@ -104,7 +104,8 @@ fn write_one_wrapper(rootfs_dfd: &Dir, binpath: &Utf8Path, allow_noent: bool) ->
     if exists {
         let destpath = format!("{}/{}", CLIWRAP_DESTDIR, name);
         rootfs_dfd.rename(binpath, rootfs_dfd, destpath.as_str())?;
-        rootfs_dfd.replace_file_with_perms(binpath, perms, |w| {
+        rootfs_dfd.atomic_replace_with(binpath, |w| {
+            w.get_mut().as_file_mut().set_permissions(perms)?;
             indoc::writedoc! {w, r#"
 #!/bin/sh
 # Wrapper created by rpm-ostree to override
@@ -115,7 +116,8 @@ exec /usr/bin/rpm-ostree cliwrap $0 "$@"
 "#,  destpath }
         })?;
     } else {
-        rootfs_dfd.replace_file_with_perms(binpath, perms, |w| {
+        rootfs_dfd.atomic_replace_with(binpath, |w| {
+            w.get_mut().as_file_mut().set_permissions(perms)?;
             indoc::writedoc! {w, r#"
 #!/bin/sh
 # Wrapper created by rpm-ostree to implement this CLI interface.

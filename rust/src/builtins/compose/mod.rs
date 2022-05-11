@@ -25,7 +25,7 @@ pub fn composeutil_legacy_prep_dev_and_run(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs = unsafe { crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     legacy_prepare_dev(&rootfs)?;
     rootfs.create_dir_with("run", DirBuilder::new().mode(0o755))?;
-    rootfs.replace_contents_with_perms(&OSTREE_BOOTED[1..], b"", Permissions::from_mode(0o755))?;
+    rootfs.atomic_write_with_perms(&OSTREE_BOOTED[1..], b"", Permissions::from_mode(0o755))?;
     Ok(())
 }
 
