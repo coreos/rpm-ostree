@@ -2410,29 +2410,14 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg, GCancel
   if (!rpmostree_context_consume_package (self, pkg, &fd, error))
     return FALSE;
 
-  /* Only set SKIP_EXTRANEOUS for packages we know need it, so that
-   * people doing custom composes don't have files silently discarded.
-   * (This will also likely need to be configurable).
-   */
+  // TODO(cgwalters): tweak the unpacker flags for containers.
   const char *pkg_name = dnf_package_get_name (pkg);
+  g_assert (pkg_name != NULL);
+  auto importer_flags = self->treefile_rs->importer_flags (pkg_name);
 
-  int flags = 0;
-  if (g_str_equal (pkg_name, "filesystem") || g_str_equal (pkg_name, "rootfiles"))
-    flags |= RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS;
-
-  if (!self->treefile_rs->get_documentation ())
-    flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
-
-  if (self->treefile_rs->get_readonly_executables ())
-    flags |= RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES;
-
-  if (self->treefile_rs->get_ima ())
-    flags |= RPMOSTREE_IMPORTER_FLAGS_IMA;
-
-  /* TODO - tweak the unpacker flags for containers */
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autoptr (RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (
-      &fd, ostreerepo, pkg, static_cast<RpmOstreeImporterFlags> (flags), self->sepolicy, error);
+      &fd, ostreerepo, pkg, *importer_flags, self->sepolicy, error);
   if (!unpacker)
     return glnx_prefix_error (error, "creating importer");
 

@@ -337,12 +337,14 @@ pub mod ffi {
 
     // importer.rs
     extern "Rust" {
-        type RpmImporter;
+        type RpmImporterFlags;
+        fn rpm_importer_flags_new_empty() -> Box<RpmImporterFlags>;
 
+        type RpmImporter;
         fn rpm_importer_new(
             pkg_name: &str,
             ostree_branch: &str,
-            doc_files_are_filtered: bool,
+            flags: &RpmImporterFlags,
         ) -> Result<Box<RpmImporter>>;
         fn handle_translate_pathname(self: &mut RpmImporter, path: &str) -> String;
         fn ostree_branch(self: &RpmImporter) -> String;
@@ -351,19 +353,20 @@ pub mod ffi {
         fn doc_files_are_filtered(self: &RpmImporter) -> bool;
         fn doc_files_insert(self: &mut RpmImporter, path: &str);
         fn doc_files_contains(self: &RpmImporter, path: &str) -> bool;
-
-        fn importer_compose_filter(
+        fn is_ima_enabled(self: &RpmImporter) -> bool;
+        fn tweak_imported_file_info(self: &RpmImporter, mut file_info: Pin<&mut GFileInfo>);
+        fn is_file_filtered(
+            self: &RpmImporter,
             path: &str,
             mut file_info: Pin<&mut GFileInfo>,
-            skip_extraneous: bool,
         ) -> Result<bool>;
+
         fn tmpfiles_translate(
             abs_path: &str,
             mut file_info: Pin<&mut GFileInfo>,
             username: &str,
             groupname: &str,
         ) -> Result<String>;
-        fn tweak_imported_file_info(mut file_info: Pin<&mut GFileInfo>, ro_executables: bool);
     }
 
     // initramfs.rs
@@ -552,6 +555,7 @@ pub mod ffi {
         fn print_deprecation_warnings(&self);
         fn print_experimental_notices(&self);
         fn sanitycheck_externals(&self) -> Result<()>;
+        fn importer_flags(&self, pkg_name: &str) -> Box<RpmImporterFlags>;
 
         // these functions are more related to derivation
         fn validate_for_container(&self) -> Result<()>;

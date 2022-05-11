@@ -42,6 +42,7 @@ use std::{fs, io};
 use tracing::{event, instrument, Level};
 
 use crate::core;
+use crate::importer::RpmImporterFlags;
 use crate::utils;
 use crate::utils::OptionExtGetOrInsertDefault;
 
@@ -1729,6 +1730,32 @@ impl Treefile {
                 .as_ref()
                 .and_then(|m| m.install.as_ref().map(|i| !i.is_empty()))
                 .unwrap_or_default()
+    }
+
+    /// Derive RPM importer flags for a given package and treefile settings.
+    pub fn importer_flags(&self, pkg_name: &str) -> Box<RpmImporterFlags> {
+        let mut flags = RpmImporterFlags::empty();
+
+        // Only set SKIP_EXTRANEOUS for packages we know need it, so that
+        // people doing custom composes don't have files silently discarded.
+        // (This will also likely need to be configurable).
+        if pkg_name == "filesystem" || pkg_name == "rootfiles" {
+            flags.insert(RpmImporterFlags::SKIP_EXTRANEOUS);
+        }
+
+        if !self.get_documentation() {
+            flags.insert(RpmImporterFlags::NODOCS);
+        }
+
+        if self.get_readonly_executables() {
+            flags.insert(RpmImporterFlags::RO_EXECUTABLES);
+        }
+
+        if self.get_ima() {
+            flags.insert(RpmImporterFlags::IMA);
+        }
+
+        Box::new(flags)
     }
 }
 

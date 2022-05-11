@@ -567,8 +567,9 @@ static gboolean
 import_local_rpm (OstreeRepo *repo, OstreeSePolicy *policy, int *fd, char **out_sha256_nevra,
                   GCancellable *cancellable, GError **error)
 {
-  g_autoptr (RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (
-      fd, repo, NULL, static_cast<RpmOstreeImporterFlags> (0), policy, error);
+  auto flags = rpmostreecxx::rpm_importer_flags_new_empty ();
+  g_autoptr (RpmOstreeImporter) unpacker
+      = rpmostree_importer_new_take_fd (fd, repo, NULL, *flags, policy, error);
   if (unpacker == NULL)
     return FALSE;
 

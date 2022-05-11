@@ -9,6 +9,7 @@
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::utils;
 use anyhow::{bail, format_err, Result};
+use bitflags::bitflags;
 use camino::{Utf8Path, Utf8PathBuf};
 use fn_error_context::context;
 use gio::{FileInfo, FileType};
@@ -19,12 +20,33 @@ use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write;
 use std::pin::Pin;
 
+bitflags! {
+    /// Flags to control the behavior of an RPM importer.
+    #[derive(Default)]
+    pub struct RpmImporterFlags: u8 {
+        /// Skip files/directories outside of supported ostree-compliant paths rather than erroring out.
+        const SKIP_EXTRANEOUS = 0b0000_0001;
+        /// Skip documentation files.
+        const NODOCS = 0b0000_0010;
+        /// Make executable files readonly.
+        const RO_EXECUTABLES = 0b000_0100;
+        /// Enabled IMA.
+        const IMA = 0b0000_1000;
+    }
+}
+
+/// Return the default empty flags set.
+pub fn rpm_importer_flags_new_empty() -> Box<RpmImporterFlags> {
+    Box::new(RpmImporterFlags::empty())
+}
+
 #[derive(Debug)]
 pub struct RpmImporter {
     // Hashset of all file entries marked as 'doc' in an RPM;
     // each key is the absolute full path of the file. This is `None`
     // if docs filtering is not enabled.
     doc_files: Option<HashSet<String>>,
+    flags: RpmImporterFlags,
     // Hashset of filepath entries which are direct children of /opt;
     // each key is a plain path fragment, e.g. 'foo' for '/opt/foo/bar'.
     opt_direntries: BTreeSet<String>,
@@ -41,9 +63,9 @@ pub struct RpmImporter {
 pub fn rpm_importer_new(
     pkg_name: &str,
     ostree_branch: &str,
-    doc_files_are_filtered: bool,
+    flags: &RpmImporterFlags,
 ) -> CxxResult<Box<RpmImporter>> {
-    let importer = RpmImporter::new(pkg_name, ostree_branch, doc_files_are_filtered)?;
+    let importer = RpmImporter::new(pkg_name, ostree_branch, *flags)?;
     Ok(Box::new(importer))
 }
 
@@ -52,7 +74,7 @@ impl RpmImporter {
     pub(crate) fn new(
         pkg_name: &str,
         ostree_branch: &str,
-        doc_files_are_filtered: bool,
+        flags: RpmImporterFlags,
     ) -> Result<Self> {
         // TODO(lucab): OSTree branch could be directly computed in Rust
         // starting from package NEVRA. Later on, let's rework arguments
@@ -62,7 +84,7 @@ impl RpmImporter {
             bail!("Empty package name");
         }
 
-        let doc_files = if doc_files_are_filtered {
+        let doc_files = if flags.contains(RpmImporterFlags::NODOCS) {
             Some(HashSet::new())
         } else {
             None
@@ -70,6 +92,7 @@ impl RpmImporter {
 
         let importer = Self {
             doc_files,
+            flags,
             opt_direntries: BTreeSet::new(),
             ostree_branch: ostree_branch.to_string(),
             pkg_name: pkg_name.to_string(),
@@ -181,6 +204,36 @@ impl RpmImporter {
             .map(|set| set.contains(path))
             .unwrap_or(false)
     }
+
+    /// Return whether IMA support is enabled.
+    pub fn is_ima_enabled(&self) -> bool {
+        self.flags.contains(RpmImporterFlags::IMA)
+    }
+
+    /// Adjust mode for specific file entries.
+    pub fn tweak_imported_file_info(&self, mut ffi_file_info: Pin<&mut crate::FFIGFileInfo>) {
+        let mut file_info = ffi_file_info.gobj_wrap();
+        let ro_executables = self.flags.contains(RpmImporterFlags::RO_EXECUTABLES);
+        tweak_imported_file_info(&mut file_info, ro_executables);
+    }
+
+    /// Apply filtering and manipulation logic to an RPM file before importing.
+    ///
+    /// This returns whether the entry should be ignored by the importer.
+    pub fn is_file_filtered(
+        &self,
+        path: &str,
+        mut ffi_file_info: Pin<&mut crate::FFIGFileInfo>,
+    ) -> CxxResult<bool> {
+        let file_info = ffi_file_info.gobj_wrap();
+        let skip_extraneous = self.flags.contains(RpmImporterFlags::SKIP_EXTRANEOUS);
+
+        match import_filter(path, &file_info, skip_extraneous)? {
+            RepoCommitFilterResult::Allow => Ok(false),
+            RepoCommitFilterResult::Skip => Ok(true),
+            x => unreachable!("unknown commit result '{}' for path '{}'", x, path),
+        }
+    }
 }
 
 /// Canonicalize a path, e.g. replace `//` with `/` and `././` with `./`.
@@ -201,11 +254,7 @@ fn canonicalize_path(p: &str) -> String {
 }
 
 /// Adjust mode for specific file entries.
-pub fn tweak_imported_file_info(
-    mut file_info: Pin<&mut crate::FFIGFileInfo>,
-    ro_executables: bool,
-) {
-    let file_info = file_info.gobj_wrap();
+fn tweak_imported_file_info(file_info: &mut FileInfo, ro_executables: bool) {
     let filetype = file_info.file_type();
 
     // Add the "user writable" permission bit for a directory.
@@ -241,26 +290,10 @@ pub fn tweak_imported_file_info(
     }
 }
 
-/// Apply filtering and manipulation logic to an RPM file before importing.
-///
-/// This returns whether the entry should be ignored by the importer.
-pub fn importer_compose_filter(
-    path: &str,
-    mut file_info: Pin<&mut crate::FFIGFileInfo>,
-    skip_extraneous: bool,
-) -> CxxResult<bool> {
-    let mut file_info = file_info.gobj_wrap();
-    match import_filter(path, &mut file_info, skip_extraneous)? {
-        RepoCommitFilterResult::Allow => Ok(false),
-        RepoCommitFilterResult::Skip => Ok(true),
-        x => unreachable!("unknown commit result '{}' for path '{}'", x, path),
-    }
-}
-
 #[context("Analyzing {}", path)]
 fn import_filter(
     path: &str,
-    file_info: &mut FileInfo,
+    file_info: &FileInfo,
     skip_extraneous: bool,
 ) -> Result<RepoCommitFilterResult> {
     // Sanity check that RPM isn't using CPIO id fields.
@@ -475,7 +508,8 @@ mod tests {
 
     #[test]
     fn test_importer_tmpfiles_symlinks() {
-        let mut importer = RpmImporter::new("testpkg", "testbranch", false).unwrap();
+        let flags = RpmImporterFlags::empty();
+        let mut importer = RpmImporter::new("testpkg", "testbranch", flags).unwrap();
 
         {
             let normal_paths = [
