@@ -48,7 +48,7 @@ if [ ! -d compose-cache ]; then
   # Also make sure to download glibc-all-langpacks which is no longer in FCOS by
   # default; we'll want it to test `install-langs`. This also means that we have
   # to add updates-archive to the repo list.
-  curl -LO https://src.fedoraproject.org/rpms/fedora-repos/raw/f35/f/fedora-updates-archive.repo
+  curl -LO https://src.fedoraproject.org/rpms/fedora-repos/raw/f36/f/fedora-updates-archive.repo
   python3 -c '
 import sys, json
 y = json.load(sys.stdin)
