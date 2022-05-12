@@ -66,7 +66,6 @@ struct RpmOstreeImporter
   //  - [V] iterator index in RPM header for this file
   GHashTable *rpmfi_overrides;
   GString *tmpfiles_d;
-  RpmOstreeImporterFlags flags;
   DnfPackage *pkg;
 
   std::optional<rust::Box<rpmostreecxx::RpmImporter> > importer_rs;
@@ -234,7 +233,7 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
  */
 RpmOstreeImporter *
 rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
-                                RpmOstreeImporterFlags flags, OstreeSePolicy *sepolicy,
+                                rpmostreecxx::RpmImporterFlags &flags, OstreeSePolicy *sepolicy,
                                 GError **error)
 {
   RpmOstreeImporter *ret = NULL;
@@ -254,10 +253,7 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   g_assert (pkg_name != NULL);
   g_autofree char *ostree_branch = rpmostree_get_cache_branch_header (hdr);
   g_assert (ostree_branch != NULL);
-  bool doc_files_are_filtered = (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS) != 0;
-  CXX_TRY_VAR (importer_rs,
-               rpmostreecxx::rpm_importer_new (pkg_name, ostree_branch, doc_files_are_filtered),
-               error);
+  CXX_TRY_VAR (importer_rs, rpmostreecxx::rpm_importer_new (pkg_name, ostree_branch, flags), error);
 
   ret = (RpmOstreeImporter *)g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
   ret->importer_rs.emplace (std::move (importer_rs));
@@ -266,7 +262,6 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   ret->sepolicy = (OstreeSePolicy *)(sepolicy ? g_object_ref (sepolicy) : NULL);
   ret->fi = util::move_nullify (fi);
   ret->archive = util::move_nullify (ar);
-  ret->flags = flags;
   ret->hdr = util::move_nullify (hdr);
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage *)(pkg ? g_object_ref (pkg) : NULL);
@@ -517,15 +512,13 @@ compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpo
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
 
-  bool skip_extraneous = (self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) != 0;
-  auto is_ignored = ROSCXX_VAL (importer_compose_filter (path, *file_info, skip_extraneous), error);
+  auto is_ignored = CXX_VAL ((*self->importer_rs)->is_file_filtered (path, *file_info), error);
   if (!is_ignored.has_value ())
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
   else if (is_ignored.value ())
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
-  bool ro_executables = (self->flags & RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES) != 0;
-  rpmostreecxx::tweak_imported_file_info (*file_info, ro_executables);
+  (*self->importer_rs)->tweak_imported_file_info (*file_info);
 
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
@@ -545,7 +538,7 @@ xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer use
   const char *fcaps = NULL;
 
   GVariant *imasig = NULL;
-  const bool use_ima = self->flags & RPMOSTREE_IMPORTER_FLAGS_IMA;
+  const bool use_ima = (*self->importer_rs)->is_ima_enabled ();
   get_rpmfi_override (self, path, NULL, NULL, &fcaps, use_ima ? &imasig : NULL);
 
   g_auto (GVariantBuilder) builder;

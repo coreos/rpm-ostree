@@ -39,24 +39,8 @@ GType rpmostree_importer_get_type (void);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeImporter, g_object_unref)
 
-/**
- * RpmOstreeImporterFlags:
- * @RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS: Skip files/directories outside of supported
- * ostree-compliant paths rather than erroring out
- * @RPMOSTREE_IMPORTER_FLAGS_NODOCS: Skip documentation files
- * @RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES: Make executable files readonly
- * @RPMOSTREE_IMPORTER_FLAGS_IMA: Enable IMA
- */
-typedef enum
-{
-  RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS = (1 << 0),
-  RPMOSTREE_IMPORTER_FLAGS_NODOCS = (1 << 1),
-  RPMOSTREE_IMPORTER_FLAGS_RO_EXECUTABLES = (1 << 2),
-  RPMOSTREE_IMPORTER_FLAGS_IMA = (1 << 3),
-} RpmOstreeImporterFlags;
-
 RpmOstreeImporter *rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
-                                                   RpmOstreeImporterFlags flags,
+                                                   rpmostreecxx::RpmImporterFlags &flags,
                                                    OstreeSePolicy *sepolicy, GError **error);
 
 gboolean rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_offset,
