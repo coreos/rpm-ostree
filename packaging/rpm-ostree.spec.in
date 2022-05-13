@@ -27,6 +27,13 @@ BuildRequires: rust
 # Embedded unit tests
 %bcond_with bin_unit_tests
 
+# This is copied from the libdnf spec
+%if 0%{?rhel} && ! 0%{?centos}
+%bcond_without rhsm
+%else
+%bcond_with rhsm
+%endif
+
 # RHEL (8,9) doesn't ship zchunk today.  Keep this in sync
 # with libdnf: https://gitlab.com/redhat/centos-stream/rpms/libdnf/-/blob/762f631e36d1e42c63a794882269d26c156b68c1/libdnf.spec#L45
 %if 0%{?rhel}
@@ -112,6 +119,9 @@ BuildRequires:  gpgme-devel
 # not in RHEL8.  Missing this package breaks -znow.
 BuildRequires:  libassuan-devel
 %endif
+%if %{with rhsm}
+BuildRequires:  pkgconfig(librhsm) >= 0.0.3
+%endif
 
 Requires:       libmodulemd%{?_isa} >= %{libmodulemd_version}
 Requires:       libsolv%{?_isa} >= %{libsolv_version}
@@ -170,7 +180,8 @@ env NOCONFIGURE=1 ./autogen.sh
 %if 0%{?build_rustflags:1}
 export RUSTFLAGS="%{build_rustflags}"
 %endif
-%configure --disable-silent-rules --enable-gtk-doc %{?rpmdb_default} %{?with_sanitizers:--enable-sanitizers}  %{?with_bin_unit_tests:--enable-bin-unit-tests}
+%configure --disable-silent-rules --enable-gtk-doc %{?rpmdb_default} %{?with_sanitizers:--enable-sanitizers}  %{?with_bin_unit_tests:--enable-bin-unit-tests} \
+  %{?with_rhsm:--enable-featuresrs=rhsm}
 
 %make_build
 
