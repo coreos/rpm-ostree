@@ -5,6 +5,7 @@ fn main() -> Result<()> {
     let libs = system_deps::Config::new().probe()?;
     let has_gpgme_pkgconfig = libs.get_by_name("gpgme").is_some();
     let with_zck: u8 = libs.get_by_name("zck").is_some().into();
+    let with_rhsm = std::env::var_os("CARGO_FEATURE_RHSM").is_some();
 
     // first, the submodule proper
     let libdnf = cmake::Config::new("../../libdnf")
@@ -25,6 +26,10 @@ fn main() -> Result<()> {
         // We don't need docs
         .define("WITH_HTML:BOOL", "0")
         .define("WITH_MAN:BOOL", "0")
+        .define(
+            "ENABLE_RHSM_SUPPORT:BOOL",
+            if with_rhsm { "1" } else { "0" },
+        )
         // Auto-enable zchunk, if present
         .define("WITH_ZCHUNK:BOOL", format!("{}", with_zck))
         // Don't need bindings
