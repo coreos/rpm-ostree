@@ -51,7 +51,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     container:
-      image: quay.io/coreos-assembler/coreos-assembler:latest
+      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
