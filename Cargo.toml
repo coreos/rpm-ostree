@@ -104,7 +104,9 @@ debug = true
 lto = "thin"
 
 [features]
+# Note: If you add a feature here, you also probably want to update utils.rs:get_features()
 fedora-integration = []
+rhsm = ["libdnf-sys/rhsm"]
 bin-unit-tests = []
 # ASAN+UBSAN
 sanitizers = []

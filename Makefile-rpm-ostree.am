@@ -99,6 +99,8 @@ if BUILDOPT_ASAN
 cargo_build += --features sanitizers
 endif
 
+cargo_build += $(if $(RUST_FEATURES),--features $(RUST_FEATURES))
+
 if RUST_DEBUG
 cargo_target_dir=debug
 else
