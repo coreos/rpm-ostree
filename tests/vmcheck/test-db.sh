@@ -127,13 +127,13 @@ vm_rpmostree override replace \
 vm_build_rpm pkg-to-overlay build 'echo same > pkg-to-overlay'
 # some multilib handling tests (override default /bin script to skip conflicts)
 vm_build_rpm pkg-to-overlay build 'echo same > pkg-to-overlay' arch i686
-vm_build_rpm glibc arch i686
+vm_build_rpm glibc arch i686 version 2.35
 vm_rpmostree install pkg-to-overlay.{x86_64,i686} glibc.i686
 pending_layered_csum=$(vm_get_pending_csum)
 check_diff $booted_csum $pending_layered_csum \
   +pkg-to-overlay-1.0-1.x86_64 \
   +pkg-to-overlay-1.0-1.i686 \
-  +glibc-1.0-1.i686 \
+  +glibc-2.35-1.i686 \
   +pkg-to-replace-15.4-4 \
   +zzz-pkg-to-downgrade-1.0 \
   +pkg-to-replace-archtrans-2.0
@@ -148,7 +148,7 @@ check_not_diff $booted_csum $pending_layered_csum \
 check_diff $pending_csum $pending_layered_csum \
   +pkg-to-overlay-1.0-1.x86_64 \
   +pkg-to-overlay-1.0-1.i686 \
-  +glibc-1.0-1.i686 \
+  +glibc-2.35-1.i686 \
   -pkg-to-remove \
   !zzz-pkg-to-downgrade-2.0 \
   =zzz-pkg-to-downgrade-1.0 \
@@ -180,7 +180,7 @@ fi
 check_diff $pending_csum $pending_layered_csum \
   +pkg-to-overlay-1.0-1.x86_64 \
   +pkg-to-overlay-1.0-1.i686 \
-  +glibc-1.0-1.i686 \
+  +glibc-2.35-1.i686 \
   -pkg-to-remove \
   !pkg-to-replace-15-8 \
   =pkg-to-replace-15.4-4 \
@@ -197,7 +197,7 @@ assert_not_file_has_content out.txt \
 assert_file_has_content out.txt \
   pkg-to-overlay-1.0-1.x86_64 \
   pkg-to-overlay-1.0-1.i686 \
-  glibc-1.0-1.i686 \
+  glibc-2.35-1.i686 \
   pkg-to-replace-15.4-4 \
   pkg-to-replace-archtrans-2.0
 echo "ok list from pkglist.metadata"
