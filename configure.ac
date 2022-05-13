@@ -65,6 +65,12 @@ AS_IF([test x$enable_bin_unit_tests = xyes], [
 ])
 AM_CONDITIONAL(BUILDOPT_BIN_UNIT_TESTS, [test x$enable_bin_unit_tests = xyes])
 
+AC_ARG_ENABLE(featuresrs,
+              AS_HELP_STRING([--enable-featuresrs],
+                             [Rust features, see Cargo.toml for more information]),,
+              [enable_featuresrs=])
+AC_SUBST([RUST_FEATURES], $enable_featuresrs)
+
 # Initialize libtool
 LT_PREREQ([2.2.4])
 LT_INIT([disable-static])
@@ -143,5 +149,6 @@ echo "
     ASAN + UBSAN:                            ${enable_sanitizers:-no}
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release
+    rust features:                           $enable_featuresrs
     bdb rpmdb default:                       ${enable_bdb_rpmdb_default}
 "
