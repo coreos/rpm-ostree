@@ -34,3 +34,8 @@ modulemd = { name = "modulemd-2.0", version = "2" }
 jsonc = { name = "json-c", version = "0" }
 glib = { name = "glib-2.0", version = "2" }
 zck = { version = "0.9", optional = true }
+librhsm = { version = "0.0.3", feature = "rhsm" }
+
+[features]
+rhsm = []
+default = []
