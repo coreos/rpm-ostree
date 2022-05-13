@@ -164,7 +164,7 @@ EOF
         3.*) touched_resolv_conf=1; touch /etc/resolv.conf;;
       esac
     fi
-    podman build -t localhost/fcos-derived --squash .
+    podman build --net=host -t localhost/fcos-derived --squash .
     if test "${touched_resolv_conf}" -eq 1; then
       rm -vf /etc/resolv.conf
     fi
