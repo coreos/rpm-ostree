@@ -3,7 +3,7 @@
 # override the version inside cosa, then build FCOS
 set -xeuo pipefail
 
-cosaimg=quay.io/coreos-assembler/coreos-assembler:latest
+cosaimg=registry.ci.openshift.org/coreos/coreos-assembler:latest
 podman pull "${cosaimg}"
 
 # Build rpm-ostree using cosa as a buildroot, and extract the result

@@ -1,4 +1,4 @@
-FROM quay.io/coreos-assembler/fcos-buildroot:testing-devel as builder
+FROM registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel as builder
 WORKDIR /src
 COPY . .
 RUN ./ci/build.sh && make install DESTDIR=/cosa/component-install
@@ -6,7 +6,7 @@ RUN make -C tests/kolainst install DESTDIR=/cosa/component-tests
 # Uncomment this to fake a build to test the code below
 #RUN mkdir -p /cosa/component-install/usr/bin && echo foo > /cosa/component-install/usr/bin/foo
 
-FROM quay.io/coreos-assembler/coreos-assembler:latest
+FROM registry.ci.openshift.org/coreos/coreos-assembler:latest
 WORKDIR /srv
 USER root
 # Copy binaries from the build
