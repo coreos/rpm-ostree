@@ -54,6 +54,10 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     rpm-ostree status | tee out.txt
     assert_file_has_content_literal out.txt 'Digest: sha256:'
 
+    # Test rebasing back to ostree https://github.com/coreos/rpm-ostree/issues/3677
+    rpm-ostree rebase "$checksum"
+    rpm-ostree rebase "$image_pull" --experimental
+
     /tmp/autopkgtest-reboot 1
     ;;
   1)

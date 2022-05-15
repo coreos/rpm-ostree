@@ -83,10 +83,21 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
       break;
     }
 
-  /* The rest of the code assumes TYPE_OSTREE refspec */
+  // Most of the code below here assumes we're operating on an ostree refspec,
+  // not a container image.  This captures the ostree ref if it's not a container.
+  const char *prev_ostree_refspec = NULL;
+  switch (current_refspec.kind)
+    {
+    case rpmostreecxx::RefspecType::Container:
+      break;
+    case rpmostreecxx::RefspecType::Ostree:
+    case rpmostreecxx::RefspecType::Checksum:
+      prev_ostree_refspec = current_refspec.refspec.c_str ();
+      break;
+    }
+
   g_autofree gchar *new_refspec = NULL;
-  if (!rpmostreed_refspec_parse_partial (refspec, current_refspec.refspec.c_str (), &new_refspec,
-                                         error))
+  if (!rpmostreed_refspec_parse_partial (refspec, prev_ostree_refspec, &new_refspec, error))
     return FALSE;
 
   /* Classify to ensure we handle TYPE_CHECKSUM */
@@ -123,8 +134,8 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
 
   g_autofree gchar *current_remote = NULL;
   g_autofree gchar *current_branch = NULL;
-  g_assert (ostree_parse_refspec (current_refspec.refspec.c_str (), &current_remote,
-                                  &current_branch, NULL));
+  if (prev_ostree_refspec != NULL)
+    g_assert (ostree_parse_refspec (prev_ostree_refspec, &current_remote, &current_branch, NULL));
 
   g_autofree gchar *new_remote = NULL;
   g_autofree gchar *new_branch = NULL;
@@ -141,7 +152,7 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
     *out_new_refspec = util::move_nullify (new_refspec);
 
   if (out_old_refspec != NULL)
-    *out_old_refspec = g_strdup (current_refspec.refspec.c_str ());
+    *out_old_refspec = g_strdup (prev_ostree_refspec);
 
   return TRUE;
 }
@@ -1585,7 +1596,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
           g_autofree char *ref = NULL;
 
           /* The actual rebase has already succeeded, so ignore errors. */
-          if (ostree_parse_refspec (old_refspec, &remote, &ref, NULL))
+          if (old_refspec && ostree_parse_refspec (old_refspec, &remote, &ref, NULL))
             {
               /* Note: In some cases the source origin ref may not actually
                * exist; say the admin did a cleanup, or the OS expects post-
