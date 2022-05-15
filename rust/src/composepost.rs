@@ -1285,6 +1285,11 @@ OSTREE_VERSION='33.4'
         umask(Mode::empty());
         let temp_rootfs = tempfile::tempdir().unwrap();
         let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+        let uid = geteuid().as_raw();
+        let gid = getegid().as_raw();
+        let uid_str = format!("{uid}");
+        let gid_str = format!("{gid}");
+        let mut expected_disk_size = 30u64;
         {
             for dirpath in &["usr/lib", "usr/etc", "var"] {
                 rootfs.ensure_dir_all(*dirpath, 0o755).unwrap();
@@ -1296,20 +1301,15 @@ OSTREE_VERSION='33.4'
                 .write_file_contents(
                     "usr/etc/passwd",
                     0o755,
-                    format!(
-                        "test-user:x:{}:{}:::",
-                        geteuid().as_raw(),
-                        getegid().as_raw()
-                    ),
+                    format!("test-user:x:{uid_str}:{gid_str}:::",),
                 )
                 .unwrap();
+            expected_disk_size += uid_str.len() as u64;
+            expected_disk_size += gid_str.len() as u64;
             rootfs
-                .write_file_contents(
-                    "usr/etc/group",
-                    0o755,
-                    format!("test-group:x:{}:", getegid().as_raw()),
-                )
+                .write_file_contents("usr/etc/group", 0o755, format!("test-group:x:{gid_str}:"))
                 .unwrap();
+            expected_disk_size += gid_str.len() as u64;
         }
 
         // Add test content.
@@ -1329,7 +1329,7 @@ OSTREE_VERSION='33.4'
         let cancellable = gio::Cancellable::new();
         assert_eq!(
             directory_size(rootfs.as_raw_fd(), cancellable.gobj_rewrap()).unwrap(),
-            42
+            expected_disk_size
         );
 
         var_to_tmpfiles(&rootfs, gio::NONE_CANCELLABLE).unwrap();
