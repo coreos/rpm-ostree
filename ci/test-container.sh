@@ -45,11 +45,17 @@ case $versionid in
     url_suffix=2.13.0/5.fc35/x86_64/ignition-2.13.0-5.fc35.x86_64.rpm
     # 2.14.0
     koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1967838
+    koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1970751
+    kver=5.17.11
+    krev=200
     ;;
   36)
     url_suffix=2.13.0/5.fc36/x86_64/ignition-2.13.0-5.fc36.x86_64.rpm
     # 2.14.0
     koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1967836
+    koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1970749
+    kver=5.17.11
+    krev=300
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
 esac
@@ -87,5 +93,9 @@ rpm-ostree override replace --experimental \
 # the continuous build's version has the git rev, prefixed with g
 rpm -q afterburn | grep g
 rpm -q afterburn-dracut | grep g
+
+rpm-ostree override replace $koji_kernel_url
+# test that the new initramfs was generated
+test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
 
 echo ok
