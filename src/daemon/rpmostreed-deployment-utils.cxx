@@ -686,18 +686,17 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
   if (!ostree_repo_load_commit (repo, new_base_checksum, &commit, NULL, error))
     return FALSE;
 
-  g_auto (GVariantDict) dict;
-  g_variant_dict_init (&dict, NULL);
+  g_autoptr (GVariantDict) dict = g_variant_dict_new (NULL);
 
   /* first get all the traditional/backcompat stuff */
   if (!add_all_commit_details_to_vardict (booted_deployment, repo, r.refspec.c_str (),
-                                          new_base_checksum, commit, &dict, error))
+                                          new_base_checksum, commit, dict, error))
     return FALSE;
 
   /* This may seem trivial, but it's important to keep the final variant as self-contained
    * and "diff-based" as possible, since it'll be available as a D-Bus property. This makes
    * it easier to consume for UIs like GNOME Software and Cockpit. */
-  g_variant_dict_insert (&dict, "ref-has-new-commit", "b", is_new_checksum);
+  g_variant_dict_insert (dict, "ref-has-new-commit", "b", is_new_checksum);
 
   g_auto (RpmDiff) rpm_diff = {
     0,
@@ -744,7 +743,7 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
 
   /* don't bother inserting if there's nothing new */
   if (!rpm_diff_is_empty (&rpm_diff))
-    g_variant_dict_insert (&dict, "rpm-diff", "@a{sv}", rpm_diff_variant_new (&rpm_diff));
+    g_variant_dict_insert (dict, "rpm-diff", "@a{sv}", rpm_diff_variant_new (&rpm_diff));
 
   /* now we look for advisories */
 
@@ -771,13 +770,13 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
 
       g_autoptr (GVariant) advisories = rpmostree_advisories_variant (sack, new_packages);
       if (advisories)
-        g_variant_dict_insert (&dict, "advisories", "@a(suuasa{sv})", advisories);
+        g_variant_dict_insert (dict, "advisories", "@a(suuasa{sv})", advisories);
     }
 
   if (staged_deployment)
     {
       auto id = rpmostreecxx::deployment_generate_id (*staged_deployment);
-      g_variant_dict_insert (&dict, "deployment", "s", id.c_str ());
+      g_variant_dict_insert (dict, "deployment", "s", id.c_str ());
     }
 
   /* but if there are no updates, then just ditch the whole thing and return NULL */
@@ -786,8 +785,8 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
       /* include a "state" checksum for cache invalidation; for now this is just the
        * checksum of the deployment against which we ran, though we could base it off more
        * things later if needed */
-      g_variant_dict_insert (&dict, "update-sha256", "s", current_checksum);
-      *out_update = g_variant_ref_sink (g_variant_dict_end (&dict));
+      g_variant_dict_insert (dict, "update-sha256", "s", current_checksum);
+      *out_update = g_variant_ref_sink (g_variant_dict_end (dict));
     }
   else
     *out_update = NULL;
