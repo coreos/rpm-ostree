@@ -26,6 +26,12 @@ unsafe impl ExternType for FFIDnfRepo {
     type Kind = cxx::kind::Trivial;
 }
 
+pub enum FFIDnfSack {}
+unsafe impl ExternType for FFIDnfSack {
+    type Id = type_id!(dnfcxx::FFIDnfSack);
+    type Kind = cxx::kind::Trivial;
+}
+
 #[cxx::bridge(namespace = "dnfcxx")]
 pub mod ffi {
 
@@ -55,6 +61,15 @@ pub mod ffi {
         fn get_id(self: Pin<&mut DnfRepo>) -> String;
         fn get_timestamp_generated(self: Pin<&mut DnfRepo>) -> u64;
         unsafe fn dnf_repo_from_ptr(pkg: *mut FFIDnfRepo) -> UniquePtr<DnfRepo>;
+
+        type DnfSack;
+        type FFIDnfSack = crate::FFIDnfSack;
+        fn get_ref<'a>(self: Pin<&'a mut DnfSack>) -> Pin<&'a mut FFIDnfSack>;
+        fn add_cmdline_package(
+            self: Pin<&mut DnfSack>,
+            filename: String,
+        ) -> Result<UniquePtr<DnfPackage>>;
+        fn dnf_sack_new() -> UniquePtr<DnfSack>;
 
         fn hy_split_nevra(nevra: &str) -> Result<Nevra>;
     }

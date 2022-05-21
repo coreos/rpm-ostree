@@ -37,6 +37,12 @@ dnf_repo_from_ptr (FFIDnfRepo *repo) noexcept
   return std::make_unique<DnfRepo> (g_object_ref (repo));
 }
 
+std::unique_ptr<DnfSack>
+dnf_sack_new () noexcept
+{
+  return std::make_unique<DnfSack> (::dnf_sack_new ());
+}
+
 // XXX: dedupe with rpmostree_decompose_nevra
 Nevra
 hy_split_nevra (rust::Str nevra)

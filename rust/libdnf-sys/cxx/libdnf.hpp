@@ -95,6 +95,32 @@ public:
 
 std::unique_ptr<DnfRepo> dnf_repo_from_ptr (FFIDnfRepo *repo) noexcept;
 
+typedef ::DnfSack FFIDnfSack;
+class DnfSack final
+{
+private:
+  FFIDnfSack *sack;
+
+public:
+  DnfSack (FFIDnfSack *sack) : sack (sack) {}
+  ~DnfSack () { g_clear_object (&sack); }
+  FFIDnfSack &
+  get_ref () noexcept
+  {
+    return *sack;
+  }
+  std::unique_ptr<DnfPackage>
+  add_cmdline_package (rust::String filename)
+  {
+    g_autoptr (DnfPackage) pkg = ::dnf_sack_add_cmdline_package (sack, filename.c_str ());
+    if (pkg == NULL)
+      throw std::runtime_error (std::string ("Invalid RPM file: ") + filename.c_str ());
+    return dnf_package_from_ptr (pkg);
+  };
+};
+
+std::unique_ptr<DnfSack> dnf_sack_new () noexcept;
+
 // utility functions here
 struct Nevra;
 Nevra hy_split_nevra (rust::Str nevra);
