@@ -5,7 +5,7 @@
 
 use crate::cxxrsutil::CxxResult;
 use crate::ffiutil;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use camino::Utf8Path;
 use cap_std::fs::Dir;
 use cap_std::fs::Permissions;
@@ -199,20 +199,17 @@ fn verify_kernel_hmac_impl(moddir: &Dir) -> Result<()> {
 
     let (hmac, path) = hmac_contents
         .split_once(SEPARATOR)
-        .ok_or_else(|| anyhow::anyhow!("Missing path in .vmlinuz.hmac: {}", hmac_contents))?;
+        .ok_or_else(|| anyhow!("Missing path in .vmlinuz.hmac: {}", hmac_contents))?;
     let path = Utf8Path::new(path);
 
     let file_name = path
         .file_name()
-        .ok_or_else(|| anyhow::anyhow!("Missing filename in .vmlinuz.hmac: {}", hmac_contents))?;
+        .ok_or_else(|| anyhow!("Missing filename in .vmlinuz.hmac: {}", hmac_contents))?;
 
     let new_contents = [hmac, SEPARATOR, file_name].concat();
     // sanity check
     if new_contents.contains('/') {
-        return Err(anyhow::anyhow!(
-            "Unexpected '/' in .vmlinuz.hmac: {}",
-            new_contents
-        ));
+        return Err(anyhow!("Unexpected '/' in .vmlinuz.hmac: {}", new_contents));
     }
 
     let perms = Permissions::from_mode(0o644);
