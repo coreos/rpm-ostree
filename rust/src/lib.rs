@@ -61,9 +61,7 @@ pub mod ffi {
         type GKeyFile = crate::FFIGKeyFile;
 
         #[namespace = "dnfcxx"]
-        type DnfPackage = libdnf_sys::DnfPackage;
-        #[namespace = "dnfcxx"]
-        type DnfRepo = libdnf_sys::DnfRepo;
+        type FFIDnfPackage = libdnf_sys::FFIDnfPackage;
     }
 
     /// Currently cxx-rs doesn't support mappings; like probably most projects,
@@ -821,7 +819,7 @@ pub mod ffi {
         // Currently only used in unit tests
         #[allow(dead_code)]
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<String>;
-        fn get_repodata_chksum_repr(pkg: &mut DnfPackage) -> Result<String>;
+        fn get_repodata_chksum_repr(pkg: &mut FFIDnfPackage) -> Result<String>;
         fn rpmts_for_commit(repo: Pin<&mut OstreeRepo>, rev: &str) -> Result<UniquePtr<RpmTs>>;
 
         // Methods on RpmTs

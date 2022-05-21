@@ -43,6 +43,6 @@ typedef ::GKeyFile GKeyFile;
 #include <libdnf/libdnf.h>
 namespace dnfcxx
 {
-typedef ::DnfPackage DnfPackage;
-typedef ::DnfRepo DnfRepo;
+typedef ::DnfPackage FFIDnfPackage;
+typedef ::DnfRepo FFIDnfRepo;
 }
