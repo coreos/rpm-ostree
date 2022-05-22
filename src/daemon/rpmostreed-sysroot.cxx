@@ -813,10 +813,11 @@ rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot *self, GDBusMethodInvocation 
         }
       const char *title
           = rpmostree_transaction_get_title ((RPMOSTreeTransaction *)(self->transaction));
-      return glnx_throw (error,
-                         "Transaction in progress: %s\n You can cancel the current transaction "
-                         "with `rpm-ostree cancel`",
-                         title);
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_BUSY,
+                   "Transaction in progress: %s\n You can cancel the current transaction "
+                   "with `rpm-ostree cancel`",
+                   title);
+      return FALSE;
     }
   *out_compat_txn = NULL;
   return TRUE;
