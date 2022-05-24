@@ -237,6 +237,14 @@ pub(crate) fn stage_container_rpms(rpms: Vec<String>) -> CxxResult<Vec<String>> 
     stage_container_rpm_files(rpms?)
 }
 
+pub(crate) fn stage_container_rpm_raw_fds(fds: Vec<i32>) -> CxxResult<Vec<String>> {
+    stage_container_rpm_files(
+        fds.into_iter()
+            .map(|fd| unsafe { File::from_raw_fd(fd) })
+            .collect(),
+    )
+}
+
 fn stage_container_rpm_files(rpms: Vec<File>) -> CxxResult<Vec<String>> {
     let mut r = Vec::new();
     let mut sack = dnf_sack_new();

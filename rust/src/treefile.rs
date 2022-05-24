@@ -766,13 +766,6 @@ impl Treefile {
         Ok(set.len() != n)
     }
 
-    pub(crate) fn set_packages(&mut self, packages: Vec<String>) {
-        let _ = self.parsed.packages.take();
-        if !packages.is_empty() {
-            self.parsed.packages = Some(packages.into_iter().collect());
-        }
-    }
-
     pub(crate) fn get_local_packages(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -1451,6 +1444,7 @@ impl Treefile {
         // and avoid regressing if we add more fields in the future
         let mut clone = self.parsed.derive.clone();
         // neuter everything we *do* support
+        clone.packages_local.take();
         clone.override_replace.take();
         clone.override_remove.take();
         clone.override_replace_local.take();

@@ -211,6 +211,7 @@ pub mod ffi {
         fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> Result<()>;
 
         fn stage_container_rpms(rpms: Vec<String>) -> Result<Vec<String>>;
+        fn stage_container_rpm_raw_fds(fds: Vec<i32>) -> Result<Vec<String>>;
     }
 
     // composepost.rs
@@ -497,7 +498,6 @@ pub mod ffi {
         fn require_automatic_version_prefix(&self) -> Result<String>;
         fn add_packages(&mut self, packages: Vec<String>, allow_existing: bool) -> Result<bool>;
         fn has_packages(&self) -> bool;
-        fn set_packages(&mut self, packages: Vec<String>);
         fn get_local_packages(&self) -> Vec<String>;
         fn add_local_packages(
             &mut self,
