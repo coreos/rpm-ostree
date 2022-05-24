@@ -209,6 +209,8 @@ pub mod ffi {
         fn refspec_classify(refspec: &str) -> RefspecType;
 
         fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> Result<()>;
+
+        fn stage_container_rpms(rpms: Vec<String>) -> Result<Vec<String>>;
     }
 
     // composepost.rs
@@ -513,8 +515,6 @@ pub mod ffi {
         fn get_packages_override_replace_local(&self) -> Vec<String>;
         fn add_packages_override_replace_local(&mut self, packages: Vec<String>) -> Result<()>;
         fn remove_package_override_replace_local(&mut self, package: &str) -> bool;
-        fn get_packages_override_replace_local_rpms(&self) -> Vec<String>;
-        fn set_packages_override_replace_local_rpms(&mut self, packages: Vec<String>);
         fn get_packages_override_remove(&self) -> Vec<String>;
         fn add_packages_override_remove(&mut self, packages: Vec<String>) -> Result<()>;
         fn remove_package_override_remove(&mut self, package: &str) -> bool;
