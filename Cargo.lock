@@ -1627,9 +1627,9 @@ dependencies = [
 
 [[package]]
 name = "ostree"
-version = "0.13.6"
+version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46874597dc208031d680eeb1d445a9d408dfa3ba972f5f97f015b01dd0b7c021"
+checksum = "2d30d0c71cf48851b0f32496d37afd2fa36f24f6b660d9431beabfd65cde3c6b"
 dependencies = [
  "bitflags",
  "cap-std",
@@ -1646,9 +1646,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "090c59160dfaa9d7e5ff3ccd047da0f4944bce8e11b840f160403683f905737d"
+checksum = "042f577a0a2bb53774295d62a2a7da203b3a671a1fc8980adf690c9ae05560f0"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1688,9 +1688,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-sys"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f21a33d095678ef9b32503ce042d4101477ab9a20c971d5f27e7f42d5a2bc79"
+checksum = "36efb9029d720217e03a43ec836e4cbd033d258e46db4366baf44508d7df877b"
 dependencies = [
  "gio-sys",
  "glib-sys",
