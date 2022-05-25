@@ -14,15 +14,21 @@ use cxx::{type_id, ExternType};
 // This technique for an uninstantiable/opaque type is used by libgit2-sys at least:
 // https://github.com/rust-lang/git2-rs/blob/master/libgit2-sys/lib.rs#L51
 // XXX: dedupe with macro
-pub enum DnfPackage {}
-unsafe impl ExternType for DnfPackage {
-    type Id = type_id!(dnfcxx::DnfPackage);
+pub enum FFIDnfPackage {}
+unsafe impl ExternType for FFIDnfPackage {
+    type Id = type_id!(dnfcxx::FFIDnfPackage);
     type Kind = cxx::kind::Trivial;
 }
 
-pub enum DnfRepo {}
-unsafe impl ExternType for DnfRepo {
-    type Id = type_id!(dnfcxx::DnfRepo);
+pub enum FFIDnfRepo {}
+unsafe impl ExternType for FFIDnfRepo {
+    type Id = type_id!(dnfcxx::FFIDnfRepo);
+    type Kind = cxx::kind::Trivial;
+}
+
+pub enum FFIDnfSack {}
+unsafe impl ExternType for FFIDnfSack {
+    type Id = type_id!(dnfcxx::FFIDnfSack);
     type Kind = cxx::kind::Trivial;
 }
 
@@ -40,15 +46,30 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("libdnf.hpp");
 
-        type DnfPackage = crate::DnfPackage;
-        fn dnf_package_get_nevra(pkg: &mut DnfPackage) -> Result<String>;
-        fn dnf_package_get_name(pkg: &mut DnfPackage) -> Result<String>;
-        fn dnf_package_get_evr(pkg: &mut DnfPackage) -> Result<String>;
-        fn dnf_package_get_arch(pkg: &mut DnfPackage) -> Result<String>;
+        type DnfPackage;
+        type FFIDnfPackage = crate::FFIDnfPackage;
+        fn get_ref<'a>(self: Pin<&'a mut DnfPackage>) -> Pin<&'a mut FFIDnfPackage>;
+        fn get_nevra(self: Pin<&mut DnfPackage>) -> String;
+        fn get_name(self: Pin<&mut DnfPackage>) -> String;
+        fn get_evr(self: Pin<&mut DnfPackage>) -> String;
+        fn get_arch(self: Pin<&mut DnfPackage>) -> String;
+        unsafe fn dnf_package_from_ptr(pkg: *mut FFIDnfPackage) -> UniquePtr<DnfPackage>;
 
-        type DnfRepo = crate::DnfRepo;
-        fn dnf_repo_get_id(repo: &mut DnfRepo) -> Result<String>;
-        fn dnf_repo_get_timestamp_generated(repo: &mut DnfRepo) -> Result<u64>;
+        type DnfRepo;
+        type FFIDnfRepo = crate::FFIDnfRepo;
+        fn get_ref<'a>(self: Pin<&'a mut DnfRepo>) -> Pin<&'a mut FFIDnfRepo>;
+        fn get_id(self: Pin<&mut DnfRepo>) -> String;
+        fn get_timestamp_generated(self: Pin<&mut DnfRepo>) -> u64;
+        unsafe fn dnf_repo_from_ptr(pkg: *mut FFIDnfRepo) -> UniquePtr<DnfRepo>;
+
+        type DnfSack;
+        type FFIDnfSack = crate::FFIDnfSack;
+        fn get_ref<'a>(self: Pin<&'a mut DnfSack>) -> Pin<&'a mut FFIDnfSack>;
+        fn add_cmdline_package(
+            self: Pin<&mut DnfSack>,
+            filename: String,
+        ) -> Result<UniquePtr<DnfPackage>>;
+        fn dnf_sack_new() -> UniquePtr<DnfSack>;
 
         fn hy_split_nevra(nevra: &str) -> Result<Nevra>;
     }

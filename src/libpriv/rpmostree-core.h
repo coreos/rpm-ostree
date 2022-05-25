@@ -64,6 +64,9 @@ G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, G
 #define RPMOSTREE_REFSPEC_OSTREE_BASE_ORIGIN_KEY "baserefspec"
 #define RPMOSTREE_REFSPEC_CONTAINER_ORIGIN_KEY "container-image-reference"
 
+/* this is used in the container context for staging RPMs the core will use */
+#define RPMOSTREE_CORE_STAGED_RPMS_DIR "/run/rpm-ostree/staged-rpms"
+
 namespace rpmostreecxx
 {
 void core_libdnf_process_global_init ();

@@ -136,16 +136,17 @@ override-remove:
   - nano-default-editor
 EOF
     cp ${KOLA_EXT_DATA}/rpm-repos/0/packages/x86_64/baz-2.0-1.x86_64.rpm .
+    baz_chksum=$(sha256sum baz-2.0-1.x86_64.rpm | cut -f1 -d' ')
     cat >replace-baz.yaml <<EOF
-override-replace-local-rpms:
-  - /var/tmp/baz-2.0-1.x86_64.rpm
+override-replace-local:
+  baz-2.0-1.x86_64: ${baz_chksum}
 ex-override-replace:
   - from:
       repo: local
     packages:
       - boo
 EOF
-cat > Dockerfile << 'EOF'
+cat > Dockerfile << EOF
 FROM localhost/fcos
 RUN rm -rf /etc/yum.repos.d/*  # Ensure we work offline
 ADD local.repo /etc/yum.repos.d/
@@ -154,7 +155,7 @@ RUN mkdir -p /etc/rpm-ostree/origin.d
 ADD baz.yaml testdaemon-query.yaml nonano.yaml /etc/rpm-ostree/origin.d/
 RUN rpm-ostree ex rebuild
 ADD replace-baz.yaml /etc/rpm-ostree/origin.d/
-ADD baz-2.0-1.x86_64.rpm /var/tmp/
+ADD baz-2.0-1.x86_64.rpm /run/rpm-ostree/staged-rpms/${baz_chksum}.rpm
 RUN rpm-ostree ex rebuild
 RUN echo some config file > /etc/someconfig.conf
 RUN echo somedata > /usr/share/somenewdata

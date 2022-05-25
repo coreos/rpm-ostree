@@ -224,9 +224,26 @@ rpmostree_override_builtin_replace (int argc, char **argv, RpmOstreeCommandInvoc
   CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
   if (is_ostree_container)
     {
+      // TODO: better API/cache for this
+      g_autoptr (DnfContext) ctx = dnf_context_new ();
+      auto basearch = dnf_context_get_base_arch (ctx);
       CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
+      for (char **it = argv; it && *it; it++)
+        {
+          auto pkg = *it;
+          CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (pkg, basearch), error);
+          if (fds.size () > 0)
+            {
+              CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpm_raw_fds (fds), error);
+              treefile->add_packages_override_replace_local (pkgs);
+            }
+          else
+            {
+              /* XXX: to come soon */
+              return glnx_throw (error, "CLI repo overrides not supported yet; use `origin.d/`.");
+            }
+        }
       treefile->add_packages_override_remove (util::rust_stringvec_from_strv (opt_remove_pkgs));
-      treefile->set_packages_override_replace_local_rpms (util::rust_stringvec_from_strv (argv));
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
 
@@ -265,9 +282,10 @@ rpmostree_override_builtin_remove (int argc, char **argv, RpmOstreeCommandInvoca
   CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
   if (is_ostree_container)
     {
+      auto argvs = util::rust_stringvec_from_strv (opt_replace_pkgs);
+      CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpms (argvs), error);
       CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
-      treefile->set_packages_override_replace_local_rpms (
-          util::rust_stringvec_from_strv (opt_replace_pkgs));
+      treefile->add_packages_override_replace_local (pkgs);
       treefile->add_packages_override_remove (util::rust_stringvec_from_strv (argv));
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }

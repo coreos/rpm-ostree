@@ -183,7 +183,24 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
   if (is_ostree_container)
     {
       CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
-      treefile->set_packages (util::rust_stringvec_from_strv (argv));
+      // TODO: better API/cache for this
+      g_autoptr (DnfContext) ctx = dnf_context_new ();
+      auto basearch = dnf_context_get_base_arch (ctx);
+      for (char **it = argv; it && *it; it++)
+        {
+          auto pkg = *it;
+          CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (pkg, basearch), error);
+          if (fds.size () > 0)
+            {
+              CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpm_raw_fds (fds), error);
+              CXX_TRY (treefile->add_local_packages (pkgs, true), error);
+            }
+          else
+            {
+              rust::Vec v = { rust::String (pkg) };
+              CXX_TRY (treefile->add_packages (v, true), error);
+            }
+        }
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
 

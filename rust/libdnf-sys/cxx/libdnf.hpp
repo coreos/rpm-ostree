@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include <gio/gio.h>
 #include <libdnf/libdnf.h>
 
@@ -27,17 +29,99 @@
 
 namespace dnfcxx
 {
+typedef ::DnfPackage FFIDnfPackage;
+class DnfPackage final
+{
+private:
+  FFIDnfPackage *pkg;
+
+public:
+  DnfPackage (FFIDnfPackage *pkg) : pkg (pkg) {}
+  ~DnfPackage () { g_clear_object (&pkg); }
+  FFIDnfPackage &
+  get_ref () noexcept
+  {
+    return *pkg;
+  }
+  rust::String
+  get_nevra () noexcept
+  {
+    return rust::String (::dnf_package_get_nevra (pkg));
+  };
+  rust::String
+  get_name () noexcept
+  {
+    return rust::String (::dnf_package_get_name (pkg));
+  };
+  rust::String
+  get_evr () noexcept
+  {
+    return rust::String (::dnf_package_get_evr (pkg));
+  };
+  rust::String
+  get_arch () noexcept
+  {
+    return rust::String (::dnf_package_get_arch (pkg));
+  };
+};
+
+std::unique_ptr<DnfPackage> dnf_package_from_ptr (FFIDnfPackage *pkg) noexcept;
+
+typedef ::DnfRepo FFIDnfRepo;
+class DnfRepo final
+{
+private:
+  FFIDnfRepo *repo;
+
+public:
+  DnfRepo (FFIDnfRepo *repo) : repo (repo) {}
+  ~DnfRepo () { g_clear_object (&repo); }
+  FFIDnfRepo &
+  get_ref () noexcept
+  {
+    return *repo;
+  }
+  rust::String
+  get_id () noexcept
+  {
+    return rust::String (::dnf_repo_get_id (repo));
+  };
+  guint64
+  get_timestamp_generated () noexcept
+  {
+    return ::dnf_repo_get_timestamp_generated (repo);
+  };
+};
+
+std::unique_ptr<DnfRepo> dnf_repo_from_ptr (FFIDnfRepo *repo) noexcept;
+
+typedef ::DnfSack FFIDnfSack;
+class DnfSack final
+{
+private:
+  FFIDnfSack *sack;
+
+public:
+  DnfSack (FFIDnfSack *sack) : sack (sack) {}
+  ~DnfSack () { g_clear_object (&sack); }
+  FFIDnfSack &
+  get_ref () noexcept
+  {
+    return *sack;
+  }
+  std::unique_ptr<DnfPackage>
+  add_cmdline_package (rust::String filename)
+  {
+    g_autoptr (DnfPackage) pkg = ::dnf_sack_add_cmdline_package (sack, filename.c_str ());
+    if (pkg == NULL)
+      throw std::runtime_error (std::string ("Invalid RPM file: ") + filename.c_str ());
+    return dnf_package_from_ptr (pkg);
+  };
+};
+
+std::unique_ptr<DnfSack> dnf_sack_new () noexcept;
+
+// utility functions here
 struct Nevra;
-
-typedef ::DnfPackage DnfPackage;
-rust::String dnf_package_get_nevra (DnfPackage &pkg);
-rust::String dnf_package_get_name (DnfPackage &pkg);
-rust::String dnf_package_get_evr (DnfPackage &pkg);
-rust::String dnf_package_get_arch (DnfPackage &pkg);
-
-typedef ::DnfRepo DnfRepo;
-rust::String dnf_repo_get_id (DnfRepo &repo);
-guint64 dnf_repo_get_timestamp_generated (DnfRepo &repo);
-
 Nevra hy_split_nevra (rust::Str nevra);
 }

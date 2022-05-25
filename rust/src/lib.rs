@@ -61,9 +61,7 @@ pub mod ffi {
         type GKeyFile = crate::FFIGKeyFile;
 
         #[namespace = "dnfcxx"]
-        type DnfPackage = libdnf_sys::DnfPackage;
-        #[namespace = "dnfcxx"]
-        type DnfRepo = libdnf_sys::DnfRepo;
+        type FFIDnfPackage = libdnf_sys::FFIDnfPackage;
     }
 
     /// Currently cxx-rs doesn't support mappings; like probably most projects,
@@ -211,6 +209,9 @@ pub mod ffi {
         fn refspec_classify(refspec: &str) -> RefspecType;
 
         fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> Result<()>;
+
+        fn stage_container_rpms(rpms: Vec<String>) -> Result<Vec<String>>;
+        fn stage_container_rpm_raw_fds(fds: Vec<i32>) -> Result<Vec<String>>;
     }
 
     // composepost.rs
@@ -497,7 +498,6 @@ pub mod ffi {
         fn require_automatic_version_prefix(&self) -> Result<String>;
         fn add_packages(&mut self, packages: Vec<String>, allow_existing: bool) -> Result<bool>;
         fn has_packages(&self) -> bool;
-        fn set_packages(&mut self, packages: Vec<String>);
         fn get_local_packages(&self) -> Vec<String>;
         fn add_local_packages(
             &mut self,
@@ -515,8 +515,6 @@ pub mod ffi {
         fn get_packages_override_replace_local(&self) -> Vec<String>;
         fn add_packages_override_replace_local(&mut self, packages: Vec<String>) -> Result<()>;
         fn remove_package_override_replace_local(&mut self, package: &str) -> bool;
-        fn get_packages_override_replace_local_rpms(&self) -> Vec<String>;
-        fn set_packages_override_replace_local_rpms(&mut self, packages: Vec<String>);
         fn get_packages_override_remove(&self) -> Vec<String>;
         fn add_packages_override_remove(&mut self, packages: Vec<String>) -> Result<()>;
         fn remove_package_override_remove(&mut self, package: &str) -> bool;
@@ -821,7 +819,7 @@ pub mod ffi {
         // Currently only used in unit tests
         #[allow(dead_code)]
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<String>;
-        fn get_repodata_chksum_repr(pkg: &mut DnfPackage) -> Result<String>;
+        fn get_repodata_chksum_repr(pkg: &mut FFIDnfPackage) -> Result<String>;
         fn rpmts_for_commit(repo: Pin<&mut OstreeRepo>, rev: &str) -> Result<UniquePtr<RpmTs>>;
 
         // Methods on RpmTs

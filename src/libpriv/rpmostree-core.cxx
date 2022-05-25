@@ -1578,19 +1578,33 @@ static gboolean
 add_pkg_from_cache (RpmOstreeContext *self, const char *nevra, const char *sha256,
                     DnfPackage **out_pkg, GCancellable *cancellable, GError **error)
 {
-  if (!checkout_pkg_metadata_by_nevra (self, nevra, sha256, cancellable, error))
-    return FALSE;
+  g_autofree char *rpm = NULL;
+  if (self->is_container)
+    rpm = g_strdup_printf ("%s/%s.rpm", RPMOSTREE_CORE_STAGED_RPMS_DIR, sha256);
+  else
+    {
+      if (!checkout_pkg_metadata_by_nevra (self, nevra, sha256, cancellable, error))
+        return FALSE;
 
-  /* This is the great lie: we make libdnf et al. think that they're dealing with a full
-   * RPM, all while crossing our fingers that they don't try to look past the header.
-   * Ideally, it would be best if libdnf could learn to treat the pkgcache repo as another
-   * DnfRepo. We could do this all in-memory though it doesn't seem like libsolv has an
-   * appropriate API for this. */
-  g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
+      /* This is the great lie: we make libdnf et al. think that they're dealing with a full
+       * RPM, all while crossing our fingers that they don't try to look past the header.
+       * Ideally, it would be best if libdnf could learn to treat the pkgcache repo as another
+       * DnfRepo. We could do this all in-memory though it doesn't seem like libsolv has an
+       * appropriate API for this. */
+      rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
+    }
+
   g_autoptr (DnfPackage) pkg
       = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->dnfctx), rpm);
   if (!pkg)
     return glnx_throw (error, "Failed to add local pkg %s to sack; check for warnings", nevra);
+
+  if (self->is_container)
+    {
+      const char *actual_nevra = dnf_package_get_nevra (pkg);
+      if (!g_str_equal (nevra, actual_nevra))
+        return glnx_throw (error, "NEVRA mismatch: expected %s, found %s", nevra, actual_nevra);
+    }
 
   *out_pkg = util::move_nullify (pkg);
   return TRUE;
@@ -1768,8 +1782,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   auto packages_local_fileoverride = self->treefile_rs->get_local_fileoverride_packages ();
   auto packages_override_replace = self->treefile_rs->get_packages_override_replace ();
   auto packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local ();
-  auto packages_override_replace_local_rpms
-      = self->treefile_rs->get_packages_override_replace_local_rpms ();
   auto packages_override_remove = self->treefile_rs->get_packages_override_remove ();
   auto exclude_packages = self->treefile_rs->get_exclude_packages ();
   auto modules_enable = self->treefile_rs->get_modules_enable ();
@@ -1781,27 +1793,16 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       g_assert_cmpint (packages_local.size (), ==, 0);
       g_assert_cmpint (packages_local_fileoverride.size (), ==, 0);
       g_assert_cmpint (packages_override_replace_local.size (), ==, 0);
-      g_assert_cmpint (packages_override_replace_local_rpms.size (), ==, 0);
       g_assert_cmpint (packages_override_remove.size (), ==, 0);
     }
 
   if (self->is_container)
     {
       /* There are things we don't support in the container flow. */
-      g_assert_cmpint (packages_local.size (), ==, 0);
       g_assert_cmpint (packages_local_fileoverride.size (), ==, 0);
-      g_assert_cmpint (packages_override_replace_local.size (), ==, 0);
       g_assert_cmpint (exclude_packages.size (), ==, 0);
       g_assert_cmpint (modules_enable.size (), ==, 0);
       g_assert_cmpint (modules_install.size (), ==, 0);
-    }
-  else
-    {
-      /* And some things we *only* support in the container flow. */
-
-      /* Though really, this *could* be useful client-side too. It's a mix of repo overrides and
-       * local overrides. */
-      g_assert_cmpint (packages_override_replace_local_rpms.size (), ==, 0);
     }
 
   /* setup sack if not yet set up */
@@ -1838,20 +1839,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       g_autoptr (DnfPackage) pkg = NULL;
       if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
         return FALSE;
-      const char *name = dnf_package_get_name (pkg);
-      g_assert (name);
-      // this is a bit wasteful, but for locking purposes, we need the pkgname to match
-      // against the base, not the nevra which naturally will be different
-      g_ptr_array_add (replaced_pkgnames, g_strdup (name));
-      g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
-    }
-  for (auto &rpm : packages_override_replace_local_rpms)
-    {
-      g_autoptr (DnfPackage) pkg
-          = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->dnfctx), rpm.c_str ());
-      if (!pkg)
-        return glnx_throw (error, "Failed to add local pkg %s to sack", rpm.c_str ());
-      const char *nevra = dnf_package_get_nevra (pkg);
       const char *name = dnf_package_get_name (pkg);
       g_assert (name);
       // this is a bit wasteful, but for locking purposes, we need the pkgname to match

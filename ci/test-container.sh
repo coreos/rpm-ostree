@@ -37,4 +37,20 @@ yum install cowsay && yum clean all
 cowsay "It worked"
 test '!' -d /var/cache/rpm-ostree
 
+# Test overrides
+versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
+versionid=${versionid:11} # trim off VERSION_ID=
+case $versionid in
+  35) url_suffix=2.13.0/5.fc35/x86_64/ignition-2.13.0-5.fc35.x86_64.rpm;;
+  36) url_suffix=2.13.0/5.fc36/x86_64/ignition-2.13.0-5.fc36.x86_64.rpm;;
+  *) fatal "Unsupported Fedora version: $versionid";;
+esac
+URL=https://kojipkgs.fedoraproject.org//packages/ignition/$url_suffix
+# test replacement by URL
+rpm-ostree override replace $URL
+rpm-ostree override remove ignition
+# test local RPM install
+curl -Lo ignition.rpm $URL
+rpm-ostree install ignition.rpm
+
 echo ok

@@ -5,7 +5,7 @@
 
 use crate::cxxrsutil::CxxResult;
 use crate::ffiutil;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use camino::Utf8Path;
 use cap_std::fs::Dir;
 use cap_std::fs::Permissions;
@@ -13,10 +13,13 @@ use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
 use ffiutil::*;
 use fn_error_context::context;
+use libdnf_sys::*;
 use ostree_ext::container::OstreeImageReference;
 use ostree_ext::ostree;
 use std::convert::TryFrom;
+use std::fs::File;
 use std::io::{BufReader, Read};
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::os::unix::prelude::PermissionsExt;
 
 /// The binary forked from useradd that pokes the sss cache.
@@ -33,6 +36,8 @@ const SSS_CACHE_PATH: &str = "usr/sbin/sss_cache";
 // our wrapper script.  If we remember.
 const SYSTEMCTL_PATH: &str = "usr/bin/systemctl";
 const SYSTEMCTL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/systemctl-wrapper.sh");
+
+const RPMOSTREE_CORE_STAGED_RPMS_DIR: &str = "rpm-ostree/staged-rpms";
 
 pub(crate) const OSTREE_BOOTED: &str = "/run/ostree-booted";
 
@@ -199,20 +204,17 @@ fn verify_kernel_hmac_impl(moddir: &Dir) -> Result<()> {
 
     let (hmac, path) = hmac_contents
         .split_once(SEPARATOR)
-        .ok_or_else(|| anyhow::anyhow!("Missing path in .vmlinuz.hmac: {}", hmac_contents))?;
+        .ok_or_else(|| anyhow!("Missing path in .vmlinuz.hmac: {}", hmac_contents))?;
     let path = Utf8Path::new(path);
 
     let file_name = path
         .file_name()
-        .ok_or_else(|| anyhow::anyhow!("Missing filename in .vmlinuz.hmac: {}", hmac_contents))?;
+        .ok_or_else(|| anyhow!("Missing filename in .vmlinuz.hmac: {}", hmac_contents))?;
 
     let new_contents = [hmac, SEPARATOR, file_name].concat();
     // sanity check
     if new_contents.contains('/') {
-        return Err(anyhow::anyhow!(
-            "Unexpected '/' in .vmlinuz.hmac: {}",
-            new_contents
-        ));
+        return Err(anyhow!("Unexpected '/' in .vmlinuz.hmac: {}", new_contents));
     }
 
     let perms = Permissions::from_mode(0o644);
@@ -225,6 +227,53 @@ pub(crate) fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> CxxResult<()> {
     let d = unsafe { &ffi_dirfd(rootfs)? };
     let moddir = d.open_dir(moddir)?;
     verify_kernel_hmac_impl(&moddir).map_err(Into::into)
+}
+
+pub(crate) fn stage_container_rpms(rpms: Vec<String>) -> CxxResult<Vec<String>> {
+    let rpms: Result<Vec<File>> = rpms
+        .into_iter()
+        .map(|path| File::open(path).map_err(Into::into))
+        .collect();
+    stage_container_rpm_files(rpms?)
+}
+
+pub(crate) fn stage_container_rpm_raw_fds(fds: Vec<i32>) -> CxxResult<Vec<String>> {
+    stage_container_rpm_files(
+        fds.into_iter()
+            .map(|fd| unsafe { File::from_raw_fd(fd) })
+            .collect(),
+    )
+}
+
+fn stage_container_rpm_files(rpms: Vec<File>) -> CxxResult<Vec<String>> {
+    let mut r = Vec::new();
+    let mut sack = dnf_sack_new();
+    // XXX: This is really ugly: libdnf enforces that the filename ends in `.rpm`. So we use this
+    // tempdir to hold symlinks to the fdpaths to fool it. Yuck. And we can't use cap_tempfile here
+    // because the symlinks we create lead outside.
+    let d = tempfile::tempdir()?;
+    for mut rpm in rpms.into_iter() {
+        let fdpath = format!("/proc/self/fd/{}", rpm.as_raw_fd());
+        let symlink = format!("{}/{}.rpm", d.path().to_str().unwrap(), rpm.as_raw_fd());
+        std::os::unix::fs::symlink(&fdpath, &symlink)?;
+        let mut pkg = sack.pin_mut().add_cmdline_package(symlink)?;
+        let chksum = crate::ffi::get_repodata_chksum_repr(&mut pkg.pin_mut().get_ref())?;
+        let (alg, digest) = chksum
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Missing ':' in chksum repr: {}", &chksum))?;
+        if alg != "sha256" {
+            return Err(anyhow!("expected sha256 hash, got {}", alg).into());
+        }
+        let staged_fn = format!("{}.rpm", digest);
+        let run = cap_std::fs::Dir::open_ambient_dir("/run", cap_std::ambient_authority())?;
+        run.create_dir_all(RPMOSTREE_CORE_STAGED_RPMS_DIR)?;
+        let staged_rpms_dir = run.open_dir(RPMOSTREE_CORE_STAGED_RPMS_DIR)?;
+        staged_rpms_dir.atomic_replace_with(&staged_fn, |f| -> std::io::Result<_> {
+            std::io::copy(&mut rpm, f)
+        })?;
+        r.push(format!("{}:{}", digest, pkg.pin_mut().get_nevra()));
+    }
+    Ok(r)
 }
 
 #[cfg(test)]

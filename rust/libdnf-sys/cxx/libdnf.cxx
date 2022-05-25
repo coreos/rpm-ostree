@@ -25,38 +25,24 @@
 
 namespace dnfcxx
 {
-// XXX: use macro to dedupe
-rust::String
-dnf_package_get_nevra (DnfPackage &pkg)
+std::unique_ptr<DnfPackage>
+dnf_package_from_ptr (FFIDnfPackage *pkg) noexcept
 {
-  return rust::String (::dnf_package_get_nevra (&pkg));
-}
-rust::String
-dnf_package_get_name (DnfPackage &pkg)
-{
-  return rust::String (::dnf_package_get_name (&pkg));
-}
-rust::String
-dnf_package_get_evr (DnfPackage &pkg)
-{
-  return rust::String (::dnf_package_get_evr (&pkg));
-}
-rust::String
-dnf_package_get_arch (DnfPackage &pkg)
-{
-  return rust::String (::dnf_package_get_arch (&pkg));
+  return std::make_unique<DnfPackage> (g_object_ref (pkg));
 }
 
-rust::String
-dnf_repo_get_id (DnfRepo &repo)
+std::unique_ptr<DnfRepo>
+dnf_repo_from_ptr (FFIDnfRepo *repo) noexcept
 {
-  return rust::String (::dnf_repo_get_id (&repo));
+  return std::make_unique<DnfRepo> (g_object_ref (repo));
 }
-guint64
-dnf_repo_get_timestamp_generated (DnfRepo &repo)
+
+std::unique_ptr<DnfSack>
+dnf_sack_new () noexcept
 {
-  return ::dnf_repo_get_timestamp_generated (&repo);
+  return std::make_unique<DnfSack> (::dnf_sack_new ());
 }
+
 // XXX: dedupe with rpmostree_decompose_nevra
 Nevra
 hy_split_nevra (rust::Str nevra)

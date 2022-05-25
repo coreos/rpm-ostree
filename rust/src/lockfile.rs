@@ -369,12 +369,14 @@ pub(crate) fn lockfile_write(
 
     for i in 0..(packages.as_mut().length()) {
         let pkg = packages.as_mut().get(i);
-        let pkg_ref = unsafe { &mut *(&mut pkg.0 as *mut _ as *mut libdnf_sys::DnfPackage) };
-        let name = dnf_package_get_name(pkg_ref).unwrap();
-        let evr = dnf_package_get_evr(pkg_ref).unwrap();
-        let arch = dnf_package_get_arch(pkg_ref).unwrap();
+        let mut pkg = unsafe {
+            libdnf_sys::dnf_package_from_ptr(&mut pkg.0 as *mut _ as *mut libdnf_sys::FFIDnfPackage)
+        };
+        let name = pkg.pin_mut().get_name();
+        let evr = pkg.pin_mut().get_evr();
+        let arch = pkg.pin_mut().get_arch();
 
-        let chksum = crate::ffi::get_repodata_chksum_repr(pkg_ref).unwrap();
+        let chksum = crate::ffi::get_repodata_chksum_repr(&mut pkg.pin_mut().get_ref())?;
         output_pkgs.insert(
             name.as_str().to_string(),
             LockedPackage::Evra {
@@ -395,10 +397,12 @@ pub(crate) fn lockfile_write(
         .unwrap();
 
     for i in 0..rpmmd_repos.as_mut().length() {
-        let repo_ref = rpmmd_repos.as_mut().get(i);
-        let repo_ref = unsafe { &mut *(&mut repo_ref.0 as *mut _ as *mut libdnf_sys::DnfRepo) };
-        let id = dnf_repo_get_id(repo_ref).unwrap();
-        let generated = dnf_repo_get_timestamp_generated(repo_ref).unwrap();
+        let repo = rpmmd_repos.as_mut().get(i);
+        let mut repo = unsafe {
+            libdnf_sys::dnf_repo_from_ptr(&mut repo.0 as *mut _ as *mut libdnf_sys::FFIDnfRepo)
+        };
+        let id = repo.pin_mut().get_id();
+        let generated = repo.pin_mut().get_timestamp_generated();
         let generated: i64 = match generated.try_into() {
             Ok(t) => t,
             Err(e) => {
