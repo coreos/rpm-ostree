@@ -92,7 +92,7 @@ pub mod ffi {
         fn require_system_host_type(t: SystemHostType) -> Result<()>;
         fn is_rpm_arg(arg: &str) -> bool;
         fn client_start_daemon() -> Result<()>;
-        fn client_handle_fd_argument(arg: &str, arch: &str) -> Result<Vec<i32>>;
+        fn client_handle_fd_argument(arg: &str, arch: &str, is_replace: bool) -> Result<Vec<i32>>;
         fn client_render_download_progress(progress: Pin<&mut GVariant>) -> String;
         fn running_in_container() -> bool;
     }
@@ -821,6 +821,7 @@ pub mod ffi {
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<String>;
         fn get_repodata_chksum_repr(pkg: &mut FFIDnfPackage) -> Result<String>;
         fn rpmts_for_commit(repo: Pin<&mut OstreeRepo>, rev: &str) -> Result<UniquePtr<RpmTs>>;
+        fn rpmdb_package_name_list(dfd: i32, path: String) -> Result<Vec<String>>;
 
         // Methods on RpmTs
         fn packages_providing_file(self: &RpmTs, path: &str) -> Result<Vec<String>>;

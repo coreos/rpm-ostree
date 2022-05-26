@@ -41,8 +41,16 @@ test '!' -d /var/cache/rpm-ostree
 versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
 case $versionid in
-  35) url_suffix=2.13.0/5.fc35/x86_64/ignition-2.13.0-5.fc35.x86_64.rpm;;
-  36) url_suffix=2.13.0/5.fc36/x86_64/ignition-2.13.0-5.fc36.x86_64.rpm;;
+  35)
+    url_suffix=2.13.0/5.fc35/x86_64/ignition-2.13.0-5.fc35.x86_64.rpm
+    # 2.14.0
+    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1967838
+    ;;
+  36)
+    url_suffix=2.13.0/5.fc36/x86_64/ignition-2.13.0-5.fc36.x86_64.rpm
+    # 2.14.0
+    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1967836
+    ;;
   *) fatal "Unsupported Fedora version: $versionid";;
 esac
 URL=https://kojipkgs.fedoraproject.org//packages/ignition/$url_suffix
@@ -52,5 +60,12 @@ rpm-ostree override remove ignition
 # test local RPM install
 curl -Lo ignition.rpm $URL
 rpm-ostree install ignition.rpm
+
+# test replacement by Koji URL
+rpm-ostree override replace $koji_url |& tee out.txt
+n_downloaded=$(grep Downloading out.txt | wc -l)
+if [[ $n_downloaded != 1 ]]; then
+  fatal "Expected 1 'Downloading', but got $n_downloaded"
+fi
 
 echo ok

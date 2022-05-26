@@ -126,9 +126,13 @@ pub(crate) fn is_src_rpm_arg(arg: &str) -> bool {
 /// RPM URLs we need to fetch, and if so download those URLs and return file
 /// descriptors for the content.
 /// TODO(cxx-rs): This would be slightly more elegant as Result<Option<Vec<i32>>>
-pub(crate) fn client_handle_fd_argument(arg: &str, arch: &str) -> CxxResult<Vec<i32>> {
+pub(crate) fn client_handle_fd_argument(
+    arg: &str,
+    arch: &str,
+    is_replace: bool,
+) -> CxxResult<Vec<i32>> {
     #[cfg(feature = "fedora-integration")]
-    if let Some(fds) = crate::fedora_integration::handle_cli_arg(arg, arch)? {
+    if let Some(fds) = crate::fedora_integration::handle_cli_arg(arg, arch, is_replace)? {
         return Ok(fds.into_iter().map(|f| f.into_raw_fd()).collect());
     }
 

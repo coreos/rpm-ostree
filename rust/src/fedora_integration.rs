@@ -3,9 +3,13 @@
 
 use crate::cxxrsutil::CxxResult;
 use anyhow::{Context, Result};
+use ostree_ext::{gio, glib, ostree};
 use serde_derive::Deserialize;
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::fs::File;
+
+use crate::cxxrsutil::FFIGObjectReWrap;
 
 const KOJI_URL_PREFIX: &str = "https://koji.fedoraproject.org/koji/";
 const BODHI_URL_PREFIX: &str = "https://bodhi.fedoraproject.org/updates/";
@@ -52,13 +56,17 @@ mod bodhi {
         Ok(resp.update)
     }
 
-    pub(crate) fn get_rpm_urls_from_update(updateid: &str, arch: &str) -> Result<Vec<String>> {
+    pub(crate) fn get_rpm_urls_from_update(
+        updateid: &str,
+        arch: &str,
+        filter: Option<&HashSet<String>>,
+    ) -> Result<Vec<String>> {
         let update = bodhi::get_update(updateid)?;
         update.builds.iter().try_fold(Vec::new(), |mut r, buildid| {
             // For now hardcode skipping debuginfo because it's large and hopefully
             // people aren't layering that.
             let buildid = koji::BuildReference::Nvr(buildid.nvr.to_string());
-            let rpms = koji::get_rpm_urls_from_build(&buildid, arch, true)?;
+            let rpms = koji::get_rpm_urls_from_build(&buildid, arch, true, filter)?;
             r.extend(rpms);
             Ok(r)
         })
@@ -128,6 +136,7 @@ mod koji {
         buildid: &BuildReference,
         target_arch: &str,
         skip_debug: bool,
+        filter: Option<&HashSet<String>>,
     ) -> Result<impl IntoIterator<Item = String>> {
         let req = match buildid {
             BuildReference::Id(id) => Request::new("getBuild").arg(*id),
@@ -166,6 +175,11 @@ mod koji {
             if skip_debug && is_debug_rpm(name) {
                 continue;
             }
+            if let Some(filter) = filter {
+                if !filter.contains(name) {
+                    continue;
+                }
+            }
 
             let mut path = rpm_path_from_koji_rpm(package_name, build)?;
             path.insert_str(0, TOPURL);
@@ -183,7 +197,7 @@ mod koji {
         fn test_get_build() -> Result<()> {
             let buildid = BuildReference::Id(1746721);
 
-            get_rpm_urls_from_build(&buildid, "x86_64", false)?;
+            get_rpm_urls_from_build(&buildid, "x86_64", false, None)?;
             Ok(())
         }
 
@@ -204,19 +218,69 @@ fn is_debug_rpm(rpm: &str) -> bool {
     rpm.contains("-debuginfo-") || rpm.contains("-debugsource-")
 }
 
-pub(crate) fn handle_cli_arg(url: &str, arch: &str) -> CxxResult<Option<Vec<File>>> {
+fn get_base_package_list() -> Result<HashSet<String>> {
+    if crate::running_in_container() {
+        Ok(
+            crate::ffi::rpmdb_package_name_list(libc::AT_FDCWD, "/".to_string())?
+                .into_iter()
+                .collect(),
+        )
+    } else {
+        let sysroot = &ostree::Sysroot::new_default();
+        sysroot.load(gio::NONE_CANCELLABLE)?;
+        let deployments = sysroot.deployments();
+        let default = deployments
+            .get(0)
+            .ok_or_else(|| anyhow::anyhow!("No deployments found"))?;
+        let checksum = default.csum().unwrap();
+        let repo = sysroot.repo().unwrap();
+        let repo = repo.gobj_rewrap();
+        let pkglist = {
+            let cancellable = gio::Cancellable::new();
+            unsafe {
+                let r = crate::ffi::package_variant_list_for_commit(
+                    repo,
+                    checksum.as_str(),
+                    cancellable.gobj_rewrap(),
+                )?;
+                let r: glib::Variant = glib::translate::from_glib_full(r as *mut _);
+                r
+            }
+        };
+        Ok(pkglist
+            .iter()
+            .map(|pkg| pkg.child_value(0).str().unwrap().to_string())
+            .collect())
+    }
+}
+
+pub(crate) fn handle_cli_arg(
+    url: &str,
+    arch: &str,
+    is_replace: bool,
+) -> CxxResult<Option<Vec<File>>> {
+    let filter_pkgs =
+        if is_replace && (url.starts_with(BODHI_URL_PREFIX) || url.starts_with(KOJI_URL_PREFIX)) {
+            Some(get_base_package_list()?)
+        } else {
+            None
+        };
     if url.starts_with(BODHI_URL_PREFIX) {
-        let urls = bodhi::get_rpm_urls_from_update(url, arch)?;
+        let urls = bodhi::get_rpm_urls_from_update(url, arch, filter_pkgs.as_ref())?;
         Ok(Some(
             crate::utils::download_urls_to_tmpfiles(urls, true)
                 .context("Failed to download RPMs")?,
         ))
     } else if url.starts_with(KOJI_URL_PREFIX) {
         let buildid = koji::get_buildid_from_url(url)?;
-        let urls: Vec<String> =
-            koji::get_rpm_urls_from_build(&koji::BuildReference::Id(buildid), arch, true)?
-                .into_iter()
-                .collect();
+        let urls: Vec<String> = koji::get_rpm_urls_from_build(
+            &koji::BuildReference::Id(buildid),
+            arch,
+            true,
+            filter_pkgs.as_ref(),
+        )?
+        .into_iter()
+        .collect();
         Ok(Some(
             crate::utils::download_urls_to_tmpfiles(urls, true)
                 .context("Failed to download RPMs")?,
