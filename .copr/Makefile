@@ -1,7 +1,7 @@
 srpm:
+	./ci/installdeps.sh
 	# similar to https://github.com/actions/checkout/issues/760, but for COPR
 	git config --global --add safe.directory $(shell pwd)
-	./ci/installdeps.sh
 	# fetch tags so `git describe` gives a nice NEVRA when building the RPM
 	git fetch origin --tags
 	git submodule update --init --recursive
