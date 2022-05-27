@@ -213,15 +213,13 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
     let pkglist = {
         let repo = repo.gobj_rewrap();
         let cancellable = gio::Cancellable::new();
-        unsafe {
-            let r = crate::ffi::package_variant_list_for_commit(
-                repo,
-                rev.as_str(),
-                cancellable.gobj_rewrap(),
-            )?;
-            let r: glib::Variant = glib::translate::from_glib_full(r as *mut _);
-            r
-        }
+        let r = crate::ffi::package_variant_list_for_commit(
+            repo,
+            rev.as_str(),
+            cancellable.gobj_rewrap(),
+        )?;
+        let r: glib::Variant = unsafe { glib::translate::from_glib_full(r as *mut _) };
+        r
     };
 
     // Open the RPM database for this commit.

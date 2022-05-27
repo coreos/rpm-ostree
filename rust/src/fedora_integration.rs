@@ -237,15 +237,13 @@ fn get_base_package_list() -> Result<HashSet<String>> {
         let repo = repo.gobj_rewrap();
         let pkglist = {
             let cancellable = gio::Cancellable::new();
-            unsafe {
-                let r = crate::ffi::package_variant_list_for_commit(
-                    repo,
-                    checksum.as_str(),
-                    cancellable.gobj_rewrap(),
-                )?;
-                let r: glib::Variant = glib::translate::from_glib_full(r as *mut _);
-                r
-            }
+            let r = crate::ffi::package_variant_list_for_commit(
+                repo,
+                checksum.as_str(),
+                cancellable.gobj_rewrap(),
+            )?;
+            let r: glib::Variant = unsafe { glib::translate::from_glib_full(r as *mut _) };
+            r
         };
         Ok(pkglist
             .iter()
