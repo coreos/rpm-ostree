@@ -847,8 +847,8 @@ rpmostree_print_package_diffs (GVariant *variant)
  * install, and splits it into repo pkgs, and for local
  * pkgs, an fd list & idx variant. */
 gboolean
-rpmostree_sort_pkgs_strv (const char *const *pkgs, GUnixFDList *fd_list, GPtrArray **out_repo_pkgs,
-                          GVariant **out_fd_idxs, GError **error)
+rpmostree_sort_pkgs_strv (const char *const *pkgs, GUnixFDList *fd_list, gboolean is_replace,
+                          GPtrArray **out_repo_pkgs, GVariant **out_fd_idxs, GError **error)
 {
   g_autoptr (GPtrArray) repo_pkgs = g_ptr_array_new_with_free_func (g_free);
   g_auto (GVariantBuilder) builder;
@@ -860,7 +860,7 @@ rpmostree_sort_pkgs_strv (const char *const *pkgs, GUnixFDList *fd_list, GPtrArr
   for (const char *const *pkgiter = pkgs; pkgiter && *pkgiter; pkgiter++)
     {
       auto pkg = *pkgiter;
-      CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (pkg, basearch), error);
+      CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (pkg, basearch, is_replace), error);
       if (fds.size () > 0)
         {
           for (const auto &fd : fds)
@@ -888,13 +888,13 @@ vardict_insert_strv (GVariantDict *dict, const char *key, const char *const *str
 }
 
 static gboolean
-vardict_sort_and_insert_pkgs (GVariantDict *dict, const char *key_prefix, GUnixFDList *fd_list,
-                              const char *const *pkgs, GError **error)
+vardict_sort_and_insert_pkgs (GVariantDict *dict, const char *key_prefix, gboolean is_replace,
+                              GUnixFDList *fd_list, const char *const *pkgs, GError **error)
 {
   g_autoptr (GVariant) fd_idxs = NULL;
   g_autoptr (GPtrArray) repo_pkgs = NULL;
 
-  if (!rpmostree_sort_pkgs_strv (pkgs, fd_list, &repo_pkgs, &fd_idxs, error))
+  if (!rpmostree_sort_pkgs_strv (pkgs, fd_list, is_replace, &repo_pkgs, &fd_idxs, error))
     return FALSE;
 
   /* for grep: here we insert
@@ -926,21 +926,21 @@ get_modifiers_variant (const char *set_refspec, const char *set_revision,
 
   if (install_pkgs)
     {
-      if (!vardict_sort_and_insert_pkgs (&dict, "install", fd_list, install_pkgs, error))
+      if (!vardict_sort_and_insert_pkgs (&dict, "install", FALSE, fd_list, install_pkgs, error))
         return FALSE;
     }
 
   if (install_fileoverride_pkgs)
     {
-      if (!vardict_sort_and_insert_pkgs (&dict, "install-fileoverride", fd_list,
+      if (!vardict_sort_and_insert_pkgs (&dict, "install-fileoverride", FALSE, fd_list,
                                          install_fileoverride_pkgs, error))
         return FALSE;
     }
 
   if (override_replace_pkgs)
     {
-      if (!vardict_sort_and_insert_pkgs (&dict, "override-replace", fd_list, override_replace_pkgs,
-                                         error))
+      if (!vardict_sort_and_insert_pkgs (&dict, "override-replace", TRUE, fd_list,
+                                         override_replace_pkgs, error))
         return FALSE;
     }
 

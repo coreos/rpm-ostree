@@ -189,7 +189,7 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
       for (char **it = argv; it && *it; it++)
         {
           auto pkg = *it;
-          CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (pkg, basearch), error);
+          CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (pkg, basearch, false), error);
           if (fds.size () > 0)
             {
               CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpm_raw_fds (fds), error);

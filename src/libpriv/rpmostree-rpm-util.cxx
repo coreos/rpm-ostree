@@ -1266,6 +1266,30 @@ rpmostree_create_rpmdb_pkglist_variant (int dfd, const char *path, GVariant **ou
   return TRUE;
 }
 
+namespace rpmostreecxx
+{
+rust::Vec<rust::String>
+rpmdb_package_name_list (gint32 dfd, rust::String path)
+{
+  g_autoptr (GError) local_error = NULL;
+  g_autoptr (RpmOstreeRefSack) refsack
+      = rpmostree_get_refsack_for_root (dfd, path.c_str (), &local_error);
+  if (!refsack)
+    throw std::runtime_error (local_error->message);
+
+  rust::Vec<rust::String> r;
+  g_autoptr (GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (refsack->sack);
+  const guint n = pkglist->len;
+  for (guint i = 0; i < n; i++)
+    {
+      auto pkg = static_cast<DnfPackage *> (pkglist->pdata[i]);
+      r.push_back (rust::String (dnf_package_get_name (pkg)));
+    }
+
+  return r;
+}
+}
+
 /* Simple wrapper around hy_split_nevra() that adds allow-none and GError convention */
 gboolean
 rpmostree_decompose_nevra (const char *nevra, char **out_name, /* allow-none */
