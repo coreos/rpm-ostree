@@ -18,7 +18,9 @@ use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::Dir;
 use cap_std_ext::cap_std;
+use cap_std_ext::cap_std::fs::Permissions;
 use cap_std_ext::dirext::CapStdExtDirExt;
+use cap_std_ext::rustix::fs::MetadataExt;
 use fn_error_context::context;
 use gio::prelude::*;
 use gio::FileType;
@@ -662,7 +664,7 @@ pub fn convert_var_to_tmpfiles_d(
     rootfs_dfd: i32,
     mut cancellable: Pin<&mut crate::FFIGCancellable>,
 ) -> CxxResult<()> {
-    let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let cancellable = &cancellable.gobj_wrap();
 
     // TODO(lucab): unify this logic with the one in rpmostree-importer.cxx.
@@ -671,7 +673,7 @@ pub fn convert_var_to_tmpfiles_d(
 }
 
 #[context("Converting /var to tmpfiles.d")]
-fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>) -> Result<()> {
+fn var_to_tmpfiles(rootfs: &Dir, cancellable: Option<&gio::Cancellable>) -> Result<()> {
     /* List of files that are known to possibly exist, but in practice
      * things work fine if we simply ignore them.  Don't add something
      * to this list unless you've verified it's handled correctly at
@@ -692,9 +694,11 @@ fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>)
     // We never want to traverse into /run when making tmpfiles since it's a tmpfs
     // Note that in a Fedora root, /var/run is a symlink, though on el7, it can be a dir.
     // See: https://github.com/projectatomic/rpm-ostree/pull/831
-    rootfs
-        .remove_all("var/run")
-        .context("Failed to remove /var/run")?;
+    if rootfs.try_exists("var/run")? {
+        rootfs
+            .remove_dir_all("var/run")
+            .context("Failed to remove /var/run")?;
+    }
 
     // Here, delete some files ahead of time to avoid emitting warnings
     // for things that are known to be harmless.
@@ -708,12 +712,16 @@ fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>)
     // code should no longer be necessary as we convert packages on import.
     // Make output file world-readable, no reason why not to
     // https://bugzilla.redhat.com/show_bug.cgi?id=1631794
-    rootfs.ensure_dir_all("usr/lib/tmpfiles.d", 0o755)?;
-    rootfs.write_file_with_sync(
+    let mut db = cap_std::fs::DirBuilder::new();
+    db.recursive(true);
+    db.mode(0o755);
+    rootfs.create_dir_with("usr/lib/tmpfiles.d", &db)?;
+    let mode = Permissions::from_mode(0o644);
+    rootfs.atomic_replace_with(
         "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
-        0o644,
         |bufwr| -> Result<()> {
-            let mut prefix = "var".to_string();
+            bufwr.get_mut().as_file_mut().set_permissions(mode)?;
+            let mut prefix = Utf8PathBuf::from("var");
             let mut entries = BTreeSet::new();
             convert_path_to_tmpfiles_d_recurse(
                 &mut entries,
@@ -722,7 +730,7 @@ fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>)
                 &mut prefix,
                 &cancellable,
             )
-            .with_context(|| format!("Analyzing /{} content", prefix))?;
+            .with_context(|| format!("Processing var content /{}", prefix))?;
             for line in entries {
                 bufwr.write_all(line.as_bytes())?;
                 writeln!(bufwr)?;
@@ -743,72 +751,73 @@ fn var_to_tmpfiles(rootfs: &openat::Dir, cancellable: Option<&gio::Cancellable>)
 fn convert_path_to_tmpfiles_d_recurse(
     out_entries: &mut BTreeSet<String>,
     pwdb: &PasswdDB,
-    rootfs: &openat::Dir,
-    prefix: &mut String,
+    rootfs: &Dir,
+    prefix: &mut Utf8PathBuf,
     cancellable: &Option<&gio::Cancellable>,
 ) -> Result<()> {
-    use openat::SimpleType;
-
     let current_prefix = prefix.clone();
-    for subpath in rootfs.list_dir(&current_prefix)? {
+    for subpath in rootfs.read_dir(&current_prefix).context("Reading dir")? {
         if cancellable.map(|c| c.is_cancelled()).unwrap_or_default() {
             bail!("Cancelled");
         };
 
         let subpath = subpath?;
-        let fname: &Utf8Path = Path::new(subpath.file_name()).try_into()?;
-        let full_path = format!("{}/{}", &current_prefix, fname);
-        let path_type = subpath.simple_type().unwrap_or(SimpleType::Other);
+        let meta = subpath.metadata()?;
+        let fname: Utf8PathBuf = PathBuf::from(subpath.file_name()).try_into()?;
+        let full_path = Utf8Path::new(&current_prefix).join(&fname);
 
         // Workaround for nfs-utils in RHEL7:
         // https://bugzilla.redhat.com/show_bug.cgi?id=1427537
         let mut retain_entry = false;
-        if path_type == SimpleType::File && full_path.starts_with("var/lib/nfs") {
+        if meta.is_file() && full_path.starts_with("var/lib/nfs") {
             retain_entry = true;
         }
 
-        if !retain_entry && !matches!(path_type, SimpleType::Dir | SimpleType::Symlink) {
-            rootfs.remove_file_optional(&full_path)?;
-            println!("Ignoring non-directory/non-symlink '{}'", &full_path);
+        if !retain_entry && !(meta.is_dir() || meta.is_symlink()) {
+            rootfs
+                .remove_file_optional(&full_path)
+                .with_context(|| format!("Removing {:?}", &full_path))?;
+            println!("Ignoring non-directory/non-symlink '{:?}'", &full_path);
             continue;
         }
 
         // Translate this file entry.
         let entry = {
-            let meta = rootfs.metadata(&full_path)?;
-            let mode = meta.stat().st_mode & !libc::S_IFMT;
+            let mode = meta.mode() & !libc::S_IFMT;
 
             let file_info = gio::FileInfo::new();
             file_info.set_attribute_uint32("unix::mode", mode);
 
-            match path_type {
-                SimpleType::Dir => file_info.set_file_type(FileType::Directory),
-                SimpleType::Symlink => {
-                    file_info.set_file_type(FileType::SymbolicLink);
-                    let link_target = rootfs.read_link(&full_path)?;
-                    let target_path = Utf8Path::from_path(&link_target).ok_or_else(|| {
-                        format_err!("non UTF-8 symlink target '{}'", &link_target.display())
-                    })?;
-                    file_info.set_symlink_target(target_path.as_str());
-                }
-                SimpleType::File => file_info.set_file_type(FileType::Regular),
-                x => unreachable!("invalid path type: {:?}", x),
-            };
+            if meta.is_dir() {
+                file_info.set_file_type(FileType::Directory);
+            } else if meta.is_symlink() {
+                file_info.set_file_type(FileType::SymbolicLink);
+                let link_target = rootfs.read_link(&full_path).context("Reading symlink")?;
+                let target_path = Utf8Path::from_path(&link_target).ok_or_else(|| {
+                    format_err!("non UTF-8 symlink target '{}'", &link_target.display())
+                })?;
+                file_info.set_symlink_target(target_path.as_str());
+            } else if meta.is_file() {
+                file_info.set_file_type(FileType::Regular);
+            } else {
+                unreachable!("invalid path type: {:?}", full_path);
+            }
 
-            let abs_path = format!("/{}", full_path);
-            let username = pwdb.lookup_user(meta.stat().st_uid)?;
-            let groupname = pwdb.lookup_group(meta.stat().st_gid)?;
-            importer::translate_to_tmpfiles_d(&abs_path, &file_info, &username, &groupname)?
+            let abs_path = Utf8Path::new("/").join(&full_path);
+            let username = pwdb.lookup_user(meta.uid())?;
+            let groupname = pwdb.lookup_group(meta.gid())?;
+            importer::translate_to_tmpfiles_d(abs_path.as_str(), &file_info, &username, &groupname)?
         };
         out_entries.insert(entry);
 
-        if path_type == SimpleType::Dir {
+        if meta.is_dir() {
             // New subdirectory discovered, recurse into it.
             *prefix = full_path.clone();
             convert_path_to_tmpfiles_d_recurse(out_entries, pwdb, rootfs, prefix, cancellable)?;
+            rootfs.remove_dir_all(&full_path)?;
+        } else {
+            rootfs.remove_file(&full_path)?;
         }
-
-        rootfs.remove_all(&full_path)?;
     }
     Ok(())
 }
@@ -1189,7 +1198,8 @@ fn hardlink_recurse(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cap_std_ext::rustix;
+    use cap_std::fs::{Dir, DirBuilder};
+    use cap_std_ext::{cap_std, rustix};
 
     #[test]
     fn stripany() {
@@ -1281,10 +1291,23 @@ OSTREE_VERSION='33.4'
         use nix::sys::stat::{umask, Mode};
         use rustix::process::{getegid, geteuid};
 
+        // Create an empty file with the given mode
+        fn touch(d: &Dir, p: impl AsRef<Utf8Path>, mode: u32) -> Result<()> {
+            d.atomic_replace_with(p.as_ref(), |w| {
+                w.get_mut()
+                    .as_file_mut()
+                    .set_permissions(Permissions::from_mode(mode))
+                    .map_err(Into::into)
+            })
+        }
+
+        let mut db = DirBuilder::new();
+        db.recursive(true);
+        db.mode(0o755);
+
         // Prepare a minimal rootfs as playground.
         umask(Mode::empty());
-        let temp_rootfs = tempfile::tempdir().unwrap();
-        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+        let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
         let uid = geteuid().as_raw();
         let gid = getegid().as_raw();
         let uid_str = format!("{uid}");
@@ -1292,37 +1315,35 @@ OSTREE_VERSION='33.4'
         let mut expected_disk_size = 30u64;
         {
             for dirpath in &["usr/lib", "usr/etc", "var"] {
-                rootfs.ensure_dir_all(*dirpath, 0o755).unwrap();
+                rootfs.ensure_dir_with(*dirpath, &db).unwrap();
             }
             for filepath in &["usr/lib/passwd", "usr/lib/group"] {
-                rootfs.new_file(*filepath, 0o755).unwrap();
+                touch(&rootfs, *filepath, 0o755).unwrap()
             }
             rootfs
-                .write_file_contents(
+                .atomic_write(
                     "usr/etc/passwd",
-                    0o755,
                     format!("test-user:x:{uid_str}:{gid_str}:::",),
                 )
                 .unwrap();
             expected_disk_size += uid_str.len() as u64;
             expected_disk_size += gid_str.len() as u64;
             rootfs
-                .write_file_contents("usr/etc/group", 0o755, format!("test-group:x:{gid_str}:"))
+                .atomic_write("usr/etc/group", format!("test-group:x:{gid_str}:"))
                 .unwrap();
             expected_disk_size += gid_str.len() as u64;
         }
 
         // Add test content.
-        rootfs.ensure_dir_all("var/lib/systemd", 0o755).unwrap();
+        rootfs.ensure_dir_with("var/lib/systemd", &db).unwrap();
+        touch(&rootfs, "var/lib/systemd/random-seed", 0o770).unwrap();
+        rootfs.ensure_dir_with("var/lib/nfs", &db).unwrap();
+        touch(&rootfs, "var/lib/nfs/etab", 0o770).unwrap();
+        db.mode(0o777);
+        rootfs.ensure_dir_with("var/lib/test/nested", &db).unwrap();
+        touch(&rootfs, "var/lib/test/nested/file", 0o770).unwrap();
         rootfs
-            .new_file("var/lib/systemd/random-seed", 0o755)
-            .unwrap();
-        rootfs.ensure_dir_all("var/lib/nfs", 0o755).unwrap();
-        rootfs.new_file("var/lib/nfs/etab", 0o770).unwrap();
-        rootfs.ensure_dir_all("var/lib/test/nested", 0o777).unwrap();
-        rootfs.new_file("var/lib/test/nested/file", 0o755).unwrap();
-        rootfs
-            .symlink("var/lib/test/nested/symlink", "../")
+            .symlink("../", "var/lib/test/nested/symlink")
             .unwrap();
 
         // Also make this a sanity test for our directory size API
@@ -1335,8 +1356,8 @@ OSTREE_VERSION='33.4'
         var_to_tmpfiles(&rootfs, gio::NONE_CANCELLABLE).unwrap();
 
         let autovar_path = "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf";
-        assert!(!rootfs.exists("var/lib").unwrap());
-        assert!(rootfs.exists(autovar_path).unwrap());
+        assert!(!rootfs.try_exists("var/lib").unwrap());
+        assert!(rootfs.try_exists(autovar_path).unwrap());
         let entries: Vec<String> = rootfs
             .read_to_string(autovar_path)
             .unwrap()

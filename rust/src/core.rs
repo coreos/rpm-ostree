@@ -278,11 +278,9 @@ fn stage_container_rpm_files(rpms: Vec<File>) -> CxxResult<Vec<String>> {
 
 #[cfg(test)]
 mod test {
-    use crate::capstdext::dirbuilder_from_mode;
-
     use super::*;
+    use crate::capstdext::dirbuilder_from_mode;
     use anyhow::Result;
-    use std::os::unix::prelude::*;
 
     #[test]
     fn etcguard() -> Result<()> {
