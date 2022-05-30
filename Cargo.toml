@@ -36,7 +36,7 @@ camino = "1.0.9"
 cap-std-ext = "0.25"
 cap-tempfile = "0.24.4"
 chrono = { version = "0.4.19", features = ["serde"] }
-clap = "2.34.0"
+clap = "3.1.18"
 curl = "0.4.43"
 cxx = "1.0.68"
 envsubst = "0.2.0"
