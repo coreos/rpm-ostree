@@ -28,13 +28,13 @@ namespace dnfcxx
 std::unique_ptr<DnfPackage>
 dnf_package_from_ptr (FFIDnfPackage *pkg) noexcept
 {
-  return std::make_unique<DnfPackage> (g_object_ref (pkg));
+  return std::make_unique<DnfPackage> ((FFIDnfPackage *)g_object_ref (pkg));
 }
 
 std::unique_ptr<DnfRepo>
 dnf_repo_from_ptr (FFIDnfRepo *repo) noexcept
 {
-  return std::make_unique<DnfRepo> (g_object_ref (repo));
+  return std::make_unique<DnfRepo> ((FFIDnfRepo *)g_object_ref (repo));
 }
 
 std::unique_ptr<DnfSack>
