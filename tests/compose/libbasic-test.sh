@@ -137,5 +137,14 @@ ostree --repo="${repo}" ls "${treeref}" '/usr/etc/alternatives/iptables' | grep 
 # NOTE: this does not check the whole symlink target, but only a reasonably-stable leading portion of it.
 assert_file_has_content_literal symlinks.txt '/usr/etc/alternatives/iptables -> /usr/sbin/ip'
 echo "ok alternatives"
+
+# Check that basic system UIDs/GIDs are injected through a sysusers.d fragment.
+ostree --repo="${repo}" ls "${treeref}" '/usr/lib/sysusers.d/00-rpm-ostree_basic.conf' | grep '^-00644' > sysusers.txt
+assert_file_has_content_literal sysusers.txt '/usr/lib/sysusers.d/00-rpm-ostree_basic.conf'
+ostree --repo="${repo}" cat "${treeref}" '/usr/lib/sysusers.d/00-rpm-ostree_basic.conf' > uidgid.txt
+assert_file_has_content_literal uidgid.txt 'g mail 12'
+assert_file_has_content_literal uidgid.txt 'g users 100'
+assert_file_has_content_literal uidgid.txt 'u games 12:100 "games" /usr/games /sbin/nologin'
+echo "ok basic sysusers"
 }
 
