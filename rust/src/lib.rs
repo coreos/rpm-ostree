@@ -902,6 +902,8 @@ mod scripts;
 pub(crate) use self::scripts::*;
 mod sysroot_upgrade;
 pub(crate) use crate::sysroot_upgrade::*;
+mod sysusers;
+pub(crate) use crate::sysusers::*;
 mod rpmutils;
 pub(crate) use self::rpmutils::*;
 mod testutils;
