@@ -21,7 +21,6 @@
 
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Context, Result};
-use c_utf8::CUtf8Buf;
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
 use openat_ext::OpenatDirExt;
@@ -72,7 +71,6 @@ pub struct Treefile {
     primary_dfd: openat::Dir,
     #[allow(dead_code)] // Not used in tests
     pub(crate) parsed: TreeComposeConfig,
-    serialized: CUtf8Buf,
     pub(crate) externals: TreefileExternals,
 }
 
@@ -619,11 +617,9 @@ impl Treefile {
     fn new_boxed(filename: &Path, basearch: Option<&str>) -> Result<Box<Treefile>> {
         let parsed = treefile_parse_and_process(filename, basearch)?;
         let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
-        let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
-            serialized,
             externals: parsed.externals,
         }))
     }
@@ -631,13 +627,11 @@ impl Treefile {
     pub(crate) fn new_from_string(fmt: utils::InputFormat, buf: &str) -> Result<Box<Self>> {
         let mut treefile = treefile_parse_stream(fmt, &mut buf.as_bytes(), None)?;
         treefile = treefile.substitute_vars()?;
-        let serialized = CUtf8Buf::from(buf);
         let td = tempfile::tempdir()?;
         let primary_dfd = openat::Dir::open(td.path())?;
         Ok(Box::new(Treefile {
             primary_dfd,
             parsed: treefile,
-            serialized,
             externals: Default::default(),
         }))
     }
@@ -646,7 +640,6 @@ impl Treefile {
         parsed: TreeComposeConfig,
         cfgdir: Option<&openat::Dir>,
     ) -> Result<Self> {
-        let serialized = Treefile::serialize_json_string(&parsed)?;
         let primary_dfd = if let Some(d) = cfgdir {
             d.sub_dir(".")?
         } else {
@@ -659,7 +652,6 @@ impl Treefile {
         Ok(Treefile {
             primary_dfd,
             parsed,
-            serialized,
             externals: Default::default(),
         })
     }
@@ -696,7 +688,7 @@ impl Treefile {
     }
 
     pub(crate) fn get_json_string(&self) -> String {
-        self.serialized.to_string()
+        serde_json::to_string_pretty(&self.parsed).unwrap()
     }
 
     pub(crate) fn get_ostree_layers(&self) -> Vec<String> {
@@ -1352,11 +1344,6 @@ impl Treefile {
         Ok(())
     }
 
-    fn serialize_json_string(config: &TreeComposeConfig) -> Result<CUtf8Buf> {
-        let output = serde_json::to_string_pretty(config)?;
-        Ok(CUtf8Buf::from_string(output))
-    }
-
     /// Throw an error if any derive fields are set.
     pub(crate) fn error_if_deriving(&self) -> Result<()> {
         self.parsed.derive.error_if_nonempty()
@@ -1369,9 +1356,9 @@ impl Treefile {
 
     /// Pretty-print treefile content as JSON to stdout.
     pub fn prettyprint_json_stdout(&self) {
-        std::io::stdout()
-            .write_all(self.serialized.as_bytes())
-            .unwrap();
+        let stdout = std::io::stdout();
+        let out = stdout.lock();
+        serde_json::to_writer_pretty(out, &self.parsed).unwrap();
     }
 
     /// Given a treefile, print warnings about items which are deprecated.
@@ -1471,8 +1458,9 @@ impl Treefile {
     pub(crate) fn write_compose_json(&self, rootfs_dfd: &openat::Dir) -> Result<()> {
         let target = Path::new(COMPOSE_JSON_PATH);
         rootfs_dfd.ensure_dir_all(target.parent().unwrap(), 0o755)?;
-        rootfs_dfd.write_file_contents(target, 0o644, self.serialized.as_bytes())?;
-        Ok(())
+        rootfs_dfd.write_file_with_sync(target, 0o644, |w| {
+            serde_json::to_writer_pretty(w, &self.parsed).map_err(anyhow::Error::new)
+        })
     }
 
     pub(crate) fn validate_for_container(&self) -> Result<()> {
