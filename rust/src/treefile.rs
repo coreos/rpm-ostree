@@ -1762,6 +1762,15 @@ impl Treefile {
 
         Box::new(flags)
     }
+
+    pub(crate) fn merge_treefile(&mut self, treefile: &str) -> Result<bool> {
+        let mut treefile = std::io::Cursor::new(treefile);
+        let mut treefile = treefile_parse_stream(utils::InputFormat::JSON, &mut treefile, None)?;
+        let prev_checksum = self.parsed.get_checksum()?;
+        treefile_merge(&mut self.parsed, &mut treefile);
+        let new_checksum = self.parsed.get_checksum()?;
+        Ok(prev_checksum != new_checksum)
+    }
 }
 
 fn add_sha256_nevra_to_map(map: &mut BTreeMap<String, String>, pkgs: Vec<String>) -> Result<bool> {
@@ -2642,6 +2651,12 @@ impl TreeComposeConfig {
         substitute_string_option(&substvars, &mut self.base.platform_module)?;
 
         Ok(self)
+    }
+
+    fn get_checksum(&self) -> Result<String> {
+        let mut hasher = glib::Checksum::new(glib::ChecksumType::Sha256).unwrap();
+        self.hasher_update(&mut hasher)?;
+        Ok(hasher.string().expect("hash"))
     }
 
     fn hasher_update(&self, hasher: &mut glib::Checksum) -> Result<()> {
