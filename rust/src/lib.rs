@@ -276,13 +276,8 @@ pub mod ffi {
     }
 
     #[derive(Debug)]
-    enum PackageOverrideSourceKind {
-        Repo,
-    }
-
-    #[derive(Debug)]
     struct PackageOverrideSource {
-        kind: PackageOverrideSourceKind,
+        kind: OverrideReplacementType,
         name: String,
     }
 

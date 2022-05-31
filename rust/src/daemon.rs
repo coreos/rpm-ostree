@@ -6,7 +6,7 @@
 
 use crate::cxxrsutil::*;
 use crate::ffi::{
-    PackageOverrideSource, PackageOverrideSourceKind, ParsedRevision, ParsedRevisionKind,
+    PackageOverrideSource, OverrideReplacementType, ParsedRevision, ParsedRevisionKind,
 };
 use anyhow::{anyhow, format_err, Result};
 use cap_std::fs::Dir;
@@ -366,7 +366,7 @@ pub fn parse_override_source(source: &str) -> CxxResult<PackageOverrideSource> {
         .ok_or_else(|| format_err!("Not in KIND=NAME format"))?;
 
     let kind = match kind_label {
-        "repo" => PackageOverrideSourceKind::Repo,
+        "repo" => OverrideReplacementType::Repo,
         x => return Err(anyhow!("Invalid kind '{}'", x).into()),
     };
 
@@ -549,7 +549,7 @@ mod test {
 
     #[test]
     fn test_parse_override_source() {
-        let ok_cases = [("repo=custom", (PackageOverrideSourceKind::Repo, "custom"))];
+        let ok_cases = [("repo=custom", (OverrideReplacementType::Repo, "custom"))];
         for (input, expected) in ok_cases {
             let out = parse_override_source(input).unwrap();
             assert_eq!(out.kind, expected.0);

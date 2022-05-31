@@ -211,7 +211,7 @@ prepare_download_pkgs_txn (const gchar *const *queries, const char *source,
   DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
   CXX_TRY_VAR (parsed_source, rpmostreecxx::parse_override_source (source), error);
 
-  if (parsed_source.kind == rpmostreecxx::PackageOverrideSourceKind::Repo)
+  if (parsed_source.kind == rpmostreecxx::OverrideReplacementType::Repo)
     {
       const char *source_name = parsed_source.name.c_str ();
       for (const char *const *it = queries; it && *it; it++)
