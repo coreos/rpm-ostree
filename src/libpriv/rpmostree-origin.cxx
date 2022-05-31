@@ -409,6 +409,13 @@ rpmostree_origin_remove_override_replace_local (RpmOstreeOrigin *origin, const c
   return changed;
 }
 
+gboolean
+rpmostree_origin_remove_override_replace (RpmOstreeOrigin *origin, const char *package)
+{
+  auto changed = (*origin->treefile)->remove_package_override_replace (package);
+  return changed;
+}
+
 /* Mutability: setter */
 gboolean
 rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin)
