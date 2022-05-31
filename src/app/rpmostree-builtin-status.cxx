@@ -926,8 +926,6 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
       g_ptr_array_add (active_replacements, NULL);
       g_ptr_array_add (active_replacements_grouped, NULL);
 
-      g_ptr_array_add (active_replacements_grouped, NULL);
-
       if (active_replacements_grouped->len > 1)
         print_packages ("ReplacedBasePackages", max_key_len,
                         (const char *const *)active_replacements_grouped->pdata, NULL, FALSE);
