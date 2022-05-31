@@ -105,7 +105,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
   if (!opt_experimental && (opt_freeze || opt_from))
     return glnx_throw (error, "Must specify --experimental to use --freeze or --from");
 
-  if (override_replace && opt_experimental && opt_freeze && opt_from)
+  if (override_replace && opt_freeze && opt_from)
     {
       override_replace_final = g_ptr_array_new_with_free_func (free);
       g_autoptr (GPtrArray) queries = g_ptr_array_new ();
