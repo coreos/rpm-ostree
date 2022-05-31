@@ -1718,6 +1718,13 @@ impl Treefile {
             || self
                 .parsed
                 .derive
+                .override_replace
+                .as_ref()
+                .map(|v| !v.is_empty())
+                .unwrap_or_default()
+            || self
+                .parsed
+                .derive
                 .override_replace_local
                 .as_ref()
                 .map(|m| !m.is_empty())
