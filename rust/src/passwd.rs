@@ -486,10 +486,10 @@ fn group_append_unique(
     Ok(())
 }
 
-fn has_usrlib_passwd(rootfs: &Dir) -> Result<bool> {
+fn has_usrlib_passwd(rootfs: &Dir) -> std::io::Result<bool> {
     // Does this rootfs have a usr/lib/passwd? We might be doing a
     // container or something else.
-    rootfs.try_exists("usr/lib/passwd").map_err(Into::into)
+    rootfs.try_exists("usr/lib/passwd")
 }
 
 fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<PathBuf>) -> Result<()> {
@@ -507,7 +507,7 @@ fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<PathBuf>) -> Result<()> 
             rootfs.atomic_replace_with(etc_file, |w| std::io::copy(&mut src, w))?;
         }
 
-        // Copy the merge's passwd/group to usr/lireaking hardlinks).
+        // Copy the merge's passwd/group to usr/lib (breaking hardlinks).
         if let Some(ref merge_dir) = merge_passwd_dir {
             let current_root = Dir::open_ambient_dir(merge_dir, cap_std::ambient_authority())?;
             let mut src = current_root.open(filename).map(BufReader::new)?;
