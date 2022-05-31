@@ -466,11 +466,11 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         &mut dest.derive.override_remove,
         &mut src.derive.override_remove,
     );
-    // XXX: should merge this correctly, keying on `from`
-    merge_basic_field(
+    merge_vec_field(
         &mut dest.derive.override_replace,
         &mut src.derive.override_replace,
     );
+    dest.handle_repo_packages_override_replacements();
     merge_map_field(
         &mut dest.derive.override_replace_local,
         &mut src.derive.override_replace_local,
@@ -2684,6 +2684,7 @@ impl TreeComposeConfig {
     }
 
     // we need to ensure that appended repo packages override earlier ones
+    // XXX: collapse elements with the same repo to a single element
     fn handle_repo_packages_overrides(&mut self) {
         if let Some(repo_packages) = self.repo_packages.as_mut() {
             let mut seen_pkgs: HashSet<String> = HashSet::new();
@@ -2702,6 +2703,29 @@ impl TreeComposeConfig {
             // Now replace the original, re-reversing.
             v.reverse();
             *repo_packages = v;
+        }
+    }
+
+    // we need to ensure that appended replacements override earlier ones
+    // XXX: collapse elements with the same source to a single element
+    fn handle_repo_packages_override_replacements(&mut self) {
+        if let Some(override_replace) = self.derive.override_replace.as_mut() {
+            let mut seen_pkgs: HashSet<String> = HashSet::new();
+            // Create a temporary new filtered vec; see
+            // https://doc.rust-lang.org/std/iter/struct.Map.html#notes-about-side-effects for why
+            // the reverse and re-reverse due to the side effect during `map()`.
+            let mut v: Vec<_> = override_replace
+                .drain(..)
+                .rev()
+                .map(|mut ovr| {
+                    ovr.packages.retain(|p| seen_pkgs.insert(p.into()));
+                    ovr
+                })
+                .filter(|ovr| !ovr.packages.is_empty())
+                .collect();
+            // Now replace the original, re-reversing.
+            v.reverse();
+            *override_replace = v;
         }
     }
 }
@@ -4026,9 +4050,9 @@ conditional-include:
                     - bar
                     - baz blah
         "};
-        let treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
+        let mut treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.parsed.derive.override_replace.is_some());
-        let replacements = treefile.parsed.derive.override_replace.unwrap();
+        let replacements = treefile.parsed.derive.override_replace.as_ref().unwrap();
         assert_eq!(replacements.len(), 1);
         assert_eq!(
             replacements[0],
@@ -4040,6 +4064,36 @@ conditional-include:
                     "baz".into(),
                     "blah".into()
                 ],
+            }
+        );
+
+        // test canonicalization
+        let buf_top = indoc! {"
+            ex-override-replace:
+                - from:
+                    repo: other-repo
+                  packages:
+                    - foo # overridden
+                    - newfoo
+        "};
+        let mut treefile_top =
+            Treefile::new_from_string(utils::InputFormat::YAML, buf_top).unwrap();
+        treefile_merge(&mut treefile_top.parsed, &mut treefile.parsed);
+        assert!(treefile_top.parsed.derive.override_replace.is_some());
+        let replacements = treefile_top.parsed.derive.override_replace.unwrap();
+        assert_eq!(replacements.len(), 2);
+        assert_eq!(
+            replacements[0],
+            RemoteOverrideReplace {
+                from: RemoteOverrideReplaceFrom::Repo("foobar".into()),
+                packages: maplit::btreeset!["bar".into(), "baz".into(), "blah".into(),],
+            }
+        );
+        assert_eq!(
+            replacements[1],
+            RemoteOverrideReplace {
+                from: RemoteOverrideReplaceFrom::Repo("other-repo".into()),
+                packages: maplit::btreeset!["foo".into(), "newfoo".into(),],
             }
         );
     }
