@@ -448,8 +448,46 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     merge_hashset_field(&mut dest.packages, &mut src.packages);
     merge_vec_field(&mut dest.repo_packages, &mut src.repo_packages);
     merge_basic_field(&mut dest.cliwrap, &mut src.cliwrap);
-    merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
     merge_modules(&mut dest.modules, &mut src.modules);
+
+    merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
+    merge_basic_field(
+        &mut dest.derive.container_image_reference,
+        &mut src.derive.container_image_reference,
+    );
+    merge_map_field(
+        &mut dest.derive.packages_local,
+        &mut src.derive.packages_local,
+    );
+    merge_map_field(
+        &mut dest.derive.packages_local_fileoverride,
+        &mut src.derive.packages_local_fileoverride,
+    );
+    merge_hashset_field(
+        &mut dest.derive.override_remove,
+        &mut src.derive.override_remove,
+    );
+    // XXX: should merge this correctly, keying on `from`
+    merge_basic_field(
+        &mut dest.derive.override_replace,
+        &mut src.derive.override_replace,
+    );
+    merge_map_field(
+        &mut dest.derive.override_replace_local,
+        &mut src.derive.override_replace_local,
+    );
+    // XXX: should merge args
+    merge_basic_field(&mut dest.derive.initramfs, &mut src.derive.initramfs);
+    // no fancy merging for this
+    merge_basic_field(&mut dest.derive.custom, &mut src.derive.custom);
+    merge_basic_field(
+        &mut dest.derive.override_commit,
+        &mut src.derive.override_commit,
+    );
+    merge_basic_field(
+        &mut dest.derive.unconfigured_state,
+        &mut src.derive.unconfigured_state,
+    );
 }
 
 /// Merge the treefile externals. There are currently only two keys that
