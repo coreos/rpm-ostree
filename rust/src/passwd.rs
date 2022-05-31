@@ -8,19 +8,28 @@ use crate::nameservice;
 use crate::normalization;
 use crate::treefile::{CheckGroups, CheckPasswd, Treefile};
 use anyhow::{anyhow, Context, Result};
+use cap_std::fs::Dir;
+use cap_std::fs::OpenOptions;
+use cap_std_ext::cap_std;
+use cap_std_ext::cap_std::fs::Permissions;
+use cap_std_ext::dirext::CapStdExtDirExt;
+use cap_std_ext::rustix::fs::MetadataExt;
+use cap_std_ext::rustix::fs::OpenOptionsExt;
 use fn_error_context::context;
 use gio::prelude::*;
 use nix::unistd::{Gid, Uid};
-use openat_ext::OpenatDirExt;
+use once_cell::sync::Lazy;
 use ostree_ext::{gio, ostree};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::io::AsRawFd;
+use std::os::unix::prelude::PermissionsExt;
 use std::path::PathBuf;
 use std::pin::Pin;
 
 const DEFAULT_MODE: u32 = 0o644;
+static DEFAULT_PERMS: Lazy<Permissions> = Lazy::new(|| Permissions::from_mode(DEFAULT_MODE));
 static PWGRP_SHADOW_FILES: &[&str] = &["shadow", "gshadow", "subuid", "subgid"];
 static USRLIB_PWGRP_FILES: &[&str] = &["passwd", "group"];
 
@@ -45,14 +54,14 @@ static PWGRP_LOCK_AND_BACKUP_FILES: &[&str] = &[
 /// not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
 pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResult<bool> {
     passwd_cleanup(rootfs_dfd)?;
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     let dir: Option<PathBuf> = opt_string(merge_passwd_dir).map(|d| d.into());
 
     // Break hardlinks for the shadow files, since shadow-utils currently uses
     // O_RDWR unconditionally.
     for filename in PWGRP_SHADOW_FILES {
         let src = format!("etc/{filename}");
-        if rootfs.exists(&src)? {
+        if rootfs.try_exists(&src)? {
             ostree::break_hardlink(rootfs.as_raw_fd(), &src, true, gio::NONE_CANCELLABLE)?;
         };
     }
@@ -83,7 +92,7 @@ pub fn complete_rpm_layering(rootfs_dfd: i32) -> CxxResult<()> {
 /// didn't clean them up at compose time, and having them exist will mean
 /// rofiles-fuse will prevent useradd from opening it for write.
 pub fn passwd_cleanup(rootfs_dfd: i32) -> Result<()> {
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     for filename in PWGRP_LOCK_AND_BACKUP_FILES {
         let target = format!("usr/etc/{}", filename);
         rootfs.remove_file_optional(target)?;
@@ -103,17 +112,20 @@ pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> CxxResult<()> {
     static ETCSRC_PATH: &str = "usr/etc/passwd";
     static USRDEST_PATH: &str = "usr/lib/passwd";
 
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     let (roots, others): (Vec<_>, Vec<_>) = {
-        let src_rd = rootfs.open_file(ETCSRC_PATH).map(BufReader::new)?;
+        let src_rd = rootfs.open(ETCSRC_PATH).map(BufReader::new)?;
         let entries = nameservice::passwd::parse_passwd_content(src_rd)?;
         entries.into_iter().partition(|e| e.uid == 0)
     };
 
     {
+        let mut options = OpenOptions::new();
+        options.create(true).append(true).mode(DEFAULT_MODE);
         let mut usrdest_stream = rootfs
-            .append_file(USRDEST_PATH, DEFAULT_MODE)
-            .map(BufWriter::new)?;
+            .open_with(USRDEST_PATH, &options)
+            .map(BufWriter::new)
+            .with_context(|| format!("Creating {USRDEST_PATH}"))?;
 
         for entry in &others {
             entry.to_writer(&mut usrdest_stream)?;
@@ -122,16 +134,16 @@ pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> CxxResult<()> {
         usrdest_stream.flush()?;
     }
 
-    rootfs.write_file_with_sync(
-        ETCSRC_PATH,
-        DEFAULT_MODE,
-        |mut etcdest_stream| -> Result<()> {
-            for entry in &roots {
-                entry.to_writer(&mut etcdest_stream)?;
-            }
-            Ok(())
-        },
-    )?;
+    rootfs.atomic_replace_with(ETCSRC_PATH, |etcdest_stream| -> Result<()> {
+        etcdest_stream
+            .get_mut()
+            .as_file_mut()
+            .set_permissions(DEFAULT_PERMS.clone())?;
+        for entry in &roots {
+            entry.to_writer(etcdest_stream)?;
+        }
+        Ok(())
+    })?;
 
     Ok(())
 }
@@ -147,16 +159,18 @@ pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>
     static ETCSRC_PATH: &str = "usr/etc/group";
     static USRDEST_PATH: &str = "usr/lib/group";
 
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     let (mut roots_preserved, others): (Vec<_>, Vec<_>) = {
-        let src_rd = rootfs.open_file(ETCSRC_PATH).map(BufReader::new)?;
+        let src_rd = rootfs.open(ETCSRC_PATH).map(BufReader::new)?;
         let entries = nameservice::group::parse_group_content(src_rd)?;
         entries.into_iter().partition(|e| e.gid == 0)
     };
 
     {
+        let mut options = OpenOptions::new();
+        options.create(true).append(true).mode(DEFAULT_MODE);
         let mut usrdest_stream = rootfs
-            .append_file(USRDEST_PATH, DEFAULT_MODE)
+            .open_with(USRDEST_PATH, &options)
             .map(BufWriter::new)?;
 
         for entry in &others {
@@ -172,23 +186,23 @@ pub fn migrate_group_except_root(rootfs_dfd: i32, preserved_groups: &Vec<String>
         usrdest_stream.flush()?;
     }
 
-    rootfs.write_file_with_sync(
-        ETCSRC_PATH,
-        DEFAULT_MODE,
-        |mut etcdest_stream| -> Result<()> {
-            for entry in &roots_preserved {
-                entry.to_writer(&mut etcdest_stream)?;
-            }
-            Ok(())
-        },
-    )?;
+    rootfs.atomic_replace_with(ETCSRC_PATH, |etcdest_stream| -> Result<()> {
+        etcdest_stream
+            .get_mut()
+            .as_file_mut()
+            .set_permissions(DEFAULT_PERMS.clone())?;
+        for entry in &roots_preserved {
+            entry.to_writer(etcdest_stream)?;
+        }
+        Ok(())
+    })?;
 
     Ok(())
 }
 
 /// Recursively search a directory for a subpath owned by a UID.
 pub fn dir_contains_uid(dirfd: i32, id: u32) -> CxxResult<bool> {
-    let dir = ffiutil::ffi_view_openat_dir(dirfd);
+    let dir = unsafe { ffiutil::ffi_dirfd(dirfd)? };
     let uid = Uid::from_raw(id);
     let found = dir_contains_uid_gid(&dir, &Some(uid), &None)?;
     Ok(found)
@@ -196,32 +210,27 @@ pub fn dir_contains_uid(dirfd: i32, id: u32) -> CxxResult<bool> {
 
 /// Recursively search a directory for a subpath owned by a GID.
 pub fn dir_contains_gid(dirfd: i32, id: u32) -> CxxResult<bool> {
-    let dir = ffiutil::ffi_view_openat_dir(dirfd);
+    let dir = unsafe { ffiutil::ffi_dirfd(dirfd)? };
     let gid = Gid::from_raw(id);
     let found = dir_contains_uid_gid(&dir, &None, &Some(gid))?;
     Ok(found)
 }
 
 /// Recursively search a directory for a subpath owned by a UID or GID.
-fn dir_contains_uid_gid(dir: &openat::Dir, uid: &Option<Uid>, gid: &Option<Gid>) -> Result<bool> {
-    use openat::SimpleType;
-
+fn dir_contains_uid_gid(dir: &Dir, uid: &Option<Uid>, gid: &Option<Gid>) -> Result<bool> {
     // First check the directory itself.
-    let self_metadata = dir.self_metadata()?;
+    let self_metadata = dir.dir_metadata()?;
     if compare_uid_gid(self_metadata, uid, gid) {
         return Ok(true);
     }
 
     // Then recursively check all entries and subdirectories.
-    for dir_entry in dir.list_self()? {
+    for dir_entry in dir.entries()? {
         let dir_entry = dir_entry?;
-        let dtype = match dir_entry.simple_type() {
-            Some(t) => t,
-            None => continue,
-        };
+        let dtype = dir_entry.file_type()?;
 
-        let found_match = if dtype == SimpleType::Dir {
-            let subdir = dir.sub_dir(dir_entry.file_name())?;
+        let found_match = if dtype.is_dir() {
+            let subdir = dir.open_dir(dir_entry.file_name())?;
             dir_contains_uid_gid(&subdir, uid, gid)?
         } else {
             let metadata = dir.metadata(dir_entry.file_name())?;
@@ -237,15 +246,15 @@ fn dir_contains_uid_gid(dir: &openat::Dir, uid: &Option<Uid>, gid: &Option<Gid>)
 }
 
 /// Helper for checking UID/GID stat fields.
-fn compare_uid_gid(metadata: openat::Metadata, uid: &Option<Uid>, gid: &Option<Gid>) -> bool {
+fn compare_uid_gid(metadata: cap_std::fs::Metadata, uid: &Option<Uid>, gid: &Option<Gid>) -> bool {
     let mut found = false;
     if let Some(raw_uid) = uid.map(|u| u.as_raw()) {
-        if metadata.stat().st_uid == raw_uid {
+        if metadata.uid() == raw_uid {
             found |= true;
         };
     }
     if let Some(raw_gid) = gid.map(|u| u.as_raw()) {
-        if metadata.stat().st_gid == raw_gid {
+        if metadata.gid() == raw_gid {
             found |= true;
         };
     }
@@ -253,7 +262,7 @@ fn compare_uid_gid(metadata: openat::Metadata, uid: &Option<Uid>, gid: &Option<G
 }
 
 pub fn passwd_compose_prep(rootfs_dfd: i32, treefile: &mut Treefile) -> CxxResult<()> {
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     passwd_compose_prep_impl(&rootfs, treefile, None, true)?;
     Ok(())
 }
@@ -271,7 +280,7 @@ pub fn passwd_compose_prep_repo(
     previous_checksum: &str,
     unified_core: bool,
 ) -> Result<()> {
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     let repo = ffi_repo.gobj_wrap();
     // C side uses "" for None
     let repo_previous_rev = if previous_checksum.is_empty() {
@@ -283,7 +292,7 @@ pub fn passwd_compose_prep_repo(
 }
 
 fn passwd_compose_prep_impl(
-    rootfs: &openat::Dir,
+    rootfs: &Dir,
     treefile: &mut Treefile,
     repo_previous_rev: Option<(&ostree::Repo, &str)>,
     unified_core: bool,
@@ -300,7 +309,10 @@ fn passwd_compose_prep_impl(
     // the right permissions from the filesystem RPM.  Doing this right
     // is really hard because filesystem depends on setup which installs
     // the files...
-    rootfs.ensure_dir_all(dest, 0o0755)?;
+    let mut db = cap_std::fs::DirBuilder::new();
+    db.recursive(true);
+    db.mode(0o755);
+    rootfs.create_dir_with(dest, &mut db)?;
 
     // TODO(lucab): consider reworking these to avoid boolean results.
     let found_passwd_data = data_from_json(rootfs, treefile, dest, "passwd")?;
@@ -329,7 +341,7 @@ fn passwd_compose_prep_impl(
 }
 
 fn data_from_json(
-    rootfs: &openat::Dir,
+    rootfs: &Dir,
     treefile: &mut Treefile,
     dest_path: &str,
     target: &str,
@@ -363,28 +375,23 @@ fn data_from_json(
 
     let mut seen_names = HashSet::new();
     rootfs
-        .write_file_with_sync(
-            &target_etc_filename,
-            DEFAULT_MODE,
-            |dest_bufwr| -> Result<()> {
-                let mut buf_rd = BufReader::new(&mut src_file);
-                append_unique_entries(&mut buf_rd, &mut seen_names, dest_bufwr).with_context(
-                    || format!("failed to process '{}' content from JSON", &target),
-                )?;
-                Ok(())
-            },
-        )
+        .atomic_replace_with(&target_etc_filename, |dest_bufwr| -> Result<()> {
+            dest_bufwr
+                .get_mut()
+                .as_file_mut()
+                .set_permissions(DEFAULT_PERMS.clone())?;
+            let mut buf_rd = BufReader::new(&mut src_file);
+            append_unique_entries(&mut buf_rd, &mut seen_names, dest_bufwr)
+                .with_context(|| format!("failed to process '{}' content from JSON", &target))?;
+            Ok(())
+        })
         .with_context(|| format!("failed to write /{}", &target_etc_filename))?;
 
     Ok(true)
 }
 
 /// Merge and deduplicate entries from /usr/etc and /usr/lib.
-fn concat_fs_content(
-    rootfs: &openat::Dir,
-    repo: &ostree::Repo,
-    previous_checksum: &str,
-) -> Result<()> {
+fn concat_fs_content(rootfs: &Dir, repo: &ostree::Repo, previous_checksum: &str) -> Result<()> {
     anyhow::ensure!(!previous_checksum.is_empty(), "missing previous reference");
 
     let (prev_root, _name) = repo.read_commit(previous_checksum, gio::NONE_CANCELLABLE)?;
@@ -396,7 +403,7 @@ fn concat_fs_content(
     Ok(())
 }
 
-fn concat_files(rootfs: &openat::Dir, prev_root: &gio::File, target: &str) -> Result<()> {
+fn concat_files(rootfs: &Dir, prev_root: &gio::File, target: &str) -> Result<()> {
     let append_unique_fn = match target {
         "passwd" => passwd_append_unique,
         "group" => group_append_unique,
@@ -422,7 +429,11 @@ fn concat_files(rootfs: &openat::Dir, prev_root: &gio::File, target: &str) -> Re
 
     let etc_target = format!("etc/{}", target);
     rootfs
-        .write_file_with_sync(&etc_target, DEFAULT_MODE, |dest_bufwr| -> Result<()> {
+        .atomic_replace_with(&etc_target, |dest_bufwr| -> Result<()> {
+            dest_bufwr
+                .get_mut()
+                .as_file_mut()
+                .set_permissions(DEFAULT_PERMS.clone())?;
             let mut seen_names = HashSet::new();
             if orig_usretc_content.query_exists(gio::NONE_CANCELLABLE) {
                 let src_stream = orig_usretc_content.read(gio::NONE_CANCELLABLE)?.into_read();
@@ -446,7 +457,7 @@ fn concat_files(rootfs: &openat::Dir, prev_root: &gio::File, target: &str) -> Re
 fn passwd_append_unique(
     src_bufrd: &mut impl BufRead,
     seen: &mut HashSet<String>,
-    dest: &mut BufWriter<File>,
+    dest: &mut BufWriter<cap_tempfile::TempFile>,
 ) -> Result<()> {
     let entries = nameservice::passwd::parse_passwd_content(src_bufrd)?;
     for passwd in entries {
@@ -462,7 +473,7 @@ fn passwd_append_unique(
 fn group_append_unique(
     src_bufrd: &mut impl BufRead,
     seen: &mut HashSet<String>,
-    dest: &mut BufWriter<File>,
+    dest: &mut BufWriter<cap_tempfile::TempFile>,
 ) -> Result<()> {
     let entries = nameservice::group::parse_group_content(src_bufrd)?;
     for group in entries {
@@ -475,33 +486,32 @@ fn group_append_unique(
     Ok(())
 }
 
-fn has_usrlib_passwd(rootfs: &openat::Dir) -> Result<bool> {
+fn has_usrlib_passwd(rootfs: &Dir) -> Result<bool> {
     // Does this rootfs have a usr/lib/passwd? We might be doing a
     // container or something else.
-    Ok(rootfs.exists("usr/lib/passwd")?)
+    rootfs.try_exists("usr/lib/passwd").map_err(Into::into)
 }
 
-fn prepare_pwgrp(rootfs: &openat::Dir, merge_passwd_dir: Option<PathBuf>) -> Result<()> {
+fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<PathBuf>) -> Result<()> {
     for filename in USRLIB_PWGRP_FILES {
         let etc_file = format!("etc/{}", filename);
         let etc_backup = format!("{}.rpmostreesave", etc_file);
         let usrlib_file = format!("usr/lib/{}", filename);
-        let usrlib_file_tmp = format!("{}.tmp", &usrlib_file);
 
         // Retain the current copies in /etc as backups.
-        rootfs.local_rename(&etc_file, &etc_backup)?;
+        rootfs.rename(&etc_file, rootfs, &etc_backup)?;
 
         // Copy /usr/lib/{passwd,group} -> /etc (breaking hardlinks).
-        rootfs.copy_file(&usrlib_file, &etc_file)?;
+        {
+            let mut src = std::io::BufReader::new(rootfs.open(&usrlib_file)?);
+            rootfs.atomic_replace_with(etc_file, |w| std::io::copy(&mut src, w))?;
+        }
 
-        // Copy the merge's passwd/group to usr/lib (breaking hardlinks).
+        // Copy the merge's passwd/group to usr/lireaking hardlinks).
         if let Some(ref merge_dir) = merge_passwd_dir {
-            {
-                let current_root = openat::Dir::open("/")?;
-                let merge_file = format!("{}/{}", merge_dir.display(), &filename);
-                current_root.copy_file_at(&merge_file, rootfs, &usrlib_file_tmp)?;
-            }
-            rootfs.local_rename(&usrlib_file_tmp, &usrlib_file)?;
+            let current_root = Dir::open_ambient_dir(merge_dir, cap_std::ambient_authority())?;
+            let mut src = current_root.open(filename).map(BufReader::new)?;
+            rootfs.atomic_replace_with(usrlib_file, |mut w| std::io::copy(&mut src, &mut w))?;
         }
     }
 
@@ -538,7 +548,7 @@ pub fn check_passwd_group_entries(
     treefile: &mut Treefile,
     previous_rev: &str,
 ) -> CxxResult<()> {
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     let repo = ffi_repo.gobj_wrap();
 
     let mut repo_previous_rev = None;
@@ -586,15 +596,15 @@ pub struct PasswdDB {
 
 /// Populate a new DB with content from `passwd` and `group` files.
 pub fn passwddb_open(rootfs: i32) -> CxxResult<Box<PasswdDB>> {
-    let fd = ffiutil::ffi_view_openat_dir(rootfs);
-    let db = PasswdDB::populate_new(&fd)?;
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs)? };
+    let db = PasswdDB::populate_new(&rootfs)?;
     Ok(Box::new(db))
 }
 
 impl PasswdDB {
     /// Populate a new DB with content from `passwd` and `group` files.
     #[context("Populating users and groups DB")]
-    pub(crate) fn populate_new(rootfs: &openat::Dir) -> Result<Self> {
+    pub(crate) fn populate_new(rootfs: &Dir) -> Result<Self> {
         let mut db = Self::default();
         db.add_passwd_content(rootfs.as_raw_fd(), "usr/etc/passwd")?;
         db.add_passwd_content(rootfs.as_raw_fd(), "usr/lib/passwd")?;
@@ -628,8 +638,8 @@ impl PasswdDB {
     /// Add content from a `group` file.
     #[context("Parsing groups from /{}", group_path)]
     fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> Result<()> {
-        let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-        let db = rootfs.open_file(group_path)?;
+        let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
+        let db = rootfs.open(group_path)?;
         let entries = nameservice::group::parse_group_content(BufReader::new(db))?;
 
         for group in entries {
