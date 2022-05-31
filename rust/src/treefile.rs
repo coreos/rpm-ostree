@@ -2464,6 +2464,18 @@ impl From<RemoteOverrideReplace> for crate::ffi::OverrideReplacement {
     }
 }
 
+impl From<crate::ffi::OverrideReplacement> for RemoteOverrideReplace {
+    fn from(o: crate::ffi::OverrideReplacement) -> RemoteOverrideReplace {
+        let packages = o.packages.into_iter().collect();
+        let from = match o.from_kind {
+            crate::ffi::OverrideReplacementType::Repo => RemoteOverrideReplaceFrom::Repo(o.from),
+            // there are no other kinds the C++ side could create, but Rust doesn't know that
+            _ => unreachable!(),
+        };
+        RemoteOverrideReplace { from, packages }
+    }
+}
+
 /// These fields are only useful when deriving from a prior ostree commit;
 /// at the moment we only use them when translating an origin file
 /// to a treefile for client side assembly.
