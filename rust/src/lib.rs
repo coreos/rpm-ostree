@@ -276,7 +276,7 @@ pub mod ffi {
     }
 
     #[derive(Debug)]
-    struct PackageOverrideSource {
+    struct OverrideReplacementSource {
         kind: OverrideReplacementType,
         name: String,
     }
@@ -321,7 +321,7 @@ pub mod ffi {
             mut repo: Pin<&mut OstreeRepo>,
             mut deployment: Pin<&mut OstreeDeployment>,
         ) -> Result<DeploymentLayeredMeta>;
-        fn parse_override_source(source: &str) -> Result<PackageOverrideSource>;
+        fn parse_override_source(source: &str) -> Result<OverrideReplacementSource>;
         fn parse_revision(source: &str) -> Result<ParsedRevision>;
         fn generate_object_path(base: &str, next_segment: &str) -> Result<String>;
     }

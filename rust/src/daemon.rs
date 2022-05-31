@@ -6,7 +6,7 @@
 
 use crate::cxxrsutil::*;
 use crate::ffi::{
-    PackageOverrideSource, OverrideReplacementType, ParsedRevision, ParsedRevisionKind,
+    OverrideReplacementSource, OverrideReplacementType, ParsedRevision, ParsedRevisionKind,
 };
 use anyhow::{anyhow, format_err, Result};
 use cap_std::fs::Dir;
@@ -360,7 +360,7 @@ fn get_cached_signatures_variant(
 
 /// Parse kind and name for a source of package overrides.
 #[context("Parsing override source '{}'", source)]
-pub fn parse_override_source(source: &str) -> CxxResult<PackageOverrideSource> {
+pub fn parse_override_source(source: &str) -> CxxResult<OverrideReplacementSource> {
     let (kind_label, name) = source
         .split_once('=')
         .ok_or_else(|| format_err!("Not in KIND=NAME format"))?;
@@ -374,7 +374,7 @@ pub fn parse_override_source(source: &str) -> CxxResult<PackageOverrideSource> {
         return Err(anyhow!("Empty name").into());
     }
 
-    Ok(PackageOverrideSource {
+    Ok(OverrideReplacementSource {
         kind,
         name: name.to_string(),
     })
