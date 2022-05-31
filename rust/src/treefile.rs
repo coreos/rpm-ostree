@@ -1093,6 +1093,30 @@ impl Treefile {
             .collect()
     }
 
+    pub(crate) fn add_packages_override_replace(
+        &mut self,
+        replacement: crate::ffi::OverrideReplacement,
+    ) -> bool {
+        let map = self
+            .parsed
+            .derive
+            .override_replace
+            .ext_get_or_insert_default();
+        let old_map = map.clone(); // XXX: yuck; hash instead?
+        map.push(replacement.into());
+        self.parsed.handle_repo_packages_override_replacements();
+        Some(old_map) != self.parsed.derive.override_replace
+    }
+
+    pub(crate) fn remove_package_override_replace(&mut self, package: &str) -> bool {
+        self.parsed
+            .derive
+            .override_replace
+            .as_mut()
+            .map(|v| v.iter_mut().any(|ovr| ovr.packages.remove(package)))
+            .unwrap_or_default()
+    }
+
     pub(crate) fn add_packages_override_remove(&mut self, packages: Vec<String>) -> Result<()> {
         for pkg in packages {
             // unfortunately this API wasn't designed to be idempotent by default
@@ -3726,6 +3750,11 @@ conditional-include:
                 - /usr/lib/foo
             unconfigured-state: First register your instance with corpy-tool
             cliwrap: true
+            ex-override-replace:
+              - from:
+                  repo: mycopr
+                packages:
+                  - strace
         "};
         let mut treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
@@ -3771,6 +3800,30 @@ conditional-include:
         assert!(!treefile.remove_package_override_replace_local("foo-1.0-1.x86_64"));
         assert!(!treefile.remove_package_override_replace_local("enoent"));
         assert!(treefile.get_packages_override_replace_local().is_empty());
+        assert_eq!(
+            treefile.get_packages_override_replace(),
+            vec![crate::ffi::OverrideReplacement {
+                from: "mycopr".into(),
+                from_kind: crate::ffi::OverrideReplacementType::Repo,
+                packages: vec!["strace".into()],
+            }]
+        );
+        assert!(
+            treefile.add_packages_override_replace(crate::ffi::OverrideReplacement {
+                from: "myothercopr".into(),
+                from_kind: crate::ffi::OverrideReplacementType::Repo,
+                packages: vec!["strace".into()],
+            })
+        );
+        assert!(
+            !treefile.add_packages_override_replace(crate::ffi::OverrideReplacement {
+                from: "myothercopr".into(),
+                from_kind: crate::ffi::OverrideReplacementType::Repo,
+                packages: vec!["strace".into()],
+            })
+        );
+        assert!(treefile.remove_package_override_replace("strace"));
+        assert!(!treefile.remove_package_override_replace("strace"));
         assert!(treefile.get_packages().is_empty());
         assert!(treefile.get_local_packages().is_empty());
         assert!(treefile.get_local_fileoverride_packages().is_empty());
