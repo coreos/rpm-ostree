@@ -445,6 +445,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     merge_hashset_field(&mut dest.bootstrap_packages, &mut src.bootstrap_packages);
     merge_hashset_field(&mut dest.packages, &mut src.packages);
     merge_vec_field(&mut dest.repo_packages, &mut src.repo_packages);
+    dest.handle_repo_packages_overrides();
     merge_basic_field(&mut dest.cliwrap, &mut src.cliwrap);
     merge_modules(&mut dest.modules, &mut src.modules);
 
@@ -590,7 +591,6 @@ fn treefile_parse_and_process<P: AsRef<Path>>(
     let mut parsed =
         treefile_parse_recurse(filename, basearch, 0, &mut seen_includes, &mut variables)?;
     event!(Level::DEBUG, "parsed successfully");
-    parsed.config.handle_repo_packages_overrides();
     if !variables.is_empty() {
         parsed.config.base.variables = Some(variables);
     }
