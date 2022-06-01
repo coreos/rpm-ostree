@@ -75,7 +75,7 @@ pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResul
 }
 
 pub fn complete_rpm_layering(rootfs_dfd: i32) -> CxxResult<()> {
-    let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     complete_pwgrp(&rootfs)?;
 
     // /etc/shadow ends up with a timestamp in it thanks to the `lstchg`
@@ -518,16 +518,16 @@ fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<PathBuf>) -> Result<()> 
     Ok(())
 }
 
-fn complete_pwgrp(rootfs: &openat::Dir) -> Result<()> {
+fn complete_pwgrp(rootfs: &Dir) -> Result<()> {
     for filename in USRLIB_PWGRP_FILES {
         // And now the inverse: /etc/passwd -> /usr/lib/passwd
         let etc_file = format!("etc/{}", filename);
         let usrlib_file = format!("usr/lib/{}", filename);
-        rootfs.local_rename(&etc_file, &usrlib_file)?;
+        rootfs.rename(&etc_file, rootfs, &usrlib_file)?;
 
         // /etc/passwd.rpmostreesave -> /etc/passwd */
         let etc_backup = format!("{}.rpmostreesave", etc_file);
-        rootfs.local_rename(&etc_backup, &etc_file)?;
+        rootfs.rename(&etc_backup, rootfs, &etc_file)?;
     }
 
     // However, we leave the (potentially modified) shadow files in place.
