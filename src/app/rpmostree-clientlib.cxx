@@ -135,7 +135,7 @@ app_load_sysroot_impl (const char *sysroot, GCancellable *cancellable, GDBusConn
 
       /* Something else went wrong */
       g_propagate_error (error, util::move_nullify (local_error));
-      return FALSE;
+      return glnx_prefix_error (error, "Failed to invoke RegisterClient");
     }
 
   *out_conn = util::move_nullify (connection);
