@@ -666,6 +666,33 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
       if (!self->build_repo)
         return glnx_prefix_error (error, "Creating repo-build");
 
+      OstreeRepo *cache_repos[2] = { self->pkgcache_repo, self->build_repo };
+
+      GKeyFile *src_config = ostree_repo_get_config (self->repo);
+      // g_key_file_get_boolean has broken GError API
+      g_autoptr (GError) temp_error = NULL;
+      gboolean src_fsync = g_key_file_get_boolean (src_config, "core", "fsync", &temp_error);
+      if (!temp_error && !src_fsync)
+        {
+          gboolean did_disable = FALSE;
+          for (guint i = 0; i < G_N_ELEMENTS (cache_repos); i++)
+            {
+              OstreeRepo *cacherepo = cache_repos[i];
+              g_autoptr (GKeyFile) cache_config = ostree_repo_copy_config (cacherepo);
+              gboolean fsync = g_key_file_get_boolean (cache_config, "core", "fsync", &temp_error);
+              if (temp_error || fsync)
+                {
+                  did_disable = TRUE;
+                  g_key_file_set_boolean (cache_config, "core", "fsync", FALSE);
+                  if (!ostree_repo_write_config (cacherepo, cache_config, error))
+                    return FALSE;
+                }
+              g_clear_error (&temp_error);
+            }
+          if (did_disable)
+            g_print ("Disabled fsync on cache repositories\n");
+        }
+
       /* Note special handling of this aliasing in rpm_ostree_tree_compose_context_free() */
       self->workdir_dfd = self->workdir_tmp.fd;
     }
