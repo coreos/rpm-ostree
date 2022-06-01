@@ -8,6 +8,9 @@
 use crate::bwrap::Bubblewrap;
 use crate::nameservice::shadow::parse_shadow_content;
 use anyhow::{anyhow, Result};
+use cap_std::fs::{Dir, OpenOptions};
+use cap_std_ext::cap_std;
+use cap_std_ext::rustix::fs::OpenOptionsExt;
 use fn_error_context::context;
 use ostree_ext::gio;
 use std::convert::TryInto;
@@ -27,9 +30,11 @@ pub(crate) fn source_date_epoch_raw() -> Option<String> {
 }
 
 #[context("Rewriting /etc/shadow to remove lstchg field")]
-pub(crate) fn normalize_etc_shadow(rootfs: &openat::Dir) -> Result<()> {
+pub(crate) fn normalize_etc_shadow(rootfs: &Dir) -> Result<()> {
     // Read in existing entries.
-    let mut shadow = rootfs.update_file("usr/etc/shadow", 0o400)?;
+    let mut openopts = OpenOptions::new();
+    openopts.create(true).read(true).write(true).mode(0o400);
+    let mut shadow = rootfs.open_with("usr/etc/shadow", &openopts)?;
     let entries = parse_shadow_content(BufReader::new(&mut shadow))?;
 
     // Go back to the start and truncate the file.
