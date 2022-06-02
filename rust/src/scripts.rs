@@ -18,9 +18,11 @@ use phf::phf_set;
 static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     "glibc.prein",
     // We take over depmod/dracut etc.  It's `kernel` in C7 and kernel-core in F25+
+    // XXX: we should probably change this to instead ignore based on the kernel virtual Provides
     "kernel.posttrans",
     "kernel-core.posttrans",
     "kernel-debug-core.posttrans",
+    "kernel-automotive-core.posttrans",
     // Additionally ignore posttrans scripts for the Oracle Linux `kernel-uek` package
     "kernel-uek.posttrans",
     // Legacy workaround
