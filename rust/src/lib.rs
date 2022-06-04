@@ -217,6 +217,8 @@ pub mod ffi {
 
         fn commit_has_matching_sepolicy(commit: &GVariant, policy: &OstreeSePolicy)
             -> Result<bool>;
+
+        fn get_header_variant(repo: &OstreeRepo, cachebranch: &str) -> Result<*mut GVariant>;
     }
 
     // composepost.rs

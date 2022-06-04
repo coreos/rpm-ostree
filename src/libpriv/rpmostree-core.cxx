@@ -863,47 +863,17 @@ checkout_pkg_metadata (RpmOstreeContext *self, const char *nevra, GVariant *head
 }
 
 static gboolean
-get_header_variant (OstreeRepo *repo, const char *cachebranch, GVariant **out_header,
-                    GCancellable *cancellable, GError **error)
-{
-  g_autofree char *cached_rev = NULL;
-
-  if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE, &cached_rev, error))
-    return FALSE;
-
-  g_autoptr (GVariant) pkg_commit = NULL;
-  if (!ostree_repo_load_commit (repo, cached_rev, &pkg_commit, NULL, error))
-    return FALSE;
-
-  g_autoptr (GVariant) pkg_meta = g_variant_get_child_value (pkg_commit, 0);
-  g_autoptr (GVariantDict) pkg_meta_dict = g_variant_dict_new (pkg_meta);
-
-  g_autoptr (GVariant) header = _rpmostree_vardict_lookup_value_required (
-      pkg_meta_dict, "rpmostree.metadata", (GVariantType *)"ay", error);
-  if (!header)
-    {
-      auto nevra = std::string (rpmostreecxx::cache_branch_to_nevra (cachebranch));
-      g_prefix_error (error, "In commit %s of %s: ", cached_rev, nevra.c_str ());
-      return FALSE;
-    }
-
-  *out_header = util::move_nullify (header);
-  return TRUE;
-}
-
-static gboolean
 checkout_pkg_metadata_by_dnfpkg (RpmOstreeContext *self, DnfPackage *pkg, GCancellable *cancellable,
                                  GError **error)
 {
   const char *nevra = dnf_package_get_nevra (pkg);
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+  auto cachebranch_rs = rust::Str (cachebranch);
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
-  g_autoptr (GVariant) header = NULL;
+  CXX_TRY_VAR (header, rpmostreecxx::get_header_variant (*pkgcache_repo, cachebranch_rs), error);
+  g_autoptr (GVariant) header_v = header;
 
-  if (!get_header_variant (pkgcache_repo, cachebranch, &header, cancellable, error))
-    return FALSE;
-
-  return checkout_pkg_metadata (self, nevra, header, cancellable, error);
+  return checkout_pkg_metadata (self, nevra, header_v, cancellable, error);
 }
 
 gboolean
@@ -933,7 +903,9 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo *pkgcache, const char *nevra,
                            expected_sha256, actual_sha256);
     }
 
-  return get_header_variant (pkgcache, cachebranch.c_str (), out_header, cancellable, error);
+  CXX_TRY_VAR (header, rpmostreecxx::get_header_variant (*pkgcache, cachebranch), error);
+  *out_header = header;
+  return TRUE;
 }
 
 static gboolean
@@ -1615,9 +1587,10 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self, GHashTable *already_added,
       if (g_hash_table_contains (already_added, nevra.c_str ()))
         continue;
 
-      g_autoptr (GVariant) header = NULL;
-      if (!get_header_variant (pkgcache_repo, ref, &header, cancellable, error))
-        return FALSE;
+      auto cachebranch_rs = rust::Str (ref);
+      CXX_TRY_VAR (header_raw, rpmostreecxx::get_header_variant (*pkgcache_repo, cachebranch_rs),
+                   error);
+      g_autoptr (GVariant) header = header_raw;
 
       if (!checkout_pkg_metadata (self, nevra.c_str (), header, cancellable, error))
         return FALSE;
