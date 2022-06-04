@@ -44,6 +44,7 @@
 #include "rpmostree-scripts.h"
 
 #include "libdnf/nevra.hpp"
+#include "rpmostree-util.h"
 
 #define RPMOSTREE_MESSAGE_COMMIT_STATS                                                             \
   SD_ID128_MAKE (e6, 37, 2e, 38, 41, 21, 42, a9, bc, 13, b6, 32, b3, f8, 93, 44)
@@ -814,12 +815,6 @@ get_commit_metadata_string (GVariant *commit, const char *key, char **out_str, G
 }
 
 static gboolean
-get_commit_sepolicy_csum (GVariant *commit, char **out_csum, GError **error)
-{
-  return get_commit_metadata_string (commit, "rpmostree.sepolicy", out_csum, error);
-}
-
-static gboolean
 get_commit_header_sha256 (GVariant *commit, char **out_csum, GError **error)
 {
   return get_commit_metadata_string (commit, "rpmostree.metadata_sha256", out_csum, error);
@@ -1137,23 +1132,6 @@ journal_rpmmd_info (RpmOstreeContext *self)
 }
 
 static gboolean
-commit_has_matching_sepolicy (GVariant *commit, OstreeSePolicy *sepolicy, gboolean *out_matches,
-                              GError **error)
-{
-  const char *sepolicy_csum_wanted = ostree_sepolicy_get_csum (sepolicy);
-  if (!sepolicy_csum_wanted)
-    return glnx_throw (error, "SELinux enabled, but no policy found");
-
-  g_autofree char *sepolicy_csum = NULL;
-  if (!get_commit_sepolicy_csum (commit, &sepolicy_csum, error))
-    return FALSE;
-
-  *out_matches = g_str_equal (sepolicy_csum, sepolicy_csum_wanted);
-
-  return TRUE;
-}
-
-static gboolean
 get_pkgcache_repodata_chksum_repr (GVariant *commit, char **out_chksum_repr, gboolean allow_noent,
                                    GError **error)
 {
@@ -1292,8 +1270,9 @@ find_pkg_in_ostree (RpmOstreeContext *self, DnfPackage *pkg, OstreeSePolicy *sep
   *out_in_ostree = TRUE;
   if (sepolicy)
     {
-      if (!commit_has_matching_sepolicy (commit, sepolicy, out_selinux_match, error))
-        return FALSE;
+      CXX_TRY_VAR (selinux_match, rpmostreecxx::commit_has_matching_sepolicy (*commit, *sepolicy),
+                   error);
+      *out_selinux_match = !!selinux_match;
     }
 
   return TRUE;
@@ -3652,9 +3631,9 @@ add_install (RpmOstreeContext *self, DnfPackage *pkg, rpmts ts, gboolean is_upgr
   gboolean sepolicy_matches = FALSE;
   if (self->sepolicy)
     {
-      if (!commit_has_matching_sepolicy (commit, self->sepolicy, &sepolicy_matches, error))
-        return FALSE;
-
+      CXX_TRY_VAR (selinux_match,
+                   rpmostreecxx::commit_has_matching_sepolicy (*commit, *self->sepolicy), error);
+      sepolicy_matches = !!selinux_match;
       /* We already did any relabeling/reimporting above */
       g_assert (sepolicy_matches);
     }

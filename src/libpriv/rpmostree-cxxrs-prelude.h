@@ -30,6 +30,7 @@ typedef ::OstreeDeployment OstreeDeployment;
 typedef ::OstreeRepo OstreeRepo;
 typedef ::OstreeRepoTransactionStats OstreeRepoTransactionStats;
 typedef ::OstreeSysroot OstreeSysroot;
+typedef ::OstreeSePolicy OstreeSePolicy;
 typedef ::GObject GObject;
 typedef ::GCancellable GCancellable;
 typedef ::GDBusConnection GDBusConnection;

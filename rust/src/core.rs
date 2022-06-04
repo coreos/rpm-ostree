@@ -3,7 +3,7 @@
 //! and server side composes.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::cxxrsutil::CxxResult;
+use crate::cxxrsutil::*;
 use crate::ffiutil;
 use anyhow::{anyhow, Result};
 use camino::Utf8Path;
@@ -15,6 +15,7 @@ use ffiutil::*;
 use fn_error_context::context;
 use libdnf_sys::*;
 use ostree_ext::container::OstreeImageReference;
+use ostree_ext::glib;
 use ostree_ext::ostree;
 use std::convert::TryFrom;
 use std::fs::File;
@@ -227,6 +228,29 @@ pub(crate) fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> CxxResult<()> {
     let d = unsafe { &ffi_dirfd(rootfs)? };
     let moddir = d.open_dir(moddir)?;
     verify_kernel_hmac_impl(&moddir).map_err(Into::into)
+}
+
+/// Check if the commit has a serialized selinux policy sha256 that matches
+/// the target policy's sha256.
+pub(crate) fn commit_has_matching_sepolicy(
+    commit: &crate::FFIGVariant,
+    policy: &crate::FFIOstreeSePolicy,
+) -> CxxResult<bool> {
+    let commit = commit.glib_reborrow();
+    let policy = policy.glib_reborrow();
+
+    let sepolicy_csum = policy
+        .csum()
+        .ok_or_else(|| anyhow!("SELinux enabled, but no policy found"))?;
+
+    let commitmeta = commit.child_value(0);
+    let commitmeta = &glib::VariantDict::new(Some(&commitmeta));
+    let key = "rpmostree.sepolicy";
+    let v = commitmeta
+        .lookup::<String>(key)
+        .map_err(anyhow::Error::msg)?
+        .ok_or_else(|| anyhow!("Missing metadata key {}", key))?;
+    Ok(sepolicy_csum.as_str() == v.as_str())
 }
 
 pub(crate) fn stage_container_rpms(rpms: Vec<String>) -> CxxResult<Vec<String>> {
