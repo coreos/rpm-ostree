@@ -30,6 +30,10 @@ pub trait FFIGObjectWrapper {
     /// objects passed via cxx-rs to synthesize the expected glib-rs
     /// wrapper type.
     fn gobj_wrap(&mut self) -> Self::Wrapper;
+
+    /// Convert a borrowed cxx-rs type back into a borrowed version
+    /// of the glib-rs type.
+    fn glib_reborrow(&self) -> glib::translate::Borrowed<Self::Wrapper>;
 }
 
 pub trait FFIGObjectReWrap<'a> {
@@ -39,6 +43,9 @@ pub trait FFIGObjectReWrap<'a> {
     /// to our FFI newtype.  This is necessary to call
     /// cxx-rs wrapped functions from Rust.
     fn gobj_rewrap(&'a self) -> Pin<&'a mut Self::ReWrapped>;
+
+    /// Convert a glib-rs wrapper object borrowed cxx-rs type.
+    fn reborrow_cxx(&'a self) -> &Self::ReWrapped;
 }
 
 /// Implement FFIGObjectWrapper given a pair of wrapper type
@@ -49,6 +56,10 @@ macro_rules! impl_wrap {
             type Wrapper = $bound;
             fn gobj_wrap(&mut self) -> Self::Wrapper {
                 unsafe { glib::translate::from_glib_none(&mut self.0 as *mut _) }
+            }
+
+            fn glib_reborrow(&self) -> glib::translate::Borrowed<Self::Wrapper> {
+                unsafe { glib::translate::from_glib_borrow(&self.0 as *const _) }
             }
         }
         impl<'a> FFIGObjectReWrap<'a> for $bound {
@@ -69,6 +80,11 @@ macro_rules! impl_wrap {
                 // we ensure that the lifetime of our return value is tied to
                 // that of the glib-rs wrapper (which holds a GObject strong reference),
                 // which ensures the value isn't freed.
+                unsafe { std::mem::transmute(p) }
+            }
+
+            fn reborrow_cxx(&'a self) -> &Self::ReWrapped {
+                let p: *const $sys = self.to_glib_none().0;
                 unsafe { std::mem::transmute(p) }
             }
         }

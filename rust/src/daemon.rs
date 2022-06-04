@@ -153,7 +153,7 @@ pub(crate) fn deployment_populate_variant(
     dict.insert("booted", &booted);
 
     let live_state =
-        crate::live::get_live_apply_state(sysroot.gobj_rewrap(), deployment.gobj_rewrap())?;
+        crate::live::get_live_apply_state(sysroot.reborrow_cxx(), deployment.reborrow_cxx())?;
     if !live_state.inprogress.is_empty() {
         dict.insert("live-inprogress", &live_state.inprogress.as_str());
     }
