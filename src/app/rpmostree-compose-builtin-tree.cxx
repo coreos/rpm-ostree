@@ -1147,8 +1147,11 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
       = rpmostree_composeutil_finalize_detached_metadata (self->detached_metadata);
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, self->unified_core_and_fuse,
-                                    cancellable, error))
+  std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile_ref;
+  if (self->treefile_rs)
+    treefile_ref = (**self->treefile_rs);
+  if (!rpmostreecxx::postprocess_final (self->rootfs_dfd, treefile_ref, self->unified_core_and_fuse,
+                                        cancellable, error))
     return FALSE;
 
   if (self->treefile_rs)
@@ -1350,8 +1353,8 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
    * to avoid at least some of the use cases requiring a treefile.
    */
   const char *treefile_path = argc > 2 ? argv[2] : NULL;
-  glnx_unref_object JsonParser *treefile_parser = NULL;
-  JsonObject *treefile = NULL; /* Owned by parser */
+  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile_rs;
+  std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile_ref;
   g_auto (GLnxTmpDir) workdir_tmp = {
     0,
   };
@@ -1360,16 +1363,9 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
     {
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
         return FALSE;
-      CXX_TRY_VAR (treefile_rs, rpmostreecxx::treefile_new_compose (treefile_path, ""), error);
-      auto serialized = treefile_rs->get_json_string ();
-      treefile_parser = json_parser_new ();
-      if (!json_parser_load_from_data (treefile_parser, serialized.c_str (), -1, error))
-        return FALSE;
-
-      JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
-      if (!JSON_NODE_HOLDS_OBJECT (treefile_rootval))
-        return glnx_throw (error, "Treefile root is not an object");
-      treefile = json_node_get_object (treefile_rootval);
+      CXX_TRY_VAR (treefile_rs_v, rpmostreecxx::treefile_new_compose (treefile_path, ""), error);
+      treefile_rs = std::move (treefile_rs_v);
+      treefile_ref = **treefile_rs;
     }
 
   glnx_fd_close int rootfs_dfd = -1;
@@ -1377,7 +1373,8 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_unified_core, cancellable, error))
+  if (!rpmostreecxx::postprocess_final (rootfs_dfd, treefile_ref, opt_unified_core, cancellable,
+                                        error))
     return FALSE;
   return TRUE;
 }

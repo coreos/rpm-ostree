@@ -533,6 +533,10 @@ pub mod ffi {
         fn get_documentation(&self) -> bool;
         fn get_recommends(&self) -> bool;
         fn get_selinux(&self) -> bool;
+        fn get_container(&self) -> bool;
+        fn get_machineid_compat(&self) -> bool;
+        fn get_etc_group_members(&self) -> Vec<String>;
+        fn get_boot_location_is_modules(&self) -> bool;
         fn get_ima(&self) -> bool;
         fn get_releasever(&self) -> String;
         fn get_repo_metadata_target(&self) -> RepoMetadataTarget;

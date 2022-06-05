@@ -1275,6 +1275,29 @@ impl Treefile {
         self.parsed.base.selinux.unwrap_or(true)
     }
 
+    pub(crate) fn get_container(&self) -> bool {
+        self.parsed.base.container.unwrap_or(false)
+    }
+
+    pub(crate) fn get_machineid_compat(&self) -> bool {
+        self.parsed.base.machineid_compat.unwrap_or(true)
+    }
+
+    pub(crate) fn get_boot_location_is_modules(&self) -> bool {
+        match self.parsed.base.boot_location.unwrap_or_default() {
+            BootLocation::New => false,
+            BootLocation::Modules => true,
+        }
+    }
+
+    pub(crate) fn get_etc_group_members(&self) -> Vec<String> {
+        self.parsed
+            .base
+            .etc_group_members
+            .clone()
+            .unwrap_or_default()
+    }
+
     pub(crate) fn get_ima(&self) -> bool {
         self.parsed.base.ima.unwrap_or(false)
     }
@@ -1462,7 +1485,7 @@ impl Treefile {
         }
 
         let parsed = &self.parsed;
-        let machineid_compat = parsed.base.machineid_compat.unwrap_or(true);
+        let machineid_compat = self.get_machineid_compat();
         let n_units = parsed
             .base
             .units
