@@ -1674,12 +1674,17 @@ impl Treefile {
     }
 
     pub(crate) fn get_initramfs_args(&self) -> Vec<String> {
-        self.parsed
+        let mut derived = self
+            .parsed
             .derive
             .initramfs
             .as_ref()
             .and_then(|i| i.args.clone())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if let Some(base) = self.parsed.base.initramfs_args.as_ref() {
+            derived.extend(base.iter().cloned());
+        }
+        derived
     }
 
     pub(crate) fn set_initramfs_regenerate(&mut self, enabled: bool, args: Vec<String>) {
@@ -3741,6 +3746,9 @@ conditional-include:
               url: https://example.com
               description: Managed by Example, Inc.
             override-commit: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+            initramfs-args:
+                - -I
+                - /usr/share/bar
             initramfs:
               etc:
                 - /etc/asdf
@@ -3935,13 +3943,19 @@ conditional-include:
             .etc
             .is_none());
         assert!(treefile.get_initramfs_regenerate());
-        assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/lib/foo"]);
+        assert_eq!(
+            treefile.get_initramfs_args(),
+            &["-I", "/usr/lib/foo", "-I", "/usr/share/bar"]
+        );
         treefile.set_initramfs_regenerate(false, vec![]);
         assert!(!treefile.get_initramfs_regenerate());
-        assert!(treefile.get_initramfs_args().is_empty());
+        assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/share/bar"]);
         treefile.set_initramfs_regenerate(true, vec!["-a".to_string(), "40foo".to_string()]);
         assert!(treefile.get_initramfs_regenerate());
-        assert_eq!(treefile.get_initramfs_args(), &["-a", "40foo"]);
+        assert_eq!(
+            treefile.get_initramfs_args(),
+            &["-a", "40foo", "-I", "/usr/share/bar"]
+        );
         assert_eq!(
             treefile.get_unconfigured_state(),
             "First register your instance with corpy-tool"
