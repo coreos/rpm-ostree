@@ -9,7 +9,7 @@ authors = [
     "Colin Walters <walters@verbum.org>",
     "Jonathan Lebon <jonathan@jlebon.com>",
 ]
-edition = "2018"
+edition = "2021"
 # See https://rust-lang.github.io/rfcs/2495-min-rust-version.html
 # Usually, we try to keep this to no newer than current RHEL8 rust-toolset version.
 # You can find the current versions from here:

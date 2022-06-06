@@ -29,7 +29,6 @@ use ostree_ext::{gio, glib};
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::collections::BTreeSet;
-use std::convert::TryInto;
 use std::fmt::Write as FmtWrite;
 use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};

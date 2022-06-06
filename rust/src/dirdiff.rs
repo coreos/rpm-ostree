@@ -12,7 +12,6 @@ use openat_ext::OpenatDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::BTreeSet;
-use std::convert::TryFrom;
 use std::fmt;
 
 use std::io::Read;

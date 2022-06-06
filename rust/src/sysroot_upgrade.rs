@@ -12,7 +12,6 @@ use ostree_container::OstreeImageReference;
 use ostree_ext::container as ostree_container;
 use ostree_ext::container::store::{ImportProgress, ManifestLayerState};
 use ostree_ext::ostree;
-use std::convert::TryFrom;
 use std::pin::Pin;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::Receiver;

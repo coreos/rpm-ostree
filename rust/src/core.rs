@@ -16,7 +16,6 @@ use fn_error_context::context;
 use libdnf_sys::*;
 use ostree_ext::container::OstreeImageReference;
 use ostree_ext::ostree;
-use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::os::unix::io::{AsRawFd, FromRawFd};

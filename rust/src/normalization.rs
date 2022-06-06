@@ -13,7 +13,6 @@ use cap_std_ext::cap_std;
 use cap_std_ext::rustix::fs::OpenOptionsExt;
 use fn_error_context::context;
 use ostree_ext::gio;
-use std::convert::TryInto;
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
