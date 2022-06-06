@@ -338,11 +338,11 @@ fn rerun_tmpfiles() -> Result<()> {
 
 /// Implementation of `rpm-ostree ex apply-live`.
 pub(crate) fn transaction_apply_live(
-    mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
-    mut options: Pin<&mut crate::ffi::GVariant>,
+    sysroot: &crate::ffi::OstreeSysroot,
+    options: &crate::ffi::GVariant,
 ) -> CxxResult<()> {
-    let sysroot = &sysroot.gobj_wrap();
-    let options = &options.gobj_wrap();
+    let sysroot = &sysroot.glib_reborrow();
+    let options = &options.glib_reborrow();
     let options = &glib::VariantDict::new(Some(options));
     let target = &options
         .lookup::<String>(OPT_TARGET)
@@ -543,11 +543,11 @@ mod test {
 }
 
 pub(crate) fn get_live_apply_state(
-    mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
-    mut deployment: Pin<&mut crate::ffi::OstreeDeployment>,
+    sysroot: &crate::ffi::OstreeSysroot,
+    deployment: &crate::ffi::OstreeDeployment,
 ) -> CxxResult<LiveApplyState> {
-    let sysroot = sysroot.gobj_wrap();
-    let deployment = deployment.gobj_wrap();
+    let sysroot = sysroot.glib_reborrow();
+    let deployment = deployment.glib_reborrow();
     let repo = &sysroot.repo().unwrap();
     if let Some(state) = get_live_state(repo, &deployment)? {
         Ok(state)
@@ -557,8 +557,8 @@ pub(crate) fn get_live_apply_state(
 }
 
 pub(crate) fn has_live_apply_state(
-    sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
-    deployment: Pin<&mut crate::ffi::OstreeDeployment>,
+    sysroot: &crate::ffi::OstreeSysroot,
+    deployment: &crate::ffi::OstreeDeployment,
 ) -> CxxResult<bool> {
     let state = get_live_apply_state(sysroot, deployment)?;
     Ok(!(state.commit.is_empty() && state.inprogress.is_empty()))

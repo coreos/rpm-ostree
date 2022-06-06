@@ -229,10 +229,7 @@ pub mod ffi {
             unified_core: bool,
         ) -> Result<()>;
         fn compose_postprocess_final(rootfs_dfd: i32) -> Result<()>;
-        fn convert_var_to_tmpfiles_d(
-            rootfs_dfd: i32,
-            cancellable: Pin<&mut GCancellable>,
-        ) -> Result<()>;
+        fn convert_var_to_tmpfiles_d(rootfs_dfd: i32, cancellable: &GCancellable) -> Result<()>;
         fn rootfs_prepare_links(rootfs_dfd: i32) -> Result<()>;
         fn workaround_selinux_cross_labeling(
             rootfs_dfd: i32,
@@ -614,18 +611,15 @@ pub mod ffi {
     // live.rs
     extern "Rust" {
         fn get_live_apply_state(
-            sysroot: Pin<&mut OstreeSysroot>,
-            deployment: Pin<&mut OstreeDeployment>,
+            sysroot: &OstreeSysroot,
+            deployment: &OstreeDeployment,
         ) -> Result<LiveApplyState>;
         fn has_live_apply_state(
-            sysroot: Pin<&mut OstreeSysroot>,
-            deployment: Pin<&mut OstreeDeployment>,
+            sysroot: &OstreeSysroot,
+            deployment: &OstreeDeployment,
         ) -> Result<bool>;
         fn applylive_sync_ref(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
-        fn transaction_apply_live(
-            sysroot: Pin<&mut OstreeSysroot>,
-            target: Pin<&mut GVariant>,
-        ) -> Result<()>;
+        fn transaction_apply_live(sysroot: &OstreeSysroot, target: &GVariant) -> Result<()>;
     }
 
     // passwd.rs

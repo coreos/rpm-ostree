@@ -662,10 +662,10 @@ pub fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
 /// few rpm-ostree compat symlinks just directly write tmpfiles.d dropins.
 pub fn convert_var_to_tmpfiles_d(
     rootfs_dfd: i32,
-    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+    cancellable: &crate::FFIGCancellable,
 ) -> CxxResult<()> {
     let rootfs = unsafe { crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
-    let cancellable = &cancellable.gobj_wrap();
+    let cancellable = &cancellable.glib_reborrow();
 
     // TODO(lucab): unify this logic with the one in rpmostree-importer.cxx.
     var_to_tmpfiles(&rootfs, Some(cancellable))?;
