@@ -193,8 +193,6 @@ G_BEGIN_DECLS
 #define _N(single, plural, n) ((n) == 1 ? (single) : (plural))
 #define _NS(n) _N ("", "s", n)
 
-int rpmostree_ptrarray_sort_compare_strings (gconstpointer ap, gconstpointer bp);
-
 GVariant *_rpmostree_vardict_lookup_value_required (GVariantDict *dict, const char *key,
                                                     const GVariantType *fmt, GError **error);
 
@@ -208,8 +206,6 @@ char *rpmostree_pkg_get_local_path (DnfPackage *pkg);
 
 gboolean rpmostree_check_size_within_limit (guint64 actual, guint64 limit, const char *subject,
                                             GError **error);
-
-char *rpmostree_str_replace (const char *buf, const char *old, const char *newval, GError **error);
 
 char *rpmostree_checksum_version (GVariant *checksum);
 

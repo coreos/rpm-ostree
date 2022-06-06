@@ -35,14 +35,6 @@
 
 #define RPMOSTREE_OLD_PKGCACHE_DIR "extensions/rpmostree/pkgcache"
 
-int
-rpmostree_ptrarray_sort_compare_strings (gconstpointer ap, gconstpointer bp)
-{
-  char **asp = (char **)(gpointer)ap;
-  char **bsp = (char **)(gpointer)bp;
-  return strcmp (*asp, *bsp);
-}
-
 GVariant *
 _rpmostree_vardict_lookup_value_required (GVariantDict *dict, const char *key,
                                           const GVariantType *fmt, GError **error)
@@ -271,21 +263,6 @@ testutil_validate_cxxrs_passthrough (OstreeRepo &repo) noexcept
 
 } /* namespace */
 #undef VERSION_TAG_REGEX
-
-/* Replace every occurrence of @old in @buf with @new. */
-char *
-rpmostree_str_replace (const char *buf, const char *old, const char *newv, GError **error)
-{
-  g_autofree char *literal_old = g_regex_escape_string (old, -1);
-  g_autoptr (GRegex) regex
-      = g_regex_new (literal_old, (GRegexCompileFlags)0, (GRegexMatchFlags)0, error);
-
-  if (regex == NULL)
-    return NULL;
-
-  return g_regex_replace_literal (regex, buf, -1, 0, newv, static_cast<GRegexMatchFlags> (0),
-                                  error);
-}
 
 /* FIXME: This is a copy of ot_admin_checksum_version */
 char *
