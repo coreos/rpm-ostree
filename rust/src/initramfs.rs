@@ -10,7 +10,6 @@ use fn_error_context::context;
 use ostree_ext::{gio, glib, prelude::*};
 use std::collections::BTreeSet;
 use std::collections::HashSet;
-use std::convert::TryInto;
 use std::io::prelude::*;
 use std::os::unix::io::IntoRawFd;
 use std::path::{Component, Path, PathBuf};

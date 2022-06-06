@@ -2,7 +2,7 @@
 name = "rpmostree-client"
 description = "Client side bindings for rpm-ostree"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 keywords = ["ostree", "rpm-ostree"]
 documentation = "http://docs.rs/rpmostree-client"

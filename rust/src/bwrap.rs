@@ -10,7 +10,6 @@ use cap_std_ext::rustix;
 use fn_error_context::context;
 use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib};
-use std::convert::TryInto;
 use std::num::NonZeroUsize;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
