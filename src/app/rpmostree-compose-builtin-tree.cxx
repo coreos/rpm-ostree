@@ -1114,11 +1114,7 @@ pull_local_into_target_repo (OstreeRepo *src_repo, OstreeRepo *dest_repo, const 
 static gboolean
 impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, GError **error)
 {
-  const char *gpgkey = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "gpg-key", &gpgkey,
-                                                              error))
-    return FALSE;
-
+  auto gpgkey = (*self->treefile_rs)->get_gpg_key ();
   auto selinux = (*self->treefile_rs)->get_selinux ();
 
   /* pick up any initramfs regeneration args to shove into the metadata */
@@ -1194,8 +1190,11 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
 
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
+  const char *gpgkey_c = NULL;
+  if (!gpgkey.empty ())
+    gpgkey_c = gpgkey.c_str ();
   if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision, metadata,
-                                 detached_metadata, gpgkey, selinux, self->devino_cache,
+                                 detached_metadata, gpgkey_c, selinux, self->devino_cache,
                                  &new_revision, cancellable, error))
     return glnx_prefix_error (error, "Writing commit");
   g_assert (new_revision != NULL);

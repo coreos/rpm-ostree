@@ -533,6 +533,7 @@ pub mod ffi {
         fn get_documentation(&self) -> bool;
         fn get_recommends(&self) -> bool;
         fn get_selinux(&self) -> bool;
+        fn get_gpg_key(&self) -> String;
         fn get_container(&self) -> bool;
         fn get_machineid_compat(&self) -> bool;
         fn get_etc_group_members(&self) -> Vec<String>;

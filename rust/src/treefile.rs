@@ -1275,6 +1275,10 @@ impl Treefile {
         self.parsed.base.selinux.unwrap_or(true)
     }
 
+    pub(crate) fn get_gpg_key(&self) -> String {
+        self.parsed.base.gpg_key.clone().unwrap_or_default()
+    }
+
     pub(crate) fn get_container(&self) -> bool {
         self.parsed.base.container.unwrap_or(false)
     }
