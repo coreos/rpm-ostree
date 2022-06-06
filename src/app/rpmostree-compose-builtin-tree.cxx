@@ -922,10 +922,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
       !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
     {
       CXX_TRY_VAR (ver_prefix, (*self->treefile_rs)->require_automatic_version_prefix (), error);
-      const char *ver_suffix = NULL;
-      if (!_rpmostree_jsonutil_object_get_optional_string_member (
-              self->treefile, "automatic-version-suffix", &ver_suffix, error))
-        return FALSE;
+      auto ver_suffix = (*self->treefile_rs)->get_automatic_version_suffix ();
 
       g_autofree char *last_version = NULL;
       if (self->previous_checksum)
@@ -941,7 +938,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
         }
 
       CXX_TRY_VAR (next_versionv,
-                   rpmostreecxx::util_next_version (ver_prefix.c_str (), ver_suffix ?: "",
+                   rpmostreecxx::util_next_version (ver_prefix.c_str (), ver_suffix.c_str (),
                                                     last_version ?: ""),
                    error);
       next_version = std::move (next_versionv);

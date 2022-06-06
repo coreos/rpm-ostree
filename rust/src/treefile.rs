@@ -1279,6 +1279,14 @@ impl Treefile {
         self.parsed.base.gpg_key.clone().unwrap_or_default()
     }
 
+    pub(crate) fn get_automatic_version_suffix(&self) -> String {
+        self.parsed
+            .base
+            .automatic_version_suffix
+            .clone()
+            .unwrap_or_default()
+    }
+
     pub(crate) fn get_container(&self) -> bool {
         self.parsed.base.container.unwrap_or(false)
     }
