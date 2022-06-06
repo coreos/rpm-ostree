@@ -25,7 +25,6 @@ use rayon::prelude::*;
 use std::borrow::Cow;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 
 /// GVariant `s`: Choose a specific commit
 pub(crate) const OPT_TARGET: &str = "target";
@@ -507,10 +506,8 @@ pub(crate) fn transaction_apply_live(
 /// Writing a ref for the live-apply state can get out of sync
 /// if we upgrade.  This prunes the ref if the booted deployment
 /// doesn't have a live apply state in /run.
-pub(crate) fn applylive_sync_ref(
-    mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
-) -> CxxResult<()> {
-    let sysroot = sysroot.gobj_wrap();
+pub(crate) fn applylive_sync_ref(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
+    let sysroot = sysroot.glib_reborrow();
     let repo = &sysroot.repo().unwrap();
     let booted = if let Some(b) = sysroot.booted_deployment() {
         b

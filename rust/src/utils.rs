@@ -22,7 +22,6 @@ use std::collections::{HashMap, HashSet};
 use std::io::prelude::*;
 use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::path::Path;
-use std::pin::Pin;
 use std::{fs, io};
 
 use curl::easy::Easy;
@@ -608,7 +607,7 @@ const GV_ADVISORIES_TYPE_STR: &str = "a(suuasa{sv})";
 static GV_ADVISORIES_TYPE: Lazy<&'static glib::VariantTy> =
     Lazy::new(|| glib::VariantTy::new(GV_ADVISORIES_TYPE_STR).unwrap());
 
-fn get_commit_advisories(repo: &mut ostree::Repo, checksum: &str) -> Result<Option<glib::Variant>> {
+fn get_commit_advisories(repo: &ostree::Repo, checksum: &str) -> Result<Option<glib::Variant>> {
     let (commit, _) = repo.load_commit(checksum)?;
     let metadata = &commit.child_value(0);
     let metadata = variant_utils::byteswap_be_to_native(metadata);
@@ -620,15 +619,15 @@ fn get_commit_advisories(repo: &mut ostree::Repo, checksum: &str) -> Result<Opti
 /// misleading here; we don't actually say which advisories were removed because normally we only
 /// really care about *new* advisories).
 pub(crate) fn calculate_advisories_diff(
-    mut repo: Pin<&mut crate::FFIOstreeRepo>,
+    repo: &crate::FFIOstreeRepo,
     checksum_from: &str,
     checksum_to: &str,
 ) -> Result<*mut crate::FFIGVariant> {
-    let mut repo = repo.gobj_wrap();
+    let repo = repo.glib_reborrow();
     let mut new_advisories: Vec<glib::Variant> = Vec::new();
-    if let Some(ref advisories_to) = get_commit_advisories(&mut repo, checksum_to)? {
+    if let Some(ref advisories_to) = get_commit_advisories(&repo, checksum_to)? {
         let mut previous_advisories: HashSet<String> = HashSet::new();
-        if let Some(ref advisories_from) = get_commit_advisories(&mut repo, checksum_from)? {
+        if let Some(ref advisories_from) = get_commit_advisories(&repo, checksum_from)? {
             for child in advisories_from.iter() {
                 let advisory_id = child.child_value(0).str().unwrap().to_string();
                 previous_advisories.insert(advisory_id);
