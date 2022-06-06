@@ -34,7 +34,6 @@ use std::io::prelude::*;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 use std::str::FromStr;
 use std::{fs, io};
 use tracing::{event, instrument, Level};
@@ -1416,11 +1415,8 @@ impl Treefile {
         print_experimental_notice(self.parsed.base.lockfile_repos.is_some(), "lockfile-repos");
     }
 
-    pub(crate) fn get_checksum(
-        &self,
-        mut repo: Pin<&mut crate::ffi::OstreeRepo>,
-    ) -> CxxResult<String> {
-        let repo = &repo.gobj_wrap();
+    pub(crate) fn get_checksum(&self, repo: &crate::ffi::OstreeRepo) -> CxxResult<String> {
+        let repo = &repo.glib_reborrow();
         // Notice we hash the *reserialization* of the final flattened treefile only so that e.g.
         // comments/whitespace/hash table key reorderings don't trigger a respin. We could take
         // this further by using a custom `serialize_with` for Vecs where ordering doesn't matter

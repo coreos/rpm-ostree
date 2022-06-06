@@ -539,7 +539,7 @@ pub mod ffi {
         fn rpmdb_backend_is_target(&self) -> bool;
         fn should_normalize_rpmdb(&self) -> bool;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
-        fn get_checksum(&self, repo: Pin<&mut OstreeRepo>) -> Result<String>;
+        fn get_checksum(&self, repo: &OstreeRepo) -> Result<String>;
         fn get_ostree_ref(&self) -> String;
         fn get_repo_packages(&self) -> &[RepoPackage];
         fn clear_repo_packages(&mut self);
@@ -592,7 +592,7 @@ pub mod ffi {
         fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32>;
         fn running_in_systemd() -> bool;
         fn calculate_advisories_diff(
-            repo: Pin<&mut OstreeRepo>,
+            repo: &OstreeRepo,
             checksum_from: &str,
             checksum_to: &str,
         ) -> Result<*mut GVariant>;
@@ -618,7 +618,7 @@ pub mod ffi {
             sysroot: &OstreeSysroot,
             deployment: &OstreeDeployment,
         ) -> Result<bool>;
-        fn applylive_sync_ref(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
+        fn applylive_sync_ref(sysroot: &OstreeSysroot) -> Result<()>;
         fn transaction_apply_live(sysroot: &OstreeSysroot, target: &GVariant) -> Result<()>;
     }
 
