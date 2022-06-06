@@ -21,7 +21,6 @@
 #pragma once
 
 #include "rpmostree-cxxrs.h"
-#include "rpmostree-json-parsing.h"
 #include <ostree.h>
 
 G_BEGIN_DECLS

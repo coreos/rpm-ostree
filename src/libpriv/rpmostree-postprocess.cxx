@@ -42,7 +42,6 @@
 #include <vector>
 
 #include "rpmostree-core.h"
-#include "rpmostree-json-parsing.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-output.h"
 #include "rpmostree-postprocess.h"

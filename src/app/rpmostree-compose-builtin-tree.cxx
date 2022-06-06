@@ -40,7 +40,6 @@
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-composeutil.h"
 #include "rpmostree-core.h"
-#include "rpmostree-json-parsing.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-package-variants.h"
 #include "rpmostree-postprocess.h"

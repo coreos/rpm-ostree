@@ -38,7 +38,6 @@
 #include "libglnx.h"
 #include "rpmostree-composeutil.h"
 #include "rpmostree-core.h"
-#include "rpmostree-json-parsing.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-package-variants.h"
 #include "rpmostree-rpm-util.h"
