@@ -44,6 +44,7 @@
 #include "rpmostree-scripts.h"
 
 #include "libdnf/nevra.hpp"
+#include "rpmostree-util.h"
 
 #define RPMOSTREE_MESSAGE_COMMIT_STATS                                                             \
   SD_ID128_MAKE (e6, 37, 2e, 38, 41, 21, 42, a9, bc, 13, b6, 32, b3, f8, 93, 44)
@@ -814,12 +815,6 @@ get_commit_metadata_string (GVariant *commit, const char *key, char **out_str, G
 }
 
 static gboolean
-get_commit_sepolicy_csum (GVariant *commit, char **out_csum, GError **error)
-{
-  return get_commit_metadata_string (commit, "rpmostree.sepolicy", out_csum, error);
-}
-
-static gboolean
 get_commit_header_sha256 (GVariant *commit, char **out_csum, GError **error)
 {
   return get_commit_metadata_string (commit, "rpmostree.metadata_sha256", out_csum, error);
@@ -868,47 +863,17 @@ checkout_pkg_metadata (RpmOstreeContext *self, const char *nevra, GVariant *head
 }
 
 static gboolean
-get_header_variant (OstreeRepo *repo, const char *cachebranch, GVariant **out_header,
-                    GCancellable *cancellable, GError **error)
-{
-  g_autofree char *cached_rev = NULL;
-
-  if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE, &cached_rev, error))
-    return FALSE;
-
-  g_autoptr (GVariant) pkg_commit = NULL;
-  if (!ostree_repo_load_commit (repo, cached_rev, &pkg_commit, NULL, error))
-    return FALSE;
-
-  g_autoptr (GVariant) pkg_meta = g_variant_get_child_value (pkg_commit, 0);
-  g_autoptr (GVariantDict) pkg_meta_dict = g_variant_dict_new (pkg_meta);
-
-  g_autoptr (GVariant) header = _rpmostree_vardict_lookup_value_required (
-      pkg_meta_dict, "rpmostree.metadata", (GVariantType *)"ay", error);
-  if (!header)
-    {
-      auto nevra = std::string (rpmostreecxx::cache_branch_to_nevra (cachebranch));
-      g_prefix_error (error, "In commit %s of %s: ", cached_rev, nevra.c_str ());
-      return FALSE;
-    }
-
-  *out_header = util::move_nullify (header);
-  return TRUE;
-}
-
-static gboolean
 checkout_pkg_metadata_by_dnfpkg (RpmOstreeContext *self, DnfPackage *pkg, GCancellable *cancellable,
                                  GError **error)
 {
   const char *nevra = dnf_package_get_nevra (pkg);
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+  auto cachebranch_rs = rust::Str (cachebranch);
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
-  g_autoptr (GVariant) header = NULL;
+  CXX_TRY_VAR (header, rpmostreecxx::get_header_variant (*pkgcache_repo, cachebranch_rs), error);
+  g_autoptr (GVariant) header_v = header;
 
-  if (!get_header_variant (pkgcache_repo, cachebranch, &header, cancellable, error))
-    return FALSE;
-
-  return checkout_pkg_metadata (self, nevra, header, cancellable, error);
+  return checkout_pkg_metadata (self, nevra, header_v, cancellable, error);
 }
 
 gboolean
@@ -938,7 +903,9 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo *pkgcache, const char *nevra,
                            expected_sha256, actual_sha256);
     }
 
-  return get_header_variant (pkgcache, cachebranch.c_str (), out_header, cancellable, error);
+  CXX_TRY_VAR (header, rpmostreecxx::get_header_variant (*pkgcache, cachebranch), error);
+  *out_header = header;
+  return TRUE;
 }
 
 static gboolean
@@ -1137,23 +1104,6 @@ journal_rpmmd_info (RpmOstreeContext *self)
 }
 
 static gboolean
-commit_has_matching_sepolicy (GVariant *commit, OstreeSePolicy *sepolicy, gboolean *out_matches,
-                              GError **error)
-{
-  const char *sepolicy_csum_wanted = ostree_sepolicy_get_csum (sepolicy);
-  if (!sepolicy_csum_wanted)
-    return glnx_throw (error, "SELinux enabled, but no policy found");
-
-  g_autofree char *sepolicy_csum = NULL;
-  if (!get_commit_sepolicy_csum (commit, &sepolicy_csum, error))
-    return FALSE;
-
-  *out_matches = g_str_equal (sepolicy_csum, sepolicy_csum_wanted);
-
-  return TRUE;
-}
-
-static gboolean
 get_pkgcache_repodata_chksum_repr (GVariant *commit, char **out_chksum_repr, gboolean allow_noent,
                                    GError **error)
 {
@@ -1292,8 +1242,9 @@ find_pkg_in_ostree (RpmOstreeContext *self, DnfPackage *pkg, OstreeSePolicy *sep
   *out_in_ostree = TRUE;
   if (sepolicy)
     {
-      if (!commit_has_matching_sepolicy (commit, sepolicy, out_selinux_match, error))
-        return FALSE;
+      CXX_TRY_VAR (selinux_match, rpmostreecxx::commit_has_matching_sepolicy (*commit, *sepolicy),
+                   error);
+      *out_selinux_match = !!selinux_match;
     }
 
   return TRUE;
@@ -1636,9 +1587,10 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self, GHashTable *already_added,
       if (g_hash_table_contains (already_added, nevra.c_str ()))
         continue;
 
-      g_autoptr (GVariant) header = NULL;
-      if (!get_header_variant (pkgcache_repo, ref, &header, cancellable, error))
-        return FALSE;
+      auto cachebranch_rs = rust::Str (ref);
+      CXX_TRY_VAR (header_raw, rpmostreecxx::get_header_variant (*pkgcache_repo, cachebranch_rs),
+                   error);
+      g_autoptr (GVariant) header = header_raw;
 
       if (!checkout_pkg_metadata (self, nevra.c_str (), header, cancellable, error))
         return FALSE;
@@ -3652,9 +3604,9 @@ add_install (RpmOstreeContext *self, DnfPackage *pkg, rpmts ts, gboolean is_upgr
   gboolean sepolicy_matches = FALSE;
   if (self->sepolicy)
     {
-      if (!commit_has_matching_sepolicy (commit, self->sepolicy, &sepolicy_matches, error))
-        return FALSE;
-
+      CXX_TRY_VAR (selinux_match,
+                   rpmostreecxx::commit_has_matching_sepolicy (*commit, *self->sepolicy), error);
+      sepolicy_matches = !!selinux_match;
       /* We already did any relabeling/reimporting above */
       g_assert (sepolicy_matches);
     }

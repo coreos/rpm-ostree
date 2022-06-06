@@ -52,6 +52,7 @@ pub mod ffi {
         type OstreeRepo = crate::FFIOstreeRepo;
         type OstreeRepoTransactionStats = crate::FFIOstreeRepoTransactionStats;
         type OstreeSysroot = crate::FFIOstreeSysroot;
+        type OstreeSePolicy = crate::FFIOstreeSePolicy;
         type GObject = crate::FFIGObject;
         type GCancellable = crate::FFIGCancellable;
         type GDBusConnection = crate::FFIGDBusConnection;
@@ -191,6 +192,7 @@ pub mod ffi {
         Container,
     }
 
+    // core.rs
     extern "Rust" {
         type TempEtcGuard;
         type FilesystemScriptPrep;
@@ -212,6 +214,11 @@ pub mod ffi {
 
         fn stage_container_rpms(rpms: Vec<String>) -> Result<Vec<String>>;
         fn stage_container_rpm_raw_fds(fds: Vec<i32>) -> Result<Vec<String>>;
+
+        fn commit_has_matching_sepolicy(commit: &GVariant, policy: &OstreeSePolicy)
+            -> Result<bool>;
+
+        fn get_header_variant(repo: &OstreeRepo, cachebranch: &str) -> Result<*mut GVariant>;
     }
 
     // composepost.rs

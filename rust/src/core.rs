@@ -3,8 +3,9 @@
 //! and server side composes.
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::cxxrsutil::CxxResult;
+use crate::cxxrsutil::*;
 use crate::ffiutil;
+use anyhow::Context;
 use anyhow::{anyhow, Result};
 use camino::Utf8Path;
 use cap_std::fs::Dir;
@@ -13,8 +14,11 @@ use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
 use ffiutil::*;
 use fn_error_context::context;
+use glib::prelude::StaticVariantType;
+use glib::translate::ToGlibPtr;
 use libdnf_sys::*;
 use ostree_ext::container::OstreeImageReference;
+use ostree_ext::glib;
 use ostree_ext::ostree;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -226,6 +230,52 @@ pub(crate) fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> CxxResult<()> {
     let d = unsafe { &ffi_dirfd(rootfs)? };
     let moddir = d.open_dir(moddir)?;
     verify_kernel_hmac_impl(&moddir).map_err(Into::into)
+}
+
+/// Check if the commit has a serialized selinux policy sha256 that matches
+/// the target policy's sha256.
+pub(crate) fn commit_has_matching_sepolicy(
+    commit: &crate::FFIGVariant,
+    policy: &crate::FFIOstreeSePolicy,
+) -> CxxResult<bool> {
+    let commit = commit.glib_reborrow();
+    let policy = policy.glib_reborrow();
+
+    let sepolicy_csum = policy
+        .csum()
+        .ok_or_else(|| anyhow!("SELinux enabled, but no policy found"))?;
+
+    let commitmeta = commit.child_value(0);
+    let commitmeta = &glib::VariantDict::new(Some(&commitmeta));
+    let key = "rpmostree.sepolicy";
+    let v = commitmeta
+        .lookup::<String>(key)
+        .map_err(anyhow::Error::msg)?
+        .ok_or_else(|| anyhow!("Missing metadata key {}", key))?;
+    Ok(sepolicy_csum.as_str() == v.as_str())
+}
+
+/// Extract the rpm header as a GVariant of type ay (byte array)
+pub(crate) fn get_header_variant(
+    repo: &crate::FFIOstreeRepo,
+    cachebranch: &str,
+) -> CxxResult<*mut crate::FFIGVariant> {
+    let repo = repo.glib_reborrow();
+
+    let cached_rev = repo.require_rev(cachebranch)?;
+    let cached_rev = cached_rev.as_str();
+    let commit = repo.load_commit(cached_rev)?.0;
+    let commitmeta = commit.child_value(0);
+    let commitmeta = &glib::VariantDict::new(Some(&commitmeta));
+    let key = "rpmostree.metadata";
+    let r = commitmeta
+        .lookup_value(key, Some(&*Vec::<u8>::static_variant_type()))
+        .ok_or_else(|| anyhow!("Missing metadata key {}", key))
+        .with_context(|| {
+            let nevra = crate::rpmutils::cache_branch_to_nevra(cachebranch);
+            format!("In commit {cached_rev} for {nevra}")
+        })?;
+    Ok(r.to_glib_full() as *mut _)
 }
 
 pub(crate) fn stage_container_rpms(rpms: Vec<String>) -> CxxResult<Vec<String>> {
