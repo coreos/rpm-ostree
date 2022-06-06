@@ -232,10 +232,7 @@ static gboolean
 try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self, GCancellable *cancellable,
                             GError **error)
 {
-  gboolean selinux = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux,
-                                                               error))
-    return FALSE;
+  auto selinux = (*self->treefile_rs)->get_selinux ();
 
   if (!selinux || !self->previous_checksum)
     return TRUE; /* nothing to do! */
@@ -1122,10 +1119,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
                                                               error))
     return FALSE;
 
-  gboolean selinux = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux,
-                                                               error))
-    return FALSE;
+  auto selinux = (*self->treefile_rs)->get_selinux ();
 
   /* pick up any initramfs regeneration args to shove into the metadata */
   JsonNode *initramfs_args = json_object_get_member (self->treefile, "initramfs-args");
