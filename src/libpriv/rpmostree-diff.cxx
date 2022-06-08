@@ -43,7 +43,8 @@ RPMDiff::~RPMDiff ()
 }
 
 std::unique_ptr<RPMDiff>
-rpmdb_diff (OstreeRepo &repo, const std::string &from, const std::string &to, bool allow_noent)
+rpmdb_diff (const OstreeRepo &repo, const std::string &from, const std::string &to,
+            bool allow_noent)
 {
   g_autoptr (GPtrArray) removed = NULL;
   g_autoptr (GPtrArray) added = NULL;
@@ -55,8 +56,9 @@ rpmdb_diff (OstreeRepo &repo, const std::string &from, const std::string &to, bo
   if (allow_noent)
     flags |= RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
 
-  if (!rpm_ostree_db_diff_ext (&repo, from.c_str (), to.c_str (), (RpmOstreeDbDiffExtFlags)flags,
-                               &removed, &added, &modified_old, &modified_new, NULL, &local_error))
+  if (!rpm_ostree_db_diff_ext (&const_cast<OstreeRepo &> (repo), from.c_str (), to.c_str (),
+                               (RpmOstreeDbDiffExtFlags)flags, &removed, &added, &modified_old,
+                               &modified_new, NULL, &local_error))
     util::throw_gerror (local_error);
   return std::make_unique<RPMDiff> (removed, added, modified_old, modified_new);
 }
