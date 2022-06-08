@@ -21,7 +21,6 @@
 #pragma once
 
 #include "rpmostree-cxxrs.h"
-#include "rpmostree-json-parsing.h"
 #include <ostree.h>
 
 G_BEGIN_DECLS
@@ -35,10 +34,6 @@ gboolean rpmostree_prepare_rootfs_get_sepolicy (int dfd, OstreeSePolicy **out_se
 gboolean rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd, GCancellable *cancellable,
                                                     GError **error);
 
-gboolean rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile,
-                                      gboolean unified_core_mode, GCancellable *cancellable,
-                                      GError **error);
-
 gboolean rpmostree_compose_commit (int rootfs_dfd, OstreeRepo *repo, const char *parent,
                                    GVariant *metadata, GVariant *detached_metadata,
                                    const char *gpg_keyid, gboolean enable_selinux,
@@ -46,3 +41,10 @@ gboolean rpmostree_compose_commit (int rootfs_dfd, OstreeRepo *repo, const char 
                                    GCancellable *cancellable, GError **error);
 
 G_END_DECLS
+
+namespace rpmostreecxx
+{
+gboolean postprocess_final (int rootfs_dfd,
+                            std::optional<std::reference_wrapper<Treefile> > treefile_rs,
+                            gboolean unified_core_mode, GCancellable *cancellable, GError **error);
+}

@@ -40,7 +40,6 @@
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-composeutil.h"
 #include "rpmostree-core.h"
-#include "rpmostree-json-parsing.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-package-variants.h"
 #include "rpmostree-postprocess.h"
@@ -232,10 +231,7 @@ static gboolean
 try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self, GCancellable *cancellable,
                             GError **error)
 {
-  gboolean selinux = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux,
-                                                               error))
-    return FALSE;
+  auto selinux = (*self->treefile_rs)->get_selinux ();
 
   if (!selinux || !self->previous_checksum)
     return TRUE; /* nothing to do! */
@@ -925,10 +921,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
       !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
     {
       CXX_TRY_VAR (ver_prefix, (*self->treefile_rs)->require_automatic_version_prefix (), error);
-      const char *ver_suffix = NULL;
-      if (!_rpmostree_jsonutil_object_get_optional_string_member (
-              self->treefile, "automatic-version-suffix", &ver_suffix, error))
-        return FALSE;
+      auto ver_suffix = (*self->treefile_rs)->get_automatic_version_suffix ();
 
       g_autofree char *last_version = NULL;
       if (self->previous_checksum)
@@ -944,7 +937,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
         }
 
       CXX_TRY_VAR (next_versionv,
-                   rpmostreecxx::util_next_version (ver_prefix.c_str (), ver_suffix ?: "",
+                   rpmostreecxx::util_next_version (ver_prefix.c_str (), ver_suffix.c_str (),
                                                     last_version ?: ""),
                    error);
       next_version = std::move (next_versionv);
@@ -1117,15 +1110,8 @@ pull_local_into_target_repo (OstreeRepo *src_repo, OstreeRepo *dest_repo, const 
 static gboolean
 impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, GError **error)
 {
-  const char *gpgkey = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "gpg-key", &gpgkey,
-                                                              error))
-    return FALSE;
-
-  gboolean selinux = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux,
-                                                               error))
-    return FALSE;
+  auto gpgkey = (*self->treefile_rs)->get_gpg_key ();
+  auto selinux = (*self->treefile_rs)->get_selinux ();
 
   /* pick up any initramfs regeneration args to shove into the metadata */
   JsonNode *initramfs_args = json_object_get_member (self->treefile, "initramfs-args");
@@ -1147,8 +1133,11 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
       = rpmostree_composeutil_finalize_detached_metadata (self->detached_metadata);
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, self->unified_core_and_fuse,
-                                    cancellable, error))
+  std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile_ref;
+  if (self->treefile_rs)
+    treefile_ref = (**self->treefile_rs);
+  if (!rpmostreecxx::postprocess_final (self->rootfs_dfd, treefile_ref, self->unified_core_and_fuse,
+                                        cancellable, error))
     return FALSE;
 
   if (self->treefile_rs)
@@ -1197,8 +1186,11 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
 
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
+  const char *gpgkey_c = NULL;
+  if (!gpgkey.empty ())
+    gpgkey_c = gpgkey.c_str ();
   if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision, metadata,
-                                 detached_metadata, gpgkey, selinux, self->devino_cache,
+                                 detached_metadata, gpgkey_c, selinux, self->devino_cache,
                                  &new_revision, cancellable, error))
     return glnx_prefix_error (error, "Writing commit");
   g_assert (new_revision != NULL);
@@ -1350,8 +1342,8 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
    * to avoid at least some of the use cases requiring a treefile.
    */
   const char *treefile_path = argc > 2 ? argv[2] : NULL;
-  glnx_unref_object JsonParser *treefile_parser = NULL;
-  JsonObject *treefile = NULL; /* Owned by parser */
+  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile_rs;
+  std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile_ref;
   g_auto (GLnxTmpDir) workdir_tmp = {
     0,
   };
@@ -1360,16 +1352,9 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
     {
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
         return FALSE;
-      CXX_TRY_VAR (treefile_rs, rpmostreecxx::treefile_new_compose (treefile_path, ""), error);
-      auto serialized = treefile_rs->get_json_string ();
-      treefile_parser = json_parser_new ();
-      if (!json_parser_load_from_data (treefile_parser, serialized.c_str (), -1, error))
-        return FALSE;
-
-      JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
-      if (!JSON_NODE_HOLDS_OBJECT (treefile_rootval))
-        return glnx_throw (error, "Treefile root is not an object");
-      treefile = json_node_get_object (treefile_rootval);
+      CXX_TRY_VAR (treefile_rs_v, rpmostreecxx::treefile_new_compose (treefile_path, ""), error);
+      treefile_rs = std::move (treefile_rs_v);
+      treefile_ref = **treefile_rs;
     }
 
   glnx_fd_close int rootfs_dfd = -1;
@@ -1377,7 +1362,8 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_unified_core, cancellable, error))
+  if (!rpmostreecxx::postprocess_final (rootfs_dfd, treefile_ref, opt_unified_core, cancellable,
+                                        error))
     return FALSE;
   return TRUE;
 }

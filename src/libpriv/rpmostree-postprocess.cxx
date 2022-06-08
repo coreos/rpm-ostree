@@ -24,6 +24,7 @@
 
 #include <err.h>
 #include <errno.h>
+#include <functional>
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
 #include <grp.h>
@@ -41,7 +42,6 @@
 #include <vector>
 
 #include "rpmostree-core.h"
-#include "rpmostree-json-parsing.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-output.h"
 #include "rpmostree-postprocess.h"
@@ -88,8 +88,9 @@ rename_if_exists (int src_dfd, const char *from, int dest_dfd, const char *to, G
  * either both (/boot and /usr/lib/ostree-boot), or just the latter.
  */
 static gboolean
-process_kernel_and_initramfs (int rootfs_dfd, JsonObject *treefile, gboolean unified_core_mode,
-                              GCancellable *cancellable, GError **error)
+process_kernel_and_initramfs (
+    int rootfs_dfd, std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile,
+    gboolean unified_core_mode, GCancellable *cancellable, GError **error)
 {
   /* The current systemd kernel-install will inject
    * /boot/${machine_id}/${uname -r} which we don't use;
@@ -164,24 +165,15 @@ process_kernel_and_initramfs (int rootfs_dfd, JsonObject *treefile, gboolean uni
   ROSCXX_TRY (run_depmod (rootfs_dfd, kver, unified_core_mode), error);
 
   RpmOstreePostprocessBootLocation boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
-  const char *boot_location_str = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "boot-location",
-                                                              &boot_location_str, error))
-    return FALSE;
-  if (boot_location_str != NULL)
+  if (treefile)
     {
-      if (g_str_equal (boot_location_str, "new"))
-        boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
-      else if (g_str_equal (boot_location_str, "modules"))
+      if (treefile->get ().get_boot_location_is_modules ())
         boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES;
-      else
-        return glnx_throw (error, "Invalid boot location '%s'", boot_location_str);
     }
 
   gboolean machineid_compat = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "machineid-compat",
-                                                               &machineid_compat, error))
-    return FALSE;
+  if (treefile)
+    machineid_compat = treefile->get ().get_machineid_compat ();
   if (machineid_compat)
     {
       /* Update June 2018: systemd seems to work fine with this deleted now in
@@ -205,19 +197,12 @@ process_kernel_and_initramfs (int rootfs_dfd, JsonObject *treefile, gboolean uni
 
   /* Run dracut with our chosen arguments (commonly at least --no-hostonly) */
   g_autoptr (GPtrArray) dracut_argv = g_ptr_array_new ();
-  if (treefile && json_object_has_member (treefile, "initramfs-args"))
+  rust::Vec<rust::String> initramfs_args;
+  if (treefile)
     {
-      JsonArray *initramfs_args = json_object_get_array_member (treefile, "initramfs-args");
-      guint len = json_array_get_length (initramfs_args);
-
-      for (guint i = 0; i < len; i++)
-        {
-          const char *arg
-              = _rpmostree_jsonutil_array_require_string_element (initramfs_args, i, error);
-          if (!arg)
-            return FALSE;
-          g_ptr_array_add (dracut_argv, (char *)arg);
-        }
+      initramfs_args = treefile->get ().get_initramfs_args ();
+      for (auto &arg : initramfs_args)
+        g_ptr_array_add (dracut_argv, (void *)arg.c_str ());
     }
   else
     {
@@ -378,12 +363,16 @@ postprocess_selinux_policy_store_location (int rootfs_dfd, GCancellable *cancell
   return TRUE;
 }
 
+namespace rpmostreecxx
+{
+
 /* All "final" processing; things that are really required to use
  * rpm-ostree on the target host.
  */
 gboolean
-rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unified_core_mode,
-                             GCancellable *cancellable, GError **error)
+postprocess_final (int rootfs_dfd,
+                   std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile,
+                   gboolean unified_core_mode, GCancellable *cancellable, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Finalizing rootfs", error);
 
@@ -399,9 +388,8 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
     return TRUE;
 
   gboolean selinux = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "selinux", &selinux,
-                                                               error))
-    return FALSE;
+  if (treefile)
+    selinux = treefile->get ().get_selinux ();
 
   ROSCXX_TRY (compose_postprocess_final (rootfs_dfd), error);
 
@@ -417,27 +405,15 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
     }
 
   gboolean container = FALSE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "container", &container,
-                                                               error))
-    return FALSE;
+  if (treefile)
+    container = treefile->get ().get_container ();
 
   g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
   ROSCXX_TRY (migrate_passwd_except_root (rootfs_dfd), error);
 
   rust::Vec<rust::String> preserve_groups_set;
-  if (treefile && json_object_has_member (treefile, "etc-group-members"))
-    {
-      JsonArray *etc_group_members = json_object_get_array_member (treefile, "etc-group-members");
-      const guint len = json_array_get_length (etc_group_members);
-      for (guint i = 0; i < len; i++)
-        {
-          const char *elt = json_array_get_string_element (etc_group_members, i);
-          g_assert (elt != NULL);
-          auto entry = std::string (elt);
-          // TODO(lucab): drop this once we can pass the treefile directly to Rust.
-          preserve_groups_set.push_back (entry);
-        }
-    }
+  if (treefile)
+    preserve_groups_set = treefile->get ().get_etc_group_members ();
 
   g_print ("Migrating /usr/etc/group to /usr/lib/\n");
   ROSCXX_TRY (migrate_group_except_root (rootfs_dfd, preserve_groups_set), error);
@@ -494,6 +470,7 @@ rpmostree_postprocess_final (int rootfs_dfd, JsonObject *treefile, gboolean unif
   ROSCXX_TRY (prepare_rpmdb_base_location (rootfs_dfd, *cancellable), error);
 
   return TRUE;
+}
 }
 
 static gboolean

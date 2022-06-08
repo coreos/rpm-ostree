@@ -1273,6 +1273,41 @@ impl Treefile {
         self.parsed.base.selinux.unwrap_or(true)
     }
 
+    pub(crate) fn get_gpg_key(&self) -> String {
+        self.parsed.base.gpg_key.clone().unwrap_or_default()
+    }
+
+    pub(crate) fn get_automatic_version_suffix(&self) -> String {
+        self.parsed
+            .base
+            .automatic_version_suffix
+            .clone()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn get_container(&self) -> bool {
+        self.parsed.base.container.unwrap_or(false)
+    }
+
+    pub(crate) fn get_machineid_compat(&self) -> bool {
+        self.parsed.base.machineid_compat.unwrap_or(true)
+    }
+
+    pub(crate) fn get_boot_location_is_modules(&self) -> bool {
+        match self.parsed.base.boot_location.unwrap_or_default() {
+            BootLocation::New => false,
+            BootLocation::Modules => true,
+        }
+    }
+
+    pub(crate) fn get_etc_group_members(&self) -> Vec<String> {
+        self.parsed
+            .base
+            .etc_group_members
+            .clone()
+            .unwrap_or_default()
+    }
+
     pub(crate) fn get_ima(&self) -> bool {
         self.parsed.base.ima.unwrap_or(false)
     }
@@ -1457,7 +1492,7 @@ impl Treefile {
         }
 
         let parsed = &self.parsed;
-        let machineid_compat = parsed.base.machineid_compat.unwrap_or(true);
+        let machineid_compat = self.get_machineid_compat();
         let n_units = parsed
             .base
             .units
@@ -1669,12 +1704,17 @@ impl Treefile {
     }
 
     pub(crate) fn get_initramfs_args(&self) -> Vec<String> {
-        self.parsed
+        let mut derived = self
+            .parsed
             .derive
             .initramfs
             .as_ref()
             .and_then(|i| i.args.clone())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if let Some(base) = self.parsed.base.initramfs_args.as_ref() {
+            derived.extend(base.iter().cloned());
+        }
+        derived
     }
 
     pub(crate) fn set_initramfs_regenerate(&mut self, enabled: bool, args: Vec<String>) {
@@ -3736,6 +3776,9 @@ conditional-include:
               url: https://example.com
               description: Managed by Example, Inc.
             override-commit: d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1
+            initramfs-args:
+                - -I
+                - /usr/share/bar
             initramfs:
               etc:
                 - /etc/asdf
@@ -3930,13 +3973,19 @@ conditional-include:
             .etc
             .is_none());
         assert!(treefile.get_initramfs_regenerate());
-        assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/lib/foo"]);
+        assert_eq!(
+            treefile.get_initramfs_args(),
+            &["-I", "/usr/lib/foo", "-I", "/usr/share/bar"]
+        );
         treefile.set_initramfs_regenerate(false, vec![]);
         assert!(!treefile.get_initramfs_regenerate());
-        assert!(treefile.get_initramfs_args().is_empty());
+        assert_eq!(treefile.get_initramfs_args(), &["-I", "/usr/share/bar"]);
         treefile.set_initramfs_regenerate(true, vec!["-a".to_string(), "40foo".to_string()]);
         assert!(treefile.get_initramfs_regenerate());
-        assert_eq!(treefile.get_initramfs_args(), &["-a", "40foo"]);
+        assert_eq!(
+            treefile.get_initramfs_args(),
+            &["-a", "40foo", "-I", "/usr/share/bar"]
+        );
         assert_eq!(
             treefile.get_unconfigured_state(),
             "First register your instance with corpy-tool"
