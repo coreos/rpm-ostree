@@ -772,7 +772,7 @@ pub mod ffi {
         fn n_added(&self) -> i32;
         fn n_modified(&self) -> i32;
         fn rpmdb_diff(
-            repo: Pin<&mut OstreeRepo>,
+            repo: &OstreeRepo,
             src: &CxxString,
             dest: &CxxString,
             allow_noent: bool,
