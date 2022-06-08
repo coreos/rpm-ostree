@@ -26,7 +26,6 @@ use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::PathBuf;
-use std::pin::Pin;
 
 const DEFAULT_MODE: u32 = 0o644;
 static DEFAULT_PERMS: Lazy<Permissions> = Lazy::new(|| Permissions::from_mode(DEFAULT_MODE));
@@ -276,17 +275,17 @@ pub fn passwd_compose_prep(rootfs_dfd: i32, treefile: &mut Treefile) -> CxxResul
 pub fn passwd_compose_prep_repo(
     rootfs_dfd: i32,
     treefile: &mut Treefile,
-    mut ffi_repo: Pin<&mut crate::ffi::OstreeRepo>,
+    ffi_repo: &crate::ffi::OstreeRepo,
     previous_checksum: &str,
     unified_core: bool,
 ) -> Result<()> {
     let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
-    let repo = ffi_repo.gobj_wrap();
+    let repo = ffi_repo.glib_reborrow();
     // C side uses "" for None
     let repo_previous_rev = if previous_checksum.is_empty() {
         None
     } else {
-        Some((&repo, previous_checksum))
+        Some((repo.as_ref(), previous_checksum))
     };
     passwd_compose_prep_impl(&rootfs, treefile, repo_previous_rev, unified_core)
 }
@@ -543,17 +542,17 @@ fn complete_pwgrp(rootfs: &Dir) -> Result<()> {
 /// users/groups entries are somehow sane. See treefile `check-passwd` and
 /// `check-groups` fields for a description of available validation knobs.
 pub fn check_passwd_group_entries(
-    mut ffi_repo: Pin<&mut crate::ffi::OstreeRepo>,
+    ffi_repo: &crate::ffi::OstreeRepo,
     rootfs_dfd: i32,
     treefile: &mut Treefile,
     previous_rev: &str,
 ) -> CxxResult<()> {
     let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
-    let repo = ffi_repo.gobj_wrap();
+    let repo = ffi_repo.glib_reborrow();
 
     let mut repo_previous_rev = None;
     if !previous_rev.is_empty() {
-        repo_previous_rev = Some((&repo, previous_rev));
+        repo_previous_rev = Some((repo.as_ref(), previous_rev));
     }
 
     // Parse entries in the upcoming commit content.
