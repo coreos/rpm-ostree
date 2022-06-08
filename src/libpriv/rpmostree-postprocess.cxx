@@ -88,9 +88,8 @@ rename_if_exists (int src_dfd, const char *from, int dest_dfd, const char *to, G
  * either both (/boot and /usr/lib/ostree-boot), or just the latter.
  */
 static gboolean
-process_kernel_and_initramfs (
-    int rootfs_dfd, std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile,
-    gboolean unified_core_mode, GCancellable *cancellable, GError **error)
+process_kernel_and_initramfs (int rootfs_dfd, rpmostreecxx::Treefile &treefile,
+                              gboolean unified_core_mode, GCancellable *cancellable, GError **error)
 {
   /* The current systemd kernel-install will inject
    * /boot/${machine_id}/${uname -r} which we don't use;
@@ -165,15 +164,10 @@ process_kernel_and_initramfs (
   ROSCXX_TRY (run_depmod (rootfs_dfd, kver, unified_core_mode), error);
 
   RpmOstreePostprocessBootLocation boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
-  if (treefile)
-    {
-      if (treefile->get ().get_boot_location_is_modules ())
-        boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES;
-    }
+  if (treefile.get_boot_location_is_modules ())
+    boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES;
 
-  gboolean machineid_compat = TRUE;
-  if (treefile)
-    machineid_compat = treefile->get ().get_machineid_compat ();
+  auto machineid_compat = treefile.get_machineid_compat ();
   if (machineid_compat)
     {
       /* Update June 2018: systemd seems to work fine with this deleted now in
@@ -197,10 +191,9 @@ process_kernel_and_initramfs (
 
   /* Run dracut with our chosen arguments (commonly at least --no-hostonly) */
   g_autoptr (GPtrArray) dracut_argv = g_ptr_array_new ();
-  rust::Vec<rust::String> initramfs_args;
-  if (treefile)
+  rust::Vec<rust::String> initramfs_args = treefile.get_initramfs_args ();
+  if (!initramfs_args.empty ())
     {
-      initramfs_args = treefile->get ().get_initramfs_args ();
       for (auto &arg : initramfs_args)
         g_ptr_array_add (dracut_argv, (void *)arg.c_str ());
     }
@@ -370,9 +363,8 @@ namespace rpmostreecxx
  * rpm-ostree on the target host.
  */
 gboolean
-postprocess_final (int rootfs_dfd,
-                   std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile,
-                   gboolean unified_core_mode, GCancellable *cancellable, GError **error)
+postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean unified_core_mode,
+                   GCancellable *cancellable, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Finalizing rootfs", error);
 
@@ -387,9 +379,7 @@ postprocess_final (int rootfs_dfd,
   if (errno == 0)
     return TRUE;
 
-  gboolean selinux = TRUE;
-  if (treefile)
-    selinux = treefile->get ().get_selinux ();
+  auto selinux = treefile.get_selinux ();
 
   ROSCXX_TRY (compose_postprocess_final (rootfs_dfd), error);
 
@@ -404,16 +394,12 @@ postprocess_final (int rootfs_dfd,
                   error);
     }
 
-  gboolean container = FALSE;
-  if (treefile)
-    container = treefile->get ().get_container ();
+  auto container = treefile.get_container ();
 
   g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
   ROSCXX_TRY (migrate_passwd_except_root (rootfs_dfd), error);
 
-  rust::Vec<rust::String> preserve_groups_set;
-  if (treefile)
-    preserve_groups_set = treefile->get ().get_etc_group_members ();
+  rust::Vec<rust::String> preserve_groups_set = treefile.get_etc_group_members ();
 
   g_print ("Migrating /usr/etc/group to /usr/lib/\n");
   ROSCXX_TRY (migrate_group_except_root (rootfs_dfd, preserve_groups_set), error);

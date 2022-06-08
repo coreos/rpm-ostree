@@ -1133,11 +1133,8 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
       = rpmostree_composeutil_finalize_detached_metadata (self->detached_metadata);
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
-  std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile_ref;
-  if (self->treefile_rs)
-    treefile_ref = (**self->treefile_rs);
-  if (!rpmostreecxx::postprocess_final (self->rootfs_dfd, treefile_ref, self->unified_core_and_fuse,
-                                        cancellable, error))
+  if (!rpmostreecxx::postprocess_final (self->rootfs_dfd, **self->treefile_rs,
+                                        self->unified_core_and_fuse, cancellable, error))
     return FALSE;
 
   if (self->treefile_rs)
@@ -1343,7 +1340,6 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
    */
   const char *treefile_path = argc > 2 ? argv[2] : NULL;
   std::optional<rust::Box<rpmostreecxx::Treefile> > treefile_rs;
-  std::optional<std::reference_wrapper<rpmostreecxx::Treefile> > treefile_ref;
   g_auto (GLnxTmpDir) workdir_tmp = {
     0,
   };
@@ -1354,7 +1350,11 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
         return FALSE;
       CXX_TRY_VAR (treefile_rs_v, rpmostreecxx::treefile_new_compose (treefile_path, ""), error);
       treefile_rs = std::move (treefile_rs_v);
-      treefile_ref = **treefile_rs;
+    }
+  else
+    {
+      CXX_TRY_VAR (treefile_rs_v, rpmostreecxx::treefile_new_empty (), error);
+      treefile_rs = std::move (treefile_rs_v);
     }
 
   glnx_fd_close int rootfs_dfd = -1;
@@ -1362,7 +1362,7 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostreecxx::postprocess_final (rootfs_dfd, treefile_ref, opt_unified_core, cancellable,
+  if (!rpmostreecxx::postprocess_final (rootfs_dfd, **treefile_rs, opt_unified_core, cancellable,
                                         error))
     return FALSE;
   return TRUE;

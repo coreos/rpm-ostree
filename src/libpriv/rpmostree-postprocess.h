@@ -44,7 +44,6 @@ G_END_DECLS
 
 namespace rpmostreecxx
 {
-gboolean postprocess_final (int rootfs_dfd,
-                            std::optional<std::reference_wrapper<Treefile> > treefile_rs,
-                            gboolean unified_core_mode, GCancellable *cancellable, GError **error);
+gboolean postprocess_final (int rootfs_dfd, Treefile &treefile, gboolean unified_core_mode,
+                            GCancellable *cancellable, GError **error);
 }
