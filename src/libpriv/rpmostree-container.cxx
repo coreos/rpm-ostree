@@ -51,6 +51,7 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
     return FALSE;
 
   DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+  rpmostree_print_transaction (dnfctx);
   DnfTransaction *t = dnf_context_get_transaction (dnfctx);
   guint64 flags = dnf_transaction_get_flags (t);
   dnf_transaction_set_flags (t, flags | DNF_TRANSACTION_FLAG_ALLOW_DOWNGRADE);
