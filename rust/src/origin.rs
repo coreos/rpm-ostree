@@ -15,7 +15,6 @@ use glib::KeyFile;
 use ostree_ext::glib;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::pin::Pin;
 use std::result::Result as StdResult;
 
 use ostree_ext::container::deploy::ORIGIN_CONTAINER;
@@ -108,11 +107,8 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
 /// For historical reasons, rpm-ostree has two file formats to represent
 /// state.  This bridges parts of an origin file to a treefile that
 /// is understood by the core.
-pub(crate) fn origin_to_treefile(
-    mut kf: Pin<&mut crate::ffi::GKeyFile>,
-) -> CxxResult<Box<Treefile>> {
-    let kf = kf.gobj_wrap();
-    Ok(origin_to_treefile_inner(&kf)?)
+pub(crate) fn origin_to_treefile(kf: &crate::ffi::GKeyFile) -> CxxResult<Box<Treefile>> {
+    Ok(origin_to_treefile_inner(&kf.glib_reborrow())?)
 }
 
 /// Convert a treefile config to an origin keyfile.
@@ -308,9 +304,8 @@ fn origin_validate_roundtrip_inner(kf: &glib::KeyFile) -> Result<()> {
 /// For historical reasons, rpm-ostree has two file formats to represent
 /// state.  This bridges parts of an origin file to a treefile that
 /// is understood by the core.
-pub(crate) fn origin_validate_roundtrip(mut kf: Pin<&mut crate::ffi::GKeyFile>) {
-    let kf = kf.gobj_wrap();
-    if let Some(e) = origin_validate_roundtrip_inner(&kf).err() {
+pub(crate) fn origin_validate_roundtrip(kf: &crate::ffi::GKeyFile) {
+    if let Some(e) = origin_validate_roundtrip_inner(&kf.glib_reborrow()).err() {
         tracing::debug!("Failed to roundtrip origin: {}", e);
     }
 }
