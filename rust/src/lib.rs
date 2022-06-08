@@ -646,14 +646,14 @@ pub mod ffi {
         fn passwd_compose_prep_repo(
             rootfs: i32,
             treefile: &mut Treefile,
-            repo: Pin<&mut OstreeRepo>,
+            repo: &OstreeRepo,
             previous_checksum: &str,
             unified_core: bool,
         ) -> Result<()>;
         fn dir_contains_uid(dirfd: i32, id: u32) -> Result<bool>;
         fn dir_contains_gid(dirfd: i32, id: u32) -> Result<bool>;
         fn check_passwd_group_entries(
-            mut ffi_repo: Pin<&mut OstreeRepo>,
+            mut ffi_repo: &OstreeRepo,
             rootfs_dfd: i32,
             treefile: &mut Treefile,
             previous_rev: &str,
