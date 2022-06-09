@@ -994,12 +994,6 @@ rpmostree_pkg_array_compare (DnfPackage **p_pkg1, DnfPackage **p_pkg2)
   return dnf_package_cmp (*p_pkg1, *p_pkg2);
 }
 
-void
-rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
-{
-  /* No-op now that we have rpmsqSetInterruptSafety_ */
-}
-
 static void
 print_pkglist (GPtrArray *pkglist)
 {

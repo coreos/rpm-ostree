@@ -200,7 +200,6 @@ rpmostree_context_new_base (OstreeRepo *repo)
   rpmsqSetInterruptSafety (FALSE);
 
   self->dnfctx = dnf_context_new ();
-  DECLARE_RPMSIGHANDLER_RESET;
   dnf_context_set_http_proxy (self->dnfctx, g_getenv ("http_proxy"));
 
   dnf_context_set_repo_dir (self->dnfctx, "/etc/yum.repos.d");
@@ -1036,7 +1035,6 @@ rpmostree_context_download_metadata (RpmOstreeContext *self, DnfContextSetupSack
     /* This will check the metadata again, but it *should* hit the cache; down
      * the line we should really improve the libdnf API around all of this.
      */
-    DECLARE_RPMSIGHANDLER_RESET;
     if (!dnf_context_setup_sack_with_flags (self->dnfctx, hifstate, flags, error))
       return FALSE;
     g_signal_handler_disconnect (hifstate, progress_sigid);
@@ -4014,10 +4012,7 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
         setup_package = (DnfPackage *)g_object_ref (pkg);
     }
 
-  {
-    DECLARE_RPMSIGHANDLER_RESET;
-    rpmtsOrder (ordering_ts);
-  }
+  rpmtsOrder (ordering_ts);
 
   guint overrides_total = overrides_remove->len + overrides_replace->len;
   const char *progress_msg = "Checking out packages";
