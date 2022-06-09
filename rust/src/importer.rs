@@ -16,7 +16,7 @@ use gio::{FileInfo, FileType};
 use ostree::RepoCommitFilterResult;
 use ostree_ext::{gio, ostree};
 use std::borrow::Cow;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
 use std::pin::Pin;
 
@@ -57,6 +57,10 @@ pub struct RpmImporter {
     /// Set of directories which got moved from '/var/lib/' to '/usr/lib/';
     /// each key is a plain directory name, e.g. 'foo' for '/var/lib/foo/'.
     varlib_direntries: BTreeSet<String>,
+    /// Hashmap of file-overrides from RPM header:
+    ///  - [K] absolute full path of the file
+    ///  - [V] iterator index in RPM header for this file
+    rpmfi_overrides: HashMap<String, u64>,
 }
 
 /// Build a new RPM importer for a given package.
@@ -97,6 +101,7 @@ impl RpmImporter {
             ostree_branch: ostree_branch.to_string(),
             pkg_name: pkg_name.to_string(),
             varlib_direntries: BTreeSet::new(),
+            rpmfi_overrides: HashMap::new(),
         };
         Ok(importer)
     }
@@ -203,6 +208,18 @@ impl RpmImporter {
             .as_ref()
             .map(|set| set.contains(path))
             .unwrap_or(false)
+    }
+
+    pub fn rpmfi_overrides_insert(&mut self, path: &str, index: u64) {
+        self.rpmfi_overrides.insert(path.to_string(), index);
+    }
+
+    pub fn rpmfi_overrides_contains(self: &RpmImporter, path: &str) -> bool {
+        self.rpmfi_overrides.get(path).is_some()
+    }
+
+    pub fn rpmfi_overrides_get(&self, path: &str) -> u64 {
+        self.rpmfi_overrides.get(path).cloned().unwrap()
     }
 
     /// Return whether IMA support is enabled.
