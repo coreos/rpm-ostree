@@ -450,7 +450,7 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
                          "set -euo pipefail\n"
                          "export PATH=%s:${PATH}\n"
                          "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then "
-                         "extra_argv=\"--reproducible --gzip\"; fi\n"
+                         "extra_argv=\"--reproducible\"; fi\n"
                          "mkdir -p /tmp/dracut && dracut $extra_argv -v --add ostree "
                          "--tmpdir=/tmp/dracut -f /tmp/initramfs.img \"$@\"\n"
                          "cat /tmp/initramfs.img >/proc/self/fd/3\n",
