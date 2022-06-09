@@ -117,21 +117,6 @@ gint rpmostree_pkg_array_compare (DnfPackage **p_pkg1, DnfPackage **p_pkg2);
 
 void rpmostree_print_transaction (DnfContext *context);
 
-/* This cleanup struct wraps _rpmostree_reset_rpm_sighandlers(). We have a dummy
- * variable to pacify clang's unused variable detection.
- */
-typedef struct
-{
-  gboolean v;
-} RpmSighandlerResetCleanup;
-void rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup);
-G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmSighandlerResetCleanup, rpmostree_sighandler_reset_cleanup);
-
-#define DECLARE_RPMSIGHANDLER_RESET                                                                \
-  __attribute__ ((unused)) g_auto (RpmSighandlerResetCleanup) sigcleanup = {                       \
-    0,                                                                                             \
-  };
-
 GVariant *rpmostree_fcap_to_ostree_xattr (const char *fcap);
 GVariant *rpmostree_fcap_to_xattr_variant (const char *fcap);
 

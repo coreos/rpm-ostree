@@ -116,7 +116,6 @@ rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_of
   gsize ret_cpio_offset;
   g_autofree char *abspath = g_strdup_printf ("/proc/self/fd/%d", fd);
 
-  DECLARE_RPMSIGHANDLER_RESET;
   ts = rpmtsCreate ();
   rpmtsSetVSFlags (ts, _RPMVSF_NOSIGNATURES);
 
