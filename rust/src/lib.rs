@@ -353,6 +353,9 @@ pub mod ffi {
         fn doc_files_are_filtered(self: &RpmImporter) -> bool;
         fn doc_files_insert(self: &mut RpmImporter, path: &str);
         fn doc_files_contains(self: &RpmImporter, path: &str) -> bool;
+        fn rpmfi_overrides_insert(self: &mut RpmImporter, path: &str, index: u64);
+        fn rpmfi_overrides_contains(self: &RpmImporter, path: &str) -> bool;
+        fn rpmfi_overrides_get(self: &RpmImporter, path: &str) -> u64;
         fn is_ima_enabled(self: &RpmImporter) -> bool;
         fn tweak_imported_file_info(self: &RpmImporter, mut file_info: Pin<&mut GFileInfo>);
         fn is_file_filtered(

@@ -61,10 +61,6 @@ struct RpmOstreeImporter
   Header hdr;
   rpmfi fi;
   off_t cpio_offset;
-  // Hashmap of file-overrides from RPM header:
-  //  - [K] absolute full path of the file
-  //  - [V] iterator index in RPM header for this file
-  GHashTable *rpmfi_overrides;
   GString *tmpfiles_d;
   DnfPackage *pkg;
 
@@ -88,7 +84,6 @@ rpmostree_importer_finalize (GObject *object)
   g_clear_object (&self->repo);
   g_clear_object (&self->sepolicy);
 
-  g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
   self->importer_rs.~optional ();
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
@@ -106,7 +101,6 @@ static void
 rpmostree_importer_init (RpmOstreeImporter *self)
 {
   self->fd = -1;
-  self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   self->tmpfiles_d = g_string_new ("");
   self->importer_rs = std::nullopt;
 }
@@ -209,7 +203,7 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
       const gboolean fcaps_is_unset = (fcaps == NULL || fcaps[0] == '\0');
       if (!(user_is_root && group_is_root && fcaps_is_unset) || have_ima)
         {
-          g_hash_table_insert (self->rpmfi_overrides, g_strdup (abs_filepath), GINT_TO_POINTER (i));
+          (*self->importer_rs)->rpmfi_overrides_insert (abs_filepath, i);
         }
 
       const gboolean is_doc = (fattrs & RPMFILE_DOC) > 0;
@@ -272,17 +266,20 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
 }
 
 static void
-get_rpmfi_override (RpmOstreeImporter *self, const char *path, const char **out_user,
+get_rpmfi_override (RpmOstreeImporter *self, const char *abs_filepath, const char **out_user,
                     const char **out_group, const char **out_fcaps, GVariant **out_ima)
 {
-  gpointer v;
+  g_assert (abs_filepath != NULL);
+  g_assert (abs_filepath[0] == '/');
 
-  /* Note: we use extended here because the value might be index 0 */
-  if (!g_hash_table_lookup_extended (self->rpmfi_overrides, path, NULL, &v))
+  if (!(*self->importer_rs)->rpmfi_overrides_contains (abs_filepath))
     return;
+  int index = (*self->importer_rs)->rpmfi_overrides_get (abs_filepath);
+  g_assert (index >= 0);
 
-  rpmfiInit (self->fi, GPOINTER_TO_INT (v));
-  g_assert (rpmfiNext (self->fi) >= 0);
+  rpmfiInit (self->fi, index);
+  int r = rpmfiNext (self->fi);
+  g_assert (r >= 0);
 
   if (out_user)
     *out_user = rpmfiFUser (self->fi);
