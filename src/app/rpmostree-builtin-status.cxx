@@ -551,24 +551,29 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   if (!is_booted && opt_only_booted)
     return TRUE;
 
+  /* these come from the origin; they represent what the user requested */
   const gchar *origin_refspec;
   auto refspectype = rpmostreecxx::RefspecType::Ostree;
-  g_autofree const gchar **origin_packages = NULL;
-  g_autofree const gchar **origin_modules = NULL;
-  g_autofree const gchar **origin_requested_modules_enabled = NULL;
   g_autofree const gchar **origin_requested_packages = NULL;
   g_autofree const gchar **origin_requested_modules = NULL;
+  g_autofree const gchar **origin_requested_modules_enabled = NULL;
   g_autofree const gchar **origin_requested_local_packages = NULL;
   g_autofree const gchar **origin_requested_local_fileoverride_packages = NULL;
-  g_autoptr (GVariant) origin_base_removals = NULL;
   g_autofree const gchar **origin_requested_base_removals = NULL;
-  g_autoptr (GVariant) origin_base_local_replacements = NULL;
   g_autofree const gchar **origin_requested_base_local_replacements = NULL;
+  /* these come from commit metadata; they represent what *actually* happened */
+  g_autofree const gchar **packages = NULL;
+  g_autofree const gchar **modules = NULL;
+  g_autoptr (GVariant) base_removals = NULL;
+  g_autoptr (GVariant) base_local_replacements = NULL;
   if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec)
       || g_variant_dict_lookup (dict, "container-image-reference", "&s", &origin_refspec))
     {
-      origin_packages = lookup_array_and_canonicalize (dict, "packages");
-      origin_modules = lookup_array_and_canonicalize (dict, "modules");
+      packages = lookup_array_and_canonicalize (dict, "packages");
+      modules = lookup_array_and_canonicalize (dict, "modules");
+      base_removals = g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
+      base_local_replacements
+          = g_variant_dict_lookup_value (dict, "base-local-replacements", G_VARIANT_TYPE ("a(vv)"));
       origin_requested_modules_enabled
           = lookup_array_and_canonicalize (dict, "requested-modules-enabled");
       origin_requested_packages = lookup_array_and_canonicalize (dict, "requested-packages");
@@ -577,12 +582,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
           = lookup_array_and_canonicalize (dict, "requested-local-packages");
       origin_requested_local_fileoverride_packages
           = lookup_array_and_canonicalize (dict, "requested-local-fileoverride-packages");
-      origin_base_removals
-          = g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
       origin_requested_base_removals
           = lookup_array_and_canonicalize (dict, "requested-base-removals");
-      origin_base_local_replacements
-          = g_variant_dict_lookup_value (dict, "base-local-replacements", G_VARIANT_TYPE ("a(vv)"));
       origin_requested_base_local_replacements
           = lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
     }
@@ -803,17 +804,17 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   /* print base overrides before overlays */
   g_autoptr (GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
   g_autoptr (GPtrArray) active_removals_grouped = g_ptr_array_new_with_free_func (g_free);
-  if (origin_base_removals)
+  if (base_removals)
     {
       g_autoptr (GHashTable) grouped_evrs = g_hash_table_new_full (
           g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_ptr_array_unref);
 
-      const guint n = g_variant_n_children (origin_base_removals);
+      const guint n = g_variant_n_children (base_removals);
       for (guint i = 0; i < n; i++)
         {
           g_autoptr (GString) buf = g_string_new ("");
           g_autoptr (GVariant) gv_nevra;
-          g_variant_get_child (origin_base_removals, i, "v", &gv_nevra);
+          g_variant_get_child (base_removals, i, "v", &gv_nevra);
           const char *name;
           g_variant_get_child (gv_nevra, 1, "&s", &name);
           g_ptr_array_add (active_removals, g_strdup (name));
@@ -859,19 +860,18 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
 
   g_autoptr (GPtrArray) active_replacements = g_ptr_array_new_with_free_func (g_free);
   g_autoptr (GPtrArray) active_replacements_grouped = g_ptr_array_new_with_free_func (g_free);
-  if (origin_base_local_replacements)
+  if (base_local_replacements)
     {
       g_autoptr (GString) buf = g_string_new ("");
       g_autoptr (GHashTable) grouped_diffs = g_hash_table_new_full (
           g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_ptr_array_unref);
 
-      const guint n = g_variant_n_children (origin_base_local_replacements);
+      const guint n = g_variant_n_children (base_local_replacements);
       for (guint i = 0; i < n; i++)
         {
           g_autoptr (GVariant) gv_nevra_new;
           g_autoptr (GVariant) gv_nevra_old;
-          g_variant_get_child (origin_base_local_replacements, i, "(vv)", &gv_nevra_new,
-                               &gv_nevra_old);
+          g_variant_get_child (base_local_replacements, i, "(vv)", &gv_nevra_new, &gv_nevra_old);
           const char *nevra_new, *name;
           g_variant_get_child (gv_nevra_new, 0, "&s", &nevra_new);
           g_variant_get_child (gv_nevra_new, 1, "&s", &name);
@@ -923,18 +923,16 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   /* only print inactive layering requests in verbose mode */
   if (origin_requested_packages && opt_verbose)
     /* requested-packages - packages = inactive (i.e. dormant requests) */
-    print_packages ("InactiveRequests", max_key_len, origin_requested_packages, origin_packages,
-                    TRUE);
+    print_packages ("InactiveRequests", max_key_len, origin_requested_packages, packages, TRUE);
   if (origin_requested_modules && opt_verbose)
     /* requested-modules - modules = inactive (i.e. dormant requests) */
     /* note the core doesn't support inactive modules yet, but could in the future */
-    print_packages ("InactiveModuleRequests", max_key_len, origin_requested_modules, origin_modules,
-                    TRUE);
+    print_packages ("InactiveModuleRequests", max_key_len, origin_requested_modules, modules, TRUE);
 
-  if (origin_packages)
-    print_packages ("LayeredPackages", max_key_len, origin_packages, NULL, TRUE);
-  if (origin_modules)
-    print_packages ("LayeredModules", max_key_len, origin_modules, NULL, TRUE);
+  if (packages)
+    print_packages ("LayeredPackages", max_key_len, packages, NULL, TRUE);
+  if (modules)
+    print_packages ("LayeredModules", max_key_len, modules, NULL, TRUE);
   if (origin_requested_modules_enabled)
     print_packages ("EnabledModules", max_key_len, origin_requested_modules_enabled, NULL, TRUE);
 
