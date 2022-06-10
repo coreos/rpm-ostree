@@ -24,7 +24,10 @@ pkgs="libsolv libmodulemd"
 if rpm -q zchunk-libs 2>/dev/null; then
     pkgs="${pkgs} zchunk-libs"
 fi
-for pkg in ostree{,-libs,-grub2} ${pkgs}; do
+if rpm -q ostree-grub2 2>/dev/null; then
+    pkgs="${pkgs} ostree-grub2"
+fi
+for pkg in ostree{,-libs} ${pkgs}; do
 
     rpm -q $pkg
 
