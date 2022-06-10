@@ -252,8 +252,11 @@ prepare_download_pkgs_txn (const gchar *const *queries, const char *source,
       if (g_unix_fd_list_append (fd_list, fd, error) < 0)
         return FALSE;
 
-      if (!glnx_unlinkat (AT_FDCWD, path, 0, error))
-        return FALSE;
+      if (!rpmostree_pkg_is_local (pkg))
+        {
+          if (!glnx_unlinkat (AT_FDCWD, path, 0, error))
+            return FALSE;
+        }
     }
 
   *out_fd_list = util::move_nullify (fd_list);
