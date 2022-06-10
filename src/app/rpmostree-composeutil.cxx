@@ -64,7 +64,7 @@ rpmostree_composeutil_checksum (HyGoal goal, OstreeRepo *repo, const rpmostreecx
 }
 
 gboolean
-rpmostree_composeutil_read_json_metadata (JsonNode *root, GHashTable *metadata, GError **error)
+rpmostree_composeutil_read_json_metadata (JsonNode *root, GVariantDict *metadata, GError **error)
 {
   g_autoptr (GVariant) jsonmetav = json_gvariant_deserialize (root, "a{sv}", error);
   if (!jsonmetav)
@@ -76,7 +76,7 @@ rpmostree_composeutil_read_json_metadata (JsonNode *root, GHashTable *metadata, 
     char *key;
     GVariant *value;
     while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
-      g_hash_table_replace (metadata, g_strdup (key), g_variant_ref (value));
+      g_variant_dict_insert_value (metadata, key, value);
   }
 
   return TRUE;
@@ -86,7 +86,7 @@ rpmostree_composeutil_read_json_metadata (JsonNode *root, GHashTable *metadata, 
  * to a hash table of a{sv}; suitable for further extension.
  */
 gboolean
-rpmostree_composeutil_read_json_metadata_from_file (const char *path, GHashTable *metadata,
+rpmostree_composeutil_read_json_metadata_from_file (const char *path, GVariantDict *metadata,
                                                     GError **error)
 {
   const char *errprefix = glnx_strjoina ("While parsing JSON file ", path);
@@ -101,19 +101,31 @@ rpmostree_composeutil_read_json_metadata_from_file (const char *path, GHashTable
 }
 
 static GVariantBuilder *
-metadata_conversion_start (GHashTable *metadata)
+variant_dict_to_builder (GVariantDict *metadata)
 {
-  GVariantBuilder *builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+  bool found_value = false;
+  g_autoptr (GVariant) final_metadata = g_variant_ref_sink (g_variant_dict_end (metadata));
+  GVariantIter viter;
+  g_variant_iter_init (&viter, final_metadata);
+  char *key;
+  GVariant *value;
+  g_autoptr (GVariantBuilder) builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+  while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
+    {
+      found_value = true;
+      g_variant_builder_add (builder, "{sv}", key, value);
+    }
 
-  GLNX_HASH_TABLE_FOREACH_KV (metadata, const char *, strkey, GVariant *, v)
-    g_variant_builder_add (builder, "{sv}", strkey, v);
-
-  return builder;
+  if (found_value)
+    return util::move_nullify (builder);
+  return NULL;
 }
 
 static GVariant *
 metadata_conversion_end (GVariantBuilder *builder)
 {
+  if (!builder)
+    return NULL;
   g_autoptr (GVariant) ret = g_variant_ref_sink (g_variant_builder_end (builder));
   /* Canonicalize to big endian, like OSTree does. Without this, any numbers
    * we place in the metadata will be unreadable since clients won't know
@@ -126,9 +138,11 @@ metadata_conversion_end (GVariantBuilder *builder)
 
 /* Convert hash table of metadata into finalized GVariant */
 GVariant *
-rpmostree_composeutil_finalize_metadata (GHashTable *metadata, int rootfs_dfd, GError **error)
+rpmostree_composeutil_finalize_metadata (GVariantDict *metadata, int rootfs_dfd, GError **error)
 {
-  g_autoptr (GVariantBuilder) builder = metadata_conversion_start (metadata);
+  g_autoptr (GVariantBuilder) builder = variant_dict_to_builder (metadata);
+  if (!builder)
+    builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
 
   /* include list of packages in rpmdb; this is used client-side for easily previewing
    * pending updates. once we only support unified core composes, this can easily be much
@@ -143,13 +157,9 @@ rpmostree_composeutil_finalize_metadata (GHashTable *metadata, int rootfs_dfd, G
 
 /* Convert hash table of metadata into finalized GVariant */
 GVariant *
-rpmostree_composeutil_finalize_detached_metadata (GHashTable *detached_metadata)
+rpmostree_composeutil_finalize_detached_metadata (GVariantDict *detached_metadata)
 {
-  /* canonicalize empty detached metadata to NULL */
-  if (g_hash_table_size (detached_metadata) == 0)
-    return NULL;
-
-  g_autoptr (GVariantBuilder) builder = metadata_conversion_start (detached_metadata);
+  g_autoptr (GVariantBuilder) builder = variant_dict_to_builder (detached_metadata);
   return metadata_conversion_end (builder);
 }
 

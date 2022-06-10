@@ -31,15 +31,16 @@ gboolean rpmostree_composeutil_checksum (HyGoal goal, OstreeRepo *repo,
                                          const rpmostreecxx::Treefile &tf, JsonObject *treefile,
                                          char **out_checksum, GError **error);
 
-gboolean rpmostree_composeutil_read_json_metadata (JsonNode *root, GHashTable *metadata,
+gboolean rpmostree_composeutil_read_json_metadata (JsonNode *root, GVariantDict *metadata,
                                                    GError **error);
-gboolean rpmostree_composeutil_read_json_metadata_from_file (const char *path, GHashTable *metadata,
+gboolean rpmostree_composeutil_read_json_metadata_from_file (const char *path,
+                                                             GVariantDict *metadata,
                                                              GError **error);
 
-GVariant *rpmostree_composeutil_finalize_metadata (GHashTable *metadata, int rootfs_dfd,
+GVariant *rpmostree_composeutil_finalize_metadata (GVariantDict *metadata, int rootfs_dfd,
                                                    GError **error);
 
-GVariant *rpmostree_composeutil_finalize_detached_metadata (GHashTable *detached_metadata);
+GVariant *rpmostree_composeutil_finalize_detached_metadata (GVariantDict *detached_metadata);
 
 gboolean rpmostree_composeutil_write_composejson (OstreeRepo *repo, const char *path,
                                                   const OstreeRepoTransactionStats *stats,
