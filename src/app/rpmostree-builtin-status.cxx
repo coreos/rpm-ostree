@@ -530,7 +530,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
 {
   /* Add the long keys here */
   const guint max_key_len
-      = MAX (strlen ("InactiveBaseReplacements"), strlen ("InterruptedLiveCommit"));
+      = MAX (strlen ("InactiveLocalOverrides"), strlen ("InterruptedLiveCommit"));
 
   g_autoptr (GVariantDict) dict = g_variant_dict_new (child);
 
@@ -912,13 +912,12 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
       g_ptr_array_add (active_replacements_grouped, NULL);
 
       if (active_replacements_grouped->len > 1)
-        print_packages ("ReplacedBasePackages", max_key_len,
+        print_packages ("LocalOverrides", max_key_len,
                         (const char *const *)active_replacements_grouped->pdata, NULL, FALSE);
     }
 
   if (origin_requested_base_local_replacements && opt_verbose)
-    print_packages ("InactiveBaseReplacements", max_key_len,
-                    origin_requested_base_local_replacements,
+    print_packages ("InactiveLocalOverrides", max_key_len, origin_requested_base_local_replacements,
                     (const char *const *)active_replacements->pdata, TRUE);
 
   /* only print inactive layering requests in verbose mode */

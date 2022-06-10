@@ -90,7 +90,7 @@ Deployments:
                     Commit: ed8e9dc881dba12840a4a85549e37c7e869ee4780010d5bfebeaf7960794ae91
               GPGSignature: Valid signature by 787EA6AE1147EEE56C40B30CDB4639719867C58F
                       Diff: 3 upgraded
-      ReplacedBasePackages: kernel kernel-modules kernel-core 5.15.10-200.fc35 -> 5.17.0-0.rc0.20220118gitfe81ba137ebc.69.vanilla.1.fc35
+            LocalOverrides: kernel kernel-modules kernel-core 5.15.10-200.fc35 -> 5.17.0-0.rc0.20220118gitfe81ba137ebc.69.vanilla.1.fc35
 ...
 ```
 
