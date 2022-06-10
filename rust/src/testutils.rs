@@ -278,11 +278,13 @@ pub(crate) fn testutils_entrypoint(args: Vec<String>) -> CxxResult<()> {
 }
 
 fn test_pkg_variants(repo: &ostree::Repo, booted_commit: &str) -> Result<()> {
-    let repo = repo.gobj_rewrap();
     let cancellable = gio::Cancellable::new();
-    let cancellable = cancellable.gobj_rewrap();
     // This returns an a(sssss) as a raw value
-    let v = crate::ffi::package_variant_list_for_commit(repo, booted_commit, cancellable)?;
+    let v = crate::ffi::package_variant_list_for_commit(
+        repo.reborrow_cxx(),
+        booted_commit,
+        cancellable.reborrow_cxx(),
+    )?;
     let v: glib::Variant = unsafe { glib::translate::from_glib_full(v as *mut _) };
     for p in v.iter() {
         let n = p.child_value(0);

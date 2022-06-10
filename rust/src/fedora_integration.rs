@@ -234,13 +234,12 @@ fn get_base_package_list() -> Result<HashSet<String>> {
             .ok_or_else(|| anyhow::anyhow!("No deployments found"))?;
         let checksum = default.csum().unwrap();
         let repo = sysroot.repo().unwrap();
-        let repo = repo.gobj_rewrap();
         let pkglist = {
             let cancellable = gio::Cancellable::new();
             let r = crate::ffi::package_variant_list_for_commit(
-                repo,
+                repo.reborrow_cxx(),
                 checksum.as_str(),
-                cancellable.gobj_rewrap(),
+                cancellable.reborrow_cxx(),
             )?;
             let r: glib::Variant = unsafe { glib::translate::from_glib_full(r as *mut _) };
             r

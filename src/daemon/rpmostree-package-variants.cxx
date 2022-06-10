@@ -191,13 +191,15 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo, const char *from_rev, const char *
 namespace rpmostreecxx
 {
 GVariant *
-package_variant_list_for_commit (OstreeRepo &repo, rust::Str rev, GCancellable &cancellable)
+package_variant_list_for_commit (const OstreeRepo &repo, rust::Str rev,
+                                 const GCancellable &cancellable)
 {
   g_autoptr (GError) local_error = NULL;
   auto rev_c = std::string (rev);
   g_autoptr (GVariant) ret_v = NULL;
-  if (!_rpm_ostree_package_variant_list_for_commit (&repo, rev_c.c_str (), FALSE, &ret_v,
-                                                    &cancellable, &local_error))
+  if (!_rpm_ostree_package_variant_list_for_commit (
+          &const_cast<OstreeRepo &> (repo), rev_c.c_str (), FALSE, &ret_v,
+          &const_cast<GCancellable &> (cancellable), &local_error))
     util::throw_gerror (local_error);
   return util::move_nullify (ret_v);
 }

@@ -845,9 +845,9 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("rpmostree-package-variants.h");
         fn package_variant_list_for_commit(
-            repo: Pin<&mut OstreeRepo>,
+            repo: &OstreeRepo,
             rev: &str,
-            cancellable: Pin<&mut GCancellable>,
+            cancellable: &GCancellable,
         ) -> Result<*mut GVariant>;
     }
 }
