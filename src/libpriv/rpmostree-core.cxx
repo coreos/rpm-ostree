@@ -1504,22 +1504,6 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
       }
   }
 
-  /* check that all the pkgs we expect to replace are marked for replacement */
-  {
-    g_autoptr (GPtrArray) forbidden = g_ptr_array_new_with_free_func (g_free);
-
-    GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant *, newv, GVariant *, old)
-      {
-        g_autoptr (GVariant) name_v = g_variant_get_child_value (newv, 1);
-        const char *name = g_variant_get_string (name_v, NULL);
-        if (!rpmostree_str_ptrarray_contains (replaced_pkgnames, name))
-          g_ptr_array_add (forbidden, g_strdup (name));
-      }
-
-    if (forbidden->len > 0)
-      return throw_package_list (error, "Base packages not marked to be installed", forbidden);
-  }
-
   return TRUE;
 }
 
