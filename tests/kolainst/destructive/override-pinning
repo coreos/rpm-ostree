@@ -41,7 +41,7 @@ rpmostree_assert_status \
   '.deployments[0]["requested-base-local-replacements"]|length == 0'
 rpm-ostree override replace zincati --experimental --freeze --from repo=test-repo
 rpm-ostree status > status.txt
-assert_file_has_content status.txt 'ReplacedBasePackages: zincati .* -> 99.99-3'
+assert_file_has_content status.txt 'LocalOverrides: zincati .* -> 99.99-3'
 rpmostree_assert_status \
   '.deployments[0]["base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1'
@@ -52,7 +52,7 @@ rpm-ostree status > status.txt
 rpmostree_assert_status \
   '.deployments[0]["base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1'
-assert_file_has_content status.txt 'ReplacedBasePackages: zincati .* -> 99.99-3'
+assert_file_has_content status.txt 'LocalOverrides: zincati .* -> 99.99-3'
 zincati > zincati_version.txt
 assert_file_has_content_literal zincati_version.txt '99.99-3'
 rm -f zincati_version.txt
