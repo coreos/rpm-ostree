@@ -1469,17 +1469,31 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
         auto pkg = static_cast<DnfPackage *> (packages->pdata[i]);
         const char *name = dnf_package_get_name (pkg);
 
-        /* just pick the first pkg */
+        /* A replacement package may in theory obsolete multiple base packages, but only one of
+         * those packages will be the one with the matching pkgname (these other packages would have
+         * to either also have their replacements with matching names or marked for removal by name
+         * otherwise they'd be locked and solving would've failed). Find that one. */
         g_autoptr (GPtrArray) old = hy_goal_list_obsoleted_by_package (goal, pkg);
         g_assert_cmpint (old->len, >, 0);
-        auto old_pkg = static_cast<DnfPackage *> (old->pdata[0]);
+        DnfPackage *replaced_pkg = NULL;
+        for (guint i = 0; i < old->len && !replaced_pkg; i++)
+          {
+            auto old_pkg = static_cast<DnfPackage *> (old->pdata[i]);
+            if (g_str_equal (dnf_package_get_name (old_pkg), name))
+              replaced_pkg = old_pkg;
+          }
+        /* this should never really happen; otherwise it's technically a layer, not an override */
+        if (replaced_pkg == NULL)
+          return glnx_throw (error, "Package %s doesn't replace a package of the same name",
+                             dnf_package_get_nevra (pkg));
 
         /* did we expect this base pkg to be replaced? */
         if (rpmostree_str_ptrarray_contains (replaced_pkgnames, name))
           g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
-                               gv_nevra_from_pkg (old_pkg));
+                               gv_nevra_from_pkg (replaced_pkg));
         else
-          g_hash_table_insert (forbidden_replacements, g_object_ref (old_pkg), g_object_ref (pkg));
+          g_hash_table_insert (forbidden_replacements, g_object_ref (replaced_pkg),
+                               g_object_ref (pkg));
       }
 
     if (g_hash_table_size (forbidden_replacements) > 0)
