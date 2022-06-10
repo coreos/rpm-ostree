@@ -210,19 +210,18 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
     let repo = &opt.repo;
     let (root, rev) = repo.read_commit(opt.ostree_ref.as_str(), gio::NONE_CANCELLABLE)?;
     let pkglist = {
-        let repo = repo.gobj_rewrap();
         let cancellable = gio::Cancellable::new();
         let r = crate::ffi::package_variant_list_for_commit(
-            repo,
+            repo.reborrow_cxx(),
             rev.as_str(),
-            cancellable.gobj_rewrap(),
+            cancellable.reborrow_cxx(),
         )?;
         let r: glib::Variant = unsafe { glib::translate::from_glib_full(r as *mut _) };
         r
     };
 
     // Open the RPM database for this commit.
-    let q = crate::ffi::rpmts_for_commit(repo.gobj_rewrap(), rev.as_str())?;
+    let q = crate::ffi::rpmts_for_commit(repo.reborrow_cxx(), rev.as_str())?;
 
     let mut state = MappingBuilder {
         unpackaged_id: Rc::from(MappingBuilder::UNPACKAGED_ID),

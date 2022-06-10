@@ -45,7 +45,7 @@ G_END_DECLS
 #include "rust/cxx.h"
 namespace rpmostreecxx
 {
-GVariant *package_variant_list_for_commit (OstreeRepo &repo, rust::Str rev,
-                                           GCancellable &cancellable);
+GVariant *package_variant_list_for_commit (const OstreeRepo &repo, rust::Str rev,
+                                           const GCancellable &cancellable);
 }
 #endif

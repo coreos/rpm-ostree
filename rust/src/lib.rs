@@ -836,7 +836,7 @@ pub mod ffi {
         #[allow(dead_code)]
         fn nevra_to_cache_branch(nevra: &CxxString) -> Result<String>;
         fn get_repodata_chksum_repr(pkg: &mut FFIDnfPackage) -> Result<String>;
-        fn rpmts_for_commit(repo: Pin<&mut OstreeRepo>, rev: &str) -> Result<UniquePtr<RpmTs>>;
+        fn rpmts_for_commit(repo: &OstreeRepo, rev: &str) -> Result<UniquePtr<RpmTs>>;
         fn rpmdb_package_name_list(dfd: i32, path: String) -> Result<Vec<String>>;
 
         // Methods on RpmTs
@@ -853,9 +853,9 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("rpmostree-package-variants.h");
         fn package_variant_list_for_commit(
-            repo: Pin<&mut OstreeRepo>,
+            repo: &OstreeRepo,
             rev: &str,
-            cancellable: Pin<&mut GCancellable>,
+            cancellable: &GCancellable,
         ) -> Result<*mut GVariant>;
     }
 }
