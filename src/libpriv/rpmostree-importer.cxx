@@ -61,7 +61,6 @@ struct RpmOstreeImporter
   Header hdr;
   rpmfi fi;
   off_t cpio_offset;
-  GString *tmpfiles_d;
   DnfPackage *pkg;
 
   std::optional<rust::Box<rpmostreecxx::RpmImporter> > importer_rs;
@@ -80,7 +79,6 @@ rpmostree_importer_finalize (GObject *object)
   if (self->fi)
     (void)rpmfiFree (self->fi);
   glnx_close_fd (&self->fd);
-  g_string_free (self->tmpfiles_d, TRUE);
   g_clear_object (&self->repo);
   g_clear_object (&self->sepolicy);
 
@@ -101,7 +99,6 @@ static void
 rpmostree_importer_init (RpmOstreeImporter *self)
 {
   self->fd = -1;
-  self->tmpfiles_d = g_string_new ("");
   self->importer_rs = std::nullopt;
 }
 
@@ -497,13 +494,9 @@ compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpo
       const char *group = NULL;
       get_rpmfi_override (self, path, &user, &group, NULL, NULL);
 
-      auto entry = ROSCXX_VAL (
-          tmpfiles_translate (path, *file_info, user ?: "root", group ?: "root"), error);
-      if (entry.has_value ())
-        {
-          g_string_append (self->tmpfiles_d, entry.value ().c_str ());
-          g_string_append_c (self->tmpfiles_d, '\n');
-        }
+      CXX ((*self->importer_rs)
+               ->translate_to_tmpfiles_entry (path, *file_info, user ?: "root", group ?: "root"),
+           error);
 
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
@@ -607,9 +600,6 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
       return FALSE;
     }
 
-  for (auto &line : (*self->importer_rs)->tmpfiles_symlink_entries ())
-    g_string_append_printf (self->tmpfiles_d, "%s\n", line.c_str ());
-
   /* Handle any data we've accumulated to write to tmpfiles.d.
    * I originally tried to do this entirely in memory but things
    * like selinux labeling only happen as callbacks out of using
@@ -618,8 +608,9 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
   g_auto (GLnxTmpDir) tmpdir = {
     0,
   };
-  if (self->tmpfiles_d->len > 0)
+  if ((*self->importer_rs)->has_tmpfiles_entries ())
     {
+      auto content = (*self->importer_rs)->serialize_tmpfiles_content ();
       auto pkg_name = (*self->importer_rs)->pkg_name ();
 
       if (!glnx_mkdtemp ("rpm-ostree-import.XXXXXX", 0700, &tmpdir, error))
@@ -628,8 +619,8 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
         return FALSE;
       if (!glnx_file_replace_contents_at (
               tmpdir.fd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkg_name.c_str (), ".conf"),
-              (guint8 *)self->tmpfiles_d->str, self->tmpfiles_d->len, GLNX_FILE_REPLACE_NODATASYNC,
-              cancellable, error))
+              (guint8 *)content.data (), content.size (), GLNX_FILE_REPLACE_NODATASYNC, cancellable,
+              error))
         return FALSE;
 
       if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir.fd, ".", mtree, modifier, cancellable,

@@ -349,7 +349,6 @@ pub mod ffi {
         fn handle_translate_pathname(self: &mut RpmImporter, path: &str) -> String;
         fn ostree_branch(self: &RpmImporter) -> String;
         fn pkg_name(self: &RpmImporter) -> String;
-        fn tmpfiles_symlink_entries(self: &RpmImporter) -> Vec<String>;
         fn doc_files_are_filtered(self: &RpmImporter) -> bool;
         fn doc_files_insert(self: &mut RpmImporter, path: &str);
         fn doc_files_contains(self: &RpmImporter, path: &str) -> bool;
@@ -363,6 +362,15 @@ pub mod ffi {
             path: &str,
             mut file_info: Pin<&mut GFileInfo>,
         ) -> Result<bool>;
+        fn translate_to_tmpfiles_entry(
+            self: &mut RpmImporter,
+            abs_path: &str,
+            mut file_info: Pin<&mut GFileInfo>,
+            username: &str,
+            groupname: &str,
+        ) -> Result<()>;
+        fn has_tmpfiles_entries(self: &RpmImporter) -> bool;
+        fn serialize_tmpfiles_content(self: &RpmImporter) -> String;
 
         fn tmpfiles_translate(
             abs_path: &str,
