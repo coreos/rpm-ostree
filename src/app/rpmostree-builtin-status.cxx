@@ -872,39 +872,23 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
           g_autoptr (GVariant) gv_nevra_old;
           g_variant_get_child (origin_base_local_replacements, i, "(vv)", &gv_nevra_new,
                                &gv_nevra_old);
-          const char *nevra_new, *name_new, *name_old;
+          const char *nevra_new, *name;
           g_variant_get_child (gv_nevra_new, 0, "&s", &nevra_new);
-          g_variant_get_child (gv_nevra_new, 1, "&s", &name_new);
-          g_variant_get_child (gv_nevra_old, 1, "&s", &name_old);
+          g_variant_get_child (gv_nevra_new, 1, "&s", &name);
 
-          /* if pkgnames match, print a nicer version like treediff */
-          if (g_str_equal (name_new, name_old))
+          /* let's just use buf as a scratchpad to avoid excessive mallocs */
+          gv_nevra_to_evr (buf, gv_nevra_old);
+          g_string_append (buf, " -> ");
+          gv_nevra_to_evr (buf, gv_nevra_new);
+          auto pkgs = static_cast<GPtrArray *> (g_hash_table_lookup (grouped_diffs, buf->str));
+          if (!pkgs)
             {
-              /* let's just use buf as a scratchpad to avoid excessive mallocs; the buf
-               * needs to be stretched anyway for the final output */
-              gsize original_size = buf->len;
-              gv_nevra_to_evr (buf, gv_nevra_old);
-              g_string_append (buf, " -> ");
-              gv_nevra_to_evr (buf, gv_nevra_new);
-              const char *diff = buf->str + original_size;
-              auto pkgs = static_cast<GPtrArray *> (g_hash_table_lookup (grouped_diffs, diff));
-              if (!pkgs)
-                {
-                  pkgs = g_ptr_array_new_with_free_func (g_free);
-                  g_hash_table_insert (grouped_diffs, g_strdup (diff), pkgs);
-                }
-              g_ptr_array_add (pkgs, g_strdup (name_new));
-              g_string_truncate (buf, original_size);
+              pkgs = g_ptr_array_new_with_free_func (g_free);
+              g_hash_table_insert (grouped_diffs, g_strdup (buf->str), pkgs);
             }
-          else
-            {
-              if (buf->len)
-                g_string_append (buf, ", ");
+          g_ptr_array_add (pkgs, g_strdup (name));
+          g_string_truncate (buf, 0);
 
-              const char *nevra_old;
-              g_variant_get_child (gv_nevra_old, 0, "&s", &nevra_old);
-              g_string_append_printf (buf, "%s -> %s", nevra_old, nevra_new);
-            }
           g_ptr_array_add (active_replacements, g_strdup (nevra_new));
         }
 
