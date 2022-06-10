@@ -104,8 +104,8 @@ gboolean rpmostree_update_deployment (
     const char *const *install_pkgs, const char *const *install_fileoverride_pkgs,
     const char *const *uninstall_pkgs, const char *const *override_replace_pkgs,
     const char *const *override_remove_pkgs, const char *const *override_reset_pkgs,
-    const char *local_repo_remote, GVariant *options, char **out_transaction_address,
-    GCancellable *cancellable, GError **error);
+    const char *local_repo_remote, const char *treefile, GVariant *options,
+    char **out_transaction_address, GCancellable *cancellable, GError **error);
 
 gboolean rpmostree_print_diff_advisories (GVariant *rpm_diff, GVariant *advisories,
                                           gboolean verbose, gboolean verbose_advisories,

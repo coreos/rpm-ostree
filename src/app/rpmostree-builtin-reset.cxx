@@ -97,8 +97,8 @@ rpmostree_builtin_reset (int argc, char **argv, RpmOstreeCommandInvocation *invo
   g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   if (!rpmostree_update_deployment (os_proxy, NULL, NULL, install_pkgs, NULL, uninstall_pkgs, NULL,
-                                    NULL, NULL, NULL, options, &transaction_address, cancellable,
-                                    error))
+                                    NULL, NULL, NULL, NULL, options, &transaction_address,
+                                    cancellable, error))
     return FALSE;
 
   return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy, options, FALSE,

@@ -134,3 +134,6 @@ gboolean rpmostree_origin_remove_override_replace_local (RpmOstreeOrigin *origin
 gboolean rpmostree_origin_remove_override_replace (RpmOstreeOrigin *origin, const char *package);
 
 gboolean rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin);
+
+gboolean rpmostree_origin_merge_treefile (RpmOstreeOrigin *origin, const char *treefile,
+                                          gboolean *out_changed, GError **error);

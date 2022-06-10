@@ -174,6 +174,7 @@ rpmostree_builtin_deploy (int argc, char **argv, RpmOstreeCommandInvocation *inv
                                             NULL,                 /* override remove */
                                             NULL,                 /* override reset */
                                             NULL,                 /* local_repo_remote */
+                                            NULL,                 /* treefile */
                                             options, &transaction_address, cancellable, error))
             return FALSE;
         }

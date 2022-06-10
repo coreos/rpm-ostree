@@ -918,7 +918,8 @@ get_modifiers_variant (const char *set_refspec, const char *set_revision,
                        const char *const *uninstall_pkgs, const char *const *override_replace_pkgs,
                        const char *const *override_remove_pkgs,
                        const char *const *override_reset_pkgs, const char *local_repo_remote,
-                       GVariant **out_modifiers, GUnixFDList **out_fd_list, GError **error)
+                       const char *treefile, GVariant **out_modifiers, GUnixFDList **out_fd_list,
+                       GError **error)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -966,27 +967,29 @@ get_modifiers_variant (const char *set_refspec, const char *set_revision,
       g_variant_dict_insert (&dict, "ex-local-repo-remote", "h", idx);
     }
 
+  if (treefile)
+    g_variant_dict_insert (&dict, "treefile", "s", treefile);
+
   *out_fd_list = util::move_nullify (fd_list);
   *out_modifiers = g_variant_ref_sink (g_variant_dict_end (&dict));
   return TRUE;
 }
 
 gboolean
-rpmostree_update_deployment (RPMOSTreeOS *os_proxy, const char *set_refspec,
-                             const char *set_revision, const char *const *install_pkgs,
-                             const char *const *install_fileoverride_pkgs,
-                             const char *const *uninstall_pkgs,
-                             const char *const *override_replace_pkgs,
-                             const char *const *override_remove_pkgs,
-                             const char *const *override_reset_pkgs, const char *local_repo_remote,
-                             GVariant *options, char **out_transaction_address,
-                             GCancellable *cancellable, GError **error)
+rpmostree_update_deployment (
+    RPMOSTreeOS *os_proxy, const char *set_refspec, const char *set_revision,
+    const char *const *install_pkgs, const char *const *install_fileoverride_pkgs,
+    const char *const *uninstall_pkgs, const char *const *override_replace_pkgs,
+    const char *const *override_remove_pkgs, const char *const *override_reset_pkgs,
+    const char *local_repo_remote, const char *treefile, GVariant *options,
+    char **out_transaction_address, GCancellable *cancellable, GError **error)
 {
   g_autoptr (GVariant) modifiers = NULL;
   glnx_unref_object GUnixFDList *fd_list = NULL;
   if (!get_modifiers_variant (set_refspec, set_revision, install_pkgs, install_fileoverride_pkgs,
                               uninstall_pkgs, override_replace_pkgs, override_remove_pkgs,
-                              override_reset_pkgs, local_repo_remote, &modifiers, &fd_list, error))
+                              override_reset_pkgs, local_repo_remote, treefile, &modifiers,
+                              &fd_list, error))
     return glnx_prefix_error (error, "Preparing D-Bus arguments");
 
   return rpmostree_os_call_update_deployment_sync (

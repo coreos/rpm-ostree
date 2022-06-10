@@ -423,3 +423,13 @@ rpmostree_origin_remove_all_overrides (RpmOstreeOrigin *origin)
   auto changed = (*origin->treefile)->remove_all_overrides ();
   return changed;
 }
+
+/* Mutability: setter */
+gboolean
+rpmostree_origin_merge_treefile (RpmOstreeOrigin *origin, const char *treefile,
+                                 gboolean *out_changed, GError **error)
+{
+  CXX_TRY_VAR (changed, (*origin->treefile)->merge_treefile (treefile), error);
+  set_changed (out_changed, changed);
+  return TRUE;
+}
