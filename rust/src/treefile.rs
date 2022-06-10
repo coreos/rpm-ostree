@@ -1779,7 +1779,7 @@ impl Treefile {
                 .derive
                 .override_replace
                 .as_ref()
-                .map(|v| !v.is_empty())
+                .map(|v| v.iter().any(|ovr| !ovr.is_empty()))
                 .unwrap_or_default()
             || self
                 .parsed
@@ -2555,9 +2555,18 @@ impl std::fmt::Display for RemoteOverrideReplaceFrom {
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct RemoteOverrideReplace {
     pub(crate) from: RemoteOverrideReplaceFrom,
-    // in the future, some `from`s could support not specifying packages
-    // see discussions in https://github.com/coreos/rpm-ostree/issues/1265
+    // In the future, some `from`s could support not specifying packages.
+    // See discussions in https://github.com/coreos/rpm-ostree/issues/1265.
+    // Update `is_empty` below as necessary in that case.
     pub(crate) packages: BTreeSet<String>,
+}
+
+impl RemoteOverrideReplace {
+    fn is_empty(&self) -> bool {
+        match self.from {
+            RemoteOverrideReplaceFrom::Repo(_) => self.packages.is_empty(),
+        }
+    }
 }
 
 impl From<RemoteOverrideReplace> for crate::ffi::OverrideReplacement {
@@ -2788,7 +2797,7 @@ impl TreeComposeConfig {
                     ovr.packages.retain(|p| seen_pkgs.insert(p.into()));
                     ovr
                 })
-                .filter(|ovr| !ovr.packages.is_empty())
+                .filter(|ovr| !ovr.is_empty())
                 .collect();
             // Now replace the original, re-reversing.
             v.reverse();
@@ -4185,7 +4194,12 @@ conditional-include:
             Treefile::new_from_string(utils::InputFormat::YAML, buf_top).unwrap();
         treefile_merge(&mut treefile_top.parsed, &mut treefile.parsed);
         assert!(treefile_top.parsed.derive.override_replace.is_some());
-        let replacements = treefile_top.parsed.derive.override_replace.unwrap();
+        let replacements = treefile_top
+            .parsed
+            .derive
+            .override_replace
+            .as_ref()
+            .unwrap();
         assert_eq!(replacements.len(), 2);
         assert_eq!(
             replacements[0],
@@ -4201,6 +4215,9 @@ conditional-include:
                 packages: maplit::btreeset!["foo".into(), "newfoo".into(),],
             }
         );
+        assert!(treefile_top.has_any_packages());
+        treefile_top.parsed.derive.override_replace = Some(Vec::new());
+        assert!(!treefile_top.has_any_packages());
     }
 
     #[test]
