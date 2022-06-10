@@ -61,6 +61,8 @@ pub struct RpmImporter {
     ///  - [K] absolute full path of the file
     ///  - [V] iterator index in RPM header for this file
     rpmfi_overrides: HashMap<String, u64>,
+    /// Filepaths translated to tmpfiles.d entries.
+    tmpfiles_entries: Vec<String>,
 }
 
 /// Build a new RPM importer for a given package.
@@ -102,6 +104,7 @@ impl RpmImporter {
             pkg_name: pkg_name.to_string(),
             varlib_direntries: BTreeSet::new(),
             rpmfi_overrides: HashMap::new(),
+            tmpfiles_entries: vec![],
         };
         Ok(importer)
     }
@@ -176,7 +179,7 @@ impl RpmImporter {
     /// Format tmpfiles.d lines for symlinked entries.
     // NOTE(lucab): destinations (dirname) can't be quoted as systemd just
     // parses the remainder of the line, and doesn't expand quotes.
-    pub fn tmpfiles_symlink_entries(&self) -> Vec<String> {
+    fn tmpfiles_symlink_entries(&self) -> Vec<String> {
         // /opt/ symlinks
         let opt_entries = self.opt_direntries.iter().map(|dirname| {
             let quoted = crate::maybe_shell_quote(&format!("/opt/{dirname}"));
@@ -250,6 +253,43 @@ impl RpmImporter {
             RepoCommitFilterResult::Skip => Ok(true),
             x => unreachable!("unknown commit result '{}' for path '{}'", x, path),
         }
+    }
+
+    /// Translate a filepath to an equivalent tmpfiles.d line.
+    pub fn translate_to_tmpfiles_entry(
+        &mut self,
+        abs_path: &str,
+        mut file_info: Pin<&mut crate::FFIGFileInfo>,
+        username: &str,
+        groupname: &str,
+    ) -> CxxResult<()> {
+        let file_info = file_info.gobj_wrap();
+        let entry = translate_to_tmpfiles_d(abs_path, &file_info, username, groupname)?;
+        self.tmpfiles_entries.push(entry);
+        Ok(())
+    }
+
+    /// Return whether this RPM has any auto-translated tmpfiles.d entries.
+    pub fn has_tmpfiles_entries(&self) -> bool {
+        self.tmpfiles_entries
+            .len()
+            .saturating_add(self.opt_direntries.len())
+            .saturating_add(self.varlib_direntries.len())
+            > 0
+    }
+
+    /// Serialize all tmpfiles.d entries as a single configuration fragment.
+    pub fn serialize_tmpfiles_content(&self) -> String {
+        let mut buf = String::new();
+
+        let symlink_entries = self.tmpfiles_symlink_entries();
+        let all_entries = symlink_entries.iter().chain(self.tmpfiles_entries.iter());
+
+        for entry in all_entries {
+            buf.push_str(&entry);
+            buf.push('\n');
+        }
+        buf
     }
 }
 
