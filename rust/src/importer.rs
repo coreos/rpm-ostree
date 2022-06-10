@@ -18,7 +18,6 @@ use ostree_ext::{gio, ostree};
 use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
-use std::pin::Pin;
 
 bitflags! {
     /// Flags to control the behavior of an RPM importer.
@@ -231,24 +230,18 @@ impl RpmImporter {
     }
 
     /// Adjust mode for specific file entries.
-    pub fn tweak_imported_file_info(&self, mut ffi_file_info: Pin<&mut crate::FFIGFileInfo>) {
-        let mut file_info = ffi_file_info.gobj_wrap();
+    pub fn tweak_imported_file_info(&self, file_info: &crate::FFIGFileInfo) {
         let ro_executables = self.flags.contains(RpmImporterFlags::RO_EXECUTABLES);
-        tweak_imported_file_info(&mut file_info, ro_executables);
+        tweak_imported_file_info(&file_info.glib_reborrow(), ro_executables);
     }
 
     /// Apply filtering and manipulation logic to an RPM file before importing.
     ///
     /// This returns whether the entry should be ignored by the importer.
-    pub fn is_file_filtered(
-        &self,
-        path: &str,
-        mut ffi_file_info: Pin<&mut crate::FFIGFileInfo>,
-    ) -> CxxResult<bool> {
-        let file_info = ffi_file_info.gobj_wrap();
+    pub fn is_file_filtered(&self, path: &str, file_info: &crate::FFIGFileInfo) -> CxxResult<bool> {
         let skip_extraneous = self.flags.contains(RpmImporterFlags::SKIP_EXTRANEOUS);
 
-        match import_filter(path, &file_info, skip_extraneous)? {
+        match import_filter(path, &file_info.glib_reborrow(), skip_extraneous)? {
             RepoCommitFilterResult::Allow => Ok(false),
             RepoCommitFilterResult::Skip => Ok(true),
             x => unreachable!("unknown commit result '{}' for path '{}'", x, path),
@@ -259,12 +252,12 @@ impl RpmImporter {
     pub fn translate_to_tmpfiles_entry(
         &mut self,
         abs_path: &str,
-        mut file_info: Pin<&mut crate::FFIGFileInfo>,
+        file_info: &crate::FFIGFileInfo,
         username: &str,
         groupname: &str,
     ) -> CxxResult<()> {
-        let file_info = file_info.gobj_wrap();
-        let entry = translate_to_tmpfiles_d(abs_path, &file_info, username, groupname)?;
+        let entry =
+            translate_to_tmpfiles_d(abs_path, &file_info.glib_reborrow(), username, groupname)?;
         self.tmpfiles_entries.push(entry);
         Ok(())
     }
@@ -311,7 +304,7 @@ fn canonicalize_path(p: &str) -> String {
 }
 
 /// Adjust mode for specific file entries.
-fn tweak_imported_file_info(file_info: &mut FileInfo, ro_executables: bool) {
+fn tweak_imported_file_info(file_info: &FileInfo, ro_executables: bool) {
     let filetype = file_info.file_type();
 
     // Add the "user writable" permission bit for a directory.
@@ -410,12 +403,11 @@ fn path_is_ostree_compliant(path: &str) -> bool {
 
 pub fn tmpfiles_translate(
     abs_path: &str,
-    mut file_info: Pin<&mut crate::FFIGFileInfo>,
+    file_info: &crate::FFIGFileInfo,
     username: &str,
     groupname: &str,
 ) -> CxxResult<String> {
-    let file_info = file_info.gobj_wrap();
-    let entry = translate_to_tmpfiles_d(abs_path, &file_info, username, groupname)?;
+    let entry = translate_to_tmpfiles_d(abs_path, &file_info.glib_reborrow(), username, groupname)?;
     Ok(entry)
 }
 

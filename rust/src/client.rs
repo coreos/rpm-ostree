@@ -11,7 +11,6 @@ use cap_std_ext::rustix;
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
 use std::os::unix::io::IntoRawFd;
-use std::pin::Pin;
 use std::process::Command;
 
 /// The well-known bus name.
@@ -197,11 +196,9 @@ pub(crate) fn client_start_daemon() -> CxxResult<()> {
 }
 
 /// Convert the GVariant parameters from the DownloadProgress DBus API to a human-readable English string.
-pub(crate) fn client_render_download_progress(
-    mut progress: Pin<&mut crate::ffi::GVariant>,
-) -> String {
-    let progress = progress.gobj_wrap();
+pub(crate) fn client_render_download_progress(progress: &crate::ffi::GVariant) -> String {
     let progress = progress
+        .glib_reborrow()
         .get::<(
             (u64, u64),
             (u32, u32),

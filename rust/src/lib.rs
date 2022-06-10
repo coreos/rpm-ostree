@@ -94,7 +94,7 @@ pub mod ffi {
         fn is_rpm_arg(arg: &str) -> bool;
         fn client_start_daemon() -> Result<()>;
         fn client_handle_fd_argument(arg: &str, arch: &str, is_replace: bool) -> Result<Vec<i32>>;
-        fn client_render_download_progress(progress: Pin<&mut GVariant>) -> String;
+        fn client_render_download_progress(progress: &GVariant) -> String;
         fn running_in_container() -> bool;
     }
 
@@ -356,16 +356,12 @@ pub mod ffi {
         fn rpmfi_overrides_contains(self: &RpmImporter, path: &str) -> bool;
         fn rpmfi_overrides_get(self: &RpmImporter, path: &str) -> u64;
         fn is_ima_enabled(self: &RpmImporter) -> bool;
-        fn tweak_imported_file_info(self: &RpmImporter, mut file_info: Pin<&mut GFileInfo>);
-        fn is_file_filtered(
-            self: &RpmImporter,
-            path: &str,
-            mut file_info: Pin<&mut GFileInfo>,
-        ) -> Result<bool>;
+        fn tweak_imported_file_info(self: &RpmImporter, mut file_info: &GFileInfo);
+        fn is_file_filtered(self: &RpmImporter, path: &str, file_info: &GFileInfo) -> Result<bool>;
         fn translate_to_tmpfiles_entry(
             self: &mut RpmImporter,
             abs_path: &str,
-            mut file_info: Pin<&mut GFileInfo>,
+            file_info: &GFileInfo,
             username: &str,
             groupname: &str,
         ) -> Result<()>;
@@ -374,7 +370,7 @@ pub mod ffi {
 
         fn tmpfiles_translate(
             abs_path: &str,
-            mut file_info: Pin<&mut GFileInfo>,
+            file_info: &GFileInfo,
             username: &str,
             groupname: &str,
         ) -> Result<String>;
