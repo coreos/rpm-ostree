@@ -1091,6 +1091,15 @@ impl Treefile {
             .collect()
     }
 
+    pub(crate) fn has_packages_override_replace(&self) -> bool {
+        self.parsed
+            .derive
+            .override_replace
+            .as_ref()
+            .map(|v| v.iter().any(|ovr| !ovr.is_empty()))
+            .unwrap_or_default()
+    }
+
     pub(crate) fn add_packages_override_replace(
         &mut self,
         replacement: crate::ffi::OverrideReplacement,

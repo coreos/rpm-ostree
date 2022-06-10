@@ -677,7 +677,11 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
    * concept. So for now, force off pkgcache-only. This means that e.g. client
    * side operations that are normally cache-only like `rpm-ostree uninstall`
    * will still try to fetch metadata, and might install newer versions of other
-   * packages... we can probably hack that in the future. */
+   * packages... we can probably hack that in the future.
+   * And similarly for remote overrides; we need to reach the remote every time.
+   * We can probably do something fancier in the future where we know which pkg
+   * from our cache to use based on which repo it was downloaded from.
+   * */
   if (self->pkgcache_only)
     {
       gboolean disable_cacheonly = FALSE;
@@ -685,11 +689,13 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
       disable_cacheonly = disable_cacheonly || !modules_enable.empty ();
       auto modules_install = self->treefile_rs->get_modules_install ();
       disable_cacheonly = disable_cacheonly || !modules_install.empty ();
+      disable_cacheonly = disable_cacheonly || self->treefile_rs->has_packages_override_replace ();
       if (disable_cacheonly)
         {
           self->pkgcache_only = FALSE;
           sd_journal_print (LOG_WARNING,
-                            "Ignoring pkgcache-only request in presence of module requests");
+                            "Ignoring pkgcache-only request in presence of module requests and/or "
+                            "remote overrides");
         }
     }
 
