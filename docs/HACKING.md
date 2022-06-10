@@ -183,20 +183,20 @@ GDB instead.
 On the client side, you need to use the `make vmsync` flow before using GDB
 because it also copies over the source files into `/root/sync`.
 
-For throwaway/fresh VMs, a simple approach is to just layer it using e.g.
-`rpm-ostree install gdb-minimal -A`, and then use it directly. (XXX:
-`apply-live` currently isn't compatible with `make vmsync`, so you'll want to
-reboot for now: https://github.com/ostreedev/ostree/issues/2369).
-
-It's also possible to use GDB from a privileged container. Make sure to use the
+You can use GDB from a privileged container. Make sure to use the
 `--pid=host` flag when using e.g. `podman run` so that you can attach to
 processes running on the host. For example:
 
 ```
 (host) podman run -ti --privileged --pid=host -v /:/host --name gdb \
-        registry.fedoraproject.org/fedora:34 /bin/bash
+        registry.fedoraproject.org/fedora:36 /bin/bash
 (cnt) dnf install -y gdb procps-ng
 ```
+
+If for whatever reason, you can't use a container, you can also layer GDB with
+e.g. `rpm-ostree install gdb-minimal -A`, and then use it directly. (XXX:
+`apply-live` currently isn't compatible with `make vmsync`, so you'll want to
+reboot for now: https://github.com/ostreedev/ostree/issues/2369).
 
 #### Attaching to the daemon
 
