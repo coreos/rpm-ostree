@@ -1368,6 +1368,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
 
       for (char **it = override_reset_pkgs; it && *it; it++)
         {
+          /* remote overrides support only pkgnames and no nevras are mapped, so try it first */
+          if (rpmostree_origin_remove_override_replace (origin, *it))
+            continue; /* override found; move on to the next one */
+
           const char *name_or_nevra = *it;
           auto name
               = static_cast<const char *> (g_hash_table_lookup (nevra_to_name, name_or_nevra));
@@ -1396,9 +1400,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
             continue; /* override found; move on to the next one */
 
           if (rpmostree_origin_remove_override_replace_local (origin, nevra))
-            continue; /* override found; move on to the next one */
-
-          if (rpmostree_origin_remove_override_replace (origin, name))
             continue; /* override found; move on to the next one */
 
           return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);

@@ -1986,32 +1986,26 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
         case rpmostreecxx::OverrideReplacementType::Repo:
           {
             const char *repo = override_replace.from.c_str ();
-            for (auto &pkg : override_replace.packages)
+            for (auto &pkgname_s : override_replace.packages)
               {
-                g_auto (HySubject) subject = hy_subject_create (pkg.c_str ());
-                HyNevra nevra = NULL;
-                // We don't support provides or filenames: we need a concrete package name that
-                // matches the base. Nevras or partial nevras (e.g. foobar.x86_64 or foobar-1.2) are
-                // supported.
-                hy_autoquery HyQuery query = hy_subject_get_best_solution (
-                    subject, sack, NULL, &nevra, FALSE, TRUE, FALSE, FALSE, FALSE);
-                if (!nevra)
-                  return glnx_throw (error, "Failed to parse selector: %s", pkg.c_str ());
-                auto pkgname = nevra->getName ();
-                // this should never happen, but just in case
-                if (pkgname.empty ())
-                  return glnx_throw (error, "Invalid subject '%s': no package name found",
-                                     pkg.c_str ());
+                // We only support pkgnames here. The use case for partial names (e.g. foo-1.2-3) is
+                // dubious; once the repo is updated past that, upgrades would fail. It also
+                // complicates inactive override handling and the UX for resetting overrides.
+                // Instead we should look at in the future implementing "smart remote overrides"
+                // which automatically drop out once a pkg reached a certain version.
+                const char *pkgname = pkgname_s.c_str ();
+                hy_autoquery HyQuery query = hy_query_create (sack);
                 hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo);
+                hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
                 g_autoptr (DnfPackageSet) pset = hy_query_run_set (query);
                 if (dnf_packageset_count (pset) == 0)
-                  return glnx_throw (error, "No matches for '%s' in repo '%s'", pkg.c_str (), repo);
+                  return glnx_throw (error, "No matches for '%s' in repo '%s'", pkgname, repo);
                 g_auto (HySelector) selector = hy_selector_create (sack);
                 hy_selector_pkg_set (selector, pset);
                 if (!hy_goal_install_selector (goal, selector, error))
                   return FALSE;
                 map_or (pinned_pkgs_map, dnf_packageset_get_map (pset));
-                g_ptr_array_add (replaced_pkgnames, g_strdup (pkgname.c_str ()));
+                g_ptr_array_add (replaced_pkgnames, g_strdup (pkgname));
               }
           }
           break;
