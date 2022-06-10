@@ -11,6 +11,8 @@ if [ -z "${SKIP_INSTALLDEPS:-}" ] && test $(id -u) -eq 0; then
     # we have the canonical spec file handy so just builddep from that
     # XXX: use --allowerasing as a temporary hack to ease the migration to libmodulemd2
     time dnf builddep --spec -y packaging/rpm-ostree.spec.in --allowerasing
+    # Also hack this in because CI may run on centos but we want this installed
+    yum -y install librhsm-devel
 fi
 
 # cxx.rs (cxxbridge) isn't packaged in Fedora today.  It generates

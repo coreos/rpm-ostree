@@ -12,4 +12,4 @@ rustc --version
 
 export LSAN_OPTIONS=verbosity=1:log_threads=1
 # And now the build
-build --enable-installed-tests --enable-gtk-doc ${CONFIGOPTS:-}
+build --enable-installed-tests --enable-gtk-doc --enable-featuresrs=rhsm ${CONFIGOPTS:-}
