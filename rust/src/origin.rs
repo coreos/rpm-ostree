@@ -74,6 +74,28 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     cfg.derive.override_replace_local = parse_localpkglist(kf, OVERRIDES, "replace-local")?;
     cfg.derive.unconfigured_state = keyfile_get_optional_string(kf, ORIGIN, "unconfigured-state")?;
 
+    if let Some(strv) = parse_stringlist::<Vec<String>>(kf, OVERRIDES, "replace")? {
+        let mut override_replace = Vec::new();
+        for s in strv {
+            let mut split = s.split(',');
+            let from = split
+                .next()
+                .ok_or_else(|| anyhow!("Invalid repo replacement: {}", s))?;
+            let from_parsed = crate::daemon::parse_override_source(from)?;
+            let source = match from_parsed.kind {
+                crate::ffi::OverrideReplacementType::Repo => {
+                    crate::treefile::RemoteOverrideReplaceFrom::Repo(from_parsed.name)
+                }
+                _ => bail!("Unknown repo replacement source: {}", from),
+            };
+            override_replace.push(crate::treefile::RemoteOverrideReplace {
+                from: source,
+                packages: split.map(|s| s.to_string()).collect(),
+            });
+        }
+        cfg.derive.override_replace = Some(override_replace);
+    }
+
     let regenerate_initramfs = kf
         .boolean(RPMOSTREE, "regenerate-initramfs")
         .unwrap_or_default();
@@ -186,6 +208,20 @@ fn treefile_to_origin_inner(tf: &Treefile) -> Result<glib::KeyFile> {
     if let Some(pkgs) = tf.derive.override_replace_local.as_ref() {
         set_sha256_nevra_pkgs(&kf, OVERRIDES, "replace-local", pkgs)
     }
+    if let Some(v) = tf.derive.override_replace.as_ref() {
+        let pkgs: Vec<String> = v
+            .iter()
+            .map(|ovr| {
+                let src = ovr.from.to_string();
+                let mut v = vec![src.as_str()];
+                v.extend(ovr.packages.iter().map(|s| s.as_str()));
+                v.join(",")
+            })
+            .collect();
+        let pkgs = pkgs.iter().map(|s| s.as_str());
+        kf_set_string_list_optional(&kf, OVERRIDES, "replace", pkgs);
+    }
+
     if let Some(ref modcfg) = tf.modules {
         if let Some(modules) = modcfg.enable.as_ref() {
             let modules = modules.iter().map(|s| s.as_str());
@@ -397,6 +433,7 @@ pub(crate) mod test {
     [overrides]
     remove=docker;
     replace-local=0c7072500af2758e7dc7d7700fed82c3c5f4da7453b4d416e79f75384eee96b0:rpm-ostree-devel-2021.1-2.fc33.x86_64;648ab3ff4d4b708ea180269297de5fa3e972f4481d47b7879c6329272e474d68:rpm-ostree-2021.1-2.fc33.x86_64;8b29b78d0ade6ec3aedb8e3846f036f6f28afe64635d83cb6a034f1004607678:rpm-ostree-libs-2021.1-2.fc33.x86_64;
+    replace=repo=foobar,systemd;repo=bazboo,kernel,kernel-core,kernel-modules;
 
     [libostree-transient]
     pinned=true
@@ -461,6 +498,23 @@ pub(crate) mod test {
                 enable: Some(maplit::btreeset!("foo:2.0".into(), "bar:rolling".into(),)),
                 install: Some(maplit::btreeset!("baz:next/development".into())),
             })
+        );
+        assert_eq!(
+            tf.parsed.derive.override_replace,
+            Some(vec![
+                crate::treefile::RemoteOverrideReplace {
+                    from: crate::treefile::RemoteOverrideReplaceFrom::Repo("foobar".into()),
+                    packages: maplit::btreeset!("systemd".into()),
+                },
+                crate::treefile::RemoteOverrideReplace {
+                    from: crate::treefile::RemoteOverrideReplaceFrom::Repo("bazboo".into()),
+                    packages: maplit::btreeset!(
+                        "kernel".into(),
+                        "kernel-core".into(),
+                        "kernel-modules".into()
+                    ),
+                }
+            ])
         );
         Ok(())
     }
