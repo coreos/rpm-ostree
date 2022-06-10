@@ -552,7 +552,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
     return TRUE;
 
   /* these come from the origin; they represent what the user requested */
-  const gchar *origin_refspec;
+  const gchar *origin_refspec = NULL;
   auto refspectype = rpmostreecxx::RefspecType::Ostree;
   g_autofree const gchar **origin_requested_packages = NULL;
   g_autofree const gchar **origin_requested_modules = NULL;
@@ -587,8 +587,6 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
       origin_requested_base_local_replacements
           = lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
     }
-  else
-    origin_refspec = NULL;
 
   const gchar *version_string;
   if (!g_variant_dict_lookup (dict, "version", "&s", &version_string))
