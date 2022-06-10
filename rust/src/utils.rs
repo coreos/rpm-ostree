@@ -544,21 +544,21 @@ pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> C
     Ok(varsubst(s, &m)?)
 }
 
-#[allow(clippy::vec_init_then_push)]
 pub(crate) fn get_features() -> Vec<String> {
     // These constant features were originally set in configure.ac, but have migrated to
     // Rust in the interest in having less logic in autoconf.
-    let mut r = vec!["rust".to_string(), "compose".to_string()];
-    if cfg!(feature = "fedora-integration") {
-        r.push("fedora-integration".to_string());
-    }
-    if cfg!(feature = "bin-unit-tests") {
-        r.push("bin-unit-tests".to_string());
-    }
-    if cfg!(feature = "rhsm") {
-        r.push("rhsm".to_string());
-    }
-    r
+    let defaults = ["rust", "compose"].into_iter().map(Some);
+    let conditionals = [
+        cfg!(feature = "fedora-integration").then(|| "fedora-integration"),
+        cfg!(feature = "bin-unit-tests").then(|| "bin-unit-tests"),
+        cfg!(feature = "rhsm").then(|| "rhsm"),
+    ]
+    .into_iter();
+    defaults
+        .chain(conditionals)
+        .flatten()
+        .map(String::from)
+        .collect()
 }
 
 fn impl_sealed_memfd(description: &str, content: &[u8]) -> Result<std::fs::File> {
