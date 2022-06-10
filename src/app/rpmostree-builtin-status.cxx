@@ -555,7 +555,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   auto refspectype = rpmostreecxx::RefspecType::Ostree;
   g_autofree const gchar **origin_packages = NULL;
   g_autofree const gchar **origin_modules = NULL;
-  g_autofree const gchar **origin_modules_enabled = NULL;
+  g_autofree const gchar **origin_requested_modules_enabled = NULL;
   g_autofree const gchar **origin_requested_packages = NULL;
   g_autofree const gchar **origin_requested_modules = NULL;
   g_autofree const gchar **origin_requested_local_packages = NULL;
@@ -569,7 +569,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
     {
       origin_packages = lookup_array_and_canonicalize (dict, "packages");
       origin_modules = lookup_array_and_canonicalize (dict, "modules");
-      origin_modules_enabled = lookup_array_and_canonicalize (dict, "modules-enabled");
+      origin_requested_modules_enabled
+          = lookup_array_and_canonicalize (dict, "requested-modules-enabled");
       origin_requested_packages = lookup_array_and_canonicalize (dict, "requested-packages");
       origin_requested_modules = lookup_array_and_canonicalize (dict, "requested-modules");
       origin_requested_local_packages
@@ -951,8 +952,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
     print_packages ("LayeredPackages", max_key_len, origin_packages, NULL, TRUE);
   if (origin_modules)
     print_packages ("LayeredModules", max_key_len, origin_modules, NULL, TRUE);
-  if (origin_modules_enabled)
-    print_packages ("EnabledModules", max_key_len, origin_modules_enabled, NULL, TRUE);
+  if (origin_requested_modules_enabled)
+    print_packages ("EnabledModules", max_key_len, origin_requested_modules_enabled, NULL, TRUE);
 
   if (origin_requested_local_packages)
     print_packages ("LocalPackages", max_key_len, origin_requested_local_packages, NULL, TRUE);

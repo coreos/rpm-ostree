@@ -85,7 +85,7 @@ fn deployment_populate_variant_origin(
     );
     vdict_insert_optset(
         dict,
-        "modules-enabled",
+        "requested-modules-enabled",
         tf.modules.as_ref().and_then(|m| m.enable.as_ref()),
     );
     vdict_insert_optmap(
