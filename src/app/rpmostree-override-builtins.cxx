@@ -105,7 +105,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
   if (!opt_experimental && (opt_freeze || opt_from))
     return glnx_throw (error, "Must specify --experimental to use --freeze or --from");
 
-  if (override_replace && opt_freeze && opt_from)
+  if (override_replace && opt_from)
     {
       override_replace_final = g_ptr_array_new_with_free_func (free);
       g_autoptr (GPtrArray) queries = g_ptr_array_new ();
@@ -117,11 +117,15 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
           if (rpmostreecxx::is_http_arg (pkg) || rpmostreecxx::is_rpm_arg (pkg))
             {
               g_ptr_array_add (override_replace_final, (gpointer)g_strdup (pkg));
-              continue;
+            }
+          // if the pkg is a valid nevra, then treat it as frozen
+          else if (opt_freeze || rpmostree_is_valid_nevra (pkg))
+            {
+              g_ptr_array_add (queries, (gpointer)pkg);
             }
           else
             {
-              g_ptr_array_add (queries, (gpointer)pkg);
+              return glnx_throw (error, "CLI remote overrides not supported yet");
             }
         }
       if (queries->len > 0)

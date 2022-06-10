@@ -179,6 +179,8 @@ gboolean rpmostree_decompose_nevra (const char *nevra, char **out_name, /* allow
                                     char **out_arch,                    /* allow-none */
                                     GError **error);
 
+gboolean rpmostree_is_valid_nevra (const char *subject);
+
 gboolean rpmostree_nevra_to_cache_branch (const char *nevra, char **cache_branch, GError **error);
 
 GPtrArray *rpmostree_get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement);
