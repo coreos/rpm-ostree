@@ -448,7 +448,7 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
                                        char **out_base_layer, char ***out_layered_pkgs,
                                        char ***out_layered_modules,
                                        GVariant **out_removed_base_pkgs,
-                                       GVariant **out_replaced_base_pkgs, GError **error)
+                                       GVariant **out_replaced_base_local_pkgs, GError **error)
 {
   const char *csum = ostree_deployment_get_csum (deployment);
   g_autoptr (GVariant) commit = NULL;
@@ -465,7 +465,7 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
   g_auto (GStrv) layered_pkgs = NULL;
   g_auto (GStrv) layered_modules = NULL;
   g_autoptr (GVariant) removed_base_pkgs = NULL;
-  g_autoptr (GVariant) replaced_base_pkgs = NULL;
+  g_autoptr (GVariant) replaced_base_local_pkgs = NULL;
   if (layeredmeta.is_layered && (out_layered_pkgs != NULL || out_removed_base_pkgs != NULL))
     {
       /* starting from v1, we no longer embed a treespec in client layers */
@@ -496,9 +496,9 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
                                                            G_VARIANT_TYPE ("av"));
           g_assert (removed_base_pkgs);
 
-          replaced_base_pkgs = g_variant_dict_lookup_value (
+          replaced_base_local_pkgs = g_variant_dict_lookup_value (
               dict, "rpmostree.replaced-base-packages", G_VARIANT_TYPE ("a(vv)"));
-          g_assert (replaced_base_pkgs);
+          g_assert (replaced_base_local_pkgs);
         }
 
       if (layeredmeta.clientlayer_version >= 5)
@@ -534,12 +534,12 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
             = g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("v"), NULL, 0));
       *out_removed_base_pkgs = util::move_nullify (removed_base_pkgs);
     }
-  if (out_replaced_base_pkgs != NULL)
+  if (out_replaced_base_local_pkgs != NULL)
     {
-      if (!replaced_base_pkgs)
-        replaced_base_pkgs
+      if (!replaced_base_local_pkgs)
+        replaced_base_local_pkgs
             = g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("(vv)"), NULL, 0));
-      *out_replaced_base_pkgs = util::move_nullify (replaced_base_pkgs);
+      *out_replaced_base_local_pkgs = util::move_nullify (replaced_base_local_pkgs);
     }
 
   return TRUE;

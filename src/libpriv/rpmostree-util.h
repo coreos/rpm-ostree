@@ -266,7 +266,8 @@ gboolean rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployme
                                                 char **out_base_layer, char ***out_layered_pkgs,
                                                 char ***out_layered_modules,
                                                 GVariant **out_removed_base_pkgs,
-                                                GVariant **out_replaced_base_pkgs, GError **error);
+                                                GVariant **out_replaced_base_local_pkgs,
+                                                GError **error);
 
 /* simpler version of the above */
 gboolean rpmostree_deployment_get_base_layer (OstreeRepo *repo, OstreeDeployment *deployment,

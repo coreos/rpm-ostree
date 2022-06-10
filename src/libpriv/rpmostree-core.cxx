@@ -4461,16 +4461,16 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
                                g_variant_builder_end (&removed_base_pkgs));
 
         /* embed packages replaced */
-        g_auto (GVariantBuilder) replaced_base_pkgs;
-        g_variant_builder_init (&replaced_base_pkgs, (GVariantType *)"a(vv)");
+        g_auto (GVariantBuilder) replaced_base_local_pkgs;
+        g_variant_builder_init (&replaced_base_local_pkgs, (GVariantType *)"a(vv)");
         if (self->pkgs_to_replace)
           {
             GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant *, new_nevra, GVariant *,
                                         old_nevra)
-              g_variant_builder_add (&replaced_base_pkgs, "(vv)", new_nevra, old_nevra);
+              g_variant_builder_add (&replaced_base_local_pkgs, "(vv)", new_nevra, old_nevra);
           }
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.replaced-base-packages",
-                               g_variant_builder_end (&replaced_base_pkgs));
+                               g_variant_builder_end (&replaced_base_local_pkgs));
 
         /* this is used by the db commands, and auto updates to diff against the base */
         g_autoptr (GVariant) rpmdb = NULL;
