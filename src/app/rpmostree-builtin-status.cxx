@@ -114,60 +114,60 @@ sort_by_name (gconstpointer a, gconstpointer b)
 }
 
 static void
-print_packages (const char *k, guint max_key_len, const char *const *pkgs,
-                const char *const *omit_pkgs, gboolean quote)
+print_values (const char *k, guint max_key_len, const char *const *values,
+              const char *const *omit_values, gboolean quote)
 {
-  g_autoptr (GPtrArray) packages_sorted = g_ptr_array_new_with_free_func (g_free);
-  for (char **iter = (char **)pkgs; iter && *iter; iter++)
+  g_autoptr (GPtrArray) values_sorted = g_ptr_array_new_with_free_func (g_free);
+  for (char **iter = (char **)values; iter && *iter; iter++)
     {
-      const char *pkg = *iter;
-      if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, pkg))
+      const char *value = *iter;
+      if (omit_values != NULL && g_strv_contains (omit_values, value))
         continue;
 
       if (quote)
         {
-          auto quoted = rpmostreecxx::maybe_shell_quote (pkg);
-          g_ptr_array_add (packages_sorted, g_strdup (quoted.c_str ()));
+          auto quoted = rpmostreecxx::maybe_shell_quote (value);
+          g_ptr_array_add (values_sorted, g_strdup (quoted.c_str ()));
         }
       else
         {
-          g_ptr_array_add (packages_sorted, g_strdup (pkg));
+          g_ptr_array_add (values_sorted, g_strdup (value));
         }
     }
 
-  const guint n_packages = packages_sorted->len;
-  if (n_packages == 0)
+  const guint n_values = values_sorted->len;
+  if (n_values == 0)
     return;
 
-  g_ptr_array_sort (packages_sorted, sort_by_name);
+  g_ptr_array_sort (values_sorted, sort_by_name);
 
   rpmostree_print_kv_no_newline (k, max_key_len, "");
 
   /* wrap pkglist output ourselves rather than letting the terminal cut us up */
   const guint area_width = get_textarea_width (max_key_len);
   guint current_width = 0;
-  for (guint i = 0; i < n_packages; i++)
+  for (guint i = 0; i < n_values; i++)
     {
-      auto pkg = static_cast<const char *> (packages_sorted->pdata[i]);
-      const guint pkg_width = strlen (pkg);
+      auto value = static_cast<const char *> (values_sorted->pdata[i]);
+      const guint value_width = strlen (value);
 
       /* first print */
       if (current_width == 0)
         {
-          g_print ("%s", pkg);
-          current_width += pkg_width;
+          g_print ("%s", value);
+          current_width += value_width;
         }
-      else if ((current_width + pkg_width + 1) <= area_width) /* +1 for space separator */
+      else if ((current_width + value_width + 1) <= area_width) /* +1 for space separator */
         {
-          g_print (" %s", pkg);
-          current_width += (pkg_width + 1);
+          g_print (" %s", value);
+          current_width += (value_width + 1);
         }
       else
         {
           /* always print at least one per line, even if we overflow */
           putc ('\n', stdout);
-          rpmostree_print_kv_no_newline ("", max_key_len, pkg);
-          current_width = pkg_width;
+          rpmostree_print_kv_no_newline ("", max_key_len, value);
+          current_width = value_width;
         }
     }
   putc ('\n', stdout);
@@ -847,14 +847,14 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
       g_ptr_array_add (active_removals_grouped, NULL);
 
       if (active_removals_grouped->len > 1)
-        print_packages ("RemovedBasePackages", max_key_len,
-                        (const char *const *)active_removals_grouped->pdata, NULL, FALSE);
+        print_values ("RemovedBasePackages", max_key_len,
+                      (const char *const *)active_removals_grouped->pdata, NULL, FALSE);
     }
 
   /* only print inactive base removal requests in verbose mode */
   if (origin_requested_base_removals && opt_verbose)
-    print_packages ("InactiveBaseRemovals", max_key_len, origin_requested_base_removals,
-                    (const char *const *)active_removals->pdata, TRUE);
+    print_values ("InactiveBaseRemovals", max_key_len, origin_requested_base_removals,
+                  (const char *const *)active_removals->pdata, TRUE);
 
   g_autoptr (GPtrArray) active_replacements = g_ptr_array_new_with_free_func (g_free);
   g_autoptr (GPtrArray) active_replacements_grouped = g_ptr_array_new_with_free_func (g_free);
@@ -910,35 +910,35 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
       g_ptr_array_add (active_replacements_grouped, NULL);
 
       if (active_replacements_grouped->len > 1)
-        print_packages ("LocalOverrides", max_key_len,
-                        (const char *const *)active_replacements_grouped->pdata, NULL, FALSE);
+        print_values ("LocalOverrides", max_key_len,
+                      (const char *const *)active_replacements_grouped->pdata, NULL, FALSE);
     }
 
   if (origin_requested_base_local_replacements && opt_verbose)
-    print_packages ("InactiveLocalOverrides", max_key_len, origin_requested_base_local_replacements,
-                    (const char *const *)active_replacements->pdata, TRUE);
+    print_values ("InactiveLocalOverrides", max_key_len, origin_requested_base_local_replacements,
+                  (const char *const *)active_replacements->pdata, TRUE);
 
   /* only print inactive layering requests in verbose mode */
   if (origin_requested_packages && opt_verbose)
     /* requested-packages - packages = inactive (i.e. dormant requests) */
-    print_packages ("InactiveRequests", max_key_len, origin_requested_packages, packages, TRUE);
+    print_values ("InactiveRequests", max_key_len, origin_requested_packages, packages, TRUE);
   if (origin_requested_modules && opt_verbose)
     /* requested-modules - modules = inactive (i.e. dormant requests) */
     /* note the core doesn't support inactive modules yet, but could in the future */
-    print_packages ("InactiveModuleRequests", max_key_len, origin_requested_modules, modules, TRUE);
+    print_values ("InactiveModuleRequests", max_key_len, origin_requested_modules, modules, TRUE);
 
   if (packages)
-    print_packages ("LayeredPackages", max_key_len, packages, NULL, TRUE);
+    print_values ("LayeredPackages", max_key_len, packages, NULL, TRUE);
   if (modules)
-    print_packages ("LayeredModules", max_key_len, modules, NULL, TRUE);
+    print_values ("LayeredModules", max_key_len, modules, NULL, TRUE);
   if (origin_requested_modules_enabled)
-    print_packages ("EnabledModules", max_key_len, origin_requested_modules_enabled, NULL, TRUE);
+    print_values ("EnabledModules", max_key_len, origin_requested_modules_enabled, NULL, TRUE);
 
   if (origin_requested_local_packages)
-    print_packages ("LocalPackages", max_key_len, origin_requested_local_packages, NULL, TRUE);
+    print_values ("LocalPackages", max_key_len, origin_requested_local_packages, NULL, TRUE);
   if (origin_requested_local_fileoverride_packages)
-    print_packages ("LocalForcedPackages", max_key_len,
-                    origin_requested_local_fileoverride_packages, NULL, TRUE);
+    print_values ("LocalForcedPackages", max_key_len, origin_requested_local_fileoverride_packages,
+                  NULL, TRUE);
 
   if (regenerate_initramfs)
     {
@@ -966,8 +966,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   g_autofree char **initramfs_etc_files = NULL;
   g_variant_dict_lookup (dict, "initramfs-etc", "^a&s", &initramfs_etc_files);
   if (initramfs_etc_files && *initramfs_etc_files)
-    /* XXX: not really packages but it works... should just rename that function */
-    print_packages ("InitramfsEtc", max_key_len, (const char **)initramfs_etc_files, NULL, TRUE);
+    print_values ("InitramfsEtc", max_key_len, (const char **)initramfs_etc_files, NULL, TRUE);
 
   gboolean pinned = FALSE;
   g_variant_dict_lookup (dict, "pinned", "b", &pinned);
