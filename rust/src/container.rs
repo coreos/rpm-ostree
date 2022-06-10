@@ -222,7 +222,7 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
     };
 
     // Open the RPM database for this commit.
-    let q = crate::ffi::rpmts_for_commit(repo.gobj_rewrap(), rev.as_str())?;
+    let q = crate::ffi::rpmts_for_commit(repo.reborrow_cxx(), rev.as_str())?;
 
     let mut state = MappingBuilder {
         unpackaged_id: Rc::from(MappingBuilder::UNPACKAGED_ID),

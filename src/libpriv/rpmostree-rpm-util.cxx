@@ -1656,12 +1656,13 @@ namespace rpmostreecxx
 {
 
 std::unique_ptr<RpmTs>
-rpmts_for_commit (OstreeRepo &repo, rust::Str rev)
+rpmts_for_commit (const OstreeRepo &repo, rust::Str rev)
 {
   g_autoptr (GError) local_error = NULL;
   RpmOstreeRefTs *refts = NULL;
   auto rev_c = std::string (rev);
-  if (!rpmostree_get_refts_for_commit (&repo, rev_c.c_str (), &refts, NULL, &local_error))
+  if (!rpmostree_get_refts_for_commit (&const_cast<OstreeRepo &> (repo), rev_c.c_str (), &refts,
+                                       NULL, &local_error))
     util::throw_gerror (local_error);
 
   return std::make_unique<RpmTs> (refts);
