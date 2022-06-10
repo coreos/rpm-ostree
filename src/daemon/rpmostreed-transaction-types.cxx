@@ -1316,9 +1316,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
           = rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
 
       g_autoptr (GVariant) removed = NULL;
-      g_autoptr (GVariant) replaced = NULL;
+      g_autoptr (GVariant) replaced_local = NULL;
       if (!rpmostree_deployment_get_layered_info (repo, merge_deployment, NULL, NULL, NULL, NULL,
-                                                  NULL, &removed, &replaced, error))
+                                                  NULL, &removed, &replaced_local, error))
         return FALSE;
 
       g_autoptr (GHashTable) nevra_to_name = g_hash_table_new (g_str_hash, g_str_equal);
@@ -1338,11 +1338,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
           g_ptr_array_add (gv_nevras, util::move_nullify (gv_nevra));
         }
 
-      const guint nreplaced = g_variant_n_children (replaced);
+      const guint nreplaced = g_variant_n_children (replaced_local);
       for (guint i = 0; i < nreplaced; i++)
         {
           g_autoptr (GVariant) gv_nevra;
-          g_variant_get_child (replaced, i, "(vv)", &gv_nevra, NULL);
+          g_variant_get_child (replaced_local, i, "(vv)", &gv_nevra, NULL);
           gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
           g_ptr_array_add (gv_nevras, util::move_nullify (gv_nevra));
         }
