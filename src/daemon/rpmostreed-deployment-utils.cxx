@@ -128,6 +128,13 @@ filter_commit_meta (GVariant *commit_meta)
   /* just remove keys for now, later we may want to define a specific list of keys to keep */
   g_variant_dict_remove (&dict, "rpmostree.rpmdb.pkglist");
   g_variant_dict_remove (&dict, "rpmostree.advisories");
+  /* these layered commit keys are already promoted up, so just remove them to avoid duplicating and
+   * because they can get quite verbose */
+  g_variant_dict_remove (&dict, "rpmostree.packages"); /* promoted as 'packages' */
+  g_variant_dict_remove (&dict, "rpmostree.modules");  /* promoted as 'modules' */
+  g_variant_dict_remove (&dict, "rpmostree.spec");     /* old way of getting packages */
+  g_variant_dict_remove (&dict, "rpmostree.removed-base-packages");  /* 'base-removals' */
+  g_variant_dict_remove (&dict, "rpmostree.replaced-base-packages"); /* 'base-local-replacements' */
   return g_variant_dict_end (&dict);
 }
 
