@@ -1316,6 +1316,12 @@ rpmostree_decompose_nevra (const char *nevra, char **out_name, /* allow-none */
   return TRUE;
 }
 
+gboolean
+rpmostree_is_valid_nevra (const char *subject)
+{
+  return rpmostree_decompose_nevra (subject, NULL, NULL, NULL, NULL, NULL, NULL);
+}
+
 /* translates NEVRA to its cache branch */
 namespace rpmostreecxx
 {

@@ -45,6 +45,15 @@ assert_file_has_content status.txt 'LocalOverrides: zincati .* -> 99.99-3'
 rpmostree_assert_status \
   '.deployments[0]["base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1'
+# try it again, but using its NEVRA
+# this also tests that we didn't delete the RPM
+rpm-ostree cleanup -p
+rpm-ostree override replace zincati-99.99-3.x86_64 --experimental --from repo=test-repo
+rpm-ostree status > status.txt
+assert_file_has_content status.txt 'ReplacedBasePackages: zincati .* -> 99.99-3'
+rpmostree_assert_status \
+  '.deployments[0]["base-local-replacements"]|length == 1' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 1'
 /tmp/autopkgtest-reboot "1"
 ;;
 "1")
