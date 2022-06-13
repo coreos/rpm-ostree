@@ -516,6 +516,16 @@ print_origin_repos (gboolean host_endian, guint maxkeylen, GVariantDict *commit_
     }
 }
 
+/* Print commit checksum, and then prints repos if in verbose mode. */
+static void
+print_commit (const char *key, const char *checksum, gboolean host_endian, guint max_key_len,
+              GVariantDict *commit_meta)
+{
+  rpmostree_print_kv (key, max_key_len, checksum);
+  if (opt_verbose)
+    print_origin_repos (host_endian, max_key_len, commit_meta);
+}
+
 static gboolean
 print_live_pkgdiff (const char *live_target, RpmOstreeDiffPrintFormat format, guint max_key_len,
                     GCancellable *cancellable, GError **error)
@@ -747,22 +757,16 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   if (is_locally_assembled && is_ostree_or_verbose)
     {
       const char *key = have_live_changes ? "BootedBaseCommit" : "BaseCommit";
-      rpmostree_print_kv (key, max_key_len, base_checksum);
-      if (opt_verbose)
-        print_origin_repos (FALSE, max_key_len, commit_meta_dict);
+      print_commit (key, base_checksum, FALSE, max_key_len, commit_meta_dict);
       if (opt_verbose || have_any_live_overlay)
-        rpmostree_print_kv ("Commit", max_key_len, checksum);
-      if (opt_verbose)
-        print_origin_repos (TRUE, max_key_len, layered_commit_meta_dict);
+        print_commit ("Commit", checksum, TRUE, max_key_len, layered_commit_meta_dict);
     }
   else if (is_ostree_or_verbose)
     {
       if (have_live_changes)
         rpmostree_print_kv ("BootedCommit", max_key_len, checksum);
       if (!have_live_changes || opt_verbose)
-        rpmostree_print_kv ("Commit", max_key_len, checksum);
-      if (opt_verbose)
-        print_origin_repos (FALSE, max_key_len, commit_meta_dict);
+        print_commit ("Commit", checksum, FALSE, max_key_len, commit_meta_dict);
     }
 
   if (live_inprogress)
