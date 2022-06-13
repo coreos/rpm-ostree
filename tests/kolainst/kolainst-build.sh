@@ -80,13 +80,25 @@ build_module foomodular \
 build_module_defaults foomodular \
   defprofile with-default-profile:default
 
-# Test override replace --ex-pin-from-repos
+# To test remote override replace
 build_rpm zincati version 99.99 release 3
 
 mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
 
+# To test remote override replace update
+repover=1
+mkdir ${test_tmpdir}/rpm-repos/${repover}
+build_rpm zincati version 99.99 release 4
+mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
+
+# Create an empty repo when we want to test inability to find a package
+repover=2
+mkdir ${test_tmpdir}/rpm-repos/${repover}
+(cd ${test_tmpdir}/rpm-repos/${repover} && createrepo_c --no-database .)
+
 # Other repo versions here e.g.
-# repover=1
+# repover=3
+# mkdir ${test_tmpdir}/rpm-repos/${repover}
 # ...
 # mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
 

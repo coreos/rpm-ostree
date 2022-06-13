@@ -68,4 +68,24 @@ if [[ $n_downloaded != 1 ]]; then
   fatal "Expected 1 'Downloading', but got $n_downloaded"
 fi
 
+(cd /etc/yum.repos.d/ && curl -LO https://raw.githubusercontent.com/coreos/fedora-coreos-config/testing-devel/fedora-coreos-pool.repo)
+(cd /etc/yum.repos.d/ && curl -LO https://raw.githubusercontent.com/coreos/fedora-coreos-config/testing-devel/ci/continuous/fcos-continuous.repo)
+
+# test repo override by NEVRA
+rpm-ostree override replace --experimental --from repo=fedora-coreos-pool \
+  afterburn-5.2.0-4.fc36.x86_64 \
+  afterburn-dracut-5.2.0-4.fc36.x86_64
+
+rpm -q afterburn-5.2.0-4.fc36.x86_64 afterburn-dracut-5.2.0-4.fc36.x86_64
+
+# test repo override by pkgname
+rpm-ostree override replace --experimental \
+  --from repo=copr:copr.fedorainfracloud.org:group_CoreOS:continuous \
+  afterburn \
+  afterburn-dracut
+
+# the continuous build's version has the git rev, prefixed with g
+rpm -q afterburn | grep g
+rpm -q afterburn-dracut | grep g
+
 echo ok

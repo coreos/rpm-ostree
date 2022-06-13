@@ -1,0 +1,100 @@
+#!/bin/bash
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+cd $(mktemp -d)
+
+set -x
+
+rm -rf /etc/yum.repos.d/*
+cat > /etc/yum.repos.d/vmcheck.repo << EOF
+[test-repo]
+name=test-repo
+baseurl=file:///${KOLA_EXT_DATA}/rpm-repos/0
+gpgcheck=0
+enabled=1
+EOF
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+"")
+
+# switch to a local ref so that `upgrade` later on works
+booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+ostree refs --create "localref" ${booted_commit}
+rpm-ostree rebase :localref
+
+# start with a simple repo override
+rpm-ostree override replace zincati --experimental --from repo=test-repo
+rpmostree_assert_status \
+  '.deployments[0]["base-remote-replacements"]["repo=test-repo"]|length == 1' \
+  '.deployments[0]["base-remote-replacements"]["repo=test-repo"][0][0][0] == "zincati-99.99-3.x86_64"' \
+  '.deployments[0]["requested-base-remote-replacements"]|length == 1' \
+  '.deployments[0]["requested-base-remote-replacements"][0][0] == "repo=test-repo"' \
+  '.deployments[0]["requested-base-remote-replacements"][0][1]|length == 1' \
+  '.deployments[0]["requested-base-remote-replacements"][0][1][0] == "zincati"'
+/tmp/autopkgtest-reboot "1"
+
+;;
+"1")
+
+# check zincati was actually installed
+zincati > zincati_version.txt
+assert_file_has_content_literal zincati_version.txt '99.99-3'
+rm -f zincati_version.txt
+rpm-ostree status > status.txt
+assert_file_has_content status.txt 'RemoteOverrides: repo=test-repo'
+assert_file_has_content status.txt 'zincati .* -> 99.99-3'
+echo "ok override replace from repos"
+
+# let's try updating now
+sed -i -e 's,rpm-repos/0,rpm-repos/1,' /etc/yum.repos.d/vmcheck.repo
+rpm-ostree upgrade
+rpmostree_assert_status \
+  '.deployments[0]["base-remote-replacements"]["repo=test-repo"]|length == 1' \
+  '.deployments[0]["base-remote-replacements"]["repo=test-repo"][0][0][0] == "zincati-99.99-4.x86_64"'
+rpm-ostree status > status.txt
+assert_file_has_content status.txt 'RemoteOverrides: repo=test-repo'
+assert_file_has_content status.txt 'zincati .* -> 99.99-4'
+echo "ok override replace update from repos"
+
+# disable repo and check that upgrading fails
+rpm-ostree cleanup -p
+sed -i -e 's,enabled=1,enabled=0,' /etc/yum.repos.d/vmcheck.repo
+if rpm-ostree upgrade; then
+  assert_not_reached "successfully upgraded without repo enabled?"
+fi
+
+# enabled repo, but package not there
+sed -i -e 's,enabled=0,enabled=1,' /etc/yum.repos.d/vmcheck.repo
+sed -i -e 's,rpm-repos/1,rpm-repos/2,' /etc/yum.repos.d/vmcheck.repo
+if rpm-ostree upgrade; then
+  assert_not_reached "successfully upgraded with empty repo?"
+fi
+
+# revert because all the other pkgs are in rpm-repos/0
+sed -i -e 's,rpm-repos/2,rpm-repos/0,' /etc/yum.repos.d/vmcheck.repo
+
+# try inactive overrides
+rpm-ostree override replace foo --experimental --from repo=test-repo
+rpmostree_assert_status \
+  '.deployments[0]["base-remote-replacements"]["repo=test-repo"]|length == 1' \
+  '.deployments[0]["base-remote-replacements"]["repo=test-repo"][0][0][0] == "zincati-99.99-3.x86_64"' \
+  '.deployments[0]["requested-base-remote-replacements"]|length == 2'
+rpm-ostree status -v > status.txt
+# awkward way of testing that foo is listed under InactiveRemoteOverrides
+if ! grep -A1 -e 'InactiveRemoteOverrides: repo=test-repo' status.txt | grep 'foo'; then
+  cat status.txt
+  assert_not_reached "failed to find inactive override in status output"
+fi
+echo "ok inactive overrides"
+
+# reset everything
+rpm-ostree override reset --all
+rpmostree_assert_status \
+  '.deployments[0]["base-remote-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-remote-replacements"]|length == 0'
+echo "ok reset all overrides"
+
+;;
+*) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac
