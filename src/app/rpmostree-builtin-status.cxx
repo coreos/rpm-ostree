@@ -763,10 +763,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
     }
   else if (is_ostree_or_verbose)
     {
-      if (have_live_changes)
-        rpmostree_print_kv ("BootedCommit", max_key_len, checksum);
-      if (!have_live_changes || opt_verbose)
-        print_commit ("Commit", checksum, FALSE, max_key_len, commit_meta_dict);
+      const char *key = have_live_changes ? "BootedCommit" : "Commit";
+      print_commit (key, checksum, FALSE, max_key_len, commit_meta_dict);
     }
 
   if (live_inprogress)
