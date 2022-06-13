@@ -146,6 +146,8 @@ gboolean rpmostree_sack_has_subject (DnfSack *sack, const char *pattern);
 gboolean rpmostree_sack_get_by_pkgname (DnfSack *sack, const char *pkgname, DnfPackage **out_pkg,
                                         GError **error);
 
+gboolean rpmostree_sack_has_pkgname (DnfSack *sack, const char *pkgname);
+
 GPtrArray *rpmostree_sack_get_packages (DnfSack *sack);
 
 GPtrArray *rpmostree_sack_get_sorted_packages (DnfSack *sack);

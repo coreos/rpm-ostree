@@ -684,6 +684,7 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *ca
   g_assert (self->rsack);
 
   auto local_replacements = rpmostree_origin_get_overrides_local_replace (self->computed_origin);
+  auto remote_replacements = rpmostree_origin_get_overrides_replace (self->computed_origin);
   g_autoptr (GPtrArray) inactive_replacements = g_ptr_array_new ();
 
   for (auto &nevra_v : local_replacements)
@@ -706,6 +707,17 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *ca
         g_ptr_array_add (inactive_replacements, (gpointer)nevra);
     }
 
+  for (auto &ovr : remote_replacements)
+    {
+      for (auto &pkgname_s : ovr.packages)
+        {
+          const char *pkgname = pkgname_s.c_str ();
+          /* make inactive if it's missing */
+          if (!rpmostree_sack_has_pkgname (self->rsack->sack, pkgname))
+            g_ptr_array_add (inactive_replacements, (gpointer)pkgname);
+        }
+    }
+
   if (inactive_replacements->len > 0)
     {
       rpmostree_output_message ("Inactive base replacements:");
@@ -714,6 +726,7 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self, GCancellable *ca
           const char *item = (const char *)inactive_replacements->pdata[i];
           rpmostree_output_message ("  %s", item);
           rpmostree_origin_remove_override_replace_local (self->computed_origin, item);
+          rpmostree_origin_remove_override_replace (self->computed_origin, item);
         }
     }
 
@@ -1153,6 +1166,7 @@ rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
   /* Do a bit more work to see whether or not we have to do assembly */
   if (!load_base_rsack (self, cancellable, error))
     return FALSE;
+  /* XXX: initialize context earlier and lower this into the core instead */
   if (!finalize_overrides (self, cancellable, error))
     return FALSE;
   if (!finalize_overlays (self, cancellable, error))

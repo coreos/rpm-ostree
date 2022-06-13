@@ -1207,6 +1207,15 @@ rpmostree_sack_get_by_pkgname (DnfSack *sack, const char *pkgname, DnfPackage **
   return TRUE;
 }
 
+gboolean
+rpmostree_sack_has_pkgname (DnfSack *sack, const char *pkgname)
+{
+  g_autoptr (DnfPackage) pkg = NULL;
+  if (rpmostree_sack_get_by_pkgname (sack, pkgname, &pkg, NULL) && pkg)
+    return TRUE;
+  return FALSE;
+}
+
 GPtrArray *
 rpmostree_sack_get_packages (DnfSack *sack)
 {
