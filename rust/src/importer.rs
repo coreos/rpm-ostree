@@ -273,16 +273,13 @@ impl RpmImporter {
 
     /// Serialize all tmpfiles.d entries as a single configuration fragment.
     pub fn serialize_tmpfiles_content(&self) -> String {
-        let mut buf = String::new();
-
         let symlink_entries = self.tmpfiles_symlink_entries();
         let all_entries = symlink_entries.iter().chain(self.tmpfiles_entries.iter());
-
-        for entry in all_entries {
+        all_entries.fold(String::new(), |mut buf, entry| {
             buf.push_str(&entry);
             buf.push('\n');
-        }
-        buf
+            buf
+        })
     }
 }
 
