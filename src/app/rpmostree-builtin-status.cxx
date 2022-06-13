@@ -491,6 +491,9 @@ print_origin_repos (gboolean host_endian, guint maxkeylen, GVariantDict *commit_
     return;
 
   const guint n = g_variant_n_children (reposdata);
+  if (n == 0)
+    return;
+
   for (guint i = 0; i < n; i++)
     {
       g_autoptr (GVariant) child = g_variant_get_child_value (reposdata, i);
