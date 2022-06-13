@@ -1439,6 +1439,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         }
       changed = TRUE;
     }
+  auto treefile = (const char *)vardict_lookup_ptr (self->modifiers, "treefile", "&s");
+  if (treefile && !rpmostree_origin_merge_treefile (origin, treefile, &changed, error))
+    return FALSE;
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 

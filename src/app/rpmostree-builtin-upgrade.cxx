@@ -183,6 +183,7 @@ rpmostree_builtin_upgrade (int argc, char **argv, RpmOstreeCommandInvocation *in
                                             NULL,                 /* override remove */
                                             NULL,                 /* override reset */
                                             NULL,                 /* local_repo_remote */
+                                            NULL,                 /* treefile */
                                             options, &transaction_address, cancellable, error))
             return FALSE;
         }

@@ -196,12 +196,12 @@ rpmostree_builtin_rebase (int argc, char **argv, RpmOstreeCommandInvocation *inv
   if (install_pkgs || uninstall_pkgs || local_repo_remote)
     {
       if (!rpmostree_update_deployment (os_proxy, new_provided_refspec, revision, install_pkgs,
-                                        NULL,                 /* install_fileoverride_pkgs */
-                                        uninstall_pkgs, NULL, /* override replace */
-                                        NULL,                 /* override remove */
-                                        NULL,                 /* override reset */
-                                        local_repo_remote, options, &transaction_address,
-                                        cancellable, error))
+                                        NULL,                    /* install_fileoverride_pkgs */
+                                        uninstall_pkgs, NULL,    /* override replace */
+                                        NULL,                    /* override remove */
+                                        NULL,                    /* override reset */
+                                        local_repo_remote, NULL, /* treefile */
+                                        options, &transaction_address, cancellable, error))
         return FALSE;
     }
   else

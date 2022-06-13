@@ -160,7 +160,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
                                     NULL,               /* set-revision */
                                     install_pkgs, NULL, /* install_fileoverride_pkgs */
                                     uninstall_pkgs, override_replace, override_remove,
-                                    override_reset, NULL, options, &transaction_address,
+                                    override_reset, NULL, NULL, options, &transaction_address,
                                     cancellable, error))
     return FALSE;
 

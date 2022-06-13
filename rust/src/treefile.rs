@@ -2543,6 +2543,14 @@ pub(crate) enum RemoteOverrideReplaceFrom {
     Repo(String),
 }
 
+impl std::fmt::Display for RemoteOverrideReplaceFrom {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            RemoteOverrideReplaceFrom::Repo(r) => write!(f, "repo={}", r),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct RemoteOverrideReplace {
