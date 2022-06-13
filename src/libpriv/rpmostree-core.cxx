@@ -1387,6 +1387,17 @@ gv_nevra_hash (gconstpointer v)
   return g_str_hash (g_variant_get_string (nevra, NULL));
 }
 
+static const char *
+get_pkgname_source (GHashTable *replaced_pkgnames, const char *pkgname)
+{
+  GLNX_HASH_TABLE_FOREACH_KV (replaced_pkgnames, const char *, source, GHashTable *, pkgnames)
+    {
+      if (g_hash_table_contains (pkgnames, pkgname))
+        return source;
+    }
+  return NULL;
+}
+
 /* Before hy_goal_lock(), this function was the only way for us to make sure that libsolv
  * wasn't trying to modify a base package it wasn't supposed to. Its secondary purpose was
  * to collect the packages being replaced and removed into `self->pkgs_to_replace` and
@@ -1398,7 +1409,7 @@ gv_nevra_hash (gconstpointer v)
  */
 static gboolean
 check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
-                     GPtrArray *replaced_pkgnames, GError **error)
+                     GHashTable *replaced_pkgnames, GError **error)
 {
   HyGoal goal = dnf_context_get_goal (self->dnfctx);
 
@@ -1459,9 +1470,8 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
 
     /* also collect info about those we're replacing */
     g_assert (!self->pkgs_to_replace);
-    self->pkgs_to_replace
-        = g_hash_table_new_full (gv_nevra_hash, g_variant_equal, (GDestroyNotify)g_variant_unref,
-                                 (GDestroyNotify)g_variant_unref);
+    self->pkgs_to_replace = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                                   (GDestroyNotify)g_hash_table_unref);
     g_autoptr (GPtrArray) packages
         = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_UPDATE, DNF_PACKAGE_INFO_DOWNGRADE, -1);
     for (guint i = 0; i < packages->len; i++)
@@ -1488,9 +1498,21 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
                              dnf_package_get_nevra (pkg));
 
         /* did we expect this base pkg to be replaced? */
-        if (rpmostree_str_ptrarray_contains (replaced_pkgnames, name))
-          g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
-                               gv_nevra_from_pkg (replaced_pkg));
+        const char *source = get_pkgname_source (replaced_pkgnames, name);
+        if (source)
+          {
+            GHashTable *replacements
+                = static_cast<GHashTable *> (g_hash_table_lookup (self->pkgs_to_replace, source));
+            if (!replacements)
+              {
+                replacements = g_hash_table_new_full (gv_nevra_hash, g_variant_equal,
+                                                      (GDestroyNotify)g_variant_unref,
+                                                      (GDestroyNotify)g_variant_unref);
+                g_hash_table_insert (self->pkgs_to_replace, g_strdup (source), replacements);
+              }
+            g_hash_table_insert (replacements, gv_nevra_from_pkg (pkg),
+                                 gv_nevra_from_pkg (replaced_pkg));
+          }
         else
           g_hash_table_insert (forbidden_replacements, g_object_ref (replaced_pkg),
                                g_object_ref (pkg));
@@ -1782,8 +1804,18 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   g_autoptr (GHashTable) local_pkgs_to_install
       = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_object_unref);
 
+  /* Hash table of "from" to set of pkgnames; this is used by check_goal_solution() to finalize the
+   * mapping to put into the commit metadata to eventually be displayed in `rpm-ostree status`. For
+   * local packages, "from" is the empty string "". */
+  g_autoptr (GHashTable) replaced_pkgnames
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_hash_table_unref);
+
+  /* Pre-seed the table for local packages. */
+  GHashTable *local_replaced_pkgnames
+      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_hash_table_insert (replaced_pkgnames, g_strdup (""), local_replaced_pkgnames);
+
   /* Handle packages to replace; only add them to the sack for now */
-  g_autoptr (GPtrArray) replaced_pkgnames = g_ptr_array_new_with_free_func (g_free);
   for (auto &nevra_v : packages_override_replace_local)
     {
       const char *nevra = nevra_v.c_str ();
@@ -1797,7 +1829,7 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       g_assert (name);
       // this is a bit wasteful, but for locking purposes, we need the pkgname to match
       // against the base, not the nevra which naturally will be different
-      g_ptr_array_add (replaced_pkgnames, g_strdup (name));
+      g_hash_table_add (local_replaced_pkgnames, g_strdup (name));
       g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
     }
 
@@ -1986,6 +2018,14 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
         case rpmostreecxx::OverrideReplacementType::Repo:
           {
             const char *repo = override_replace.from.c_str ();
+            g_autofree char *from = g_strdup_printf ("repo=%s", repo);
+            GHashTable *pkgnames
+                = static_cast<GHashTable *> (g_hash_table_lookup (replaced_pkgnames, from));
+            if (!pkgnames)
+              {
+                pkgnames = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+                g_hash_table_insert (replaced_pkgnames, util::move_nullify (from), pkgnames);
+              }
             for (auto &pkgname_s : override_replace.packages)
               {
                 // We only support pkgnames here. The use case for partial names (e.g. foo-1.2-3) is
@@ -2005,10 +2045,14 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
                 if (!hy_goal_install_selector (goal, selector, error))
                   return FALSE;
                 map_or (pinned_pkgs_map, dnf_packageset_get_map (pset));
-                g_ptr_array_add (replaced_pkgnames, g_strdup (pkgname));
+                g_hash_table_add (pkgnames, g_strdup (pkgname));
               }
           }
           break;
+        /* Note, if implementing a new "from" kind that doesn't require specifying pkgnames (see
+         * https://github.com/coreos/rpm-ostree/blob/34cdfd6e055e/rust/src/treefile.rs#L2515-L2517),
+         * you'll want to resolve it to a concrete list of packages at this point and put them in
+         * `replaced_pkgnames`. */
         default:
           g_assert_not_reached ();
         }
@@ -2081,7 +2125,7 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
         g_assert (pkgname);
 
         if (rpmostree_str_ptrarray_contains (removed_pkgnames, pkgname)
-            || rpmostree_str_ptrarray_contains (replaced_pkgnames, pkgname))
+            || get_pkgname_source (replaced_pkgnames, pkgname) != NULL)
           continue;
         if (hy_goal_lock (goal, pkg, error) != 0)
           return glnx_prefix_error (error, "while locking pkg '%s'", pkgname);
@@ -4531,17 +4575,44 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.removed-base-packages",
                                g_variant_builder_end (&removed_base_pkgs));
 
-        /* embed packages replaced */
+        /* embed local packages replaced */
         g_auto (GVariantBuilder) replaced_base_local_pkgs;
         g_variant_builder_init (&replaced_base_local_pkgs, (GVariantType *)"a(vv)");
         if (self->pkgs_to_replace)
           {
-            GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant *, new_nevra, GVariant *,
-                                        old_nevra)
-              g_variant_builder_add (&replaced_base_local_pkgs, "(vv)", new_nevra, old_nevra);
+            GHashTable *local_replacements
+                = static_cast<GHashTable *> (g_hash_table_lookup (self->pkgs_to_replace, ""));
+            if (local_replacements)
+              {
+                GLNX_HASH_TABLE_FOREACH_KV (local_replacements, GVariant *, new_nevra, GVariant *,
+                                            old_nevra)
+                  g_variant_builder_add (&replaced_base_local_pkgs, "(vv)", new_nevra, old_nevra);
+              }
           }
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.replaced-base-packages",
                                g_variant_builder_end (&replaced_base_local_pkgs));
+
+        /* embed remote packages replaced */
+        g_auto (GVariantBuilder) replaced_base_remote_pkgs;
+        g_variant_builder_init (&replaced_base_remote_pkgs, (GVariantType *)"a{sv}");
+        if (self->pkgs_to_replace)
+          {
+            GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, const char *, source, GHashTable *,
+                                        packages)
+              {
+                if (g_str_equal (source, ""))
+                  continue; /* local replacements handled above */
+
+                g_auto (GVariantBuilder) replacements;
+                g_variant_builder_init (&replacements, (GVariantType *)"a(vv)");
+                GLNX_HASH_TABLE_FOREACH_KV (packages, GVariant *, new_nevra, GVariant *, old_nevra)
+                  g_variant_builder_add (&replacements, "(vv)", new_nevra, old_nevra);
+                g_variant_builder_add (&replaced_base_remote_pkgs, "{sv}", source,
+                                       g_variant_builder_end (&replacements));
+              }
+          }
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.replaced-base-remote-packages",
+                               g_variant_builder_end (&replaced_base_remote_pkgs));
 
         /* this is used by the db commands, and auto updates to diff against the base */
         g_autoptr (GVariant) rpmdb = NULL;
@@ -4552,7 +4623,7 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
 
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.clientlayer_version",
-                               g_variant_new_uint32 (5));
+                               g_variant_new_uint32 (6));
       }
     else if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE)
       {

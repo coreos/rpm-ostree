@@ -69,7 +69,7 @@ struct _RpmOstreeContext
   guint n_async_pkgs_relabeled;
 
   GHashTable *pkgs_to_remove;  /* pkgname --> gv_nevra */
-  GHashTable *pkgs_to_replace; /* new gv_nevra --> old gv_nevra */
+  GHashTable *pkgs_to_replace; /* source -> (new gv_nevra --> old gv_nevra) */
 
   GHashTable *fileoverride_pkgs; /* set of nevras */
 
