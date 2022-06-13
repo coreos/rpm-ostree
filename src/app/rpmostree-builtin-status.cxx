@@ -480,9 +480,11 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy, GCancellable *cancellable, 
   return TRUE;
 }
 
-/* Print the result of rpmostree_context_get_rpmmd_repo_commit_metadata() */
+/* Print the commit checksum, and optionally the rpm repodata injected from
+ * rpmostree_context_get_rpmmd_repo_commit_metadata() */
 static void
-print_origin_repos (gboolean host_endian, guint maxkeylen, GVariantDict *commit_meta)
+print_commit (const char *key, const char *checksum, gboolean host_endian, guint max_key_len,
+              GVariantDict *commit_meta)
 {
   g_autoptr (GVariant) reposdata = g_variant_dict_lookup_value (
       commit_meta, "rpmostree.rpmmd-repos", G_VARIANT_TYPE ("aa{sv}"));
@@ -491,9 +493,14 @@ print_origin_repos (gboolean host_endian, guint maxkeylen, GVariantDict *commit_
     return;
 
   const guint n = g_variant_n_children (reposdata);
-  if (n == 0)
-    return;
+  if (n == 0 || !opt_verbose)
+    {
+      /* no repos to print, so this is just a pure kv print */
+      rpmostree_print_kv (key, max_key_len, checksum);
+      return;
+    }
 
+  g_autoptr (GPtrArray) repos = g_ptr_array_new_with_free_func (g_free);
   for (guint i = 0; i < n; i++)
     {
       g_autoptr (GVariant) child = g_variant_get_child_value (reposdata, i);
@@ -511,19 +518,12 @@ print_origin_repos (gboolean host_endian, guint maxkeylen, GVariantDict *commit_
       if (!host_endian)
         ts = GUINT64_FROM_BE (ts);
       g_autofree char *timestamp_string = rpmostree_timestamp_str_from_unix_utc (ts);
-      g_print ("  %*s%s %s (%s)\n", maxkeylen + 2, " ",
-               libsd_special_glyph (i == (n - 1) ? TREE_RIGHT : TREE_BRANCH), id, timestamp_string);
+      g_ptr_array_add (repos, g_strdup_printf ("%s (%s)", id, timestamp_string));
     }
-}
+  g_ptr_array_add (repos, NULL);
 
-/* Print commit checksum, and then prints repos if in verbose mode. */
-static void
-print_commit (const char *key, const char *checksum, gboolean host_endian, guint max_key_len,
-              GVariantDict *commit_meta)
-{
-  rpmostree_print_kv (key, max_key_len, checksum);
-  if (opt_verbose)
-    print_origin_repos (host_endian, max_key_len, commit_meta);
+  /* NB: print_values takes care of printing the checksum for us */
+  print_values (key, max_key_len, (const char *const *)repos->pdata, NULL, FALSE, checksum);
 }
 
 static gboolean
