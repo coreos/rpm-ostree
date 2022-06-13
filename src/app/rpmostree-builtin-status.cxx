@@ -113,7 +113,8 @@ sort_by_name (gconstpointer a, gconstpointer b)
   return g_ascii_strcasecmp (entry1, entry2);
 }
 
-static void
+/* Returns TRUE if some values were printed after filtering, FALSE otherwise. */
+static bool
 print_values (const char *k, guint max_key_len, const char *const *values,
               const char *const *omit_values, gboolean quote)
 {
@@ -137,7 +138,7 @@ print_values (const char *k, guint max_key_len, const char *const *values,
 
   const guint n_values = values_sorted->len;
   if (n_values == 0)
-    return;
+    return false;
 
   g_ptr_array_sort (values_sorted, sort_by_name);
 
@@ -171,6 +172,7 @@ print_values (const char *k, guint max_key_len, const char *const *values,
         }
     }
   putc ('\n', stdout);
+  return true;
 }
 
 static const gchar **
