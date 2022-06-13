@@ -18,4 +18,5 @@ fi
 # tarballs.
 CXX_VER=$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name == "cxx").version')
 mkdir -p target
-time cargo install --root=target/cxxbridge cxxbridge-cmd --version "${CXX_VER}"
+# Use https://github.com/dtolnay/cxx/pull/1058
+time cargo install --root=target/cxxbridge --git=https://github.com/cgwalters/cxx --branch gen-clap-pin cxxbridge-cmd
