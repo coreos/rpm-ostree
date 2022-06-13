@@ -743,10 +743,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
 
   if (is_locally_assembled && is_ostree_or_verbose)
     {
-      if (have_live_changes)
-        rpmostree_print_kv ("BootedBaseCommit", max_key_len, base_checksum);
-      else
-        rpmostree_print_kv ("BaseCommit", max_key_len, base_checksum);
+      const char *key = have_live_changes ? "BootedBaseCommit" : "BaseCommit";
+      rpmostree_print_kv (key, max_key_len, base_checksum);
       if (opt_verbose)
         print_origin_repos (FALSE, max_key_len, commit_meta_dict);
       if (opt_verbose || have_any_live_overlay)
