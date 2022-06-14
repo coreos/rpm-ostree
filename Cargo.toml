@@ -45,6 +45,8 @@ c_utf8 = "0.1.0"
 camino = "1.0.9"
 cap-std-ext = "0.26"
 cap-std = { version = "0.25", features = ["fs_utf8"] }
+# Explicitly force on libc
+rustix = { version = "0.35", features = ["use-libc"] }
 cap-primitives = "0.25.2"
 cap-tempfile = "0.25.2"
 chrono = { version = "0.4.19", features = ["serde"] }
