@@ -448,7 +448,8 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
                                        char **out_base_layer, char ***out_layered_pkgs,
                                        char ***out_layered_modules,
                                        GVariant **out_removed_base_pkgs,
-                                       GVariant **out_replaced_base_local_pkgs, GError **error)
+                                       GVariant **out_replaced_base_local_pkgs,
+                                       GVariant **out_replaced_base_remote_pkgs, GError **error)
 {
   const char *csum = ostree_deployment_get_csum (deployment);
   g_autoptr (GVariant) commit = NULL;
@@ -466,6 +467,7 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
   g_auto (GStrv) layered_modules = NULL;
   g_autoptr (GVariant) removed_base_pkgs = NULL;
   g_autoptr (GVariant) replaced_base_local_pkgs = NULL;
+  g_autoptr (GVariant) replaced_base_remote_pkgs = NULL;
   if (layeredmeta.is_layered && (out_layered_pkgs != NULL || out_removed_base_pkgs != NULL))
     {
       /* starting from v1, we no longer embed a treespec in client layers */
@@ -505,6 +507,13 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
         {
           g_assert (g_variant_dict_lookup (dict, "rpmostree.modules", "^as", &layered_modules));
         }
+
+      if (layeredmeta.clientlayer_version >= 6)
+        {
+          replaced_base_remote_pkgs = g_variant_dict_lookup_value (
+              dict, "rpmostree.replaced-base-remote-packages", G_VARIANT_TYPE ("a{sv}"));
+          g_assert (replaced_base_remote_pkgs);
+        }
     }
 
   /* canonicalize outputs to empty array */
@@ -541,6 +550,13 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
             = g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("(vv)"), NULL, 0));
       *out_replaced_base_local_pkgs = util::move_nullify (replaced_base_local_pkgs);
     }
+  if (out_replaced_base_remote_pkgs != NULL)
+    {
+      if (!replaced_base_remote_pkgs)
+        replaced_base_remote_pkgs
+            = g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0));
+      *out_replaced_base_remote_pkgs = util::move_nullify (replaced_base_remote_pkgs);
+    }
 
   return TRUE;
 }
@@ -551,7 +567,7 @@ rpmostree_deployment_get_base_layer (OstreeRepo *repo, OstreeDeployment *deploym
                                      char **out_base_layer, GError **error)
 {
   return rpmostree_deployment_get_layered_info (repo, deployment, NULL, NULL, out_base_layer, NULL,
-                                                NULL, NULL, NULL, error);
+                                                NULL, NULL, NULL, NULL, error);
 }
 
 static gboolean

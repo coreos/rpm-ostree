@@ -108,6 +108,13 @@ fn deployment_populate_variant_origin(
         "requested-base-local-replacements",
         tf.derive.override_replace_local.as_ref(),
     );
+    if let Some(remote_overrides) = tf.derive.override_replace.as_ref() {
+        let v: Vec<(String, Vec<&String>)> = remote_overrides
+            .iter()
+            .map(|ovr| (ovr.from.to_string(), ovr.packages.iter().collect()))
+            .collect();
+        dict.insert_value("requested-base-remote-replacements", &v.to_variant());
+    }
 
     // Initramfs data.
     if let Some(initramfs) = tf.derive.initramfs.as_ref() {

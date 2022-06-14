@@ -135,6 +135,8 @@ filter_commit_meta (GVariant *commit_meta)
   g_variant_dict_remove (&dict, "rpmostree.spec");     /* old way of getting packages */
   g_variant_dict_remove (&dict, "rpmostree.removed-base-packages");  /* 'base-removals' */
   g_variant_dict_remove (&dict, "rpmostree.replaced-base-packages"); /* 'base-local-replacements' */
+  g_variant_dict_remove (
+      &dict, "rpmostree.replaced-base-remote-packages"); /* 'base-remote-replacements' */
   return g_variant_dict_end (&dict);
 }
 
@@ -166,9 +168,10 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
   g_auto (GStrv) layered_modules = NULL;
   g_autoptr (GVariant) removed_base_pkgs = NULL;
   g_autoptr (GVariant) replaced_base_local_pkgs = NULL;
-  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, NULL, &base_checksum,
-                                              &layered_pkgs, &layered_modules, &removed_base_pkgs,
-                                              &replaced_base_local_pkgs, error))
+  g_autoptr (GVariant) replaced_base_remote_pkgs = NULL;
+  if (!rpmostree_deployment_get_layered_info (
+          repo, deployment, &is_layered, NULL, &base_checksum, &layered_pkgs, &layered_modules,
+          &removed_base_pkgs, &replaced_base_local_pkgs, &replaced_base_remote_pkgs, error))
     return FALSE;
 
   g_autoptr (GVariant) base_commit = NULL;
@@ -255,6 +258,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
   g_variant_dict_insert (dict, "modules", "^as", layered_modules);
   g_variant_dict_insert_value (dict, "base-removals", removed_base_pkgs);
   g_variant_dict_insert_value (dict, "base-local-replacements", replaced_base_local_pkgs);
+  g_variant_dict_insert_value (dict, "base-remote-replacements", replaced_base_remote_pkgs);
 
   *out_variant = g_variant_dict_end (dict);
   return TRUE;
