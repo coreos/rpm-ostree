@@ -111,4 +111,5 @@
 /tests/check/test-lib-introspection.sh.log
 /tests/check/test-lib-introspection.sh.test
 /tests/check/test-lib-introspection.sh.trs
+/tests/kola
 _libs
