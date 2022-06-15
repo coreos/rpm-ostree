@@ -12,6 +12,7 @@ use cap_std::fs::Dir;
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::*;
 use chrono::prelude::*;
+use clap::Parser;
 use ostree::glib;
 use ostree_ext::chunking::ObjectMetaSized;
 use ostree_ext::container::{Config, ExportOpts, ImageReference};
@@ -20,7 +21,6 @@ use ostree_ext::objectsource::{
 };
 use ostree_ext::prelude::*;
 use ostree_ext::{gio, ostree};
-use structopt::StructOpt;
 
 use crate::cxxrsutil::FFIGObjectReWrap;
 
@@ -35,36 +35,36 @@ pub async fn entrypoint(args: &[&str]) -> Result<i32> {
     Ok(0)
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 struct ContainerEncapsulateOpts {
-    #[structopt(long)]
-    #[structopt(parse(try_from_str = ostree_ext::cli::parse_repo))]
-    repo: ostree::Repo,
+    #[clap(long)]
+    #[clap(value_parser)]
+    repo: Utf8PathBuf,
 
     /// OSTree branch name or checksum
     ostree_ref: String,
 
     /// Image reference, e.g. registry:quay.io/exampleos/exampleos:latest
-    #[structopt(parse(try_from_str = ostree_ext::cli::parse_base_imgref))]
+    #[clap(value_parser = ostree_ext::cli::parse_base_imgref)]
     imgref: ImageReference,
 
     /// Additional labels for the container
-    #[structopt(name = "label", long, short)]
+    #[clap(name = "label", long, short)]
     labels: Vec<String>,
 
     /// Propagate an OSTree commit metadata key to container label
-    #[structopt(name = "copymeta", long)]
+    #[clap(name = "copymeta", long)]
     copy_meta_keys: Vec<String>,
 
     /// Corresponds to the Dockerfile `CMD` instruction.
-    #[structopt(long)]
+    #[clap(long)]
     cmd: Option<Vec<String>>,
 
     /// Maximum number of container image layers
-    #[structopt(long)]
+    #[clap(long)]
     max_layers: Option<NonZeroU32>,
 
-    #[structopt(long)]
+    #[clap(long)]
     /// Output content metadata as JSON
     write_contentmeta_json: Option<Utf8PathBuf>,
 }
@@ -206,8 +206,8 @@ fn gv_nevra_to_string(pkg: &glib::Variant) -> String {
 /// Note this isn't *really* asynchronous in many parts.
 pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
     let args = args.iter().skip(1);
-    let opt = ContainerEncapsulateOpts::from_iter(args);
-    let repo = &opt.repo;
+    let opt = ContainerEncapsulateOpts::parse_from(args);
+    let repo = &ostree_ext::cli::parse_repo(opt.repo.as_str())?;
     let (root, rev) = repo.read_commit(opt.ostree_ref.as_str(), gio::NONE_CANCELLABLE)?;
     let pkglist = {
         let cancellable = gio::Cancellable::new();

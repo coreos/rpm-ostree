@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{anyhow, Result};
+use clap::Parser;
 use indoc::indoc;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
-use structopt::StructOpt;
 
 use crate::ffi::SystemHostType;
 
@@ -36,12 +36,13 @@ Install RPM packages layered on the host root filesystem.
 Consider these "operating system extensions".
 Add `--apply-live` to immediately start using the layered packages."#};
 
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(Debug, Parser)]
+#[clap(
     name = "yumdnf-rpmostree",
-    about = "Compatibility wrapper implementing subset of yum/dnf CLI"
+    about = "Compatibility wrapper implementing subset of yum/dnf CLI",
+    version
 )]
-#[structopt(rename_all = "kebab-case")]
+#[clap(rename_all = "kebab-case")]
 /// Main options struct
 enum Opt {
     /// Start an upgrade of the operating system
@@ -91,11 +92,11 @@ fn run_clean(argv: &Vec<String>) -> Result<RunDisposition> {
 }
 
 fn disposition(hosttype: SystemHostType, argv: &[&str]) -> Result<RunDisposition> {
-    let opt = match Opt::from_iter_safe(std::iter::once(&"yum").chain(argv.iter())) {
+    let opt = match Opt::try_parse_from(std::iter::once(&"yum").chain(argv.iter())) {
         Ok(v) => v,
         Err(e)
-            if e.kind == clap::ErrorKind::VersionDisplayed
-                || e.kind == clap::ErrorKind::HelpDisplayed =>
+            if e.kind() == clap::ErrorKind::DisplayVersion
+                || e.kind() == clap::ErrorKind::DisplayHelp =>
         {
             return Ok(RunDisposition::HelpOrVersionDisplayed)
         }
