@@ -4,24 +4,24 @@
 use crate::cxxrsutil::*;
 use crate::live;
 use anyhow::{anyhow, Result};
+use clap::Parser;
 use glib::Variant;
 use ostree_ext::{gio, glib, ostree, prelude::*};
 use std::pin::Pin;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "apply-live")]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Debug, Parser)]
+#[clap(name = "apply-live")]
+#[clap(rename_all = "kebab-case")]
 struct Opts {
     /// Target provided commit instead of pending deployment
-    #[structopt(long)]
+    #[clap(long)]
     target: Option<String>,
     /// Reset back to booted commit
-    #[structopt(long)]
+    #[clap(long)]
     reset: bool,
 
     /// Allow replacement of packages/files (default is pure additive)
-    #[structopt(long)]
+    #[clap(long)]
     allow_replacement: bool,
 }
 
@@ -48,7 +48,7 @@ fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Vari
 }
 
 pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
-    let opts = &Opts::from_iter(args.iter());
+    let opts = &Opts::parse_from(args.iter());
     let client = &mut crate::client::ClientConnection::new()?;
     let sysroot = &ostree::Sysroot::new_default();
     sysroot.load(gio::NONE_CANCELLABLE)?;

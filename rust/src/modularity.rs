@@ -3,16 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{anyhow, bail, Result};
+use clap::{ArgAction, Parser};
 use gio::prelude::*;
 use glib::Variant;
 use ostree_ext::{gio, glib};
-use structopt::StructOpt;
 
 use crate::utils::print_treepkg_diff;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "rpm-ostree module", no_version)]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Debug, Parser)]
+#[clap(name = "rpm-ostree module")]
+#[clap(rename_all = "kebab-case")]
 enum Opt {
     /// Enable a module
     Enable(InstallOpts),
@@ -24,15 +24,15 @@ enum Opt {
     Uninstall(InstallOpts),
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 struct InstallOpts {
-    #[structopt(parse(from_str))]
+    #[clap(action(ArgAction::Append))]
     modules: Vec<String>,
-    #[structopt(long)]
+    #[clap(long)]
     reboot: bool,
-    #[structopt(long)]
+    #[clap(long)]
     lock_finalization: bool,
-    #[structopt(long)]
+    #[clap(long)]
     dry_run: bool,
 }
 
@@ -42,7 +42,7 @@ const OPT_KEY_INSTALL_MODULES: &str = "install-modules";
 const OPT_KEY_UNINSTALL_MODULES: &str = "uninstall-modules";
 
 pub(crate) fn modularity_entrypoint(args: &Vec<String>) -> Result<()> {
-    match Opt::from_iter(args.iter()) {
+    match Opt::parse_from(args.iter()) {
         Opt::Enable(ref opts) => enable(opts),
         Opt::Disable(ref opts) => disable(opts),
         Opt::Install(ref opts) => install(opts),

@@ -16,6 +16,7 @@ use cap_std::fs::{Dir, Permissions};
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
 use cap_std_ext::rustix::fs::{MetadataExt, Mode};
+use clap::Parser;
 use fn_error_context::context;
 use glib::{ToVariant, Variant};
 use ostree_ext::{gio, glib, ostree};
@@ -27,29 +28,28 @@ use std::os::unix::fs::FileExt as UnixFileExt;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 struct SyntheticUpgradeOpts {
-    #[structopt(long)]
+    #[clap(long)]
     repo: String,
 
-    #[structopt(long = "srcref")]
+    #[clap(long = "srcref")]
     src_ref: Option<String>,
 
-    #[structopt(long = "ref")]
+    #[clap(long = "ref")]
     ostref: String,
 
-    #[structopt(long, default_value = "30")]
+    #[clap(long, default_value = "30")]
     percentage: u32,
 
-    #[structopt(long)]
+    #[clap(long)]
     commit_version: Option<String>,
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "testutils")]
-#[structopt(rename_all = "kebab-case")]
+#[derive(Debug, Parser)]
+#[clap(name = "testutils")]
+#[clap(rename_all = "kebab-case")]
 enum Opt {
     /// Generate an OS update by changing ELF files
     GenerateSyntheticUpgrade(SyntheticUpgradeOpts),
@@ -267,7 +267,7 @@ fn test_moo() -> Result<()> {
 }
 
 pub(crate) fn testutils_entrypoint(args: Vec<String>) -> CxxResult<()> {
-    let opt = Opt::from_iter(args.iter());
+    let opt = Opt::parse_from(args.iter());
     match opt {
         Opt::GenerateSyntheticUpgrade(ref opts) => update_os_tree(opts)?,
         Opt::IntegrationReadOnly => integration_read_only()?,

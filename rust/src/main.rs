@@ -11,7 +11,7 @@ use termcolor::WriteColor;
 /// Directly exec(ostree admin unlock) - does not return on success.
 fn usroverlay(args: &[&str]) -> Result<()> {
     // Handle --help and error on extra arguments
-    let _ = clap::App::new("rpm-ostree usroverlay")
+    let _ = clap::Command::new("rpm-ostree usroverlay")
         .bin_name("rpm-ostree usroverlay")
         .long_version("")
         .long_about("Apply a transient overlayfs to /usr")

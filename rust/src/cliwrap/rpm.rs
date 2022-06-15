@@ -1,24 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 use anyhow::Result;
-use clap::{App, Arg};
+use clap::{Arg, Command};
 
 use crate::cliwrap::cliutil;
 use crate::cliwrap::RunDisposition;
 use crate::ffi::SystemHostType;
 
-fn new_rpm_app<'r>() -> App<'r, 'static> {
+fn new_rpm_app() -> Command<'static> {
     let name = "cli-ostree-wrapper-rpm";
-    App::new(name)
+    Command::new(name)
         .bin_name(name)
         .version("0.1")
         .about("Wrapper for rpm")
-        .arg(Arg::with_name("verify").short("V").long("verify"))
-        .arg(Arg::with_name("version"))
+        .arg(Arg::new("verify").short('V').long("verify"))
         .arg(
-            Arg::with_name("package")
+            Arg::new("version")
+                .long("version")
+                .action(clap::ArgAction::Version),
+        )
+        .arg(
+            Arg::new("package")
                 .help("package")
                 .takes_value(true)
-                .multiple(true),
+                .action(clap::ArgAction::Append),
         )
 }
 
@@ -57,17 +61,16 @@ fn disposition(host: SystemHostType, argv: &[&str]) -> Result<RunDisposition> {
         return Ok(RunDisposition::Ok);
     }
 
-    let mut app = new_rpm_app();
-    let matches = match app.get_matches_from_safe_borrow(std::iter::once(&"rpm").chain(argv.iter()))
-    {
+    let app = new_rpm_app();
+    let matches = match app.try_get_matches_from(std::iter::once(&"rpm").chain(argv.iter())) {
         Ok(v) => v,
-        Err(e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(RunDisposition::Ok),
+        Err(e) if e.kind() == clap::ErrorKind::DisplayVersion => return Ok(RunDisposition::Ok),
         Err(_) => {
             return Ok(RunDisposition::Warn);
         }
     };
 
-    if matches.is_present("verify") {
+    if matches.contains_id("verify") {
         Ok(RunDisposition::Notice(
             "rpm --verify is not necessary for ostree-based systems.
             All binaries in /usr are underneath a read-only bind mount.
