@@ -17,6 +17,7 @@ use crate::{bwrap, importer};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::Dir;
+use cap_std::fs_utf8::Dir as Utf8Dir;
 use cap_std_ext::cap_std;
 use cap_std_ext::cap_std::fs::Permissions;
 use cap_std_ext::dirext::CapStdExtDirExt;
@@ -261,17 +262,16 @@ fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
 #[context("Cleaning up rpmdb leftovers")]
 fn postprocess_cleanup_rpmdb_impl(rootfs_dfd: &Dir) -> Result<()> {
     let d = if let Some(d) = rootfs_dfd.open_dir_optional(RPMOSTREE_RPMDB_LOCATION)? {
-        d
+        Utf8Dir::from_cap_std(d)
     } else {
         return Ok(());
     };
     for ent in d.entries()? {
         let ent = ent?;
-        let name: Utf8PathBuf = PathBuf::from(ent.file_name()).try_into()?;
-        if matches!(name.as_str(), ".dbenv.lock" | ".rpm.lock")
-            || name.as_str().starts_with("__db.")
-        {
-            d.remove_file(&name)?;
+        let name = ent.file_name()?;
+        let name = name.as_str();
+        if matches!(name, ".dbenv.lock" | ".rpm.lock") || name.starts_with("__db.") {
+            d.remove_file(name)?;
         }
     }
     Ok(())

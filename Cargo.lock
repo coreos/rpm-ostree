@@ -177,6 +177,7 @@ version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d684df5773e4af5c343c466f47151db7e7a4366daab609b4a6bb7a75aecf732"
 dependencies = [
+ "camino",
  "cap-primitives",
  "io-extras",
  "io-lifetimes 0.5.1",
@@ -2108,6 +2109,7 @@ dependencies = [
  "bitflags",
  "c_utf8",
  "camino",
+ "cap-std",
  "cap-std-ext",
  "cap-tempfile",
  "chrono",
