@@ -791,11 +791,13 @@ fn convert_path_to_tmpfiles_d_recurse(
                 file_info.set_file_type(FileType::Directory);
             } else if meta.is_symlink() {
                 file_info.set_file_type(FileType::SymbolicLink);
-                let link_target = rootfs.read_link(&full_path).context("Reading symlink")?;
-                let target_path = Utf8Path::from_path(&link_target).ok_or_else(|| {
-                    format_err!("non UTF-8 symlink target '{}'", &link_target.display())
-                })?;
-                file_info.set_symlink_target(target_path.as_str());
+                let link_target =
+                    crate::capstdext::read_link_contents(rootfs, full_path.as_std_path())
+                        .context("Reading symlink")?;
+                let link_target = link_target
+                    .to_str()
+                    .ok_or_else(|| format_err!("non UTF-8 symlink target '{:?}'", link_target))?;
+                file_info.set_symlink_target(link_target);
             } else if meta.is_file() {
                 file_info.set_file_type(FileType::Regular);
             } else {
@@ -1344,6 +1346,12 @@ OSTREE_VERSION='33.4'
         rootfs
             .symlink("../", "var/lib/test/nested/symlink")
             .unwrap();
+        crate::capstdext::write_read_link_contents(
+            &rootfs,
+            "/var/lib/foo",
+            "var/lib/test/absolute-symlink",
+        )
+        .unwrap();
 
         // Also make this a sanity test for our directory size API
         let cancellable = gio::Cancellable::new();
@@ -1364,6 +1372,7 @@ OSTREE_VERSION='33.4'
             .map(|s| s.to_owned())
             .collect();
         let expected = &[
+            "L /var/lib/test/absolute-symlink - - - - /var/lib/foo",
             "L /var/lib/test/nested/symlink - - - - ../",
             "d /var/lib 0755 test-user test-group - -",
             "d /var/lib/nfs 0755 test-user test-group - -",
