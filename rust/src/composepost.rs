@@ -756,9 +756,9 @@ fn convert_path_to_tmpfiles_d_recurse(
 ) -> Result<()> {
     let current_prefix = prefix.clone();
     for subpath in rootfs.read_dir(&current_prefix).context("Reading dir")? {
-        if cancellable.map(|c| c.is_cancelled()).unwrap_or_default() {
-            bail!("Cancelled");
-        };
+        if let Some(c) = cancellable {
+            c.set_error_if_cancelled()?;
+        }
 
         let subpath = subpath?;
         let meta = subpath.metadata()?;
@@ -956,9 +956,9 @@ fn workaround_selinux_cross_labeling_recurse(
 
     let current_prefix = prefix.clone();
     for subpath in rootfs.list_dir(&current_prefix)? {
-        if cancellable.map(|c| c.is_cancelled()).unwrap_or_default() {
-            bail!("Cancelled");
-        };
+        if let Some(c) = cancellable {
+            c.set_error_if_cancelled()?;
+        }
 
         let subpath = subpath?;
         let full_path = {
@@ -1152,9 +1152,9 @@ fn hardlink_recurse(
     let current_dir = relative_path.clone();
     let current_source_dir = format!("{}/{}", source_prefix, relative_path);
     for subpath in rootfs.list_dir(&current_source_dir)? {
-        if cancellable.map(|c| c.is_cancelled()).unwrap_or_default() {
-            bail!("Cancelled");
-        };
+        if let Some(c) = cancellable {
+            c.set_error_if_cancelled()?;
+        }
 
         let subpath = subpath?;
         let full_path = {
