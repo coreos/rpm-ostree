@@ -3,3 +3,4 @@
 
 pub(crate) mod apply_live;
 pub(crate) mod compose;
+pub mod usroverlay;

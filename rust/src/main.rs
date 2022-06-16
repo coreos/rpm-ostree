@@ -3,27 +3,10 @@
 
 use anyhow::{Context, Result};
 use nix::sys::signal;
+use rpmostree_rust::builtins;
 use std::ffi::OsString;
 use std::io::Write;
-use std::os::unix::prelude::CommandExt;
 use termcolor::WriteColor;
-
-/// Directly exec(ostree admin unlock) - does not return on success.
-fn usroverlay(args: &[&str]) -> Result<()> {
-    // Handle --help and error on extra arguments
-    let _ = clap::Command::new("rpm-ostree usroverlay")
-        .bin_name("rpm-ostree usroverlay")
-        .long_version("")
-        .long_about("Apply a transient overlayfs to /usr")
-        .get_matches_from(args.iter().skip(1));
-    Err::<_, anyhow::Error>(
-        std::process::Command::new("ostree")
-            .args(&["admin", "unlock"])
-            .exec()
-            .into(),
-    )
-    .context("Failed to execute ostree admin unlock")
-}
 
 // And now we've done process global initialization, we have a tokio runtime setup; process the command line.
 // As of today, basically every function here is blocking, so we spawn a thread.
@@ -62,7 +45,7 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
                 "countme" => rpmostree_rust::countme::entrypoint(args).map(|_| 0),
                 "cliwrap" => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
                 // The `unlock` is a hidden alias for "ostree CLI compatibility"
-                "usroverlay" | "unlock" => usroverlay(args).map(|_| 0),
+                "usroverlay" | "unlock" => builtins::usroverlay::entrypoint(args).map(|_| 0),
                 // C++ main
                 _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
             }
