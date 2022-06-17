@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include "rpmostree-container.h"
+#include "rpmostree-core.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-override-builtins.h"
 
@@ -71,16 +72,86 @@ static GOptionEntry remove_option_entries[] = { { "replace", 0, 0, G_OPTION_ARG_
                                                 { NULL } };
 
 static gboolean
+sort_replacements (RPMOSTreeOSExperimental *osexperimental_proxy,
+                   const char *const *replacement_args, char ***out_local,
+                   GUnixFDList **out_fd_list, GCancellable *cancellable, GError **error)
+{
+  g_autoptr (GPtrArray) local = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr (GPtrArray) freeze = g_ptr_array_new_with_free_func (g_free);
+  for (const char *const *it = replacement_args; it && *it; it++)
+    {
+      auto arg = *it;
+      if (rpmostreecxx::is_http_arg (arg) || rpmostreecxx::is_rpm_arg (arg))
+        {
+          g_ptr_array_add (local, (gpointer)g_strdup (arg));
+        }
+      // if the pkg is a valid nevra, then treat it as frozen
+      else if (opt_freeze || rpmostree_is_valid_nevra (arg))
+        {
+          g_ptr_array_add (freeze, (gpointer)g_strdup (arg));
+        }
+      else
+        {
+          glnx_throw (error, "Remote overrides are not supported yet on the CLI");
+        }
+    }
+
+  g_autoptr (GUnixFDList) fd_list = NULL;
+  if (freeze->len > 0)
+    {
+      g_ptr_array_add (freeze, NULL);
+
+      /* this is really just a D-Bus wrapper around `rpmostree_find_and_download_packages` */
+      if (!rpmostree_osexperimental_call_download_packages_sync (
+              osexperimental_proxy, (const char *const *)freeze->pdata, opt_from, NULL, &fd_list,
+              cancellable, error))
+        return FALSE;
+
+      int nfds;
+      const int *fds = g_unix_fd_list_peek_fds (fd_list, &nfds);
+      for (guint i = 0; i < nfds; i++)
+        g_ptr_array_add (local, g_strdup_printf ("file:///proc/self/fd/%d", fds[i]));
+    }
+
+  if (local->len > 0)
+    {
+      g_ptr_array_add (local, NULL);
+      *out_local = (char **)g_ptr_array_free (util::move_nullify (local), FALSE);
+    }
+  else
+    *out_local = NULL;
+
+  *out_fd_list = util::move_nullify (fd_list);
+  return TRUE;
+}
+
+static gboolean
 handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *invocation,
                  const char *const *override_remove, const char *const *override_replace,
                  const char *const *override_reset, GCancellable *cancellable, GError **error)
 {
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
-
+  glnx_unref_object RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
   if (!rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable, &os_proxy,
                                   &osexperimental_proxy, error))
     return FALSE;
+
+  if (!opt_experimental && (opt_freeze || opt_from))
+    return glnx_throw (error, "Must specify --experimental to use --freeze or --from");
+
+  g_autoptr (GUnixFDList) fd_list = NULL; /* this is just used to own the fds */
+
+  /* By default, we assume all the args are local overrides. If --from is used, we have to sort them
+   * first to handle --freeze and (eventually) remote overrides. */
+  g_auto (GStrv) override_replace_local = NULL;
+  if (override_replace && opt_from)
+    {
+      if (!sort_replacements (osexperimental_proxy, override_replace, &override_replace_local,
+                              &fd_list, cancellable, error))
+        return FALSE;
+
+      override_replace = override_replace_local;
+    }
 
   /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
    * note we might still need to fetch pkgs in the local replacement case (e.g. the
@@ -99,66 +170,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
   g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
-  g_autoptr (GUnixFDList) fetched_rpms_fds = NULL;
-  g_autoptr (GPtrArray) override_replace_final = NULL;
 
-  if (!opt_experimental && (opt_freeze || opt_from))
-    return glnx_throw (error, "Must specify --experimental to use --freeze or --from");
-
-  if (override_replace && opt_from)
-    {
-      override_replace_final = g_ptr_array_new_with_free_func (free);
-      g_autoptr (GPtrArray) queries = g_ptr_array_new ();
-
-      for (const char *const *it = override_replace; it && *it; it++)
-        {
-          auto pkg = *it;
-
-          if (rpmostreecxx::is_http_arg (pkg) || rpmostreecxx::is_rpm_arg (pkg))
-            {
-              g_ptr_array_add (override_replace_final, (gpointer)g_strdup (pkg));
-            }
-          // if the pkg is a valid nevra, then treat it as frozen
-          else if (opt_freeze || rpmostree_is_valid_nevra (pkg))
-            {
-              g_ptr_array_add (queries, (gpointer)pkg);
-            }
-          else
-            {
-              return glnx_throw (error, "CLI remote overrides not supported yet");
-            }
-        }
-      if (queries->len > 0)
-        {
-          g_ptr_array_add (queries, NULL);
-          g_autofree char *refresh_transaction_address = NULL;
-
-          if (!rpmostree_os_call_refresh_md_sync (os_proxy, options, &refresh_transaction_address,
-                                                  cancellable, error))
-            return FALSE;
-          if (!rpmostree_transaction_get_response_sync (
-                  sysroot_proxy, (const char *)refresh_transaction_address, cancellable, error))
-            return FALSE;
-          if (!rpmostree_osexperimental_call_download_packages_sync (
-                  osexperimental_proxy, (const char *const *)queries->pdata, opt_from, NULL,
-                  &fetched_rpms_fds, cancellable, error))
-            return FALSE;
-
-          const int nfds = fetched_rpms_fds ? g_unix_fd_list_get_length (fetched_rpms_fds) : 0;
-          g_assert_cmpuint (nfds, >, 0);
-
-          for (guint i = 0; i < nfds; i++)
-            {
-              gint fd = g_unix_fd_list_get (fetched_rpms_fds, i, error);
-              if (fd < 0)
-                return FALSE;
-              g_ptr_array_add (override_replace_final,
-                               g_strdup_printf ("file:///proc/self/fd/%d", fd));
-            }
-          g_ptr_array_add (override_replace_final, NULL);
-          override_replace = (const char *const *)override_replace_final->pdata;
-        }
-    }
   g_autofree char *transaction_address = NULL;
   if (!rpmostree_update_deployment (os_proxy, NULL,     /* set-refspec */
                                     NULL,               /* set-revision */

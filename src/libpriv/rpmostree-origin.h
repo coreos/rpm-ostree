@@ -54,6 +54,9 @@ rust::Vec<rust::String> rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *
 
 bool rpmostree_origin_has_overrides_remove_name (RpmOstreeOrigin *origin, const char *name);
 
+rust::Vec<rpmostreecxx::OverrideReplacement>
+rpmostree_origin_get_overrides_replace (RpmOstreeOrigin *origin);
+
 rust::Vec<rust::String> rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin);
 
 rust::String rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
