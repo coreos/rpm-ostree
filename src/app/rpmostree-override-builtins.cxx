@@ -101,11 +101,20 @@ sort_replacements (RPMOSTreeOSExperimental *osexperimental_proxy,
     {
       g_ptr_array_add (freeze, NULL);
 
-      /* this is really just a D-Bus wrapper around `rpmostree_find_and_download_packages` */
-      if (!rpmostree_osexperimental_call_download_packages_sync (
-              osexperimental_proxy, (const char *const *)freeze->pdata, opt_from, NULL, &fd_list,
-              cancellable, error))
-        return FALSE;
+      if (osexperimental_proxy)
+        {
+          /* this is really just a D-Bus wrapper around `rpmostree_find_and_download_packages` */
+          if (!rpmostree_osexperimental_call_download_packages_sync (
+                  osexperimental_proxy, (const char *const *)freeze->pdata, opt_from, NULL,
+                  &fd_list, cancellable, error))
+            return FALSE;
+        }
+      else
+        {
+          if (!rpmostree_find_and_download_packages ((const char *const *)freeze->pdata, opt_from,
+                                                     "/", NULL, &fd_list, cancellable, error))
+            return FALSE;
+        }
 
       int nfds;
       const int *fds = g_unix_fd_list_peek_fds (fd_list, &nfds);
@@ -130,14 +139,21 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
                  const char *const *override_remove, const char *const *override_replace,
                  const char *const *override_reset, GCancellable *cancellable, GError **error)
 {
+  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
+
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
-  if (!rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable, &os_proxy,
-                                  &osexperimental_proxy, error))
-    return FALSE;
+  if (!is_ostree_container)
+    {
+      if (!rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable, &os_proxy,
+                                      &osexperimental_proxy, error))
+        return FALSE;
+    }
 
   if (!opt_experimental && (opt_freeze || opt_from))
     return glnx_throw (error, "Must specify --experimental to use --freeze or --from");
+  if (is_ostree_container && override_reset && *override_reset)
+    return glnx_throw (error, "Resetting overrides is not supported in container mode");
 
   g_autoptr (GUnixFDList) fd_list = NULL; /* this is just used to own the fds */
 
@@ -151,6 +167,24 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
         return FALSE;
 
       override_replace = override_replace_local;
+    }
+
+  if (is_ostree_container)
+    {
+      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
+      for (const char *const *it = override_replace; it && *it; it++)
+        {
+          auto arg = *it;
+          // TODO: better API/cache for this
+          g_autoptr (DnfContext) ctx = dnf_context_new ();
+          auto basearch = dnf_context_get_base_arch (ctx);
+          CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (arg, basearch, true), error);
+          g_assert_cmpint (fds.size (), >, 0);
+          CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpm_raw_fds (fds), error);
+          treefile->add_packages_override_replace_local (pkgs);
+        }
+      treefile->add_packages_override_remove (util::rust_stringvec_from_strv (override_remove));
+      return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
 
   /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
@@ -237,32 +271,6 @@ rpmostree_override_builtin_replace (int argc, char **argv, RpmOstreeCommandInvoc
   argc--;
   argv[argc] = NULL;
 
-  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
-  if (is_ostree_container)
-    {
-      // TODO: better API/cache for this
-      g_autoptr (DnfContext) ctx = dnf_context_new ();
-      auto basearch = dnf_context_get_base_arch (ctx);
-      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
-      for (char **it = argv; it && *it; it++)
-        {
-          auto pkg = *it;
-          CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (pkg, basearch, true), error);
-          if (fds.size () > 0)
-            {
-              CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpm_raw_fds (fds), error);
-              treefile->add_packages_override_replace_local (pkgs);
-            }
-          else
-            {
-              /* XXX: to come soon */
-              return glnx_throw (error, "CLI repo overrides not supported yet; use `origin.d/`.");
-            }
-        }
-      treefile->add_packages_override_remove (util::rust_stringvec_from_strv (opt_remove_pkgs));
-      return rpmostree_container_rebuild (*treefile, cancellable, error);
-    }
-
   return handle_override (sysroot_proxy, invocation, opt_remove_pkgs, (const char *const *)argv,
                           NULL, cancellable, error);
 }
@@ -294,17 +302,6 @@ rpmostree_override_builtin_remove (int argc, char **argv, RpmOstreeCommandInvoca
   argv++;
   argc--;
   argv[argc] = NULL;
-
-  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
-  if (is_ostree_container)
-    {
-      auto argvs = util::rust_stringvec_from_strv (opt_replace_pkgs);
-      CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpms (argvs), error);
-      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
-      treefile->add_packages_override_replace_local (pkgs);
-      treefile->add_packages_override_remove (util::rust_stringvec_from_strv (argv));
-      return rpmostree_container_rebuild (*treefile, cancellable, error);
-    }
 
   return handle_override (sysroot_proxy, invocation, (const char *const *)argv, opt_replace_pkgs,
                           NULL, cancellable, error);
