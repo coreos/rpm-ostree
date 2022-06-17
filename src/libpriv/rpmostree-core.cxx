@@ -2295,6 +2295,79 @@ rpmostree_download_packages (GPtrArray *packages, GCancellable *cancellable, GEr
 }
 
 gboolean
+rpmostree_find_and_download_packages (const char *const *packages, const char *source,
+                                      const char *source_root, const char *repo_root,
+                                      GUnixFDList **out_fd_list, GCancellable *cancellable,
+                                      GError **error)
+{
+  CXX_TRY_VAR (parsed_source, rpmostreecxx::parse_override_source (source), error);
+
+  g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_base (NULL);
+  if (!rpmostree_context_setup (ctx, NULL, source_root, cancellable, error))
+    return glnx_prefix_error (error, "Setting up dnf context");
+
+  g_autofree char *reposdir = g_build_filename (repo_root ?: source_root, "etc/yum.repos.d", NULL);
+  dnf_context_set_repo_dir (ctx->dnfctx, reposdir);
+
+  if (!rpmostree_context_download_metadata (ctx, DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB,
+                                            cancellable, error))
+    return glnx_prefix_error (error, "Downloading metadata");
+
+  g_autoptr (GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_object_unref);
+  DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
+  switch (parsed_source.kind)
+    {
+    case rpmostreecxx::OverrideReplacementType::Repo:
+      {
+        const char *repo = parsed_source.name.c_str ();
+        for (const char *const *it = packages; it && *it; it++)
+          {
+            g_auto (HySubject) subject = hy_subject_create (static_cast<const char *> (*it));
+            HyNevra nevra = NULL;
+            hy_autoquery HyQuery query = hy_subject_get_best_solution (
+                subject, sack, NULL, &nevra, FALSE, TRUE, FALSE, FALSE, FALSE);
+            hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo);
+            g_autoptr (GPtrArray) results = hy_query_run (query);
+            if (!results || results->len == 0)
+              return glnx_throw (error, "No matches for \"%s\" in repo '%s'", subject, repo);
+            g_ptr_array_add (pkgs, g_object_ref (results->pdata[0]));
+          }
+        break;
+      }
+    default:
+      return glnx_throw (error, "Unsupported source type used in '%s'", source);
+    }
+
+  rpmostree_set_repos_on_packages (rpmostree_context_get_dnf (ctx), pkgs);
+
+  if (!rpmostree_download_packages (pkgs, cancellable, error))
+    return glnx_prefix_error (error, "Downloading packages");
+
+  g_autoptr (GUnixFDList) fd_list = g_unix_fd_list_new ();
+  for (unsigned int i = 0; i < pkgs->len; i++)
+    {
+      DnfPackage *pkg = static_cast<DnfPackage *> (pkgs->pdata[i]);
+      const char *path = dnf_package_get_filename (pkg);
+
+      glnx_autofd int fd = -1;
+      if (!glnx_openat_rdonly (AT_FDCWD, path, TRUE, &fd, error))
+        return FALSE;
+
+      if (g_unix_fd_list_append (fd_list, fd, error) < 0)
+        return FALSE;
+
+      if (!rpmostree_pkg_is_local (pkg))
+        {
+          if (!glnx_unlinkat (AT_FDCWD, path, 0, error))
+            return FALSE;
+        }
+    }
+
+  *out_fd_list = util::move_nullify (fd_list);
+  return TRUE;
+}
+
+gboolean
 rpmostree_context_download (RpmOstreeContext *self, GCancellable *cancellable, GError **error)
 {
   int n = self->pkgs_to_download->len;

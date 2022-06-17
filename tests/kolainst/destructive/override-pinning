@@ -35,6 +35,24 @@ EOF
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 "")
 
+# try an invalid source
+if rpm-ostree override replace zincati --experimental --freeze --from foo=bar 2>err.txt; then
+  assert_not_reached "Successfully replaced from source foo=bar?"
+fi
+assert_file_has_content_literal err.txt 'Parsing override source'
+
+# try an invalid repo
+if rpm-ostree override replace zincati --experimental --freeze --from repo=enoent 2>err.txt; then
+  assert_not_reached "Successfully replaced from source repo=enoent?"
+fi
+assert_file_has_content_literal err.txt 'No matches'
+
+# try a non-existent package
+if rpm-ostree override replace enoent --experimental --freeze --from repo=test-repo 2>err.txt; then
+  assert_not_reached "Successfully replaced non-existent package?"
+fi
+assert_file_has_content_literal err.txt 'No matches'
+
 # query and fetch for the lastest version of a package from enabled repos
 rpmostree_assert_status \
   '.deployments[0]["base-local-replacements"]|length == 0' \

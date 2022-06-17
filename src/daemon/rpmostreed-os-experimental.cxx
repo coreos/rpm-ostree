@@ -171,16 +171,12 @@ static gboolean
 prepare_download_pkgs_txn (const gchar *const *queries, const char *source,
                            GUnixFDList **out_fd_list, GError **error)
 {
-  GUnixFDList *fd_list = NULL;
-  g_autoptr (GCancellable) cancellable = g_cancellable_new ();
-
   if (!queries || !*queries)
     return glnx_throw (error, "No queries passed");
 
   OstreeSysroot *sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
   const char *osname = ostree_deployment_get_osname (booted_deployment);
-  g_autoptr (GPtrArray) dnf_pkgs = g_ptr_array_new_with_free_func (g_object_unref);
 
   g_autoptr (OstreeDeployment) cfg_merge_deployment
       = ostree_sysroot_get_merge_deployment (sysroot, osname);
@@ -191,73 +187,14 @@ prepare_download_pkgs_txn (const gchar *const *queries, const char *source,
   g_autofree char *origin_deployment_root
       = rpmostree_get_deployment_root (sysroot, origin_merge_deployment);
 
-  OstreeRepo *repo = ostree_sysroot_repo (sysroot);
-  g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_client (repo);
-  rpmostree_context_set_dnf_caching (ctx, RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER);
-  /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
-   * since we're not actually going to perform any installation. Though it does provide us
-   * with the right semantics for install/source_root. */
+  g_autofree char *cfg_deployment_root
+      = rpmostree_get_deployment_root (sysroot, cfg_merge_deployment);
 
-  if (!rpmostree_context_setup (ctx, NULL, origin_deployment_root, cancellable, error))
-    return glnx_prefix_error (error, "Setting up dnf context");
-
-  /* point libdnf to our repos dir */
-  rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
-
-  if (!rpmostree_context_download_metadata (ctx, DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB,
-                                            cancellable, error))
-    return glnx_prefix_error (error, "Downloading metadata");
-
-  DnfSack *sack = dnf_context_get_sack (rpmostree_context_get_dnf (ctx));
-  CXX_TRY_VAR (parsed_source, rpmostreecxx::parse_override_source (source), error);
-
-  if (parsed_source.kind == rpmostreecxx::OverrideReplacementType::Repo)
-    {
-      const char *source_name = parsed_source.name.c_str ();
-      for (const char *const *it = queries; it && *it; it++)
-        {
-          auto pkg_name = static_cast<const char *> (*it);
-          g_autoptr (GPtrArray) pkglist = NULL;
-          HyNevra nevra = NULL;
-          g_auto (HySubject) subject = hy_subject_create (pkg_name);
-          hy_autoquery HyQuery query = hy_subject_get_best_solution (
-              subject, sack, NULL, &nevra, FALSE, TRUE, TRUE, TRUE, FALSE);
-          hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, source_name);
-          pkglist = hy_query_run (query);
-          if (!pkglist || pkglist->len == 0)
-            return glnx_throw (error, "No matches for \"%s\" in repo '%s'", pkg_name, source_name);
-
-          g_ptr_array_add (dnf_pkgs, g_object_ref (pkglist->pdata[0]));
-        }
-    }
-  /* Future source kinds go here */
-  else
-    return glnx_throw (error, "Unsupported source type");
-
-  rpmostree_set_repos_on_packages (rpmostree_context_get_dnf (ctx), dnf_pkgs);
-
-  if (!rpmostree_download_packages (dnf_pkgs, cancellable, error))
-    return glnx_prefix_error (error, "Downloading packages");
-
-  fd_list = g_unix_fd_list_new ();
-  for (unsigned int i = 0; i < dnf_pkgs->len; i++)
-    {
-      DnfPackage *pkg = static_cast<DnfPackage *> (dnf_pkgs->pdata[i]);
-      const gchar *path = dnf_package_get_filename (pkg);
-      gint fd = -1;
-
-      if (!glnx_openat_rdonly (AT_FDCWD, path, TRUE, &fd, error))
-        return FALSE;
-
-      if (g_unix_fd_list_append (fd_list, fd, error) < 0)
-        return FALSE;
-
-      if (!rpmostree_pkg_is_local (pkg))
-        {
-          if (!glnx_unlinkat (AT_FDCWD, path, 0, error))
-            return FALSE;
-        }
-    }
+  g_autoptr (GUnixFDList) fd_list = NULL;
+  g_autoptr (GCancellable) cancellable = g_cancellable_new ();
+  if (!rpmostree_find_and_download_packages (queries, source, origin_deployment_root,
+                                             cfg_deployment_root, &fd_list, cancellable, error))
+    return FALSE;
 
   *out_fd_list = util::move_nullify (fd_list);
   return TRUE;

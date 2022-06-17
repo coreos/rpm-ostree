@@ -144,6 +144,11 @@ GPtrArray *rpmostree_context_get_packages_to_import (RpmOstreeContext *self);
 gboolean rpmostree_context_set_lockfile (RpmOstreeContext *self, char **lockfiles, gboolean strict,
                                          GError **error);
 
+gboolean rpmostree_find_and_download_packages (const char *const *packages, const char *source,
+                                               const char *source_root, const char *repo_root,
+                                               GUnixFDList **out_fd_list, GCancellable *cancellable,
+                                               GError **error);
+
 gboolean rpmostree_download_packages (GPtrArray *packages, GCancellable *cancellable,
                                       GError **error);
 
