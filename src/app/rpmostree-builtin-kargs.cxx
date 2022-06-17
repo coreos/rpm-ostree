@@ -275,6 +275,7 @@ rpmostree_builtin_kargs (int argc, char **argv, RpmOstreeCommandInvocation *invo
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
+  g_autoptr (GVariant) options = NULL;
 
   if (opt_editor)
     {
@@ -329,7 +330,7 @@ rpmostree_builtin_kargs (int argc, char **argv, RpmOstreeCommandInvocation *invo
        * TODO(lucab): switch all flows to perform client-side assembling, like the
        * editor currently does: https://github.com/coreos/rpm-ostree/issues/2712 */
       g_variant_dict_insert (&dict, "final-kernel-args", "s", current_kernel_arg_string);
-      g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+      options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       if (!rpmostree_os_call_kernel_args_sync (
               os_proxy, old_kernel_arg_string, (const char *const *)empty_strv,
@@ -354,7 +355,7 @@ rpmostree_builtin_kargs (int argc, char **argv, RpmOstreeCommandInvocation *invo
       if (opt_kernel_delete_if_present_strings && *opt_kernel_delete_if_present_strings)
         g_variant_dict_insert (&dict, "delete-if-present", "^as",
                                opt_kernel_delete_if_present_strings);
-      g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+      options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* call the generated dbus-function */
       if (!rpmostree_os_call_kernel_args_sync (os_proxy, old_kernel_arg_string,
@@ -365,14 +366,7 @@ rpmostree_builtin_kargs (int argc, char **argv, RpmOstreeCommandInvocation *invo
         return FALSE;
     }
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
-                                                error))
-    return FALSE;
-
-  if (rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
-    g_print ("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
-  else if (opt_unchanged_exit_77)
-    invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
-
-  return TRUE;
+  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy, options,
+                                           opt_unchanged_exit_77, transaction_address,
+                                           previous_deployment, cancellable, error);
 }
