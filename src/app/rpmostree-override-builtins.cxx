@@ -76,8 +76,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
                  const char *const *override_reset, GCancellable *cancellable, GError **error)
 {
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
-
+  glnx_unref_object RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
   if (!rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable, &os_proxy,
                                   &osexperimental_proxy, error))
     return FALSE;
