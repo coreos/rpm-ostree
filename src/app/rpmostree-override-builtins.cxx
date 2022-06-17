@@ -73,11 +73,12 @@ static GOptionEntry remove_option_entries[] = { { "replace", 0, 0, G_OPTION_ARG_
 
 static gboolean
 sort_replacements (RPMOSTreeOSExperimental *osexperimental_proxy,
-                   const char *const *replacement_args, char ***out_local,
+                   const char *const *replacement_args, char ***out_local, char ***out_remote,
                    GUnixFDList **out_fd_list, GCancellable *cancellable, GError **error)
 {
   g_autoptr (GPtrArray) local = g_ptr_array_new_with_free_func (g_free);
   g_autoptr (GPtrArray) freeze = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr (GPtrArray) remote = g_ptr_array_new_with_free_func (g_free);
   for (const char *const *it = replacement_args; it && *it; it++)
     {
       auto arg = *it;
@@ -92,7 +93,7 @@ sort_replacements (RPMOSTreeOSExperimental *osexperimental_proxy,
         }
       else
         {
-          glnx_throw (error, "Remote overrides are not supported yet on the CLI");
+          g_ptr_array_add (remote, (gpointer)g_strdup (arg));
         }
     }
 
@@ -130,6 +131,14 @@ sort_replacements (RPMOSTreeOSExperimental *osexperimental_proxy,
   else
     *out_local = NULL;
 
+  if (remote->len > 0)
+    {
+      g_ptr_array_add (remote, NULL);
+      *out_remote = (char **)g_ptr_array_free (util::move_nullify (remote), FALSE);
+    }
+  else
+    *out_remote = NULL;
+
   *out_fd_list = util::move_nullify (fd_list);
   return TRUE;
 }
@@ -155,23 +164,35 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
   if (is_ostree_container && override_reset && *override_reset)
     return glnx_throw (error, "Resetting overrides is not supported in container mode");
 
+  CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
   g_autoptr (GUnixFDList) fd_list = NULL; /* this is just used to own the fds */
 
   /* By default, we assume all the args are local overrides. If --from is used, we have to sort them
-   * first to handle --freeze and (eventually) remote overrides. */
+   * first to handle --freeze and remote overrides. */
   g_auto (GStrv) override_replace_local = NULL;
   if (override_replace && opt_from)
     {
+      g_auto (GStrv) override_replace_remote = NULL;
       if (!sort_replacements (osexperimental_proxy, override_replace, &override_replace_local,
-                              &fd_list, cancellable, error))
+                              &override_replace_remote, &fd_list, cancellable, error))
         return FALSE;
+
+      if (override_replace_remote)
+        {
+          CXX_TRY_VAR (parsed_source, rpmostreecxx::parse_override_source (opt_from), error);
+          rpmostreecxx::OverrideReplacement replacement = {
+            parsed_source.name,
+            parsed_source.kind,
+            util::rust_stringvec_from_strv (override_replace_remote),
+          };
+          treefile->add_packages_override_replace (replacement);
+        }
 
       override_replace = override_replace_local;
     }
 
   if (is_ostree_container)
     {
-      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
       for (const char *const *it = override_replace; it && *it; it++)
         {
           auto arg = *it;
@@ -205,12 +226,20 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
 
   g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
+  rust::String treefile_s;
+  const char *treefile_c = NULL;
+  if (treefile->has_any_packages ())
+    {
+      treefile_s = treefile->get_json_string ();
+      treefile_c = treefile_s.c_str ();
+    }
+
   g_autofree char *transaction_address = NULL;
   if (!rpmostree_update_deployment (os_proxy, NULL,     /* set-refspec */
                                     NULL,               /* set-revision */
                                     install_pkgs, NULL, /* install_fileoverride_pkgs */
                                     uninstall_pkgs, override_replace, override_remove,
-                                    override_reset, NULL, NULL, options, &transaction_address,
+                                    override_reset, NULL, treefile_c, options, &transaction_address,
                                     cancellable, error))
     return FALSE;
 
