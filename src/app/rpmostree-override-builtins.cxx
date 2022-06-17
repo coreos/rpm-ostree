@@ -131,14 +131,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
       if (queries->len > 0)
         {
           g_ptr_array_add (queries, NULL);
-          g_autofree char *refresh_transaction_address = NULL;
 
-          if (!rpmostree_os_call_refresh_md_sync (os_proxy, options, &refresh_transaction_address,
-                                                  cancellable, error))
-            return FALSE;
-          if (!rpmostree_transaction_get_response_sync (
-                  sysroot_proxy, (const char *)refresh_transaction_address, cancellable, error))
-            return FALSE;
           if (!rpmostree_osexperimental_call_download_packages_sync (
                   osexperimental_proxy, (const char *const *)queries->pdata, opt_from, NULL,
                   &fetched_rpms_fds, cancellable, error))
