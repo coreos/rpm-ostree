@@ -82,23 +82,6 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
                                   &osexperimental_proxy, error))
     return FALSE;
 
-  /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
-   * note we might still need to fetch pkgs in the local replacement case (e.g. the
-   * replacing pkg has an additional out-of-tree dep). */
-  const gboolean cache_only = opt_cache_only || (override_replace == NULL && install_pkgs == NULL);
-
-  GVariantDict dict;
-  g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-  g_variant_dict_insert (&dict, "cache-only", "b", cache_only);
-  g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
-  g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
-  g_variant_dict_insert (&dict, "no-overrides", "b", opt_reset_all);
-  g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
-  g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
-  g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
-
-  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
   g_autoptr (GUnixFDList) fetched_rpms_fds = NULL;
   g_autoptr (GPtrArray) override_replace_final = NULL;
 
@@ -152,6 +135,25 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
           override_replace = (const char *const *)override_replace_final->pdata;
         }
     }
+
+  /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
+   * note we might still need to fetch pkgs in the local replacement case (e.g. the
+   * replacing pkg has an additional out-of-tree dep). */
+  const gboolean cache_only = opt_cache_only || (override_replace == NULL && install_pkgs == NULL);
+
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+  g_variant_dict_insert (&dict, "cache-only", "b", cache_only);
+  g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
+  g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
+  g_variant_dict_insert (&dict, "no-overrides", "b", opt_reset_all);
+  g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
+  g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
+  g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+
+  g_autoptr (GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+
   g_autofree char *transaction_address = NULL;
   if (!rpmostree_update_deployment (os_proxy, NULL,     /* set-refspec */
                                     NULL,               /* set-revision */
