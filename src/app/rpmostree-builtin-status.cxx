@@ -563,8 +563,13 @@ print_live_pkgdiff (const char *live_target, RpmOstreeDiffPrintFormat format, gu
   return TRUE;
 }
 
+/** Print status of a single deployment.
+ *
+ * @param index The index of the deployment to print. Only displayed when >= 0
+ *     and the verbose option is set.
+ */
 static gboolean
-print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean first,
+print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint index,
                       gboolean have_any_live_overlay, gboolean have_multiple_stateroots,
                       const char *booted_osname, const char *cached_update_deployment_id,
                       GVariant *cached_update, gboolean *out_printed_cached_update, GError **error)
@@ -585,6 +590,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
   g_assert (g_variant_dict_lookup (dict, "serial", "i", &serial));
   g_assert (g_variant_dict_lookup (dict, "checksum", "&s", &checksum));
 
+  const gboolean first = (index == 0);
   gboolean is_booted;
   if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
     is_booted = FALSE;
@@ -688,6 +694,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gboolean
     }
   else
     g_print ("%s", checksum);
+  if (opt_verbose && (index >= 0))
+    g_print (" (index: %d)", index);
   g_print ("\n");
 
   if (container_image_reference_digest)
@@ -1092,20 +1100,19 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy, GVariant *deployments, GVari
 
   g_variant_iter_init (&iter, deployments);
 
-  gboolean first = TRUE;
+  gint index = 0;
   while (TRUE)
     {
       g_autoptr (GVariant) child = g_variant_iter_next_value (&iter);
       if (child == NULL)
         break;
 
-      if (!print_one_deployment (sysroot_proxy, child, first, have_any_live_overlay,
+      if (!print_one_deployment (sysroot_proxy, child, index, have_any_live_overlay,
                                  have_multiple_stateroots, booted_osname,
                                  cached_update_deployment_id, cached_update,
                                  out_printed_cached_update, error))
         return FALSE;
-      if (first)
-        first = FALSE;
+      ++index;
     }
 
   return TRUE;
@@ -1318,7 +1325,7 @@ print_history_entry (const rpmostreecxx::HistoryEntry &entry, GError **error)
         g_print ("  << Missing history information >>\n");
 
       /* XXX: factor out interesting bits from print_one_deployment() */
-      else if (!print_one_deployment (NULL, deployment, TRUE, FALSE, FALSE, NULL, NULL, NULL, NULL,
+      else if (!print_one_deployment (NULL, deployment, -1, FALSE, FALSE, NULL, NULL, NULL, NULL,
                                       error))
         return FALSE;
     }
