@@ -1,0 +1,33 @@
+# === Variables ===
+CONTAINER_NAME=localhost/rpm-ostree-builder
+CONTAINER_TAG=latest
+CONTAINER_IMAGE=$(CONTAINER_NAME):$(CONTAINER_TAG)
+# Workdir to use inside the container. This is where we mount `$PWD` to. If you
+# want to keep the paths equal to what they are on the host, use `$PWD` instead
+# of the default here.
+WORKDIR=/project
+# Shorthand prefix that calls the container to run a command inside it. When
+# running this in CI or similar, remove the `-t` flag.
+RPM_OSTREE_CONTAINER=podman run --rm -it -v "$(PWD):$(WORKDIR):z" -w "$(WORKDIR)" $(CONTAINER_IMAGE)
+# Arbitrary command to run for 'run' target
+CMD=
+
+# === Makefile ===
+.PHONY: container prepare build run
+default: build
+
+# We pass in the project folder at container build time, since the
+# `installdeps.sh` script builds a cargo binary that's expected to live in a
+# fixed path in the project.
+container:
+	podman build --squash -t $(CONTAINER_IMAGE) -v "$(PWD):$(WORKDIR):Z" --build-arg WORKDIR=$(WORKDIR) .
+
+prepare:
+	$(RPM_OSTREE_CONTAINER) git submodule update --init
+	$(RPM_OSTREE_CONTAINER) ./autogen.sh --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc
+
+build:
+	$(RPM_OSTREE_CONTAINER) make
+
+run:
+	$(RPM_OSTREE_CONTAINER) $(CMD)
