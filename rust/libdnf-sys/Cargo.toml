@@ -6,7 +6,7 @@ edition = "2021"
 links = "dnf"
 
 [dependencies]
-cxx = "1.0.68"
+cxx = "1.0.69"
 
 [lib]
 name = "libdnf_sys"
