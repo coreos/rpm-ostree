@@ -39,26 +39,16 @@ function cleanup () {
 cleanup
 mkdir ${tmpd} && touch ${tmpd}/.tmp
 
+vendor_cmd="cargo vendor-filterer"
+target_vendor_cmd=$srcdir/target/cargo-vendor-filterer/bin/cargo-vendor-filterer
+if test -x "${target_vendor_cmd}"; then
+    vendor_cmd=${target_vendor_cmd}
+fi
+
 (cd ${tmpd}
- mkdir -p .cargo vendor
- (cd ${TOP} && cargo vendor ${tmpd}/vendor | sed -e "s,^directory *=.*,directory = './vendor',") > .cargo/config
+ mkdir -p .cargo
+ (cd ${TOP} && ${vendor_cmd} ${tmpd}/vendor | sed -e "s,^directory *=.*,directory = './vendor',") > .cargo/config
  cp ${TOP}/Cargo.lock .
- # Filter out bundled libcurl and systemd; we always want the pkgconfig ones
- for crate_subdir in curl-sys/curl \
-                     libz-sys/src/zlib \
-                     systemd/libsystemd-sys/systemd \
-                     libsystemd-sys/systemd; do
-   rm -rf vendor/$crate_subdir
-   python3 -c '
-import json, sys
-crate, subdir = sys.argv[1].split("/", 1)
-checksum_file = ("vendor/%s/.cargo-checksum.json" % crate)
-j = json.load(open(checksum_file))
-j["files"] = {f:c for f, c in j["files"].items() if not f.startswith(subdir)}
-open(checksum_file, "w").write(json.dumps(j))' $crate_subdir
- done
- # Remove unneeded Windows binaries
- rm -rf vendor/winapi*gnu*/lib/*.a
  tar --owner=0 --group=0 --transform="s,^,${PKG_VER}/," -rf ${TARFILE_TMP} * .cargo/
  )
 
