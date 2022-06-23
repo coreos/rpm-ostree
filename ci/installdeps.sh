@@ -19,3 +19,4 @@ fi
 CXX_VER=$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name == "cxx").version')
 mkdir -p target
 time cargo install --root=target/cxxbridge cxxbridge-cmd --version "${CXX_VER}"
+time cargo install --root=target/cargo-vendor-filterer cargo-vendor-filterer --version ^0.5
