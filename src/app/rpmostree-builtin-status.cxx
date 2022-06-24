@@ -576,7 +576,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
 {
   /* Add the long keys here */
   const guint max_key_len
-      = MAX (strlen ("InactiveLocalOverrides"), strlen ("InterruptedLiveCommit"));
+      = MAX (strlen ("InactiveRemoteOverrides"), strlen ("InterruptedLiveCommit"));
 
   g_autoptr (GVariantDict) dict = g_variant_dict_new (child);
 
@@ -608,11 +608,13 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
   g_autofree const gchar **origin_requested_local_fileoverride_packages = NULL;
   g_autofree const gchar **origin_requested_base_removals = NULL;
   g_autofree const gchar **origin_requested_base_local_replacements = NULL;
+  g_autoptr (GVariant) origin_requested_base_remote_replacements = NULL;
   /* these come from commit metadata; they represent what *actually* happened */
   g_autofree const gchar **packages = NULL;
   g_autofree const gchar **modules = NULL;
   g_autoptr (GVariant) base_removals = NULL;
   g_autoptr (GVariant) base_local_replacements = NULL;
+  g_autoptr (GVariant) base_remote_replacements = NULL;
   if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec)
       || g_variant_dict_lookup (dict, "container-image-reference", "&s", &origin_refspec))
     {
@@ -621,6 +623,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
       base_removals = g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
       base_local_replacements
           = g_variant_dict_lookup_value (dict, "base-local-replacements", G_VARIANT_TYPE ("a(vv)"));
+      base_remote_replacements = g_variant_dict_lookup_value (dict, "base-remote-replacements",
+                                                              G_VARIANT_TYPE ("a{sv}"));
       origin_requested_modules_enabled
           = lookup_array_and_canonicalize (dict, "requested-modules-enabled");
       origin_requested_packages = lookup_array_and_canonicalize (dict, "requested-packages");
@@ -633,6 +637,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
           = lookup_array_and_canonicalize (dict, "requested-base-removals");
       origin_requested_base_local_replacements
           = lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
+      origin_requested_base_remote_replacements = g_variant_dict_lookup_value (
+          dict, "requested-base-remote-replacements", G_VARIANT_TYPE ("a(sas)"));
     }
 
   const gchar *version_string;
@@ -956,6 +962,61 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
   if (origin_requested_base_local_replacements && opt_verbose)
     print_values ("InactiveLocalOverrides", max_key_len, origin_requested_base_local_replacements,
                   (const char *const *)active_replacements->pdata, TRUE, NULL);
+
+  g_autoptr (GPtrArray) active_remote_replacements = g_ptr_array_new_with_free_func (g_free);
+  if (base_remote_replacements)
+    {
+      g_autoptr (GVariantIter) viter = g_variant_iter_new (base_remote_replacements);
+      const char *source;
+      GVariant *vreplaced;
+      g_autoptr (GString) buf = g_string_new ("");
+      while (g_variant_iter_loop (viter, "{&sv}", &source, &vreplaced))
+        {
+          const guint n = g_variant_n_children (vreplaced);
+          if (n == 0)
+            continue;
+
+          g_autoptr (GPtrArray) vals = g_ptr_array_new_with_free_func (g_free);
+          for (guint i = 0; i < n; i++)
+            {
+              g_autoptr (GVariant) gv_nevra_new;
+              g_autoptr (GVariant) gv_nevra_old;
+              g_variant_get_child (vreplaced, i, "(vv)", &gv_nevra_new, &gv_nevra_old);
+              const char *name;
+              g_variant_get_child (gv_nevra_new, 1, "&s", &name);
+
+              g_string_truncate (buf, 0);
+              g_string_append (buf, name);
+              g_string_append (buf, " ");
+              gv_nevra_to_evr (buf, gv_nevra_old);
+              g_string_append (buf, " -> ");
+              gv_nevra_to_evr (buf, gv_nevra_new);
+
+              g_ptr_array_add (active_remote_replacements, g_strdup (name));
+              g_ptr_array_add (vals, g_strdup (buf->str));
+            }
+          g_ptr_array_add (vals, NULL);
+          print_values ("RemoteOverrides", max_key_len, (const char *const *)vals->pdata, NULL,
+                        FALSE, source);
+        }
+
+      g_ptr_array_add (active_remote_replacements, NULL);
+    }
+
+  if (origin_requested_base_remote_replacements && opt_verbose)
+    {
+      g_autoptr (GVariantIter) viter
+          = g_variant_iter_new (origin_requested_base_remote_replacements);
+      const char *source;
+      g_autofree char **packages = NULL;
+      gboolean printed_key = FALSE;
+      while (g_variant_iter_loop (viter, "(&s^a&s)", &source, &packages))
+        {
+          if (print_values (printed_key ? "" : "InactiveRemoteOverrides", max_key_len, packages,
+                            (const char *const *)active_remote_replacements->pdata, FALSE, source))
+            printed_key = TRUE;
+        }
+    }
 
   /* only print inactive layering requests in verbose mode */
   if (origin_requested_packages && opt_verbose)
