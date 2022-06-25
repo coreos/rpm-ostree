@@ -129,7 +129,7 @@ fn inner_main() -> Result<i32> {
     // Gather and pre-process command-line arguments.
     let (callname, args) = gather_cli_args(std::env::args_os())?;
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
+    let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .context("Failed to build tokio runtime")?;
