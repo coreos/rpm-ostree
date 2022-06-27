@@ -99,7 +99,7 @@ fn generate_initramfs_overlay<P: glib::IsA<gio::Cancellable>>(
         "-c",
         "set -euo pipefail; cpio --create --format newc --quiet --reproducible --null | gzip -1",
     ]);
-    cmd.cwd_dir_owned(root.try_clone()?);
+    cmd.cwd_dir(root.try_clone()?);
     let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::from(out_tmpf.try_clone()?))

@@ -30,7 +30,7 @@ pub(crate) fn daemon_sanitycheck_environment(
     mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
 ) -> CxxResult<()> {
     let sysroot = &sysroot.gobj_wrap();
-    let sysroot_dir = Dir::reopen_dir(unsafe { &BorrowedFd::borrow_raw_fd(sysroot.fd()) })?;
+    let sysroot_dir = Dir::reopen_dir(unsafe { &BorrowedFd::borrow_raw(sysroot.fd()) })?;
     let loc = crate::composepost::TRADITIONAL_RPMDB_LOCATION;
     if let Some(metadata) = sysroot_dir.symlink_metadata_optional(loc)? {
         if !metadata.is_symlink() {
