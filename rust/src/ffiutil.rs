@@ -52,7 +52,7 @@ pub(crate) fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
 /// This creates a new file descriptor, because we can't guarantee they are
 /// interchangable; for example right now openat uses `O_PATH`
 pub(crate) unsafe fn ffi_dirfd(fd: libc::c_int) -> std::io::Result<cap_std::fs::Dir> {
-    let fd = unsafe { rustix::fd::BorrowedFd::borrow_raw_fd(fd) };
+    let fd = unsafe { rustix::fd::BorrowedFd::borrow_raw(fd) };
     cap_std::fs::Dir::reopen_dir(&fd)
 }
 

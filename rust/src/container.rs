@@ -15,7 +15,7 @@ use chrono::prelude::*;
 use clap::Parser;
 use ostree::glib;
 use ostree_ext::chunking::ObjectMetaSized;
-use ostree_ext::container::{Config, ExportOpts, ImageReference};
+use ostree_ext::container::{Config, ExportLayout, ExportOpts, ImageReference};
 use ostree_ext::objectsource::{
     ContentID, ObjectMeta, ObjectMetaMap, ObjectMetaSet, ObjectSourceMeta,
 };
@@ -63,6 +63,10 @@ struct ContainerEncapsulateOpts {
     /// Maximum number of container image layers
     #[clap(long)]
     max_layers: Option<NonZeroU32>,
+
+    /// The encapsulated container format version; must be 0 or 1.
+    #[clap(long)]
+    format_version: u32,
 
     #[clap(long)]
     /// Output content metadata as JSON
@@ -370,9 +374,15 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
         labels: Some(labels),
         cmd: opt.cmd,
     };
+    let format = match opt.format_version {
+        0 => ExportLayout::V0,
+        1 => ExportLayout::V1,
+        n => anyhow::bail!("Invalid format version {n}"),
+    };
     let opts = ExportOpts {
         copy_meta_keys: copy_meta_keys,
         max_layers: opt.max_layers,
+        format,
         ..Default::default()
     };
     let digest = ostree_ext::container::encapsulate(

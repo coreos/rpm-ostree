@@ -1498,7 +1498,7 @@ OSTREE_VERSION='33.4'
             assert_eq!(rootfs.exists(MACRO_PATH), true);
             let macrofile = rootfs.metadata(MACRO_PATH).unwrap();
             assert_eq!(macrofile.is_file(), true);
-            assert_eq!(macrofile.permissions().mode(), 0o644);
+            assert_eq!(macrofile.permissions().mode() & 0o777, 0o644);
             let content = rootfs.read_to_string(MACRO_PATH).unwrap();
             assert_eq!(content, expected_content);
         }
