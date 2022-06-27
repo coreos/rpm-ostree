@@ -819,7 +819,8 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
         {
           if (!pull_local_into_target_repo (self->repo, self->build_repo, layer.c_str (),
                                             cancellable, error))
-            return FALSE;
+            return glnx_prefix_error (error,
+                                      "Copying ostree layers from target repo into build repo");
         }
     }
 
@@ -1093,7 +1094,7 @@ pull_local_into_target_repo (OstreeRepo *src_repo, OstreeRepo *dest_repo, const 
   /* no fancy flags here, so just use the old school simpler API */
   if (!ostree_repo_pull (dest_repo, src_repo_uri, (char **)refs,
                          static_cast<OstreeRepoPullFlags> (0), progress, cancellable, error))
-    return glnx_prefix_error (error, "Copying from build repo into target repo");
+    return glnx_prefix_error (error, "Failed to pull-local %s", checksum);
 
   if (!console.is_tty)
     {
@@ -1214,7 +1215,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
 
       if (!pull_local_into_target_repo (self->build_repo, self->repo, new_revision, cancellable,
                                         error))
-        return FALSE;
+        return glnx_prefix_error (error, "Copying final commit from build repo into target repo");
     }
 
   g_autoptr (GVariant) new_commit = NULL;
