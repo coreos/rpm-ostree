@@ -9,31 +9,65 @@ nav_order: 1
 1. TOC
 {:toc}
 
-## Building and testing in a container
 
-The majority of developers on rpm-ostree build and test it
-from a [toolbox container](https://github.com/containers/toolbox), separate from the host system.
-The instructions below may *also* work when run in a traditional
-login on a virtual machine, but are less frequently tested.
+## Setting up a development environment
 
-### Installing dependencies (cxx)
+The majority of developers on rpm-ostree build and test it from a [toolbox
+container](https://github.com/containers/toolbox), separate from the host
+system. The instructions below may *also* work when run in a traditional login
+on a virtual machine, but are less frequently tested.
 
-Today rpm-ostree uses [cxx.rs](https://cxx.rs/) - the CLI tools for
-that aren't packaged in e.g. Fedora; we ship the pre-generated
-source in the releases.  But to build from git you need to install the
-tools.
+
+### Via toolbx/Installing natively
+
+When developing either in a toolbx container or natively on your system, you
+must install all the required dependencies. In the `ci/` subfolder, there are
+scripts that will do this for you:
+
+- **To install the build dependencies**: `./ci/installdeps.sh`
+    - **Note**: This command must be rerun after the dependencies in
+      `Cargo.lock` change. This will eventually be fixed.
+- **To install the test dependencies**:
+    - For `make check`: `./ci/install-test-deps.sh`
+    - For `make vmcheck`: Follow the instructions for [installing cosa inside
+      an existing container][3] from the [cosa GitHub repository][4]
+
+Today rpm-ostree uses [cxx.rs](https://cxx.rs/) - the CLI tools for that aren't
+packaged in e.g. Fedora; we ship the pre-generated source in the releases. It
+is installed as part of the `installdeps.sh` script. Most importantly, it must
+be reinstalled after you run `make clean` on the project.
+
+
+### Using the `fcos-buildroot` container
+
+The [`fcos-buildroot` container][1] has all the dependencies needed for
+building and testing included. As a consequence, it is comparatively large (~
+2.5 GB). Since this is the same container used by the CI system, this is useful
+for reproducing CI failures.
+
+You can either work from inside the container in an interactive manner:
 
 ```
-$ ./ci/installdeps.sh
+# IMPORTANT: Run this command from the projects root directory!
+$ podman run --rm -it -v "$PWD:$PWD:z" -w "$PWD" \
+    quay.io/coreos-assembler/fcos-buildroot:testing-devel
 ```
 
-You will also need to rerun this after the dependency changes in our
-`Cargo.lock`.  Eventually we will fix this.
+Or you use the container in an ephemeral fashion with an alias like this:
 
-### Installing dependencies: packages
+```
+# IMPORTANT: Run this command from the projects root directory!
+$ alias buildroot="podman run --rm -it -v \"$PWD:$PWD:z\" -w \"$PWD\" \
+    quay.io/coreos-assembler/fcos-buildroot:testing-devel"
+# These commands run in the container now
+$ buildroot make ...
+```
 
-Otherwise, you can use e.g. `sudo dnf builddep rpm-ostree` to get
-the rest of the build dependencies.
+The above commands will mount your current working directory into the container
+for your build artifacts etc. to persist.
+
+
+## Building and testing
 
 ### Baseline build
 
@@ -242,3 +276,9 @@ Then:
         -ex 'directory /host/var/roothome/sync/libdnf/libdnf' \
         -ex n -ex n
 ```
+
+
+
+[1]: https://quay.io/repository/coreos-assembler/fcos-buildroot
+[3]: https://coreos.github.io/coreos-assembler/devel/#installing-cosa-inside-an-existing-container
+[4]: https://github.com/coreos/coreos-assembler
