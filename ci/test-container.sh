@@ -98,4 +98,14 @@ rpm-ostree override replace $koji_kernel_url
 # test that the new initramfs was generated
 test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
 
+# test skipping cliwraps
+export RPMOSTREE_CLIWRAP_SKIP=1
+if yum swap foo 2>err.txt; then
+    fatal "skipping cliwrap"
+fi
+if ! grep -qe "error: No such file or directory" err.txt; then
+    cat err.txt
+    fatal "did not find expected error when skipping CLI wraps."
+fi
+
 echo ok

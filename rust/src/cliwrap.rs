@@ -60,6 +60,11 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
     // And now these are the args for the command
     let args = &args[1..];
 
+    // Call original binary if environment variable is set
+    if std::env::var_os("RPMOSTREE_CLIWRAP_SKIP").is_some() {
+        return cliutil::exec_real_binary(name, args);
+    }
+
     let host_type = crate::get_system_host_type()?;
     if matches!(
         host_type,
