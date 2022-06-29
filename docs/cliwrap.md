@@ -27,6 +27,10 @@ To disable: `rpm-ostree deploy --ex-cliwrap=false`
 
 This is just `cliwrap: true` in the treefile.
 
+## Globally Skipping cliwrap via environment variable
+
+To skip cliwrap set the `RPMOSTREE_CLIWRAP_SKIP` enviroment variable with any value.
+
 ## Wrapped commands
 
 ### rpm
