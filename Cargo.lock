@@ -162,10 +162,10 @@ dependencies = [
  "errno",
  "fs-set-times",
  "io-extras",
- "io-lifetimes 0.7.2",
+ "io-lifetimes",
  "ipnet",
  "maybe-owned",
- "rustix 0.35.6",
+ "rustix",
  "winapi-util",
  "windows-sys",
  "winx",
@@ -180,9 +180,9 @@ dependencies = [
  "camino",
  "cap-primitives",
  "io-extras",
- "io-lifetimes 0.7.2",
+ "io-lifetimes",
  "ipnet",
- "rustix 0.35.6",
+ "rustix",
 ]
 
 [[package]]
@@ -192,7 +192,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4d151d4bfd87d022c482ce7b40b34c74a484f6bb3a3f3632151b565c938326f"
 dependencies = [
  "cap-tempfile",
- "rustix 0.35.6",
+ "rustix",
 ]
 
 [[package]]
@@ -203,7 +203,7 @@ checksum = "57a052a812f36a2fc6eef70a42dd8e01435c024d3ea3cbb9b283f336f2d87a19"
 dependencies = [
  "cap-std",
  "rand",
- "rustix 0.35.6",
+ "rustix",
  "uuid",
 ]
 
@@ -795,8 +795,8 @@ version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a267b6a9304912e018610d53fe07115d8b530b160e85db4d2d3a59f3ddde1aec"
 dependencies = [
- "io-lifetimes 0.7.2",
- "rustix 0.35.6",
+ "io-lifetimes",
+ "rustix",
  "windows-sys",
 ]
 
@@ -1218,15 +1218,9 @@ version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5d8c2ab5becd8720e30fd25f8fa5500d8dc3fceadd8378f05859bd7b46fc49"
 dependencies = [
- "io-lifetimes 0.7.2",
+ "io-lifetimes",
  "windows-sys",
 ]
-
-[[package]]
-name = "io-lifetimes"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9448015e586b611e5d322f6703812bbca2f1e709d5773ecd38ddb4e3bb649504"
 
 [[package]]
 name = "io-lifetimes"
@@ -1394,11 +1388,11 @@ checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
 
 [[package]]
 name = "memfd"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc651bf00734a239f7cd40a733c322895181394d6de10490b97c678f416a67d"
+checksum = "480b5a5de855d11ff13195950bdc8b98b5e942ef47afc447f6615cdcc4e15d80"
 dependencies = [
- "rustix 0.34.8",
+ "rustix",
 ]
 
 [[package]]
@@ -1666,7 +1660,7 @@ dependencies = [
  "gio",
  "glib",
  "hex",
- "io-lifetimes 0.7.2",
+ "io-lifetimes",
  "libc",
  "once_cell",
  "ostree-sys",
@@ -1695,7 +1689,7 @@ dependencies = [
  "gvariant",
  "hex",
  "indicatif",
- "io-lifetimes 0.7.2",
+ "io-lifetimes",
  "libc",
  "oci-spec",
  "once_cell",
@@ -2126,27 +2120,13 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.34.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2079c267b8394eb529872c3cf92e181c378b41fea36e68130357b52493701d2e"
-dependencies = [
- "bitflags",
- "errno",
- "io-lifetimes 0.6.1",
- "libc",
- "linux-raw-sys",
- "winapi",
-]
-
-[[package]]
-name = "rustix"
 version = "0.35.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef258c11e17f5c01979a10543a30a4e12faef6aab217a74266e747eefa3aed88"
 dependencies = [
  "bitflags",
  "errno",
- "io-lifetimes 0.7.2",
+ "io-lifetimes",
  "itoa 1.0.1",
  "libc",
  "linux-raw-sys",
@@ -3004,7 +2984,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7b01e010390eb263a4518c8cebf86cb67469d1511c00b749a47b64c39e8054d"
 dependencies = [
  "bitflags",
- "io-lifetimes 0.7.2",
+ "io-lifetimes",
  "windows-sys",
 ]
 
