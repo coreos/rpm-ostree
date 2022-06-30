@@ -2061,6 +2061,7 @@ dependencies = [
  "bitflags",
  "c_utf8",
  "camino",
+ "cap-primitives",
  "cap-std",
  "cap-std-ext",
  "cap-tempfile",

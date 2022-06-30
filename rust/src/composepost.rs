@@ -18,6 +18,7 @@ use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::Dir;
 use cap_std::fs_utf8::Dir as Utf8Dir;
+use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::cap_std;
 use cap_std_ext::cap_std::fs::Permissions;
 use cap_std_ext::dirext::CapStdExtDirExt;
@@ -791,9 +792,11 @@ fn convert_path_to_tmpfiles_d_recurse(
                 file_info.set_file_type(FileType::Directory);
             } else if meta.is_symlink() {
                 file_info.set_file_type(FileType::SymbolicLink);
-                let link_target =
-                    crate::capstdext::read_link_contents(rootfs, full_path.as_std_path())
-                        .context("Reading symlink")?;
+                let link_target = cap_primitives::fs::read_link_contents(
+                    &rootfs.as_filelike_view(),
+                    full_path.as_std_path(),
+                )
+                .context("Reading symlink")?;
                 let link_target = link_target
                     .to_str()
                     .ok_or_else(|| format_err!("non UTF-8 symlink target '{:?}'", link_target))?;
@@ -1346,9 +1349,9 @@ OSTREE_VERSION='33.4'
         rootfs
             .symlink("../", "var/lib/test/nested/symlink")
             .unwrap();
-        crate::capstdext::write_read_link_contents(
-            &rootfs,
+        cap_primitives::fs::symlink_contents(
             "/var/lib/foo",
+            &rootfs.as_filelike_view(),
             "var/lib/test/absolute-symlink",
         )
         .unwrap();
