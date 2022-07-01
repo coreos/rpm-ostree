@@ -37,7 +37,11 @@
 #include "rpmostree-package-priv.h"
 #include "rpmostree-shlib-ipc-private.h"
 
+#if BUILDOPT_HAVE_RPMVER
 #include <rpm/rpmver.h>
+#else
+#include "rpmver-private.h"
+#endif
 
 typedef GObjectClass RpmOstreePackageClass;
 
