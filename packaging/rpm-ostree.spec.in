@@ -90,7 +90,7 @@ BuildRequires: jq
 #########################################################################
 
 
-%global libsolv_version 0.7.21
+%global libsolv_version 0.7.17
 %global libmodulemd_version 2.13.0
 %global librepo_version 1.13.1
 
@@ -102,7 +102,7 @@ BuildRequires:  pkgconfig(librepo) >= %{librepo_version}
 BuildRequires:  pkgconfig(check)
 BuildRequires:  pkgconfig(gio-unix-2.0) >= 2.46.0
 BuildRequires:  pkgconfig(gtk-doc)
-BuildRequires:  rpm-devel >= 4.15.0
+BuildRequires:  rpm-devel >= 4.11.0
 %if %{with zchunk}
 BuildRequires:  pkgconfig(zck) >= 0.9.11
 %endif
