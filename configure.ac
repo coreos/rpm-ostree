@@ -81,13 +81,19 @@ PKG_PROG_PKG_CONFIG
 dnl Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 dnl These are the dependencies of the public librpmostree-1.0.0 shared library
-PKG_CHECK_MODULES(PKGDEP_LIBRPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0 ostree-1 >= 2021.2 rpm >= 4.17])
+PKG_CHECK_MODULES(PKGDEP_LIBRPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0 ostree-1 >= 2021.2 rpm])
 dnl And these additional ones are used by for the rpmostreeinternals C/C++ library
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [polkit-gobject-1 libarchive])
 
 dnl RHEL8.1 has old libarchive
 AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
   [AC_DEFINE([HAVE_LIBARCHIVE_ZSTD], 1, [Define if we have libarchive with zstd])])
+
+# rpmver is available in rpm >= 4.16, el8 is still on 4.14
+AC_SEARCH_LIBS([rpmverCmp], [rpm],
+  AC_DEFINE([BUILDOPT_HAVE_RPMVER], 1, [Whether rpmver API is available in librpmio]),
+  AC_DEFINE([BUILDOPT_HAVE_RPMVER], 0, [Whether rpmver API is available in librpmio])
+)
 
 dnl We don't *actually* use this ourself, but librepo does, and libdnf gets confused
 dnl if librepo doesn't support it.
