@@ -128,15 +128,19 @@ pub(crate) fn rewrite_rpmdb_timestamps<F: Read + Write + Seek>(rpmdb: &mut F) ->
 }
 
 #[context("Rewriting rpmdb database files for build stability")]
-pub(crate) fn normalize_rpmdb(rootfs: &openat::Dir, rpmdb_path: impl AsRef<Path>) -> Result<()> {
+pub(crate) fn normalize_rpmdb(rootfs: &Dir, rpmdb_path: impl AsRef<Path>) -> Result<()> {
     let source_date = if let Some(source_date) = source_date_epoch() {
         source_date as u32
     } else {
         return Ok(());
     };
 
-    let mut bwrap =
-        Bubblewrap::new_with_mutability(rootfs, crate::ffi::BubblewrapMutability::Immutable)?;
+    let bwrap_rootfs = crate::capstdext::to_openat(rootfs)?;
+
+    let mut bwrap = Bubblewrap::new_with_mutability(
+        &bwrap_rootfs,
+        crate::ffi::BubblewrapMutability::Immutable,
+    )?;
     bwrap.append_child_argv(&["rpm", "--eval", "%{_db_backend}"]);
     let cancellable = gio::Cancellable::new();
     let db_backend = bwrap.run_captured(Some(&cancellable))?;
@@ -177,11 +181,12 @@ mod bdb_normalize {
     // name of the file in question. Both of these normalise the file sufficiently that we
     // no longer see byte-wise variance given the same input data.
 
+    use super::Dir;
     use crate::bwrap::Bubblewrap;
     use anyhow::{anyhow, Context, Result};
     use binread::{BinRead, BinReaderExt};
+    use cap_std::fs::{FileType, OpenOptions};
     use once_cell::sync::Lazy;
-    use openat::SimpleType;
     use openssl::sha::{sha256, Sha256};
     use ostree_ext::gio;
     use std::io::{Read, Seek, SeekFrom, Write};
@@ -282,12 +287,7 @@ mod bdb_normalize {
 
     static PROC_SELF_CWD: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("/proc/self/cwd"));
 
-    pub(super) fn normalize_one(
-        rootfs: &openat::Dir,
-        path: &Path,
-        entry: openat::Entry,
-        timestamp: u32,
-    ) -> Result<()> {
+    pub(super) fn normalize_one(entry: cap_std::fs::DirEntry, timestamp: u32) -> Result<()> {
         // Construct a new, deterministic file ID.
         let mut file_id = Sha256::new();
         file_id.update(&timestamp.to_be_bytes());
@@ -295,7 +295,7 @@ mod bdb_normalize {
         let file_id = &file_id.finish()[..20];
 
         // Open the file for update.
-        let mut db = rootfs.update_file(path, 0o644)?;
+        let mut db = entry.open_with(OpenOptions::new().write(true))?.into_std();
 
         // Get the metadata header and make sure we're working on one of the
         // types of file we care about.
@@ -400,18 +400,14 @@ mod bdb_normalize {
         Ok(())
     }
 
-    pub(super) fn normalize(
-        rootfs: &openat::Dir,
-        db_path: impl AsRef<Path>,
-        timestamp: u32,
-    ) -> Result<()> {
+    pub(super) fn normalize(rootfs: &Dir, db_path: impl AsRef<Path>, timestamp: u32) -> Result<()> {
         let db_path = db_path.as_ref();
 
-        for entry in rootfs.list_dir(db_path)? {
+        for entry in rootfs.read_dir(db_path)? {
             let entry = entry?;
 
             // We only care about regular files.
-            if !matches!(entry.simple_type(), Some(SimpleType::File)) {
+            if entry.file_type()? != FileType::file() {
                 continue;
             }
 
@@ -433,7 +429,7 @@ mod bdb_normalize {
                 .context("pre-normalization contents check")?;
 
             // Perform normalization
-            normalize_one(rootfs, &path, entry, timestamp)?;
+            normalize_one(entry, timestamp)?;
 
             // Ensure that we haven't changed (or trashed) the database contents.
             let new_digest = database_contents_digest(&path, rootfs)
@@ -454,10 +450,7 @@ mod bdb_normalize {
     // Verify a given BerkeleyDB database/file and then dump the internal contents into a hash function.
     // By checksumming the logical contents rather than the physical bytes on disk we can ensure that we
     // haven't actually changed anything.
-    fn database_contents_digest(
-        path: &PathBuf,
-        rootfs: &openat::Dir,
-    ) -> Result<[u8; 32], anyhow::Error> {
+    fn database_contents_digest(path: &PathBuf, rootfs: &Dir) -> Result<[u8; 32], anyhow::Error> {
         // Build up the path we want and make sure it's a &str so Bubblewrap can use it.
         let path = PROC_SELF_CWD.join(path);
         let path = path
@@ -465,10 +458,14 @@ mod bdb_normalize {
             .to_str()
             .ok_or_else(|| anyhow!("bad path for bdb file"))?;
 
+        let bwrap_rootfs = crate::capstdext::to_openat(rootfs)?;
+
         // Run db_verify over the file, this tells us whether the actual BerkeleyDB code thinks it's
         // valid. db_verify will exit with a non-0 status if there are problems.
-        let mut verify =
-            Bubblewrap::new_with_mutability(rootfs, crate::ffi::BubblewrapMutability::Immutable)?;
+        let mut verify = Bubblewrap::new_with_mutability(
+            &bwrap_rootfs,
+            crate::ffi::BubblewrapMutability::Immutable,
+        )?;
         verify.append_child_argv(&["db_verify", "-q", path]);
         let cancellable = gio::Cancellable::new();
         verify.run_captured(Some(&cancellable))?;
@@ -477,8 +474,10 @@ mod bdb_normalize {
         // and calculate the SHA256 digest of said contents. Since the contents are independent of whatever
         // random uninitialized data may lurk in the file itself it acts as a decent check of whether we've
         // inadvertently changed anything we shouldn't have.
-        let mut dump =
-            Bubblewrap::new_with_mutability(rootfs, crate::ffi::BubblewrapMutability::Immutable)?;
+        let mut dump = Bubblewrap::new_with_mutability(
+            &bwrap_rootfs,
+            crate::ffi::BubblewrapMutability::Immutable,
+        )?;
         dump.append_child_argv(&["db_dump", path]);
         let cancellable = gio::Cancellable::new();
         let digest = sha256(&dump.run_captured(Some(&cancellable))?);
