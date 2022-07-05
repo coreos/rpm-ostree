@@ -144,7 +144,7 @@ pub mod ffi {
     // builtins/apply_live.rs
     extern "Rust" {
         fn applylive_entrypoint(args: &Vec<String>) -> Result<()>;
-        fn applylive_finish(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
+        fn applylive_finish(sysroot: &OstreeSysroot) -> Result<()>;
     }
 
     // builtins/compose/
@@ -768,7 +768,7 @@ pub mod ffi {
         #[allow(missing_debug_implementations)]
         type ClientConnection;
         fn new_client_connection() -> Result<UniquePtr<ClientConnection>>;
-        fn get_connection<'a>(self: Pin<&'a mut ClientConnection>) -> Pin<&'a mut GDBusConnection>;
+        fn get_connection<'a>(self: Pin<&'a mut ClientConnection>) -> &'a GDBusConnection;
         fn transaction_connect_progress_sync(&self, address: &str) -> Result<()>;
     }
 

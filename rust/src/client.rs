@@ -35,8 +35,8 @@ impl ClientConnection {
     /// Create a new connection object.
     pub(crate) fn new() -> Result<Self> {
         let mut conn = crate::ffi::new_client_connection()?;
-        let mut bus_conn = conn.pin_mut().get_connection();
-        let bus_conn = bus_conn.gobj_wrap();
+        let bus_conn = conn.pin_mut().get_connection();
+        let bus_conn = bus_conn.glib_reborrow();
         // This proxy will synchronously load the properties, including Booted that
         // we depend on for the next proxy.
         let sysroot_proxy = gio::DBusProxy::new_sync(

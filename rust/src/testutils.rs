@@ -242,8 +242,8 @@ fn test_moo() -> Result<()> {
     crate::ffi::client_require_root()?;
 
     let mut client_conn = crate::ffi::new_client_connection()?;
-    let mut bus_conn = client_conn.pin_mut().get_connection();
-    let bus_conn = bus_conn.gobj_wrap();
+    let bus_conn = client_conn.pin_mut().get_connection();
+    let bus_conn = bus_conn.glib_reborrow();
 
     let params = Variant::from_tuple(&[true.to_variant()]);
     let reply = &bus_conn.call_sync(
