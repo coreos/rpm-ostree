@@ -47,7 +47,7 @@ cap-std = { version = "0.25", features = ["fs_utf8"] }
 cap-primitives = "0.25.2"
 cap-tempfile = "0.25.1"
 chrono = { version = "0.4.19", features = ["serde"] }
-clap = { version = "3.2.6", features = ["derive"] }
+clap = { version = "3.2.8", features = ["derive"] }
 curl = "0.4.43"
 cxx = "1.0.69"
 envsubst = "0.2.0"
@@ -78,7 +78,7 @@ rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 rust-ini = "0.18.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_derive = "1.0.118"
-serde_json = "1.0.81"
+serde_json = "1.0.82"
 serde_yaml = "0.8.24"
 systemd = "0.10.0"
 tempfile = "3.3.0"
