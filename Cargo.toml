@@ -47,7 +47,7 @@ cap-std = { version = "0.25", features = ["fs_utf8"] }
 cap-primitives = "0.25.2"
 cap-tempfile = "0.25.1"
 chrono = { version = "0.4.19", features = ["serde"] }
-clap = { version = "3.2.6", features = ["derive"] }
+clap = { version = "3.2.8", features = ["derive"] }
 curl = "0.4.43"
 cxx = "1.0.69"
 envsubst = "0.2.0"
