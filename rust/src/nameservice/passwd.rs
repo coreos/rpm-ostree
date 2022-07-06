@@ -80,7 +80,7 @@ pub(crate) fn parse_passwd_content(content: impl BufRead) -> Result<Vec<PasswdEn
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{BufReader, Cursor};
+    use std::io::Cursor;
 
     fn mock_passwd_entry() -> PasswdEntry {
         PasswdEntry {
@@ -114,7 +114,7 @@ someuser:x:1000:1000:Foo BAR,,,:/home/foobar:/bin/bash
 +
 "#;
 
-        let input = BufReader::new(Cursor::new(content));
+        let input = Cursor::new(content);
         let groups = parse_passwd_content(input).unwrap();
         assert_eq!(groups.len(), 4);
         assert_eq!(groups[3], mock_passwd_entry());

@@ -110,7 +110,7 @@ pub(crate) fn parse_shadow_content(content: impl BufRead) -> Result<Vec<ShadowEn
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{BufReader, Cursor};
+    use std::io::Cursor;
 
     fn mock_shadow_entry() -> ShadowEntry {
         ShadowEntry {
@@ -140,7 +140,7 @@ systemd-resolve:!!:::::::
 rngd:!!:::::::
 "#;
 
-        let input = BufReader::new(Cursor::new(content));
+        let input = Cursor::new(content);
         let entries = parse_shadow_content(input).unwrap();
         assert_eq!(entries.len(), 6);
         assert_eq!(entries[2], mock_shadow_entry());

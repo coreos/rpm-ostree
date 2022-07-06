@@ -75,7 +75,7 @@ pub(crate) fn parse_group_content(content: impl BufRead) -> Result<Vec<GroupEntr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{BufReader, Cursor};
+    use std::io::Cursor;
 
     fn mock_group_entry() -> GroupEntry {
         GroupEntry {
@@ -107,7 +107,7 @@ staff:x:50:operator
 +
 "#;
 
-        let input = BufReader::new(Cursor::new(content));
+        let input = Cursor::new(content);
         let groups = parse_group_content(input).unwrap();
         assert_eq!(groups.len(), 9);
         assert_eq!(groups[8], mock_group_entry());

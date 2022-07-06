@@ -204,6 +204,7 @@ impl Extensions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     fn base_rpmdb() -> Vec<StringMapping> {
         vec![
@@ -228,7 +229,7 @@ extensions:
         packages:
             - bazboo
 "###;
-        let mut input = std::io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         let extensions = extensions_load_stream(&mut input, "x86_64", &base_rpmdb()).unwrap();
         assert!(extensions.get_repos() == vec!["my-repo"]);
         assert!(extensions.get_os_extension_packages() == vec!["bazboo"]);
@@ -273,7 +274,7 @@ extensions:
         packages:
             - foobar
 "###;
-        let mut input = std::io::BufReader::new(buf.as_bytes());
+        let mut input = Cursor::new(buf);
         match extensions_load_stream(&mut input, "x86_64", &base_rpmdb()) {
             Ok(_) => panic!("expected failure from extension in base"),
             Err(ref e) => assert!(e.to_string() == "package foobar already present in base"),
