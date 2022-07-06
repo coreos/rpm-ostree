@@ -312,16 +312,16 @@ impl Bubblewrap {
 
     /// Add an argument for the child process.
     pub(crate) fn append_child_arg(&mut self, arg: &str) {
-        self.append_child_argv(&[arg])
+        self.append_child_argv([arg])
     }
 
     /// Add multiple arguments for the child process.
-    pub(crate) fn append_child_argv(&mut self, args: &[&str]) {
+    pub(crate) fn append_child_argv<'a>(&mut self, args: impl IntoIterator<Item = &'a str>) {
         // Record the binary name for later error messages
         if self.child_argv0.is_none() {
             self.child_argv0 = Some(self.argv.len().try_into().expect("args"));
         }
-        self.argv.extend(args.iter().map(|s| s.to_string()));
+        self.argv.extend(args.into_iter().map(|s| s.to_string()));
     }
 
     /// Set an environment variable
@@ -481,8 +481,7 @@ pub(crate) fn bubblewrap_run_sync(
         bwrap.bind_readwrite("var", "/var")
     }
 
-    let args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    bwrap.append_child_argv(&args);
+    bwrap.append_child_argv(args.iter().map(|s| s.as_str()));
 
     let cancellable = &gio::Cancellable::new();
     let cancellable = Some(cancellable);
@@ -503,7 +502,7 @@ pub(crate) fn bubblewrap_run_sync(
 pub(crate) fn bubblewrap_selftest() -> CxxResult<()> {
     let fd = &openat::Dir::open("/")?;
     let mut bwrap = Bubblewrap::new_with_mutability(fd, BubblewrapMutability::Immutable)?;
-    bwrap.append_child_argv(&["true"]);
+    bwrap.append_child_argv(["true"]);
     let cancellable = &gio::Cancellable::new();
     let cancellable = Some(cancellable);
     bwrap.run_inner(cancellable)?;

@@ -530,7 +530,7 @@ fn compose_postprocess_mutate_os_release(
         rootfs_dfd,
         crate::ffi::BubblewrapMutability::Immutable,
     )?;
-    bwrap.append_child_argv(&["realpath", "/etc/os-release"]);
+    bwrap.append_child_argv(["realpath", "/etc/os-release"]);
     let cancellable = &gio::Cancellable::new();
     let cancellable = Some(cancellable);
     let path = bwrap.run_captured(cancellable)?;
@@ -1095,7 +1095,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
 
     // Fork the target rpmdb to write the content from memory to disk
     let mut bwrap = Bubblewrap::new_with_mutability(rootfs_dfd, BubblewrapMutability::RoFiles)?;
-    bwrap.append_child_argv(&["rpmdb", dbpath_arg.as_str(), "--importdb"]);
+    bwrap.append_child_argv(["rpmdb", dbpath_arg.as_str(), "--importdb"]);
     bwrap.take_stdin_fd(dbfd.into_raw_fd());
     let cancellable = gio::Cancellable::new();
     bwrap

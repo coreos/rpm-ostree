@@ -141,7 +141,7 @@ pub(crate) fn normalize_rpmdb(rootfs: &Dir, rpmdb_path: impl AsRef<Path>) -> Res
         &bwrap_rootfs,
         crate::ffi::BubblewrapMutability::Immutable,
     )?;
-    bwrap.append_child_argv(&["rpm", "--eval", "%{_db_backend}"]);
+    bwrap.append_child_argv(["rpm", "--eval", "%{_db_backend}"]);
     let cancellable = gio::Cancellable::new();
     let db_backend = bwrap.run_captured(Some(&cancellable))?;
 
@@ -466,7 +466,7 @@ mod bdb_normalize {
             &bwrap_rootfs,
             crate::ffi::BubblewrapMutability::Immutable,
         )?;
-        verify.append_child_argv(&["db_verify", "-q", path]);
+        verify.append_child_argv(["db_verify", "-q", path]);
         let cancellable = gio::Cancellable::new();
         verify.run_captured(Some(&cancellable))?;
 
@@ -478,7 +478,7 @@ mod bdb_normalize {
             &bwrap_rootfs,
             crate::ffi::BubblewrapMutability::Immutable,
         )?;
-        dump.append_child_argv(&["db_dump", path]);
+        dump.append_child_argv(["db_dump", path]);
         let cancellable = gio::Cancellable::new();
         let digest = sha256(&dump.run_captured(Some(&cancellable))?);
 
