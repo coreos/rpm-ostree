@@ -768,11 +768,7 @@ fn convert_path_to_tmpfiles_d_recurse(
 
         // Workaround for nfs-utils in RHEL7:
         // https://bugzilla.redhat.com/show_bug.cgi?id=1427537
-        let mut retain_entry = false;
-        if meta.is_file() && full_path.starts_with("var/lib/nfs") {
-            retain_entry = true;
-        }
-
+        let retain_entry = meta.is_file() && full_path.starts_with("var/lib/nfs");
         if !retain_entry && !(meta.is_dir() || meta.is_symlink()) {
             rootfs
                 .remove_file_optional(&full_path)
