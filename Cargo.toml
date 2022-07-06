@@ -17,6 +17,7 @@ edition = "2021"
 # However, right now we are bumping to 1.48 so we can use https://cxx.rs
 #rust = "1.48"
 links = "rpmostreeinternals"
+publish = false
 
 # See https://github.com/cgwalters/cargo-vendor-filterer
 [package.metadata.vendor-filter]
