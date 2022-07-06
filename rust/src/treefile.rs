@@ -3670,7 +3670,9 @@ conditional-include:
             let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
             tf.write_compose_json(rootdir)?;
         }
-        let mut src = std::io::BufReader::new(rootdir.open_file(COMPOSE_JSON_PATH)?);
+        let mut src = rootdir
+            .open_file(COMPOSE_JSON_PATH)
+            .map(std::io::BufReader::new)?;
         let cfg = treefile_parse_stream(utils::InputFormat::JSON, &mut src, None)?;
         assert_eq!(cfg.base.treeref.unwrap(), "exampleos/x86_64/blah");
         Ok(())
