@@ -65,9 +65,12 @@ It supports the following parameters:
    transaction flag "nodocs" which makes yum/rpm not install files marked as
    documentation. The default is true.
 
- * `packages`: Array of strings, mandatory: Set of installed packages.
-   comps groups are currently not supported due to walters having issues with libcomp:
-   https://github.com/cgwalters/fedora-atomic-work/commit/36d18b490529fec91b74ca9b464adb73ef0ab462
+ * `packages`: Array of strings, mandatory: Each entry in this list should name a package;
+   however, virtual provides are also supported.
+   For convenience when writing YAML/JSON, entries in this list will also be split by
+   whitespace.  Finally, another syntax special case is that surrounding the entry
+   with quotes `'` will suppress this whitespace split, and that in turn makes it possible to use version query
+   syntax such as `'podman >= 4.1'`.
 
  * `packages-$basearch`: Array of strings, optional: Set of installed packages, used
     only if $basearch matches the target architecture name.
