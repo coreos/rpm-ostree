@@ -191,8 +191,7 @@ fn verify_kernel_hmac_impl(moddir: &Dir) -> Result<()> {
 
     let hmac_path = ".vmlinuz.hmac";
 
-    let hmac_contents = if let Some(f) = moddir.open_optional(hmac_path)? {
-        let mut f = BufReader::new(f);
+    let hmac_contents = if let Some(mut f) = moddir.open_optional(hmac_path)?.map(BufReader::new) {
         let mut s = String::new();
         f.read_to_string(&mut s)?;
         s

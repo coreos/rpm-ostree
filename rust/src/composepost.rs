@@ -530,7 +530,7 @@ fn compose_postprocess_mutate_os_release(
         rootfs_dfd,
         crate::ffi::BubblewrapMutability::Immutable,
     )?;
-    bwrap.append_child_argv(&["realpath", "/etc/os-release"]);
+    bwrap.append_child_argv(["realpath", "/etc/os-release"]);
     let cancellable = &gio::Cancellable::new();
     let cancellable = Some(cancellable);
     let path = bwrap.run_captured(cancellable)?;
@@ -768,11 +768,7 @@ fn convert_path_to_tmpfiles_d_recurse(
 
         // Workaround for nfs-utils in RHEL7:
         // https://bugzilla.redhat.com/show_bug.cgi?id=1427537
-        let mut retain_entry = false;
-        if meta.is_file() && full_path.starts_with("var/lib/nfs") {
-            retain_entry = true;
-        }
-
+        let retain_entry = meta.is_file() && full_path.starts_with("var/lib/nfs");
         if !retain_entry && !(meta.is_dir() || meta.is_symlink()) {
             rootfs
                 .remove_file_optional(&full_path)
@@ -1099,7 +1095,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
 
     // Fork the target rpmdb to write the content from memory to disk
     let mut bwrap = Bubblewrap::new_with_mutability(rootfs_dfd, BubblewrapMutability::RoFiles)?;
-    bwrap.append_child_argv(&["rpmdb", dbpath_arg.as_str(), "--importdb"]);
+    bwrap.append_child_argv(["rpmdb", dbpath_arg.as_str(), "--importdb"]);
     bwrap.take_stdin_fd(dbfd.into_raw_fd());
     let cancellable = gio::Cancellable::new();
     bwrap
