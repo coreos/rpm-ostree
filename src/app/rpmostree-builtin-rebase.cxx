@@ -112,7 +112,7 @@ rpmostree_builtin_rebase (int argc, char **argv, RpmOstreeCommandInvocation *inv
 
   if (argc < 2 && !(opt_branch || opt_remote))
     {
-      return rpmostree_usage_error (context, "Must specify refspec, or -b branch or -r remote",
+      return rpmostree_usage_error (context, "Must specify refspec, or -b branch or -m remote",
                                     error),
              FALSE;
     }
