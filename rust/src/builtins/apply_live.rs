@@ -7,7 +7,6 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use glib::Variant;
 use ostree_ext::{gio, glib, ostree, prelude::*};
-use std::pin::Pin;
 
 #[derive(Debug, Parser)]
 #[clap(name = "apply-live")]
@@ -67,13 +66,13 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
         .get::<(String,)>()
         .ok_or_else(|| anyhow!("Invalid reply {:?}, expected (s)", reply.type_()))?;
     client.transaction_connect_progress_sync(txn_address.0.as_str())?;
-    applylive_finish(sysroot.gobj_rewrap())?;
+    applylive_finish(sysroot.reborrow_cxx())?;
     Ok(())
 }
 
 // Postprocessing after the daemon has reported completion; print an rpmdb diff.
-pub(crate) fn applylive_finish(mut sysroot: Pin<&mut crate::ffi::OstreeSysroot>) -> CxxResult<()> {
-    let sysroot = sysroot.gobj_wrap();
+pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
+    let sysroot = sysroot.glib_reborrow();
     let cancellable = gio::NONE_CANCELLABLE;
     sysroot.load_if_changed(cancellable)?;
     let repo = &sysroot.repo().unwrap();

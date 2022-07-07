@@ -44,7 +44,7 @@ public:
   ClientConnection (GDBusConnection *connp) : conn (connp) {}
   ~ClientConnection () { g_clear_object (&conn); }
 
-  GDBusConnection &
+  const GDBusConnection &
   get_connection ()
   {
     return *conn;
