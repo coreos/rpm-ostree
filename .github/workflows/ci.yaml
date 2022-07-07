@@ -58,6 +58,14 @@ jobs:
         run: tar -C / -xzvf install.tar
       - name: Integration tests
         run: ./ci/test-container.sh
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: EmbarkStudios/cargo-deny-action@v1
+      with:
+        log-level: warn
+        command: check bans sources licenses
   compose:
     name: "Compose tests"
     needs: build
