@@ -183,7 +183,7 @@ namespace rpmostreecxx
 rust::String util_next_version (rust::Str auto_version_prefix, rust::Str version_suffix,
                                 rust::Str last_version);
 
-int testutil_validate_cxxrs_passthrough (OstreeRepo &repo) noexcept;
+int testutil_validate_cxxrs_passthrough (const OstreeRepo &repo) noexcept;
 
 }
 
