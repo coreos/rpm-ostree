@@ -67,7 +67,6 @@ pub(crate) struct TreefileExternals {
 #[derive(Debug)]
 pub struct Treefile {
     primary_dfd: openat::Dir,
-    #[allow(dead_code)] // Not used in tests
     pub(crate) parsed: TreeComposeConfig,
     pub(crate) externals: TreefileExternals,
 }
