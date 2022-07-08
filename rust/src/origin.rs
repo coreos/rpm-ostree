@@ -121,7 +121,7 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
 
     cfg.derive.override_commit = keyfile_get_optional_string(kf, ORIGIN, "override-commit")?;
 
-    Ok(Box::new(Treefile::new_from_config(cfg, None)?))
+    Ok(Box::new(Treefile::new_from_config(cfg)?))
 }
 
 /// Convert an origin keyfile to a treefile config.

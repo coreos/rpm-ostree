@@ -197,7 +197,7 @@ impl Extensions {
             modules: self.modules.clone(),
             ..Default::default()
         };
-        Ok(Box::new(Treefile::new_from_config(ret, None)?))
+        Ok(Box::new(Treefile::new_from_config(ret)?))
     }
 }
 
