@@ -492,7 +492,7 @@ pub mod ffi {
         fn treefile_new_client_from_etc(basearch: &str) -> Result<Box<Treefile>>;
         fn treefile_delete_client_etc() -> Result<u32>;
 
-        fn get_workdir(&self) -> i32;
+        fn get_workdir(&self) -> &str;
         fn get_passwd_fd(&mut self) -> i32;
         fn get_group_fd(&mut self) -> i32;
         fn get_json_string(&self) -> String;

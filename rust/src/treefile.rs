@@ -21,6 +21,7 @@
 
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Context, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
 use openat_ext::OpenatDirExt;
@@ -66,7 +67,7 @@ pub(crate) struct TreefileExternals {
 // This type name is exposed through ffi.
 #[derive(Debug)]
 pub struct Treefile {
-    primary_dfd: openat::Dir,
+    pub(crate) directory: Option<Utf8PathBuf>,
     pub(crate) parsed: TreeComposeConfig,
     pub(crate) externals: TreefileExternals,
 }
@@ -611,11 +612,14 @@ fn add_files_path_is_valid(path: &str) -> bool {
 impl Treefile {
     /// The main treefile creation entrypoint.
     #[instrument]
-    fn new_boxed(filename: &Path, basearch: Option<&str>) -> Result<Box<Treefile>> {
+    fn new_boxed(filename: &Utf8Path, basearch: Option<&str>) -> Result<Box<Treefile>> {
+        let directory = filename
+            .parent()
+            .ok_or_else(|| anyhow!("{} is not a file path", filename))
+            .map(|v| Some(v.to_owned()))?;
         let parsed = treefile_parse_and_process(filename, basearch)?;
-        let dfd = openat::Dir::open(utils::parent_dir(filename).unwrap())?;
         Ok(Box::new(Treefile {
-            primary_dfd: dfd,
+            directory,
             parsed: parsed.config,
             externals: parsed.externals,
         }))
@@ -624,38 +628,24 @@ impl Treefile {
     pub(crate) fn new_from_string(fmt: utils::InputFormat, buf: &str) -> Result<Box<Self>> {
         let mut treefile = treefile_parse_stream(fmt, &mut buf.as_bytes(), None)?;
         treefile = treefile.substitute_vars()?;
-        let td = tempfile::tempdir()?;
-        let primary_dfd = openat::Dir::open(td.path())?;
         Ok(Box::new(Treefile {
-            primary_dfd,
+            directory: None,
             parsed: treefile,
             externals: Default::default(),
         }))
     }
 
-    pub(crate) fn new_from_config(
-        parsed: TreeComposeConfig,
-        cfgdir: Option<&openat::Dir>,
-    ) -> Result<Self> {
-        let primary_dfd = if let Some(d) = cfgdir {
-            d.sub_dir(".")?
-        } else {
-            // If we weren't passed a configdir, for now we just make a tempdir
-            // then delete it, holding open a useless fd to it.  This is to
-            // avoid changing all of the treefile code to use an Option<> for the dfd right now.
-            let td = tempfile::tempdir()?;
-            openat::Dir::open(td.path())?
-        };
+    pub(crate) fn new_from_config(parsed: TreeComposeConfig) -> Result<Self> {
         Ok(Treefile {
-            primary_dfd,
+            directory: None,
             parsed,
             externals: Default::default(),
         })
     }
 
-    /// Return the raw file descriptor for the workdir
-    pub(crate) fn get_workdir(&self) -> i32 {
-        self.primary_dfd.as_raw_fd()
+    /// Return the path to the directory containing the treefile
+    pub(crate) fn get_workdir(&self) -> &str {
+        self.directory.as_deref().map(|p| p.as_str()).unwrap_or("")
     }
 
     /// Return the raw file descriptor for the postprocess script
@@ -3151,25 +3141,27 @@ pub(crate) mod tests {
     }
 
     pub(crate) fn new_test_treefile<'a, 'b>(
-        workdir: &std::path::Path,
+        workdir: &Utf8Path,
         contents: &'a str,
         basearch: Option<&'b str>,
     ) -> Result<Box<Treefile>> {
-        let tf_path = workdir.join("treefile.yaml");
-        std::fs::write(&tf_path, contents)?;
-        Ok(Treefile::new_boxed(tf_path.as_path(), basearch)?)
+        let tf_path = &workdir.join("treefile.yaml");
+        std::fs::write(tf_path, contents)?;
+        Ok(Treefile::new_boxed(tf_path, basearch)?)
     }
 
     pub(crate) fn new_test_tf_basic(contents: impl AsRef<str>) -> Result<Box<Treefile>> {
         let contents = contents.as_ref();
         let workdir = tempfile::tempdir().unwrap();
-        new_test_treefile(workdir.path(), contents, None)
+        let workdir: &Utf8Path = workdir.path().try_into()?;
+        new_test_treefile(workdir, contents, None)
     }
 
     #[test]
     fn test_treefile_new() {
         let workdir = tempfile::tempdir().unwrap();
-        let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let tf = new_test_treefile(workdir, VALID_PRELUDE, None).unwrap();
         assert!(tf.parsed.base.rojig.is_none());
         assert!(tf.parsed.base.machineid_compat.is_none());
     }
@@ -3186,9 +3178,10 @@ pub(crate) mod tests {
     #[test]
     fn test_treefile_new_rojig() {
         let workdir = tempfile::tempdir().unwrap();
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(ROJIG_YAML);
-        let mut tf = new_test_treefile(workdir.path(), buf.as_str(), Some("x86_64")).unwrap();
+        let mut tf = new_test_treefile(workdir, buf.as_str(), Some("x86_64")).unwrap();
         tf.parsed = tf.parsed.substitute_vars().unwrap();
         let rojig = tf.parsed.base.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos 35");
@@ -3198,7 +3191,8 @@ pub(crate) mod tests {
     #[test]
     fn test_treefile_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
-        let workdir_d = openat::Dir::open(workdir.path())?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let workdir_d = openat::Dir::open(workdir.as_std_path())?;
         workdir_d.write_file_contents(
             "foo.yaml",
             0o644,
@@ -3230,7 +3224,7 @@ pub(crate) mod tests {
         buf.push_str(indoc! {"
             include: foo.yaml
         "});
-        let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
+        let tf = new_test_treefile(workdir, buf.as_str(), None)?;
         assert!(tf.parsed.packages.unwrap().len() == 6);
         assert_eq!(
             tf.parsed.repo_packages,
@@ -3274,7 +3268,8 @@ pub(crate) mod tests {
     #[test]
     fn test_treefile_arch_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
-        let workdir_d = openat::Dir::open(workdir.path())?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let workdir_d = openat::Dir::open(workdir.as_std_path())?;
         workdir_d.write_file_contents(
             "foo-x86_64.yaml",
             0o644,
@@ -3294,7 +3289,7 @@ arch-include:
 "#,
         );
         // Note foo-s390x.yaml doesn't exist
-        let tf = new_test_treefile(workdir.path(), buf.as_str(), Some(ARCH_X86_64))?;
+        let tf = new_test_treefile(workdir, buf.as_str(), Some(ARCH_X86_64))?;
         assert_package(&tf, "foo-x86_64-include");
         Ok(())
     }
@@ -3302,7 +3297,8 @@ arch-include:
     #[test]
     fn test_treefile_conditional_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
-        let workdir_d = openat::Dir::open(workdir.path())?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let workdir_d = openat::Dir::open(workdir.as_std_path())?;
         workdir_d.write_file_contents(
             "foo-x86_64.yaml",
             0o644,
@@ -3396,7 +3392,7 @@ conditional-include:
       - foo-multi-b.yaml
 "#,
         );
-        let tf = new_test_treefile(workdir.path(), buf.as_str(), Some(ARCH_X86_64))?;
+        let tf = new_test_treefile(workdir, buf.as_str(), Some(ARCH_X86_64))?;
         assert_package(&tf, "foo-x86_64-include");
         assert_package(&tf, "foo-le");
         assert_package(&tf, "foo-eq");
@@ -3414,7 +3410,8 @@ conditional-include:
     #[test]
     fn test_treefile_conditional_releasever_str() -> Result<()> {
         let workdir = tempfile::tempdir()?;
-        let workdir_d = openat::Dir::open(workdir.path())?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let workdir_d = openat::Dir::open(workdir.as_std_path())?;
         workdir_d.write_file_contents("foo.yaml", 0o644, "packages: [foo]")?;
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
@@ -3425,7 +3422,7 @@ conditional-include:
       include: foo.yaml
 "#,
         );
-        let tf = new_test_treefile(workdir.path(), buf.as_str(), None)?;
+        let tf = new_test_treefile(workdir, buf.as_str(), None)?;
         assert_package(&tf, "foo");
         Ok(())
     }
@@ -3433,6 +3430,7 @@ conditional-include:
     #[test]
     fn test_treefile_conditional_include_errors() -> Result<()> {
         let workdir = tempfile::tempdir()?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3441,7 +3439,7 @@ conditional-include:
       include: enoent.yaml
 "#,
         );
-        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        assert!(new_test_treefile(workdir, buf.as_str(), None).is_err());
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3450,7 +3448,7 @@ conditional-include:
       include: enoent.yaml
 "#,
         );
-        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        assert!(new_test_treefile(workdir, buf.as_str(), None).is_err());
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3459,7 +3457,7 @@ conditional-include:
       include: enoent.yaml
 "#,
         );
-        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        assert!(new_test_treefile(workdir, buf.as_str(), None).is_err());
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3468,7 +3466,7 @@ conditional-include:
       include: enoent.yaml
 "#,
         );
-        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        assert!(new_test_treefile(workdir, buf.as_str(), None).is_err());
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3479,7 +3477,7 @@ conditional-include:
       include: enoent.yaml
 "#,
         );
-        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        assert!(new_test_treefile(workdir, buf.as_str(), None).is_err());
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3490,7 +3488,7 @@ conditional-include:
       include: enoent.yaml
 "#,
         );
-        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        assert!(new_test_treefile(workdir, buf.as_str(), None).is_err());
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3501,7 +3499,7 @@ conditional-include:
       include: enoent.yaml
 "#,
         );
-        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        assert!(new_test_treefile(workdir, buf.as_str(), None).is_err());
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3510,7 +3508,7 @@ conditional-include:
       include: enoent.yaml
 "#,
         );
-        assert!(new_test_treefile(workdir.path(), buf.as_str(), None).is_err());
+        assert!(new_test_treefile(workdir, buf.as_str(), None).is_err());
         Ok(())
     }
 
@@ -3666,7 +3664,8 @@ conditional-include:
         let rootdir = &openat::Dir::open(rootdir.path())?;
         {
             let workdir = tempfile::tempdir()?;
-            let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let tf = new_test_treefile(workdir, VALID_PRELUDE, None).unwrap();
             tf.write_compose_json(rootdir)?;
         }
         let mut src = rootdir
@@ -3681,14 +3680,16 @@ conditional-include:
     fn test_check_passwd() {
         {
             let workdir = tempfile::tempdir().unwrap();
-            let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let tf = new_test_treefile(workdir, VALID_PRELUDE, None).unwrap();
             let default_cfg = tf.parsed.get_check_passwd();
             assert_eq!(default_cfg, &CheckPasswd::Previous);
         }
         {
             let input = VALID_PRELUDE.to_string() + r#"check-passwd: { "type": "none" }"#;
             let workdir = tempfile::tempdir().unwrap();
-            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let tf = new_test_treefile(workdir, &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_passwd();
             assert_eq!(custom_cfg, &CheckPasswd::None);
         }
@@ -3696,7 +3697,8 @@ conditional-include:
             let input = VALID_PRELUDE.to_string()
                 + r#"check-passwd: { "type": "data", "entries": { "bin": 1, "adm": [3, 4], "foo" : [2] } }"#;
             let workdir = tempfile::tempdir().unwrap();
-            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let tf = new_test_treefile(workdir, &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_passwd();
             let data = match custom_cfg {
                 CheckPasswd::Data(ref v) => v,
@@ -3724,11 +3726,12 @@ conditional-include:
             let input = VALID_PRELUDE.to_string()
                 + r#"check-passwd: { "type": "file", "filename": "local-file" }"#;
             let workdir = tempfile::tempdir().unwrap();
-            let workdir_d = openat::Dir::open(workdir.path()).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let workdir_d = openat::Dir::open(workdir.as_std_path()).unwrap();
             workdir_d
                 .write_file_contents("local-file", 0o755, "")
                 .unwrap();
-            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let tf = new_test_treefile(workdir, &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_passwd();
             assert_eq!(
                 custom_cfg,
@@ -3743,14 +3746,16 @@ conditional-include:
     fn test_check_groups() {
         {
             let workdir = tempfile::tempdir().unwrap();
-            let tf = new_test_treefile(workdir.path(), VALID_PRELUDE, None).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let tf = new_test_treefile(workdir, VALID_PRELUDE, None).unwrap();
             let default_cfg = tf.parsed.get_check_groups();
             assert_eq!(default_cfg, &CheckGroups::Previous);
         }
         {
             let input = VALID_PRELUDE.to_string() + r#"check-groups: { "type": "none" }"#;
             let workdir = tempfile::tempdir().unwrap();
-            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let tf = new_test_treefile(workdir, &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_groups();
             assert_eq!(custom_cfg, &CheckGroups::None);
         }
@@ -3758,7 +3763,8 @@ conditional-include:
             let input = VALID_PRELUDE.to_string()
                 + r#"check-groups: { "type": "data", "entries": { "bin": 1 } }"#;
             let workdir = tempfile::tempdir().unwrap();
-            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let tf = new_test_treefile(workdir, &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_groups();
             assert_eq!(
                 custom_cfg,
@@ -3773,11 +3779,12 @@ conditional-include:
             let input = VALID_PRELUDE.to_string()
                 + r#"check-groups: { "type": "file", "filename": "local-file" }"#;
             let workdir = tempfile::tempdir().unwrap();
-            let workdir_d = openat::Dir::open(workdir.path()).unwrap();
+            let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+            let workdir_d = openat::Dir::open(workdir.as_std_path()).unwrap();
             workdir_d
                 .write_file_contents("local-file", 0o755, "")
                 .unwrap();
-            let tf = new_test_treefile(workdir.path(), &input, None).unwrap();
+            let tf = new_test_treefile(workdir, &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_groups();
             assert_eq!(
                 custom_cfg,
@@ -4330,7 +4337,7 @@ pub(crate) fn treefile_new_client_from_etc(basearch: &str) -> CxxResult<Box<Tree
         treefile_merge(&mut new_cfg, &mut cfg);
         cfg = new_cfg;
     }
-    let r = Treefile::new_from_config(cfg, None)?;
+    let r = Treefile::new_from_config(cfg)?;
     r.error_if_base()?;
     Ok(Box::new(r))
 }

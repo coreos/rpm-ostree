@@ -294,9 +294,8 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
   }
 
   {
-    int tf_dfd = (*self->treefile_rs)->get_workdir ();
-    g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
-    dnf_context_set_repo_dir (dnfctx, abs_tf_path);
+    auto treefile_dir = std::string ((*self->treefile_rs)->get_workdir ());
+    dnf_context_set_repo_dir (dnfctx, treefile_dir.c_str ());
   }
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
@@ -1615,9 +1614,8 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
       = rpmostree_context_new_compose (cachedir_dfd, repo, *extension_tf);
 
   {
-    int tf_dfd = src_treefile->get_workdir ();
-    g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
-    dnf_context_set_repo_dir (rpmostree_context_get_dnf (ctx), abs_tf_path);
+    auto treefile_dir = std::string (src_treefile->get_workdir ());
+    dnf_context_set_repo_dir (rpmostree_context_get_dnf (ctx), treefile_dir.c_str ());
   }
 
 #define TMP_EXTENSIONS_ROOTFS "rpmostree-extensions.tmp"
