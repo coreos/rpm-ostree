@@ -34,6 +34,7 @@ pub(crate) struct ClientConnection {
 impl ClientConnection {
     /// Create a new connection object.
     pub(crate) fn new() -> Result<Self> {
+        require_system_host_type(SystemHostType::OstreeHost)?;
         let mut conn = crate::ffi::new_client_connection()?;
         let bus_conn = conn.pin_mut().get_connection();
         let bus_conn = bus_conn.glib_reborrow();
@@ -292,7 +293,7 @@ pub(crate) fn require_system_host_type(expected: SystemHostType) -> CxxResult<()
     if current != expected {
         let expected = system_host_type_str(&expected);
         let current = system_host_type_str(&current);
-        return Err(format!("Current system type: {current} Expected: {expected}").into());
+        return Err(format!("This command requires an {expected} system; found: {current}").into());
     }
     Ok(())
 }

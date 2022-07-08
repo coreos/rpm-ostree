@@ -15,6 +15,14 @@ if ! grep -qe "error.*This system was not booted via libostree" err.txt; then
     fatal "did not find expected error"
 fi
 
+if rpm-ostree ex module install foo 2>err.txt; then
+  fatal "module in container"
+fi
+if ! grep -qe 'error.*requires an ostree host system' err.txt; then
+    cat err.txt
+    fatal "did not find expected error"
+fi
+
 origindir=/etc/rpm-ostree/origin.d
 mkdir -p "${origindir}"
 cat > "${origindir}/clienterror.yaml" << 'EOF'
