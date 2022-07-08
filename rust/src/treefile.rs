@@ -1448,6 +1448,15 @@ impl Treefile {
                 )
             }
         }
+        if self
+            .parsed
+            .initramfs_args
+            .as_ref()
+            .map_or(false, |v| !v.is_empty())
+        {
+            deprecated = true;
+            eprintln!("warning: initramfs-args is deprecated, use /etc/dracut.conf.d")
+        }
         if deprecated {
             std::thread::sleep(std::time::Duration::from_secs(3));
         }

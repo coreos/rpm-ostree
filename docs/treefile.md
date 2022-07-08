@@ -113,6 +113,8 @@ It supports the following parameters:
     case for this with Dracut is `--filesystems xfs,ext4` to ensure
     specific filesystem drivers are included.  If not specified,
     `--no-hostonly` will be used.
+    Deprecated; you should place files in `/etc/dracut.conf.d` instead. This
+    option is ignored when regenerating the initramfs in the container flow.
 
  * `rpmdb`: String, optional: The RPM database backend.  Can be one of
     `target` (the default) or `host`.  Legacy values 

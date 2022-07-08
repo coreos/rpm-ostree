@@ -1098,6 +1098,8 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellabl
       /* append the extra args */
       rust::Vec<rust::String> add_dracut_argv;
       if (rpmostree_origin_get_regenerate_initramfs (self->computed_origin))
+        /* Note this option is deprecated, but we still read it for now. See
+         * https://github.com/coreos/rpm-ostree/issues/3799. */
         add_dracut_argv = rpmostree_origin_get_initramfs_args (self->computed_origin);
       for (auto &arg : add_dracut_argv)
         g_ptr_array_add (initramfs_args, g_strdup (arg.c_str ()));
