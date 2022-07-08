@@ -11,8 +11,8 @@ use std::pin::Pin;
 /// Get a currently unique (for this host) identifier for the deployment.
 // TODO - adding the deployment timestamp would make it
 // persistently unique, needs API in libostree.
-pub fn deployment_generate_id(mut deployment: Pin<&mut crate::FFIOstreeDeployment>) -> String {
-    let deployment = deployment.gobj_wrap();
+pub fn deployment_generate_id(deployment: &crate::FFIOstreeDeployment) -> String {
+    let deployment = deployment.glib_reborrow();
     deployment_generate_id_impl(&deployment)
 }
 

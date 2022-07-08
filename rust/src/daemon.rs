@@ -21,15 +21,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::pin::Pin;
 
 const RPM_OSTREED_COMMIT_VERIFICATION_CACHE: &str = "rpm-ostree/gpgcheck-cache";
 
 /// Validate basic assumptions on daemon startup.
-pub(crate) fn daemon_sanitycheck_environment(
-    mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
-) -> CxxResult<()> {
-    let sysroot = &sysroot.gobj_wrap();
+pub(crate) fn daemon_sanitycheck_environment(sysroot: &crate::FFIOstreeSysroot) -> CxxResult<()> {
+    let sysroot = &sysroot.glib_reborrow();
     let sysroot_dir = Dir::reopen_dir(unsafe { &BorrowedFd::borrow_raw(sysroot.fd()) })?;
     let loc = crate::composepost::TRADITIONAL_RPMDB_LOCATION;
     if let Some(metadata) = sysroot_dir.symlink_metadata_optional(loc)? {
@@ -137,13 +134,13 @@ fn deployment_populate_variant_origin(
 /// Serialize information about the given deployment into the `dict`;
 /// this will be exposed via DBus and is hence public API.
 pub(crate) fn deployment_populate_variant(
-    mut sysroot: Pin<&mut crate::FFIOstreeSysroot>,
-    mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
-    mut dict: Pin<&mut crate::FFIGVariantDict>,
+    sysroot: &crate::FFIOstreeSysroot,
+    deployment: &crate::FFIOstreeDeployment,
+    dict: &crate::FFIGVariantDict,
 ) -> CxxResult<()> {
-    let sysroot = &sysroot.gobj_wrap();
-    let deployment = &deployment.gobj_wrap();
-    let dict = dict.gobj_wrap();
+    let sysroot = &sysroot.glib_reborrow();
+    let deployment = &deployment.glib_reborrow();
+    let dict = dict.glib_reborrow();
 
     let id = crate::deployment_generate_id_impl(deployment);
     // First, basic values from ostree
@@ -197,11 +194,11 @@ pub(crate) fn deployment_populate_variant(
 
 /// Load basic layering metadata about a deployment commit.
 pub fn deployment_layeredmeta_from_commit(
-    mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
-    mut commit: Pin<&mut crate::FFIGVariant>,
+    deployment: &crate::FFIOstreeDeployment,
+    commit: &crate::FFIGVariant,
 ) -> CxxResult<crate::ffi::DeploymentLayeredMeta> {
-    let deployment = deployment.gobj_wrap();
-    let commit = &commit.gobj_wrap();
+    let deployment = deployment.glib_reborrow();
+    let commit = &commit.glib_reborrow();
     let layered_meta = deployment_layeredmeta_from_commit_impl(&deployment, commit)?;
     Ok(layered_meta)
 }
@@ -246,11 +243,11 @@ fn deployment_layeredmeta_from_commit_impl(
 }
 
 pub fn deployment_layeredmeta_load(
-    mut repo: Pin<&mut crate::FFIOstreeRepo>,
-    mut deployment: Pin<&mut crate::FFIOstreeDeployment>,
+    repo: &crate::FFIOstreeRepo,
+    deployment: &crate::FFIOstreeDeployment,
 ) -> CxxResult<crate::ffi::DeploymentLayeredMeta> {
-    let repo = repo.gobj_wrap();
-    let deployment = deployment.gobj_wrap();
+    let repo = repo.glib_reborrow();
+    let deployment = deployment.glib_reborrow();
     let layered_meta = deployment_layeredmeta_load_commit(&repo, &deployment)?;
     Ok(layered_meta)
 }
@@ -268,13 +265,13 @@ pub(crate) fn deployment_layeredmeta_load_commit(
 
 #[context("Loading origin status")]
 pub(crate) fn variant_add_remote_status(
-    mut repo: Pin<&mut crate::FFIOstreeRepo>,
+    repo: &crate::FFIOstreeRepo,
     refspec: &str,
     base_checksum: &str,
-    mut dict: Pin<&mut crate::FFIGVariantDict>,
+    dict: &crate::FFIGVariantDict,
 ) -> CxxResult<()> {
-    let repo = &repo.gobj_wrap();
-    let dict = &dict.gobj_wrap();
+    let repo = &repo.glib_reborrow();
+    let dict = &dict.glib_reborrow();
 
     let (maybe_remote, _) = ostree::parse_refspec(refspec)?;
     let gpg_verify = if let Some(ref remote) = maybe_remote {
@@ -442,20 +439,20 @@ pub fn parse_revision(revision: &str) -> CxxResult<ParsedRevision> {
 /// let's try to be nice).
 #[context("Generating baselayer refs")]
 pub fn generate_baselayer_refs(
-    mut ffi_sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
-    mut ffi_repo: Pin<&mut crate::ffi::OstreeRepo>,
-    mut ffi_cancellable: Pin<&mut crate::FFIGCancellable>,
+    ffi_sysroot: &crate::ffi::OstreeSysroot,
+    ffi_repo: &crate::ffi::OstreeRepo,
+    ffi_cancellable: &crate::FFIGCancellable,
 ) -> CxxResult<()> {
-    let sysroot = &ffi_sysroot.gobj_wrap();
-    let repo = ffi_repo.gobj_wrap();
-    let cancellable = &ffi_cancellable.gobj_wrap();
+    let sysroot = &ffi_sysroot.glib_reborrow();
+    let repo = ffi_repo.glib_reborrow();
+    let cancellable = ffi_cancellable.glib_reborrow().clone();
 
     // Delete all the refs.
     for ref_entry in repo
         .list_refs_ext(
             Some("rpmostree/base"),
             ostree::RepoListRefsExtFlags::NONE,
-            Some(cancellable),
+            Some(&cancellable),
         )?
         .keys()
     {

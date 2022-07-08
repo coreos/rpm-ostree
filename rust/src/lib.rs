@@ -299,31 +299,31 @@ pub mod ffi {
 
     // daemon.rs
     extern "Rust" {
-        fn daemon_sanitycheck_environment(sysroot: Pin<&mut OstreeSysroot>) -> Result<()>;
-        fn deployment_generate_id(deployment: Pin<&mut OstreeDeployment>) -> String;
+        fn daemon_sanitycheck_environment(sysroot: &OstreeSysroot) -> Result<()>;
+        fn deployment_generate_id(deployment: &OstreeDeployment) -> String;
         fn deployment_populate_variant(
-            mut sysroot: Pin<&mut OstreeSysroot>,
-            mut deployment: Pin<&mut OstreeDeployment>,
-            mut dict: Pin<&mut GVariantDict>,
+            sysroot: &OstreeSysroot,
+            deployment: &OstreeDeployment,
+            dict: &GVariantDict,
         ) -> Result<()>;
         fn generate_baselayer_refs(
-            mut sysroot: Pin<&mut OstreeSysroot>,
-            mut repo: Pin<&mut OstreeRepo>,
-            cancellable: Pin<&mut GCancellable>,
+            sysroot: &OstreeSysroot,
+            repo: &OstreeRepo,
+            cancellable: &GCancellable,
         ) -> Result<()>;
         fn variant_add_remote_status(
-            mut repo: Pin<&mut OstreeRepo>,
+            repo: &OstreeRepo,
             refspec: &str,
             base_checksum: &str,
-            mut dict: Pin<&mut GVariantDict>,
+            dict: &GVariantDict,
         ) -> Result<()>;
         fn deployment_layeredmeta_from_commit(
-            mut deployment: Pin<&mut OstreeDeployment>,
-            mut commit: Pin<&mut GVariant>,
+            deployment: &OstreeDeployment,
+            commit: &GVariant,
         ) -> Result<DeploymentLayeredMeta>;
         fn deployment_layeredmeta_load(
-            mut repo: Pin<&mut OstreeRepo>,
-            mut deployment: Pin<&mut OstreeDeployment>,
+            repo: &OstreeRepo,
+            deployment: &OstreeDeployment,
         ) -> Result<DeploymentLayeredMeta>;
         fn parse_override_source(source: &str) -> Result<OverrideReplacementSource>;
         fn parse_revision(source: &str) -> Result<ParsedRevision>;
