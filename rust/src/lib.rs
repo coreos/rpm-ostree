@@ -174,12 +174,12 @@ pub mod ffi {
     // sysroot_upgrade.rs
     extern "Rust" {
         fn pull_container(
-            repo: Pin<&mut OstreeRepo>,
-            cancellable: Pin<&mut GCancellable>,
+            repo: &OstreeRepo,
+            cancellable: &GCancellable,
             imgref: &str,
         ) -> Result<Box<ContainerImageState>>;
         fn query_container_image(
-            repo: Pin<&mut OstreeRepo>,
+            repo: &OstreeRepo,
             imgref: &str,
         ) -> Result<Box<ContainerImageState>>;
     }
