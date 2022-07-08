@@ -12,7 +12,6 @@ use ostree_container::OstreeImageReference;
 use ostree_ext::container as ostree_container;
 use ostree_ext::container::store::{ImportProgress, ManifestLayerState};
 use ostree_ext::ostree;
-use std::pin::Pin;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::Receiver;
 
@@ -90,12 +89,12 @@ async fn pull_container_async(
 
 /// Import ostree commit in container image using ostree-rs-ext's API.
 pub(crate) fn pull_container(
-    mut repo: Pin<&mut crate::FFIOstreeRepo>,
-    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+    repo: &crate::FFIOstreeRepo,
+    cancellable: &crate::FFIGCancellable,
     imgref: &str,
 ) -> CxxResult<Box<ContainerImageState>> {
-    let repo = &repo.gobj_wrap();
-    let cancellable = cancellable.gobj_wrap();
+    let repo = &repo.glib_reborrow();
+    let cancellable = cancellable.glib_reborrow();
     let imgref = &OstreeImageReference::try_from(imgref)?;
 
     let r = Handle::current().block_on(async {
@@ -110,10 +109,10 @@ pub(crate) fn pull_container(
 
 /// C++ wrapper for querying image state; requires a pulled image
 pub(crate) fn query_container_image(
-    mut repo: Pin<&mut crate::FFIOstreeRepo>,
+    repo: &crate::FFIOstreeRepo,
     imgref: &str,
 ) -> CxxResult<Box<crate::ffi::ContainerImageState>> {
-    let repo = &repo.gobj_wrap();
+    let repo = &repo.glib_reborrow();
     let imgref = &OstreeImageReference::try_from(imgref)?;
     let state = ostree_container::store::query_image(repo, imgref)?
         .ok_or_else(|| anyhow::anyhow!("Failed to find image {}", imgref))?;

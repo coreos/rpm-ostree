@@ -251,7 +251,7 @@ mod test {
         let fd = r.dfd();
         assert_eq!(
             fd,
-            crate::ffi::testutil_validate_cxxrs_passthrough(r.gobj_rewrap())
+            crate::ffi::testutil_validate_cxxrs_passthrough(r.reborrow_cxx())
         );
         Ok(())
     }
