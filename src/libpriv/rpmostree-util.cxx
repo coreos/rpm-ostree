@@ -256,9 +256,9 @@ util_next_version (rust::Str auto_version_prefix, rust::Str version_suffix_rs, /
 // A test function to validate that we can pass glib-rs types
 // from Rust back through cxx-rs to C++.
 int
-testutil_validate_cxxrs_passthrough (OstreeRepo &repo) noexcept
+testutil_validate_cxxrs_passthrough (const OstreeRepo &repo) noexcept
 {
-  return ostree_repo_get_dfd (&repo);
+  return ostree_repo_get_dfd (&const_cast<OstreeRepo &> (repo));
 }
 
 } /* namespace */
