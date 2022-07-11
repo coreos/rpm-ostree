@@ -479,6 +479,7 @@ pub fn compose_postprocess(
     unified_core: bool,
 ) -> CxxResult<()> {
     let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs_cap_std = &crate::capstdext::from_openat(rootfs_dfd)?;
 
     // One of several dances we do around this that really needs to be completely
     // reworked.
@@ -492,7 +493,7 @@ pub fn compose_postprocess(
         compose_postprocess_default_target(rootfs_dfd, t)?;
     }
 
-    treefile.write_compose_json(rootfs_dfd)?;
+    treefile.write_compose_json(rootfs_cap_std)?;
 
     let etc_guard = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
     // These ones depend on the /etc path
