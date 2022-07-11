@@ -22,9 +22,10 @@
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use cap_std_ext::cap_std::fs::Dir;
+use cap_std_ext::prelude::CapStdExtDirExt;
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
-use openat_ext::OpenatDirExt;
 use ostree_ext::{glib, ostree};
 use regex::Regex;
 use serde_derive::{Deserialize, Serialize};
@@ -1507,10 +1508,12 @@ impl Treefile {
     }
 
     /// Write the serialized treefile into /usr/share on the target filesystem.
-    pub(crate) fn write_compose_json(&self, rootfs_dfd: &openat::Dir) -> Result<()> {
+    pub(crate) fn write_compose_json(&self, rootfs_dfd: &Dir) -> Result<()> {
         let target = Path::new(COMPOSE_JSON_PATH);
-        rootfs_dfd.ensure_dir_all(target.parent().unwrap(), 0o755)?;
-        rootfs_dfd.write_file_with_sync(target, 0o644, |w| {
+        let mut db = crate::capstdext::dirbuilder_from_mode(0o755);
+        db.recursive(true);
+        rootfs_dfd.create_dir_with(target.parent().unwrap(), &db)?;
+        rootfs_dfd.atomic_replace_with(target, |w| {
             serde_json::to_writer_pretty(w, &self.parsed).map_err(anyhow::Error::new)
         })
     }
@@ -3660,16 +3663,15 @@ conditional-include:
 
     #[test]
     fn test_write_json() -> Result<()> {
-        let rootdir = tempfile::tempdir()?;
-        let rootdir = &openat::Dir::open(rootdir.path())?;
+        let rootdir = cap_tempfile::tempdir(cap_std::ambient_authority())?;
         {
             let workdir = tempfile::tempdir()?;
             let workdir: &Utf8Path = workdir.path().try_into().unwrap();
             let tf = new_test_treefile(workdir, VALID_PRELUDE, None).unwrap();
-            tf.write_compose_json(rootdir)?;
+            tf.write_compose_json(&rootdir)?;
         }
         let mut src = rootdir
-            .open_file(COMPOSE_JSON_PATH)
+            .open(COMPOSE_JSON_PATH)
             .map(std::io::BufReader::new)?;
         let cfg = treefile_parse_stream(utils::InputFormat::JSON, &mut src, None)?;
         assert_eq!(cfg.base.treeref.unwrap(), "exampleos/x86_64/blah");
