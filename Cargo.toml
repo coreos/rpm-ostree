@@ -21,7 +21,7 @@ publish = false
 
 # See https://github.com/cgwalters/cargo-vendor-filterer
 [package.metadata.vendor-filter]
-platforms = ["x86_64-unknown-linux-gnu"]
+platforms = ["x86_64-unknown-linux-gnu", "s390x-unknown-linux-gnu"]
 all-features = true
 exclude-crate-paths = [ { name = "curl-sys", exclude = "curl" },
                         { name = "libz-sys", exclude = "src/zlib" },
