@@ -177,10 +177,9 @@ impl FilesystemScriptPrep {
 /// which breaks when we relocate them into ostree/.  This function
 /// changes them to be relative.
 ///
-/// Fixes are pending to ensure the kernels are doing this from the start,
-/// but we can't rely on that landing for a while. In addition, there are
-/// many 3rd-party kernels that have replicated the behavior in the ARK
-/// kernel.spec.
+/// This is fixed in:
+/// https://gitlab.com/cki-project/kernel-ark/-/merge_requests/1725
+/// Until this lands everywhere we care about, we need this hack.
 fn verify_kernel_hmac_impl(moddir: &Dir) -> Result<()> {
     // FIXME: in 2023
     // This method is intentionally a misnomer because it should eventually
