@@ -86,3 +86,28 @@ jobs:
         run: tar -C / -xzvf install.tar
       - name: Integration tests
         run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh
+  build-c9s:
+    name: "Build (c9s)"
+    runs-on: ubuntu-latest
+    container: quay.io/centos/centos:stream9
+    steps:
+      - name: Install git
+        run: yum -y install git
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      # https://github.com/actions/checkout/issues/760
+      - name: Mark git checkout as safe
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Run ridiculous RHEL -devel package workaround
+        run: ./ci/ridiculous-rhel-devel-workaround.sh
+      - name: Install dependencies
+        run: ./ci/installdeps.sh
+      - name: Build
+        run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
+      - name: Upload binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: install-c9s.tar
+          path: install.tar
