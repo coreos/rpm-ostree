@@ -74,6 +74,7 @@ assert_file_has_content_literal lsinitrd.txt etc/foobar.conf
 
 echo "ok override kernel with custom initramfs args"
 
+vm_cmd lsinitrd -m ${newroot}/usr/lib/modules/${kernel_release}/initramfs.img > lsinitrd-modules.txt
 # FCOS omits lvm; check that we still omit lvm here too
-assert_file_has_content_literal lsinitrd.txt "--omit 'lvm'"
+assert_not_file_has_content_literal lsinitrd-modules.txt lvm
 echo "ok override kernel uses base initramfs args"
