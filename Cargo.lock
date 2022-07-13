@@ -187,9 +187,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std-ext"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4d151d4bfd87d022c482ce7b40b34c74a484f6bb3a3f3632151b565c938326f"
+checksum = "d2efd8f69529838e5adf942ed8f0fc36f7ae9dfdcbb4cf6b8509a6c299396529"
 dependencies = [
  "cap-tempfile",
  "rustix",
