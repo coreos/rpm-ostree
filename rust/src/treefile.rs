@@ -2820,7 +2820,6 @@ impl TreeComposeConfig {
 pub(crate) mod tests {
     use super::*;
     use indoc::indoc;
-    use openat_ext::OpenatDirExt;
     use std::io::Cursor;
     use tempfile;
 
@@ -3204,10 +3203,8 @@ pub(crate) mod tests {
     fn test_treefile_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
         let workdir: &Utf8Path = workdir.path().try_into().unwrap();
-        let workdir_d = openat::Dir::open(workdir.as_std_path())?;
-        workdir_d.write_file_contents(
-            "foo.yaml",
-            0o644,
+        std::fs::write(
+            workdir.join("foo.yaml"),
             indoc! {"
                 repos:
                     - foo
@@ -3281,10 +3278,8 @@ pub(crate) mod tests {
     fn test_treefile_arch_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
         let workdir: &Utf8Path = workdir.path().try_into().unwrap();
-        let workdir_d = openat::Dir::open(workdir.as_std_path())?;
-        workdir_d.write_file_contents(
-            "foo-x86_64.yaml",
-            0o644,
+        std::fs::write(
+            workdir.join("foo-x86_64.yaml"),
             r#"
 repos:
   - foo
@@ -3310,43 +3305,39 @@ arch-include:
     fn test_treefile_conditional_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
         let workdir: &Utf8Path = workdir.path().try_into().unwrap();
-        let workdir_d = openat::Dir::open(workdir.as_std_path())?;
-        workdir_d.write_file_contents(
-            "foo-x86_64.yaml",
-            0o644,
-            "packages: [foo-x86_64-include]",
-        )?;
-        workdir_d.write_file_contents("foo-le.yaml", 0o644, "packages: [foo-le]")?;
-        workdir_d.write_file_contents("foo-ge.yaml", 0o644, "packages: [foo-ge]")?;
-        workdir_d.write_file_contents("foo-eq.yaml", 0o644, "packages: [foo-eq]")?;
-        workdir_d.write_file_contents("foo-true.yaml", 0o644, "packages: [foo-true]")?;
-        workdir_d.write_file_contents("foo-false.yaml", 0o644, "packages: [foo-false]")?;
-        workdir_d.write_file_contents("foo-str.yaml", 0o644, "packages: [foo-str]")?;
-        workdir_d.write_file_contents("foo-multi-a.yaml", 0o644, "packages: [foo-multi-a]")?;
-        workdir_d.write_file_contents("foo-multi-b.yaml", 0o644, "packages: [foo-multi-b]")?;
-        workdir_d.write_file_contents(
-            "nested.yaml",
-            0o644,
-            r#"
+
+        let treefiles = [
+            ("foo-x86_64.yaml", "packages: [foo-x86_64-include]"),
+            ("foo-le.yaml", "packages: [foo-le]"),
+            ("foo-ge.yaml", "packages: [foo-ge]"),
+            ("foo-eq.yaml", "packages: [foo-eq]"),
+            ("foo-true.yaml", "packages: [foo-true]"),
+            ("foo-false.yaml", "packages: [foo-false]"),
+            ("foo-str.yaml", "packages: [foo-str]"),
+            ("foo-multi-a.yaml", "packages: [foo-multi-a]"),
+            ("foo-multi-b.yaml", "packages: [foo-multi-b]"),
+            (
+                "nested.yaml",
+                r#"
 conditional-include:
   - if: releasever == 35
     include: foo-nested.yaml"#,
-        )?;
-        workdir_d.write_file_contents(
-            "foo-nested.yaml",
-            0o644,
-            r#"
-packages:
-  - foo-nested
-conditional-include:
-  - if: releasever == 35
-    include: foo-more-nested.yaml"#,
-        )?;
-        workdir_d.write_file_contents(
-            "foo-more-nested.yaml",
-            0o644,
-            "packages: [foo-more-nested]",
-        )?;
+            ),
+            (
+                "foo-nested.yaml",
+                r#"
+    packages:
+      - foo-nested
+    conditional-include:
+      - if: releasever == 35
+        include: foo-more-nested.yaml"#,
+            ),
+            ("foo-more-nested.yaml", "packages: [foo-more-nested]"),
+        ];
+        for (name, data) in treefiles {
+            std::fs::write(workdir.join(name), data)?;
+        }
+
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3423,8 +3414,7 @@ conditional-include:
     fn test_treefile_conditional_releasever_str() -> Result<()> {
         let workdir = tempfile::tempdir()?;
         let workdir: &Utf8Path = workdir.path().try_into().unwrap();
-        let workdir_d = openat::Dir::open(workdir.as_std_path())?;
-        workdir_d.write_file_contents("foo.yaml", 0o644, "packages: [foo]")?;
+        std::fs::write(workdir.join("foo.yaml"), "packages: [foo]")?;
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(
             r#"
@@ -3738,10 +3728,7 @@ conditional-include:
                 + r#"check-passwd: { "type": "file", "filename": "local-file" }"#;
             let workdir = tempfile::tempdir().unwrap();
             let workdir: &Utf8Path = workdir.path().try_into().unwrap();
-            let workdir_d = openat::Dir::open(workdir.as_std_path()).unwrap();
-            workdir_d
-                .write_file_contents("local-file", 0o755, "")
-                .unwrap();
+            std::fs::write(workdir.join("local-file"), "").unwrap();
             let tf = new_test_treefile(workdir, &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_passwd();
             assert_eq!(
@@ -3791,10 +3778,7 @@ conditional-include:
                 + r#"check-groups: { "type": "file", "filename": "local-file" }"#;
             let workdir = tempfile::tempdir().unwrap();
             let workdir: &Utf8Path = workdir.path().try_into().unwrap();
-            let workdir_d = openat::Dir::open(workdir.as_std_path()).unwrap();
-            workdir_d
-                .write_file_contents("local-file", 0o755, "")
-                .unwrap();
+            std::fs::write(workdir.join("local-file"), "").unwrap();
             let tf = new_test_treefile(workdir, &input, None).unwrap();
             let custom_cfg = tf.parsed.get_check_groups();
             assert_eq!(
