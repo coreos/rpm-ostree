@@ -4,7 +4,6 @@
 
 use anyhow::{bail, Context, Result};
 use cap_std_ext::rustix;
-use curl::easy::Easy;
 use os_release::OsRelease;
 use std::path;
 
@@ -23,16 +22,14 @@ const DEFAULT_VARIANT_ID: &str = "unknown";
 /// let mut handle = Easy::new().nobody(true)?;
 fn send_countme(url: &str, ua: &str) -> Result<()> {
     println!("Sending request to: {}", url);
-    let mut handle = Easy::new();
-    handle.follow_location(true)?;
-    handle.fail_on_error(true)?;
-    handle.url(url)?;
-    handle.useragent(ua)?;
-    {
-        let mut transfer = handle.transfer();
-        transfer.write_function(|new_data| Ok(new_data.len()))?;
-        transfer.perform()?;
-    }
+    let handle = reqwest::blocking::ClientBuilder::new()
+        .user_agent(ua)
+        .build()?;
+    let req = handle.get(url);
+    handle
+        .execute(req.build()?)?
+        .error_for_status()?
+        .copy_to(&mut std::io::sink())?;
     Ok(())
 }
 

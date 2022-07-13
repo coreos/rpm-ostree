@@ -24,8 +24,6 @@ use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::path::Path;
 use std::{fs, io};
 
-use curl::easy::Easy;
-
 #[derive(Debug, PartialEq)]
 /// Supported config serialization used by treefile and lockfile
 pub enum InputFormat {
@@ -93,9 +91,7 @@ pub(crate) fn download_urls_to_tmpfiles<S: AsRef<str>>(
     urls: Vec<S>,
     progress: bool,
 ) -> Result<Vec<fs::File>> {
-    let mut handle = Easy::new();
-    handle.follow_location(true)?;
-    handle.fail_on_error(true)?;
+    let handle = reqwest::blocking::Client::new();
     urls.iter()
         .map(|url| {
             let url = url.as_ref();
@@ -107,12 +103,11 @@ pub(crate) fn download_urls_to_tmpfiles<S: AsRef<str>>(
             // capture the success/error case to complete the progress output line.
             let mut dl = || -> Result<()> {
                 let mut output = io::BufWriter::new(&mut tmpf);
-                handle.url(url)?;
-
-                let mut transfer = handle.transfer();
-                transfer
-                    .write_function(|data| output.write_all(data).and(Ok(data.len())).or(Ok(0)))?;
-                transfer.perform()?;
+                let req = handle.get(url).build()?;
+                handle
+                    .execute(req)?
+                    .error_for_status()?
+                    .copy_to(&mut output)?;
                 Ok(())
             };
             if progress {
