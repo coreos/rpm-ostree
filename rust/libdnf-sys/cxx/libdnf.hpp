@@ -44,22 +44,22 @@ public:
     return *pkg;
   }
   rust::String
-  get_nevra () noexcept
+  get_nevra ()
   {
     return rust::String (::dnf_package_get_nevra (pkg));
   };
   rust::String
-  get_name () noexcept
+  get_name ()
   {
     return rust::String (::dnf_package_get_name (pkg));
   };
   rust::String
-  get_evr () noexcept
+  get_evr ()
   {
     return rust::String (::dnf_package_get_evr (pkg));
   };
   rust::String
-  get_arch () noexcept
+  get_arch ()
   {
     return rust::String (::dnf_package_get_arch (pkg));
   };
