@@ -20,6 +20,11 @@ ProtectHome=true
 # entry here ensures that the skopeo process we fork won't interact with
 # application containers.
 InaccessiblePaths=-/var/lib/containers
+# Some popular akmods, when invoked through akmods-ostree-post, will want to
+# open more files than we would normally have access to. This is sometimes a
+# function of the number of logical CPU cores, and so we are generous in our
+# request of systemd.
+LimitNOFILE=65535
 NotifyAccess=main
 @SYSTEMD_ENVIRON@
 ExecStart=@bindir@/rpm-ostree start-daemon
