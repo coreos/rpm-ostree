@@ -455,7 +455,7 @@ pub(crate) fn transaction_apply_live(
 
     let mut state = state.unwrap_or_default();
 
-    let rootfs_dfd = openat::Dir::open("/")?;
+    let rootfs_dfd = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
     let sepolicy = ostree::SePolicy::new_at(rootfs_dfd.as_raw_fd(), gio::NONE_CANCELLABLE)?;
 
     // Record that we're targeting this commit
@@ -465,8 +465,8 @@ pub(crate) fn transaction_apply_live(
     // Gather the current diff of /etc - we need to avoid changing
     // any files which are locally modified.
     let config_diff = progress_task("Computing /etc diff to preserve", || -> Result<_> {
-        let usretc = &rootfs_dfd.sub_dir("usr/etc")?;
-        let etc = &rootfs_dfd.sub_dir("etc")?;
+        let usretc = &rootfs_dfd.open_dir("usr/etc")?;
+        let etc = &rootfs_dfd.open_dir("etc")?;
         crate::dirdiff::diff(usretc, etc)
     })?;
     println!("Computed /etc diff: {}", &config_diff);
