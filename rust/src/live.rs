@@ -17,7 +17,6 @@ use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use nix::sys::statvfs;
-use openat_ext::OpenatDirExt;
 use ostree::DeploymentUnlockedState;
 use ostree_ext::diff::FileTreeDiff;
 use ostree_ext::{gio, glib, ostree};
@@ -122,12 +121,7 @@ fn subpath(diff: &FileTreeDiff, p: &Path) -> Option<PathBuf> {
 }
 
 /// Given a diff, apply it to the target directory, which should be a checkout of the source commit.
-fn apply_diff(
-    repo: &ostree::Repo,
-    diff: &FileTreeDiff,
-    commit: &str,
-    destdir: &openat::Dir,
-) -> Result<()> {
+fn apply_diff(repo: &ostree::Repo, diff: &FileTreeDiff, commit: &str, destdir: &Dir) -> Result<()> {
     if !diff.changed_dirs.is_empty() {
         anyhow::bail!("Changed directories are not supported yet");
     }
@@ -179,7 +173,7 @@ fn apply_diff(
         .try_for_each(|d| -> Result<()> {
             let d = d.strip_prefix('/').expect("prefix");
             destdir
-                .remove_all(d)
+                .remove_all_optional(d)
                 .with_context(|| format!("Failed to remove {:?}", d))?;
             Ok(())
         })?;
@@ -198,7 +192,7 @@ fn update_etc(
     config_diff: &crate::dirdiff::Diff,
     sepolicy: &ostree::SePolicy,
     commit: &str,
-    destdir: &openat::Dir,
+    destdir: &Dir,
 ) -> Result<()> {
     let expected_subpath = "/usr";
     // We stripped both /usr and /etc, we need to readd them both
@@ -291,7 +285,7 @@ fn update_etc(
         .filter_map(filtermap_paths)
         .try_for_each(|(_, target)| -> Result<()> {
             destdir
-                .remove_all(&target)
+                .remove_all_optional(&target)
                 .with_context(|| format!("Failed to remove {:?}", target))?;
             Ok(())
         })?;
@@ -478,20 +472,15 @@ pub(crate) fn transaction_apply_live(
     println!("Computed /etc diff: {}", &config_diff);
 
     // The heart of things: updating the overlayfs on /usr
+    let usr = &Dir::open_ambient_dir("/usr", cap_std::ambient_authority())?;
     progress_task("Updating /usr", || -> Result<_> {
-        apply_diff(repo, &diff, &target_commit, &openat::Dir::open("/usr")?)
+        apply_diff(repo, &diff, &target_commit, usr)
     })?;
 
     // The other important bits are /etc and /var
+    let etc = &Dir::open_ambient_dir("/etc", cap_std::ambient_authority())?;
     progress_task("Updating /etc", || -> Result<_> {
-        update_etc(
-            repo,
-            &diff,
-            &config_diff,
-            &sepolicy,
-            &target_commit,
-            &openat::Dir::open("/etc")?,
-        )
+        update_etc(repo, &diff, &config_diff, &sepolicy, &target_commit, etc)
     })?;
     progress_task("Running systemd-tmpfiles for /run and /var", rerun_tmpfiles)?;
 
