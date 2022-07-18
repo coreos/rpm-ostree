@@ -49,7 +49,7 @@ rustix = { version = "0.35", features = ["use-libc"] }
 cap-primitives = "0.25.2"
 cap-tempfile = "0.25.2"
 chrono = { version = "0.4.19", features = ["serde"] }
-clap = { version = "3.2.8", features = ["derive"] }
+clap = { version = "3.2.12", features = ["derive"] }
 cxx = "1.0.71"
 envsubst = "0.2.0"
 either = "1.7.0"
