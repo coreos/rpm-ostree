@@ -52,12 +52,4 @@ fi
  tar --owner=0 --group=0 --transform="s,^,${PKG_VER}/," -rf ${TARFILE_TMP} * .cargo/
  )
 
-# And finally, vendor generated code.  See installdeps.sh
-# and Makefile-rpm-ostree.am for more.
-(cd ${srcdir}
- cp rpmostree-cxxrs{,-prebuilt}.h
- cp rpmostree-cxxrs{,-prebuilt}.cxx
- cp rust/cxx.h rust/cxx-prebuilt.h
- tar --owner=0 --group=0 --transform "s,^,${PKG_VER}/," -rf ${TARFILE_TMP} rpmostree-cxxrs-prebuilt.h rpmostree-cxxrs-prebuilt.cxx rust/cxx-prebuilt.h)
-
 mv ${TARFILE_TMP} ${TARFILE}

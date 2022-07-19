@@ -30,6 +30,18 @@ jobs:
         with:
           name: install.tar
           path: install.tar
+  cxx-verify:
+    name: "Verify CXX generation"
+    runs-on: ubuntu-latest
+    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      # https://github.com/actions/checkout/issues/760
+      - name: Mark git checkout as safe
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Codestyle
+        run: ./ci/verify-cxx.sh
   build-clang:
     name: "Build (clang)"
     runs-on: ubuntu-latest

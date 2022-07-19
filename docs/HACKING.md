@@ -24,7 +24,7 @@ When developing either in a toolbx container or natively on your system, you
 must install all the required dependencies. In the `ci/` subfolder, there are
 scripts that will do this for you:
 
-- **To install the build dependencies**: `./ci/installdeps.sh`
+- **To install the build dependencies**: `./ci/installdeps.sh` and `ci/install-cxx.sh`
     - **Note**: This command must be rerun after the dependencies in
       `Cargo.lock` change. This will eventually be fixed.
 - **To install the test dependencies**:
@@ -32,9 +32,9 @@ scripts that will do this for you:
     - For `make vmcheck`: Follow the instructions for [installing cosa inside
       an existing container][3] from the [cosa GitHub repository][4]
 
-Today rpm-ostree uses [cxx.rs](https://cxx.rs/) - the CLI tools for that aren't
-packaged in e.g. Fedora; we ship the pre-generated source in the releases. It
-is installed as part of the `installdeps.sh` script. Most importantly, it must
+Today rpm-ostree uses [cxx.rs](https://cxx.rs/), and as of https://github.com/coreos/rpm-ostree/pull/3864
+we commit the generated code to git.  If you want to regenerate it (particularly
+when changing it), use `ci/install-cxx.sh`.  Most importantly, it currently must
 be reinstalled after you run `make clean` on the project.
 
 

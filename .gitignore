@@ -73,9 +73,6 @@
 /rpm-ostreed-generated.c
 /rpm-ostreed-generated.h
 /rpm-ostreed.conf.5
-/rpmostree-cxxrs.cxx
-/rpmostree-cxxrs.h
-/rust/cxx.h
 /so_locations
 /src/daemon/org.projectatomic.rpmostree1.service
 /src/daemon/rpm-ostree-bootstatus.service

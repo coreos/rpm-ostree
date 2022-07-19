@@ -13,10 +13,5 @@ if [ -z "${SKIP_INSTALLDEPS:-}" ] && test $(id -u) -eq 0; then
     time dnf builddep --spec -y packaging/rpm-ostree.spec.in --allowerasing
 fi
 
-# cxx.rs (cxxbridge) isn't packaged in Fedora today.  It generates
-# source code, which we vendor along with our dependent crates into release
-# tarballs.
-CXX_VER=$(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name == "cxx").version')
 mkdir -p target
-time cargo install --root=target/cxxbridge cxxbridge-cmd --version "${CXX_VER}"
 time cargo install --root=target/cargo-vendor-filterer cargo-vendor-filterer --version ^0.5

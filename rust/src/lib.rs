@@ -21,6 +21,11 @@ pub(crate) use cxxrsutil::*;
 
 /// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
 ///
+/// # Regenerating
+///
+/// After you change APIs in here, you must run `make -f Makefile.bindings bindings`
+/// to regenerate the C++ bridge side.
+///
 /// # File layout
 ///
 /// Try to keep APIs defined here roughly alphabetical.  When adding a new file,

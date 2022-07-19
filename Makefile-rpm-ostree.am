@@ -115,27 +115,14 @@ CLEANFILES += rpm-ostree
 .PHONY: cargo-build
 ALL_LOCAL_HOOKS += cargo-build
 
-# cxx.rs
+# cxx.rs - to regenerate this, run `make -f Makefile.bindings bindings`
 binding_generated_sources = rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
-if BUILDOPT_PREBUILT_BINDINGS
-# In this case we shipped prebuilt versions in the source tarball
-rpmostree-cxxrs.h:
-	ln -sfr rpmostree-cxxrs-prebuilt.h $@
-rpmostree-cxxrs.cxx:
-	ln -sfr rpmostree-cxxrs-prebuilt.cxx $@
-rust/cxx.h:
-	ln -sfr rust/cxx-prebuilt.h $@
-else
-include Makefile.bindings
-CLEANFILES += rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
-endif
 
 noinst_LTLIBRARIES += librpmostreecxxrs.la
 librpmostreecxxrs_la_SOURCES = rpmostree-cxxrs.h rpmostree-cxxrs.cxx
 # Suppress missing-declarations because https://github.com/dtolnay/cxx/issues/590
 librpmostreecxxrs_la_CXXFLAGS = $(AM_CXXFLAGS) $(SANITIZER_FLAGS) $(rpmostree_common_cflags) -Wno-missing-declarations
 librpmostreecxxrs_la_LIBADD = -lstdc++
-BUILT_SOURCES += $(binding_generated_sources)
 
 ostreeextdir = $(DESTDIR)$(libexecdir)/libostree/ext
 
