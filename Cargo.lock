@@ -1639,9 +1639,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31a3981faab95c06279c0c6d02c7948983ca5783904f10164881569b7f467c14"
+checksum = "d48d13c84ccafa8e23b1c08094593de0a25e5b7c3e14786b5590fd9d766cf753"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1674,7 +1674,7 @@ dependencies = [
  "term_size",
  "tokio",
  "tokio-stream",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.2",
  "tracing",
 ]
 
