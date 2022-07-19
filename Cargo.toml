@@ -25,6 +25,10 @@ platforms = ["x86_64-unknown-linux-gnu", "s390x-unknown-linux-gnu"]
 all-features = true
 exclude-crate-paths = [ { name = "libz-sys", exclude = "src/zlib" },
                         { name = "libz-sys", exclude = "src/zlib-ng" },
+                        # rustix includes pre-generated assembly for linux_raw, which we don't use
+                        { name = "rustix", exclude = "src/imp/linux_raw" },
+                        # Test files that include binaries
+                        { name = "system-deps", exclude = "src/tests" },
                       ]
 
 # This currently needs to duplicate the libraries in configure.ac
