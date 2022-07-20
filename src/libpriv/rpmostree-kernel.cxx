@@ -520,6 +520,11 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
       bwrap->bind_read ("usr", "/usr");
     }
 
+  /* The only baked special files we need are /dev/[u]random (see below). So tell dracut to not even
+   * try to create the other ones (/dev/null, /dev/kmsg, and /dev/console) since it'll fail anyway
+   * (and print ugly messages) since we don't give it `CAP_MKNOD`. */
+  bwrap->setenv ("DRACUT_NO_MKNOD", "1");
+
   if (dracut_host_tmpdir)
     bwrap->bind_readwrite (dracut_host_tmpdir->path, "/tmp/dracut");
 
