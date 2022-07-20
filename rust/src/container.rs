@@ -65,7 +65,7 @@ struct ContainerEncapsulateOpts {
     max_layers: Option<NonZeroU32>,
 
     /// The encapsulated container format version; must be 0 or 1.
-    #[clap(long)]
+    #[clap(long, default_value = "0")]
     format_version: u32,
 
     #[clap(long)]
