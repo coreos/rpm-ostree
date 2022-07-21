@@ -49,7 +49,6 @@ BuildRequires: autoconf automake libtool git
 # For docs
 BuildRequires: chrpath
 BuildRequires: gtk-doc
-BuildRequires: gnome-common
 BuildRequires: /usr/bin/g-ir-scanner
 # Core requirements
 # One way to check this: `objdump -p /path/to/rpm-ostree | grep LIBOSTREE` and pick the highest (though that might miss e.g. new struct members)
