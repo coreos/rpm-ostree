@@ -15,14 +15,6 @@ if ! grep -qe "error.*This system was not booted via libostree" err.txt; then
     fatal "did not find expected error"
 fi
 
-if rpm-ostree ex module install foo 2>err.txt; then
-  fatal "module in container"
-fi
-if ! grep -qe 'error.*requires an ostree host system' err.txt; then
-    cat err.txt
-    fatal "did not find expected error"
-fi
-
 origindir=/etc/rpm-ostree/origin.d
 mkdir -p "${origindir}"
 cat > "${origindir}/clienterror.yaml" << 'EOF'
@@ -44,6 +36,26 @@ fi
 yum install cowsay && yum clean all
 cowsay "It worked"
 test '!' -d /var/cache/rpm-ostree
+
+versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
+# Let's start by trying to install a bona fide module.
+# NOTE: If changing this also change the layering-modules test
+case $versionid in
+  # yes, this is going backwards, see:
+  # https://github.com/coreos/fedora-coreos-tracker/issues/767#issuecomment-917191270
+  35) module=cri-o:1.19/default;;
+  36) module=cri-o:1.23/default;;
+  *) assert_not_reached "Unsupported Fedora version: $versionid";;
+esac
+rpm-ostree ex module install "${module}"
+
+if rpm-ostree ex module uninstall "${module}" 2>err.txt; then
+  assert_not_reached "not implemented"
+fi
+if ! grep -qFe "not yet implemented" err.txt; then
+  cat err.txt
+  assert_not_reached "unexpected error"
+fi
 
 # Test overrides
 versionid=$(grep -E '^VERSION_ID=' /etc/os-release)

@@ -68,3 +68,15 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
 
   return TRUE;
 }
+
+namespace rpmostreecxx
+{
+void
+container_rebuild (rust::Str treefile)
+{
+  auto tf = rpmostreecxx::treefile_new_from_string (treefile, true);
+  g_autoptr (GError) local_error = NULL;
+  if (!rpmostree_container_rebuild (*tf, NULL, &local_error))
+    util::throw_gerror (local_error);
+}
+}

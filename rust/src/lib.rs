@@ -252,6 +252,12 @@ pub mod ffi {
         fn directory_size(dfd: i32, mut cancellable: Pin<&mut GCancellable>) -> Result<u64>;
     }
 
+    // container.cxx
+    unsafe extern "C++" {
+        include!("rpmostree-container.hpp");
+        fn container_rebuild(treefile: &str) -> Result<()>;
+    }
+
     // deployment_utils.rs
     extern "Rust" {
         fn deployment_for_id(

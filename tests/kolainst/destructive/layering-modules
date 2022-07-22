@@ -7,10 +7,9 @@ cd $(mktemp -d)
 
 set -x
 
-versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
-versionid=${versionid:11} # trim off VERSION_ID=
-
+versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 # Let's start by trying to install a bona fide module.
+# NOTE: If changing this also change test-container.sh
 case $versionid in
   # yes, this is going backwards, see:
   # https://github.com/coreos/fedora-coreos-tracker/issues/767#issuecomment-917191270
