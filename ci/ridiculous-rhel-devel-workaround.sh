@@ -27,10 +27,13 @@ if test -f /usr/lib/os-release; then
         cd util-linux
         yum -y install centpkg
         yum -y builddep *.spec
-        if test '!' -d "$(arch)"; then
+        builddir=$(arch)
+        if test '!' -d "$builddir"; then
             centpkg local
         fi
-        yum -y install $(arch)/libsmartcols-devel*.rpm
+        rm -vf $builddir/*debuginfo*.rpm
+        rm -vf $builddir/*python*.rpm
+        rpm -Uvh --oldpackage $builddir/*.rpm
     fi
 else
     echo "Unhandled OS" 1>&2
