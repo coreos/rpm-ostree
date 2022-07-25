@@ -4298,6 +4298,10 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
    * replacements */
   if (overlays->len > 0 || overrides_replace->len > 0)
     {
+      /* Any ostree refs to overlay */
+      if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
+        return FALSE;
+
       CXX_TRY_VAR (fs_prep, rpmostreecxx::prepare_filesystem_script_prep (tmprootfs_dfd), error);
 
       auto passwd_entries = rpmostreecxx::new_passwd_entries ();
@@ -4408,10 +4412,6 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
               return FALSE;
           }
       }
-
-      /* Any ostree refs to overlay */
-      if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
-        return FALSE;
 
       {
         auto task = rpmostreecxx::progress_begin_task ("Running posttrans scripts");
