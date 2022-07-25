@@ -1777,8 +1777,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
       /* There are things we don't support in the container flow. */
       g_assert_cmpint (packages_local_fileoverride.size (), ==, 0);
       g_assert_cmpint (exclude_packages.size (), ==, 0);
-      g_assert_cmpint (modules_enable.size (), ==, 0);
-      g_assert_cmpint (modules_install.size (), ==, 0);
     }
 
   /* setup sack if not yet set up */

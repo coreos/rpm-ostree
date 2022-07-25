@@ -2,6 +2,7 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use crate::ffi::SystemHostType;
 use anyhow::{anyhow, bail, Result};
 use clap::{ArgAction, Parser};
 use gio::prelude::*;
@@ -84,11 +85,25 @@ fn uninstall(opts: &InstallOpts) -> Result<()> {
     modules_impl(OPT_KEY_UNINSTALL_MODULES, opts)
 }
 
-fn modules_impl(key: &str, opts: &InstallOpts) -> Result<()> {
-    if opts.modules.is_empty() {
-        bail!("At least one module must be specified");
+fn modules_impl_container(key: &str, opts: &InstallOpts) -> Result<()> {
+    let mut tf = crate::treefile_new_empty()?;
+    let mut mcfg = crate::treefile::ModulesConfig::default();
+    match key {
+        OPT_KEY_ENABLE_MODULES => {
+            mcfg.enable = Some(opts.modules.iter().cloned().collect());
+        }
+        OPT_KEY_INSTALL_MODULES => {
+            mcfg.install = Some(opts.modules.iter().cloned().collect());
+        }
+        _ => bail!("Support for this option is not yet implemented"),
     }
+    tf.parsed.modules = Some(mcfg);
+    let tf = tf.get_json_string();
+    crate::ffi::container_rebuild(tf.as_str())?;
+    Ok(())
+}
 
+fn modules_impl_host(key: &str, opts: &InstallOpts) -> Result<()> {
     let client = &mut crate::client::ClientConnection::new()?;
     let previous_deployment = client
         .get_os_proxy()
@@ -120,4 +135,16 @@ fn modules_impl(key: &str, opts: &InstallOpts) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn modules_impl(key: &str, opts: &InstallOpts) -> Result<()> {
+    if opts.modules.is_empty() {
+        bail!("At least one module must be specified");
+    }
+
+    match crate::client::get_system_host_type()? {
+        SystemHostType::OstreeContainer => modules_impl_container(key, opts),
+        SystemHostType::OstreeHost => modules_impl_host(key, opts),
+        o => bail!("Unsupported system type: {:?}", o),
+    }
 }
