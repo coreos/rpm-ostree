@@ -296,9 +296,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.8"
+version = "3.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "190814073e85d238f31ff738fcb0bf6910cedeb73376c87cd69291028966fd83"
+checksum = "54635806b078b7925d6e36810b1755f2a4b5b4d57560432c1ecf60bcbe10602b"
 dependencies = [
  "atty",
  "bitflags",
@@ -2029,7 +2029,7 @@ dependencies = [
  "cap-std-ext",
  "cap-tempfile",
  "chrono",
- "clap 3.2.8",
+ "clap 3.2.14",
  "cxx",
  "either",
  "env_logger",
@@ -2085,9 +2085,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.35.6"
+version = "0.35.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef258c11e17f5c01979a10543a30a4e12faef6aab217a74266e747eefa3aed88"
+checksum = "d51cc38aa10f6bbb377ed28197aa052aa4e2b762c22be9d3153d01822587e787"
 dependencies = [
  "bitflags",
  "errno",
