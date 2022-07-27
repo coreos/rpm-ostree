@@ -84,6 +84,8 @@ static RpmOstreeCommand commands[] = {
   /* Rust-implemented commands; they're here so that they show up in `rpm-ostree
    * --help` alongside the other commands, but the command itself is fully
    *  handled Rust side. */
+  { "scriptlet-intercept", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
+    "Intercept some commands used by RPM scriptlets", NULL },
   { "usroverlay", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
     "Apply a transient overlayfs to /usr", NULL },
   /* Legacy aliases */
