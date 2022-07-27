@@ -40,6 +40,10 @@ const SSS_CACHE_PATH: &str = "usr/sbin/sss_cache";
 const SYSTEMCTL_PATH: &str = "usr/bin/systemctl";
 const SYSTEMCTL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/systemctl-wrapper.sh");
 
+// Intercept `groupadd` for automatic sysusers.d fragment generation.
+const GROUPADD_PATH: &str = "usr/sbin/groupadd";
+const GROUPADD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/groupadd-wrapper.sh");
+
 const RPMOSTREE_CORE_STAGED_RPMS_DIR: &str = "rpm-ostree/staged-rpms";
 
 pub(crate) const OSTREE_BOOTED: &str = "/run/ostree-booted";
@@ -132,8 +136,10 @@ pub(crate) fn log_treefile(tf: &crate::treefile::Treefile) {
 impl FilesystemScriptPrep {
     /// Filesystem paths that we rename out of the way if present
     const OPTIONAL_PATHS: &'static [&'static str] = &[SSS_CACHE_PATH];
-    const REPLACE_OPTIONAL_PATHS: &'static [(&'static str, &'static [u8])] =
-        &[(SYSTEMCTL_PATH, SYSTEMCTL_WRAPPER)];
+    const REPLACE_OPTIONAL_PATHS: &'static [(&'static str, &'static [u8])] = &[
+        (GROUPADD_PATH, GROUPADD_WRAPPER),
+        (SYSTEMCTL_PATH, SYSTEMCTL_WRAPPER),
+    ];
 
     fn saved_name(name: &str) -> String {
         format!("{}.rpmostreesave", name)
@@ -360,19 +366,39 @@ mod test {
         d.ensure_dir_with("usr/bin", &db)?;
         d.ensure_dir_with("usr/sbin", &db)?;
         d.atomic_write_with_perms(super::SSS_CACHE_PATH, "sss binary", mode.clone())?;
-        let original_systemctl = "original systemctl";
-        d.atomic_write_with_perms(super::SYSTEMCTL_PATH, original_systemctl, mode.clone())?;
-        // Replaced systemctl
+        // Neutered sss_cache.
         {
             assert!(d.try_exists(super::SSS_CACHE_PATH)?);
             let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             assert!(!d.try_exists(super::SSS_CACHE_PATH)?);
+            g.undo()?;
+            assert!(d.try_exists(super::SSS_CACHE_PATH)?);
+        }
+        // Replaced systemctl.
+        {
+            let original_systemctl = "original systemctl";
+            d.atomic_write_with_perms(super::SYSTEMCTL_PATH, original_systemctl, mode.clone())?;
+            let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
+            assert_eq!(contents, original_systemctl);
+            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
             assert_eq!(contents.as_bytes(), super::SYSTEMCTL_WRAPPER);
             g.undo()?;
             let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
             assert_eq!(contents, original_systemctl);
-            assert!(d.try_exists(super::SSS_CACHE_PATH)?);
+        }
+        // Replaced groupadd.
+        {
+            let original_groupadd = "original groupadd";
+            d.atomic_write_with_perms(super::GROUPADD_PATH, original_groupadd, mode.clone())?;
+            let contents = d.read_to_string(super::GROUPADD_PATH)?;
+            assert_eq!(contents, original_groupadd);
+            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let contents = d.read_to_string(super::GROUPADD_PATH)?;
+            assert_eq!(contents.as_bytes(), super::GROUPADD_WRAPPER);
+            g.undo()?;
+            let contents = d.read_to_string(super::GROUPADD_PATH)?;
+            assert_eq!(contents, original_groupadd);
         }
         Ok(())
     }

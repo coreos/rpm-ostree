@@ -46,6 +46,8 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
                 "cliwrap" => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
                 // The `unlock` is a hidden alias for "ostree CLI compatibility"
                 "usroverlay" | "unlock" => builtins::usroverlay::entrypoint(args).map(|_| 0),
+                // A hidden wrapper to intercept some binaries in RPM scriptlets.
+                "scriptlet-intercept" => builtins::scriptlet_intercept::entrypoint(args).map(|_| 0),
                 // C++ main
                 _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
             }
