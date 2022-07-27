@@ -33,6 +33,7 @@
 #include <string.h>
 #include <sys/poll.h>
 #include <sys/prctl.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -214,6 +215,17 @@ rpmostree_polkit_agent_open (void)
    * not output */
   if (!isatty (STDIN_FILENO))
     return 0;
+
+  /* Don't print an error if there's no pkttyagent; we don't want
+   * to have a hard dependency on it.  Not all DBus methods require
+   * it.
+   */
+  struct stat stbuf;
+  if (stat (POLKIT_TTY_AGENT_BINARY_PATH, &stbuf) < 0)
+    {
+      if (errno == ENOENT)
+        return 0;
+    }
 
   if (pipe (pipe_fd) < 0)
     return -errno;
