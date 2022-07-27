@@ -33,7 +33,7 @@ if ! test -x /usr/bin/yum; then
 fi
 
 # Test a critical path package
-yum install cowsay && yum clean all
+yum -y install cowsay && yum clean all
 cowsay "It worked"
 test '!' -d /var/cache/rpm-ostree
 

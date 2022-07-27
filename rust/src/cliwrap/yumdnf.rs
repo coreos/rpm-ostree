@@ -44,7 +44,24 @@ Add `--apply-live` to immediately start using the layered packages."#};
 )]
 #[clap(rename_all = "kebab-case")]
 /// Main options struct
-enum Opt {
+struct Opt {
+    /// Assume yes in answer to all questions.
+    #[clap(global = true, long, short = 'y')]
+    assumeyes: bool,
+
+    #[clap(subcommand)]
+    cmd: Cmd,
+}
+
+#[derive(Debug, clap::Subcommand)]
+#[clap(
+    name = "yumdnf-rpmostree",
+    about = "Compatibility wrapper implementing subset of yum/dnf CLI",
+    version
+)]
+#[clap(rename_all = "kebab-case")]
+/// Subcommands
+enum Cmd {
     /// Start an upgrade of the operating system
     Upgrade,
     /// Start an upgrade of the operating system
@@ -57,7 +74,7 @@ enum Opt {
         #[allow(dead_code)]
         terms: Vec<String>,
     },
-    /// Will return an error suggesting other approaches.
+    /// Install packages.
     Install {
         /// Set of packages to install
         packages: Vec<String>,
@@ -107,31 +124,34 @@ fn disposition(hosttype: SystemHostType, argv: &[&str]) -> Result<RunDisposition
 
     let disp = match hosttype {
         SystemHostType::OstreeHost => {
-            match opt {
-                Opt::Upgrade | Opt::Update => RunDisposition::ExecRpmOstree(vec!["upgrade".into()]),
-                Opt::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
-                Opt::Install { packages: _ } => {
+            match opt.cmd {
+                Cmd::Upgrade | Cmd::Update => RunDisposition::ExecRpmOstree(vec!["upgrade".into()]),
+                Cmd::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
+                Cmd::Install { packages: _ } => {
                     // TODO analyze packages to find e.g. `gcc` (not ok, use `toolbox`) versus `libvirt` (ok)
                     RunDisposition::UseSomethingElse
                 },
-                Opt::Clean { subargs } => {
+                Cmd::Clean { subargs } => {
                     run_clean(&subargs)?
                 }
-                Opt::Search { .. } => RunDisposition::NotImplementedYet(indoc! { r##"
+                Cmd::Search { .. } => RunDisposition::NotImplementedYet(indoc! { r##"
             Package search is not yet implemented.
             For now, it's recommended to use e.g. `toolbox` and `dnf search` inside there.
             "##}),
             }
         },
-        SystemHostType::OstreeContainer => match opt {
-            Opt::Upgrade | Opt::Update => RunDisposition::NotImplementedYet("At the current time, it is not supported to update packages independently of the base image."),
-            Opt::Install { mut packages } => {
+        SystemHostType::OstreeContainer => match opt.cmd {
+            Cmd::Upgrade | Cmd::Update => RunDisposition::NotImplementedYet("At the current time, it is not supported to update packages independently of the base image."),
+            Cmd::Install { mut packages } => {
+                if !opt.assumeyes {
+                    crate::client::warn_future_incompatibility("-y/--assumeyes is assumed now, but may not be in the future");
+                }
                 packages.insert(0, "install".into());
                 RunDisposition::ExecRpmOstree(packages)
             },
-            Opt::Clean { subargs } => run_clean(&subargs)?,
-            Opt::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
-            Opt::Search { .. } => {
+            Cmd::Clean { subargs } => run_clean(&subargs)?,
+            Cmd::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
+            Cmd::Search { .. } => {
                 RunDisposition::NotImplementedYet("Package search is not yet implemented.")
             }
         },
