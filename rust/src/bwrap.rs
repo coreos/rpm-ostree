@@ -6,9 +6,10 @@ use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::normalization;
 use anyhow::{Context, Result};
+use cap_std::fs::Dir;
+use cap_std_ext::prelude::{CapStdExtCommandExt, CapStdExtDirExt};
 use cap_std_ext::rustix;
 use fn_error_context::context;
-use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib};
 use std::num::NonZeroUsize;
 use std::os::unix::io::AsRawFd;
@@ -46,7 +47,7 @@ static RO_BINDS: &[&str] = &[
 ];
 
 pub(crate) struct Bubblewrap {
-    pub(crate) rootfs_fd: openat::Dir,
+    pub(crate) rootfs_fd: Dir,
 
     executed: bool,
     argv: Vec<String>,
@@ -79,7 +80,7 @@ struct RoFilesMount {
 
 impl RoFilesMount {
     /// Create a new rofiles-fuse mount point
-    fn new(rootfs: &openat::Dir, path: &str) -> Result<Self> {
+    fn new(rootfs: &Dir, path: &str) -> Result<Self> {
         let path = path.trim_start_matches('/');
         let tempdir = tempfile::Builder::new()
             .prefix("rpmostree-rofiles-fuse")
@@ -88,7 +89,7 @@ impl RoFilesMount {
             .arg("--copyup")
             .arg(path)
             .arg(tempdir.path())
-            .current_dir(format!("/proc/self/fd/{}", rootfs.as_raw_fd()))
+            .cwd_dir(rootfs.try_clone()?)
             .status()?;
         if !status.success() {
             return Err(anyhow::anyhow!("{}", status));
@@ -159,8 +160,8 @@ fn child_wait_check(
 
 impl Bubblewrap {
     /// Create a new Bubblewrap instance
-    pub(crate) fn new(rootfs_fd: &openat::Dir) -> Result<Self> {
-        let rootfs_fd = rootfs_fd.sub_dir(".")?;
+    pub(crate) fn new(rootfs_fd: &Dir) -> Result<Self> {
+        let rootfs_fd = rootfs_fd.try_clone()?;
 
         let lang = std::env::var_os("LANG");
         let lang = lang.as_ref().and_then(|s| s.to_str()).unwrap_or("C");
@@ -240,8 +241,8 @@ impl Bubblewrap {
         let mut argv: Vec<_> = argv.into_iter().map(|s| s.to_string()).collect();
 
         for &name in USR_LINKS.iter() {
-            if let Some(stbuf) = rootfs_fd.metadata_optional(name)? {
-                if !matches!(stbuf.simple_type(), openat::SimpleType::Symlink) {
+            if let Some(stbuf) = rootfs_fd.symlink_metadata_optional(name)? {
+                if !stbuf.is_symlink() {
                     continue;
                 }
 
@@ -263,7 +264,7 @@ impl Bubblewrap {
 
     /// Create a new bwrap instance with the provided level of mutability.
     pub(crate) fn new_with_mutability(
-        rootfs_fd: &openat::Dir,
+        rootfs_fd: &Dir,
         mutability: BubblewrapMutability,
     ) -> Result<Self> {
         let mut ret = Self::new(rootfs_fd)?;
@@ -377,13 +378,17 @@ impl Bubblewrap {
 
         for entry in COMPAT_VARLIB_SYMLINKS {
             let varlib_path = format!("var/lib/{}", &entry);
-            if !self.rootfs_fd.exists(&varlib_path)? {
-                let target = format!("../../usr/lib/{}", &entry);
-                self.rootfs_fd
-                    .symlink(&varlib_path, &target)
-                    .with_context(|| {
-                        format!("Creating compatibility symlink at /var/lib/{}", &entry)
-                    })?;
+            match self.rootfs_fd.symlink_metadata(&varlib_path) {
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    let target = format!("../../usr/lib/{}", &entry);
+                    self.rootfs_fd
+                        .symlink(&target, &varlib_path)
+                        .with_context(|| {
+                            format!("Creating compatibility symlink at /var/lib/{}", &entry)
+                        })?;
+                }
+                Err(error) => return Err(error.into()),
             };
         }
 
@@ -443,7 +448,7 @@ impl Bubblewrap {
 #[context("Creating bwrap instance")]
 /// Create a new Bubblewrap instance
 pub(crate) fn bubblewrap_new(rootfs_fd: i32) -> CxxResult<Box<Bubblewrap>> {
-    let rootfs_fd = crate::ffiutil::ffi_view_openat_dir(rootfs_fd);
+    let rootfs_fd = unsafe { crate::ffiutil::ffi_dirfd(rootfs_fd)? };
     Ok(Box::new(Bubblewrap::new(&rootfs_fd)?))
 }
 
@@ -453,7 +458,7 @@ pub(crate) fn bubblewrap_new_with_mutability(
     rootfs_fd: i32,
     mutability: crate::ffi::BubblewrapMutability,
 ) -> Result<Box<Bubblewrap>> {
-    let rootfs_fd = crate::ffiutil::ffi_view_openat_dir(rootfs_fd);
+    let rootfs_fd = unsafe { crate::ffiutil::ffi_dirfd(rootfs_fd)? };
     Ok(Box::new(Bubblewrap::new_with_mutability(
         &rootfs_fd, mutability,
     )?))
@@ -466,7 +471,7 @@ pub(crate) fn bubblewrap_run_sync(
     capture_stdout: bool,
     unified_core: bool,
 ) -> CxxResult<Vec<u8>> {
-    let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let tempetc = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
     let mutability = if unified_core {
         BubblewrapMutability::RoFiles
@@ -500,7 +505,7 @@ pub(crate) fn bubblewrap_run_sync(
 /// Validate that bubblewrap works at all.  This will flush out any incorrect
 /// setups such being inside an outer container that disallows `CLONE_NEWUSER` etc.
 pub(crate) fn bubblewrap_selftest() -> CxxResult<()> {
-    let fd = &openat::Dir::open("/")?;
+    let fd = &Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
     let mut bwrap = Bubblewrap::new_with_mutability(fd, BubblewrapMutability::Immutable)?;
     bwrap.append_child_argv(["true"]);
     let cancellable = &gio::Cancellable::new();

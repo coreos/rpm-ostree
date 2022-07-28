@@ -135,12 +135,8 @@ pub(crate) fn normalize_rpmdb(rootfs: &Dir, rpmdb_path: impl AsRef<Path>) -> Res
         return Ok(());
     };
 
-    let bwrap_rootfs = crate::capstdext::to_openat(rootfs)?;
-
-    let mut bwrap = Bubblewrap::new_with_mutability(
-        &bwrap_rootfs,
-        crate::ffi::BubblewrapMutability::Immutable,
-    )?;
+    let mut bwrap =
+        Bubblewrap::new_with_mutability(rootfs, crate::ffi::BubblewrapMutability::Immutable)?;
     bwrap.append_child_argv(["rpm", "--eval", "%{_db_backend}"]);
     let cancellable = gio::Cancellable::new();
     let db_backend = bwrap.run_captured(Some(&cancellable))?;
@@ -458,14 +454,10 @@ mod bdb_normalize {
             .to_str()
             .ok_or_else(|| anyhow!("bad path for bdb file"))?;
 
-        let bwrap_rootfs = crate::capstdext::to_openat(rootfs)?;
-
         // Run db_verify over the file, this tells us whether the actual BerkeleyDB code thinks it's
         // valid. db_verify will exit with a non-0 status if there are problems.
-        let mut verify = Bubblewrap::new_with_mutability(
-            &bwrap_rootfs,
-            crate::ffi::BubblewrapMutability::Immutable,
-        )?;
+        let mut verify =
+            Bubblewrap::new_with_mutability(rootfs, crate::ffi::BubblewrapMutability::Immutable)?;
         verify.append_child_argv(["db_verify", "-q", path]);
         let cancellable = gio::Cancellable::new();
         verify.run_captured(Some(&cancellable))?;
@@ -474,10 +466,8 @@ mod bdb_normalize {
         // and calculate the SHA256 digest of said contents. Since the contents are independent of whatever
         // random uninitialized data may lurk in the file itself it acts as a decent check of whether we've
         // inadvertently changed anything we shouldn't have.
-        let mut dump = Bubblewrap::new_with_mutability(
-            &bwrap_rootfs,
-            crate::ffi::BubblewrapMutability::Immutable,
-        )?;
+        let mut dump =
+            Bubblewrap::new_with_mutability(rootfs, crate::ffi::BubblewrapMutability::Immutable)?;
         dump.append_child_argv(["db_dump", path]);
         let cancellable = gio::Cancellable::new();
         let digest = sha256(&dump.run_captured(Some(&cancellable))?);
