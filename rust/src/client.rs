@@ -10,6 +10,7 @@ use anyhow::{anyhow, Result};
 use cap_std_ext::rustix;
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
+use std::io::{BufRead, Write};
 use std::os::unix::io::IntoRawFd;
 use std::process::Command;
 
@@ -306,6 +307,30 @@ pub(crate) fn warn_future_incompatibility(msg: impl AsRef<str>) {
     std::thread::sleep(std::time::Duration::from_secs(1));
 }
 
+fn is_yes(s: &str) -> bool {
+    matches!(s.to_lowercase().as_str(), "y" | "yes")
+}
+
+/// Prompt for confirmation
+pub(crate) fn confirm() -> CxxResult<bool> {
+    let mut stdout = std::io::stdout().lock();
+    let mut stdin = std::io::stdin().lock();
+    write!(stdout, "Continue? [y/N] ")?;
+    stdout.flush()?;
+    let mut resp = String::new();
+    stdin.read_line(&mut resp)?;
+    Ok(is_yes(resp.as_str().trim()))
+}
+
+/// Prompt for confirmation, and return an error if not agreed
+pub(crate) fn confirm_or_abort() -> CxxResult<()> {
+    if confirm()? {
+        Ok(())
+    } else {
+        Err(anyhow::format_err!("Operation aborted").into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,6 +342,16 @@ mod tests {
         let src_rpm = "file://linux-kernel-2.2.2.src.rpm";
         assert!(!is_src_rpm_arg(rpm));
         assert!(is_src_rpm_arg(src_rpm));
+    }
+
+    #[test]
+    fn test_yes() {
+        for v in ["y", "yes"] {
+            assert!(is_yes(v))
+        }
+        for v in ["", "n", "no", "DOIT"] {
+            assert!(!is_yes(v));
+        }
     }
 
     #[test]

@@ -657,10 +657,16 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_lookup (&optdict, "reboot", "b", &opt_reboot);
   gboolean opt_dry_run = FALSE;
   g_variant_dict_lookup (&optdict, "dry-run", "b", &opt_dry_run);
+  gboolean opt_print_interactive = FALSE;
+  g_variant_dict_lookup (&optdict, "print-interactive", "b", &opt_print_interactive);
   gboolean opt_apply_live = FALSE;
   g_variant_dict_lookup (&optdict, "apply-live", "b", &opt_apply_live);
 
-  if (opt_dry_run)
+  if (opt_print_interactive)
+    {
+      /* Nothing; we print the transaction by default */
+    }
+  else if (opt_dry_run)
     {
       g_print ("Exiting because of '--dry-run' option\n");
     }

@@ -1719,6 +1719,10 @@ void client_start_daemon ();
 
 bool running_in_container () noexcept;
 
+bool confirm ();
+
+void confirm_or_abort ();
+
 void bubblewrap_selftest ();
 
 ::rust::Vec< ::std::uint8_t> bubblewrap_run_sync (::std::int32_t rootfs_dfd,

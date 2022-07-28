@@ -1951,6 +1951,10 @@ extern "C"
                                                            ::rust::String *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$running_in_container () noexcept;
+
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$confirm (bool *return$) noexcept;
+
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$confirm_or_abort () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$Bubblewrap$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$Bubblewrap$operator$alignof () noexcept;
 
@@ -3336,6 +3340,28 @@ bool
 running_in_container () noexcept
 {
   return rpmostreecxx$cxxbridge1$running_in_container ();
+}
+
+bool
+confirm ()
+{
+  ::rust::MaybeUninit<bool> return$;
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$confirm (&return$.value);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+  return ::std::move (return$.value);
+}
+
+void
+confirm_or_abort ()
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$confirm_or_abort ();
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
 }
 
 ::std::size_t
