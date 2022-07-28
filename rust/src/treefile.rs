@@ -2755,7 +2755,12 @@ impl TreeComposeConfig {
     fn hasher_update(&self, hasher: &mut glib::Checksum) -> Result<()> {
         // don't use pretty mode to increase the chances of a stable serialization
         // https://github.com/projectatomic/rpm-ostree/pull/1865
-        hasher.update(serde_json::to_vec(self)?.as_slice());
+
+        // We don't want to hash in the name of the layers, because only their content is relevant
+        let mut self_clone = (*self).clone();
+        self_clone.base.ostree_layers = None;
+        hasher.update(serde_json::to_vec(&self_clone)?.as_slice());
+
         Ok(())
     }
 
@@ -2929,6 +2934,17 @@ pub(crate) mod tests {
             let tf = new_test_tf_basic(buf.as_str()).unwrap();
             assert!(!tf.rpmdb_backend_is_target());
         }
+    }
+
+    #[test]
+    fn ostree_layer_hashes() {
+        let mut input = Cursor::new(VALID_PRELUDE);
+        let mut treefile =
+            treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+        let hash = treefile.get_checksum().unwrap();
+        treefile.ostree_layers = Some(vec!["new".to_string()]);
+        let hash2 = treefile.get_checksum().unwrap();
+        assert_eq!(hash, hash2);
     }
 
     #[test]
