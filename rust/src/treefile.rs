@@ -2003,7 +2003,7 @@ impl Default for BootLocation {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 #[serde(tag = "type")]
 pub(crate) enum CheckGroups {
@@ -2013,17 +2013,17 @@ pub(crate) enum CheckGroups {
     Data(CheckGroupsData),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct CheckFile {
     filename: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct CheckGroupsData {
     pub(crate) entries: BTreeMap<String, u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 #[serde(tag = "type")]
 pub(crate) enum CheckPasswd {
@@ -2033,12 +2033,12 @@ pub(crate) enum CheckPasswd {
     Data(CheckPasswdData),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct CheckPasswdData {
     pub(crate) entries: BTreeMap<String, CheckPasswdDataEntries>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub(crate) enum CheckPasswdDataEntries {
     IdValue(u32),
@@ -2076,7 +2076,7 @@ impl From<(u32, u32)> for CheckPasswdDataEntries {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct Rojig {
     pub(crate) name: String,
     pub(crate) summary: String,
@@ -2084,35 +2084,35 @@ pub(crate) struct Rojig {
     pub(crate) description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub(crate) enum Include {
     Single(String),
     Multiple(Vec<String>),
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct ConditionalInclude {
     #[serde(rename = "if")]
     pub(crate) condition: IncludeConditions,
     pub(crate) include: Include,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub(crate) enum IncludeConditions {
     Single(IncludeCondition),
     Multiple(Vec<IncludeCondition>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct IncludeCondition {
     pub(crate) variable: String,
     pub(crate) op: IncludeConditionOp,
     pub(crate) value: VarValue,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum IncludeConditionOp {
     Equal,
     NotEqual,
@@ -2308,7 +2308,7 @@ impl From<RepoMetadataTarget> for crate::ffi::RepoMetadataTarget {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
 /// and https://fedoraproject.org/wiki/Changes/Sqlite_Rpmdb
@@ -2328,7 +2328,7 @@ pub(crate) enum RpmdbBackend {
 /// Things that live *directly* in this struct are in common to both the base compose and derive
 /// cases. Everything else is specific to either case and so lives in their respective flattened
 /// field.
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2362,7 +2362,7 @@ impl std::ops::DerefMut for TreeComposeConfig {
 }
 
 /// These fields are only useful when composing a new ostree commit.
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct BaseComposeConfigFields {
     // Compose controls
@@ -2503,13 +2503,13 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) extra: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RepoPackage {
     pub(crate) repo: String,
     pub(crate) packages: BTreeSet<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub(crate) struct ModulesConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) enable: Option<BTreeSet<String>>,
@@ -2517,7 +2517,7 @@ pub(crate) struct ModulesConfig {
     pub(crate) install: Option<BTreeSet<String>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub(crate) struct LegacyTreeComposeConfigFields {
     #[serde(skip_serializing)]
     pub(crate) gpg_key: Option<String>,
