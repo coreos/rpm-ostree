@@ -47,19 +47,19 @@ fn vdict_insert_strv<'a>(dict: &glib::VariantDict, k: &str, v: impl IntoIterator
 
 /// Insert values from `v` into the target `dict` with key `k`.
 fn vdict_insert_optvec(dict: &glib::VariantDict, k: &str, v: Option<&Vec<String>>) {
-    let v = v.iter().map(|s| s.iter()).flatten().map(|s| s.as_str());
+    let v = v.iter().flat_map(|s| s.iter()).map(|s| s.as_str());
     vdict_insert_strv(dict, k, v);
 }
 
 /// Insert keys from the provided map into the target `dict` with key `k`.
 fn vdict_insert_optmap(dict: &glib::VariantDict, k: &str, v: Option<&BTreeMap<String, String>>) {
-    let v = v.iter().map(|s| s.keys()).flatten().map(|s| s.as_str());
+    let v = v.iter().flat_map(|s| s.keys()).map(|s| s.as_str());
     vdict_insert_strv(dict, k, v);
 }
 
 /// Insert keys from the provided map into the target `dict` with key `k`.
 fn vdict_insert_optset(dict: &glib::VariantDict, k: &str, v: Option<&BTreeSet<String>>) {
-    let v = v.iter().map(|s| s.iter()).flatten().map(|s| s.as_str());
+    let v = v.iter().flat_map(|s| s.iter()).map(|s| s.as_str());
     vdict_insert_strv(dict, k, v);
 }
 

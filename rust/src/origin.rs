@@ -41,10 +41,8 @@ pub(crate) fn origin_to_treefile_inner(kf: &KeyFile) -> Result<Box<Treefile>> {
     let mut cfg: crate::treefile::TreeComposeConfig = Default::default();
     let base_refspec = if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "refspec")? {
         Some(r)
-    } else if let Some(r) = keyfile_get_optional_string(kf, ORIGIN, "baserefspec")? {
-        Some(r)
     } else {
-        None
+        keyfile_get_optional_string(kf, ORIGIN, "baserefspec")?
     };
 
     let container_image_reference = keyfile_get_optional_string(kf, ORIGIN, ORIGIN_CONTAINER)?;
