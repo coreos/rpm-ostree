@@ -1024,10 +1024,7 @@ impl Treefile {
                 .derive
                 .override_replace
                 .as_ref()
-                .map(|v| {
-                    v.iter()
-                        .fold(false, |prev, o| prev || o.packages.contains(name_or_nevra))
-                })
+                .map(|v| v.iter().any(|o| o.packages.contains(name_or_nevra)))
                 .unwrap_or_default()
     }
 
@@ -1067,7 +1064,7 @@ impl Treefile {
             .derive
             .override_replace_local
             .as_mut()
-            .and_then(|map| Some(map.remove(package).is_some()))
+            .map(|map| map.remove(package).is_some())
             .unwrap_or_default()
     }
 
@@ -1136,7 +1133,7 @@ impl Treefile {
             .derive
             .override_remove
             .as_mut()
-            .and_then(|set| Some(set.remove(package)))
+            .map(|set| set.remove(package))
             .unwrap_or_default()
     }
 

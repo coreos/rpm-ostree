@@ -749,6 +749,7 @@ fn var_to_tmpfiles(rootfs: &Dir, cancellable: Option<&gio::Cancellable>) -> Resu
 /// This proceeds depth-first and progressively deletes translated subpaths as it goes.
 /// `prefix` is updated at each recursive step, so that in case of errors it can be
 /// used to pinpoint the faulty path.
+#[allow(clippy::nonminimal_bool)]
 fn convert_path_to_tmpfiles_d_recurse(
     out_entries: &mut BTreeSet<String>,
     pwdb: &PasswdDB,
