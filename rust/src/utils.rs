@@ -309,7 +309,7 @@ pub(crate) fn translate_path_for_ostree_impl(path: &str) -> Option<String> {
     }
 
     // All remaining cases do not need translation.
-    return None;
+    None
 }
 
 #[cfg(test)]

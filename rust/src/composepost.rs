@@ -1106,7 +1106,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
     // Sometimes we can end up with build-to-build variance in the underlying rpmdb
     // files. Attempt to sort that out, if requested.
     if normalize {
-        let rootfs_dfd = crate::capstdext::from_openat(&rootfs_dfd)?;
+        let rootfs_dfd = crate::capstdext::from_openat(rootfs_dfd)?;
         normalization::normalize_rpmdb(&rootfs_dfd, RPMOSTREE_RPMDB_LOCATION)?;
     }
 

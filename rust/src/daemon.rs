@@ -524,7 +524,7 @@ fn generate_object_path_impl(
     base.push('/');
     append_to_object_path(&mut base, segment);
 
-    return Ok(base);
+    Ok(base)
 }
 
 pub(crate) fn generate_object_path(base: &str, next_segment: &str) -> CxxResult<String> {

@@ -25,7 +25,7 @@ fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
     // Maybe add a glib feature for openat-ext to support cancellability?  Or
     // perhaps we should just use futures and ensure GCancellable bridges to that.
     if let Some(c) = cancellable {
-        let _ = c.set_error_if_cancelled()?;
+        c.set_error_if_cancelled()?;
     }
     let meta = d.symlink_metadata(path).context("stat")?;
     if meta.is_dir() {
