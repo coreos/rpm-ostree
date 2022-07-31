@@ -260,7 +260,7 @@ pub(crate) fn deployment_layeredmeta_load_commit(
     // SAFETY: return value is "not nullable".
     let checksum = deployment.csum().unwrap();
     let commit = &repo.load_variant(ostree::ObjectType::Commit, &checksum)?;
-    deployment_layeredmeta_from_commit_impl(&deployment, &commit)
+    deployment_layeredmeta_from_commit_impl(deployment, commit)
 }
 
 #[context("Loading origin status")]

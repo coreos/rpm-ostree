@@ -276,7 +276,7 @@ impl RpmImporter {
         let symlink_entries = self.tmpfiles_symlink_entries();
         let all_entries = symlink_entries.iter().chain(self.tmpfiles_entries.iter());
         all_entries.fold(String::new(), |mut buf, entry| {
-            buf.push_str(&entry);
+            buf.push_str(entry);
             buf.push('\n');
             buf
         })
