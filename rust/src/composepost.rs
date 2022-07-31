@@ -998,11 +998,8 @@ pub fn prepare_rpmdb_base_location(
 
 /// Recurse into this directory and return the total size of all regular files.
 #[context("Computing directory size")]
-pub fn directory_size(
-    dfd: i32,
-    mut cancellable: Pin<&mut crate::FFIGCancellable>,
-) -> CxxResult<u64> {
-    let cancellable = &cancellable.gobj_wrap();
+pub fn directory_size(dfd: i32, cancellable: &crate::FFIGCancellable) -> CxxResult<u64> {
+    let cancellable = cancellable.glib_reborrow();
     let dfd = crate::ffiutil::ffi_view_openat_dir(dfd);
     fn directory_size_recurse(d: &openat::Dir, cancellable: &gio::Cancellable) -> Result<u64> {
         let mut r = 0;
@@ -1025,7 +1022,7 @@ pub fn directory_size(
         }
         Ok(r)
     }
-    Ok(directory_size_recurse(&dfd, cancellable)?)
+    Ok(directory_size_recurse(&dfd, &cancellable)?)
 }
 
 #[context("Hardlinking rpmdb to base location")]
@@ -1100,7 +1097,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
     bwrap.take_stdin_fd(dbfd.into_raw_fd());
     let cancellable = gio::Cancellable::new();
     bwrap
-        .run(cancellable.gobj_rewrap())
+        .run(cancellable.reborrow_cxx())
         .context("Failed to run rpmdb --importdb")?;
 
     // Sometimes we can end up with build-to-build variance in the underlying rpmdb
@@ -1357,7 +1354,7 @@ OSTREE_VERSION='33.4'
         // Also make this a sanity test for our directory size API
         let cancellable = gio::Cancellable::new();
         assert_eq!(
-            directory_size(rootfs.as_raw_fd(), cancellable.gobj_rewrap()).unwrap(),
+            directory_size(rootfs.as_raw_fd(), cancellable.reborrow_cxx()).unwrap(),
             expected_disk_size
         );
 

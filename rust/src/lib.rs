@@ -143,7 +143,7 @@ pub mod ffi {
         fn bind_readwrite(&mut self, src: &str, dest: &str);
         fn setup_compat_var(&mut self) -> Result<()>;
 
-        fn run(&mut self, cancellable: Pin<&mut GCancellable>) -> Result<()>;
+        fn run(&mut self, cancellable: &GCancellable) -> Result<()>;
     }
 
     // builtins/apply_live.rs
@@ -254,7 +254,7 @@ pub mod ffi {
         fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> Result<()>;
         fn postprocess_cleanup_rpmdb(rootfs_dfd: i32) -> Result<()>;
         fn rewrite_rpmdb_for_target(rootfs_dfd: i32, normalize: bool) -> Result<()>;
-        fn directory_size(dfd: i32, mut cancellable: Pin<&mut GCancellable>) -> Result<u64>;
+        fn directory_size(dfd: i32, cancellable: &GCancellable) -> Result<u64>;
     }
 
     // container.cxx

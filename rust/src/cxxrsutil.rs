@@ -13,7 +13,6 @@ use cxx::{type_id, ExternType};
 use glib::translate::ToGlibPtr;
 use ostree_ext::{gio, glib, ostree};
 use paste::paste;
-use std::pin::Pin;
 
 /// Map an empty string to a `None`.
 pub(crate) fn opt_string(input: &str) -> Option<&str> {
@@ -39,11 +38,6 @@ pub trait FFIGObjectWrapper {
 pub trait FFIGObjectReWrap<'a> {
     type ReWrapped;
 
-    /// Convert a glib-rs wrapper object into a Pin pointer
-    /// to our FFI newtype.  This is necessary to call
-    /// cxx-rs wrapped functions from Rust.
-    fn gobj_rewrap(&'a self) -> Pin<&'a mut Self::ReWrapped>;
-
     /// Convert a glib-rs wrapper object borrowed cxx-rs type.
     fn reborrow_cxx(&'a self) -> &Self::ReWrapped;
 }
@@ -64,24 +58,6 @@ macro_rules! impl_wrap {
         }
         impl<'a> FFIGObjectReWrap<'a> for $bound {
             type ReWrapped = $w;
-            fn gobj_rewrap(&'a self) -> Pin<&'a mut Self::ReWrapped> {
-                // Access the underlying raw pointer behind the glib-rs
-                // newtype wrapper, e.g. `ostree_sys::OstreeRepo`.
-                let p: *const $sys = self.to_glib_none().0;
-                // Safety: Pin<T> is a #[repr(transparent)] newtype wrapper
-                // around our #[repr(transparent)] FFI newtype wrapper which
-                // for the glib-rs newtype wrapper, which finally holds the real
-                // raw pointer.  Phew!
-                // In other words: Pin(FFINewType(GlibRs(RawPointer)))
-                // Here we're just powering through those layers of wrappers to
-                // convert the raw pointer.  See also https://internals.rust-lang.org/t/pre-rfc-v2-safe-transmute/11431
-                //
-                // However, since what we're handing out is a raw pointer,
-                // we ensure that the lifetime of our return value is tied to
-                // that of the glib-rs wrapper (which holds a GObject strong reference),
-                // which ensures the value isn't freed.
-                unsafe { std::mem::transmute(p) }
-            }
 
             fn reborrow_cxx(&'a self) -> &Self::ReWrapped {
                 let p: *const $sys = self.to_glib_none().0;

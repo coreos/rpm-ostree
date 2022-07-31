@@ -1165,7 +1165,7 @@ struct Bubblewrap final : public ::rust::Opaque
   void bind_read (::rust::Str src, ::rust::Str dest) noexcept;
   void bind_readwrite (::rust::Str src, ::rust::Str dest) noexcept;
   void setup_compat_var ();
-  void run (::rpmostreecxx::GCancellable &cancellable);
+  void run (const ::rpmostreecxx::GCancellable &cancellable);
   ~Bubblewrap () = delete;
 
 private:
@@ -1804,7 +1804,8 @@ void postprocess_cleanup_rpmdb (::std::int32_t rootfs_dfd);
 
 void rewrite_rpmdb_for_target (::std::int32_t rootfs_dfd, bool normalize);
 
-::std::uint64_t directory_size (::std::int32_t dfd, ::rpmostreecxx::GCancellable &cancellable);
+::std::uint64_t directory_size (::std::int32_t dfd,
+                                const ::rpmostreecxx::GCancellable &cancellable);
 
 ::rpmostreecxx::OstreeDeployment *deployment_for_id (::rpmostreecxx::OstreeSysroot &sysroot,
                                                      ::rust::Str deploy_id);
