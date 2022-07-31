@@ -518,7 +518,7 @@ fn generate_object_path_impl(
     }
 
     let segment = next_segment.as_ref();
-    if segment.len() == 0 {
+    if segment.is_empty() {
         return Err(anyhow::anyhow!("Cannot append empty segment: {base}"));
     }
     base.push('/');

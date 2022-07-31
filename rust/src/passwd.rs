@@ -311,7 +311,7 @@ fn passwd_compose_prep_impl(
     let mut db = cap_std::fs::DirBuilder::new();
     db.recursive(true);
     db.mode(0o755);
-    rootfs.create_dir_with(dest, &mut db)?;
+    rootfs.create_dir_with(dest, &db)?;
 
     // TODO(lucab): consider reworking these to avoid boolean results.
     let found_passwd_data = data_from_json(rootfs, treefile, dest, "passwd")?;

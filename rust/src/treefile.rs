@@ -1952,7 +1952,7 @@ impl TreefileExternals {
 
 /// For increased readability in YAML/JSON, we support whitespace in individual
 /// array elements.
-fn whitespace_split_packages<'a>(pkgs: &BTreeSet<String>) -> Result<BTreeSet<String>> {
+fn whitespace_split_packages(pkgs: &BTreeSet<String>) -> Result<BTreeSet<String>> {
     let mut ret = BTreeSet::new();
     for element in pkgs {
         ret.extend(split_whitespace_unless_quoted(element)?.map(String::from));

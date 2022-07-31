@@ -380,7 +380,7 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
         n => anyhow::bail!("Invalid format version {n}"),
     };
     let opts = ExportOpts {
-        copy_meta_keys: copy_meta_keys,
+        copy_meta_keys,
         max_layers: opt.max_layers,
         format,
         ..Default::default()
