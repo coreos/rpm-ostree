@@ -272,7 +272,7 @@ pub fn translate_path_for_ostree(path: &str) -> String {
 
 /// Translate a relative unprefixed path according to ostree rules, if needed.
 pub(crate) fn translate_path_for_ostree_impl(path: &str) -> Option<String> {
-    assert!(!path.starts_with("/"));
+    assert!(!path.starts_with('/'));
     assert!(!path.starts_with("./"));
 
     // etc/foo -> usr/etc/foo

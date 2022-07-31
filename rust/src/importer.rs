@@ -109,7 +109,7 @@ impl RpmImporter {
     }
 
     fn get_first_path_element(rel_path: &str) -> String {
-        match rel_path.split_once("/") {
+        match rel_path.split_once('/') {
             Some((dirname, _rest)) => dirname.to_string(),
             None => rel_path.to_string(),
         }
