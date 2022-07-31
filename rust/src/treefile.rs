@@ -275,7 +275,7 @@ fn treefile_parse<P: AsRef<Path>>(
     let tf = treefile_parse_stream(fmt, &mut f, basearch).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Parsing {}: {}", filename.to_string_lossy(), e.to_string()),
+            format!("Parsing {}: {e}", filename.to_string_lossy()),
         )
     })?;
     let postprocess_script = if let Some(ref postprocess) = tf.base.postprocess_script.as_ref() {
@@ -1864,7 +1864,7 @@ fn build_name_to_nevra_map(
     nevras
         .iter()
         .flatten()
-        .map(|(nevra, _)| Ok((libdnf_sys::hy_split_nevra(&nevra)?.name, nevra.clone())))
+        .map(|(nevra, _)| Ok((libdnf_sys::hy_split_nevra(nevra)?.name, nevra.clone())))
         .collect()
 }
 

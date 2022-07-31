@@ -54,19 +54,13 @@ where
     let parsed: T = match fmt {
         InputFormat::JSON => {
             let pf: T = serde_json::from_reader(input).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("serde-json: {}", e.to_string()),
-                )
+                io::Error::new(io::ErrorKind::InvalidInput, format!("serde-json: {e}"))
             })?;
             pf
         }
         InputFormat::YAML => {
             let pf: T = serde_yaml::from_reader(input).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("serde-yaml: {}", e.to_string()),
-                )
+                io::Error::new(io::ErrorKind::InvalidInput, format!("serde-yaml: {e}"))
             })?;
             pf
         }
