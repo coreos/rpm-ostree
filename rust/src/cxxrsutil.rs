@@ -61,7 +61,8 @@ macro_rules! impl_wrap {
 
             fn reborrow_cxx(&'a self) -> &Self::ReWrapped {
                 let p: *const $sys = self.to_glib_none().0;
-                unsafe { std::mem::transmute(p) }
+                let p = p as *const Self::ReWrapped;
+                unsafe { &*p }
             }
         }
     };
