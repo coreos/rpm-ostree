@@ -12,15 +12,6 @@ use crate::ffi::SystemHostType;
 /// Emitted at the first line.
 pub(crate) const IMAGEBASED: &str = "Note: This system is image (rpm-ostree) based.";
 
-/// Emitted for unhandled options.
-const UNHANDLED: &str = indoc::indoc! {r#"
-rpm-ostree: Unknown arguments passed to yum/dnf compatibility wrapper.
-
-Please see `yum --help` for currently accepted commands via this
-wrapper, and `rpm-ostree --help` for more information about.the rpm-ostree
-project.
-"#};
-
 const OTHER_OPTIONS: &[(&str, &str)] = &[
     (
         "toolbox",
@@ -54,11 +45,6 @@ struct Opt {
 }
 
 #[derive(Debug, clap::Subcommand)]
-#[clap(
-    name = "yumdnf-rpmostree",
-    about = "Compatibility wrapper implementing subset of yum/dnf CLI",
-    version
-)]
 #[clap(rename_all = "kebab-case")]
 /// Subcommands
 enum Cmd {
@@ -86,12 +72,10 @@ enum Cmd {
 
 #[derive(Debug, PartialEq, Eq)]
 enum RunDisposition {
-    HelpOrVersionDisplayed,
     ExecRpmOstree(Vec<String>),
     UseSomethingElse,
     NotImplementedYet(&'static str),
     Unsupported,
-    Unhandled,
 }
 
 fn run_clean(argv: &Vec<String>) -> Result<RunDisposition> {
@@ -108,20 +92,7 @@ fn run_clean(argv: &Vec<String>) -> Result<RunDisposition> {
     }
 }
 
-fn disposition(hosttype: SystemHostType, argv: &[&str]) -> Result<RunDisposition> {
-    let opt = match Opt::try_parse_from(std::iter::once(&"yum").chain(argv.iter())) {
-        Ok(v) => v,
-        Err(e)
-            if e.kind() == clap::ErrorKind::DisplayVersion
-                || e.kind() == clap::ErrorKind::DisplayHelp =>
-        {
-            return Ok(RunDisposition::HelpOrVersionDisplayed)
-        }
-        Err(_) => {
-            return Ok(RunDisposition::Unhandled);
-        }
-    };
-
+fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
     let disp = match hosttype {
         SystemHostType::OstreeHost => {
             match opt.cmd {
@@ -163,8 +134,8 @@ fn disposition(hosttype: SystemHostType, argv: &[&str]) -> Result<RunDisposition
 
 /// Primary entrypoint to running our wrapped `yum`/`dnf` handling.
 pub(crate) fn main(hosttype: SystemHostType, argv: &[&str]) -> Result<()> {
-    match disposition(hosttype, argv)? {
-        RunDisposition::HelpOrVersionDisplayed => Ok(()),
+    let opt = Opt::parse_from(std::iter::once(&"yum").chain(argv.iter()));
+    match disposition(opt, hosttype)? {
         RunDisposition::ExecRpmOstree(args) => {
             eprintln!("{}", IMAGEBASED);
             Err(Command::new("rpm-ostree").args(args).exec().into())
@@ -191,7 +162,6 @@ pub(crate) fn main(hosttype: SystemHostType, argv: &[&str]) -> Result<()> {
 
             Err(anyhow!("not implemented"))
         }
-        RunDisposition::Unhandled => Err(anyhow!("{}", UNHANDLED)),
         RunDisposition::Unsupported => Err(anyhow!(
             "This command is only supported on ostree-based systems."
         )),
@@ -203,23 +173,16 @@ pub(crate) fn main(hosttype: SystemHostType, argv: &[&str]) -> Result<()> {
 mod tests {
     use super::*;
 
+    fn testrun(hosttype: SystemHostType, args: &[&str]) -> Result<RunDisposition> {
+        let o = Opt::try_parse_from([&"yum"].into_iter().chain(args)).unwrap();
+        disposition(o, hosttype)
+    }
+
     #[test]
     fn test_yumdnf() -> Result<()> {
         for common in [SystemHostType::OstreeContainer, SystemHostType::OstreeHost] {
             assert!(matches!(
-                disposition(common, &["--version"])?,
-                RunDisposition::HelpOrVersionDisplayed
-            ));
-            assert!(matches!(
-                disposition(common, &["--help"])?,
-                RunDisposition::HelpOrVersionDisplayed
-            ));
-            assert!(matches!(
-                disposition(common, &["unknown", "--other"])?,
-                RunDisposition::Unhandled
-            ));
-            assert!(matches!(
-                disposition(common, &["search", "foo", "bar"])?,
+                testrun(common, &["search", "foo", "bar"])?,
                 RunDisposition::NotImplementedYet(_)
             ));
         }
@@ -227,15 +190,15 @@ mod tests {
         // Tests for the ostree host case
         let host = SystemHostType::OstreeHost;
         assert!(matches!(
-            disposition(host, &["upgrade"])?,
+            testrun(host, &["upgrade"])?,
             RunDisposition::ExecRpmOstree(_)
         ));
         assert!(matches!(
-            disposition(host, &["install", "foo"])?,
+            testrun(host, &["install", "foo"])?,
             RunDisposition::UseSomethingElse
         ));
         assert!(matches!(
-            disposition(host, &["install", "foo", "bar"])?,
+            testrun(host, &["install", "foo", "bar"])?,
             RunDisposition::UseSomethingElse
         ));
 
@@ -246,15 +209,15 @@ mod tests {
         // Tests for the ostree container case
         let host = SystemHostType::OstreeContainer;
         assert_eq!(
-            disposition(host, &["install", "foo", "bar"])?,
+            testrun(host, &["install", "foo", "bar"])?,
             RunDisposition::ExecRpmOstree(strvec(["install", "foo", "bar"]))
         );
         assert_eq!(
-            disposition(host, &["clean", "all"])?,
+            testrun(host, &["clean", "all"])?,
             RunDisposition::ExecRpmOstree(strvec(["cleanup", "-m"]))
         );
         assert!(matches!(
-            disposition(host, &["upgrade"])?,
+            testrun(host, &["upgrade"])?,
             RunDisposition::NotImplementedYet(_)
         ));
         Ok(())
