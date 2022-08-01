@@ -850,6 +850,7 @@ impl Treefile {
         add_sha256_nevra_to_map(map, packages)
     }
 
+    #[allow(clippy::if_same_then_else)]
     pub(crate) fn remove_packages(
         &mut self,
         packages: Vec<String>,
