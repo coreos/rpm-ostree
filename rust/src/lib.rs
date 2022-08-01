@@ -11,6 +11,8 @@
 #![deny(missing_debug_implementations)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unused_must_use)]
+#![deny(clippy::dbg_macro)]
+#![deny(clippy::todo)]
 #![allow(clippy::ptr_arg)]
 
 // pub(crate) utilities

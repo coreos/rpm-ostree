@@ -280,9 +280,9 @@ pub(crate) fn get_system_host_type() -> CxxResult<SystemHostType> {
 }
 
 pub(crate) fn system_host_type_str(t: &SystemHostType) -> &'static str {
-    match t {
-        &SystemHostType::OstreeContainer => "ostree container",
-        &SystemHostType::OstreeHost => "ostree host",
+    match *t {
+        SystemHostType::OstreeContainer => "ostree container",
+        SystemHostType::OstreeHost => "ostree host",
         _ => "unknown",
     }
 }

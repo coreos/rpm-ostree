@@ -109,7 +109,7 @@ impl RpmImporter {
     }
 
     fn get_first_path_element(rel_path: &str) -> String {
-        match rel_path.split_once("/") {
+        match rel_path.split_once('/') {
             Some((dirname, _rest)) => dirname.to_string(),
             None => rel_path.to_string(),
         }
@@ -276,7 +276,7 @@ impl RpmImporter {
         let symlink_entries = self.tmpfiles_symlink_entries();
         let all_entries = symlink_entries.iter().chain(self.tmpfiles_entries.iter());
         all_entries.fold(String::new(), |mut buf, entry| {
-            buf.push_str(&entry);
+            buf.push_str(entry);
             buf.push('\n');
             buf
         })

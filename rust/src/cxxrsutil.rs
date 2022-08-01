@@ -205,7 +205,7 @@ mod err {
         where
             C: Display + Send + Sync + 'static,
         {
-            Self(format!("{}: {}", context.to_string(), self))
+            Self(format!("{context}: {self}"))
         }
     }
 

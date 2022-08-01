@@ -62,7 +62,7 @@ pub fn deployment_checksum_for_id(
 ) -> CxxResult<String> {
     let sysroot = &ffi_sysroot.gobj_wrap();
 
-    let deployment = deployment_for_id_impl(&sysroot, deploy_id)?;
+    let deployment = deployment_for_id_impl(sysroot, deploy_id)?;
     // SAFETY: result is not-nullable in the C API.
     let csum = deployment.csum().unwrap();
     Ok(csum.to_string())
@@ -77,7 +77,7 @@ pub fn deployment_get_base(
     let deploy_id = opt_string(opt_deploy_id);
     let os_name = opt_string(opt_os_name);
 
-    let deployment = deployment_get_base_impl(&sysroot, deploy_id, os_name)?;
+    let deployment = deployment_get_base_impl(sysroot, deploy_id, os_name)?;
 
     let depl_ptr: *mut ostree::ffi::OstreeDeployment = deployment.to_glib_full();
     Ok(depl_ptr as *mut _)

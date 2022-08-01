@@ -283,8 +283,8 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
         // of minutes or seconds.
         let change_time_offset = change_time_offset_secs / (60 * 60);
         state.packagemeta.insert(ObjectSourceMeta {
-            identifier: Rc::clone(&nevra),
-            name: Rc::clone(&nevra),
+            identifier: Rc::clone(nevra),
+            name: Rc::clone(nevra),
             srcid: Rc::from(pkgmeta.src_pkg().to_str().unwrap()),
             change_time_offset,
         });
@@ -380,7 +380,7 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
         n => anyhow::bail!("Invalid format version {n}"),
     };
     let opts = ExportOpts {
-        copy_meta_keys: copy_meta_keys,
+        copy_meta_keys,
         max_layers: opt.max_layers,
         format,
         ..Default::default()

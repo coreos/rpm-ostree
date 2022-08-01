@@ -54,19 +54,13 @@ where
     let parsed: T = match fmt {
         InputFormat::JSON => {
             let pf: T = serde_json::from_reader(input).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("serde-json: {}", e.to_string()),
-                )
+                io::Error::new(io::ErrorKind::InvalidInput, format!("serde-json: {e}"))
             })?;
             pf
         }
         InputFormat::YAML => {
             let pf: T = serde_yaml::from_reader(input).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("serde-yaml: {}", e.to_string()),
-                )
+                io::Error::new(io::ErrorKind::InvalidInput, format!("serde-yaml: {e}"))
             })?;
             pf
         }
@@ -272,7 +266,7 @@ pub fn translate_path_for_ostree(path: &str) -> String {
 
 /// Translate a relative unprefixed path according to ostree rules, if needed.
 pub(crate) fn translate_path_for_ostree_impl(path: &str) -> Option<String> {
-    assert!(!path.starts_with("/"));
+    assert!(!path.starts_with('/'));
     assert!(!path.starts_with("./"));
 
     // etc/foo -> usr/etc/foo
@@ -309,7 +303,7 @@ pub(crate) fn translate_path_for_ostree_impl(path: &str) -> Option<String> {
     }
 
     // All remaining cases do not need translation.
-    return None;
+    None
 }
 
 #[cfg(test)]

@@ -749,6 +749,7 @@ fn var_to_tmpfiles(rootfs: &Dir, cancellable: Option<&gio::Cancellable>) -> Resu
 /// This proceeds depth-first and progressively deletes translated subpaths as it goes.
 /// `prefix` is updated at each recursive step, so that in case of errors it can be
 /// used to pinpoint the faulty path.
+#[allow(clippy::nonminimal_bool)]
 fn convert_path_to_tmpfiles_d_recurse(
     out_entries: &mut BTreeSet<String>,
     pwdb: &PasswdDB,
@@ -1106,7 +1107,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
     // Sometimes we can end up with build-to-build variance in the underlying rpmdb
     // files. Attempt to sort that out, if requested.
     if normalize {
-        let rootfs_dfd = crate::capstdext::from_openat(&rootfs_dfd)?;
+        let rootfs_dfd = crate::capstdext::from_openat(rootfs_dfd)?;
         normalization::normalize_rpmdb(&rootfs_dfd, RPMOSTREE_RPMDB_LOCATION)?;
     }
 

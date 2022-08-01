@@ -53,6 +53,7 @@ pub mod ffi {
         fn get_name(self: Pin<&mut DnfPackage>) -> String;
         fn get_evr(self: Pin<&mut DnfPackage>) -> String;
         fn get_arch(self: Pin<&mut DnfPackage>) -> String;
+        /// SAFETY: This can only be called on a valid pointer
         unsafe fn dnf_package_from_ptr(pkg: *mut FFIDnfPackage) -> UniquePtr<DnfPackage>;
 
         type DnfRepo;
@@ -60,6 +61,7 @@ pub mod ffi {
         fn get_ref<'a>(self: Pin<&'a mut DnfRepo>) -> Pin<&'a mut FFIDnfRepo>;
         fn get_id(self: Pin<&mut DnfRepo>) -> String;
         fn get_timestamp_generated(self: Pin<&mut DnfRepo>) -> u64;
+        /// SAFETY: This can only be called on a valid pointer
         unsafe fn dnf_repo_from_ptr(pkg: *mut FFIDnfRepo) -> UniquePtr<DnfRepo>;
 
         type DnfSack;

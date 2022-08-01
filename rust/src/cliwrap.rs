@@ -47,7 +47,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
     // The outer code should always pass us at least one arg.
     let name = args
         .get(0)
-        .map(|&x| x)
+        .copied()
         .ok_or_else(|| anyhow!("Missing required argument"))?;
     // Handle this case early, it's not like the other cliwrap bits.
     if name == "install-to-root" {
