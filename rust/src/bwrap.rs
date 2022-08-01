@@ -13,7 +13,6 @@ use ostree_ext::{gio, glib};
 use std::num::NonZeroUsize;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-use std::pin::Pin;
 use std::process::Command;
 
 // Links in the rootfs to /usr
@@ -430,11 +429,8 @@ impl Bubblewrap {
     }
 
     /// Execute the instance; requires a cancellable for C++.
-    pub(crate) fn run(
-        &mut self,
-        mut cancellable: Pin<&mut crate::FFIGCancellable>,
-    ) -> CxxResult<()> {
-        let cancellable = &cancellable.gobj_wrap();
+    pub(crate) fn run(&mut self, cancellable: &crate::FFIGCancellable) -> CxxResult<()> {
+        let cancellable = &cancellable.glib_reborrow();
         self.run_inner(Some(cancellable))?;
         Ok(())
     }

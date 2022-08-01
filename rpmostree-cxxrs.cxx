@@ -1379,7 +1379,7 @@ struct Bubblewrap final : public ::rust::Opaque
   void bind_read (::rust::Str src, ::rust::Str dest) noexcept;
   void bind_readwrite (::rust::Str src, ::rust::Str dest) noexcept;
   void setup_compat_var ();
-  void run (::rpmostreecxx::GCancellable &cancellable);
+  void run (const ::rpmostreecxx::GCancellable &cancellable);
   ~Bubblewrap () = delete;
 
 private:
@@ -2011,7 +2011,7 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Bubblewrap$run (::rpmostreecxx::Bubblewrap &self,
-                                          ::rpmostreecxx::GCancellable &cancellable) noexcept;
+                                          const ::rpmostreecxx::GCancellable &cancellable) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$applylive_entrypoint (const ::rust::Vec< ::rust::String> &args) noexcept;
@@ -2125,7 +2125,7 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$directory_size (::std::int32_t dfd,
-                                          ::rpmostreecxx::GCancellable &cancellable,
+                                          const ::rpmostreecxx::GCancellable &cancellable,
                                           ::std::uint64_t *return$) noexcept;
 
   ::rust::repr::PtrLen
@@ -3483,7 +3483,7 @@ Bubblewrap::setup_compat_var ()
 }
 
 void
-Bubblewrap::run (::rpmostreecxx::GCancellable &cancellable)
+Bubblewrap::run (const ::rpmostreecxx::GCancellable &cancellable)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Bubblewrap$run (*this, cancellable);
   if (error$.ptr)
@@ -3868,7 +3868,7 @@ rewrite_rpmdb_for_target (::std::int32_t rootfs_dfd, bool normalize)
 }
 
 ::std::uint64_t
-directory_size (::std::int32_t dfd, ::rpmostreecxx::GCancellable &cancellable)
+directory_size (::std::int32_t dfd, const ::rpmostreecxx::GCancellable &cancellable)
 {
   ::rust::MaybeUninit< ::std::uint64_t> return$;
   ::rust::repr::PtrLen error$
