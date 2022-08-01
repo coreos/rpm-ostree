@@ -2,7 +2,7 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use cap_std::fs::{Dir, Permissions};
 use cap_std_ext::prelude::CapStdExtDirExt;
 use clap::{Arg, Command};
@@ -12,6 +12,13 @@ use std::os::unix::prelude::PermissionsExt;
 /// Entrypoint for (the rpm-ostree implementation of) `groupadd`.
 pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     fail::fail_point!("intercept_groupadd_ok", |_| Ok(()));
+
+    // Extract the package name from rpm-ostree/bwrap environment.
+    // This also works as a sanity check to ensure we are running in
+    // the context of a scriptlet.
+    static SCRIPT_PKG_VAR: &str = "RPMOSTREE_SCRIPT_PKG_NAME";
+    let pkgname = std::env::var(SCRIPT_PKG_VAR)
+        .with_context(|| format!("Failed to access {SCRIPT_PKG_VAR} environment variable"))?;
 
     // This parses the same CLI surface as the real `groupadd`,
     // but in the end we only extract the group name and (if
@@ -29,7 +36,7 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     }
 
     let rootdir = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
-    generate_sysusers_fragment(&rootdir, groupname, gid)?;
+    generate_sysusers_fragment(&rootdir, &pkgname, groupname, gid)?;
 
     Ok(())
 }
@@ -77,12 +84,17 @@ fn cli_cmd() -> Command<'static> {
 ///
 /// This returns whether a new fragment has been actually written
 /// to disk.
-fn generate_sysusers_fragment(rootdir: &Dir, groupname: &str, gid: Option<u32>) -> Result<bool> {
+fn generate_sysusers_fragment(
+    rootdir: &Dir,
+    pkgname: &str,
+    groupname: &str,
+    gid: Option<u32>,
+) -> Result<bool> {
     static SYSUSERS_DIR: &str = "usr/lib/sysusers.d";
 
     // The filename of the configuration fragment is in fact a public
     // API, because users may have masked it in /etc. Do not change this.
-    let filename = format!("30-pkg-group-{groupname}.conf");
+    let filename = format!("30-pkg-{pkgname}-group-{groupname}.conf");
 
     rootdir.create_dir_all(SYSUSERS_DIR)?;
     let conf_dir = rootdir.open_dir(SYSUSERS_DIR)?;
@@ -146,10 +158,10 @@ mod test {
             ("bar", None, true, "-"),
         ];
         for entry in groups {
-            let generated = generate_sysusers_fragment(&tmpdir, entry.0, entry.1).unwrap();
+            let generated = generate_sysusers_fragment(&tmpdir, "foo", entry.0, entry.1).unwrap();
             assert_eq!(generated, entry.2, "{:?}", entry);
 
-            let path = format!("usr/lib/sysusers.d/30-pkg-group-{}.conf", entry.0);
+            let path = format!("usr/lib/sysusers.d/30-pkg-foo-group-{}.conf", entry.0);
             assert!(tmpdir.is_file(&path));
 
             let mut fragment = tmpdir.open(&path).unwrap();

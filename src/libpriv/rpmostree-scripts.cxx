@@ -309,6 +309,9 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_
                                          int provided_stdin_fd, GCancellable *cancellable,
                                          GError **error)
 {
+  g_assert (name != NULL);
+  g_assert (name[0] != '\0');
+
   const char *pkg_script = scriptdesc ? glnx_strjoina (name, ".", scriptdesc + 1) : name;
 
   // A dance just to pass a well-known fd for /dev/null to bwrap as fd 3
@@ -369,6 +372,8 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_
   const char *bridge_sysusers = g_getenv ("RPMOSTREE_EXP_BRIDGE_SYSUSERS");
   if (bridge_sysusers != NULL)
     bwrap->setenv ("RPMOSTREE_EXP_BRIDGE_SYSUSERS", rust::String (bridge_sysusers));
+
+  bwrap->setenv ("RPMOSTREE_SCRIPT_PKG_NAME", name);
 
   /* https://github.com/systemd/systemd/pull/7631 AKA
    * "systemctl,verbs: Introduce SYSTEMD_OFFLINE environment variable"
