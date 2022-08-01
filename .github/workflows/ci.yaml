@@ -10,6 +10,13 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+  # Minimum supported Rust version (MSRV)
+  ACTION_MSRV_TOOLCHAIN: 1.60.0
+  # Pinned toolchain for linting
+  ACTION_LINTS_TOOLCHAIN: 1.60.0
+
 jobs:
   build:
     name: "Build"
@@ -42,6 +49,32 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Codestyle
         run: ./ci/verify-cxx.sh
+  # TODO: Enable this once we've switched closer to having `cargo build`
+  # be the primary buildsystem entrypoint.  Right now the problem is
+  # in order to build the libdnf-sys dependency it relies on us having
+  # run through autoconf, but that flow wants to a "real" Rust build
+  # and not clippy.
+  # linting:
+  #   name: "Lints, pinned toolchain"
+  #   runs-on: ubuntu-latest
+  #   container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v2
+  #     - name: Install dependencies
+  #       run: ./ci/installdeps.sh
+  #     - name: Remove system Rust toolchain
+  #       run: dnf remove -y rust cargo
+  #     - name: Install toolchain
+  #       uses: actions-rs/toolchain@v1
+  #       with:
+  #         toolchain: ${{ env['ACTION_LINTS_TOOLCHAIN']  }}
+  #         default: true
+  #         components: rustfmt, clippy
+  #     - name: cargo fmt (check)
+  #       run: cargo fmt -- --check -l
+  #     - name: cargo clippy (warnings)
+  #       run: cargo clippy -- -D warnings
   build-clang:
     name: "Build (clang)"
     runs-on: ubuntu-latest
