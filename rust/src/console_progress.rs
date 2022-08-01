@@ -48,29 +48,36 @@ impl ProgressState {
     /// Create a new progress bar.  Should really only be stored
     /// in the PROGRESS static ref.
     fn new<M: Into<String>>(msg: M, ptype: ProgressType) -> Self {
+        use std::fmt::Write;
         let msg = msg.into();
         let target = ProgressDrawTarget::stdout();
         let style = ProgressStyle::default_bar();
         let pb = match ptype {
             ProgressType::Task => {
                 let pb = ProgressBar::new_spinner();
-                pb.set_style(style.template("{spinner} {prefix} {msg}"));
-                pb.enable_steady_tick(200);
+                pb.set_style(style.template("{spinner} {prefix} {msg}").unwrap());
+                pb.enable_steady_tick(std::time::Duration::from_millis(200));
                 pb
             }
             ProgressType::NItems(n) => {
                 let pb = ProgressBar::new(n);
                 let width = n_digits(n);
-                // Our width is static, so format the format string with it
-                let fmt = format!("{{spinner}} {{prefix}} {{pos:>{width}$}}/{{len:width$}} [{{bar:20}}] ({{eta}}) {{msg}}",
-                                  width = width);
-                pb.set_style(style.template(&fmt));
+                // Our width is dynamic, so format the format string with it
+                let mut fmt = String::new();
+                fmt.push_str("{spinner} {prefix} {pos:>");
+                write!(fmt, "{width}").unwrap();
+                fmt.push_str("}/{len:");
+                write!(fmt, "{width}").unwrap();
+                fmt.push_str("} [{bar:20}] ({eta}) {msg}");
+                pb.set_style(style.template(&fmt).unwrap());
                 pb
             }
             ProgressType::Percent => {
                 let pb = ProgressBar::new(100);
                 pb.set_style(
-                    style.template("{spinner} {prefix} {pos:>3}% [{bar:20}] ({eta}) {msg}"),
+                    style
+                        .template("{spinner} {prefix} {pos:>3}% [{bar:20}] ({eta}) {msg}")
+                        .unwrap(),
                 );
                 pb
             }
