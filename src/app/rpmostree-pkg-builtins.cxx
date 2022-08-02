@@ -37,6 +37,7 @@ static gboolean opt_dry_run;
 static gboolean opt_apply_live;
 static gboolean opt_idempotent;
 static gchar **opt_install;
+static gboolean opt_assumeyes;
 static gchar **opt_uninstall;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
@@ -52,6 +53,8 @@ static GOptionEntry option_entries[]
           "Initiate a reboot after operation is complete", NULL },
         { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction",
           NULL },
+        { "assumeyes", 'y', 0, G_OPTION_ARG_NONE, &opt_assumeyes,
+          "Auto-confirm interactive prompts for non-security questions", NULL },
         { "allow-inactive", 0, 0, G_OPTION_ARG_NONE, &opt_allow_inactive,
           "Allow inactive package requests", NULL },
         { "idempotent", 0, 0, G_OPTION_ARG_NONE, &opt_idempotent,
@@ -84,8 +87,8 @@ static GOptionEntry install_option_entry[]
 
 static gboolean
 pkg_change (RpmOstreeCommandInvocation *invocation, RPMOSTreeSysroot *sysroot_proxy,
-            const char *const *packages_to_add, const char *const *packages_to_remove,
-            GCancellable *cancellable, GError **error)
+            gboolean print_interactive, const char *const *packages_to_add,
+            const char *const *packages_to_remove, GCancellable *cancellable, GError **error)
 {
   const char *const strv_empty[] = { NULL };
   const char *const *install_pkgs = strv_empty;
@@ -111,7 +114,10 @@ pkg_change (RpmOstreeCommandInvocation *invocation, RPMOSTreeSysroot *sysroot_pr
   g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
   g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
   g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
-  g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
+  // Note that we pass dry-run to the server if we're actually asked for dry-run by the user,
+  // or when we're trying to do an interactive prompt.
+  g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run || print_interactive);
+  g_variant_dict_insert (&dict, "print-interactive", "b", print_interactive);
   g_variant_dict_insert (&dict, "allow-inactive", "b", opt_allow_inactive);
   g_variant_dict_insert (&dict, "no-layering", "b", opt_uninstall_all);
   g_variant_dict_insert (&dict, "idempotent-layering", "b", opt_idempotent);
@@ -180,6 +186,34 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
   argc--;
   argv[argc] = NULL;
 
+  // Special handling for -A without -y (and without --dry-run).
+  const bool unconfirmed_live = !opt_assumeyes && opt_apply_live;
+  if (unconfirmed_live && !opt_dry_run)
+    {
+      // In this case, `rpm-ostree install -A foo` is being invoked from a script.
+      // In older versions, we didn't have the -y/--assumeyes option, so for backwards
+      // compatibility, continue to work - but print a warning so they adjust their
+      // scripts.
+      if (!isatty (0))
+        {
+          g_printerr ("notice: auto-inferring -y/--assumeyes when not run interactively; this will "
+                      "change in the future\n");
+          g_usleep (G_USEC_PER_SEC);
+          opt_assumeyes = 1;
+        }
+      else
+        {
+          // In this case, `rpm-ostree install -A foo` is being run *not* from a script
+
+          // Recurse - this will update the caches, do depsolve etc.
+          if (!pkg_change (invocation, sysroot_proxy, TRUE, (const char *const *)argv,
+                           (const char *const *)opt_uninstall, cancellable, error))
+            return FALSE;
+          CXX_TRY (rpmostreecxx::confirm_or_abort (), error);
+          // Fall through, the operation is confirmed.
+        }
+    }
+
   CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
   if (is_ostree_container)
     {
@@ -205,7 +239,7 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
 
-  return pkg_change (invocation, sysroot_proxy, (const char *const *)argv,
+  return pkg_change (invocation, sysroot_proxy, FALSE, (const char *const *)argv,
                      (const char *const *)opt_uninstall, cancellable, error);
 }
 
@@ -241,6 +275,6 @@ rpmostree_builtin_uninstall (int argc, char **argv, RpmOstreeCommandInvocation *
   if (!opt_install)
     opt_cache_only = TRUE;
 
-  return pkg_change (invocation, sysroot_proxy, (const char *const *)opt_install,
+  return pkg_change (invocation, sysroot_proxy, FALSE, (const char *const *)opt_install,
                      (const char *const *)argv, cancellable, error);
 }

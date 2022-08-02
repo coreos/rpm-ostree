@@ -103,6 +103,8 @@ pub mod ffi {
         fn client_handle_fd_argument(arg: &str, arch: &str, is_replace: bool) -> Result<Vec<i32>>;
         fn client_render_download_progress(progress: &GVariant) -> String;
         fn running_in_container() -> bool;
+        fn confirm() -> Result<bool>;
+        fn confirm_or_abort() -> Result<()>;
     }
 
     #[derive(Debug)]

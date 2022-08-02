@@ -92,7 +92,7 @@ As a special case, it is supported to live-apply just package additions, assumin
 that there are not other pending changes:
 
 ```
-# rpm-ostree install -A <pkg>
+# rpm-ostree install -yA <pkg>
 ```
 
 ### Modularity
