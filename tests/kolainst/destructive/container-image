@@ -44,7 +44,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     # Since we're switching OS update stream, turn off zincati
     systemctl mask --now zincati
 
-    rpm-ostree ex-container 'export' --repo=/ostree/repo ${checksum} "${image}"
+    ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}"
     rpm-ostree rebase "$image_pull" --experimental | tee out.txt
     assert_file_has_content out.txt 'Importing.*'"$image_pull"
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:$image\""
@@ -88,7 +88,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     ostree refs ${with_foo_commit} --create vmcheck_tmp/new_update
     new_commit=$(ostree commit -b vmcheck --tree=ref=vmcheck_tmp/new_update)
     rm "${image_dir}" -rf
-    rpm-ostree ex-container export --repo=/ostree/repo ${new_commit} "$image"
+    ostree container encapsulate --repo=/ostree/repo ${new_commit} "$image"
 
     rpm-ostree uninstall foo
     rpm-ostree upgrade
@@ -104,7 +104,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
     rm "${image_dir}" -rf
-    rpm-ostree ex-container 'export' --repo=/ostree/repo ${checksum} "${image}"
+    ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}"
     # https://github.com/ostreedev/ostree-rs-ext/issues/153
     skopeo copy $image containers-storage:localhost/fcos
     rm "${image_dir}" -rf
