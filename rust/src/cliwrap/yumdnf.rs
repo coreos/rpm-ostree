@@ -68,6 +68,42 @@ enum Cmd {
     Clean {
         subargs: Vec<String>,
     },
+    /// Operate on ostree-based bootable container images
+    Image {
+        #[clap(subcommand)]
+        cmd: ImageCmd,
+    },
+}
+
+/// Switch the booted container image.
+#[derive(Debug, Parser)]
+#[clap(rename_all = "kebab-case")]
+struct RebaseCmd {
+    /// Explicitly opt-out of requiring any form of signature verification.
+    #[clap(long)]
+    no_signature_verification: bool,
+
+    /// Opt-in notice this is still experimental
+    #[clap(long)]
+    experimental: bool,
+
+    /// Use this ostree remote for signature verification
+    #[clap(long)]
+    ostree_remote: Option<String>,
+
+    /// The transport; e.g. oci, oci-archive.  Defaults to `registry`.
+    #[clap(long, default_value = "registry")]
+    transport: String,
+
+    /// Target container image reference
+    imgref: String,
+}
+
+/// Operations on container images
+#[derive(Debug, clap::Subcommand)]
+#[clap(rename_all = "kebab-case")]
+enum ImageCmd {
+    Rebase(RebaseCmd),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -75,7 +111,29 @@ enum RunDisposition {
     ExecRpmOstree(Vec<String>),
     UseSomethingElse,
     NotImplementedYet(&'static str),
+    OnlySupportedOn(SystemHostType),
     Unsupported,
+}
+
+impl RebaseCmd {
+    fn to_ostree_container_ref(&self) -> Result<ostree_ext::container::OstreeImageReference> {
+        let transport = ostree_ext::container::Transport::try_from(self.transport.as_str())?;
+        let imgref = ostree_ext::container::ImageReference {
+            transport,
+            name: self.imgref.to_string(),
+        };
+        use ostree_ext::container::SignatureSource;
+        let sigverify = if self.no_signature_verification {
+            SignatureSource::ContainerPolicyAllowInsecure
+        } else {
+            if let Some(remote) = self.ostree_remote.as_ref() {
+                SignatureSource::OstreeRemote(remote.to_string())
+            } else {
+                SignatureSource::ContainerPolicy
+            }
+        };
+        Ok(ostree_ext::container::OstreeImageReference { sigverify, imgref })
+    }
 }
 
 fn run_clean(argv: &Vec<String>) -> Result<RunDisposition> {
@@ -109,6 +167,18 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
             Package search is not yet implemented.
             For now, it's recommended to use e.g. `toolbox` and `dnf search` inside there.
             "##}),
+                Cmd::Image { cmd } => {
+                    match cmd {
+                        ImageCmd::Rebase(rebase) => {
+                            let container_ref = rebase.to_ostree_container_ref()?;
+                            let container_ref = container_ref.to_string();
+                            let experimental = rebase.experimental.then(|| "--experimental");
+                            let cmd = ["rebase"].into_iter().chain(experimental).chain([container_ref.as_str()])
+                                .map(|s| s.to_string()).collect::<Vec<String>>();
+                            RunDisposition::ExecRpmOstree(cmd)
+                        }
+                    }
+            }
             }
         },
         SystemHostType::OstreeContainer => match opt.cmd {
@@ -124,7 +194,10 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
             Cmd::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
             Cmd::Search { .. } => {
                 RunDisposition::NotImplementedYet("Package search is not yet implemented.")
-            }
+            },
+            Cmd::Image { .. } => {
+                RunDisposition::OnlySupportedOn(SystemHostType::OstreeHost)
+            },
         },
         _ => RunDisposition::Unsupported
     };
@@ -165,6 +238,10 @@ pub(crate) fn main(hosttype: SystemHostType, argv: &[&str]) -> Result<()> {
         RunDisposition::Unsupported => Err(anyhow!(
             "This command is only supported on ostree-based systems."
         )),
+        RunDisposition::OnlySupportedOn(platform) => {
+            let platform = crate::client::system_host_type_str(&platform);
+            Err(anyhow!("This command is only supported on {platform}"))
+        }
         RunDisposition::NotImplementedYet(msg) => Err(anyhow!("{}\n{}", IMAGEBASED, msg)),
     }
 }
@@ -187,6 +264,13 @@ mod tests {
             ));
         }
 
+        let rebasecmd = &[
+            "image",
+            "rebase",
+            "--experimental",
+            "quay.io/example/os:latest",
+        ];
+
         // Tests for the ostree host case
         let host = SystemHostType::OstreeHost;
         assert!(matches!(
@@ -200,6 +284,10 @@ mod tests {
         assert!(matches!(
             testrun(host, &["install", "foo", "bar"])?,
             RunDisposition::UseSomethingElse
+        ));
+        assert!(matches!(
+            testrun(host, rebasecmd).unwrap(),
+            RunDisposition::ExecRpmOstree(_)
         ));
 
         fn strvec(s: impl IntoIterator<Item = &'static str>) -> Vec<String> {
@@ -216,6 +304,11 @@ mod tests {
             testrun(host, &["clean", "all"])?,
             RunDisposition::ExecRpmOstree(strvec(["cleanup", "-m"]))
         );
+        assert!(matches!(
+            testrun(host, rebasecmd).unwrap(),
+            RunDisposition::OnlySupportedOn(SystemHostType::OstreeHost)
+        ));
+
         assert!(matches!(
             testrun(host, &["upgrade"])?,
             RunDisposition::NotImplementedYet(_)
