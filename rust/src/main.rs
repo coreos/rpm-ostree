@@ -30,9 +30,12 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
             );
             return rpmostree_rust::container::entrypoint(&args_borrowed).await;
         }
-        // This is a custom wrapper for
+        // This is a deprecated entrypoint
         "container-encapsulate" => {
-            rpmostree_rust::container::container_encapsulate(&args_borrowed).await?;
+            rpmostree_rust::client::warn_future_incompatibility(
+                "This entrypoint is deprecated; use `rpm-ostree compose container-encapsulate` instead",
+            );
+            rpmostree_rust::container::container_encapsulate(args)?;
             return Ok(0);
         }
         _ => {}

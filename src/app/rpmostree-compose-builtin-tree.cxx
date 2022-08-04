@@ -1731,3 +1731,19 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
 
   return TRUE;
 }
+
+gboolean
+rpmostree_compose_builtin_container_encapsulate (int argc, char **argv,
+                                                 RpmOstreeCommandInvocation *invocation,
+                                                 GCancellable *cancellable, GError **error)
+{
+  rust::Vec<rust::String> rustargv;
+  g_assert_cmpint (argc, >, 0);
+  rustargv.push_back (std::string (argv[0]));
+  // Re-inject argument required by the Rust side
+  rustargv.push_back (std::string ("container-encapsulate"));
+  for (int i = 1; i < argc; i++)
+    rustargv.push_back (std::string (argv[i]));
+  CXX_TRY (rpmostreecxx::container_encapsulate (rustargv), error);
+  return TRUE;
+}

@@ -28,27 +28,30 @@
 
 #include <glib/gi18n.h>
 
-static RpmOstreeCommand compose_subcommands[]
-    = { { "tree", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-          "Process a \"treefile\"; install packages and commit the result to an OSTree repository",
-          rpmostree_compose_builtin_tree },
-        { "install",
-          (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
-                                  | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
-          "Install packages into a target path", rpmostree_compose_builtin_install },
-        { "postprocess",
-          (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
-                                  | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
-          "Perform final postprocessing on an installation root",
-          rpmostree_compose_builtin_postprocess },
-        { "commit",
-          (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
-                                  | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
-          "Commit a target path to an OSTree repository", rpmostree_compose_builtin_commit },
-        { "extensions", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-          "Download RPM packages guaranteed to depsolve with a base OSTree",
-          rpmostree_compose_builtin_extensions },
-        { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL } };
+static RpmOstreeCommand compose_subcommands[] = {
+  { "tree", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Process a \"treefile\"; install packages and commit the result to an OSTree repository",
+    rpmostree_compose_builtin_tree },
+  { "install",
+    (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
+                            | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
+    "Install packages into a target path", rpmostree_compose_builtin_install },
+  { "postprocess",
+    (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
+                            | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
+    "Perform final postprocessing on an installation root", rpmostree_compose_builtin_postprocess },
+  { "commit",
+    (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
+                            | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
+    "Commit a target path to an OSTree repository", rpmostree_compose_builtin_commit },
+  { "extensions", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Download RPM packages guaranteed to depsolve with a base OSTree",
+    rpmostree_compose_builtin_extensions },
+  { "container-encapsulate", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Generate a reproducible \"chunked\" container image (using RPM data) from an OSTree commit",
+    rpmostree_compose_builtin_container_encapsulate },
+  { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
+};
 
 gboolean
 rpmostree_builtin_compose (int argc, char **argv, RpmOstreeCommandInvocation *invocation,

@@ -41,5 +41,9 @@ gboolean rpmostree_compose_builtin_commit (int argc, char **argv,
 gboolean rpmostree_compose_builtin_extensions (int argc, char **argv,
                                                RpmOstreeCommandInvocation *invocation,
                                                GCancellable *cancellable, GError **error);
+gboolean rpmostree_compose_builtin_container_encapsulate (int argc, char **argv,
+                                                          RpmOstreeCommandInvocation *invocation,
+                                                          GCancellable *cancellable,
+                                                          GError **error);
 
 G_END_DECLS

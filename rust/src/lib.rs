@@ -169,6 +169,11 @@ pub mod ffi {
         fn cliwrap_destdir() -> String;
     }
 
+    // container.rs
+    extern "Rust" {
+        fn container_encapsulate(args: Vec<String>) -> Result<()>;
+    }
+
     /// `ContainerImageState` is currently identical to ostree-rs-ext's `LayeredImageState` struct, because
     /// cxx.rs currently requires types used as extern Rust types to be defined by the same crate
     /// that contains the bridge using them, so we redefine an `ContainerImport` struct here.
@@ -883,6 +888,7 @@ pub(crate) use client::*;
 pub mod cliwrap;
 pub mod container;
 pub use cliwrap::*;
+pub(crate) use container::*;
 mod composepost;
 pub mod countme;
 pub(crate) use composepost::*;

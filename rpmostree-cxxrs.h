@@ -1749,6 +1749,8 @@ void cliwrap_write_wrappers (::std::int32_t rootfs);
 
 ::rust::String cliwrap_destdir () noexcept;
 
+void container_encapsulate (::rust::Vec< ::rust::String> args);
+
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 pull_container (const ::rpmostreecxx::OstreeRepo &repo,
                 const ::rpmostreecxx::GCancellable &cancellable, ::rust::Str imgref);
