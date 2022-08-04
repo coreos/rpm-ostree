@@ -38,6 +38,9 @@ echo "ok empty pkg arrays, and commit meta correct in status json"
 # All tests which require a booted system, but are nondestructive
 rpm-ostree testutils integration-read-only
 
+systemctl show -p TimeoutStartUSec rpm-ostreed.service > out.txt
+assert_file_has_content out.txt 'TimeoutStartUSec=5m'
+
 # Ensure we return an error when passing a wrong option.
 rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands.txt
 while read cmd; do
