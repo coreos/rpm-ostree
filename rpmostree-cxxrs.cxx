@@ -2037,6 +2037,9 @@ extern "C"
 
   void rpmostreecxx$cxxbridge1$cliwrap_destdir (::rust::String *return$) noexcept;
 
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$container_encapsulate (::rust::Vec< ::rust::String> *args) noexcept;
+
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$pull_container (
       const ::rpmostreecxx::OstreeRepo &repo, const ::rpmostreecxx::GCancellable &cancellable,
       ::rust::Str imgref, ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
@@ -3581,6 +3584,17 @@ cliwrap_destdir () noexcept
   ::rust::MaybeUninit< ::rust::String> return$;
   rpmostreecxx$cxxbridge1$cliwrap_destdir (&return$.value);
   return ::std::move (return$.value);
+}
+
+void
+container_encapsulate (::rust::Vec< ::rust::String> args)
+{
+  ::rust::ManuallyDrop< ::rust::Vec< ::rust::String> > args$ (::std::move (args));
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$container_encapsulate (&args$.value);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
 }
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>

@@ -207,9 +207,8 @@ fn gv_nevra_to_string(pkg: &glib::Variant) -> String {
 }
 
 /// Like `ostree container encapsulate`, but uses chunks derived from package data.
-/// Note this isn't *really* asynchronous in many parts.
-pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
-    let args = args.iter().skip(1);
+pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
+    let args = args.iter().skip(1).map(|s| s.as_str());
     let opt = ContainerEncapsulateOpts::parse_from(args);
     let repo = &ostree_ext::cli::parse_repo(opt.repo.as_str())?;
     let (root, rev) = repo.read_commit(opt.ostree_ref.as_str(), gio::NONE_CANCELLABLE)?;
@@ -385,15 +384,18 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
         format,
         ..Default::default()
     };
-    let digest = ostree_ext::container::encapsulate(
-        repo,
-        rev.as_str(),
-        &config,
-        Some(opts),
-        Some(meta),
-        &opt.imgref,
-    )
-    .await?;
+    let handle = tokio::runtime::Handle::current();
+    let digest = handle.block_on(async {
+        ostree_ext::container::encapsulate(
+            repo,
+            rev.as_str(),
+            &config,
+            Some(opts),
+            Some(meta),
+            &opt.imgref,
+        )
+        .await
+    })?;
     println!("Pushed digest: {}", digest);
     Ok(())
 }
