@@ -32,6 +32,7 @@ G_BEGIN_DECLS
                                      RpmOstreeCommandInvocation *invocation,                       \
                                      GCancellable *cancellable, GError **error)
 
+BUILTINPROTO (apply_live);
 BUILTINPROTO (compose);
 BUILTINPROTO (countme);
 BUILTINPROTO (upgrade);

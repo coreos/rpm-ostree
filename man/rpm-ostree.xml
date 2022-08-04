@@ -710,33 +710,15 @@ Boston, MA 02111-1307, USA.
         </listitem>
       </varlistentry>
 
-      <varlistentry>
-        <term><command>ex</command></term>
-
-        <listitem>
-          <para>
-            This command offers access to experimental features; command line
-            stability is not guaranteed.  The available subcommands will be listed
-            by invoking <command>rpm-ostree ex</command>.  For example, there is
-            <command>rpm-ostree ex apply-live</command> which is an experimental
-            interface for applying changes to the booted deployment.
-          </para>
-        </listitem>
-      </varlistentry>
-
 
       <varlistentry>
-        <term><command>ex apply-live</command></term>
+        <term><command>apply-live</command></term>
 
         <listitem>
-          <para>
-            Experimental feature; subject to change.
-          </para>
-
           <para>
             Given a target OSTree commit (defaults to the pending deployment), create a transient
-            <literal>overlayfs</literal> filesystem for <literal>/usr</literal>, and synchronize
-            the changes to the booted filesystem tree.  By default, to ensure safety, only package additions
+            <literal>overlayfs</literal> filesystem for the booted <literal>/usr</literal>, and synchronize
+            the changes from the source to the booted filesystem tree.  By default, to ensure safety, only package additions
             are allowed.
           </para>
 
@@ -756,9 +738,15 @@ Boston, MA 02111-1307, USA.
             <title>Install postgresql live</title>
 
             <programlisting>$ rpm-ostree install postgresql-server
-$ rpm-ostree ex apply-live
+$ rpm-ostree apply-live
 $ systemctl start postgresql  # Some setup required
             </programlisting>
+
+            <para>
+              This is also the same as:
+            </para>
+
+            <programlisting>$ rpm-ostree install -A postgresql-server</programlisting>
           </example>
 
           <para>
@@ -774,6 +762,19 @@ $ systemctl start postgresql  # Some setup required
           </para>
         </listitem>
       </varlistentry>
+
+      <varlistentry>
+        <term><command>ex</command></term>
+
+        <listitem>
+          <para>
+            This command offers access to experimental features; command line
+            stability is not guaranteed.  The available subcommands will be listed
+            by invoking <command>rpm-ostree ex</command>.
+          </para>
+        </listitem>
+      </varlistentry>
+
 
       <varlistentry>
         <term><command>ex initramfs-etc</command></term>

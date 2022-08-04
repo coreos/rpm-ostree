@@ -31,8 +31,8 @@
 #include <libglnx.h>
 
 gboolean
-rpmostree_ex_builtin_apply_live (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
-                                 GCancellable *cancellable, GError **error)
+rpmostree_builtin_apply_live (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                              GCancellable *cancellable, GError **error)
 {
   rust::Vec<rust::String> rustargv;
   for (int i = 0; i < argc; i++)

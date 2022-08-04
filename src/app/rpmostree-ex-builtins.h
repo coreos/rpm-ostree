@@ -32,7 +32,6 @@ G_BEGIN_DECLS
                                         GCancellable *cancellable, GError **error)
 
 BUILTINPROTO (unpack);
-BUILTINPROTO (apply_live);
 BUILTINPROTO (history);
 BUILTINPROTO (initramfs_etc);
 BUILTINPROTO (module);

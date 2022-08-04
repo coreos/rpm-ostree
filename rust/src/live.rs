@@ -329,7 +329,7 @@ fn rerun_tmpfiles() -> Result<()> {
     })
 }
 
-/// Implementation of `rpm-ostree ex apply-live`.
+/// Implementation of `rpm-ostree apply-live`.
 pub(crate) fn transaction_apply_live(
     sysroot: &crate::ffi::OstreeSysroot,
     options: &crate::ffi::GVariant,

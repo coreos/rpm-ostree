@@ -43,6 +43,8 @@ static RpmOstreeCommand commands[] = {
     static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
                                         | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
     "Commands to compose a tree", rpmostree_builtin_compose },
+  { "apply-live", (RpmOstreeBuiltinFlags)0, "Apply pending deployment changes to booted deployment",
+    rpmostree_builtin_apply_live },
   { "cleanup", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
     "Clear cached/pending data", rpmostree_builtin_cleanup },
   { "db", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD),

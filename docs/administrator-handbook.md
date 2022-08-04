@@ -160,8 +160,6 @@ command that enables local initramfs generation.
 ### Experimental interface
 
 There is a generic `rpm-ostree ex` command that offers experimental features.
-One of those is `rpm-ostree ex apply-live`, which offers the ability to apply
-changes from the pending deployment to the booted deployment.
 
 See `man rpm-ostree` for more information.
 
@@ -206,11 +204,10 @@ Now, suppose that you want to test this change *live*.  There are two choices.
 The first choice is to run the `rpm-ostree override replace` command above to stage the deployment, and then run
 
 ```
-$ rpm-ostree ex apply-live --allow-replacement
+$ rpm-ostree apply-live --allow-replacement
 ```
 
-This is a currently experimental interface that will pull the pending
-changes and apply them live.  You can `rpm-ostree ex apply-live --reset`
+This will pull the pending changes and apply them live.  You can `rpm-ostree apply-live --reset`
 to revert back to the booted tree.
 
 ### Using `usroverlay`
@@ -222,7 +219,7 @@ server somewhere that may not be in an RPM even.
 The changes here will not persist across reboots, which makes this a great choice for
 testing.
 
-One downside though is there's no equivalent of `rpm-ostree ex apply-live --reset`
+One downside though is it does not currently work to `rpm-ostree apply-live --reset`
 today when `rpm-ostree usroverlay` is in place.  It's possible to find the original
 binaries in a previous deployment, or via `ostree checkout` of the base commit, etc.
 

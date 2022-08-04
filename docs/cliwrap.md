@@ -19,7 +19,7 @@ rpm-ostree today contains code to wrap/reimplement the latter, which includes `d
 $ rpm-ostree deploy --ex-cliwrap=true
 ```
 
-You may also want to follow this with an `rpm-ostree ex apply-live` to apply the change live.
+You may also want to follow this with an `rpm-ostree apply-live` to apply the change live.
 
 To disable: `rpm-ostree deploy --ex-cliwrap=false`
 

@@ -72,7 +72,7 @@ rpm-ostree install bar
 rpmostree_assert_status '.deployments|length == 2' \
                     '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]'
-if rpm-ostree ex apply-live 2>err.txt; then
+if rpm-ostree apply-live 2>err.txt; then
     fatal "live-removed foo"
 fi
 assert_file_has_content_literal err.txt 'packages would be removed: 1, enable replacement to override'
@@ -129,7 +129,7 @@ assert_file_has_content_literal status.txt 'LiveDiff: 3 added'
 echo "ok apply-live stage2"
 
 # Now undo it all
-rpm-ostree ex apply-live --reset --allow-replacement
+rpm-ostree apply-live --reset --allow-replacement
 rpm -qa | sort > current-rpmdb.txt
 diff -u original-rpmdb.txt current-rpmdb.txt
 if test -f /usr/bin/bar; then
@@ -151,7 +151,7 @@ mkdir -p ${td}/usr/share/localdata
 echo mytestdata > ${td}/usr/share/localdata/mytestfile
 ostree commit --base=localref --selinux-policy-from-base -b localref --tree=dir=${td} --consume
 rpm-ostree rebase :localref
-rpm-ostree ex apply-live
+rpm-ostree apply-live
 cat /usr/share/localdata/mytestfile > out.txt
 assert_file_has_content out.txt mytestdata
 echo "ok local ref without package changes"

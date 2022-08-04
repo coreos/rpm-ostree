@@ -28,7 +28,7 @@ libtest_enable_repover 0
 cd $(mktemp -d)
 
 rpm-ostree deploy --ex-cliwrap=true
-rpm-ostree ex apply-live  # yep it works!
+rpm-ostree apply-live  # yep it works!
 
 wrapdir="/usr/libexec/rpm-ostree/wrapped"
 if ! test -d "${wrapdir}"; then
@@ -59,7 +59,7 @@ assert_file_has_content err.txt "operating system extensions"
 echo "ok cliwrap yum install"
 
 rpm-ostree deploy --ex-cliwrap=false
-rpm-ostree ex apply-live --allow-replacement
+rpm-ostree apply-live --allow-replacement
 rpm --version
 rpm -qa >/dev/null
 rpm --verify bash >out.txt || true
