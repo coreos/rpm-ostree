@@ -21,6 +21,9 @@ ProtectHome=true
 # application containers.
 InaccessiblePaths=-/var/lib/containers
 NotifyAccess=main
+# Significantly bump this timeout from the default because
+# we do a lot of stuff on daemon startup.
+TimeoutStartSec=5m
 @SYSTEMD_ENVIRON@
 ExecStart=@bindir@/rpm-ostree start-daemon
 ExecReload=@bindir@/rpm-ostree reload
