@@ -32,7 +32,9 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
         .value_of("groupname")
         .ok_or_else(|| anyhow!("missing required groupname argument"))?;
     if !matches.is_present("system") {
-        eprintln!("Trying to create non-system group '{groupname}'; this will become an error in the future.");
+        crate::client::warn_future_incompatibility(
+            format!("Trying to create non-system group '{groupname}'; this will become an error in the future.")
+        );
     }
 
     let rootdir = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;

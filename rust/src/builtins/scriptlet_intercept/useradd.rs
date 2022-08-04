@@ -37,7 +37,9 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     let shell = matches.value_of("shell");
 
     if !matches.is_present("system") {
-        eprintln!("Trying to create non-system user '{username}'; this will become an error in the future.");
+        crate::client::warn_future_incompatibility(
+            format!("Trying to create non-system user '{username}'; this will become an error in the future.")
+        );
     }
 
     let rootdir = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
