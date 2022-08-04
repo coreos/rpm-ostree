@@ -301,7 +301,7 @@ pub(crate) fn require_system_host_type(expected: SystemHostType) -> CxxResult<()
 
 /// Emit a warning about a potential future incompatible change we may make
 /// that would require adjustment from the user.
-pub(crate) fn warn_future_incompatibility(msg: impl AsRef<str>) {
+pub fn warn_future_incompatibility(msg: impl AsRef<str>) {
     let msg = msg.as_ref();
     eprintln!("warning: {msg}");
     std::thread::sleep(std::time::Duration::from_secs(1));

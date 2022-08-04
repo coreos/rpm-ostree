@@ -25,6 +25,9 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
     match arg {
         // TODO(lucab): move consumers to the multicall entrypoint, then drop this.
         "ex-container" => {
+            rpmostree_rust::client::warn_future_incompatibility(
+                "This entrypoint is deprecated; use `ostree container` instead",
+            );
             return rpmostree_rust::container::entrypoint(&args_borrowed).await;
         }
         // This is a custom wrapper for

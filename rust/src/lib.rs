@@ -878,7 +878,7 @@ pub(crate) use crate::builtins::compose::commit::*;
 pub(crate) use crate::builtins::compose::*;
 mod bwrap;
 pub(crate) use bwrap::*;
-mod client;
+pub mod client;
 pub(crate) use client::*;
 pub mod cliwrap;
 pub mod container;
