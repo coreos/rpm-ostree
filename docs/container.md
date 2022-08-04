@@ -43,22 +43,30 @@ The ostree-container model creates a bidirectional bridge between ostree and OCI
 formatted containers.  `rpm-ostree compose tree` today is a tool which natively
 accepts RPMs (and other content) and outputs an OSTree commit.
 
-This output can be converted into a base image via e.g.:
+In ostree upstream, there is a simplistic CLI (and API) that "encapsulates"
+a commit into a container image with a *single layer*:
 
 ```
 $ ostree container encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue docker://quay.io/myuser/fedora-silverblue:35
 ```
 
-or:
-
-```
-$ ostree container encapsulate --repo=/path/to/repo fedora/x86_64/coreos/stable oci:/var/tmp/fcos
-```
-
-In the first case, we are pushing to a remote Docker registry, and
-in the second we are pushing to a local OCI formatted directory.
 The `encapsulate` command accepts all the same "transport prefixes" as the `skopeo`
 CLI.  For more information, see `man skopeo`.
+
+However, this "single layer" is not an efficient way to deliver content.  It means
+that any time anything in the ostree commit changes, clients need to download
+a full new tarball.
+
+The ostree shared library has low level APIs that support creating reproducible
+"chunked" images.  A key adavantage of this is that if e.g. just the kernel
+changes, one only downloads the layer containing the kernel/initramfs
+(plus a metadata layer) instead of everything.
+
+Use a command like this to generate chunked images:
+
+```
+$ rpm-ostree compose container-encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue docker://quay.io/myuser/fedora-silverblue:35
+```
 
 It is likely at some point that we add `rpm-ostree compose container` or so
 which would natively input and output a (base) container image.
