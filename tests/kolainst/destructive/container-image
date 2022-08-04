@@ -88,7 +88,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     ostree refs ${with_foo_commit} --create vmcheck_tmp/new_update
     new_commit=$(ostree commit -b vmcheck --tree=ref=vmcheck_tmp/new_update)
     rm "${image_dir}" -rf
-    ostree container encapsulate --repo=/ostree/repo ${new_commit} "$image"
+    ostree container encapsulate --compression-fast --repo=/ostree/repo ${new_commit} "$image"
 
     rpm-ostree uninstall foo
     rpm-ostree upgrade
@@ -104,7 +104,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
     rm "${image_dir}" -rf
-    ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}"
+    ostree container encapsulate --compression-fast --repo=/ostree/repo ${checksum} "${image}"
     # https://github.com/ostreedev/ostree-rs-ext/issues/153
     skopeo copy $image containers-storage:localhost/fcos
     rm "${image_dir}" -rf
