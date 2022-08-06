@@ -32,6 +32,10 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     // Looks like legacy...
     "ca-certificates.prein",
     "libgcc.post",
+    // The entire filesystem package is insane.  Every hack in there would go
+    // away if we just taught traditional yum/dnf to install it first, in
+    // the same way we do in rpm-ostree.
+    "filesystem.posttrans",
     "setup.post",
     "pinentry.prein",
     "fedora-release.posttrans",
