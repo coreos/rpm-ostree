@@ -85,7 +85,7 @@ rust-ini = "0.18.0"
 serde = { version = "1.0.140", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.83"
-serde_yaml = "0.9.2"
+serde_yaml = "0.9.4"
 systemd = "0.10.0"
 tempfile = "3.3.0"
 tracing = "0.1"
