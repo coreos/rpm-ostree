@@ -61,7 +61,7 @@ env_logger = "0.9.0"
 fail = { version = "0.5", features = ["failpoints"] }
 fn-error-context = "0.2.0"
 futures = "0.3.21"
-indoc = "1.0.6"
+indoc = "1.0.7"
 indicatif = "0.17.0"
 libc = "0.2.127"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
