@@ -52,7 +52,7 @@ cap-std = { version = "0.25", features = ["fs_utf8"] }
 rustix = { version = "0.35", features = ["use-libc"] }
 cap-primitives = "0.25.2"
 cap-tempfile = "0.25.2"
-chrono = { version = "0.4.20", features = ["serde"] }
+chrono = { version = "0.4.21", features = ["serde"] }
 clap = { version = "3.2.16", features = ["derive"] }
 cxx = "1.0.72"
 envsubst = "0.2.0"
