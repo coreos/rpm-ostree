@@ -36,9 +36,10 @@ gboolean rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd, GCancellable
 
 gboolean rpmostree_compose_commit (int rootfs_dfd, OstreeRepo *repo, const char *parent,
                                    GVariant *metadata, GVariant *detached_metadata,
-                                   const char *gpg_keyid, gboolean enable_selinux,
-                                   OstreeRepoDevInoCache *devino_cache, char **out_new_revision,
-                                   GCancellable *cancellable, GError **error);
+                                   const char *gpg_keyid, gboolean container,
+                                   gboolean enable_selinux, OstreeRepoDevInoCache *devino_cache,
+                                   char **out_new_revision, GCancellable *cancellable,
+                                   GError **error);
 
 G_END_DECLS
 

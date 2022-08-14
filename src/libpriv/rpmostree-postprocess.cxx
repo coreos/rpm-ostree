@@ -751,7 +751,7 @@ on_progress_timeout (gpointer datap)
 gboolean
 rpmostree_compose_commit (int rootfs_fd, OstreeRepo *repo, const char *parent_revision,
                           GVariant *src_metadata, GVariant *detached_metadata,
-                          const char *gpg_keyid, gboolean enable_selinux,
+                          const char *gpg_keyid, gboolean container, gboolean enable_selinux,
                           OstreeRepoDevInoCache *devino_cache, char **out_new_revision,
                           GCancellable *cancellable, GError **error)
 {
@@ -827,8 +827,11 @@ rpmostree_compose_commit (int rootfs_fd, OstreeRepo *repo, const char *parent_re
 
   // Unfortunately this API takes GVariantDict, not GVariantBuilder, so convert
   g_autoptr (GVariantDict) metadata_dict = g_variant_dict_new (src_metadata);
-  if (!ostree_commit_metadata_for_bootable (root_tree, metadata_dict, cancellable, error))
-    return glnx_prefix_error (error, "Looking for bootable kernel");
+  if (!container)
+    {
+      if (!ostree_commit_metadata_for_bootable (root_tree, metadata_dict, cancellable, error))
+        return glnx_prefix_error (error, "Looking for bootable kernel");
+    }
   g_autoptr (GVariant) metadata = g_variant_dict_end (metadata_dict);
 
   g_autofree char *new_revision = NULL;
