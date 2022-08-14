@@ -326,7 +326,10 @@ pub fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
 }
 
 #[context("Handling treefile 'units'")]
-fn compose_postprocess_units(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
+fn compose_postprocess_units(rootfs_dfd: &Dir, treefile: &mut Treefile) -> Result<()> {
+    let mut db = cap_std::fs::DirBuilder::new();
+    db.recursive(true);
+    db.mode(0o755);
     let units = if let Some(u) = treefile.parsed.base.units.as_ref() {
         u
     } else {
@@ -334,20 +337,20 @@ fn compose_postprocess_units(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) 
     };
     let multiuser_wants = Path::new("usr/etc/systemd/system/multi-user.target.wants");
     // Sanity check
-    if !rootfs_dfd.exists("usr/etc")? {
+    if !rootfs_dfd.try_exists("usr/etc")? {
         return Err(anyhow!("Missing usr/etc in rootfs"));
     }
-    rootfs_dfd.ensure_dir_all(multiuser_wants, 0o755)?;
+    rootfs_dfd.ensure_dir_with(multiuser_wants, &db)?;
 
     for unit in units {
         let dest = multiuser_wants.join(unit);
-        if rootfs_dfd.exists(&dest)? {
+        if rootfs_dfd.try_exists(&dest)? {
             continue;
         }
 
         println!("Adding {} to multi-user.target.wants", unit);
         let target = format!("/usr/lib/systemd/system/{unit}");
-        rootfs_dfd.symlink(&dest, &target)?;
+        cap_primitives::fs::symlink_contents(target, &rootfs_dfd.as_filelike_view(), dest)?;
     }
     Ok(())
 }
@@ -439,7 +442,10 @@ pub fn compose_postprocess_remove_files(
     Ok(())
 }
 
-fn compose_postprocess_add_files(rootfs_dfd: &openat::Dir, treefile: &mut Treefile) -> Result<()> {
+fn compose_postprocess_add_files(rootfs_dfd: &Dir, treefile: &mut Treefile) -> Result<()> {
+    let mut db = cap_std::fs::DirBuilder::new();
+    db.recursive(true);
+    db.mode(0o755);
     // Make a deep copy here because get_add_file_fd() also wants an &mut
     // reference.
     let add_files: Vec<_> = treefile
@@ -464,14 +470,20 @@ fn compose_postprocess_add_files(rootfs_dfd: &openat::Dir, treefile: &mut Treefi
         println!("Adding file {}", dest);
         let dest = Path::new(&*dest);
         if let Some(parent) = dest.parent() {
-            rootfs_dfd.ensure_dir_all(parent, 0o755)?;
+            rootfs_dfd.ensure_dir_with(parent, &db)?;
         }
 
         let fd = treefile.get_add_file(&src);
         fd.seek(std::io::SeekFrom::Start(0))?;
         let mut reader = std::io::BufReader::new(fd);
-        let mode = reader.get_mut().metadata()?.permissions().mode();
-        rootfs_dfd.write_file_with(dest, mode, |w| std::io::copy(&mut reader, w))?;
+        let perms = reader.get_mut().metadata()?.permissions();
+        rootfs_dfd.atomic_replace_with(dest, |w| {
+            std::io::copy(&mut reader, w)?;
+            w.get_mut()
+                .as_file_mut()
+                .set_permissions(cap_std::fs::Permissions::from_std(perms))?;
+            Ok::<_, anyhow::Error>(())
+        })?;
     }
     Ok(())
 }
@@ -514,7 +526,7 @@ pub fn compose_postprocess(
     }
 
     compose_postprocess_rpmdb(rootfs_dfd)?;
-    compose_postprocess_units(rootfs_dfd, treefile)?;
+    compose_postprocess_units(rootfs_cap_std, treefile)?;
     if let Some(t) = treefile.parsed.base.default_target.as_deref() {
         compose_postprocess_default_target(rootfs_dfd, t)?;
     }
@@ -525,7 +537,7 @@ pub fn compose_postprocess(
     // These ones depend on the /etc path
     compose_postprocess_mutate_os_release(rootfs_dfd, treefile, next_version)?;
     compose_postprocess_remove_files(rootfs_dfd, treefile)?;
-    compose_postprocess_add_files(rootfs_dfd, treefile)?;
+    compose_postprocess_add_files(rootfs_cap_std, treefile)?;
     etc_guard.undo()?;
 
     compose_postprocess_scripts(rootfs_dfd, treefile, unified_core)?;
