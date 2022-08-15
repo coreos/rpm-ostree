@@ -26,6 +26,10 @@ set -x
 
 # More miscellaneous tests
 
+# Verify that the commit is printed in the output
+vm_rpmostree status > status.txt
+assert_file_has_content status.txt 'Commit:'
+
 # Locked finalization
 booted_csum=$(vm_get_booted_csum)
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)

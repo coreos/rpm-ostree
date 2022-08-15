@@ -489,10 +489,7 @@ print_commit (const char *key, const char *checksum, gboolean host_endian, guint
   g_autoptr (GVariant) reposdata = g_variant_dict_lookup_value (
       commit_meta, "rpmostree.rpmmd-repos", G_VARIANT_TYPE ("aa{sv}"));
 
-  if (!reposdata)
-    return;
-
-  const guint n = g_variant_n_children (reposdata);
+  const guint n = reposdata ? g_variant_n_children (reposdata) : 0;
   if (n == 0 || !opt_verbose)
     {
       /* no repos to print, so this is just a pure kv print */
