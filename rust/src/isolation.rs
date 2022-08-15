@@ -56,3 +56,28 @@ pub(crate) fn run_systemd_worker_sync(cfg: &UnitConfig) -> Result<()> {
     }
     Ok(())
 }
+
+/// Return a prepared subprocess configuration that will run as an unprivileged user if possible.
+///
+/// This currently only drops privileges when run under systemd with DynamicUser.
+pub(crate) fn unprivileged_subprocess(binary: &str) -> Command {
+    // TODO: if we detect we're running in a container as uid 0, perhaps at least switch to the
+    // "bin" user if we can?
+    if !crate::utils::running_in_systemd() {
+        return Command::new(binary);
+    }
+    let mut cmd = Command::new("setpriv");
+    cmd.args(&[
+        "--no-new-privs",
+        "--init-groups",
+        "--reuid",
+        "rpm-ostree",
+        "--bounding-set",
+        "-all",
+        "--pdeathsig",
+        "SIGTERM",
+        "--",
+        binary,
+    ]);
+    cmd
+}
