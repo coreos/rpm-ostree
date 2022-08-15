@@ -5,6 +5,10 @@ ConditionPathExists=/ostree
 RequiresMountsFor=/boot
 
 [Service]
+# See similar code in rpm-ostree-countme.service
+User=rpm-ostree
+DynamicUser=yes
+# As of right now, our primary API is DBus.  But see also https://github.com/coreos/rpm-ostree/issues/3850
 Type=dbus
 BusName=org.projectatomic.rpmostree1
 # To use the read-only sysroot bits
@@ -25,5 +29,7 @@ NotifyAccess=main
 # we do a lot of stuff on daemon startup.
 TimeoutStartSec=5m
 @SYSTEMD_ENVIRON@
-ExecStart=@bindir@/rpm-ostree start-daemon
+# We start this main process with full privileges; it may spawn unprivileged processes
+# with the rpm-ostree user.
+ExecStart=+@bindir@/rpm-ostree start-daemon
 ExecReload=@bindir@/rpm-ostree reload

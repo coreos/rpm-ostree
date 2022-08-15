@@ -6,11 +6,11 @@ use crate::cxxrsutil::*;
 use crate::ffi::{output_message, ContainerImageState};
 use anyhow::Result;
 use ostree::glib;
-use ostree_container::store::ImageImporter;
-use ostree_container::store::PrepareResult;
+use ostree_container::store::{
+    ImageImporter, ImageProxyConfig, ImportProgress, ManifestLayerState, PrepareResult,
+};
 use ostree_container::OstreeImageReference;
 use ostree_ext::container as ostree_container;
-use ostree_ext::container::store::{ImportProgress, ManifestLayerState};
 use ostree_ext::ostree;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::Receiver;
@@ -48,12 +48,20 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
     }
 }
 
+fn default_container_pull_config() -> ImageProxyConfig {
+    let cmd = crate::isolation::unprivileged_subprocess("skopeo");
+    ImageProxyConfig {
+        skopeo_cmd: Some(cmd),
+        ..Default::default()
+    }
+}
+
 async fn pull_container_async(
     repo: &ostree::Repo,
     imgref: &OstreeImageReference,
 ) -> Result<ContainerImageState> {
     output_message(&format!("Pulling manifest: {}", &imgref));
-    let mut imp = ImageImporter::new(repo, imgref, Default::default()).await?;
+    let mut imp = ImageImporter::new(repo, imgref, default_container_pull_config()).await?;
     let layer_progress = imp.request_progress();
     let prep = match imp.prepare().await? {
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
