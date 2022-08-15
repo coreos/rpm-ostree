@@ -1186,9 +1186,10 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
   const char *gpgkey_c = NULL;
   if (!gpgkey.empty ())
     gpgkey_c = gpgkey.c_str ();
+  auto container = (*self->treefile_rs)->get_container ();
   if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision, metadata,
-                                 detached_metadata, gpgkey_c, selinux, self->devino_cache,
-                                 &new_revision, cancellable, error))
+                                 detached_metadata, gpgkey_c, container, selinux,
+                                 self->devino_cache, &new_revision, cancellable, error))
     return glnx_prefix_error (error, "Writing commit");
   g_assert (new_revision != NULL);
 

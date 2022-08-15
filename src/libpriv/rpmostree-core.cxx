@@ -1174,8 +1174,9 @@ find_pkg_in_ostree (RpmOstreeContext *self, DnfPackage *pkg, OstreeSePolicy *sep
   OstreeRepo *repo = get_pkgcache_repo (self);
   /* Init output here, since we have several early returns */
   *out_in_ostree = FALSE;
+  auto selinux_enabled = self->treefile_rs->get_selinux ();
   /* If there's no sepolicy, then we always match */
-  *out_selinux_match = (sepolicy == NULL);
+  *out_selinux_match = (sepolicy == NULL || !selinux_enabled);
 
   /* NB: we're not using a pkgcache yet in the compose path */
   if (repo == NULL)
@@ -1244,7 +1245,7 @@ find_pkg_in_ostree (RpmOstreeContext *self, DnfPackage *pkg, OstreeSePolicy *sep
 
   /* We found an import, let's load the sepolicy state */
   *out_in_ostree = TRUE;
-  if (sepolicy)
+  if (sepolicy && selinux_enabled)
     {
       CXX_TRY_VAR (selinux_match, rpmostreecxx::commit_has_matching_sepolicy (*commit, *sepolicy),
                    error);
