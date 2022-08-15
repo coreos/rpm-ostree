@@ -527,8 +527,9 @@ fn compose_postprocess_mutate_os_release(
     // find the real path to os-release using bwrap; this is an overkill but safer way
     // of resolving a symlink relative to a rootfs (see discussions in
     // https://github.com/projectatomic/rpm-ostree/pull/410/)
+    let rootfs_cap_std = crate::capstdext::from_openat(rootfs_dfd)?;
     let mut bwrap = crate::bwrap::Bubblewrap::new_with_mutability(
-        rootfs_dfd,
+        &rootfs_cap_std,
         crate::ffi::BubblewrapMutability::Immutable,
     )?;
     bwrap.append_child_argv(["realpath", "/etc/os-release"]);
@@ -1093,7 +1094,9 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
     }
 
     // Fork the target rpmdb to write the content from memory to disk
-    let mut bwrap = Bubblewrap::new_with_mutability(rootfs_dfd, BubblewrapMutability::RoFiles)?;
+    let rootfs_cap_std = crate::capstdext::from_openat(rootfs_dfd)?;
+    let mut bwrap =
+        Bubblewrap::new_with_mutability(&rootfs_cap_std, BubblewrapMutability::RoFiles)?;
     bwrap.append_child_argv(["rpmdb", dbpath_arg.as_str(), "--importdb"]);
     bwrap.take_stdin_fd(dbfd.into_raw_fd());
     let cancellable = gio::Cancellable::new();
