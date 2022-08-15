@@ -4,7 +4,6 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use indoc::indoc;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
 use std::process::Command;
 
 use crate::ffi::SystemHostType;
@@ -12,20 +11,19 @@ use crate::ffi::SystemHostType;
 /// Emitted at the first line.
 pub(crate) const IMAGEBASED: &str = "Note: This system is image (rpm-ostree) based.";
 
-const OTHER_OPTIONS: &[(&str, &str)] = &[
-    (
-        "toolbox",
-        "For command-line development and debugging tools in a privileged container",
-    ),
-    ("podman", "General purpose containers"),
-    ("docker", "General purpose containers"),
-    ("flatpak", "Desktop (GUI) applications"),
-];
-
-const RPMOSTREE_INSTALL_TEXT: &str = indoc! { r#"
-Install RPM packages layered on the host root filesystem.
-Consider these "operating system extensions".
-Add `--apply-live` to immediately start using the layered packages."#};
+// const OTHER_OPTIONS: &[(&str, &str)] = &[
+//     (
+//         "toolbox",
+//         "For command-line development and debugging tools in a privileged container",
+//     ),
+//     ("podman", "General purpose containers"),
+//     ("docker", "General purpose containers"),
+//     ("flatpak", "Desktop (GUI) applications"),
+// ];
+// const RPMOSTREE_INSTALL_TEXT: &str = indoc! { r#"
+// Install RPM packages layered on the host root filesystem.
+// Consider these "operating system extensions".
+// Add `--apply-live` to immediately start using the layered packages."#};
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -109,7 +107,6 @@ enum ImageCmd {
 #[derive(Debug, PartialEq, Eq)]
 enum RunDisposition {
     ExecRpmOstree(Vec<String>),
-    UseSomethingElse,
     NotImplementedYet(&'static str),
     OnlySupportedOn(SystemHostType),
     Unsupported,
@@ -156,9 +153,14 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
             match opt.cmd {
                 Cmd::Upgrade | Cmd::Update => RunDisposition::ExecRpmOstree(vec!["upgrade".into()]),
                 Cmd::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
-                Cmd::Install { packages: _ } => {
-                    // TODO analyze packages to find e.g. `gcc` (not ok, use `toolbox`) versus `libvirt` (ok)
-                    RunDisposition::UseSomethingElse
+                Cmd::Install { packages } => {
+                    let mut args = packages;
+                    args.insert(0, "install".into());
+                    args.insert(1, "-A".into());
+                    if opt.assumeyes {
+                        args.insert(1, "-y".into());
+                    }
+                    RunDisposition::ExecRpmOstree(args)
                 },
                 Cmd::Clean { subargs } => {
                     run_clean(&subargs)?
@@ -183,12 +185,16 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
         },
         SystemHostType::OstreeContainer => match opt.cmd {
             Cmd::Upgrade | Cmd::Update => RunDisposition::NotImplementedYet("At the current time, it is not supported to update packages independently of the base image."),
-            Cmd::Install { mut packages } => {
+            Cmd::Install { packages } => {
+                let mut args = packages;
                 if !opt.assumeyes {
                     crate::client::warn_future_incompatibility("-y/--assumeyes is assumed now, but may not be in the future");
                 }
-                packages.insert(0, "install".into());
-                RunDisposition::ExecRpmOstree(packages)
+                args.insert(0, "install".into());
+                if opt.assumeyes {
+                    args.insert(1, "-y".into());
+                }
+                RunDisposition::ExecRpmOstree(args)
             },
             Cmd::Clean { subargs } => run_clean(&subargs)?,
             Cmd::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
@@ -213,28 +219,30 @@ pub(crate) fn main(hosttype: SystemHostType, argv: &[&str]) -> Result<()> {
             eprintln!("{}", IMAGEBASED);
             Err(Command::new("rpm-ostree").args(args).exec().into())
         }
-        RunDisposition::UseSomethingElse => {
-            eprintln!("{}", IMAGEBASED);
-            let mut valid_options: Vec<_> = OTHER_OPTIONS
-                .iter()
-                .filter(|(cmd, _)| Path::new(&format!("/usr/bin/{}", cmd)).exists())
-                .collect();
-            if !valid_options.is_empty() {
-                eprintln!("Before installing packages to the host root filesystem, consider other options:");
-            } else {
-                eprintln!("To explicitly perform the operation:");
-            }
-            valid_options.push(&("rpm-ostree install", RPMOSTREE_INSTALL_TEXT));
-            for (cmd, text) in valid_options {
-                let mut lines = text.lines();
-                eprintln!(" - `{}`: {}", cmd, lines.next().unwrap());
-                for line in lines {
-                    eprintln!("   {}", line)
-                }
-            }
+        // TODO *maybe* enable this later via something like a personality flag
+        // that discourages package installs on e.g. CoreOS.
+        // RunDisposition::UseSomethingElse => {
+        //     eprintln!("{}", IMAGEBASED);
+        //     let mut valid_options: Vec<_> = OTHER_OPTIONS
+        //         .iter()
+        //         .filter(|(cmd, _)| Path::new(&format!("/usr/bin/{}", cmd)).exists())
+        //         .collect();
+        //     if !valid_options.is_empty() {
+        //         eprintln!("Before installing packages to the host root filesystem, consider other options:");
+        //     } else {
+        //         eprintln!("To explicitly perform the operation:");
+        //     }
+        //     valid_options.push(&("rpm-ostree install", RPMOSTREE_INSTALL_TEXT));
+        //     for (cmd, text) in valid_options {
+        //         let mut lines = text.lines();
+        //         eprintln!(" - `{}`: {}", cmd, lines.next().unwrap());
+        //         for line in lines {
+        //             eprintln!("   {}", line)
+        //         }
+        //     }
 
-            Err(anyhow!("not implemented"))
-        }
+        //     Err(anyhow!("not implemented"))
+        // }
         RunDisposition::Unsupported => Err(anyhow!(
             "This command is only supported on ostree-based systems."
         )),
@@ -271,20 +279,24 @@ mod tests {
             "quay.io/example/os:latest",
         ];
 
+        fn vecstr(v: impl IntoIterator<Item = &'static str>) -> Vec<String> {
+            v.into_iter().map(|s| s.to_string()).collect()
+        }
+
         // Tests for the ostree host case
         let host = SystemHostType::OstreeHost;
         assert!(matches!(
             testrun(host, &["upgrade"])?,
             RunDisposition::ExecRpmOstree(_)
         ));
-        assert!(matches!(
+        assert_eq!(
             testrun(host, &["install", "foo"])?,
-            RunDisposition::UseSomethingElse
-        ));
-        assert!(matches!(
-            testrun(host, &["install", "foo", "bar"])?,
-            RunDisposition::UseSomethingElse
-        ));
+            RunDisposition::ExecRpmOstree(vecstr(["install", "-A", "foo"]))
+        );
+        assert_eq!(
+            testrun(host, &["install", "-y", "foo", "bar"])?,
+            RunDisposition::ExecRpmOstree(vecstr(["install", "-y", "-A", "foo", "bar"]))
+        );
         assert!(matches!(
             testrun(host, rebasecmd).unwrap(),
             RunDisposition::ExecRpmOstree(_)
