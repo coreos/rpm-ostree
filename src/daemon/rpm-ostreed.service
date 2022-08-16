@@ -28,8 +28,7 @@ NotifyAccess=main
 # Significantly bump this timeout from the default because
 # we do a lot of stuff on daemon startup.
 TimeoutStartSec=5m
-@SYSTEMD_ENVIRON@
 # We start this main process with full privileges; it may spawn unprivileged processes
 # with the rpm-ostree user.
-ExecStart=+@bindir@/rpm-ostree start-daemon
-ExecReload=@bindir@/rpm-ostree reload
+ExecStart=+rpm-ostree start-daemon
+ExecReload=rpm-ostree reload

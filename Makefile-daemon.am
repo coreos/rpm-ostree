@@ -55,14 +55,14 @@ librpmostreed_sources = \
 dbusconf_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.conf
 dbusconfdir = $(datadir)/dbus-1/system.d
 
-systemdunit_service_in_files = \
-	$(srcdir)/src/daemon/rpm-ostreed.service.in \
-	$(srcdir)/src/daemon/rpm-ostreed-automatic.service.in \
-	$(srcdir)/src/daemon/rpm-ostree-bootstatus.service.in \
-	$(srcdir)/src/daemon/rpm-ostree-countme.service.in \
+systemdunit_service_file_names = \
+	rpm-ostreed.service \
+	rpm-ostreed-automatic.service \
+	rpm-ostree-bootstatus.service \
+	rpm-ostree-countme.service \
 	$(NULL)
 
-systemdunit_service_files = $(systemdunit_service_in_files:.service.in=.service)
+systemdunit_service_files = $(addprefix $(srcdir)/src/daemon/,$(systemdunit_service_file_names))
 systemdunit_timer_files = \
 	$(srcdir)/src/daemon/rpm-ostreed-automatic.timer \
 	$(srcdir)/src/daemon/rpm-ostree-countme.timer \
@@ -74,13 +74,6 @@ systemdunit_DATA = \
 	$(NULL)
 
 systemdunitdir       = $(prefix)/lib/systemd/system/
-if BUILDOPT_ASAN
-daemon_asan_options = -e s,@SYSTEMD_ENVIRON\@,Environment=ASAN_OPTIONS=detect_leaks=false,
-else
-daemon_asan_options = -e /@SYSTEMD_ENVIRON\@/d
-endif
-$(systemdunit_service_files): Makefile
-	$(SED_SUBST) $(daemon_asan_options) $@.in > $@
 
 # We keep this stub script around to have SELinux labeling work,
 # plus some backwards compatibility.
