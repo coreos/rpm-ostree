@@ -5,7 +5,7 @@ ConditionPathExists=/run/ostree-booted
 
 [Service]
 Type=oneshot
-ExecStart=@bindir@/rpm-ostree status -b
+ExecStart=rpm-ostree status -b
 RemainAfterExit=yes
 
 [Install]

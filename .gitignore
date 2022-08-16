@@ -75,10 +75,6 @@
 /rpm-ostreed.conf.5
 /so_locations
 /src/daemon/org.projectatomic.rpmostree1.service
-/src/daemon/rpm-ostree-bootstatus.service
-/src/daemon/rpm-ostree-countme.service
-/src/daemon/rpm-ostreed-automatic.service
-/src/daemon/rpm-ostreed.service
 /src/lib/rpm-ostree-1.pc
 /src/lib/rpmostree-version.h
 /stamp-h1
