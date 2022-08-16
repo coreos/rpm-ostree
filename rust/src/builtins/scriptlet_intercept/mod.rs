@@ -4,6 +4,7 @@
 
 mod groupadd;
 mod useradd;
+mod usermod;
 use anyhow::{bail, Result};
 
 /// Entrypoint for `rpm-ostree scriplet-intercept`.
@@ -19,6 +20,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
     match orig_command {
         "groupadd" => groupadd::entrypoint(rest),
         "useradd" => useradd::entrypoint(rest),
+        "usermod" => usermod::entrypoint(rest),
         x => bail!("Unable to intercept command '{}'", x),
     }
 }
@@ -33,12 +35,14 @@ mod tests {
         let _guard = fail::FailScenario::setup();
         fail::cfg("intercept_groupadd_ok", "return").unwrap();
         fail::cfg("intercept_useradd_ok", "return").unwrap();
+        fail::cfg("intercept_usermod_ok", "return").unwrap();
 
         let err_cases = [
             vec![],
             vec!["rpm-ostree", "install"],
             vec!["rpm-ostree", "scriptlet-intercept", "groupadd"],
             vec!["rpm-ostree", "scriptlet-intercept", "useradd"],
+            vec!["rpm-ostree", "scriptlet-intercept", "usermod"],
             vec!["rpm-ostree", "scriptlet-intercept", "foo", "--"],
         ];
         for input in &err_cases {
@@ -48,6 +52,7 @@ mod tests {
         let ok_cases = [
             vec!["rpm-ostree", "scriptlet-intercept", "groupadd", "--"],
             vec!["rpm-ostree", "scriptlet-intercept", "useradd", "--"],
+            vec!["rpm-ostree", "scriptlet-intercept", "usermod", "--"],
         ];
         for input in &ok_cases {
             entrypoint(input).unwrap();

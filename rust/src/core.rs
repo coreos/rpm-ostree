@@ -40,11 +40,13 @@ const SSS_CACHE_PATH: &str = "usr/sbin/sss_cache";
 const SYSTEMCTL_PATH: &str = "usr/bin/systemctl";
 const SYSTEMCTL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/systemctl-wrapper.sh");
 
-// Intercept `groupadd` and `useradd` for automatic sysusers.d fragment generation.
+// Intercept commands for automatic sysusers.d fragment generation.
 const GROUPADD_PATH: &str = "usr/sbin/groupadd";
 const GROUPADD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/groupadd-wrapper.sh");
 const USERADD_PATH: &str = "usr/sbin/useradd";
 const USERADD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/useradd-wrapper.sh");
+const USERMOD_PATH: &str = "usr/sbin/usermod";
+const USERMOD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/usermod-wrapper.sh");
 
 const RPMOSTREE_CORE_STAGED_RPMS_DIR: &str = "rpm-ostree/staged-rpms";
 
@@ -142,6 +144,7 @@ impl FilesystemScriptPrep {
         (GROUPADD_PATH, GROUPADD_WRAPPER),
         (SYSTEMCTL_PATH, SYSTEMCTL_WRAPPER),
         (USERADD_PATH, USERADD_WRAPPER),
+        (USERMOD_PATH, USERMOD_WRAPPER),
     ];
 
     fn saved_name(name: &str) -> String {
@@ -415,6 +418,19 @@ mod test {
             g.undo()?;
             let contents = d.read_to_string(super::USERADD_PATH)?;
             assert_eq!(contents, original_useradd);
+        }
+        // Replaced usermod.
+        {
+            let original_usermod = "original usermod";
+            d.atomic_write_with_perms(super::USERMOD_PATH, original_usermod, mode.clone())?;
+            let contents = d.read_to_string(super::USERMOD_PATH)?;
+            assert_eq!(contents, original_usermod);
+            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let contents = d.read_to_string(super::USERMOD_PATH)?;
+            assert_eq!(contents.as_bytes(), super::USERMOD_WRAPPER);
+            g.undo()?;
+            let contents = d.read_to_string(super::USERMOD_PATH)?;
+            assert_eq!(contents, original_usermod);
         }
         Ok(())
     }
