@@ -23,7 +23,7 @@ ProtectHome=true
 # Explicitly list paths here which we should never access.  The initial
 # entry here ensures that the skopeo process we fork won't interact with
 # application containers.
-InaccessiblePaths=-/var/lib/containers
+BindReadOnlyPaths=-/var/lib/containers
 NotifyAccess=main
 # Significantly bump this timeout from the default because
 # we do a lot of stuff on daemon startup.
