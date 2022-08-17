@@ -81,3 +81,8 @@ pub(crate) fn unprivileged_subprocess(binary: &str) -> Command {
     ]);
     cmd
 }
+
+/// Return a Command instance that will re-execute the current binary.
+pub(crate) fn self_command() -> Command {
+    Command::new("/proc/self/exe")
+}

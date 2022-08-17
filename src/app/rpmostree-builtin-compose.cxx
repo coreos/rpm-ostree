@@ -50,6 +50,9 @@ static RpmOstreeCommand compose_subcommands[] = {
   { "container-encapsulate", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Generate a reproducible \"chunked\" container image (using RPM data) from an OSTree commit",
     rpmostree_compose_builtin_container_encapsulate },
+  { "image", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Generate a reproducible \"chunked\" container image (using RPM data) from a treefile",
+    rpmostree_compose_builtin_image },
   { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
@@ -59,4 +62,18 @@ rpmostree_builtin_compose (int argc, char **argv, RpmOstreeCommandInvocation *in
 {
   return rpmostree_handle_subcommand (argc, argv, compose_subcommands, invocation, cancellable,
                                       error);
+}
+
+gboolean
+rpmostree_compose_builtin_image (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                 GCancellable *cancellable, GError **error)
+{
+  rust::Vec<rust::String> rustargv;
+  g_assert_cmpint (argc, >, 0);
+  rustargv.push_back (std::string (argv[0]));
+  rustargv.push_back (std::string ("baseimage"));
+  for (int i = 1; i < argc; i++)
+    rustargv.push_back (std::string (argv[i]));
+  CXX_TRY (rpmostreecxx::compose_image (rustargv), error);
+  return TRUE;
 }

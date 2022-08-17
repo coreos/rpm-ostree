@@ -131,6 +131,26 @@ jobs:
         run: tar -C / -xzvf install.tar
       - name: Integration tests
         run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh
+  compose-image:
+    name: "compose-image tests"
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+      options: "--user root --privileged -v /var/tmp:/var/tmp"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install test dependencies
+        run: ./ci/install-test-deps.sh
+      - name: Download build
+        uses: actions/download-artifact@v2
+        with:
+          name: install.tar
+      - name: Install
+        run: tar -C / -xzvf install.tar
+      - name: Integration tests
+        run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose-image.sh
   container-encapsulate:
     name: "Encapsulate tests"
     needs: build

@@ -102,6 +102,18 @@ struct RebaseCmd {
 #[clap(rename_all = "kebab-case")]
 enum ImageCmd {
     Rebase(RebaseCmd),
+    Build {
+        #[clap(subcommand)]
+        cmd: BuildCmd,
+    },
+}
+
+/// Commands to build container images
+#[derive(Debug, clap::Subcommand)]
+#[clap(rename_all = "kebab-case")]
+enum BuildCmd {
+    #[clap(external_subcommand)]
+    ImageFromTreeFile(Vec<String>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -176,6 +188,15 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
                             let cmd = ["rebase"].into_iter().chain(experimental).chain([container_ref.as_str()])
                                 .map(|s| s.to_string()).collect::<Vec<String>>();
                             RunDisposition::ExecRpmOstree(cmd)
+                        },
+                        ImageCmd::Build { cmd } => {
+                            match cmd {
+                                BuildCmd::ImageFromTreeFile(mut args) => {
+                                    args.insert(0, "compose".to_string());
+                                    args.insert(1, "image".to_string());
+                                    RunDisposition::ExecRpmOstree(args)
+                                }
+                            }
                         }
                     }
             }
