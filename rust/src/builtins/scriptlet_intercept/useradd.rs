@@ -104,7 +104,7 @@ fn generate_sysusers_fragment(
 ) -> Result<bool> {
     // The filename of the configuration fragment is in fact a public
     // API, because users may have masked it in /etc. Do not change this.
-    let filename = format!("40-pkg-{pkgname}-user-{username}.conf");
+    let filename = format!("35-pkg-{pkgname}-user-{username}.conf");
 
     let conf_dir = common::open_create_sysusers_dir(rootdir)?;
     if conf_dir.try_exists(&filename)? {
@@ -229,7 +229,7 @@ mod test {
             .unwrap();
             assert_eq!(generated, entry.2, "{:?}", entry);
 
-            let path = format!("usr/lib/sysusers.d/40-pkg-foopkg-user-{}.conf", entry.0);
+            let path = format!("usr/lib/sysusers.d/35-pkg-foopkg-user-{}.conf", entry.0);
             assert!(tmpdir.is_file(&path));
 
             let mut fragment = tmpdir.open(&path).unwrap();
