@@ -63,7 +63,7 @@ fn-error-context = "0.2.0"
 futures = "0.3.23"
 indoc = "1.0.7"
 indicatif = "0.17.0"
-libc = "0.2.131"
+libc = "0.2.132"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 memfd = "0.6.0"
