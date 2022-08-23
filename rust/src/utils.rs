@@ -547,7 +547,7 @@ pub(crate) fn varsubstitute(s: &str, subs: &Vec<crate::ffi::StringMapping>) -> C
 pub(crate) fn get_features() -> Vec<String> {
     // These constant features were originally set in configure.ac, but have migrated to
     // Rust in the interest in having less logic in autoconf.
-    let defaults = ["rust", "compose"].into_iter().map(Some);
+    let defaults = ["rust", "compose", "container"].into_iter().map(Some);
     let conditionals = [
         cfg!(feature = "fedora-integration").then(|| "fedora-integration"),
         cfg!(feature = "bin-unit-tests").then(|| "bin-unit-tests"),
