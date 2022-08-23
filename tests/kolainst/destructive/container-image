@@ -86,7 +86,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     # Create a new ostree commit containing foo and export the commit as a container image
     with_foo_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
     ostree refs ${with_foo_commit} --create vmcheck_tmp/new_update
-    new_commit=$(ostree commit -b vmcheck --tree=ref=vmcheck_tmp/new_update)
+    new_commit=$(ostree commit -b vmcheck --bootable --tree=ref=vmcheck_tmp/new_update)
     rm "${image_dir}" -rf
     rpm-ostree ex-container export --repo=/ostree/repo ${new_commit} "$image"
 
