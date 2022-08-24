@@ -122,12 +122,10 @@ impl RebaseCmd {
         use ostree_ext::container::SignatureSource;
         let sigverify = if self.no_signature_verification {
             SignatureSource::ContainerPolicyAllowInsecure
+        } else if let Some(remote) = self.ostree_remote.as_ref() {
+            SignatureSource::OstreeRemote(remote.to_string())
         } else {
-            if let Some(remote) = self.ostree_remote.as_ref() {
-                SignatureSource::OstreeRemote(remote.to_string())
-            } else {
-                SignatureSource::ContainerPolicy
-            }
+            SignatureSource::ContainerPolicy
         };
         Ok(ostree_ext::container::OstreeImageReference { sigverify, imgref })
     }
@@ -303,7 +301,7 @@ mod tests {
         ));
 
         fn strvec(s: impl IntoIterator<Item = &'static str>) -> Vec<String> {
-            s.into_iter().map(|s| String::from(s)).collect()
+            s.into_iter().map(String::from).collect()
         }
 
         // Tests for the ostree container case
