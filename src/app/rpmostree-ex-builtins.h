@@ -36,6 +36,7 @@ BUILTINPROTO (history);
 BUILTINPROTO (initramfs_etc);
 BUILTINPROTO (module);
 BUILTINPROTO (rebuild);
+BUILTINPROTO (deploy_from_self);
 
 #undef BUILTINPROTO
 
