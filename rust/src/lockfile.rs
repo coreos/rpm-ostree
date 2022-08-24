@@ -333,8 +333,8 @@ mod tests {
         let mut input = io::BufReader::new(INVALID_PRELUDE_JS.as_bytes());
         match utils::parse_stream::<LockfileConfig, _>(&utils::InputFormat::JSON, &mut input) {
             Err(ref e) => match e.downcast_ref::<io::Error>() {
-                Some(ref ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {}
-                _ => panic!("Expected invalid lockfile, not {}", e.to_string()),
+                Some(ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {}
+                _ => panic!("Expected invalid lockfile, not {}", e),
             },
             Ok(_) => panic!("Expected invalid lockfile"),
         }

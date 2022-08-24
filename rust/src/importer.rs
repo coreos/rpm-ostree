@@ -522,7 +522,7 @@ mod tests {
             let file_info = FileInfo::new();
             file_info.set_file_type(FileType::Directory);
             file_info.set_attribute_uint32("unix::mode", 0o721);
-            let out = translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap();
+            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
             let expected = r#"d '/var/foo bar' 0721 testuser testgroup - -"#;
             assert_eq!(out, expected);
         }
@@ -531,7 +531,7 @@ mod tests {
             let file_info = FileInfo::new();
             file_info.set_file_type(FileType::SymbolicLink);
             file_info.set_symlink_target("/mytarget");
-            let out = translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap();
+            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
             let expected = r#"L '/var/foo bar' - - - - /mytarget"#;
             assert_eq!(out, expected);
         }
@@ -540,7 +540,7 @@ mod tests {
             let file_info = FileInfo::new();
             file_info.set_file_type(FileType::Regular);
             file_info.set_attribute_uint32("unix::mode", 0o123);
-            let out = translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap();
+            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
             let expected = r#"f '/var/foo bar' 0123 testuser testgroup - -"#;
             assert_eq!(out, expected);
         }
@@ -548,7 +548,7 @@ mod tests {
             // Other unsupported
             let file_info = FileInfo::new();
             file_info.set_file_type(FileType::Unknown);
-            translate_to_tmpfiles_d(&path, &file_info, &username, &groupname).unwrap_err();
+            translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap_err();
         }
     }
 

@@ -136,7 +136,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glib;
+
     use std::{io, ptr};
 
     struct Foo {

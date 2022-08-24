@@ -2824,7 +2824,6 @@ pub(crate) mod tests {
     use super::*;
     use indoc::indoc;
     use std::io::Cursor;
-    use tempfile;
 
     pub(crate) static ARCH_X86_64: &str = "x86_64";
 
@@ -2983,8 +2982,8 @@ pub(crate) mod tests {
         let mut input = Cursor::new(buf);
         match treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)) {
             Err(ref e) => match e.downcast_ref::<io::Error>() {
-                Some(ref ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {}
-                _ => panic!("Expected invalid treefile, not {}", e.to_string()),
+                Some(ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {}
+                _ => panic!("Expected invalid treefile, not {}", e),
             },
             Ok(_) => panic!("Expected invalid treefile"),
         }
@@ -3172,7 +3171,7 @@ pub(crate) mod tests {
     ) -> Result<Box<Treefile>> {
         let tf_path = &workdir.join("treefile.yaml");
         std::fs::write(tf_path, contents)?;
-        Ok(Treefile::new_boxed(tf_path, basearch)?)
+        Treefile::new_boxed(tf_path, basearch)
     }
 
     pub(crate) fn new_test_tf_basic(contents: impl AsRef<str>) -> Result<Box<Treefile>> {
@@ -3191,7 +3190,7 @@ pub(crate) mod tests {
         assert!(tf.parsed.base.machineid_compat.is_none());
     }
 
-    const ROJIG_YAML: &'static str = indoc! {r#"
+    const ROJIG_YAML: &str = indoc! {r#"
         releasever: "35"
         rojig:
             name: "exampleos ${releasever}"
@@ -3284,8 +3283,7 @@ pub(crate) mod tests {
             .as_ref()
             .unwrap()
             .iter()
-            .find(|&p| p == pkg)
-            .is_some());
+            .any(|p| p == pkg));
     }
 
     #[test]
@@ -3619,41 +3617,41 @@ conditional-include:
     fn test_split_whitespace_unless_quoted() -> Result<()> {
         // test single quoted package
         let single_quoted_pkg = "'foobar >= 1.0'";
-        let pkgs: Vec<_> = split_whitespace_unless_quoted(&single_quoted_pkg)?.collect();
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(single_quoted_pkg)?.collect();
         assert_eq!("foobar >= 1.0", pkgs[0]);
 
         // test multiple quoted packages
         let mult_quoted_pkg = "'foobar >= 1.0' 'quuz < 0.5' 'corge > 2'";
-        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mult_quoted_pkg)?.collect();
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(mult_quoted_pkg)?.collect();
         assert_eq!("foobar >= 1.0", pkgs[0]);
         assert_eq!("quuz < 0.5", pkgs[1]);
         assert_eq!("corge > 2", pkgs[2]);
 
         // test single unquoted package
         let single_unquoted_pkg = "foobar";
-        let pkgs: Vec<_> = split_whitespace_unless_quoted(&single_unquoted_pkg)?.collect();
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(single_unquoted_pkg)?.collect();
         assert_eq!("foobar", pkgs[0]);
 
         // test multiple unquoted packages
         let mult_unquoted_pkg = "foobar quuz corge";
-        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mult_unquoted_pkg)?.collect();
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(mult_unquoted_pkg)?.collect();
         assert_eq!("foobar", pkgs[0]);
         assert_eq!("quuz", pkgs[1]);
         assert_eq!("corge", pkgs[2]);
 
         // test different orderings of mixed quoted and unquoted packages
         let mix_quoted_unquoted_pkgs = "'foobar >= 1.1' baz-package 'corge < 0.5'";
-        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mix_quoted_unquoted_pkgs)?.collect();
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(mix_quoted_unquoted_pkgs)?.collect();
         assert_eq!("foobar >= 1.1", pkgs[0]);
         assert_eq!("baz-package", pkgs[1]);
         assert_eq!("corge < 0.5", pkgs[2]);
         let mix_quoted_unquoted_pkgs = "corge 'foobar >= 1.1' baz-package";
-        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mix_quoted_unquoted_pkgs)?.collect();
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(mix_quoted_unquoted_pkgs)?.collect();
         assert_eq!("corge", pkgs[0]);
         assert_eq!("foobar >= 1.1", pkgs[1]);
         assert_eq!("baz-package", pkgs[2]);
         let mix_quoted_unquoted_pkgs = "corge 'foobar >= 1.1' baz-package 'quuz < 0.0.1'";
-        let pkgs: Vec<_> = split_whitespace_unless_quoted(&mix_quoted_unquoted_pkgs)?.collect();
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(mix_quoted_unquoted_pkgs)?.collect();
         assert_eq!("corge", pkgs[0]);
         assert_eq!("foobar >= 1.1", pkgs[1]);
         assert_eq!("baz-package", pkgs[2]);
@@ -3661,15 +3659,15 @@ conditional-include:
 
         // test missing quotes around packages using version qualifiers
         let missing_quotes = "foobar >= 1.0 quuz";
-        let pkgs: Vec<_> = split_whitespace_unless_quoted(&missing_quotes)?.collect();
+        let pkgs: Vec<_> = split_whitespace_unless_quoted(missing_quotes)?.collect();
         assert_ne!("foobar >= 1.0", pkgs[0]);
         assert_eq!(">=", pkgs[1]);
         let missing_leading_quote = "foobar >= 1.0'";
-        assert!(split_whitespace_unless_quoted(&missing_leading_quote).is_err());
+        assert!(split_whitespace_unless_quoted(missing_leading_quote).is_err());
         let missing_trailing_quote = "'foobar >= 1.0 baz-package";
-        assert!(split_whitespace_unless_quoted(&missing_trailing_quote).is_err());
+        assert!(split_whitespace_unless_quoted(missing_trailing_quote).is_err());
         let stray_quote = "'foobar >= 1.0' quuz' corge";
-        assert!(split_whitespace_unless_quoted(&stray_quote).is_err());
+        assert!(split_whitespace_unless_quoted(stray_quote).is_err());
 
         Ok(())
     }

@@ -524,7 +524,7 @@ mod test {
             ..Default::default()
         };
         let s = subpath(&d, Path::new("/foo"));
-        assert_eq!(s.as_ref().map(|s| s.as_path()), Some(Path::new("/usr/foo")));
+        assert_eq!(s.as_deref(), Some(Path::new("/usr/foo")));
     }
 }
 

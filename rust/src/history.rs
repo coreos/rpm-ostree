@@ -514,11 +514,11 @@ mod tests {
             assert!(
                 self.next_entry().unwrap()
                     == HistoryEntry {
-                        first_boot_timestamp: first_boot_timestamp,
-                        last_boot_timestamp: last_boot_timestamp,
-                        deploy_timestamp: deploy_timestamp,
+                        first_boot_timestamp,
+                        last_boot_timestamp,
+                        deploy_timestamp,
                         deploy_cmdline: "".to_string(),
-                        boot_count: boot_count,
+                        boot_count,
                         eof: false,
                     }
             );

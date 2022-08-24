@@ -51,7 +51,7 @@ mod tests {
         let tmpdir = tempfile::tempdir().unwrap();
         let filepath = tmpdir.path().join("commit-id");
         let expected_id = "my-revision-id";
-        write_commit_id(&filepath.to_string_lossy(), &expected_id).unwrap();
+        write_commit_id(&filepath.to_string_lossy(), expected_id).unwrap();
         let read = std::fs::read_to_string(&filepath).unwrap();
         assert_eq!(read, expected_id);
     }

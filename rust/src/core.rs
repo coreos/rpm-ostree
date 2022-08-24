@@ -422,7 +422,7 @@ mod test {
         // Replaced usermod.
         {
             let original_usermod = "original usermod";
-            d.atomic_write_with_perms(super::USERMOD_PATH, original_usermod, mode.clone())?;
+            d.atomic_write_with_perms(super::USERMOD_PATH, original_usermod, mode)?;
             let contents = d.read_to_string(super::USERMOD_PATH)?;
             assert_eq!(contents, original_usermod);
             let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
