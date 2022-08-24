@@ -31,6 +31,9 @@ static RpmOstreeCommand ex_subcommands[] = {
     "Inspect rpm-ostree history of the system", rpmostree_ex_builtin_history },
   { "initramfs-etc", (RpmOstreeBuiltinFlags)0, "Track initramfs configuration files",
     rpmostree_ex_builtin_initramfs_etc },
+  { "deploy-from-self", (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
+    "Deploy OSTree commit in container repository to target system",
+    rpmostree_ex_builtin_deploy_from_self },
   /* This is currently only for CoreOS layering; so hide it to not confuse
    * users. */
   { "rebuild",
@@ -68,5 +71,17 @@ rpmostree_ex_builtin_module (int argc, char **argv, RpmOstreeCommandInvocation *
   for (int i = 0; i < argc; i++)
     rustargv.push_back (std::string (argv[i]));
   ROSCXX_TRY (modularity_entrypoint (rustargv), error);
+  return TRUE;
+}
+
+gboolean
+rpmostree_ex_builtin_deploy_from_self (int argc, char **argv,
+                                       RpmOstreeCommandInvocation *invocation,
+                                       GCancellable *cancellable, GError **error)
+{
+  rust::Vec<rust::String> rustargv;
+  for (int i = 0; i < argc; i++)
+    rustargv.push_back (std::string (argv[i]));
+  CXX_TRY (rpmostreecxx::deploy_from_self_entrypoint (rustargv), error);
   return TRUE;
 }
