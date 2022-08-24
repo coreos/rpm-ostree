@@ -2040,6 +2040,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$container_encapsulate (::rust::Vec< ::rust::String> *args) noexcept;
 
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$deploy_from_self_entrypoint (::rust::Vec< ::rust::String> *args) noexcept;
+
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$pull_container (
       const ::rpmostreecxx::OstreeRepo &repo, const ::rpmostreecxx::GCancellable &cancellable,
       ::rust::Str imgref, ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
@@ -3591,6 +3594,17 @@ container_encapsulate (::rust::Vec< ::rust::String> args)
 {
   ::rust::ManuallyDrop< ::rust::Vec< ::rust::String> > args$ (::std::move (args));
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$container_encapsulate (&args$.value);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
+deploy_from_self_entrypoint (::rust::Vec< ::rust::String> args)
+{
+  ::rust::ManuallyDrop< ::rust::Vec< ::rust::String> > args$ (::std::move (args));
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$deploy_from_self_entrypoint (&args$.value);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);

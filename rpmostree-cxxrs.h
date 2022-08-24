@@ -1751,6 +1751,8 @@ void cliwrap_write_wrappers (::std::int32_t rootfs);
 
 void container_encapsulate (::rust::Vec< ::rust::String> args);
 
+void deploy_from_self_entrypoint (::rust::Vec< ::rust::String> args);
+
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 pull_container (const ::rpmostreecxx::OstreeRepo &repo,
                 const ::rpmostreecxx::GCancellable &cancellable, ::rust::Str imgref);

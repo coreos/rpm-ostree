@@ -172,6 +172,7 @@ pub mod ffi {
     // container.rs
     extern "Rust" {
         fn container_encapsulate(args: Vec<String>) -> Result<()>;
+        fn deploy_from_self_entrypoint(args: Vec<String>) -> Result<()>;
     }
 
     /// `ContainerImageState` is currently identical to ostree-rs-ext's `LayeredImageState` struct, because
