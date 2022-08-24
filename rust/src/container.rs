@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::num::NonZeroU32;
+use std::process::Command;
 use std::rc::Rc;
 
 use anyhow::Result;
@@ -23,6 +24,7 @@ use ostree_ext::prelude::*;
 use ostree_ext::{gio, ostree};
 
 use crate::cxxrsutil::FFIGObjectReWrap;
+use crate::CxxResult;
 
 /// Main entrypoint for container
 pub async fn entrypoint(args: &[&str]) -> Result<i32> {
@@ -395,5 +397,119 @@ pub async fn container_encapsulate(args: &[&str]) -> Result<()> {
     )
     .await?;
     println!("Pushed digest: {}", digest);
+    Ok(())
+}
+
+#[derive(clap::Parser)]
+struct UpdateFromRunningOpts {
+    /// Path to target system root
+    #[clap(value_parser)]
+    target_root: Utf8PathBuf,
+
+    #[clap(long)]
+    /// Reboot after performing operation
+    reboot: bool,
+}
+
+// This reimplements https://github.com/ostreedev/ostree/pull/2691 basically
+fn find_encapsulated_commits(repo: &Utf8Path) -> Result<Vec<String>> {
+    let objects = Dir::open_ambient_dir(&repo.join("objects"), cap_std::ambient_authority())?;
+    let mut r = Vec::new();
+    for entry in objects.entries()? {
+        let entry = entry?;
+        let etype = entry.file_type()?;
+        if !etype.is_dir() {
+            continue;
+        }
+        let name = entry.file_name();
+        let name = if let Some(n) = name.to_str() {
+            n
+        } else {
+            continue;
+        };
+
+        let subd = entry.open_dir()?;
+        for entry in subd.entries()? {
+            let entry = entry?;
+            let etype = entry.file_type()?;
+            if !etype.is_file() {
+                continue;
+            }
+            let subname = entry.file_name();
+            let subname = if let Some(n) = subname.to_str() {
+                Utf8Path::new(n)
+            } else {
+                continue;
+            };
+            if let (Some(stem), Some("commit")) = (subname.file_stem(), subname.extension()) {
+                r.push(format!("{name}{stem}"));
+            }
+        }
+    }
+
+    Ok(r)
+}
+
+/// The implementation of `rpm-ostree ex deploy-from-self`, which writes
+/// the container ostree commit to the host and deploys it, optionally rebooting.
+pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
+    use nix::sys::statvfs;
+    let cancellable = gio::NONE_CANCELLABLE;
+    let opts = UpdateFromRunningOpts::parse_from(args);
+
+    let sysroot = opts.target_root.join("sysroot");
+
+    if statvfs::statvfs(sysroot.as_std_path())?
+        .flags()
+        .contains(statvfs::FsFlags::ST_RDONLY)
+    {
+        let status = Command::new("mount")
+            .args(["-o", "remount,rw", sysroot.as_str()])
+            .status()?;
+        if !status.success() {
+            return Err(format!("Failed to remount /sysroot writable: {:?}", status).into());
+        }
+    }
+
+    let src_repo_path = Utf8Path::new("/ostree/repo");
+    // Just verify it can be opened for now...in the future ideally we'll use https://github.com/ostreedev/ostree/pull/2701
+    let src_repo = ostree::Repo::open_at(libc::AT_FDCWD, src_repo_path.as_str(), cancellable)?;
+    drop(src_repo);
+
+    let encapsulated_commits = find_encapsulated_commits(src_repo_path)?;
+    let commit = match encapsulated_commits.as_slice() {
+        [] => return Err(format!("No encapsulated commit found in container").into()),
+        [c] => c.as_str(),
+        o => return Err(format!("Found {} commit objects, expected just one", o.len()).into()),
+    };
+
+    let target_repo = sysroot.join("ostree/repo");
+    let target_repo = ostree::Repo::open_at(libc::AT_FDCWD, target_repo.as_str(), cancellable)?;
+
+    {
+        let flags = ostree::RepoPullFlags::MIRROR;
+        let opts = glib::VariantDict::new(None);
+        let refs = [commit];
+        opts.insert("refs", &&refs[..]);
+        opts.insert("flags", &(flags.bits() as i32));
+        let options = opts.to_variant();
+        target_repo.pull_with_options(
+            &format!("file://{src_repo_path}"),
+            &options,
+            None,
+            cancellable,
+        )?;
+    }
+
+    println!("Imported: {commit}");
+
+    let status = Command::new("chroot")
+        .args(&[opts.target_root.as_str(), "rpm-ostree", "rebase", commit])
+        .args(opts.reboot.then(|| "--reboot"))
+        .status()?;
+    if !status.success() {
+        return Err(format!("Failed to deploy commit: {:?}", status).into());
+    }
+
     Ok(())
 }
