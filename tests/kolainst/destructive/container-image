@@ -159,6 +159,9 @@ ADD baz-2.0-1.x86_64.rpm /run/rpm-ostree/staged-rpms/${baz_chksum}.rpm
 RUN rpm-ostree ex rebuild
 RUN echo some config file > /etc/someconfig.conf
 RUN echo somedata > /usr/share/somenewdata
+# Verify we're ignoring subdirectories that don't contain vmlinuz https://github.com/coreos/rpm-ostree/issues/3965
+RUN mkdir -p /usr/lib/modules/blah && touch /usr/lib/modules/blah/foo
+RUN rpm-ostree cleanup -m
 EOF
     # Older podman found in RHEL8 blows up without /etc/resolv.conf
     # which happens in our qemu path.

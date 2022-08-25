@@ -13,6 +13,12 @@ build_rpm foobar-rec
 build_rpm quuz
 build_rpm corge version 1.0
 build_rpm corge version 2.0
+build_rpm thirdpartymodules version 2.3 \
+  files "/usr/lib/modules/4.7.8-10.x86_64/foo.ko
+         /usr/lib/modules/4.9.3-2.x86_64/foo.ko
+         /usr/lib/modules/5.8.1-11.x86_64/foo.ko
+         " \
+  install "for v in 4.7.8-10.x86_64 4.9.3-2.x86_64 5.8.1-11.x86_64; do d=%{buildroot}/usr/lib/modules/\$v; mkdir -p \$d && echo kmod\$v > \$d/foo.ko; done"
 # test `remove-from-packages` (files shared with other pkgs should not be removed)
 build_rpm barbar \
           files "/etc/sharedfile
@@ -26,7 +32,7 @@ build_rpm barbaz \
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
 # the top-level manifest doesn't have any packages, so just set it
-treefile_append "packages" $'["\'foobar >= 0.5\' quuz \'corge < 2.0\' barbar barbaz"]'
+treefile_append "packages" $'["\'foobar >= 0.5\' quuz \'corge < 2.0\' barbar barbaz thirdpartymodules"]'
 
 # With docs and recommends, also test multi includes
 cat > config/documentation.yaml <<'EOF'
