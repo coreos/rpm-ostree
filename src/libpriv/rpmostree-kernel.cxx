@@ -105,13 +105,13 @@ find_kernel_and_initramfs_in_bootdir (int rootfs_dfd, const char *bootdir, char 
   return TRUE;
 }
 
-/* Given a directory @subpath, find the first child that is a directory,
- * returning it in @out_subdir.  If there are multiple directories,
+/* Given a directory @subpath, find the first child that is a directory
+ * and contains a `vmlinuz` file, returning it in @out_subdir.  If there are multiple directories,
  * return an error.
  */
 static gboolean
-find_ensure_one_subdirectory (int rootfs_dfd, const char *subpath, char **out_subdir,
-                              GCancellable *cancellable, GError **error)
+find_dir_with_vmlinuz (int rootfs_dfd, const char *subpath, char **out_subdir,
+                       GCancellable *cancellable, GError **error)
 {
   g_autofree char *ret_subdir = NULL;
   g_auto (GLnxDirFdIterator) dfd_iter = {
@@ -132,11 +132,18 @@ find_ensure_one_subdirectory (int rootfs_dfd, const char *subpath, char **out_su
 
       if (dent->d_type != DT_DIR)
         continue;
+      // Ignore directories without vmlinuz
+      struct stat stbuf;
+      g_autofree char *vmlinuz_path = g_strdup_printf ("%s/vmlinuz", dent->d_name);
+      if (!glnx_fstatat_allow_noent (dfd_iter.fd, vmlinuz_path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT)
+        continue;
 
       if (ret_subdir)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Multiple subdirectories found in: %s: %s %s", subpath,
+                       "Multiple kernels (vmlinuz) found in: %s: %s %s", subpath,
                        glnx_basename (ret_subdir), dent->d_name);
           return FALSE;
         }
@@ -179,8 +186,7 @@ gboolean
 rpmostree_kernel_remove (int rootfs_dfd, GCancellable *cancellable, GError **error)
 {
   g_autofree char *modversion_dir = NULL;
-  if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules", &modversion_dir, cancellable,
-                                     error))
+  if (!find_dir_with_vmlinuz (rootfs_dfd, "usr/lib/modules", &modversion_dir, cancellable, error))
     return FALSE;
   if (modversion_dir)
     {
@@ -231,8 +237,7 @@ rpmostree_find_kernel (int rootfs_dfd, GCancellable *cancellable, GError **error
 {
   /* Fetch the kver from /usr/lib/modules */
   g_autofree char *modversion_dir = NULL;
-  if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules", &modversion_dir, cancellable,
-                                     error))
+  if (!find_dir_with_vmlinuz (rootfs_dfd, "usr/lib/modules", &modversion_dir, cancellable, error))
     return NULL;
 
   if (!modversion_dir)
