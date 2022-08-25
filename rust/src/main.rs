@@ -30,20 +30,13 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
             );
             return rpmostree_rust::container::entrypoint(&args_borrowed).await;
         }
-        // This is a deprecated entrypoint
-        "container-encapsulate" => {
-            rpmostree_rust::client::warn_future_incompatibility(
-                "This entrypoint is deprecated; use `rpm-ostree compose container-encapsulate` instead",
-            );
-            rpmostree_rust::container::container_encapsulate(args)?;
-            return Ok(0);
-        }
         _ => {}
     }
     // Everything below here is a blocking API, and run on a worker thread so
     // that the main thread is dedicated to the Tokio reactor.
-    tokio::task::spawn_blocking(move || {
-        let args_borrowed: Vec<_> = args.iter().map(|s| s.as_str()).collect();
+    tokio::task::spawn_blocking(move || -> Result<i32, anyhow::Error> {
+        let args_orig = args;
+        let args_borrowed: Vec<_> = args_orig.iter().map(|s| s.as_str()).collect();
         let args = &args_borrowed[..];
         if let Some(arg) = args.get(1) {
             match *arg {
@@ -54,6 +47,13 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
                 "usroverlay" | "unlock" => builtins::usroverlay::entrypoint(args).map(|_| 0),
                 // A hidden wrapper to intercept some binaries in RPM scriptlets.
                 "scriptlet-intercept" => builtins::scriptlet_intercept::entrypoint(args).map(|_| 0),
+                // This is a deprecated entrypoint
+                "container-encapsulate" => {
+                    rpmostree_rust::client::warn_future_incompatibility(
+                    "This entrypoint is deprecated; use `rpm-ostree compose container-encapsulate` instead",
+                    );
+                    rpmostree_rust::container::container_encapsulate(args_orig).map(|_| 0)
+                },
                 // C++ main
                 _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
             }
