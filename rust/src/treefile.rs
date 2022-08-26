@@ -2367,6 +2367,9 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(rename = "ref")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) treeref: Option<String>,
+    /// Generic unparsed metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) metadata: Option<BTreeMap<String, serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) basearch: Option<String>,
     #[serde(skip_serializing)]
@@ -3210,6 +3213,26 @@ pub(crate) mod tests {
         let rojig = tf.parsed.base.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos 35");
         assert!(rojig.summary == "ExampleOS rojig base image 35 x86_64");
+    }
+
+    #[test]
+    fn test_treefile_metadata() {
+        let workdir = tempfile::tempdir().unwrap();
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(indoc! {r#"
+            metadata:
+              foo: bar
+              name: fedora-coreos
+              deeper:
+                answer: 42
+                reasons: ["because", "universe"]
+        "#});
+        let tf = new_test_treefile(workdir, buf.as_str(), Some("x86_64")).unwrap();
+        let meta = tf.parsed.base.metadata.as_ref().unwrap();
+        assert_eq!(meta.get("name").unwrap(), "fedora-coreos");
+        let deeper = meta.get("deeper").unwrap().as_object().unwrap();
+        assert_eq!(deeper.get("answer").unwrap().as_i64().unwrap(), 42);
     }
 
     #[test]
