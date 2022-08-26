@@ -1659,9 +1659,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7d284276e1d9c7a8651d03f967064734c9e038b725a78412dcf9a31ba16f0a8"
+checksum = "df4deae91dbcd44fec84a7a6050b19e1952c35ddcab956d283dea86c9f7d6c37"
 dependencies = [
  "anyhow",
  "async-compression",
