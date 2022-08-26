@@ -61,7 +61,7 @@ echo "ok layer selinux pkg"
 
 # now let's change the policy
 vm_build_selinux_rpm foobar-selinux /usr/bin/foobar shell_exec_t
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable
 vm_rpmostree upgrade
 root=$(vm_get_deployment_root 0)
 assert_actual_label $root/usr/bin/foobar shell_exec_t
@@ -77,7 +77,7 @@ root=$(vm_get_deployment_root 0)
 se_new_csum=$(vm_cmd ostree checksum $root/usr/etc/selinux/targeted/policy/policy.*)
 assert_not_streq "$se_csum" "$se_new_csum"
 csum=$(vm_get_deployment_info 0 checksum)
-vm_cmd ostree commit -b vmcheck --tree=ref=$csum
+vm_cmd ostree commit -b vmcheck --tree=ref=$csum --bootable
 vm_rpmostree cleanup -p
 echo "ok setup relabel"
 

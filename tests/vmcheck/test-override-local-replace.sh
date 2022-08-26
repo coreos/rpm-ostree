@@ -123,7 +123,7 @@ vm_cmd rpm-ostree status > status.txt
 assert_file_has_content_literal status.txt 'bar 1.0-1 -> 0.9-1'
 echo "ok override replace resets previous override"
 
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable
 vm_rpmostree upgrade
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 3' \

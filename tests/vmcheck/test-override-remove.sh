@@ -113,7 +113,7 @@ vm_cmd rpm-ostree status > status.txt
 assert_file_has_content status.txt '\(foo bar\|bar foo\) 1\.0-1'
 echo "ok override remove foo and bar"
 
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable
 vm_rpmostree upgrade --cache-only
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 2' \

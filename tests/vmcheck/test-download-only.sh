@@ -102,7 +102,7 @@ vm_rpmostree upgrade -C --unchanged-exit-77 || rc=$?
 assert_streq "$rc" "77"
 echo "ok check for change with --cache-only"
 
-$REMOTE_OSTREE commit -b vmcheck --tree=ref=vmcheck --timestamp '"Oct 21 1988"'
+$REMOTE_OSTREE commit -b vmcheck --tree=ref=vmcheck --bootable --timestamp '"Oct 21 1988"'
 vm_cmd ostree pull vmcheck_remote:vmcheck
 if vm_rpmostree upgrade -C |& tee out.txt; then
   assert_not_reached "upgraded to chronologically older commit"
@@ -141,7 +141,7 @@ vm_rpmostree cleanup -prmb
 vm_rpmostree rebase --remote vmcheck_remote
 vm_build_rpm_repo_mode skip foobar version 2.0
 vm_rpmostree override replace $YUMREPO/foobar-2.0-1.x86_64.rpm
-csum=$($REMOTE_OSTREE commit -b vmcheck --tree=ref=vmcheck)
+csum=$($REMOTE_OSTREE commit -b vmcheck --tree=ref=vmcheck --bootable)
 vm_rpmostree upgrade --download-only
 vm_assert_status_jq \
   ".deployments[0][\"base-checksum\"] != \"$csum\"" \
