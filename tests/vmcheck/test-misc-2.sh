@@ -32,7 +32,7 @@ assert_file_has_content status.txt 'Commit:'
 
 # Locked finalization
 booted_csum=$(vm_get_booted_csum)
-commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable)
 vm_rpmostree deploy revision="${commit}" --lock-finalization
 vm_cmd test -f /run/ostree/staged-deployment-locked
 cursor=$(vm_get_journal_cursor)
@@ -107,7 +107,7 @@ echo "ok rebase from local repo remote"
 # Add metadata string containing EnfOfLife attribtue
 META_ENDOFLIFE_MESSAGE="this is a test for metadata message"
 commit=$(vm_cmd ostree commit -b vmcheck \
-            --tree=ref=vmcheck --add-metadata-string=ostree.endoflife="'${META_ENDOFLIFE_MESSAGE}'")
+            --tree=ref=vmcheck --add-metadata-string=ostree.endoflife="'${META_ENDOFLIFE_MESSAGE}'" --bootable)
 vm_rpmostree upgrade
 vm_assert_status_jq ".deployments[0][\"endoflife\"] == \"${META_ENDOFLIFE_MESSAGE}\""
 echo "ok endoflife metadata gets parsed correctly"
@@ -183,7 +183,7 @@ vm_assert_status_jq ".deployments|length == 1"
 echo "ok unpin"
 
 # https://github.com/ostreedev/ostree/pull/1055
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --timestamp=\"October 25 1985\"
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --timestamp=\"October 25 1985\" --bootable
 if vm_rpmostree upgrade 2>err.txt; then
     fatal "upgraded to older commit?"
 fi
@@ -223,7 +223,7 @@ echo "ok detecting file name conflicts before writing rpmdb"
 vm_rpmostree cleanup -rp
 vm_rpmostree status
 echo "before redeploy"
-csum=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+csum=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable)
 # restart to make daemon see the pending checksum
 vm_cmd systemctl restart rpm-ostreed
 vm_assert_status_jq '.deployments[0]["pending-base-checksum"]'
@@ -303,7 +303,7 @@ assert_file_has_content status.txt "error: opendir"
 echo "ok previous staged failure in status"
 
 # check that --skip-branch-check indeeds skips branch checking
-csum=$(vm_cmd ostree commit -b otherbranch --tree=ref=vmcheck)
+csum=$(vm_cmd ostree commit -b otherbranch --tree=ref=vmcheck --bootable)
 if vm_rpmostree deploy $csum 2>err.txt; then
     assert_not_reached "Deployed to commit on different branch"
 fi
@@ -331,7 +331,7 @@ vm_assert_status_jq ".\"update-driver\"[\"driver-name\"] == \"TestDriver\"" \
 echo "ok deploy --register-driver with empty string revision"
 
 # Ensure that we are prevented from rebasing when an updates driver is registered
-commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable)
 if vm_rpmostree rebase :"${commit}" --skip-purge 2>err.txt;then
   assert_not_reached "Rebase with updates driver registered unexpectedly succeeded"
 fi

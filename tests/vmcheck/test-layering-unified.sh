@@ -38,7 +38,7 @@ bar_rpm=/var/tmp/vmcheck/yumrepo/packages/x86_64/bar-1.0-1.x86_64.rpm
 
 # UPGRADE
 
-commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable)
 vm_status_watch_start
 vm_rpmostree upgrade --install bar --install $foo_rpm
 vm_status_watch_check "Transaction: upgrade --install bar --install $foo_rpm"
@@ -54,7 +54,7 @@ echo "ok upgrade with bar and local foo"
 
 # DEPLOY
 
-commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck \
+commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable \
            --add-metadata-string=version=SUPADUPAVERSION)
 vm_status_watch_start
 vm_rpmostree deploy SUPADUPAVERSION --install foo --install $bar_rpm
@@ -72,7 +72,7 @@ echo "ok deploy with foo and local bar"
 
 # REBASE
 
-commit=$(vm_cmd ostree commit -b vmcheck_tmp/rebase \
+commit=$(vm_cmd ostree commit -b vmcheck_tmp/rebase --bootable \
            --tree=ref=vmcheck --add-metadata-string=version=SUPADUPAVERSION)
 vm_status_watch_start
 vm_rpmostree rebase vmcheck_tmp/rebase SUPADUPAVERSION \

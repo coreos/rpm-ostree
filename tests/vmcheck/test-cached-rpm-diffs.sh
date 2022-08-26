@@ -31,26 +31,26 @@ set -x
 # the usual update synthesis trickery
 noop_csum=$(vm_cmd ostree commit -b vmcheck --fsync=no \
                 --tree=ref=$(vm_get_booted_csum) \
-                --add-metadata-string=version=vDeployNoop)
+                --add-metadata-string=version=vDeployNoop --bootable)
 # put a pin on it so it doesn't get blown away
 vm_cmd ostree refs $noop_csum --create vmcheck_tmp/pinned
 vm_build_rpm pkg1
 vm_rpmostree install pkg1
 deploy_csum=$(vm_cmd ostree commit -b vmcheck --fsync=no \
                 --tree=ref=$(vm_get_pending_csum) \
-                --add-metadata-string=version=vDeploy)
+                --add-metadata-string=version=vDeploy --bootable)
 # put a pin on it so it doesn't get blown away
 vm_cmd ostree refs $deploy_csum --create vmcheck_tmp/pinned2
 vm_build_rpm pkg2
 vm_rpmostree install pkg2
 update_csum=$(vm_cmd ostree commit -b vmcheck --fsync=no \
                 --tree=ref=$(vm_get_pending_csum) \
-                --add-metadata-string=version=vUpdate)
+                --add-metadata-string=version=vUpdate --bootable)
 vm_build_rpm pkg3
 vm_rpmostree install pkg3
 rebase_csum=$(vm_cmd ostree commit -b vmcheck_tmp/other_branch --fsync=no \
                 --tree=ref=$(vm_get_pending_csum) \
-                --add-metadata-string=version=vRebase)
+                --add-metadata-string=version=vRebase --bootable)
 vm_rpmostree cleanup -p
 echo "ok setup"
 

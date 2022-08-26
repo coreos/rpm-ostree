@@ -32,7 +32,7 @@ assert_file_has_content output.txt '^Importing packages\.\.\.done'
 assert_file_has_content output.txt "Checking out tree "
 
 # upgrade with same foo in repos --> shouldn't re-import
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable
 vm_rpmostree upgrade | tee output.txt
 assert_not_file_has_content output.txt '^Importing packages\.\.\.'
 echo "ok reuse cached pkg"
@@ -77,7 +77,7 @@ ostree init --repo ${OLD_PKGCACHE_DIR} --mode=bare
 ostree pull-local --repo ${OLD_PKGCACHE_DIR} /ostree/repo \
   rpmostree/pkg/test-pkgcache-migrate-pkg{1,2}/1.0-1.x86__64
 EOF
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable
 cursor=$(vm_get_journal_cursor)
 vm_rpmostree upgrade | tee output.txt
 vm_wait_content_after_cursor $cursor 'migrated 2 cached packages'

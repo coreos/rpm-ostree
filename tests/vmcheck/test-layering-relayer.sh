@@ -56,7 +56,7 @@ vm_assert_status_jq \
   '.deployments[0]["base-checksum"]' \
   '.deployments[0]["pending-base-checksum"]|not'
 # let's synthesize an upgrade
-commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable)
 vm_rpmostree upgrade
 vm_assert_status_jq \
   '.deployments[1]["base-checksum"]' \
@@ -75,7 +75,7 @@ echo "ok pkg foo relayered on upgrade"
 # DEPLOY
 
 commit=$(vm_cmd ostree commit -b vmcheck \
-           --tree=ref=vmcheck --add-metadata-string=version=my-commit)
+           --tree=ref=vmcheck --add-metadata-string=version=my-commit --bootable)
 vm_rpmostree deploy my-commit
 reboot_and_assert_base $commit
 echo "ok deploy"
@@ -85,7 +85,7 @@ echo "ok pkg foo relayered on deploy"
 
 # REBASE
 
-commit=$(vm_cmd ostree commit -b vmcheck_tmp/rebase_test --tree=ref=vmcheck)
+commit=$(vm_cmd ostree commit -b vmcheck_tmp/rebase_test --tree=ref=vmcheck --bootable)
 vm_rpmostree rebase --skip-purge vmcheck_tmp/rebase_test
 reboot_and_assert_base $commit
 echo "ok rebase"
@@ -104,7 +104,7 @@ vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
                  '.deployments[0]["packages"]|index("foo") >= 0' \
                  '.deployments[0]["packages"]|index("bar") >= 0'
 commit=$(vm_cmd ostree commit -b vmcheck \
-                --tree=ref=vmcheck --add-metadata-string=version=my-commit2)
+                --tree=ref=vmcheck --add-metadata-string=version=my-commit2 --bootable)
 vm_rpmostree rebase ${commit}
 vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
                  '.deployments[0]["packages"]|index("foo") >= 0' \

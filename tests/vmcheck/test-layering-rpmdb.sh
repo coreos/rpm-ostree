@@ -56,7 +56,7 @@ echo "ok pkg foo added"
 
 # remember it for later
 vm_cmd ostree refs $(vm_get_booted_csum) --create vmcheck_tmp/with_foo
-csum_with_foo=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo)
+csum_with_foo=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo --bootable)
 
 # check that upgrading to it will make the package dormant
 
@@ -80,7 +80,7 @@ echo "ok can't layer conflicting pkg (dormant)"
 
 # now check that upgrading to a new base layer that drops foo relayers it
 
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo --bootable
 vm_rpmostree upgrade
 vm_reboot
 
@@ -113,7 +113,7 @@ fi
 echo "ok can't layer conflicting pkg (base)"
 
 # ok, now go back to a base layer without foo and add bar
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo --bootable
 vm_rpmostree upgrade
 vm_rpmostree pkg-add bar
 vm_reboot
@@ -122,7 +122,7 @@ vm_assert_layered_pkg bar present
 echo "ok pkg-add bar"
 
 # now let's try to do an upgrade to a base layer which *has* foo
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo --bootable
 if vm_rpmostree upgrade; then
   assert_not_reached "upgrade succeeded but new base has conflicting pkg foo"
 fi
@@ -150,7 +150,7 @@ echo "ok coloring layered"
 
 # now embed the x86_64 version into it
 vm_rpmostree install bloop.x86_64
-vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_pending_csum) --fsync=no
+vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_pending_csum) --fsync=no --bootable
 vm_rpmostree cleanup -p
 vm_rpmostree upgrade
 check_bloop_color 64-bit
