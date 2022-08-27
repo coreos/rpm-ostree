@@ -24,6 +24,7 @@ use ostree_ext::prelude::*;
 use ostree_ext::{gio, ostree};
 
 use crate::cxxrsutil::FFIGObjectReWrap;
+use crate::progress::progress_task;
 use crate::CxxResult;
 
 /// Main entrypoint for container
@@ -214,7 +215,7 @@ pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
     let opt = ContainerEncapsulateOpts::parse_from(args);
     let repo = &ostree_ext::cli::parse_repo(opt.repo.as_str())?;
     let (root, rev) = repo.read_commit(opt.ostree_ref.as_str(), gio::NONE_CANCELLABLE)?;
-    let pkglist = {
+    let pkglist = progress_task("Reading packages", || -> Result<_> {
         let cancellable = gio::Cancellable::new();
         let r = crate::ffi::package_variant_list_for_commit(
             repo.reborrow_cxx(),
@@ -222,8 +223,8 @@ pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
             cancellable.reborrow_cxx(),
         )?;
         let r: glib::Variant = unsafe { glib::translate::from_glib_full(r as *mut _) };
-        r
-    };
+        Ok(r)
+    })?;
 
     // Open the RPM database for this commit.
     let q = crate::ffi::rpmts_for_commit(repo.reborrow_cxx(), rev.as_str())?;
@@ -318,7 +319,10 @@ pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
     }
 
     // Walk the filesystem
-    build_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &q, &mut state)?;
+    progress_task("Building package mapping", || {
+        build_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &q, &mut state)
+    })?;
+
     let src_pkgs: HashSet<_> = state.packagemeta.iter().map(|p| &p.srcid).collect();
 
     // Print out information about what we found
@@ -387,16 +391,18 @@ pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
         ..Default::default()
     };
     let handle = tokio::runtime::Handle::current();
-    let digest = handle.block_on(async {
-        ostree_ext::container::encapsulate(
-            repo,
-            rev.as_str(),
-            &config,
-            Some(opts),
-            Some(meta),
-            &opt.imgref,
-        )
-        .await
+    let digest = progress_task("Generating container image", || {
+        handle.block_on(async {
+            ostree_ext::container::encapsulate(
+                repo,
+                rev.as_str(),
+                &config,
+                Some(opts),
+                Some(meta),
+                &opt.imgref,
+            )
+            .await
+        })
     })?;
     println!("Pushed digest: {}", digest);
     Ok(())
