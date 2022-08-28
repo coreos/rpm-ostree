@@ -1014,10 +1014,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
   if (!inject_advisories (self, cancellable, error))
     return FALSE;
 
-  /* Destroy this now so the libdnf stack won't have any references
-   * into the filesystem before we manipulate it.
-   */
-  g_clear_object (&self->corectx);
+  rpmostree_context_prepare_commit (self->corectx);
 
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     return FALSE;

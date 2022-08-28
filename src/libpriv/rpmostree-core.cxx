@@ -4495,6 +4495,15 @@ rpmostree_context_assemble_end (RpmOstreeContext *self, GCancellable *cancellabl
   return TRUE;
 }
 
+// De-initialize any references to open files in the target root, preparing
+// it for commit.
+void
+rpmostree_context_prepare_commit (RpmOstreeContext *self)
+{
+  /* Clear this out to ensure it's not holding open any files */
+  g_clear_object (&self->dnfctx);
+}
+
 gboolean
 rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
                           RpmOstreeAssembleType assemble_type, char **out_commit,
@@ -4641,6 +4650,8 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
 
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.state-sha512",
                            g_variant_new_string (state_checksum));
+
+    rpmostree_context_prepare_commit (self);
 
     CXX_TRY (rpmostreecxx::postprocess_cleanup_rpmdb (self->tmprootfs_dfd), error);
 
