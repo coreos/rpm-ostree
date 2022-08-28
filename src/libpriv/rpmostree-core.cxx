@@ -119,6 +119,7 @@ rpmostree_context_init (RpmOstreeContext *self)
   self->tmprootfs_dfd = -1;
   self->dnf_cache_policy = RPMOSTREE_CONTEXT_DNF_CACHE_DEFAULT;
   self->enable_rofiles = TRUE;
+  self->unprivileged = getuid () != 0;
 }
 
 static void
