@@ -121,4 +121,7 @@ gboolean rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                             GCancellable *cancellable, GError **error);
 
 void rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self, char **kernel_args);
+
+void rpmostree_sysroot_upgrader_set_network_wait (RpmOstreeSysrootUpgrader *self,
+                                                  guint network_wait_sec);
 G_END_DECLS
