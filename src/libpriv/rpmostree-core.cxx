@@ -119,6 +119,7 @@ rpmostree_context_init (RpmOstreeContext *self)
   self->tmprootfs_dfd = -1;
   self->dnf_cache_policy = RPMOSTREE_CONTEXT_DNF_CACHE_DEFAULT;
   self->enable_rofiles = TRUE;
+  self->unprivileged = getuid () != 0;
 }
 
 static void
@@ -4494,6 +4495,15 @@ rpmostree_context_assemble_end (RpmOstreeContext *self, GCancellable *cancellabl
   return TRUE;
 }
 
+// De-initialize any references to open files in the target root, preparing
+// it for commit.
+void
+rpmostree_context_prepare_commit (RpmOstreeContext *self)
+{
+  /* Clear this out to ensure it's not holding open any files */
+  g_clear_object (&self->dnfctx);
+}
+
 gboolean
 rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
                           RpmOstreeAssembleType assemble_type, char **out_commit,
@@ -4641,6 +4651,8 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.state-sha512",
                            g_variant_new_string (state_checksum));
 
+    rpmostree_context_prepare_commit (self);
+
     CXX_TRY (rpmostreecxx::postprocess_cleanup_rpmdb (self->tmprootfs_dfd), error);
 
     auto modflags
@@ -4692,8 +4704,11 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
         = g_variant_ref_sink (g_variant_builder_end (&metadata_builder));
     // Unfortunately this API takes GVariantDict, not GVariantBuilder, so convert
     g_autoptr (GVariantDict) metadata_dict = g_variant_dict_new (metadata_so_far);
-    if (!ostree_commit_metadata_for_bootable (root, metadata_dict, cancellable, error))
-      return FALSE;
+    if (!self->treefile_rs->get_container ())
+      {
+        if (!ostree_commit_metadata_for_bootable (root, metadata_dict, cancellable, error))
+          return FALSE;
+      }
     g_autoptr (GVariant) metadata = g_variant_dict_end (metadata_dict);
 
     {
