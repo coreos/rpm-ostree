@@ -236,6 +236,11 @@ pub mod ffi {
         fn get_header_variant(repo: &OstreeRepo, cachebranch: &str) -> Result<*mut GVariant>;
     }
 
+    // compose.rs
+    extern "Rust" {
+        fn compose_image(args: Vec<String>) -> Result<()>;
+    }
+
     // composepost.rs
     extern "Rust" {
         fn compose_prepare_rootfs(
@@ -890,6 +895,8 @@ pub mod cliwrap;
 pub mod container;
 pub use cliwrap::*;
 pub(crate) use container::*;
+mod compose;
+pub(crate) use compose::*;
 mod composepost;
 pub mod countme;
 pub(crate) use composepost::*;

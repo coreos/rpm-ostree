@@ -66,6 +66,8 @@ static char **opt_metadata_json;
 static char *opt_repo;
 static char *opt_touch_if_changed;
 static char *opt_previous_commit;
+static char *opt_previous_inputhash;
+static char *opt_previous_version;
 static gboolean opt_dry_run;
 static gboolean opt_print_only;
 static char *opt_write_commitid_to;
@@ -112,6 +114,10 @@ static GOptionEntry install_option_entries[]
           "Update the modification time on FILE if a new commit was created", "FILE" },
         { "previous-commit", 0, 0, G_OPTION_ARG_STRING, &opt_previous_commit,
           "Use this commit for change detection", "COMMIT" },
+        { "previous-inputhash", 0, 0, G_OPTION_ARG_STRING, &opt_previous_inputhash,
+          "Use this input hash for change detection", "DIGEST" },
+        { "previous-version", 0, 0, G_OPTION_ARG_STRING, &opt_previous_version,
+          "Use this version number for automatic version numbering", "VERSION" },
         { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
         { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs,
           "Use tmpfs for working state", NULL },
@@ -400,7 +406,15 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
   *out_new_inputhash = g_strdup (ret_new_inputhash);
 
   /* Only look for previous checksum if caller has passed *out_unmodified */
-  if (self->previous_checksum && out_unmodified != NULL)
+  if (out_unmodified != NULL && opt_previous_inputhash)
+    {
+      if (strcmp (opt_previous_inputhash, ret_new_inputhash) == 0)
+        {
+          *out_unmodified = TRUE;
+          return TRUE; /* NB: early return */
+        }
+    }
+  else if (self->previous_checksum && out_unmodified != NULL)
     {
       g_autofree char *previous_inputhash = NULL;
       if (!inputhash_from_commit (self->repo, self->previous_checksum, &previous_inputhash, error))
@@ -924,7 +938,9 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
       auto ver_suffix = (*self->treefile_rs)->get_automatic_version_suffix ();
 
       g_autofree char *last_version = NULL;
-      if (self->previous_checksum)
+      if (opt_previous_version)
+        last_version = g_strdup (opt_previous_version);
+      else if (self->previous_checksum)
         {
           g_autoptr (GVariant) previous_commit = NULL;
           if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,

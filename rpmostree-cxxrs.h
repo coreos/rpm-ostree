@@ -1785,6 +1785,8 @@ bool commit_has_matching_sepolicy (const ::rpmostreecxx::GVariant &commit,
 ::rpmostreecxx::GVariant *get_header_variant (const ::rpmostreecxx::OstreeRepo &repo,
                                               ::rust::Str cachebranch);
 
+void compose_image (::rust::Vec< ::rust::String> args);
+
 void compose_prepare_rootfs (::std::int32_t src_rootfs_dfd, ::std::int32_t dest_rootfs_dfd,
                              ::rpmostreecxx::Treefile &treefile);
 

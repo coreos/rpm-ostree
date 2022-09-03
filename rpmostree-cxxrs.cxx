@@ -2098,6 +2098,9 @@ extern "C"
                                               ::rpmostreecxx::GVariant **return$) noexcept;
 
   ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$compose_image (::rust::Vec< ::rust::String> *args) noexcept;
+
+  ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$compose_prepare_rootfs (::std::int32_t src_rootfs_dfd,
                                                   ::std::int32_t dest_rootfs_dfd,
                                                   ::rpmostreecxx::Treefile &treefile) noexcept;
@@ -3799,6 +3802,17 @@ get_header_variant (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str cachebra
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
   return ::std::move (return$.value);
+}
+
+void
+compose_image (::rust::Vec< ::rust::String> args)
+{
+  ::rust::ManuallyDrop< ::rust::Vec< ::rust::String> > args$ (::std::move (args));
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$compose_image (&args$.value);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
 }
 
 void
