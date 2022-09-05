@@ -2760,6 +2760,8 @@ impl TreeComposeConfig {
         // We don't want to hash in the name of the layers, because only their content is relevant
         let mut self_clone = (*self).clone();
         self_clone.base.ostree_layers = None;
+        // Also ignore metadata
+        self_clone.base.metadata = None;
         hasher.update(serde_json::to_vec(&self_clone)?.as_slice());
 
         Ok(())
@@ -2832,6 +2834,12 @@ pub(crate) mod tests {
 
     pub(crate) static VALID_PRELUDE: &str = indoc! {r#"
         ref: "exampleos/x86_64/blah"
+        metadata:
+          foo: bar
+          name: fedora-coreos
+          deeper:
+            answer: 42
+            reasons: ["because", "universe"]
         repos:
          - baserepo
         lockfile-repos:
@@ -2937,14 +2945,27 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn ostree_layer_hashes() {
+    fn digest_changes() {
         let mut input = Cursor::new(VALID_PRELUDE);
         let mut treefile =
             treefile_parse_stream(utils::InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
-        let hash = treefile.get_checksum().unwrap();
+        let h1 = treefile.get_checksum().unwrap();
         treefile.ostree_layers = Some(vec!["new".to_string()]);
-        let hash2 = treefile.get_checksum().unwrap();
-        assert_eq!(hash, hash2);
+        let h2 = treefile.get_checksum().unwrap();
+        assert_eq!(h1, h2);
+
+        // Modifying metadata is also a no-op change
+        treefile
+            .metadata
+            .as_mut()
+            .unwrap()
+            .insert("foo".to_owned(), serde_json::Value::from("somenewval"));
+        let h3 = treefile.get_checksum().unwrap();
+        assert_eq!(h2, h3);
+
+        treefile.cliwrap = Some(true);
+        let h4 = treefile.get_checksum().unwrap();
+        assert_ne!(h3, h4);
     }
 
     #[test]
@@ -3219,16 +3240,7 @@ pub(crate) mod tests {
     fn test_treefile_metadata() {
         let workdir = tempfile::tempdir().unwrap();
         let workdir: &Utf8Path = workdir.path().try_into().unwrap();
-        let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str(indoc! {r#"
-            metadata:
-              foo: bar
-              name: fedora-coreos
-              deeper:
-                answer: 42
-                reasons: ["because", "universe"]
-        "#});
-        let tf = new_test_treefile(workdir, buf.as_str(), Some("x86_64")).unwrap();
+        let tf = new_test_treefile(workdir, VALID_PRELUDE, Some("x86_64")).unwrap();
         let meta = tf.parsed.base.metadata.as_ref().unwrap();
         assert_eq!(meta.get("name").unwrap(), "fedora-coreos");
         let deeper = meta.get("deeper").unwrap().as_object().unwrap();
