@@ -10,6 +10,7 @@ use anyhow::{anyhow, Result};
 use cap_std_ext::rustix;
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
+use std::env;
 use std::io::{BufRead, Write};
 use std::os::unix::io::IntoRawFd;
 use std::process::Command;
@@ -356,9 +357,6 @@ mod tests {
 
     #[test]
     fn test_running_in_container() {
-        assert_eq!(
-            Path::new("/run/.containerenv").exists(),
-            running_in_container()
-        );
+        assert_eq!(env::var("container").is_ok(), running_in_container());
     }
 }

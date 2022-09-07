@@ -33,7 +33,7 @@ if test -f /usr/lib/os-release; then
         fi
         rm -vf $builddir/*debuginfo*.rpm
         rm -vf $builddir/*python*.rpm
-        rpm -Uvh --oldpackage $builddir/*.rpm
+        yum -y localinstall $builddir/*.rpm
     fi
 else
     echo "Unhandled OS" 1>&2
