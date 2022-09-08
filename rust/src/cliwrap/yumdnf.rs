@@ -63,6 +63,16 @@ enum Cmd {
         /// Set of packages to install
         packages: Vec<String>,
     },
+    /// Remove packages.
+    Remove {
+        /// Set of packages to remove
+        packages: Vec<String>,
+    },
+    /// Uninstall packages.
+    Uninstall {
+        /// Set of packages to uninstall
+        packages: Vec<String>,
+    },
     Clean {
         subargs: Vec<String>,
     },
@@ -175,6 +185,7 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
                 Cmd::Clean { subargs } => {
                     run_clean(&subargs)?
                 }
+                Cmd::Remove { .. } | Cmd::Uninstall { .. } => RunDisposition::NotImplementedYet("Not implemented yet"),
                 Cmd::Search { .. } => RunDisposition::NotImplementedYet(indoc! { r##"
             Package search is not yet implemented.
             For now, it's recommended to use e.g. `toolbox` and `dnf search` inside there.
@@ -215,6 +226,15 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
                 }
                 RunDisposition::ExecRpmOstree(args)
             },
+            Cmd::Remove { packages } | Cmd::Uninstall { packages } => {
+                let mut args = packages;
+                // We haven't plumbed -y through to override remove yet
+                if !opt.assumeyes {
+                    anyhow::bail!("This command currently requires -y/--assumeyes");
+                }
+                args.insert(0, "uninstall".into());
+                RunDisposition::ExecRpmOstree(args)
+            }
             Cmd::Clean { subargs } => run_clean(&subargs)?,
             Cmd::Status => RunDisposition::ExecRpmOstree(vec!["status".into()]),
             Cmd::Search { .. } => {

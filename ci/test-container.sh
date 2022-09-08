@@ -89,6 +89,11 @@ rpm-ostree override remove ignition
 # test local RPM install
 curl -Lo ignition.rpm $URL
 rpm-ostree install ignition.rpm
+rpm -q ignition
+
+# And verify it's uninstalled
+dnf -y uninstall kexec-tools
+if rpm -q kexec-tools; then fatal "failed to remove kexec-tools"; fi
 
 # test replacement by Koji URL
 rpm-ostree override replace $koji_url |& tee out.txt
