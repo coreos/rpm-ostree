@@ -97,11 +97,14 @@ struct RebaseCmd {
     imgref: String,
 }
 
-/// Operations on container images
+/// Operations on dnf image based systems.
 #[derive(Debug, clap::Subcommand)]
 #[clap(rename_all = "kebab-case")]
 enum ImageCmd {
     Rebase(RebaseCmd),
+    /// Apply changes from pending deployment to booted deployment
+    #[clap(external_subcommand)]
+    ApplyLive(Vec<String>),
     Build {
         #[clap(subcommand)]
         cmd: BuildCmd,
@@ -188,6 +191,9 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
                             let cmd = ["rebase"].into_iter().chain(experimental).chain([container_ref.as_str()])
                                 .map(|s| s.to_string()).collect::<Vec<String>>();
                             RunDisposition::ExecRpmOstree(cmd)
+                        },
+                        ImageCmd::ApplyLive(args) => {
+                            RunDisposition::ExecRpmOstree(args)
                         },
                         ImageCmd::Build { cmd } => {
                             match cmd {
@@ -320,6 +326,10 @@ mod tests {
             testrun(host, rebasecmd).unwrap(),
             RunDisposition::ExecRpmOstree(_)
         ));
+        assert_eq!(
+            testrun(host, &["image", "apply-live", "--allow-replacement"])?,
+            RunDisposition::ExecRpmOstree(vecstr(["apply-live", "--allow-replacement"]))
+        );
 
         fn strvec(s: impl IntoIterator<Item = &'static str>) -> Vec<String> {
             s.into_iter().map(String::from).collect()
