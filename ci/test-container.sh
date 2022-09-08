@@ -37,6 +37,9 @@ yum -y install cowsay && yum clean all
 cowsay "It worked"
 test '!' -d /var/cache/rpm-ostree
 
+rpm -e cowsay
+if rpm -q cowsay; then fatal "failed to remove cowsay"; fi
+
 versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 # Let's start by trying to install a bona fide module.
 # NOTE: If changing this also change the layering-modules test
