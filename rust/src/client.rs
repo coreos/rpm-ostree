@@ -10,7 +10,6 @@ use anyhow::{anyhow, Result};
 use cap_std_ext::rustix;
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
-use std::env;
 use std::io::{BufRead, Write};
 use std::os::unix::io::IntoRawFd;
 use std::process::Command;
@@ -335,7 +334,7 @@ pub(crate) fn confirm_or_abort() -> CxxResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    use std::env;
 
     #[test]
     fn test_is_src_rpm() {
