@@ -144,6 +144,9 @@ It supports the following parameters:
 
     The default is `false` out of conservatism; you likely want to enable this.
 
+ * `cliwrap-binaries`: array of strings, optional.  An explicit list of binaries
+    to enable `cliwrap`.  The current allowed set contains just one value: `kernel-install`.
+
  * `readonly-executables`: boolean, optional.  Defaults to `false` (for backcompat).
     If enabled, rpm-ostree will remove the write bit from all executables.
 

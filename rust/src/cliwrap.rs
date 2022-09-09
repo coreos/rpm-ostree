@@ -10,6 +10,7 @@ use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
 use fn_error_context::context;
 use rayon::prelude::*;
+use std::collections::HashSet;
 use std::io::prelude::*;
 use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::prelude::PermissionsExt;
@@ -91,7 +92,7 @@ fn install_to_root(args: &[&str]) -> Result<()> {
         .map(Utf8Path::new)
         .ok_or_else(|| anyhow!("Missing required argument: ROOTDIR"))?;
     let rootdir = &Dir::open_ambient_dir(root, cap_std::ambient_authority())?;
-    write_wrappers(rootdir)?;
+    write_wrappers(rootdir, None)?;
     println!("Successfully enabled cliwrap for {root}");
     Ok(())
 }
@@ -138,12 +139,31 @@ exec /usr/bin/rpm-ostree cliwrap $0 "$@"
 
 /// Move the real binaries to a subdir, and replace them with
 /// a shell script that calls our wrapping code.
-fn write_wrappers(rootfs_dfd: &Dir) -> Result<()> {
+fn write_wrappers(rootfs_dfd: &Dir, allowlist: Option<&HashSet<&str>>) -> Result<()> {
     let destdir = Utf8Path::new(CLIWRAP_DESTDIR);
     let mut dirbuilder = DirBuilder::new();
     dirbuilder.mode(0o755);
     rootfs_dfd.ensure_dir_with(destdir.parent().unwrap(), &dirbuilder)?;
     rootfs_dfd.ensure_dir_with(destdir, &dirbuilder)?;
+
+    let all_wrapped = WRAPPED_BINARIES.iter().map(Utf8Path::new);
+    let all_mustwrap = MUSTWRAP_BINARIES.iter().map(Utf8Path::new);
+    let all_names = all_wrapped
+        .clone()
+        .chain(all_mustwrap.clone())
+        .map(|p| p.file_name().unwrap())
+        .collect::<HashSet<_>>();
+
+    if let Some(allowlist) = allowlist.as_ref() {
+        for k in allowlist.iter() {
+            if !all_names.contains(k) {
+                anyhow::bail!("Unknown cliwrap binary: {k}");
+            }
+        }
+    }
+
+    let allowlist_contains =
+        |v: &(&Utf8Path, bool)| allowlist.map_or(true, |l| l.contains(v.0.file_name().unwrap()));
 
     WRAPPED_BINARIES
         .par_iter()
@@ -153,11 +173,19 @@ fn write_wrappers(rootfs_dfd: &Dir) -> Result<()> {
                 .par_iter()
                 .map(|p| (Utf8Path::new(p), false)),
         )
+        .filter(allowlist_contains)
         .try_for_each(|(binpath, allow_noent)| write_one_wrapper(rootfs_dfd, binpath, allow_noent))
 }
 
 pub(crate) fn cliwrap_write_wrappers(rootfs_dfd: i32) -> CxxResult<()> {
-    Ok(write_wrappers(unsafe { &ffi_dirfd(rootfs_dfd)? })?)
+    let rootfs_dfd = unsafe { &ffi_dirfd(rootfs_dfd)? };
+    write_wrappers(rootfs_dfd, None).map_err(Into::into)
+}
+
+pub(crate) fn cliwrap_write_some_wrappers(rootfs_dfd: i32, args: &Vec<String>) -> CxxResult<()> {
+    let rootfs_dfd = unsafe { &ffi_dirfd(rootfs_dfd)? };
+    let allowlist = args.iter().map(|v| v.as_str()).collect::<HashSet<_>>();
+    write_wrappers(rootfs_dfd, Some(&allowlist)).map_err(Into::into)
 }
 
 pub(crate) fn cliwrap_destdir() -> String {
@@ -194,7 +222,7 @@ mod tests {
             td.ensure_dir_with(d, &db)?;
         }
         td.write("usr/bin/rpm", "this is rpm")?;
-        write_wrappers(td)?;
+        write_wrappers(td, None)?;
         assert!(file_contains(
             td,
             "usr/bin/rpm",
@@ -205,6 +233,28 @@ mod tests {
             td,
             "usr/bin/yum",
             "to implement this CLI interface"
+        )?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_wrappers_allowlist() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        let mut db = DirBuilder::new();
+        db.mode(0o755);
+        db.recursive(true);
+        for &d in &["usr/bin", "usr/libexec"] {
+            td.ensure_dir_with(d, &db)?;
+        }
+        td.write("usr/bin/rpm", "this is rpm")?;
+        td.write("usr/bin/kernel-install", "this is kernel-install")?;
+        let allowlist = ["kernel-install"].into_iter().collect();
+        write_wrappers(td, Some(&allowlist))?;
+        assert!(file_contains(td, "usr/bin/rpm", "this is rpm")?);
+        assert!(file_contains(
+            td,
+            "usr/bin/kernel-install",
+            "binary is now located at"
         )?);
         Ok(())
     }

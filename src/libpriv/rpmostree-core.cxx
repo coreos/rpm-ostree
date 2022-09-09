@@ -4492,6 +4492,12 @@ rpmostree_context_assemble_end (RpmOstreeContext *self, GCancellable *cancellabl
     return FALSE;
   if (self->treefile_rs->get_cliwrap ())
     ROSCXX_TRY (cliwrap_write_wrappers (self->tmprootfs_dfd), error);
+  else
+    {
+      auto wrappers = self->treefile_rs->get_cliwrap_binaries ();
+      if (wrappers.size () > 0)
+        CXX_TRY (rpmostreecxx::cliwrap_write_some_wrappers (self->tmprootfs_dfd, wrappers), error);
+    }
   return TRUE;
 }
 
