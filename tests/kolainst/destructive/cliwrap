@@ -54,6 +54,10 @@ echo "ok cliwrap rpm + dracut"
 
 yum -y install foo
 rpm -q foo
+
+# This is also exposed; currently we seem to not error out if it'd be a no-op
+dnf image apply-live
+
 echo "ok cliwrap yum install"
 
 rpm-ostree deploy --ex-cliwrap=false
