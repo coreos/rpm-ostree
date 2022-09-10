@@ -270,6 +270,14 @@ rpmostree_builtin_uninstall (int argc, char **argv, RpmOstreeCommandInvocation *
   argc--;
   argv[argc] = NULL;
 
+  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
+  if (is_ostree_container)
+    {
+      CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
+      treefile->add_packages_override_remove (util::rust_stringvec_from_strv (argv));
+      return rpmostree_container_rebuild (*treefile, cancellable, error);
+    }
+
   /* If we don't also have to install pkgs, perform uninstalls offline; users don't expect
    * the "auto-update" behaviour here. */
   if (!opt_install)
