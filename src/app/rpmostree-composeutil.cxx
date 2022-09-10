@@ -45,7 +45,7 @@
 
 gboolean
 rpmostree_composeutil_checksum (HyGoal goal, OstreeRepo *repo, const rpmostreecxx::Treefile &tf,
-                                JsonObject *treefile, char **out_checksum, GError **error)
+                                char **out_checksum, GError **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Computing compose checksum", error);
   g_autoptr (GChecksum) checksum = g_checksum_new (G_CHECKSUM_SHA256);

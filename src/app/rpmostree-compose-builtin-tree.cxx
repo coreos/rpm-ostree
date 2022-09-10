@@ -397,8 +397,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;
   if (!rpmostree_composeutil_checksum (dnf_context_get_goal (dnfctx), self->repo,
-                                       **self->treefile_rs, self->treefile, &ret_new_inputhash,
-                                       error))
+                                       **self->treefile_rs, &ret_new_inputhash, error))
     return FALSE;
 
   g_assert (ret_new_inputhash != NULL);
