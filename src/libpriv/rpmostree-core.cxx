@@ -2262,10 +2262,10 @@ rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal, OstreeRepo *p
   return TRUE;
 }
 
-gboolean
-rpmostree_context_get_state_sha512 (RpmOstreeContext *self, char **out_checksum, GError **error)
+char *
+rpmostree_context_get_state_digest (RpmOstreeContext *self, GChecksumType algo, GError **error)
 {
-  g_autoptr (GChecksum) state_checksum = g_checksum_new (G_CHECKSUM_SHA512);
+  g_autoptr (GChecksum) state_checksum = g_checksum_new (algo);
   CXX_TRY_VAR (tf_checksum, self->treefile_rs->get_checksum (*self->ostreerepo), error);
   g_checksum_update (state_checksum, (const guint8 *)tf_checksum.data (), tf_checksum.size ());
 
@@ -2273,11 +2273,10 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self, char **out_checksum,
     {
       if (!rpmostree_dnf_add_checksum_goal (state_checksum, dnf_context_get_goal (self->dnfctx),
                                             get_pkgcache_repo (self), error))
-        return FALSE;
+        return NULL;
     }
 
-  *out_checksum = g_strdup (g_checksum_get_string (state_checksum));
-  return TRUE;
+  return g_strdup (g_checksum_get_string (state_checksum));
 }
 
 static GHashTable *
@@ -4530,7 +4529,6 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
     glnx_unref_object OstreeMutableTree *mtree = NULL;
     g_autoptr (GFile) root = NULL;
     g_auto (GVariantBuilder) metadata_builder;
-    g_autofree char *state_checksum = NULL;
 
     g_variant_builder_init (&metadata_builder, (GVariantType *)"a{sv}");
 
@@ -4651,7 +4649,9 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
         g_assert_not_reached ();
       }
 
-    if (!rpmostree_context_get_state_sha512 (self, &state_checksum, error))
+    g_autofree char *state_checksum
+        = rpmostree_context_get_state_digest (self, G_CHECKSUM_SHA512, error);
+    if (!state_checksum)
       return FALSE;
 
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.state-sha512",
