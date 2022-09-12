@@ -27,10 +27,6 @@
 
 G_BEGIN_DECLS
 
-gboolean rpmostree_composeutil_checksum (HyGoal goal, OstreeRepo *repo,
-                                         const rpmostreecxx::Treefile &tf, char **out_checksum,
-                                         GError **error);
-
 gboolean rpmostree_composeutil_read_json_metadata (JsonNode *root, GHashTable *metadata,
                                                    GError **error);
 gboolean rpmostree_composeutil_read_json_metadata_from_file (const char *path, GHashTable *metadata,
