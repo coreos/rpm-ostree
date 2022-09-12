@@ -144,9 +144,6 @@ rpmostree_builtin_rebase (int argc, char **argv, RpmOstreeCommandInvocation *inv
 
   if (refspectype == rpmostreecxx::RefspecType::Container)
     {
-      if (!opt_experimental)
-        return glnx_throw (error,
-                           "Rebasing to a container image reference requires --experimental");
       /* When using the container refspec type, if rebasing to a specific commit, we expect a
        * specific digest tag in the refspec, not in a separate argument */
       if (revision)

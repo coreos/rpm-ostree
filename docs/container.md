@@ -1,11 +1,8 @@
 ---
-parent: Experimental features
-nav_order: 1
+nav_order: 5
 ---
 
 # ostree native containers
-
-For more information on this, see [CoreOS layering](https://github.com/coreos/enhancements/pull/7).
 
 rpm-ostree inherits work in [ostree-rs-ext](https://github.com/ostreedev/ostree-rs-ext/) to
 create "container native ostree" functionality.  This elevates OCI/docker containers to
@@ -16,10 +13,8 @@ be natively supported as a transport mechanism for bootable operating systems.
 Use this to switch to booting from a container image:
 
 ```
-$ rpm-ostree rebase --experimental ostree-unverified-registry:quay.io/coreos-assembler/fcos:testing-devel
+$ rpm-ostree rebase ostree-unverified-registry:quay.io/fedora/fedora-coreos:stable
 ```
-
-In the near future, we hope to push this more officially to `quay.io/fedora/coreos:stable`.
 
 However, this model would just be using Docker/OCI transport "on the wire"
 for content that already exists today.  This would aid things like mirroring

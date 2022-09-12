@@ -198,8 +198,7 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
                         ImageCmd::Rebase(rebase) => {
                             let container_ref = rebase.to_ostree_container_ref()?;
                             let container_ref = container_ref.to_string();
-                            let experimental = rebase.experimental.then(|| "--experimental");
-                            let cmd = ["rebase"].into_iter().chain(experimental).chain([container_ref.as_str()])
+                            let cmd = ["rebase"].into_iter().chain([container_ref.as_str()])
                                 .map(|s| s.to_string()).collect::<Vec<String>>();
                             RunDisposition::ExecRpmOstree(cmd)
                         },

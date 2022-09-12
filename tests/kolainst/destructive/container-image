@@ -46,8 +46,9 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     # Since we're switching OS update stream, turn off zincati
     systemctl mask --now zincati
 
-    ostree container encapsulate --compression-fast --repo=/ostree/repo ${checksum} "${image}"
-    rpm-ostree rebase "$image_pull" --experimental | tee out.txt
+    ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}"
+    # This one keeps --experimental, but we also test without it below
+    rpm-ostree rebase --experimental "$image_pull" | tee out.txt
     assert_file_has_content out.txt 'Importing.*'"$image_pull"
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:$image\""
     rpmostree_assert_status ".deployments[0][\"checksum\"] == \"${checksum}\""
@@ -61,7 +62,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     # Test rebasing back to ostree https://github.com/coreos/rpm-ostree/issues/3677
     rpm-ostree rebase "$checksum"
-    rpm-ostree rebase "$image_pull" --experimental
+    rpm-ostree rebase "$image_pull"
 
     /tmp/autopkgtest-reboot 1
     ;;
@@ -183,7 +184,7 @@ EOF
     fi
     derived=oci:$image_dir:derived
     skopeo copy containers-storage:localhost/fcos-derived $derived
-    rpm-ostree rebase --experimental ostree-unverified-image:$derived
+    rpm-ostree rebase ostree-unverified-image:$derived
     rm $image_dir -rf
     /tmp/autopkgtest-reboot 3
     ;;
