@@ -1496,6 +1496,7 @@ struct Treefile final : public ::rust::Opaque
   ::rust::Vec< ::rust::String> get_lockfile_repos () const noexcept;
   ::rust::Str get_ref () const noexcept;
   bool get_cliwrap () const noexcept;
+  ::rust::Vec< ::rust::String> get_cliwrap_binaries () const noexcept;
   void set_cliwrap (bool enabled) noexcept;
   ::rust::Vec< ::rust::String> get_container_cmd () const noexcept;
   bool get_readonly_executables () const noexcept;
@@ -1746,6 +1747,8 @@ void print_ostree_txn_stats (::rpmostreecxx::OstreeRepoTransactionStats &stats) 
 void write_commit_id (::rust::Str target_path, ::rust::Str revision);
 
 void cliwrap_write_wrappers (::std::int32_t rootfs);
+
+void cliwrap_write_some_wrappers (::std::int32_t rootfs, const ::rust::Vec< ::rust::String> &args);
 
 ::rust::String cliwrap_destdir () noexcept;
 

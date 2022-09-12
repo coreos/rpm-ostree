@@ -1710,6 +1710,7 @@ struct Treefile final : public ::rust::Opaque
   ::rust::Vec< ::rust::String> get_lockfile_repos () const noexcept;
   ::rust::Str get_ref () const noexcept;
   bool get_cliwrap () const noexcept;
+  ::rust::Vec< ::rust::String> get_cliwrap_binaries () const noexcept;
   void set_cliwrap (bool enabled) noexcept;
   ::rust::Vec< ::rust::String> get_container_cmd () const noexcept;
   bool get_readonly_executables () const noexcept;
@@ -2034,6 +2035,9 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$cliwrap_write_wrappers (::std::int32_t rootfs) noexcept;
+
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$cliwrap_write_some_wrappers (
+      ::std::int32_t rootfs, const ::rust::Vec< ::rust::String> &args) noexcept;
 
   void rpmostreecxx$cxxbridge1$cliwrap_destdir (::rust::String *return$) noexcept;
 
@@ -2506,6 +2510,9 @@ extern "C"
   rpmostreecxx$cxxbridge1$Treefile$get_ref (const ::rpmostreecxx::Treefile &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_cliwrap (const ::rpmostreecxx::Treefile &self) noexcept;
+
+  void rpmostreecxx$cxxbridge1$Treefile$get_cliwrap_binaries (
+      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$set_cliwrap (::rpmostreecxx::Treefile &self,
                                                      bool enabled) noexcept;
@@ -3578,6 +3585,16 @@ void
 cliwrap_write_wrappers (::std::int32_t rootfs)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$cliwrap_write_wrappers (rootfs);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
+cliwrap_write_some_wrappers (::std::int32_t rootfs, const ::rust::Vec< ::rust::String> &args)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$cliwrap_write_some_wrappers (rootfs, args);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
@@ -4963,6 +4980,14 @@ bool
 Treefile::get_cliwrap () const noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$get_cliwrap (*this);
+}
+
+::rust::Vec< ::rust::String>
+Treefile::get_cliwrap_binaries () const noexcept
+{
+  ::rust::MaybeUninit< ::rust::Vec< ::rust::String> > return$;
+  rpmostreecxx$cxxbridge1$Treefile$get_cliwrap_binaries (*this, &return$.value);
+  return ::std::move (return$.value);
 }
 
 void

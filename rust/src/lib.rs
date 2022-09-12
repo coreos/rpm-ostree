@@ -166,6 +166,7 @@ pub mod ffi {
     // cliwrap.rs
     extern "Rust" {
         fn cliwrap_write_wrappers(rootfs: i32) -> Result<()>;
+        fn cliwrap_write_some_wrappers(rootfs: i32, args: &Vec<String>) -> Result<()>;
         fn cliwrap_destdir() -> String;
     }
 
@@ -568,6 +569,7 @@ pub mod ffi {
         fn get_lockfile_repos(&self) -> Vec<String>;
         fn get_ref(&self) -> &str;
         fn get_cliwrap(&self) -> bool;
+        fn get_cliwrap_binaries(&self) -> Vec<String>;
         fn set_cliwrap(&mut self, enabled: bool);
         fn get_container_cmd(&self) -> Vec<String>;
         fn get_readonly_executables(&self) -> bool;

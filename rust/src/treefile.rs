@@ -446,6 +446,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     merge_vec_field(&mut dest.repo_packages, &mut src.repo_packages);
     dest.handle_repo_packages_overrides();
     merge_basic_field(&mut dest.cliwrap, &mut src.cliwrap);
+    merge_vec_field(&mut dest.cliwrap_binaries, &mut src.cliwrap_binaries);
     merge_modules(&mut dest.modules, &mut src.modules);
 
     merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
@@ -1245,6 +1246,10 @@ impl Treefile {
 
     pub(crate) fn get_cliwrap(&self) -> bool {
         self.parsed.cliwrap.unwrap_or(false)
+    }
+
+    pub(crate) fn get_cliwrap_binaries(&self) -> Vec<String> {
+        self.parsed.cliwrap_binaries.clone().unwrap_or_default()
     }
 
     pub(crate) fn set_cliwrap(&mut self, enabled: bool) {
@@ -2337,6 +2342,8 @@ pub(crate) struct TreeComposeConfig {
     pub(crate) modules: Option<ModulesConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) cliwrap: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) cliwrap_binaries: Option<Vec<String>>,
 
     #[serde(flatten)]
     pub(crate) derive: DeriveConfigFields,
