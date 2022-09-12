@@ -161,8 +161,8 @@ typedef struct
 {
   RpmOstreeContext *corectx;
   GFile *treefile_path;
-  GHashTable *metadata;
-  GHashTable *detached_metadata;
+  GVariantDict *metadata;
+  GVariantDict *detached_metadata;
   gboolean failed;
   GLnxTmpDir workdir_tmp;
   int workdir_dfd;
@@ -187,7 +187,8 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 {
   g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile_path);
-  g_clear_pointer (&ctx->metadata, g_hash_table_unref);
+  g_clear_pointer (&ctx->metadata, g_variant_dict_unref);
+  g_clear_pointer (&ctx->detached_metadata, g_variant_dict_unref);
   ctx->treefile_rs.~optional ();
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized)
@@ -527,7 +528,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
 }
 
 static gboolean
-parse_metadata_keyvalue_strings (char **strings, GHashTable *metadata_hash, GError **error)
+parse_metadata_keyvalue_strings (char **strings, GVariantDict *metadata_hash, GError **error)
 {
   for (char **iter = strings; *iter; iter++)
     {
@@ -535,9 +536,9 @@ parse_metadata_keyvalue_strings (char **strings, GHashTable *metadata_hash, GErr
       const char *eq = strchr (s, '=');
       if (!eq)
         return glnx_throw (error, "Missing '=' in KEY=VALUE metadata '%s'", s);
+      g_autofree char *k = g_strndup (s, eq - s);
 
-      g_hash_table_insert (metadata_hash, g_strndup (s, eq - s),
-                           g_variant_ref_sink (g_variant_new_string (eq + 1)));
+      g_variant_dict_insert (metadata_hash, k, "s", eq + 1);
     }
 
   return TRUE;
@@ -774,10 +775,8 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
 
   self->treefile = json_node_get_object (self->treefile_rootval);
 
-  self->metadata
-      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
-  self->detached_metadata
-      = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
+  self->metadata = g_variant_dict_new (NULL);
+  self->detached_metadata = g_variant_dict_new (NULL);
 
   /* metadata from the treefile itself has the lowest priority */
   JsonNode *add_commit_metadata_node
@@ -817,8 +816,8 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
         {
           g_variant_builder_add (&builder, "s", s.c_str ());
         }
-      g_hash_table_insert (self->metadata, g_strdup ("ostree.container-cmd"),
-                           g_variant_ref_sink (g_variant_builder_end (&builder)));
+      g_variant_dict_insert_value (self->metadata, "ostree.container-cmd",
+                                   g_variant_builder_end (&builder));
     }
 
   auto layers = (*self->treefile_rs)->get_all_ostree_layers ();
@@ -849,8 +848,7 @@ inject_advisories (RpmOstreeTreeComposeContext *self, GCancellable *cancellable,
   g_autoptr (GVariant) advisories = rpmostree_advisories_variant (yum_sack, pkgs);
 
   if (advisories && g_variant_n_children (advisories) > 0)
-    g_hash_table_insert (self->metadata, g_strdup ("rpmostree.advisories"),
-                         g_steal_pointer (&advisories));
+    g_variant_dict_insert_value (self->metadata, "rpmostree.advisories", advisories);
 
   return TRUE;
 }
@@ -931,7 +929,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
   rust::String next_version;
   if (json_object_has_member (self->treefile, "automatic-version-prefix") &&
       /* let --add-metadata-string=version=... take precedence */
-      !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
+      !g_variant_dict_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
     {
       CXX_TRY_VAR (ver_prefix, (*self->treefile_rs)->require_automatic_version_prefix (), error);
       auto ver_suffix = (*self->treefile_rs)->get_automatic_version_suffix ();
@@ -956,17 +954,15 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
                                                     last_version ?: ""),
                    error);
       next_version = std::move (next_versionv);
-      g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
-                           g_variant_ref_sink (g_variant_new_string (next_version.c_str ())));
+      g_variant_dict_insert (self->metadata, OSTREE_COMMIT_META_KEY_VERSION, "s",
+                             next_version.c_str ());
     }
   else
     {
-      gpointer vp = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
-      auto v = static_cast<GVariant *> (vp);
-      if (v)
+      const char *version = NULL;
+      if (g_variant_dict_lookup (self->metadata, "&s", OSTREE_COMMIT_META_KEY_VERSION, &version))
         {
-          g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
-          next_version = rust::String (static_cast<char *> (g_variant_dup_string (v, NULL)));
+          next_version = rust::String (version);
         }
     }
 
@@ -1006,24 +1002,26 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
       = (*self->treefile_rs)->get_repo_metadata_target ();
   if (repomd_target == rpmostreecxx::RepoMetadataTarget::Inline)
     {
-      if (!g_hash_table_contains (self->metadata, "rpmostree.rpmmd-repos"))
+      if (!g_variant_dict_contains (self->metadata, "rpmostree.rpmmd-repos"))
         {
-          g_hash_table_insert (self->metadata, g_strdup ("rpmostree.rpmmd-repos"),
-                               rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
+          g_autoptr (GVariant) meta
+              = rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx);
+          g_variant_dict_insert_value (self->metadata, "rpmostree.rpmmd-repos", meta);
         }
     }
   else if (repomd_target == rpmostreecxx::RepoMetadataTarget::Detached)
     {
-      if (!g_hash_table_contains (self->detached_metadata, "rpmostree.rpmmd-repos"))
+      if (!g_variant_dict_contains (self->detached_metadata, "rpmostree.rpmmd-repos"))
         {
-          g_hash_table_insert (self->detached_metadata, g_strdup ("rpmostree.rpmmd-repos"),
-                               rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
+          g_autoptr (GVariant) meta
+              = rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx);
+          g_variant_dict_insert_value (self->detached_metadata, "rpmostree.rpmmd-repos", meta);
         }
     }
   else
     {
-      g_hash_table_remove (self->metadata, "rpmostree.rpmmd-repos");
-      g_hash_table_remove (self->detached_metadata, "rpmostree.rpmmd-repos");
+      g_variant_dict_remove (self->metadata, "rpmostree.rpmmd-repos");
+      g_variant_dict_remove (self->detached_metadata, "rpmostree.rpmmd-repos");
     }
 
   if (!inject_advisories (self, cancellable, error))
@@ -1069,8 +1067,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
   }
 
   /* Insert our input hash */
-  g_hash_table_replace (self->metadata, g_strdup ("rpmostree.inputhash"),
-                        g_variant_ref_sink (g_variant_new_string (new_inputhash)));
+  g_variant_dict_insert (self->metadata, "rpmostree.inputhash", "s", new_inputhash);
 
   *out_changed = TRUE;
   return TRUE;
@@ -1132,8 +1129,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
       GVariant *v = json_gvariant_deserialize (initramfs_args, "as", error);
       if (!v)
         return FALSE;
-      g_hash_table_insert (self->metadata, g_strdup ("rpmostree.initramfs-args"),
-                           g_variant_ref_sink (v));
+      g_variant_dict_insert_value (self->metadata, "rpmostree.initramfs-args", v);
     }
 
   /* Convert metadata hash tables to GVariants */
