@@ -1,5 +1,6 @@
 #!/bin/bash
-# kola: { "timeoutMin": 20 }
+# This test reboots a lot, generates container images, etc.
+# kola: { "timeoutMin": 30 }
 #
 # Copyright (C) 2021 Red Hat, Inc.
 #
@@ -44,7 +45,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     # Since we're switching OS update stream, turn off zincati
     systemctl mask --now zincati
 
-    ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}"
+    ostree container encapsulate --compression-fast --repo=/ostree/repo ${checksum} "${image}"
     rpm-ostree rebase "$image_pull" --experimental | tee out.txt
     assert_file_has_content out.txt 'Importing.*'"$image_pull"
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:$image\""
