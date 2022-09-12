@@ -558,7 +558,7 @@ vm_start_httpd() {
   local port=$1; shift
 
   vm_cmd podman rm -f $name || true
-  vm_run_container --net=host -d --name $name --privileged \
+  vm_run_container --net=host --stop-signal 'SIGKILL' -d --name $name --privileged \
     -v $dir:/srv --workdir /srv -- \
     python3 -m http.server $port
 
@@ -573,7 +573,7 @@ vm_start_httpd() {
 # $1 - service name
 vm_stop_httpd() {
   local name=$1; shift
-  vm_cmd podman rm -f $name
+  vm_cmd podman rm --time 60 -f $name
   set +E
   trap - ERR
 }
