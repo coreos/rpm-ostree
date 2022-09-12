@@ -64,6 +64,7 @@ static char *opt_proxy;
 static char **opt_metadata_strings;
 static char **opt_metadata_json;
 static char *opt_repo;
+static char *opt_layer_repo;
 static char *opt_touch_if_changed;
 static char *opt_previous_commit;
 static char *opt_previous_inputhash;
@@ -93,6 +94,8 @@ static GOptionEntry common_option_entries[]
 /* shared by install & commit */
 static GOptionEntry repo_option_entries[]
     = { { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
+        { "layer-repo", 0, 0, G_OPTION_ARG_STRING, &opt_layer_repo,
+          "Path to OSTree repository for ostree-layers and ostree-override-layers", "REPO" },
         { NULL } };
 
 static GOptionEntry install_option_entries[]
@@ -750,6 +753,14 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
   if (!opt_unified_core)
     rpmostree_context_disable_selinux (self->corectx);
 
+  g_autoptr (OstreeRepo) layer_repo = NULL;
+  if (opt_layer_repo)
+    {
+      layer_repo = ostree_repo_open_at (AT_FDCWD, opt_layer_repo, cancellable, error);
+      if (!layer_repo)
+        return FALSE;
+    }
+
   self->ref = g_strdup (rpmostree_context_get_ref (self->corectx));
 
   if (opt_lockfiles)
@@ -825,11 +836,17 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
   if (layers.size () > 0 && !opt_unified_core)
     return glnx_throw (error, "ostree-layers requires unified-core mode");
 
-  if (self->build_repo != self->repo)
+  OstreeRepo *layer_repo_src = nullptr;
+  if (layer_repo != nullptr)
+    layer_repo_src = layer_repo;
+  else if (self->build_repo != self->repo)
+    layer_repo_src = self->repo;
+
+  if (layer_repo_src != nullptr)
     {
       for (auto layer : layers)
         {
-          if (!pull_local_into_target_repo (self->repo, self->build_repo, layer.c_str (),
+          if (!pull_local_into_target_repo (layer_repo_src, self->build_repo, layer.c_str (),
                                             cancellable, error))
             return glnx_prefix_error (error,
                                       "Copying ostree layers from target repo into build repo");

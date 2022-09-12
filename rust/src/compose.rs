@@ -48,6 +48,11 @@ struct Opt {
     #[clap(value_parser)]
     authfile: Option<Utf8PathBuf>,
 
+    /// OSTree repository to use for `ostree-layers` and `ostree-override-layers`
+    #[clap(long)]
+    #[clap(value_parser)]
+    layer_repo: Option<Utf8PathBuf>,
+
     #[clap(long, short = 'i')]
     /// Do not query previous image in target location; use this for the first build
     initialize: bool,
@@ -171,6 +176,9 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         if let Some(v) = m.version.as_ref() {
             compose_args_extra.extend(["--previous-version", v])
         }
+    }
+    if let Some(layer_repo) = opt.layer_repo.as_deref() {
+        compose_args_extra.extend(["--layer-repo", layer_repo.as_str()]);
     }
 
     let commitid_path = tempdir.join("commitid");
