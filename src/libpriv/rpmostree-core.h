@@ -122,8 +122,8 @@ void rpmostree_context_set_sepolicy (RpmOstreeContext *self, OstreeSePolicy *sep
 gboolean rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal,
                                           OstreeRepo *pkgcache_repo, GError **error);
 
-gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self, char **out_checksum,
-                                             GError **error);
+char *rpmostree_context_get_state_digest (RpmOstreeContext *self, GChecksumType algo,
+                                          GError **error);
 
 gboolean rpmostree_pkgcache_find_pkg_header (OstreeRepo *pkgcache, const char *nevra,
                                              const char *expected_sha256, GVariant **out_header,

@@ -1669,8 +1669,9 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   if (!glnx_opendirat (AT_FDCWD, opt_extensions_output_dir, TRUE, &output_dfd, error))
     return glnx_prefix_error (error, "Opening output dir");
 
-  g_autofree char *state_checksum;
-  if (!rpmostree_context_get_state_sha512 (ctx, &state_checksum, error))
+  g_autofree char *state_checksum
+      = rpmostree_context_get_state_digest (ctx, G_CHECKSUM_SHA512, error);
+  if (!state_checksum)
     return FALSE;
 
   CXX_TRY_VAR (changed,
