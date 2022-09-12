@@ -44,26 +44,6 @@
 #include "rpmostree-util.h"
 
 gboolean
-rpmostree_composeutil_checksum (HyGoal goal, OstreeRepo *repo, const rpmostreecxx::Treefile &tf,
-                                char **out_checksum, GError **error)
-{
-  GLNX_AUTO_PREFIX_ERROR ("Computing compose checksum", error);
-  g_autoptr (GChecksum) checksum = g_checksum_new (G_CHECKSUM_SHA256);
-
-  /* Hash in the treefile inputs (this includes all externals like postprocess, add-files,
-   * etc... and the final flattened treefile -- see treefile.rs for more details). */
-  CXX_TRY_VAR (tf_checksum, tf.get_checksum (*repo), error);
-  g_checksum_update (checksum, (const guint8 *)tf_checksum.data (), tf_checksum.size ());
-
-  /* Hash in each package */
-  if (!rpmostree_dnf_add_checksum_goal (checksum, goal, NULL, error))
-    return FALSE;
-
-  *out_checksum = g_strdup (g_checksum_get_string (checksum));
-  return TRUE;
-}
-
-gboolean
 rpmostree_composeutil_read_json_metadata (JsonNode *root, GHashTable *metadata, GError **error)
 {
   g_autoptr (GVariant) jsonmetav = json_gvariant_deserialize (root, "a{sv}", error);

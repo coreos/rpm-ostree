@@ -2266,6 +2266,8 @@ char *
 rpmostree_context_get_state_digest (RpmOstreeContext *self, GChecksumType algo, GError **error)
 {
   g_autoptr (GChecksum) state_checksum = g_checksum_new (algo);
+  /* Hash in the treefile inputs (this includes all externals like postprocess, add-files,
+   * etc... and the final flattened treefile -- see treefile.rs for more details). */
   CXX_TRY_VAR (tf_checksum, self->treefile_rs->get_checksum (*self->ostreerepo), error);
   g_checksum_update (state_checksum, (const guint8 *)tf_checksum.data (), tf_checksum.size ());
 
