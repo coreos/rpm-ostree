@@ -194,3 +194,19 @@ jobs:
         with:
           name: install-c9s.tar
           path: install.tar
+  # Doc: https://github.com/redhat-plumbers-in-action/differential-shellcheck#usage
+  differential-shellcheck:
+    name: Differential ShellCheck
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Differential ShellCheck
+        uses: redhat-plumbers-in-action/differential-shellcheck@v3
+        with:
+          severity: warning
+          token: ${{ secrets.GITHUB_TOKEN }}
