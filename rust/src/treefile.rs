@@ -424,7 +424,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         rpmdb_normalize
     );
     merge_hashsets!(ignore_removed_groups, ignore_removed_users);
-    merge_maps!(add_commit_metadata, variables);
+    merge_maps!(add_commit_metadata, variables, metadata);
     merge_vecs!(
         repos,
         lockfile_repos,
@@ -3602,6 +3602,10 @@ conditional-include:
               my-third-key: 1000
               my-fourth-key:
                 nested: table
+            metadata:
+                foo: baz
+                deeper:
+                  answer: 9001
             etc-group-members:
               - docker
         "#}
@@ -3640,6 +3644,11 @@ conditional-include:
                 .unwrap()
                 == "table"
         );
+        let data = tf.base.metadata.as_ref().unwrap();
+        assert_eq!(data.get("foo").unwrap().as_str().unwrap(), "baz");
+        assert_eq!(data.get("name").unwrap().as_str().unwrap(), "fedora-coreos");
+        let deeper = data.get("deeper").unwrap().as_object().unwrap();
+        assert_eq!(deeper.get("answer").unwrap().as_i64().unwrap(), 9001);
         let data = tf.base.variables.as_ref().unwrap();
         assert_eq!(
             data.get("mystr").unwrap(),
