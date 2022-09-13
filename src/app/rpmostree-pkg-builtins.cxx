@@ -46,6 +46,7 @@ static gboolean opt_uninstall_all;
 static gboolean opt_unchanged_exit_77;
 static gboolean opt_lock_finalization;
 static gboolean opt_force_replacefiles;
+static guint opt_network_wait;
 
 static GOptionEntry option_entries[]
     = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -83,6 +84,8 @@ static GOptionEntry install_option_entry[]
           "Apply changes to both pending deployment and running filesystem tree", NULL },
         { "force-replacefiles", 0, 0, G_OPTION_ARG_NONE, &opt_force_replacefiles,
           "Allow package to replace files from other packages", NULL },
+        { "network-wait", 'N', 0, G_OPTION_ARG_INT, &opt_network_wait,
+          "Wait to reach into remote repository till network setup", "seconds" },
         { NULL } };
 
 static gboolean
@@ -125,6 +128,8 @@ pkg_change (RpmOstreeCommandInvocation *invocation, RPMOSTreeSysroot *sysroot_pr
   g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
   if (opt_apply_live)
     g_variant_dict_insert (&dict, "apply-live", "b", opt_apply_live);
+  if (opt_network_wait)
+    g_variant_dict_insert (&dict, "network-wait", "u", opt_network_wait);
   g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   gboolean met_local_pkg = FALSE;

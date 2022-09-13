@@ -1557,6 +1557,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
       return TRUE;
     }
 
+  guint network_wait_sec;
+  if (g_variant_dict_lookup (self->options, "network-wait", "u", &network_wait_sec))
+    {
+      rpmostree_sysroot_upgrader_set_network_wait (upgrader, network_wait_sec);
+    }
+
   RpmOstreeSysrootUpgraderLayeringType layering_type;
   gboolean layering_changed = FALSE;
   if (!rpmostree_sysroot_upgrader_prep_layering (upgrader, &layering_type, &layering_changed,

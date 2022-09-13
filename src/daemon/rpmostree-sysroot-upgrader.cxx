@@ -90,6 +90,7 @@ struct RpmOstreeSysrootUpgrader
   char *command_line;
   char *agent;
   char *sd_unit;
+  guint network_wait_timeout_secs;
 
   OstreeDeployment *cfg_merge_deployment;
   OstreeDeployment *origin_merge_deployment;
@@ -905,6 +906,12 @@ prepare_context_for_assembly (RpmOstreeSysrootUpgrader *self, const char *tmproo
   return TRUE;
 }
 
+void
+rpmostree_sysroot_upgrader_set_network_wait (RpmOstreeSysrootUpgrader *self, guint network_wait_sec)
+{
+  self->network_wait_timeout_secs = network_wait_sec;
+}
+
 /* Initialize libdnf context from our configuration */
 static gboolean
 prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, GError **error)
@@ -941,6 +948,9 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
   if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath, cancellable,
                                 error))
     return FALSE;
+
+  dnf_context_set_network_timeout_seconds (rpmostree_context_get_dnf (self->ctx),
+                                           self->network_wait_timeout_secs);
 
   if (rpmostree_origin_has_any_packages (self->computed_origin))
     {
