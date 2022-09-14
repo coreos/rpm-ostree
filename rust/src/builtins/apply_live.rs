@@ -7,6 +7,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use glib::Variant;
 use ostree_ext::{gio, glib, ostree, prelude::*};
+use std::process::Command;
 
 #[derive(Debug, Parser)]
 #[clap(name = "apply-live")]
@@ -94,9 +95,42 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
     if pkgdiff.n_removed() == 0 && pkgdiff.n_modified() == 0 {
         crate::ffi::output_message("Successfully updated running filesystem tree.");
     } else {
+        let lib_diff = ostree_ext::diff::diff(
+            repo,
+            &booted_commit,
+            &live_state.commit.as_str(),
+            Some("/usr/lib/systemd/system"),
+        )?;
+
+        let etc_diff = ostree_ext::diff::diff(
+            repo,
+            &booted_commit,
+            &live_state.commit.as_str(),
+            Some("/usr/etc/systemd/system"),
+        )?;
+
+        if !lib_diff.changed_files.is_empty()
+            || !etc_diff.changed_files.is_empty()
+            || !lib_diff.added_files.is_empty()
+            || !etc_diff.added_files.is_empty()
+        {
+            let output = Command::new("/usr/bin/systemctl")
+                .arg("daemon-reload")
+                .status()
+                .expect("Failed to reload systemd manager configuration");
+            assert!(output.success());
+        }
+        let changed: Vec<String> = lib_diff
+            .changed_files
+            .union(&etc_diff.changed_files)
+            .filter(|s| s.contains(".service"))
+            .cloned()
+            .collect();
         crate::ffi::output_message(
-            "Successfully updated running filesystem tree; some services may need to be restarted.",
-        );
+            "Successfully updated running filesystem tree; Following services may need to be restarted:");
+        for service in changed {
+            crate::ffi::output_message(&format!("{}", service.strip_prefix('/').unwrap()));
+        }
     }
     Ok(())
 }

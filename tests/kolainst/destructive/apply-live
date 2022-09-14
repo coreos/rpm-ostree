@@ -23,16 +23,23 @@ set -euo pipefail
 
 set -x
 
-libtest_prepare_fully_offline
-libtest_enable_repover 0
 cd $(mktemp -d)
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 "")
 
+libtest_prepare_fully_offline
+libtest_enable_repover 0
+
 # Verify we're offline
 rpm-ostree upgrade --unchanged-exit-77 || rc=$?
 assert_streq "${rc}" 77
+
+/tmp/autopkgtest-reboot "1"
+;;
+"1")
+
+rpm-ostree cleanup -pr
 
 if rpm -q foo 2>/dev/null; then
   fatal "found foo"
@@ -141,6 +148,24 @@ assert_not_file_has_content_literal status.txt 'LiveDiff:'
 
 echo "ok livefs reset"
 
+# testing apply-live when changes made to systemd unit while upgrade
+rpm-ostree cleanup -pr
+rpm-ostree install pkgsystemd
+/tmp/autopkgtest-reboot "2"
+;;
+"2")
+pkgsystemd > pkg_version.txt
+assert_file_has_content_literal pkg_version.txt '1.0-1'
+rm -f pkg_version.txt
+sed -i -e 's,rpm-repos/0,rpm-repos/1,' /etc/yum.repos.d/libtest.repo
+rpm-ostree upgrade
+rpm-ostree apply-live --allow-replacement | tee out_ap.txt
+pkgsystemd > pkg_version.txt
+assert_file_has_content_literal pkg_version.txt '2.0-1'
+rm -f pkg_version.txt
+assert_file_has_content out_ap.txt 'Successfully updated running filesystem tree; Following services may need to be restarted:'
+assert_file_has_content out_ap.txt 'pkgsystemd.service'
+
 # Validate that we can generate a local ostree commit
 # that adds content, but doesn't change any packages -
 # i.e. there's no package diff.  This is a bit of a corner
@@ -158,4 +183,5 @@ assert_file_has_content out.txt mytestdata
 echo "ok local ref without package changes"
 ;;
 *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+
 esac
