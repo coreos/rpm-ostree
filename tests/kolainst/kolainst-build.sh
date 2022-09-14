@@ -62,6 +62,16 @@ build_rpm testpkg-post-infinite-loop \
              post "echo entering testpkg-post-infinite-loop 1>&2; while true; do sleep 1h; done"
 build_rpm testpkg-touch-run \
              post "touch /{run,tmp,var/tmp}/should-not-persist"
+
+# Will be useful in checking difference in package version while doing apply-live 
+build_rpm pkgsystemd \
+  version 1.0 \
+  release 1 \
+  build 'echo -e "[Unit]\nDescription=Testinglive apply\n\n[Service]\nExecStart=/bin/bash echo done\n\n[Install]\nWantedBy=multi-user.target" > %{name}.service' \
+  install "mkdir -p %{buildroot}/usr/lib/systemd/system
+           install %{name}.service %{buildroot}/usr/lib/systemd/system" \
+  files "/usr/lib/systemd/system/%{name}.service"
+
 # Test module
 build_rpm foomodular
 build_module foomodular \
@@ -90,6 +100,15 @@ mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
 repover=1
 mkdir ${test_tmpdir}/rpm-repos/${repover}
 build_rpm zincati version 99.99 release 4
+
+#different package version to test apply-live
+build_rpm pkgsystemd \
+  version 2.0 \
+  release 1 \
+  build 'echo -e "[Unit]\nDescription=Testinglive apply\n\n[Service]\nExecStart=/bin/bash echo upgradeDone\n\n[Install]\nWantedBy=multi-user.target" > %{name}.service' \
+  install "mkdir -p %{buildroot}/usr/lib/systemd/system 
+           install %{name}.service %{buildroot}/usr/lib/systemd/system" \
+  files "/usr/lib/systemd/system/%{name}.service"
 mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
 
 # Create an empty repo when we want to test inability to find a package
