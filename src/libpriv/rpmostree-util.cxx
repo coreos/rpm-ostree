@@ -938,6 +938,7 @@ rpmostree_diff_print (GPtrArray *removed, GPtrArray *added, GPtrArray *modified_
       if (pkg_cmp_end (pkg_m, pkg_r) < 0)
         if (pkg_cmp_end (pkg_m, pkg_a) < 0)
           { /* mod is first */
+            g_assert (pkg_m != NULL);
             g_print ("!%s\n", rpm_ostree_package_get_nevra (pkg_m));
             g_print ("=%s\n", rpm_ostree_package_get_nevra (
                                   static_cast<RpmOstreePackage *> (modified_new->pdata[cur_m])));
@@ -945,16 +946,19 @@ rpmostree_diff_print (GPtrArray *removed, GPtrArray *added, GPtrArray *modified_
           }
         else
           { /* add is first */
+            g_assert (pkg_a != NULL);
             g_print ("+%s\n", rpm_ostree_package_get_nevra (pkg_a));
             cur_a++;
           }
       else if (pkg_cmp_end (pkg_r, pkg_a) < 0)
         { /* del is first */
+          g_assert (pkg_r != NULL);
           g_print ("-%s\n", rpm_ostree_package_get_nevra (pkg_r));
           cur_r++;
         }
       else
         { /* add is first */
+          g_assert (pkg_a != NULL);
           g_print ("+%s\n", rpm_ostree_package_get_nevra (pkg_a));
           cur_a++;
         }
