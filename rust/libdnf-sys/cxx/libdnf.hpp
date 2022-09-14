@@ -82,7 +82,7 @@ public:
     return *repo;
   }
   rust::String
-  get_id () noexcept
+  get_id ()
   {
     return rust::String (::dnf_repo_get_id (repo));
   };
