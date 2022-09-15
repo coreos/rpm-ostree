@@ -54,7 +54,7 @@ rpm-ostree compose image --cachedir=cache --touch-if-changed=changed.stamp --ini
 skopeo inspect oci-archive:fedora-silverblue.ociarchive
 test -f changed.stamp
 rm -f changed.stamp
-rpm-ostree compose image --cachedir=cache --touch-if-changed=changed.stamp workstation-ostree-config/fedora-silverblue.yaml fedora-silverblue.ociarchive | tee out.txt
+rpm-ostree compose image --cachedir=cache --offline --touch-if-changed=changed.stamp workstation-ostree-config/fedora-silverblue.yaml fedora-silverblue.ociarchive | tee out.txt
 test '!' -f changed.stamp
 assert_file_has_content_literal out.txt 'No apparent changes since previous commit'
 
