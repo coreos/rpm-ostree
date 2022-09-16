@@ -68,6 +68,10 @@ struct Opt {
     /// Operate only on cached data, do not access network repositories
     offline: bool,
 
+    #[clap(long = "lockfile", value_parser)]
+    /// JSON-formatted lockfile; can be specified multiple times.
+    lockfiles: Vec<Utf8PathBuf>,
+
     #[clap(long, value_parser)]
     /// Update the timestamp or create this file on changes
     touch_if_changed: Option<Utf8PathBuf>,
@@ -179,6 +183,10 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     }
     if let Some(layer_repo) = opt.layer_repo.as_deref() {
         compose_args_extra.extend(["--layer-repo", layer_repo.as_str()]);
+    }
+
+    for lockfile in opt.lockfiles.iter() {
+        compose_args_extra.extend(["--ex-lockfile", lockfile.as_str()]);
     }
 
     let commitid_path = tempdir.join("commitid");
