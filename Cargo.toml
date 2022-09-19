@@ -51,14 +51,14 @@ cap-std = { version = "0.25", features = ["fs_utf8"] }
 containers-image-proxy = "0.5.1"
 # Explicitly force on libc
 rustix = { version = "0.35", features = ["use-libc"] }
-cap-primitives = "0.25.2"
+cap-primitives = "0.25.3"
 cap-tempfile = "0.25.2"
 chrono = { version = "0.4.22", features = ["serde"] }
 clap = { version = "3.2.20", features = ["derive"] }
 cxx = "1.0.75"
 envsubst = "0.2.0"
 either = "1.8.0"
-env_logger = "0.9.0"
+env_logger = "0.9.1"
 fail = { version = "0.5", features = ["failpoints"] }
 fn-error-context = "0.2.0"
 futures = "0.3.24"
