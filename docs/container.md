@@ -39,6 +39,22 @@ where we may require a command to be run as part of the build in the future.
 
 ## Creating base images
 
+There is now an `rpm-ostree compose image` command which generates a new base image using a treefile:
+
+```
+$ rpm-ostree compose image --initialize --format=ociarchive workstation-ostree-config/fedora-silverblue.yaml fedora-silverblue.ociarchive
+```
+
+The `--initialize` command here will create a new image unconditionally.  If not provided,
+the target image must exist, and will be used for change detection.  You can also directly push
+to a registry:
+
+```
+$ rpm-ostree compose image --initialize --format=registry workstation-ostree-config/fedora-silverblue.yaml quay.io/example/exampleos:latest
+```
+
+## Converting OSTree commits to new base images
+
 The ostree-container model creates a bidirectional bridge between ostree and OCI
 formatted containers.  `rpm-ostree compose tree` today is a tool which natively
 accepts RPMs (and other content) and outputs an OSTree commit.
@@ -68,5 +84,4 @@ Use a command like this to generate chunked images:
 $ rpm-ostree compose container-encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue docker://quay.io/myuser/fedora-silverblue:35
 ```
 
-It is likely at some point that we add `rpm-ostree compose container` or so
-which would natively input and output a (base) container image.
+This "chunked" format is used by default by `rpm-ostree compose image`.
