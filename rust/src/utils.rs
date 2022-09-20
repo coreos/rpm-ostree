@@ -550,7 +550,7 @@ pub(crate) fn get_features() -> Vec<String> {
         .collect()
 }
 
-fn impl_sealed_memfd(description: &str, content: &[u8]) -> Result<std::fs::File> {
+pub(crate) fn impl_sealed_memfd(description: &str, content: &[u8]) -> Result<std::fs::File> {
     let mfd = memfd::MemfdOptions::default()
         .allow_sealing(true)
         .close_on_exec(true)
