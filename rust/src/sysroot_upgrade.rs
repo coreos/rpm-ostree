@@ -2,9 +2,14 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use crate::cxxrsutil::*;
 use crate::ffi::{output_message, ContainerImageState};
 use anyhow::Result;
+use cap_std::io_lifetimes::IntoFd;
+use cap_std_ext::cmdext::CapStdExtCommandExt;
 use ostree::glib;
 use ostree_container::store::{
     ImageImporter, ImageProxyConfig, ImportProgress, ManifestLayerState, PrepareResult,
@@ -48,12 +53,23 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
     }
 }
 
-fn default_container_pull_config() -> ImageProxyConfig {
-    let cmd = crate::isolation::unprivileged_subprocess("skopeo");
-    ImageProxyConfig {
-        skopeo_cmd: Some(cmd),
-        ..Default::default()
+fn default_container_pull_config() -> Result<ImageProxyConfig> {
+    let mut cfg = ImageProxyConfig::default();
+    ostree_container::merge_default_container_proxy_opts(&mut cfg)?;
+    let mut cmd = crate::isolation::unprivileged_subprocess("skopeo");
+    // Read the default authfile if it exists and pass it via file descriptor
+    // which will ensure it's readable when we drop privileges.
+    if let Some(authfile) = cfg.authfile.take() {
+        let authbytes = std::fs::read(authfile)?;
+        let authfd = crate::utils::impl_sealed_memfd("pullsecret", &authbytes)?;
+        let authfd = Arc::new(authfd.into_fd().into());
+        drop(authbytes);
+        let n = 5;
+        cmd.take_fd_n(authfd, n);
+        cfg.authfile = Some(PathBuf::from(format!("/proc/self/fd/{n}")));
     }
+    cfg.skopeo_cmd = Some(cmd);
+    Ok(cfg)
 }
 
 async fn pull_container_async(
@@ -61,7 +77,8 @@ async fn pull_container_async(
     imgref: &OstreeImageReference,
 ) -> Result<ContainerImageState> {
     output_message(&format!("Pulling manifest: {}", &imgref));
-    let mut imp = ImageImporter::new(repo, imgref, default_container_pull_config()).await?;
+    let config = default_container_pull_config()?;
+    let mut imp = ImageImporter::new(repo, imgref, config).await?;
     let layer_progress = imp.request_progress();
     let prep = match imp.prepare().await? {
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
