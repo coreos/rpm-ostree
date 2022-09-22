@@ -513,3 +513,13 @@ libtest_prepare_offline() {
     rpm-ostree cleanup -pr
     rm -vrf /etc/yum.repos.d/*
 }
+
+# Like libtest_prepare_offline but also rebases to a vmcheck ref
+libtest_prepare_fully_offline() {
+    libtest_prepare_offline
+    # Also disable zincati since we're rebasing
+    systemctl mask --now zincati
+    booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    ostree refs ${booted_commit} --create vmcheck
+    rpm-ostree rebase :vmcheck
+}

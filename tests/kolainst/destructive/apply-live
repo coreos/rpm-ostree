@@ -23,19 +23,20 @@ set -euo pipefail
 
 set -x
 
-libtest_prepare_offline
+libtest_prepare_fully_offline
 libtest_enable_repover 0
 cd $(mktemp -d)
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 "")
 
+# Verify we're offline
+rpm-ostree upgrade --unchanged-exit-77 || rc=$?
+assert_streq "${rc}" 77
+
 if rpm -q foo 2>/dev/null; then
   fatal "found foo"
 fi
-
-# Turn off zincati since we're rebasing
-systemctl mask --now zincati
 
 rpm -qa | sort > original-rpmdb.txt
 
