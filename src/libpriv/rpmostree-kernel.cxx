@@ -46,14 +46,15 @@ static const char usrlib_ostreeboot[] = "usr/lib/ostree-boot";
  * to support grabbing wherever the Fedora kernel RPM dropped files as well.
  */
 static gboolean
-find_kernel_and_initramfs_in_bootdir (int rootfs_dfd, const char *bootdir, char **out_kernel,
-                                      char **out_initramfs, GCancellable *cancellable,
-                                      GError **error)
+find_kernel_and_initramfs_in_bootdir (int rootfs_dfd, const char *bootdir, char **out_ksuffix,
+                                      char **out_kernel, char **out_initramfs,
+                                      GCancellable *cancellable, GError **error)
 {
   g_auto (GLnxDirFdIterator) dfd_iter = {
     0,
   };
   glnx_autofd int dfd = -1;
+  g_autofree char *ret_ksuffix = NULL;
   g_autofree char *ret_kernel = NULL;
   g_autofree char *ret_initramfs = NULL;
 
@@ -85,11 +86,12 @@ find_kernel_and_initramfs_in_bootdir (int rootfs_dfd, const char *bootdir, char 
 
       name = dent->d_name;
 
-      /* Current Fedora 23 kernel.spec installs as just vmlinuz */
-      if (g_str_equal (name, "vmlinuz") || g_str_has_prefix (name, "vmlinuz-"))
+      if (out_ksuffix ? g_str_has_prefix (name, "vmlinuz-") : g_str_equal (name, "vmlinuz"))
         {
           if (ret_kernel)
-            return glnx_throw (error, "Multiple vmlinuz- in %s", bootdir);
+            return glnx_throw (error, "Multiple vmlinuz%s in %s", out_ksuffix ? "-" : "", bootdir);
+          if (out_ksuffix)
+            ret_ksuffix = g_strdup (name + strlen ("vmlinuz-"));
           ret_kernel = g_strconcat (bootdir, "/", name, NULL);
         }
       else if (g_str_equal (name, "initramfs.img") || g_str_has_prefix (name, "initramfs-"))
@@ -100,6 +102,8 @@ find_kernel_and_initramfs_in_bootdir (int rootfs_dfd, const char *bootdir, char 
         }
     }
 
+  if (out_ksuffix)
+    *out_ksuffix = util::move_nullify (ret_ksuffix);
   *out_kernel = util::move_nullify (ret_kernel);
   *out_initramfs = util::move_nullify (ret_initramfs);
   return TRUE;
@@ -155,12 +159,14 @@ find_dir_with_vmlinuz (int rootfs_dfd, const char *subpath, char **out_subdir,
 }
 
 static gboolean
-kernel_remove_in (int rootfs_dfd, const char *bootdir, GCancellable *cancellable, GError **error)
+kernel_remove_in (int rootfs_dfd, const char *bootdir, gboolean has_ksuffix,
+                  GCancellable *cancellable, GError **error)
 {
+  g_autofree char *ksuffix = NULL;
   g_autofree char *kernel_path = NULL;
   g_autofree char *initramfs_path = NULL;
-  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kernel_path, &initramfs_path,
-                                             cancellable, error))
+  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, has_ksuffix ? &ksuffix : NULL,
+                                             &kernel_path, &initramfs_path, cancellable, error))
     return FALSE;
 
   if (kernel_path)
@@ -190,7 +196,7 @@ rpmostree_kernel_remove (int rootfs_dfd, GCancellable *cancellable, GError **err
     return FALSE;
   if (modversion_dir)
     {
-      if (!kernel_remove_in (rootfs_dfd, modversion_dir, cancellable, error))
+      if (!kernel_remove_in (rootfs_dfd, modversion_dir, FALSE, cancellable, error))
         return FALSE;
       glnx_autofd int modversion_dfd = -1;
       if (!glnx_opendirat (rootfs_dfd, modversion_dir, TRUE, &modversion_dfd, error))
@@ -218,9 +224,9 @@ rpmostree_kernel_remove (int rootfs_dfd, GCancellable *cancellable, GError **err
             }
         }
     }
-  if (!kernel_remove_in (rootfs_dfd, "usr/lib/ostree-boot", cancellable, error))
+  if (!kernel_remove_in (rootfs_dfd, "usr/lib/ostree-boot", TRUE, cancellable, error))
     return FALSE;
-  if (!kernel_remove_in (rootfs_dfd, "boot", cancellable, error))
+  if (!kernel_remove_in (rootfs_dfd, "boot", TRUE, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -235,22 +241,13 @@ rpmostree_kernel_remove (int rootfs_dfd, GCancellable *cancellable, GError **err
 GVariant *
 rpmostree_find_kernel (int rootfs_dfd, GCancellable *cancellable, GError **error)
 {
-  /* Fetch the kver from /usr/lib/modules */
-  g_autofree char *modversion_dir = NULL;
-  if (!find_dir_with_vmlinuz (rootfs_dfd, "usr/lib/modules", &modversion_dir, cancellable, error))
-    return NULL;
-
-  if (!modversion_dir)
-    return (GVariant *)glnx_null_throw (error, "/usr/lib/modules is empty");
-
-  const char *kver = glnx_basename (modversion_dir);
-
   /* First, look for the kernel in the canonical ostree directory */
+  g_autofree char *kver = NULL;
   g_autofree char *kernel_path = NULL;
   g_autofree char *initramfs_path = NULL;
   g_autofree char *bootdir = g_strdup (usrlib_ostreeboot);
-  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kernel_path, &initramfs_path,
-                                             cancellable, error))
+  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kver, &kernel_path,
+                                             &initramfs_path, cancellable, error))
     return NULL;
 
   /* Next, the traditional /boot */
@@ -259,18 +256,29 @@ rpmostree_find_kernel (int rootfs_dfd, GCancellable *cancellable, GError **error
       g_free (bootdir);
       bootdir = g_strdup ("boot");
 
-      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kernel_path, &initramfs_path,
-                                                 cancellable, error))
+      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kver, &kernel_path,
+                                                 &initramfs_path, cancellable, error))
         return NULL;
     }
 
   /* Finally, the newer model of having the kernel with the modules */
   if (kernel_path == NULL)
     {
+      /* Fetch the kver from /usr/lib/modules */
+      g_autofree char *modversion_dir = NULL;
+      if (!find_dir_with_vmlinuz (rootfs_dfd, "usr/lib/modules", &modversion_dir, cancellable,
+                                  error))
+        return NULL;
+
+      if (!modversion_dir)
+        return (GVariant *)glnx_null_throw (error, "/usr/lib/modules is empty");
+
+      kver = g_strdup (glnx_basename (modversion_dir));
+
       g_free (bootdir);
       bootdir = util::move_nullify (modversion_dir);
-      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &kernel_path, &initramfs_path,
-                                                 cancellable, error))
+      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, NULL, &kernel_path,
+                                                 &initramfs_path, cancellable, error))
         return NULL;
     }
 
@@ -295,10 +303,12 @@ copy_kernel_into (int rootfs_dfd, const char *kver, const char *boot_checksum_st
                   gboolean only_if_found, const char *bootdir, GCancellable *cancellable,
                   GError **error)
 {
+  g_autofree char *legacy_kernel_suffix = NULL;
   g_autofree char *legacy_kernel_path = NULL;
   g_autofree char *legacy_initramfs_path = NULL;
-  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &legacy_kernel_path,
-                                             &legacy_initramfs_path, cancellable, error))
+  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir, &legacy_kernel_suffix,
+                                             &legacy_kernel_path, &legacy_initramfs_path,
+                                             cancellable, error))
     return FALSE;
 
   /* No kernel found? Skip to the next if we're in "auto"
