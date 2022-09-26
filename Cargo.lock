@@ -180,13 +180,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-primitives"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "591dbd5ace8712534c781367a16b46b620564153f88dfed85e7f609638f52e01"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras",
+ "io-lifetimes",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "winapi-util",
+ "windows-sys",
+ "winx",
+]
+
+[[package]]
 name = "cap-std"
 version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e3a603c9f3bd2181ed128ab3cd32fbde7cff76afc64a3576662701c4aee7e2b"
 dependencies = [
  "camino",
- "cap-primitives",
+ "cap-primitives 0.25.3",
+ "io-extras",
+ "io-lifetimes",
+ "ipnet",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a6652184ef93583621d582105885a82cc7c6f522662390a15658e6d098c833c"
+dependencies = [
+ "cap-primitives 0.26.0",
  "io-extras",
  "io-lifetimes",
  "ipnet",
@@ -199,7 +230,7 @@ version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2efd8f69529838e5adf942ed8f0fc36f7ae9dfdcbb4cf6b8509a6c299396529"
 dependencies = [
- "cap-tempfile",
+ "cap-tempfile 0.25.3",
  "rustix",
 ]
 
@@ -209,7 +240,19 @@ version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86d435f791da84cb800b98a1de48d145a08e70d8172d335e87446c79b17bfbf3"
 dependencies = [
- "cap-std",
+ "cap-std 0.25.3",
+ "rand",
+ "rustix",
+ "uuid",
+]
+
+[[package]]
+name = "cap-tempfile"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc76d2cf04cd69960421f484ac5a82802546fada52b26253e1e51a44fc318c34"
+dependencies = [
+ "cap-std 0.26.0",
  "rand",
  "rustix",
  "uuid",
@@ -1645,7 +1688,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3106805eb979ca1a46dd10a126384849f683a583f9ecb1c1fba4af293ee129ff"
 dependencies = [
  "bitflags",
- "cap-std",
+ "cap-std 0.25.3",
  "gio",
  "glib",
  "hex",
@@ -1668,7 +1711,7 @@ dependencies = [
  "bitflags",
  "camino",
  "cap-std-ext",
- "cap-tempfile",
+ "cap-tempfile 0.25.3",
  "chrono",
  "cjson",
  "containers-image-proxy",
@@ -2046,10 +2089,10 @@ dependencies = [
  "bitflags",
  "c_utf8",
  "camino",
- "cap-primitives",
- "cap-std",
+ "cap-primitives 0.25.3",
+ "cap-std 0.25.3",
  "cap-std-ext",
- "cap-tempfile",
+ "cap-tempfile 0.26.0",
  "chrono",
  "clap 3.2.22",
  "containers-image-proxy",
@@ -2231,9 +2274,9 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.11"
+version = "0.9.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89f31df3f50926cdf2855da5fd8812295c34752cb20438dae42a67f79e021ac3"
+checksum = "8613d593412a0deb7bbd8de9d908efff5a0cb9ccd8f62c641e7b2ed2f57291d1"
 dependencies = [
  "indexmap",
  "itoa 1.0.1",

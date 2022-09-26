@@ -52,7 +52,7 @@ containers-image-proxy = "0.5.1"
 # Explicitly force on libc
 rustix = { version = "0.35", features = ["use-libc"] }
 cap-primitives = "0.25.3"
-cap-tempfile = "0.25.3"
+cap-tempfile = "0.26.0"
 chrono = { version = "0.4.22", features = ["serde"] }
 clap = { version = "3.2.22", features = ["derive"] }
 cxx = "1.0.75"
@@ -87,7 +87,7 @@ rust-ini = "0.18.0"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.85"
-serde_yaml = "0.9.11"
+serde_yaml = "0.9.13"
 systemd = "0.10.0"
 tempfile = "3.3.0"
 tracing = "0.1"
