@@ -1659,9 +1659,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.8.6"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89cb31d21170303ca01bf67dc3b0e27c58271e6224bbd36a8e7000da71ec0039"
+checksum = "5f80902d38a2754402100e8afdb6147ac7f4c93ca14202c3ca9a98c53f81d1d9"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2109,9 +2109,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.35.9"
+version = "0.35.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72c825b8aa8010eb9ee99b75f05e10180b9278d161583034d7574c9d617aeada"
+checksum = "af895b90e5c071badc3136fc10ff0bcfc98747eadbaf43ed8f214e07ba8f8477"
 dependencies = [
  "bitflags",
  "errno",
