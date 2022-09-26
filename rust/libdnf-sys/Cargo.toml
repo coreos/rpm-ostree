@@ -7,7 +7,7 @@ links = "dnf"
 publish = false
 
 [dependencies]
-cxx = "1.0.75"
+cxx = "1.0.76"
 
 [lib]
 name = "libdnf_sys"
