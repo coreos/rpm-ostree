@@ -200,7 +200,8 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
           g_autoptr (DnfContext) ctx = dnf_context_new ();
           auto basearch = dnf_context_get_base_arch (ctx);
           CXX_TRY_VAR (fds, rpmostreecxx::client_handle_fd_argument (arg, basearch, true), error);
-          g_assert_cmpint (fds.size (), >, 0);
+          if (fds.size () == 0)
+            return glnx_throw (error, "Non-local replacement overrides not implemented yet");
           CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpm_raw_fds (fds), error);
           treefile->add_packages_override_replace_local (pkgs);
         }
