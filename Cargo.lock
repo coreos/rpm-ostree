@@ -180,13 +180,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-primitives"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "591dbd5ace8712534c781367a16b46b620564153f88dfed85e7f609638f52e01"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras",
+ "io-lifetimes",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "winapi-util",
+ "windows-sys",
+ "winx",
+]
+
+[[package]]
 name = "cap-std"
 version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e3a603c9f3bd2181ed128ab3cd32fbde7cff76afc64a3576662701c4aee7e2b"
 dependencies = [
+ "cap-primitives 0.25.3",
+ "io-extras",
+ "io-lifetimes",
+ "ipnet",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a6652184ef93583621d582105885a82cc7c6f522662390a15658e6d098c833c"
+dependencies = [
  "camino",
- "cap-primitives",
+ "cap-primitives 0.26.0",
  "io-extras",
  "io-lifetimes",
  "ipnet",
@@ -209,7 +240,7 @@ version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86d435f791da84cb800b98a1de48d145a08e70d8172d335e87446c79b17bfbf3"
 dependencies = [
- "cap-std",
+ "cap-std 0.25.3",
  "rand",
  "rustix",
  "uuid",
@@ -1279,9 +1310,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.132"
+version = "0.2.133"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8371e4e5341c3a96db127eb2465ac681ced4c433e01dd0e938adbef26ba93ba5"
+checksum = "c0f80d65747a3e43d1596c7c5492d95d5edddaabd45a7fcdb02b95f644164966"
 
 [[package]]
 name = "libdnf-sys"
@@ -1645,7 +1676,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3106805eb979ca1a46dd10a126384849f683a583f9ecb1c1fba4af293ee129ff"
 dependencies = [
  "bitflags",
- "cap-std",
+ "cap-std 0.25.3",
  "gio",
  "glib",
  "hex",
@@ -2046,8 +2077,8 @@ dependencies = [
  "bitflags",
  "c_utf8",
  "camino",
- "cap-primitives",
- "cap-std",
+ "cap-primitives 0.25.3",
+ "cap-std 0.26.0",
  "cap-std-ext",
  "cap-tempfile",
  "chrono",
