@@ -7,6 +7,7 @@ use camino::Utf8Path;
 use cap_std::fs::FileType;
 use cap_std::fs_utf8::Dir as Utf8Dir;
 use cap_std_ext::cap_std;
+use std::io::Write;
 use std::process::Command;
 
 /// Primary entrypoint to running our wrapped `kernel-install` handling.
@@ -65,7 +66,7 @@ fn run_dracut(kernel_dir: &str) -> Result<()> {
             "ostree",
             "-f",
         ])
-        .arg(tmp_initramfs_path)
+        .arg(&tmp_initramfs_path)
         .status()?;
     if !res.success() {
         return Err(anyhow!(
@@ -73,6 +74,13 @@ fn run_dracut(kernel_dir: &str) -> Result<()> {
             res
         ));
     }
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(&tmp_initramfs_path)?;
+    // Also append the dev/urandom bits here, see the duplicate bits in rpmostree-kernel.cxx
+    f.write(crate::initramfs::get_dracut_random_cpio())?;
+    drop(f);
     let utf8_tmp_dir_path = Utf8Path::from_path(tmp_dir.path().strip_prefix("/")?)
         .context("Error turning Path to Utf8Path")?;
     root_fs.rename(
