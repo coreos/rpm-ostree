@@ -2372,6 +2372,7 @@ rpmostree_find_and_download_packages (const char *const *packages, const char *s
             hy_autoquery HyQuery query = hy_subject_get_best_solution (
                 subject, sack, NULL, &nevra, FALSE, TRUE, FALSE, FALSE, FALSE);
             hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, repo);
+            hy_query_filter_num (query, HY_PKG_LATEST_PER_ARCH_BY_PRIORITY, HY_EQ, 1);
             g_autoptr (GPtrArray) results = hy_query_run (query);
             if (!results || results->len == 0)
               return glnx_throw (error, "No matches for \"%s\" in repo '%s'", subject, repo);
