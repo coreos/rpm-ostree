@@ -53,7 +53,7 @@ if rpm-ostree override replace enoent --experimental --freeze --from repo=test-r
 fi
 assert_file_has_content_literal err.txt 'No matches'
 
-# query and fetch for the lastest version of a package from enabled repos
+# query and fetch for the latest version of a package from enabled repos
 rpmostree_assert_status \
   '.deployments[0]["base-local-replacements"]|length == 0' \
   '.deployments[0]["requested-base-local-replacements"]|length == 0'
