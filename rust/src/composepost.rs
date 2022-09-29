@@ -202,6 +202,47 @@ fn postprocess_presets(rootfs_dfd: &Dir) -> Result<()> {
     Ok(())
 }
 
+fn is_overlay_whiteout(meta: &cap_std::fs::Metadata) -> bool {
+    (meta.mode() & libc::S_IFMT) == libc::S_IFCHR && meta.rdev() == 0
+}
+
+/// Auto-synthesize embedded overlayfs whiteouts; for more information
+/// see https://github.com/ostreedev/ostree/pull/2722/commits/0085494e350c72599fc5c0e00422885d80b3c660
+#[context("Postprocessing embedded overlayfs")]
+fn postprocess_embedded_ovl_whiteouts(root: &Dir) -> Result<()> {
+    const OSTREE_WHITEOUT_PREFIX: &str = ".ostree-wh.";
+    fn recurse(root: &Dir, path: &Utf8Path) -> Result<u32> {
+        let mut n = 0;
+        for entry in root.read_dir(path)? {
+            let entry = entry?;
+            let meta = entry.metadata()?;
+            let name = PathBuf::from(entry.file_name());
+            let name: Utf8PathBuf = name.try_into()?;
+            if meta.is_dir() {
+                n += recurse(root, &path.join(name))?;
+                continue;
+            }
+            if !is_overlay_whiteout(&meta) {
+                continue;
+            };
+            let srcpath = path.join(&name);
+            let targetname = format!("{OSTREE_WHITEOUT_PREFIX}{name}");
+            let destpath = path.join(&targetname);
+            root.remove_file(srcpath)?;
+            root.atomic_write_with_perms(destpath, "", meta.permissions())?;
+            n += 1;
+        }
+        Ok(n)
+    }
+    let n = recurse(root, ".".into())?;
+    if n > 0 {
+        println!("Processed {n} embedded whiteouts");
+    } else {
+        println!("No embedded whiteouts found");
+    }
+    Ok(())
+}
+
 /// Write an RPM macro file to ensure the rpmdb path is set on the client side.
 pub fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
@@ -290,13 +331,17 @@ pub(crate) fn postprocess_cleanup_rpmdb(rootfs_dfd: i32) -> CxxResult<()> {
 /// on the target host.
 pub fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
+    // These tasks can safely run in parallel, so just for fun we do so via rayon.
     let tasks = [
         postprocess_useradd,
         postprocess_presets,
         postprocess_subs_dist,
         postprocess_rpm_macro,
     ];
-    Ok(tasks.par_iter().try_for_each(|f| f(rootfs_dfd))?)
+    tasks.par_iter().try_for_each(|f| f(rootfs_dfd))?;
+    // This task recursively traverses the filesystem and hence should be serial.
+    postprocess_embedded_ovl_whiteouts(rootfs_dfd)?;
+    Ok(())
 }
 
 #[context("Handling treefile 'units'")]
@@ -1286,6 +1331,22 @@ OSTREE_VERSION='33.4'
             assert!(tmpdir_meta.is_dir());
             assert_eq!(tmpdir_meta.permissions().mode() & 0o7777, 0o1777);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_overlay() -> Result<()> {
+        // We don't actually test creating whiteout devices here as that
+        // may not work.
+        let td = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        // Verify no-op case
+        postprocess_embedded_ovl_whiteouts(&td).unwrap();
+        td.create("foo")?;
+        td.symlink("foo", "bar")?;
+        postprocess_embedded_ovl_whiteouts(&td).unwrap();
+        assert!(td.try_exists("foo")?);
+        assert!(td.try_exists("bar")?);
+
         Ok(())
     }
 
