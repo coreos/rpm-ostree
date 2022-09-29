@@ -54,6 +54,8 @@ echo "ok postprocess with treefile"
 
 testdate=$(date)
 runasroot sh -xec "
+# https://github.com/ostreedev/ostree/pull/2717/commits/e234b630f85b97e48ecf45d5aaba9b1aa64e6b54
+mknod -m 000 ${instroot}-directcommit/usr/share/foowhiteout c 0 0
 echo \"${testdate}\" > ${instroot}-directcommit/usr/share/rpm-ostree-composetest-split.txt
 ! test -f ${instroot}-directcommit/${integrationconf}
 rpm-ostree compose commit --repo=${repo} ${treefile} ${instroot}-directcommit
@@ -61,6 +63,12 @@ ostree --repo=${repo} ls ${treeref} /usr/bin/bash
 if ostree --repo=${repo} ls ${treeref} /var/lib/rpm >/dev/null; then
   echo found /var/lib/rpm in commit 1>&2; exit 1
 fi
+
+# Verify whiteout renames
+ostree --repo=${repo} ls ${treeref} /usr/share
+ostree --repo=${repo} ls ${treeref} /usr/share/.ostree-wh.foowhiteout >out.txt
+grep -Ee '^-00000' out.txt
+
 ostree --repo=${repo} cat ${treeref} /usr/share/rpm-ostree-composetest-split.txt >out.txt
 grep \"${testdate}\" out.txt
 ostree --repo=${repo} cat ${treeref} /${integrationconf}
