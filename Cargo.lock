@@ -490,9 +490,9 @@ dependencies = [
 
 [[package]]
 name = "cxx-build"
-version = "1.0.76"
+version = "1.0.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc65e68d05a2bf20230ea07fff3f26aaa15d057d8361438859f0fe66a89ce288"
+checksum = "3e580d70777c116df50c390d1211993f62d40302881e54d4b79727acb83d0199"
 dependencies = [
  "cc",
  "codespan-reporting",
@@ -2109,9 +2109,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.35.10"
+version = "0.35.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af895b90e5c071badc3136fc10ff0bcfc98747eadbaf43ed8f214e07ba8f8477"
+checksum = "fbb2fda4666def1433b1b05431ab402e42a1084285477222b72d6c564c417cef"
 dependencies = [
  "bitflags",
  "errno",
