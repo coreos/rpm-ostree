@@ -52,7 +52,7 @@ containers-image-proxy = "0.5.1"
 # Explicitly force on libc
 rustix = { version = "0.35", features = ["use-libc"] }
 cap-primitives = "0.25.3"
-cap-tempfile = "0.25.3"
+cap-tempfile = "0.26.1"
 chrono = { version = "0.4.22", features = ["serde"] }
 clap = { version = "3.2.22", features = ["derive"] }
 cxx = "1.0.76"
