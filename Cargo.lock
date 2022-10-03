@@ -180,13 +180,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-primitives"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af3f336aa91cce16033ed3c94ac91d98956c49b420e6d6cd0dd7d0e386a57085"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras",
+ "io-lifetimes",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "winapi-util",
+ "windows-sys",
+ "winx",
+]
+
+[[package]]
 name = "cap-std"
 version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e3a603c9f3bd2181ed128ab3cd32fbde7cff76afc64a3576662701c4aee7e2b"
 dependencies = [
+ "cap-primitives 0.25.3",
+ "io-extras",
+ "io-lifetimes",
+ "ipnet",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9d6e70b626eceac9d6fc790fe2d72cc3f2f7bc3c35f467690c54a526b0f56db"
+dependencies = [
  "camino",
- "cap-primitives",
+ "cap-primitives 0.26.1",
  "io-extras",
  "io-lifetimes",
  "ipnet",
@@ -209,7 +240,7 @@ version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86d435f791da84cb800b98a1de48d145a08e70d8172d335e87446c79b17bfbf3"
 dependencies = [
- "cap-std",
+ "cap-std 0.25.3",
  "rand",
  "rustix",
  "uuid",
@@ -1645,7 +1676,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3106805eb979ca1a46dd10a126384849f683a583f9ecb1c1fba4af293ee129ff"
 dependencies = [
  "bitflags",
- "cap-std",
+ "cap-std 0.25.3",
  "gio",
  "glib",
  "hex",
@@ -2046,8 +2077,8 @@ dependencies = [
  "bitflags",
  "c_utf8",
  "camino",
- "cap-primitives",
- "cap-std",
+ "cap-primitives 0.25.3",
+ "cap-std 0.26.1",
  "cap-std-ext",
  "cap-tempfile",
  "chrono",
@@ -2109,9 +2140,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.35.10"
+version = "0.35.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af895b90e5c071badc3136fc10ff0bcfc98747eadbaf43ed8f214e07ba8f8477"
+checksum = "fbb2fda4666def1433b1b05431ab402e42a1084285477222b72d6c564c417cef"
 dependencies = [
  "bitflags",
  "errno",
