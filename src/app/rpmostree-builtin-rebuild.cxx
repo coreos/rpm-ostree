@@ -41,39 +41,19 @@ rpmostree_ex_builtin_rebuild (int argc, char **argv, RpmOstreeCommandInvocation 
                                        NULL, NULL, error))
     return FALSE;
 
-  bool in_container = false;
-  if (rpmostreecxx::running_in_container ())
-    {
-      CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
-      if (!is_ostree_container)
-        return glnx_throw (error, "This command can only run in an OSTree container.");
-      in_container = true;
-    }
-
   auto basearch = rpmostreecxx::get_rpm_basearch ();
   CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_client_from_etc (basearch), error);
 
-  /* This is the big switch: we support running this command in two modes:
-   * "client containers", where the effect takes place in the active rootfs, and
-   * possibly eventually "client host systems", where the effect takes place in
-   * a new deployment. */
-  if (in_container)
-    {
-      if (!rpmostree_container_rebuild (*treefile, cancellable, error))
-        return FALSE;
+  /* Right now we only support running this in a container */
+  if (!rpmostree_container_rebuild (*treefile, cancellable, error))
+    return FALSE;
 
-      /* In the container flow, we effectively "consume" the treefiles after
-       * modifying the rootfs. */
-      CXX_TRY_VAR (n, rpmostreecxx::treefile_delete_client_etc (), error);
-      if (n == 0)
-        {
-          g_print ("No changes to apply.\n");
-        }
-    }
-  else
+  /* In the container flow, we effectively "consume" the treefiles after
+   * modifying the rootfs. */
+  CXX_TRY_VAR (n, rpmostreecxx::treefile_delete_client_etc (), error);
+  if (n == 0)
     {
-      return glnx_throw (error, "This command is not yet supported on host systems. "
-                                "See https://github.com/coreos/rpm-ostree/issues/2326.");
+      g_print ("No changes to apply.\n");
     }
 
   return TRUE;
