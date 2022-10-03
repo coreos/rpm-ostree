@@ -56,6 +56,11 @@ fi
 assert_file_has_content_literal err.txt 'error: Argument is invalid UTF-8'
 echo "ok error on non UTF-8"
 
+if rpm-ostree ex rebuild 2>err.txt; then
+    fatal "ex rebuild on host"
+fi
+assert_file_has_content_literal err.txt 'error: This command can only run in an OSTree container'
+
 rpm-ostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
 assert_file_has_content_literal jsonpath.txt 'true'
 echo "ok jsonpath"

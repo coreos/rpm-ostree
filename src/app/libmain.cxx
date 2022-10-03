@@ -273,6 +273,8 @@ rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *mai
   bool container_capable = (flags & RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE) > 0;
   if (use_daemon && !(is_ostree_container && container_capable))
     {
+      if (out_sysroot_proxy == NULL)
+        return glnx_throw (error, "This command can only run in an OSTree container.");
       /* More gracefully handle the case where
        * no --sysroot option was specified and we're not booted via ostree
        * https://github.com/projectatomic/rpm-ostree/issues/1537
