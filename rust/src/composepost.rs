@@ -17,6 +17,7 @@ use crate::{bwrap, importer};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::Dir;
+use cap_std::fs::OpenOptions;
 use cap_std::fs_utf8::Dir as Utf8Dir;
 use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::cap_std;
@@ -271,8 +272,20 @@ fn postprocess_cleanup_rpmdb_impl(rootfs_dfd: &Dir) -> Result<()> {
         let ent = ent?;
         let name = ent.file_name()?;
         let name = name.as_str();
-        if matches!(name, ".dbenv.lock" | ".rpm.lock") || name.starts_with("__db.") {
-            d.remove_file(name)?;
+        match name {
+            // BDB cruft
+            ".dbenv.lock" | ".rpm.lock" => d.remove_file(name)?,
+            name if name.starts_with("__db.") => d.remove_file(name)?,
+            // SQLite case.  Today, it seems to work to remove the WAL, but removing the SHM
+            // file causes a runtime error as RPM tries to mutate a read-only database.
+            "rpmdb.sqlite-shm" => {
+                // This one needs zeroing today sadly
+                let size = ent.metadata()?.size();
+                let f = ent.open_with(OpenOptions::new().truncate(true))?;
+                f.set_len(size)?;
+            }
+            "rpmdb.sqlite-wal" => d.remove_file(name)?,
+            _ => {}
         }
     }
     Ok(())
