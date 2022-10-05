@@ -1225,7 +1225,7 @@ private:
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$FilesystemScriptPrep
 struct FilesystemScriptPrep final : public ::rust::Opaque
 {
-  void undo () const;
+  void undo ();
   ~FilesystemScriptPrep () = delete;
 
 private:

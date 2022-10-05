@@ -125,6 +125,7 @@ pub(crate) fn refspec_classify(refspec: &str) -> crate::ffi::RefspecType {
 /// Perform reversible filesystem transformations necessary before we execute scripts.
 pub(crate) struct FilesystemScriptPrep {
     rootfs: Dir,
+    enabled: bool,
 }
 
 pub(crate) fn prepare_filesystem_script_prep(rootfs: i32) -> CxxResult<Box<FilesystemScriptPrep>> {
@@ -166,12 +167,18 @@ impl FilesystemScriptPrep {
                 rootfs.atomic_write_with_perms(path, contents, mode)?;
             }
         }
-        Ok(Box::new(Self { rootfs }))
+        Ok(Box::new(Self {
+            rootfs,
+            enabled: true,
+        }))
     }
 
     /// Undo the filesystem changes.
     #[context("Undoing prep filesystem for scripts")]
-    pub(crate) fn undo(&self) -> CxxResult<()> {
+    pub(crate) fn undo(&mut self) -> CxxResult<()> {
+        if !self.enabled {
+            return Ok(());
+        }
         for &path in Self::OPTIONAL_PATHS
             .iter()
             .chain(Self::REPLACE_OPTIONAL_PATHS.iter().map(|x| &x.0))
@@ -181,7 +188,14 @@ impl FilesystemScriptPrep {
                 self.rootfs.rename(saved, &self.rootfs, path)?;
             }
         }
+        self.enabled = false;
         Ok(())
+    }
+}
+
+impl Drop for FilesystemScriptPrep {
+    fn drop(&mut self) {
+        let _ = self.undo();
     }
 }
 
@@ -363,7 +377,7 @@ mod test {
         let d = cap_tempfile::tempdir(cap_std::ambient_authority())?;
         // The no-op case
         {
-            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             g.undo()?;
         }
         let mut db = dirbuilder_from_mode(0o755);
@@ -375,7 +389,7 @@ mod test {
         // Neutered sss_cache.
         {
             assert!(d.try_exists(super::SSS_CACHE_PATH)?);
-            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             assert!(!d.try_exists(super::SSS_CACHE_PATH)?);
             g.undo()?;
             assert!(d.try_exists(super::SSS_CACHE_PATH)?);
@@ -386,7 +400,7 @@ mod test {
             d.atomic_write_with_perms(super::SYSTEMCTL_PATH, original_systemctl, mode.clone())?;
             let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
             assert_eq!(contents, original_systemctl);
-            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             let contents = d.read_to_string(super::SYSTEMCTL_PATH)?;
             assert_eq!(contents.as_bytes(), super::SYSTEMCTL_WRAPPER);
             g.undo()?;
@@ -399,7 +413,7 @@ mod test {
             d.atomic_write_with_perms(super::GROUPADD_PATH, original_groupadd, mode.clone())?;
             let contents = d.read_to_string(super::GROUPADD_PATH)?;
             assert_eq!(contents, original_groupadd);
-            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             let contents = d.read_to_string(super::GROUPADD_PATH)?;
             assert_eq!(contents.as_bytes(), super::GROUPADD_WRAPPER);
             g.undo()?;
@@ -412,7 +426,7 @@ mod test {
             d.atomic_write_with_perms(super::USERADD_PATH, original_useradd, mode.clone())?;
             let contents = d.read_to_string(super::USERADD_PATH)?;
             assert_eq!(contents, original_useradd);
-            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             let contents = d.read_to_string(super::USERADD_PATH)?;
             assert_eq!(contents.as_bytes(), super::USERADD_WRAPPER);
             g.undo()?;
@@ -425,7 +439,7 @@ mod test {
             d.atomic_write_with_perms(super::USERMOD_PATH, original_usermod, mode)?;
             let contents = d.read_to_string(super::USERMOD_PATH)?;
             assert_eq!(contents, original_usermod);
-            let g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
             let contents = d.read_to_string(super::USERMOD_PATH)?;
             assert_eq!(contents.as_bytes(), super::USERMOD_WRAPPER);
             g.undo()?;

@@ -41,6 +41,13 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
   g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_container ();
   rpmostree_context_set_treefile (ctx, treefile);
 
+  glnx_autofd int rootfs_fd = -1;
+  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_fd, error))
+    return FALSE;
+
+  // Ensure we have our wrappers for groupadd/systemctl set up
+  CXX_TRY_VAR (fs_prep, rpmostreecxx::prepare_filesystem_script_prep (rootfs_fd), error);
+
   if (!rpmostree_context_setup (ctx, "/", "/", cancellable, error))
     return FALSE;
 
@@ -61,9 +68,8 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
   if (!dnf_context_run (dnfctx, NULL, error))
     return FALSE;
 
-  glnx_autofd int rootfs_fd = -1;
-  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_fd, error))
-    return FALSE;
+  CXX_TRY (fs_prep->undo (), error);
+
   CXX_TRY (rpmostreecxx::postprocess_cleanup_rpmdb (rootfs_fd), error);
 
   return TRUE;

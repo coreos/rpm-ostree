@@ -1439,7 +1439,7 @@ private:
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$FilesystemScriptPrep
 struct FilesystemScriptPrep final : public ::rust::Opaque
 {
-  void undo () const;
+  void undo ();
   ~FilesystemScriptPrep () = delete;
 
 private:
@@ -2069,7 +2069,7 @@ extern "C"
       ::std::int32_t rootfs, ::rust::Box< ::rpmostreecxx::FilesystemScriptPrep> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$FilesystemScriptPrep$undo (
-      const ::rpmostreecxx::FilesystemScriptPrep &self) noexcept;
+      ::rpmostreecxx::FilesystemScriptPrep &self) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$run_depmod (::std::int32_t rootfs_dfd,
                                                            ::rust::Str kver,
@@ -3719,7 +3719,7 @@ prepare_filesystem_script_prep (::std::int32_t rootfs)
 }
 
 void
-FilesystemScriptPrep::undo () const
+FilesystemScriptPrep::undo ()
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$FilesystemScriptPrep$undo (*this);
   if (error$.ptr)
