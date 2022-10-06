@@ -103,6 +103,25 @@ jobs:
         run: tar -C / -xzvf install.tar
       - name: Integration tests
         run: ./ci/test-container.sh
+  # Try to keep this in sync with https://github.com/ostreedev/ostree-rs-ext/blob/1fc115a760eeada22599e0f57026f58b22efded4/.github/workflows/rust.yml#L163
+  container-build:
+    name: "Container build"
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Checkout coreos-layering-examples
+        uses: actions/checkout@v3
+        with:
+          repository: coreos/coreos-layering-examples
+          path: coreos-layering-examples
+      - name: Download
+        uses: actions/download-artifact@v2
+        with:
+          name: install.tar
+      - name: Integration tests
+        run: ./ci/container-build-integration.sh
   cargo-deny:
     runs-on: ubuntu-latest
     steps:
