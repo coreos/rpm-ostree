@@ -1,5 +1,5 @@
 #!/bin/bash
-# kola: { "tags": "needs-internet" }
+# kola: { "tags": "needs-internet", "minMemory": 1536 }
 set -euo pipefail
 
 . ${KOLA_EXT_DATA}/libtest.sh

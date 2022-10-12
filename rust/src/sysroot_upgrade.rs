@@ -84,6 +84,10 @@ async fn pull_container_async(
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
         PrepareResult::Ready(r) => r,
     };
+    if prep.export_layout == ostree_container::ExportLayout::V0 {
+        output_message(&format!("warning: pulled image is using deprecated v0 format; support will be dropped in a future release"));
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
     let progress_printer =
         tokio::task::spawn(async move { layer_progress_print(layer_progress).await });
     let digest = prep.manifest_digest.clone();
