@@ -1213,7 +1213,29 @@ rpmostree_builtin_status (int argc, char **argv, RpmOstreeCommandInvocation *inv
       json_builder_begin_object (builder);
 
       json_builder_set_member_name (builder, "deployments");
-      json_builder_add_value (builder, json_gvariant_serialize (deployments));
+      g_autoptr (GVariant) deployments_to_list = g_variant_ref (deployments);
+      if (opt_only_booted)
+        {
+          g_autoptr (GVariantBuilder) filtered_deployments
+              = g_variant_builder_new (g_variant_get_type (deployments));
+          const guint n = g_variant_n_children (deployments);
+          for (guint i = 0; i < n; i++)
+            {
+              g_autoptr (GVariant) deployment = g_variant_get_child_value (deployments, i);
+              g_auto (GVariantDict) dict;
+              g_variant_dict_init (&dict, deployment);
+              gboolean is_booted = FALSE;
+              (void)g_variant_dict_lookup (&dict, "booted", "b", &is_booted);
+              if (is_booted)
+                {
+                  g_variant_builder_add_value (filtered_deployments, deployment);
+                }
+            }
+          g_variant_unref (deployments_to_list);
+          deployments_to_list = g_variant_ref_sink (g_variant_builder_end (filtered_deployments));
+        }
+
+      json_builder_add_value (builder, json_gvariant_serialize (deployments_to_list));
       json_builder_set_member_name (builder, "transaction");
       GVariant *txn = get_active_txn (sysroot_proxy);
       JsonNode *txn_node = txn ? json_gvariant_serialize (txn) : json_node_new (JSON_NODE_NULL);
