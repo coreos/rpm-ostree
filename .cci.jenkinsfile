@@ -56,7 +56,7 @@ cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
   stage("Kola") {
     // TODO upstream this into coreos-ci-lib
     shwrap("make -C tests/kolainst install")
-    fcosKola(cosaDir: "${env.WORKSPACE}", extraArgs: "ext.rpm-ostree.*", parallel: nhosts)
+    kola(cosaDir: "${env.WORKSPACE}", extraArgs: "ext.rpm-ostree.*", parallel: nhosts)
   }
   stage("vmcheck") {
     try {
