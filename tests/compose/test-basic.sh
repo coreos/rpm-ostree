@@ -61,9 +61,6 @@ assert_file_has_content_literal autovar.txt 'd /var/tmp 1777 root root - -'
 assert_file_has_content_literal autovar.txt 'd /var/lib/polkit-1 0750 root polkitd - -'
 echo "ok autovar"
 
-# Validate this exists
-ostree --repo="${repo}" ls "${treeref}" /usr/lib/systemd/system/multi-user.target.wants/ostree-remount.service
-
 python3 <<EOF
 import json, yaml
 tf=yaml.safe_load(open("$treefile"))
