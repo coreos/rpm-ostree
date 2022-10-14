@@ -184,24 +184,6 @@ fn postprocess_useradd(rootfs_dfd: &cap_std::fs::Dir) -> Result<()> {
     Ok(())
 }
 
-// We keep hitting issues with the ostree-remount preset not being
-// enabled; let's just do this rather than trying to propagate the
-// preset everywhere.
-#[context("Postprocessing presets")]
-fn postprocess_presets(rootfs_dfd: &Dir) -> Result<()> {
-    let wantsdir = "usr/lib/systemd/system/multi-user.target.wants";
-    let mut db = cap_std::fs::DirBuilder::new();
-    db.recursive(true);
-    db.mode(0o755);
-    rootfs_dfd.create_dir_with(wantsdir, &db)?;
-    for service in &["ostree-remount.service", "ostree-finalize-staged.path"] {
-        let target = format!("../{}", service);
-        let loc = Path::new(wantsdir).join(service);
-        rootfs_dfd.symlink(target, &loc)?;
-    }
-    Ok(())
-}
-
 fn is_overlay_whiteout(meta: &cap_std::fs::Metadata) -> bool {
     (meta.mode() & libc::S_IFMT) == libc::S_IFCHR && meta.rdev() == 0
 }
@@ -334,7 +316,6 @@ pub fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
     // These tasks can safely run in parallel, so just for fun we do so via rayon.
     let tasks = [
         postprocess_useradd,
-        postprocess_presets,
         postprocess_subs_dist,
         postprocess_rpm_macro,
     ];
