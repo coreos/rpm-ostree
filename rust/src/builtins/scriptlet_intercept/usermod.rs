@@ -16,13 +16,6 @@ use std::os::unix::prelude::PermissionsExt;
 pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     fail::fail_point!("intercept_usermod_ok", |_| Ok(()));
 
-    // Extract the package name from rpm-ostree/bwrap environment.
-    // This also works as a sanity check to ensure we are running in
-    // the context of a scriptlet.
-    static SCRIPT_PKG_VAR: &str = "RPMOSTREE_SCRIPT_PKG_NAME";
-    let pkgname = std::env::var(SCRIPT_PKG_VAR)
-        .with_context(|| format!("Failed to access {SCRIPT_PKG_VAR} environment variable"))?;
-
     // This parses the same CLI surface as the real `usermod`,
     // but in the end we only extract the user name and supplementary
     // groups.
@@ -44,7 +37,7 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     let rootdir = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
     let conf_dir = common::open_create_sysusers_dir(&rootdir)?;
     for secondary_group in groups {
-        generate_sysusers_fragment(&conf_dir, &pkgname, username, secondary_group)?;
+        generate_sysusers_fragment(&conf_dir, username, secondary_group)?;
     }
 
     Ok(())
@@ -72,20 +65,18 @@ fn cli_cmd() -> Command<'static> {
 /// This returns whether a new fragment has been actually written
 /// to disk.
 #[context(
-    "Generating sysusers.d fragment for package '{}', adding user '{}' to group '{}'",
-    pkgname,
+    "Generating sysusers.d fragment adding user '{}' to group '{}'",
     username,
     group
 )]
-fn generate_sysusers_fragment(
+pub(crate) fn generate_sysusers_fragment(
     conf_dir: &Dir,
-    pkgname: &str,
     username: &str,
     group: &str,
 ) -> Result<bool> {
     // The filename of the configuration fragment is in fact a public
     // API, because users may have masked it in /etc. Do not change this.
-    let filename = format!("40-pkg-{pkgname}-usermod-{username}-{group}.conf");
+    let filename = format!("40-rpmostree-pkg-usermod-{username}-{group}.conf");
 
     if conf_dir.try_exists(&filename)? {
         return Ok(false);
@@ -150,11 +141,11 @@ mod test {
             ("testuser", "other", true),
         ];
         for entry in testcases {
-            let generated = generate_sysusers_fragment(&conf_dir, "foo", entry.0, entry.1).unwrap();
+            let generated = generate_sysusers_fragment(&conf_dir, entry.0, entry.1).unwrap();
             assert_eq!(generated, entry.2, "{:?}", entry);
 
             let path = format!(
-                "usr/lib/sysusers.d/40-pkg-foo-usermod-{}-{}.conf",
+                "usr/lib/sysusers.d/40-rpmostree-pkg-usermod-{}-{}.conf",
                 entry.0, entry.1
             );
             assert!(tmpdir.is_file(&path));

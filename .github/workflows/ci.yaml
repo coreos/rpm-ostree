@@ -37,6 +37,23 @@ jobs:
         with:
           name: install.tar
           path: install.tar
+  build-tests:
+    name: "Build Integration Test Data"
+    runs-on: ubuntu-latest
+    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      # https://github.com/actions/checkout/issues/760
+      - name: Mark git checkout as safe
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Build
+        run: make -C tests/kolainst && make -C tests/kolainst install DESTDIR=$(pwd)/install && tar -C install -czf tests.tar .
+      - name: Upload binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: tests.tar
+          path: tests.tar
   cxx-verify:
     name: "Verify CXX generation"
     runs-on: ubuntu-latest
@@ -89,7 +106,7 @@ jobs:
         run: ./ci/clang-build-check.sh
   integration:
     name: "Container Integration"
-    needs: build
+    needs: [build, build-tests]
     runs-on: ubuntu-latest
     container: quay.io/coreos-assembler/fcos:testing-devel
     steps:
@@ -100,7 +117,13 @@ jobs:
         with:
           name: install.tar
       - name: Install
-        run: tar -C / -xzvf install.tar
+        run: tar -C / -xzvf install.tar && rm -f install.tar
+      - name: Download tests
+        uses: actions/download-artifact@v2
+        with:
+          name: tests.tar
+      - name: Install Tests
+        run: tar -C / -xzvf tests.tar && rm -f tests.tar
       - name: Integration tests
         run: ./ci/test-container.sh
   # Try to keep this in sync with https://github.com/ostreedev/ostree-rs-ext/blob/1fc115a760eeada22599e0f57026f58b22efded4/.github/workflows/rust.yml#L163

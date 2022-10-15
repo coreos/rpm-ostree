@@ -16,13 +16,6 @@ use std::os::unix::prelude::PermissionsExt;
 pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     fail::fail_point!("intercept_groupadd_ok", |_| Ok(()));
 
-    // Extract the package name from rpm-ostree/bwrap environment.
-    // This also works as a sanity check to ensure we are running in
-    // the context of a scriptlet.
-    static SCRIPT_PKG_VAR: &str = "RPMOSTREE_SCRIPT_PKG_NAME";
-    let pkgname = std::env::var(SCRIPT_PKG_VAR)
-        .with_context(|| format!("Failed to access {SCRIPT_PKG_VAR} environment variable"))?;
-
     // This parses the same CLI surface as the real `groupadd`,
     // but in the end we only extract the group name and (if
     // present) the static GID.
@@ -42,7 +35,7 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     }
 
     let rootdir = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
-    generate_sysusers_fragment(&rootdir, &pkgname, groupname, gid)?;
+    generate_sysusers_fragment(&rootdir, groupname, gid)?;
 
     Ok(())
 }
@@ -90,20 +83,11 @@ fn cli_cmd() -> Command<'static> {
 ///
 /// This returns whether a new fragment has been actually written
 /// to disk.
-#[context(
-    "Generating sysusers.d fragment for package '{}', adding group '{}'",
-    pkgname,
-    groupname
-)]
-fn generate_sysusers_fragment(
-    rootdir: &Dir,
-    pkgname: &str,
-    groupname: &str,
-    gid: Option<u32>,
-) -> Result<bool> {
+#[context("Generating sysusers.d fragment adding group '{}'", groupname)]
+fn generate_sysusers_fragment(rootdir: &Dir, groupname: &str, gid: Option<u32>) -> Result<bool> {
     // The filename of the configuration fragment is in fact a public
     // API, because users may have masked it in /etc. Do not change this.
-    let filename = format!("30-pkg-{pkgname}-group-{groupname}.conf");
+    let filename = format!("30-rpmostree-pkg-group-{groupname}.conf");
 
     let conf_dir = common::open_create_sysusers_dir(rootdir)?;
     if conf_dir.try_exists(&filename)? {
@@ -168,10 +152,10 @@ mod test {
             ("bar", None, true, "-"),
         ];
         for entry in groups {
-            let generated = generate_sysusers_fragment(&tmpdir, "foo", entry.0, entry.1).unwrap();
+            let generated = generate_sysusers_fragment(&tmpdir, entry.0, entry.1).unwrap();
             assert_eq!(generated, entry.2, "{:?}", entry);
 
-            let path = format!("usr/lib/sysusers.d/30-pkg-foo-group-{}.conf", entry.0);
+            let path = format!("usr/lib/sysusers.d/30-rpmostree-pkg-group-{}.conf", entry.0);
             assert!(tmpdir.is_file(&path));
 
             let mut fragment = tmpdir.open(&path).unwrap();
