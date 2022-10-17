@@ -331,6 +331,19 @@
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
+    <!-- List configured repositories.
+	Available properties:
+	"id" (type 's')
+	"description" (type 's')
+	"is-devel" (type 'b')
+	"is-source" (type 'b')
+	"is-enabled" (type 'b')
+    -->
+    <method name="ListRepos">
+      <arg type="aa{sv}" name="repos" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
+    </method>
+
     <!-- Available modifiers:
          "set-refspec" (type 's')
          "set-revision" (type 's')

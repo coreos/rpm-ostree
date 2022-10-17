@@ -123,10 +123,11 @@ os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *i
     {
       g_ptr_array_add (actions, (void *)"org.projectatomic.rpmostree1.rebase");
     }
-  else if (g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0)
+  else if (g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0
+           || g_strcmp0 (method_name, "ListRepos") == 0)
     {
       /* Note: early return here because no need authentication
-       * for this method
+       * for these methods
        */
       return TRUE;
     }
@@ -890,6 +891,60 @@ os_handle_modify_yum_repo (RPMOSTreeOS *interface, GDBusMethodInvocation *invoca
 }
 
 static gboolean
+os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
+{
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  GError *local_error = NULL;
+  g_autoptr (GCancellable) cancellable = NULL;
+  const gchar *os_name = rpmostree_os_get_name (interface);
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
+                                      &local_error))
+    return os_throw_dbus_invocation_error (invocation, &local_error);
+
+  g_autoptr (OstreeDeployment) cfg_merge_deployment
+      = ostree_sysroot_get_merge_deployment (ot_sysroot, os_name);
+
+  OstreeRepo *ot_repo = ostree_sysroot_repo (ot_sysroot);
+  g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_client (ot_repo);
+
+  /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
+   * since we're not actually going to perform any installation. Though it does provide us
+   * with the right semantics for install/source_root. */
+  if (!rpmostree_context_setup (ctx, NULL, NULL, cancellable, &local_error))
+    return os_throw_dbus_invocation_error (invocation, &local_error);
+
+  /* point libdnf to our repos dir */
+  rpmostree_context_configure_from_deployment (ctx, ot_sysroot, cfg_merge_deployment);
+
+  DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+  GVariantBuilder builder;
+
+  /* Using such type will handle empty arrays gracefully */
+  g_variant_builder_init (&builder, (const GVariantType *)"aa{sv}");
+
+  GPtrArray *repos = dnf_context_get_repos (dnfctx);
+  for (guint i = 0; i < repos->len; i++)
+    {
+      auto repo = static_cast<DnfRepo *> (repos->pdata[i]);
+      GVariantDict repo_dict;
+      g_variant_dict_init (&repo_dict, NULL);
+      g_variant_dict_insert (&repo_dict, "id", "s", dnf_repo_get_id (repo));
+      g_variant_dict_insert (&repo_dict, "description", "s", dnf_repo_get_description (repo));
+      g_variant_dict_insert (&repo_dict, "is-devel", "b", dnf_repo_is_devel (repo));
+      g_variant_dict_insert (&repo_dict, "is-source", "b", dnf_repo_is_source (repo));
+      g_variant_dict_insert (&repo_dict, "is-enabled", "b",
+                             (dnf_repo_get_enabled (repo) & DNF_REPO_ENABLED_PACKAGES) != 0);
+      g_variant_builder_add_value (&builder, g_variant_dict_end (&repo_dict));
+    }
+
+  GVariant *repos_result = g_variant_builder_end (&builder);
+  g_dbus_method_invocation_return_value (invocation, g_variant_new ("(@aa{sv})", repos_result));
+
+  return TRUE;
+}
+
+static gboolean
 os_handle_finalize_deployment (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
                                GVariant *arg_options)
 {
@@ -1599,6 +1654,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_kernel_args = os_handle_kernel_args;
   iface->handle_refresh_md = os_handle_refresh_md;
   iface->handle_modify_yum_repo = os_handle_modify_yum_repo;
+  iface->handle_list_repos = os_handle_list_repos;
   iface->handle_rollback = os_handle_rollback;
   iface->handle_initramfs_etc = os_handle_initramfs_etc;
   iface->handle_set_initramfs_state = os_handle_set_initramfs_state;
