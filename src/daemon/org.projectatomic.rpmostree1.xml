@@ -458,6 +458,25 @@
       <arg type="aa{sv}" name="packages" direction="out"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
     </method>
+
+    <!-- Search for packages with given 'names'.
+         @pkgnames: array of package names to search for; there can be multiple results for one name
+         Available return package properties:
+         "key" (type 's') an item of the names array, for which the package belongs
+         "name" (type 's') package name
+         "epoch" (type 't') package epoch
+         "version" (type 's') package version
+         "arch" (type 's') package architecture
+         "nevra" (type 's') package nevra
+         "evr" (type 's') package evr
+         "summary" (type 's') package summary
+         "reponame" (type 's') package repository name
+    -->
+    <method name="GetPackages">
+      <arg type="as" name="names" direction="in"/>
+      <arg type="aa{sv}" name="packages" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
+    </method>
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.OSExperimental">

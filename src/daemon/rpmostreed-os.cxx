@@ -125,7 +125,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *i
     }
   else if (g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0
            || g_strcmp0 (method_name, "ListRepos") == 0
-           || g_strcmp0 (method_name, "WhatProvides") == 0)
+           || g_strcmp0 (method_name, "WhatProvides") == 0
+           || g_strcmp0 (method_name, "GetPackages") == 0)
     {
       /* Note: early return here because no need authentication
        * for these methods
@@ -1020,13 +1021,14 @@ os_handle_finalize_deployment (RPMOSTreeOS *interface, GDBusMethodInvocation *in
 }
 
 static void
-os_add_package_info_to_builder (DnfPackage *pkg, GVariantBuilder *builder)
+os_add_package_info_to_builder (DnfPackage *pkg, GVariantBuilder *builder, const gchar *key)
 {
   GVariantDict pkg_dict;
   g_variant_dict_init (&pkg_dict, NULL);
 #define insert_nonnull_string(_key, _value)                                                        \
   if (_value != NULL)                                                                              \
     g_variant_dict_insert (&pkg_dict, _key, "s", _value);
+  insert_nonnull_string ("key", key);
   insert_nonnull_string ("name", dnf_package_get_name (pkg));
   g_variant_dict_insert (&pkg_dict, "epoch", "t", dnf_package_get_epoch (pkg));
   insert_nonnull_string ("version", dnf_package_get_version (pkg));
@@ -1066,7 +1068,47 @@ os_handle_what_provides (RPMOSTreeOS *interface, GDBusMethodInvocation *invocati
   for (guint i = 0; i < pkglist->len; i++)
     {
       auto pkg = static_cast<DnfPackage *> (g_ptr_array_index (pkglist, i));
-      os_add_package_info_to_builder (pkg, &builder);
+      os_add_package_info_to_builder (pkg, &builder, NULL);
+    }
+
+  GVariant *pkgs_result = g_variant_builder_end (&builder);
+  g_dbus_method_invocation_return_value (invocation, g_variant_new ("(@aa{sv})", pkgs_result));
+
+  return TRUE;
+}
+
+static gboolean
+os_handle_get_packages (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
+                        const gchar *const *names)
+{
+  GError *local_error = NULL;
+  g_autoptr (GCancellable) cancellable = NULL;
+  g_autoptr (DnfContext) dnfctx = NULL;
+
+  dnfctx = os_create_dnf_context_simple (interface, TRUE, cancellable, &local_error);
+  if (dnfctx == NULL)
+    return os_throw_dbus_invocation_error (invocation, &local_error);
+
+  hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
+
+  GVariantBuilder builder;
+  /* Using such type will handle empty arrays gracefully */
+  g_variant_builder_init (&builder, (const GVariantType *)"aa{sv}");
+
+  for (guint i = 0; names[i] != NULL; i++)
+    {
+      g_autoptr (GPtrArray) pkglist = NULL;
+
+      hy_query_clear (query);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, names[i]);
+      hy_query_filter_latest_per_arch (query, TRUE);
+
+      pkglist = hy_query_run (query);
+      for (guint j = 0; j < pkglist->len; j++)
+        {
+          auto pkg = static_cast<DnfPackage *> (g_ptr_array_index (pkglist, j));
+          os_add_package_info_to_builder (pkg, &builder, names[i]);
+        }
     }
 
   GVariant *pkgs_result = g_variant_builder_end (&builder);
@@ -1749,6 +1791,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_update_deployment = os_handle_update_deployment;
   iface->handle_finalize_deployment = os_handle_finalize_deployment;
   iface->handle_what_provides = os_handle_what_provides;
+  iface->handle_get_packages = os_handle_get_packages;
   /* legacy cleanup API; superseded by Cleanup() */
   iface->handle_clear_rollback_target = os_handle_clear_rollback_target;
   /* legacy deployment change API; superseded by UpdateDeployment() */
