@@ -440,6 +440,24 @@
       <annotation name="org.qtproject.QtDBus.QtTypeName.In0" value="QVariantMap"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
+
+    <!-- Search for packages with certain 'provides'.
+         @provides: array of 'provides' to search for
+         Available return package properties:
+         "name" (type 's') package name
+         "epoch" (type 't') package epoch
+         "version" (type 's') package version
+         "arch" (type 's') package architecture
+         "nevra" (type 's') package nevra
+         "evr" (type 's') package evr
+         "summary" (type 's') package summary
+         "reponame" (type 's') package repository name
+    -->
+    <method name="WhatProvides">
+      <arg type="as" name="provides" direction="in"/>
+      <arg type="aa{sv}" name="packages" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
+    </method>
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.OSExperimental">
