@@ -873,7 +873,7 @@ rpmostree_sort_pkgs_strv (const char *const *pkgs, GUnixFDList *fd_list, gboolea
             {
               auto idx = g_unix_fd_list_append (fd_list, fd, error);
               if (idx < 0)
-                return FALSE;
+                return glnx_prefix_error (error, "dup(%s)", pkg);
               g_variant_builder_add (&builder, "h", idx);
             }
         }

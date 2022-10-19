@@ -8,6 +8,7 @@ use crate::ffi::SystemHostType;
 use crate::utils;
 use anyhow::{anyhow, Result};
 use cap_std_ext::rustix;
+use fn_error_context::context;
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
 use std::io::{BufRead, Write};
@@ -127,6 +128,7 @@ pub(crate) fn is_src_rpm_arg(arg: &str) -> bool {
 /// RPM URLs we need to fetch, and if so download those URLs and return file
 /// descriptors for the content.
 /// TODO(cxx-rs): This would be slightly more elegant as Result<Option<Vec<i32>>>
+#[context("Handling argument {}", arg)]
 pub(crate) fn client_handle_fd_argument(
     arg: &str,
     arch: &str,
