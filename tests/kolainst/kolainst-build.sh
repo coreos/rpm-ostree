@@ -51,8 +51,10 @@ build_rpm testpkg-etc \
 # A service that adds a user and has data in tmpfiles.d
 build_rpm testdaemon \
              build "echo testdaemon-binary > %{name}" \
+             summary "awesome-daemon-for-testing" \
              install "mkdir -p %{buildroot}/{usr/bin,var/lib/%{name}}
                       install %{name} %{buildroot}/usr/bin" \
+             provides "provided-testing-daemon" \
              pre "getent group testdaemon-group &>/dev/null || groupadd -r testdaemon-group
                   getent passwd testdaemon-user &>/dev/null || useradd -r testdaemon-user -g testdaemon-group -s /sbin/nologin" \
              files "/usr/bin/%{name}

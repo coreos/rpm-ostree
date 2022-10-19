@@ -168,6 +168,8 @@ EOF
             echo "Provides: $arg" >> $spec;;
         conflicts)
             echo "Conflicts: $arg" >> $spec;;
+        summary)
+            echo "Summary: $arg" >> $spec;;
         post_args)
             post_args="$arg";;
         version|release|epoch|arch|build|install|files|pretrans|pre|post|posttrans|verifyscript|uinfo)
