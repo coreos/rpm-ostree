@@ -80,6 +80,22 @@ assert_file_has_content_literal out.txt '"is-source" b false'
 assert_file_has_content_literal out.txt '"is-enabled" b true'
 echo "ok dbus ListRepos"
 
+rpmostree_busctl_call_os WhatProvides as 1 provided-testing-daemon > out.txt
+assert_file_has_content_literal out.txt '"epoch" t 0'
+assert_file_has_content_literal out.txt '"reponame" s "libtest"'
+assert_file_has_content_literal out.txt '"nevra" s "testdaemon'
+rpmostree_busctl_call_os WhatProvides as 1 should-not-exist-p-equals-np > out.txt
+assert_file_has_content_literal out.txt 'aa{sv} 0'
+echo "ok dbus WhatProvides"
+
+rpmostree_busctl_call_os GetPackages as 1 testdaemon > out.txt
+assert_file_has_content_literal out.txt '"epoch" t 0'
+assert_file_has_content_literal out.txt '"reponame" s "libtest"'
+assert_file_has_content_literal out.txt '"nevra" s "testdaemon'
+rpmostree_busctl_call_os GetPackages as 1 should-not-exist-p-equals-np > out.txt
+assert_file_has_content_literal out.txt 'aa{sv} 0'
+echo "ok dbus GetPackages"
+
 # Verify operations as non-root
 runuser -u core rpm-ostree status
 echo "ok status doesn't require root"
