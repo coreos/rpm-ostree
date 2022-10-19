@@ -213,7 +213,7 @@ fn gv_nevra_to_string(pkg: &glib::Variant) -> String {
 pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
     let args = args.iter().skip(1).map(|s| s.as_str());
     let opt = ContainerEncapsulateOpts::parse_from(args);
-    let repo = &ostree_ext::cli::parse_repo(opt.repo.as_str())?;
+    let repo = &ostree_ext::cli::parse_repo(&opt.repo)?;
     let (root, rev) = repo.read_commit(opt.ostree_ref.as_str(), gio::NONE_CANCELLABLE)?;
     let pkglist = progress_task("Reading packages", || -> Result<_> {
         let cancellable = gio::Cancellable::new();
