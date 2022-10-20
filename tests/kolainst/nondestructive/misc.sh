@@ -4,6 +4,9 @@ set -xeuo pipefail
 . ${KOLA_EXT_DATA}/libtest.sh
 cd $(mktemp -d)
 
+libtest_prepare_offline
+libtest_enable_repover 0
+
 # Ensure multicall is correctly set up and working.
 R_O_DIGEST=$(sha512sum $(which rpm-ostree) | cut -d' ' -f1)
 O_C_DIGEST=$(sha512sum $(which /usr/libexec/libostree/ext/ostree-container) | cut -d' ' -f1)
@@ -64,6 +67,14 @@ assert_file_has_content_literal err.txt 'error: This command can only run in an 
 rpm-ostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
 assert_file_has_content_literal jsonpath.txt 'true'
 echo "ok jsonpath"
+
+rpmostree_busctl_call_os ListRepos > out.txt
+assert_file_has_content_literal out.txt '"id" s "libtest"'
+assert_file_has_content_literal out.txt '"description" s "libtest repo"'
+assert_file_has_content_literal out.txt '"is-devel" b false'
+assert_file_has_content_literal out.txt '"is-source" b false'
+assert_file_has_content_literal out.txt '"is-enabled" b true'
+echo "ok dbus ListRepos"
 
 # Verify operations as non-root
 runuser -u core rpm-ostree status
