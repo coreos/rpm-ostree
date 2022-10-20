@@ -523,3 +523,11 @@ libtest_prepare_fully_offline() {
     ostree refs ${booted_commit} --create vmcheck
     rpm-ostree rebase :vmcheck
 }
+
+# Invoke a method on the OS interface of the booted OS
+rpmostree_busctl_call_os() {
+  stateroot=$(rpm-ostree status --booted --json | jq -r '.deployments[0].osname')
+  ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
+  busctl call org.projectatomic.rpmostree1 $ospath \
+    org.projectatomic.rpmostree1.OS "$@"
+}
