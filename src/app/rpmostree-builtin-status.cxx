@@ -73,7 +73,7 @@ static GOptionEntry option_entries[]
           "EXPRESSION" },
         { "booted", 'b', 0, G_OPTION_ARG_NONE, &opt_only_booted, "Only print the booted deployment",
           NULL },
-        { "pending-exit-77", 'b', 0, G_OPTION_ARG_NONE, &opt_pending_exit_77,
+        { "pending-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_pending_exit_77,
           "If pending deployment available, exit 77", NULL },
         { NULL } };
 
