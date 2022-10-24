@@ -38,6 +38,10 @@ assert_jq status.json \
 rm status.json
 echo "ok empty pkg arrays, and commit meta correct in status json"
 
+rpm-ostree status -b --json > status.json
+assert_jq status.json '.deployments|length == 1'
+echo "ok --booted --json"
+
 # All tests which require a booted system, but are nondestructive
 rpm-ostree testutils integration-read-only
 
