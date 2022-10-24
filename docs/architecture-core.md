@@ -141,6 +141,22 @@ not writable.  This helps ensure offline updates are possible; a
 package script running client side cannot affect persistent system
 state.
 
+### Content in /var
+
+rpm-ostree automatically synthesizes [systemd tmpfiles.d](https://www.freedesktop.org/software/systemd/man/tmpfiles.d.html)
+snippets from directories in `/var`.  This helps ensure a separation
+between OS updates and machine local state.  The directories
+will be created when the system boots - and it aids in a "factory reset"
+scenario of wiping machine-local state in `/var`.
+
+At the current time, any non-directories (i.e. regular files or symbolic links)
+are discarded.  This will likely change to be an opt-in error in the future.
+
+Example bugs:
+
+ - https://bugzilla.redhat.com/show_bug.cgi?id=2132103
+ - https://bugzilla.redhat.com/show_bug.cgi?id=1473402
+
 ### Kernel handling
 
 ostree is entirely oriented around bootable filesystem trees;
