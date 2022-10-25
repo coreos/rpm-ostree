@@ -6,6 +6,16 @@ fatal() {
     exit 1
 }
 
+repodir=/usr/lib/coreos-assembler/tests/kola/rpm-ostree/destructive/data/rpm-repos/
+
+cat >/etc/yum.repos.d/libtest.repo <<EOF
+[libtest]
+name=libtest repo
+baseurl=file://${repodir}/0
+gpgcheck=0
+enabled=1
+EOF
+
 # Verify container flow
 if rpm-ostree status 2>err.txt; then
     fatal "status in container"
@@ -14,6 +24,10 @@ if ! grep -qe "error.*This system was not booted via libostree" err.txt; then
     cat err.txt
     fatal "did not find expected error"
 fi
+
+rpm-ostree install testdaemon
+grep -qF 'u testdaemon-user' /usr/lib/sysusers.d/35-rpmostree-pkg-user-testdaemon-user.conf
+grep -qF 'g testdaemon-group' /usr/lib/sysusers.d/30-rpmostree-pkg-group-testdaemon-group.conf
 
 origindir=/etc/rpm-ostree/origin.d
 mkdir -p "${origindir}"

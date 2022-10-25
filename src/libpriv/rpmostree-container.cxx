@@ -45,6 +45,14 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
   if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_fd, error))
     return FALSE;
 
+  // Forcibly turn this on for the container flow because it's the only sane
+  // way for installing RPM packages that invoke useradd/groupadd to work.
+  g_setenv ("RPMOSTREE_EXP_BRIDGE_SYSUSERS", "1", TRUE);
+
+  // This is a duplicate of the bits in rpmostree-scripts.cxx which we need
+  // for now because we aren't going through that code path today.
+  g_setenv ("SYSTEMD_OFFLINE", "1", TRUE);
+
   // Ensure we have our wrappers for groupadd/systemctl set up
   CXX_TRY_VAR (fs_prep, rpmostreecxx::prepare_filesystem_script_prep (rootfs_fd), error);
 

@@ -53,8 +53,8 @@ build_rpm testdaemon \
              build "echo testdaemon-binary > %{name}" \
              install "mkdir -p %{buildroot}/{usr/bin,var/lib/%{name}}
                       install %{name} %{buildroot}/usr/bin" \
-             pre "groupadd -r testdaemon-group
-                  useradd -r testdaemon-user -g testdaemon-group -s /sbin/nologin" \
+             pre "getent group testdaemon-group &>/dev/null || groupadd -r testdaemon-group
+                  getent passwd testdaemon-user &>/dev/null || useradd -r testdaemon-user -g testdaemon-group -s /sbin/nologin" \
              files "/usr/bin/%{name}
                     /var/lib/%{name}"
 # Will be useful for testing cancellation

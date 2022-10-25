@@ -16,13 +16,6 @@ use std::os::unix::prelude::PermissionsExt;
 pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     fail::fail_point!("intercept_useradd_ok", |_| Ok(()));
 
-    // Extract the package name from rpm-ostree/bwrap environment.
-    // This also works as a sanity check to ensure we are running in
-    // the context of a scriptlet.
-    static SCRIPT_PKG_VAR: &str = "RPMOSTREE_SCRIPT_PKG_NAME";
-    let pkgname = std::env::var(SCRIPT_PKG_VAR)
-        .with_context(|| format!("Failed to access {SCRIPT_PKG_VAR} environment variable"))?;
-
     // This parses the same CLI surface as the real `useradd`,
     // but in the end we only extract the username and UID/GID
     // (if present).
@@ -34,7 +27,10 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
         .value_of("uid")
         .map(|s| s.parse::<u32>())
         .transpose()?;
-    let group = matches.value_of("group");
+    let primary_group = matches.value_of("group");
+    let supplementary_groups = matches
+        .value_of("groups")
+        .map(|s| s.split(',').collect::<Vec<_>>());
     let gecos = matches.value_of("comment");
     let homedir = matches.value_of("homedir");
     let shell = matches.value_of("shell");
@@ -48,13 +44,20 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     let rootdir = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
     generate_sysusers_fragment(
         &rootdir,
-        &pkgname,
         username,
-        (uid, group),
+        (uid, primary_group),
         gecos,
         homedir,
         shell,
     )?;
+
+    if let Some(groups) = supplementary_groups {
+        for group in groups {
+            crate::builtins::scriptlet_intercept::usermod::generate_sysusers_fragment(
+                &rootdir, username, &group,
+            )?;
+        }
+    }
 
     Ok(())
 }
@@ -78,6 +81,12 @@ fn cli_cmd() -> Command<'static> {
                 .takes_value(true),
         )
         .arg(Arg::new("group").short('g').long("gid").takes_value(true))
+        .arg(
+            Arg::new("groups")
+                .short('G')
+                .long("groups")
+                .takes_value(true),
+        )
         .arg(Arg::new("system").short('r').long("system"))
         .arg(Arg::new("shell").short('s').long("shell").takes_value(true))
         .arg(Arg::new("uid").short('u').long("uid").takes_value(true))
@@ -88,14 +97,9 @@ fn cli_cmd() -> Command<'static> {
 ///
 /// This returns whether a new fragment has been actually written
 /// to disk.
-#[context(
-    "Generating sysusers.d fragment for package '{}', adding user '{}'",
-    pkgname,
-    username
-)]
+#[context("Generating sysusers.d fragment for user '{}' from package", username)]
 fn generate_sysusers_fragment(
     rootdir: &Dir,
-    pkgname: &str,
     username: &str,
     id: (Option<u32>, Option<&str>),
     gecos: Option<&str>,
@@ -104,7 +108,7 @@ fn generate_sysusers_fragment(
 ) -> Result<bool> {
     // The filename of the configuration fragment is in fact a public
     // API, because users may have masked it in /etc. Do not change this.
-    let filename = format!("35-pkg-{pkgname}-user-{username}.conf");
+    let filename = format!("35-rpmostree-pkg-user-{username}.conf");
 
     let conf_dir = common::open_create_sysusers_dir(rootdir)?;
     if conf_dir.try_exists(&filename)? {
@@ -219,7 +223,6 @@ mod test {
         for entry in groups {
             let generated = generate_sysusers_fragment(
                 &tmpdir,
-                "foopkg",
                 entry.0,
                 entry.1,
                 Some("freeform description"),
@@ -229,7 +232,7 @@ mod test {
             .unwrap();
             assert_eq!(generated, entry.2, "{:?}", entry);
 
-            let path = format!("usr/lib/sysusers.d/35-pkg-foopkg-user-{}.conf", entry.0);
+            let path = format!("usr/lib/sysusers.d/35-rpmostree-pkg-user-{}.conf", entry.0);
             assert!(tmpdir.is_file(&path));
 
             let mut fragment = tmpdir.open(&path).unwrap();
