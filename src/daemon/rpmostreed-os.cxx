@@ -904,6 +904,14 @@ os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
 
   g_autoptr (OstreeDeployment) cfg_merge_deployment
       = ostree_sysroot_get_merge_deployment (ot_sysroot, os_name);
+  g_autofree char *deployment_root = NULL;
+  OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (ot_sysroot);
+  /* Prefer booted deployment, if it matches the os_name */
+  if (!booted_deployment
+      || g_strcmp0 (os_name, ostree_deployment_get_osname (booted_deployment)) != 0)
+    deployment_root = rpmostree_get_deployment_root (ot_sysroot, cfg_merge_deployment);
+  else
+    deployment_root = rpmostree_get_deployment_root (ot_sysroot, booted_deployment);
 
   OstreeRepo *ot_repo = ostree_sysroot_repo (ot_sysroot);
   g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_client (ot_repo);
@@ -911,8 +919,11 @@ os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us
    * with the right semantics for install/source_root. */
-  if (!rpmostree_context_setup (ctx, NULL, NULL, cancellable, &local_error))
+  if (!rpmostree_context_setup (ctx, NULL, deployment_root, cancellable, &local_error))
     return os_throw_dbus_invocation_error (invocation, &local_error);
+
+  /* No need to refresh local cache */
+  rpmostree_context_set_dnf_caching (ctx, RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER);
 
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, ot_sysroot, cfg_merge_deployment);
