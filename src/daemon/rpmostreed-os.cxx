@@ -890,17 +890,16 @@ os_handle_modify_yum_repo (RPMOSTreeOS *interface, GDBusMethodInvocation *invoca
   return TRUE;
 }
 
-static gboolean
-os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
+static DnfContext *
+os_create_dnf_context_simple (RPMOSTreeOS *interface, gboolean with_sack, GCancellable *cancellable,
+                              GError **error)
 {
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  GError *local_error = NULL;
-  g_autoptr (GCancellable) cancellable = NULL;
   const gchar *os_name = rpmostree_os_get_name (interface);
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable, &ot_sysroot, NULL,
-                                      &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
+                                      error))
+    return NULL;
 
   g_autoptr (OstreeDeployment) cfg_merge_deployment
       = ostree_sysroot_get_merge_deployment (ot_sysroot, os_name);
@@ -919,8 +918,8 @@ os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us
    * with the right semantics for install/source_root. */
-  if (!rpmostree_context_setup (ctx, NULL, deployment_root, cancellable, &local_error))
-    return os_throw_dbus_invocation_error (invocation, &local_error);
+  if (!rpmostree_context_setup (ctx, NULL, deployment_root, cancellable, error))
+    return NULL;
 
   /* No need to refresh local cache */
   rpmostree_context_set_dnf_caching (ctx, RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER);
@@ -928,7 +927,28 @@ os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, ot_sysroot, cfg_merge_deployment);
 
+  if (with_sack
+      && !rpmostree_context_download_metadata (
+          ctx,
+          static_cast<DnfContextSetupSackFlags> (DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB
+                                                 | DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO),
+          cancellable, error))
+    return NULL;
+
   DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+  return static_cast<DnfContext *> (g_object_ref (dnfctx));
+}
+
+static gboolean
+os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
+{
+  GError *local_error = NULL;
+  g_autoptr (DnfContext) dnfctx = NULL;
+
+  dnfctx = os_create_dnf_context_simple (interface, FALSE, NULL, &local_error);
+  if (dnfctx == NULL)
+    return os_throw_dbus_invocation_error (invocation, &local_error);
+
   GVariantBuilder builder;
 
   /* Using such type will handle empty arrays gracefully */
