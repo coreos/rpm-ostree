@@ -13,7 +13,7 @@ overriding them. Full support for this feature is tracked in [#1265].
 
 For this example, we will replace the kernel shipped as part of the base image
 in Fedora CoreOS with the one provided by the [Vanilla Kernel Repositories].
-This is something usefull for example if you want to try reproduciong a bug on
+This is something useful for example if you want to try reproducing a bug on
 a recent vanilla Linux kernel to make sure this is not something coming from a
 Fedora specific patch.
 
