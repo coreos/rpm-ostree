@@ -10,7 +10,7 @@ for example in "${examples[@]}"; do
     cd coreos-layering-examples/${example}
     # Inject our code
     tar xvf ${workdir}/install.tar
-    sed -ie 's,^\(FROM .*\),\1\nADD usr/ /usr/,' Dockerfile
+    sed -ie 's,^\(FROM .*\),\1\nADD usr/ /usr/,' Containerfile
     git diff
 
     podman build -t localhost/fcos-$example .
