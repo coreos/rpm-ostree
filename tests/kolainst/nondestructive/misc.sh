@@ -234,3 +234,8 @@ echo "ok unconfigured-state"
 rpm-ostree usroverlay
 echo some content > /usr/share/testcontent
 echo "ok usroverlay"
+
+# This just verifies --register-driver
+rpm-ostree deploy --register-driver "foo"
+rpm-ostree status > status.txt
+assert_file_has_content status.txt "AutomaticUpdatesDriver: foo"
