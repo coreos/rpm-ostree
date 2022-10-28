@@ -81,7 +81,6 @@ rpmostree_builtin_deploy (int argc, char **argv, RpmOstreeCommandInvocation *inv
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
   const char *const packages[] = { NULL };
-  const char *revision;
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
@@ -109,10 +108,9 @@ rpmostree_builtin_deploy (int argc, char **argv, RpmOstreeCommandInvocation *inv
       return FALSE;
     }
 
+  const char *revision = NULL;
   if (arg_specified)
     revision = argv[1];
-  else
-    revision = NULL;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
     return FALSE;
@@ -122,7 +120,7 @@ rpmostree_builtin_deploy (int argc, char **argv, RpmOstreeCommandInvocation *inv
   if (opt_preview)
     {
       if (!rpmostree_os_call_download_deploy_rpm_diff_sync (
-              os_proxy, revision, packages, &transaction_address, cancellable, error))
+              os_proxy, revision ?: "", packages, &transaction_address, cancellable, error))
         return FALSE;
       g_print ("Note: The information output from --preview may be unreliable.  See "
                "https://github.com/coreos/rpm-ostree/issues/1579\n");
@@ -180,7 +178,7 @@ rpmostree_builtin_deploy (int argc, char **argv, RpmOstreeCommandInvocation *inv
         }
       else
         {
-          if (!rpmostree_os_call_deploy_sync (os_proxy, revision, options, NULL,
+          if (!rpmostree_os_call_deploy_sync (os_proxy, revision ?: "", options, NULL,
                                               &transaction_address, NULL, cancellable, error))
             return FALSE;
         }
