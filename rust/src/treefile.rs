@@ -144,6 +144,21 @@ fn treefile_parse_stream<R: io::Read>(
         .into());
     }
 
+    // If container = true, then that implies other things
+    if treefile.container.unwrap_or_default() {
+        // We don't care about boot location for containers, so use the
+        // latest to avoid a deprecation warning
+        treefile.boot_location = Some(BootLocation::Modules);
+        // non-bootable containers don't have selinux
+        treefile.selinux = Some(false);
+        // Also fix this default
+        treefile.tmp_is_dir = Some(true);
+        // We ignore in-place updates of user/group for containers
+        treefile.preserve_passwd = Some(false);
+        treefile.check_passwd = Some(CheckPasswd::None);
+        treefile.check_groups = Some(CheckGroups::None);
+    }
+
     // Special handling for packages, since we allow whitespace within items.
     // We also canonicalize bootstrap_packages to packages here so it's
     // easier to append the basearch packages after.
@@ -3219,6 +3234,7 @@ pub(crate) mod tests {
         let tf = new_test_treefile(workdir, VALID_PRELUDE, None).unwrap();
         assert!(tf.parsed.base.rojig.is_none());
         assert!(tf.parsed.base.machineid_compat.is_none());
+        assert!(tf.parsed.base.container.is_none());
     }
 
     const ROJIG_YAML: &str = indoc! {r#"
@@ -3738,6 +3754,21 @@ conditional-include:
         let cfg = treefile_parse_stream(utils::InputFormat::JSON, &mut src, None)?;
         assert_eq!(cfg.base.treeref.unwrap(), "exampleos/x86_64/blah");
         Ok(())
+    }
+
+    #[test]
+    fn test_container_defaults() {
+        let workdir = tempfile::tempdir().unwrap();
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let tf = indoc! { "
+            container: true
+            packages:
+              - foo bar
+              - baz
+        "};
+        let tf = new_test_treefile(workdir, tf, None).unwrap();
+        assert_eq!(tf.parsed.base.container.unwrap(), true);
+        assert!(tf.parsed.base.tmp_is_dir.unwrap());
     }
 
     #[test]

@@ -22,9 +22,36 @@ if test -z "${COMPOSE_KEEP_CACHE:-}"; then
     mkdir compose-baseimage-test
 fi
 cd compose-baseimage-test
-mkdir -p cache
+mkdir -p cache cache-container
 
-# First, let's test a minimal manifest, using repos from the host
+# A container image using stock dnf, similar to
+# https://pagure.io/fedora-kickstarts/blob/main/f/fedora-container-base.ks
+rm minimal-test -rf
+mkdir minimal-test
+cd minimal-test
+cat > minimal.yaml << 'EOF'
+container: true
+recommends: false
+releasever: 36
+packages:
+  - rootfiles
+  - fedora-repos-modular
+  - vim-minimal
+  - coreutils
+  - dnf dnf-yum
+  - sudo
+repos:
+  - fedora  # Intentially using frozen GA repo
+EOF
+cp /etc/yum.repos.d/*.repo .
+rpm-ostree compose image --cachedir=../cache-container --initialize minimal.yaml minimal.ociarchive
+# Also verify change detection
+rpm-ostree compose image --cachedir=../cache-container --touch-if-changed changed.stamp minimal.yaml minimal.ociarchive
+test '!' -f changed.stamp
+cd ..
+echo "ok minimal"
+
+# A minimal bootable manifest, using repos from the host
 rm minimal-test -rf
 mkdir minimal-test
 cd minimal-test

@@ -377,7 +377,8 @@ It supports the following parameters:
  * `container`: boolean, optional: Defaults to `false`.  If `true`, then
    rpm-ostree will not do any special handling of kernel, initrd or the
    /boot directory. This is useful if the target for the tree is some kind
-   of container which does not have its own kernel.
+   of container which does not have its own kernel.  This also implies
+   several other options, such as `tmp-is-dir: true` and `selinux: false`.
 
  * `add-files`: Array, optional: Copy external files to the rootfs.
 
