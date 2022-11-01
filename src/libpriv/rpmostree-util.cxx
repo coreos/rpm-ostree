@@ -436,7 +436,7 @@ rpmostree_str_ptrarray_contains (GPtrArray *strs, const char *str)
   guint n = strs->len;
   for (guint i = 0; i < n; i++)
     {
-      if (g_str_equal (str, strs->pdata[i]))
+      if (g_str_equal (str, (const char *)strs->pdata[i]))
         return TRUE;
     }
   return FALSE;
