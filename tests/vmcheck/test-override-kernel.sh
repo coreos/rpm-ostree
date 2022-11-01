@@ -46,7 +46,7 @@ case $versionid in
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt $kernel_release
-grep -E '^ kernel-5' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
+grep -E '^ kernel-[0-9]' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
 assert_streq "$(wc -l < orig-kernel.txt)" "1"
 orig_kernel=$(cat orig-kernel.txt)
 URL_ROOT="https://dl.fedoraproject.org/pub/fedora/linux/releases/$versionid/Everything/x86_64/os/Packages/k"
