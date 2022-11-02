@@ -185,6 +185,7 @@ pub mod ffi {
         pub merge_commit: String,
         pub is_layered: bool,
         pub image_digest: String,
+        pub version: String,
     }
 
     // sysroot_upgrade.rs

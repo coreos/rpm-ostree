@@ -1189,6 +1189,7 @@ struct ContainerImageState final
   ::rust::String merge_commit;
   bool is_layered;
   ::rust::String image_digest;
+  ::rust::String version;
 
   using IsRelocatable = ::std::true_type;
 };
