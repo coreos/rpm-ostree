@@ -4,6 +4,11 @@ set -xeuo pipefail
 . ${KOLA_EXT_DATA}/libtest.sh
 cd $(mktemp -d)
 
+# Sanity-check the policy isn't marked as modified
+if ostree admin config-diff | grep 'selinux/targeted/policy'; then
+    assert_not_reached "selinux policy is marked as modified"
+fi
+
 # Ensure multicall is correctly set up and working.
 R_O_DIGEST=$(sha512sum $(which rpm-ostree) | cut -d' ' -f1)
 O_C_DIGEST=$(sha512sum $(which /usr/libexec/libostree/ext/ostree-container) | cut -d' ' -f1)
