@@ -15,7 +15,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <exception>
 #include <initializer_list>
 #include <iterator>
@@ -1144,6 +1143,17 @@ template <typename T> class Slice<T>::uninit
 };
 template <typename T> inline Slice<T>::Slice (uninit) noexcept {}
 
+namespace repr
+{
+using Fat = ::std::array< ::std::uintptr_t, 2>;
+
+struct PtrLen final
+{
+  void *ptr;
+  ::std::size_t len;
+};
+} // namespace repr
+
 namespace detail
 {
 template <typename T, typename = void *> struct operator_new
@@ -1162,6 +1172,16 @@ template <typename T> struct operator_new<T, decltype (T::operator new (sizeof (
   {
     return T::operator new (sz);
   }
+};
+
+class Fail final
+{
+  ::rust::repr::PtrLen &throw$;
+
+public:
+  Fail (::rust::repr::PtrLen &throw$) : throw$ (throw$) {}
+  void operator() (const char *) noexcept;
+  void operator() (const std::string &) noexcept;
 };
 } // namespace detail
 
@@ -1186,17 +1206,6 @@ template <typename T> union MaybeUninit
 
 namespace
 {
-namespace repr
-{
-using Fat = ::std::array< ::std::uintptr_t, 2>;
-
-struct PtrLen final
-{
-  void *ptr;
-  ::std::size_t len;
-};
-} // namespace repr
-
 template <> class impl<Str> final
 {
 public:
@@ -1276,11 +1285,6 @@ catch (const ::std::exception &e)
   }
 } // namespace behavior
 } // namespace rust
-
-extern "C"
-{
-  const char *cxxbridge1$exception (const char *, ::std::size_t);
-} // extern "C"
 
 namespace rpmostreecxx
 {
@@ -1403,6 +1407,7 @@ struct ContainerImageState final
   ::rust::String merge_commit;
   bool is_layered;
   ::rust::String image_digest;
+  ::rust::String version;
 
   using IsRelocatable = ::std::true_type;
 };
@@ -2155,10 +2160,7 @@ extern "C"
           container_rebuild$ (treefile);
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -2879,10 +2881,7 @@ extern "C"
               util_next_version$ (auto_version_prefix, version_suffix, last_version));
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -2914,10 +2913,7 @@ extern "C"
           new (return$)::std::int32_t (rpmostree_main$ (args));
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -2939,10 +2935,7 @@ extern "C"
           c_unit_tests$ ();
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -2956,10 +2949,7 @@ extern "C"
           client_require_root$ ();
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -2975,10 +2965,7 @@ extern "C"
           new (return$)::rpmostreecxx::ClientConnection *(new_client_connection$ ().release ());
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3003,10 +2990,7 @@ extern "C"
           (self.*transaction_connect_progress_sync$) (address);
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3049,10 +3033,7 @@ extern "C"
               rpmdb_diff$ (repo, src, dest, allow_noent).release ());
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3109,10 +3090,7 @@ extern "C"
           new (return$)::rust::String (nevra_to_cache_branch$ (nevra));
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3128,10 +3106,7 @@ extern "C"
           new (return$)::rust::String (get_repodata_chksum_repr$ (pkg));
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3148,10 +3123,7 @@ extern "C"
           new (return$)::rpmostreecxx::RpmTs *(rpmts_for_commit$ (repo, rev).release ());
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3168,10 +3140,7 @@ extern "C"
               rpmdb_package_name_list$ (dfd, ::rust::String (::rust::unsafe_bitcopy, *path)));
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3189,10 +3158,7 @@ extern "C"
           new (return$)::rust::Vec< ::rust::String> ((self.*packages_providing_file$) (path));
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3209,10 +3175,7 @@ extern "C"
           new (return$)::rpmostreecxx::PackageMeta *((self.*package_meta$) (name).release ());
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 
@@ -3255,10 +3218,7 @@ extern "C"
               package_variant_list_for_commit$ (repo, rev, cancellable));
           throw$.ptr = nullptr;
         },
-        [&] (const char *catch$) noexcept {
-          throw$.len = ::std::strlen (catch$);
-          throw$.ptr = const_cast<char *> (::cxxbridge1$exception (catch$, throw$.len));
-        });
+        ::rust::detail::Fail (throw$));
     return throw$;
   }
 } // extern "C"

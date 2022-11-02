@@ -217,6 +217,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
         CXX_TRY_VAR (state, rpmostreecxx::query_container_image (*repo, refspec), error);
         g_variant_dict_insert (dict, "container-image-reference-digest", "s",
                                state->image_digest.c_str ());
+        if (state->version.size () > 0)
+          g_variant_dict_insert (dict, "version", "s", state->version.c_str ());
       }
       break;
     case rpmostreecxx::RefspecType::Checksum:
