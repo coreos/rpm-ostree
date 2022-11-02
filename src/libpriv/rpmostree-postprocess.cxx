@@ -387,11 +387,21 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
     {
       g_print ("Recompiling policy\n");
 
-      /* Now regenerate SELinux policy so that postprocess scripts from users and from us
-       * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
-      rust::Vec child_argv = { rust::String ("semodule"), rust::String ("-nB") };
-      ROSCXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode),
-                  error);
+      {
+        /* Now regenerate SELinux policy so that postprocess scripts from users and from us
+         * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
+        rust::Vec child_argv = { rust::String ("semodule"), rust::String ("-nB") };
+        ROSCXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode),
+                    error);
+      }
+
+      /* Temporary workaround for https://github.com/openshift/os/issues/1036. */
+      {
+        rust::Vec child_argv = { rust::String ("semodule"), rust::String ("-n"),
+                                 rust::String ("--rebuild-if-modules-changed") };
+        ROSCXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode),
+                    error);
+      }
     }
 
   auto container = treefile.get_container ();
