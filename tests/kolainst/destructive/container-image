@@ -39,6 +39,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     # Take the existing ostree commit, and export it to a container image, then rebase to it.
 
     checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    v0=$(rpm-ostree status --json | jq -r '.deployments[0].version')
     rm ${image_dir} -rf
     
     # Since we're switching OS update stream, turn off zincati
@@ -53,6 +54,9 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     rpm-ostree status | tee out.txt
     assert_file_has_content_literal out.txt 'Digest: sha256:'
+
+    v1=$(rpm-ostree status --json | jq -r '.deployments[0].version')
+    assert_streq "${v0}" "${v1}"
 
     # Test rebasing back to ostree https://github.com/coreos/rpm-ostree/issues/3677
     rpm-ostree rebase "$checksum"

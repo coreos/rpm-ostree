@@ -18,11 +18,20 @@ use tokio::sync::mpsc::Receiver;
 
 impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::ContainerImageState {
     fn from(s: Box<ostree_container::store::LayeredImageState>) -> crate::ffi::ContainerImageState {
+        let version = s
+            .configuration
+            .as_ref()
+            .and_then(|c| c.config().as_ref())
+            .and_then(|c| c.labels().as_ref())
+            .and_then(|l| l.get("version"))
+            .cloned()
+            .unwrap_or_default();
         crate::ffi::ContainerImageState {
             base_commit: s.base_commit,
             merge_commit: s.merge_commit,
             is_layered: s.is_layered,
             image_digest: s.manifest_digest,
+            version,
         }
     }
 }
