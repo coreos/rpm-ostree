@@ -108,5 +108,4 @@ EXTRA_DIST += \
 
 CLEANFILES += \
 	$(service_DATA) \
-	$(systemdunit_service_files) \
 	$(NULL)
