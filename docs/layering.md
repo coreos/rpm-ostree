@@ -256,7 +256,7 @@ We need to stop the Zincati service so that auto-updates won't interfere with ou
 Next, we call `rpm-ostree` to rebase our system using the image we just pushed to quay.
 
 ```bash
-[core@tutorial ~]$ sudo rpm-ostree rebase --experimental \
+[core@tutorial ~]$ sudo rpm-ostree rebase \
     ostree-unverified-registry:quay.io/<YOURUSER>/my-custom-fcos
 ```
 
