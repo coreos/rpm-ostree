@@ -1764,6 +1764,8 @@ pull_container (const ::rpmostreecxx::OstreeRepo &repo,
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c);
 
+void purge_refspec (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str refspec);
+
 ::rust::Box< ::rpmostreecxx::TempEtcGuard> prepare_tempetc_guard (::std::int32_t rootfs);
 
 ::rust::Box< ::rpmostreecxx::FilesystemScriptPrep>

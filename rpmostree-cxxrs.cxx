@@ -2059,6 +2059,10 @@ extern "C"
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$query_container_image_commit (
       const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c,
       ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$purge_refspec (const ::rpmostreecxx::OstreeRepo &repo,
+                                         ::rust::Str refspec) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$alignof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$FilesystemScriptPrep$operator$sizeof () noexcept;
@@ -3616,6 +3620,16 @@ query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::St
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
   return ::std::move (return$.value);
+}
+
+void
+purge_refspec (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str refspec)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$purge_refspec (repo, refspec);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
 }
 
 ::std::size_t

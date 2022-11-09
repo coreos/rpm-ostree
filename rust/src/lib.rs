@@ -199,6 +199,7 @@ pub mod ffi {
             repo: &OstreeRepo,
             c: &str,
         ) -> Result<Box<ContainerImageState>>;
+        fn purge_refspec(repo: &OstreeRepo, refspec: &str) -> Result<()>;
     }
 
     // core.rs
