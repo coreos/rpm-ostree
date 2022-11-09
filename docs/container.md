@@ -21,6 +21,13 @@ for content that already exists today.  This would aid things like mirroring
 the OS alongside other container images, but for many users the next step
 is more interesting:
 
+### Upgrading
+
+After a rebase, all further rpm-ostree operations work as you'd expect.
+For example, `rpm-ostree upgrade` will look for a new container version.
+You can also `rpm-ostree apply-live`, etc.  It also does still work
+to do "client side" `rpm-ostree install` etc.
+
 ## Using custom builds
 
 The ostree container functionality supports layered container images; you can
