@@ -44,7 +44,10 @@ repos:
   - fedora  # Intentially using frozen GA repo
 EOF
 cp /etc/yum.repos.d/*.repo .
-rpm-ostree compose image --cachedir=../cache-container --initialize minimal.yaml minimal.ociarchive
+rpm-ostree compose image --cachedir=../cache-container --label=foo=bar --label=baz=blah --initialize minimal.yaml minimal.ociarchive
+skopeo inspect oci-archive:minimal.ociarchive > inspect.json
+test $(jq -r '.Labels["foo"]' < inspect.json) = bar
+test $(jq -r '.Labels["baz"]' < inspect.json) = blah
 # Also verify change detection
 rpm-ostree compose image --cachedir=../cache-container --touch-if-changed changed.stamp minimal.yaml minimal.ociarchive
 test '!' -f changed.stamp

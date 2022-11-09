@@ -76,6 +76,10 @@ struct Opt {
     /// JSON-formatted lockfile; can be specified multiple times.
     lockfiles: Vec<Utf8PathBuf>,
 
+    /// Additional labels for the container image, in KEY=VALUE format
+    #[clap(name = "label", long, short)]
+    labels: Vec<String>,
+
     #[clap(long, value_parser)]
     /// Update the timestamp or create this file on changes
     touch_if_changed: Option<Utf8PathBuf>,
@@ -273,10 +277,12 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     };
     let target_imgref = target_imgref.to_string();
 
+    let label_args = opt.labels.into_iter().map(|v| format!("--label={v}"));
+
     let s = self_command()
+        .args(&["compose", "container-encapsulate"])
+        .args(label_args)
         .args(&[
-            "compose",
-            "container-encapsulate",
             "--repo",
             repo.as_str(),
             commitid.as_str(),
