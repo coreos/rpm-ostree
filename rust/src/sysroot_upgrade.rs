@@ -126,3 +126,34 @@ pub(crate) fn query_container_image_commit(
     let state = ostree_container::store::query_image_commit(repo, imgcommit)?;
     Ok(Box::new(state.into()))
 }
+
+/// Remove a refspec, which can be either an ostree branch or a container image.
+pub(crate) fn purge_refspec(repo: &crate::FFIOstreeRepo, imgref: &str) -> CxxResult<()> {
+    let repo = &repo.glib_reborrow();
+    tracing::debug!("Purging {imgref}");
+    if let Ok(cref) = OstreeImageReference::try_from(imgref) {
+        // It's a container, use the ostree-ext APIs to prune it.
+        let iref = &cref.imgref;
+        ostree_container::store::remove_images(repo, [iref])?;
+        let n = ostree_container::store::gc_image_layers(repo)?;
+        tracing::debug!("Pruned {n} layers");
+    } else if ostree::validate_checksum_string(imgref).is_ok() {
+        // Nothing to do here
+    } else {
+        match ostree::parse_refspec(imgref) {
+            Ok((remote, ostreeref)) => {
+                repo.set_ref_immediate(
+                    remote.as_ref().map(|s| s.as_str()),
+                    &ostreeref,
+                    None,
+                    ostree::gio::NONE_CANCELLABLE,
+                )?;
+            }
+            Err(e) => {
+                // For historical reasons, we ignore errors here
+                tracing::warn!("{e}");
+            }
+        }
+    }
+    Ok(())
+}

@@ -54,6 +54,8 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     rpm-ostree status | tee out.txt
     assert_file_has_content_literal out.txt 'Digest: sha256:'
+    ostree container image list --repo=/ostree/repo | tee imglist.txt
+    assert_streq "$(wc -l < imglist.txt)" 1
 
     v1=$(rpm-ostree status --json | jq -r '.deployments[0].version')
     assert_streq "${v0}" "${v1}"
@@ -183,6 +185,8 @@ EOF
     derived=oci:$image_dir:derived
     skopeo copy containers-storage:localhost/fcos-derived $derived
     rpm-ostree rebase --experimental ostree-unverified-image:$derived
+    ostree container image list --repo=/ostree/repo | tee imglist.txt
+    assert_streq "$(wc -l < imglist.txt)" 1
     rm $image_dir -rf
     /tmp/autopkgtest-reboot 3
     ;;
