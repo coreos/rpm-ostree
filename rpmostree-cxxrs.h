@@ -1762,7 +1762,7 @@ pull_container (const ::rpmostreecxx::OstreeRepo &repo,
                 const ::rpmostreecxx::GCancellable &cancellable, ::rust::Str imgref);
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
-query_container_image (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str imgref);
+query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c);
 
 ::rust::Box< ::rpmostreecxx::TempEtcGuard> prepare_tempetc_guard (::std::int32_t rootfs);
 

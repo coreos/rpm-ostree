@@ -146,13 +146,11 @@ pub(crate) fn pull_container(
 }
 
 /// C++ wrapper for querying image state; requires a pulled image
-pub(crate) fn query_container_image(
+pub(crate) fn query_container_image_commit(
     repo: &crate::FFIOstreeRepo,
-    imgref: &str,
+    imgcommit: &str,
 ) -> CxxResult<Box<crate::ffi::ContainerImageState>> {
     let repo = &repo.glib_reborrow();
-    let imgref = &OstreeImageReference::try_from(imgref)?;
-    let state = ostree_container::store::query_image(repo, imgref)?
-        .ok_or_else(|| anyhow::anyhow!("Failed to find image {}", imgref))?;
+    let state = ostree_container::store::query_image_commit(repo, imgcommit)?;
     Ok(Box::new(state.into()))
 }

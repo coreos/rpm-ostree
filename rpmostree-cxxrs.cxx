@@ -2056,8 +2056,8 @@ extern "C"
       const ::rpmostreecxx::OstreeRepo &repo, const ::rpmostreecxx::GCancellable &cancellable,
       ::rust::Str imgref, ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
 
-  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$query_container_image (
-      const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str imgref,
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$query_container_image_commit (
+      const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c,
       ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$alignof () noexcept;
@@ -3606,11 +3606,11 @@ pull_container (const ::rpmostreecxx::OstreeRepo &repo,
 }
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
-query_container_image (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str imgref)
+query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c)
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::ContainerImageState> > return$;
   ::rust::repr::PtrLen error$
-      = rpmostreecxx$cxxbridge1$query_container_image (repo, imgref, &return$.value);
+      = rpmostreecxx$cxxbridge1$query_container_image_commit (repo, c, &return$.value);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
