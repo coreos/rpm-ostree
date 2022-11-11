@@ -436,12 +436,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
         CXX_TRY_VAR (import,
                      rpmostreecxx::pull_container (*self->repo, *cancellable, r.refspec.c_str ()),
                      error);
-        // Note this duplicates
-        // https://github.com/ostreedev/ostree-rs-ext/blob/22a663f64e733e7ba8382f11f853ce4202652254/lib/src/container/store.rs#L64
-        if (import->is_layered)
-          new_base_rev = strdup (import->merge_commit.c_str ());
-        else
-          new_base_rev = strdup (import->base_commit.c_str ());
+        new_base_rev = strdup (import->merge_commit.c_str ());
         break;
       }
     case rpmostreecxx::RefspecType::Checksum:
