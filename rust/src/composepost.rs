@@ -372,7 +372,7 @@ fn compose_postprocess_default_target(rootfs: &Dir, target: &str) -> Result<()> 
 /// there's a single `postprocess-script` as well as inline (anonymous)
 /// scripts.  This function executes both kinds in bwrap containers.
 fn compose_postprocess_scripts(
-    rootfs_dfd: &openat::Dir,
+    rootfs_dfd: &Dir,
     treefile: &mut Treefile,
     unified_core: bool,
 ) -> Result<()> {
@@ -388,7 +388,11 @@ fn compose_postprocess_scripts(
         let binpath = format!("/usr/bin/rpmostree-postprocess-inline-{}", i);
         let target_binpath = &binpath[1..];
 
-        rootfs_dfd.write_file_contents(target_binpath, 0o755, script)?;
+        rootfs_dfd.atomic_write_with_perms(
+            target_binpath,
+            script,
+            Permissions::from_mode(0o755),
+        )?;
         println!("Executing `postprocess` inline script '{}'", i);
         let child_argv = vec![binpath.to_string()];
         let _ =
@@ -402,7 +406,13 @@ fn compose_postprocess_scripts(
         let target_binpath = &binpath[1..];
         postprocess_script.seek(std::io::SeekFrom::Start(0))?;
         let mut reader = std::io::BufReader::new(postprocess_script);
-        rootfs_dfd.write_file_with(target_binpath, 0o755, |w| std::io::copy(&mut reader, w))?;
+        rootfs_dfd.atomic_replace_with(target_binpath, |w| {
+            std::io::copy(&mut reader, w)?;
+            w.get_mut()
+                .as_file_mut()
+                .set_permissions(Permissions::from_mode(0o755))?;
+            Ok::<_, anyhow::Error>(())
+        })?;
         println!("Executing postprocessing script");
 
         let child_argv = &vec![binpath.to_string()];
@@ -538,7 +548,7 @@ pub fn compose_postprocess(
     compose_postprocess_add_files(rootfs_cap_std, treefile)?;
     etc_guard.undo()?;
 
-    compose_postprocess_scripts(rootfs_dfd, treefile, unified_core)?;
+    compose_postprocess_scripts(rootfs_cap_std, treefile, unified_core)?;
 
     Ok(())
 }
