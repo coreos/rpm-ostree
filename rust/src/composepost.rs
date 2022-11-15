@@ -543,7 +543,7 @@ pub fn compose_postprocess(
 
     let etc_guard = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
     // These ones depend on the /etc path
-    compose_postprocess_mutate_os_release(rootfs_dfd, treefile, next_version)?;
+    compose_postprocess_mutate_os_release(rootfs_cap_std, treefile, next_version)?;
     compose_postprocess_remove_files(rootfs_cap_std, treefile)?;
     compose_postprocess_add_files(rootfs_cap_std, treefile)?;
     etc_guard.undo()?;
@@ -556,7 +556,7 @@ pub fn compose_postprocess(
 /// Implementation of the treefile `mutate-os-release` field.
 #[context("Updating os-release with commit version")]
 fn compose_postprocess_mutate_os_release(
-    rootfs_dfd: &openat::Dir,
+    rootfs: &Dir,
     treefile: &mut Treefile,
     next_version: &str,
 ) -> Result<()> {
@@ -573,9 +573,8 @@ fn compose_postprocess_mutate_os_release(
     // find the real path to os-release using bwrap; this is an overkill but safer way
     // of resolving a symlink relative to a rootfs (see discussions in
     // https://github.com/projectatomic/rpm-ostree/pull/410/)
-    let rootfs_cap_std = crate::capstdext::from_openat(rootfs_dfd)?;
     let mut bwrap = crate::bwrap::Bubblewrap::new_with_mutability(
-        &rootfs_cap_std,
+        &rootfs,
         crate::ffi::BubblewrapMutability::Immutable,
     )?;
     bwrap.append_child_argv(["realpath", "/etc/os-release"]);
@@ -593,12 +592,12 @@ fn compose_postprocess_mutate_os_release(
         path
     };
     println!("Updating {}", path);
-    let contents = rootfs_dfd
+    let contents = rootfs
         .read_to_string(path)
         .with_context(|| format!("Reading {path}"))?;
     let new_contents = mutate_os_release_contents(&contents, base_version, next_version);
-    rootfs_dfd
-        .write_file_contents(path, 0o644, new_contents.as_bytes())
+    rootfs
+        .atomic_write(path, new_contents.as_bytes())
         .with_context(|| format!("Writing {path}"))?;
     Ok(())
 }
