@@ -22,6 +22,14 @@ tf['repo-packages'] = [{
 }]
 "
 
+# also test repovar substitution
+treefile_pyedit "tf['repovars'] = {
+  'foobar': 'yumrepo',
+  'unused': 'bazboo',
+}"
+sed -i -e 's,baseurl=\(.*\)/yumrepo,baseurl=\1/$foobar,' yumrepo.repo
+assert_file_has_content_literal yumrepo.repo '$foobar'
+
 treefile_pyedit "tf['add-commit-metadata']['foobar'] = 'bazboo'"
 treefile_pyedit "tf['add-commit-metadata']['overrideme'] = 'old var'"
 

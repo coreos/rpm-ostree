@@ -599,6 +599,7 @@ pub mod ffi {
         fn print_experimental_notices(&self);
         fn sanitycheck_externals(&self) -> Result<()>;
         fn importer_flags(&self, pkg_name: &str) -> Box<RpmImporterFlags>;
+        fn write_repovars(&self, workdir_dfd_raw: i32) -> Result<String>;
 
         // these functions are more related to derivation
         fn validate_for_container(&self) -> Result<()>;

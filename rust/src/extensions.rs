@@ -191,6 +191,7 @@ impl Extensions {
         let parsed = TreeComposeConfig {
             base: BaseComposeConfigFields {
                 repos: Some(repos),
+                repovars: src.parsed.base.repovars.clone(),
                 releasever: src.parsed.base.releasever.clone(),
                 ..Default::default()
             },

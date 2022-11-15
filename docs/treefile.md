@@ -471,3 +471,7 @@ version of `rpm-ostree`.
      `packages`.
    * `install`: Array of strings, required: Set of RPM module specs to install
      (the same formats as dnf are supported, e.g. `NAME[:STREAM][/PROFILE]`).
+ * `repovars`: object (`Map<String, String>`), optional: yum repository variable
+   names to use when substituting variables in yum repo files. The `releasever`
+   variable name is invalid. Use the `releasever` key instead. The `basearch`
+   name is invalid; it is filled in automatically.

@@ -1526,6 +1526,7 @@ struct Treefile final : public ::rust::Opaque
   void sanitycheck_externals () const;
   ::rust::Box< ::rpmostreecxx::RpmImporterFlags>
   importer_flags (::rust::Str pkg_name) const noexcept;
+  ::rust::String write_repovars (::std::int32_t workdir_dfd_raw) const;
   void validate_for_container () const;
   ::rpmostreecxx::Refspec get_base_refspec () const noexcept;
   void rebase (::rust::Str new_refspec, ::rust::Str custom_origin_url,

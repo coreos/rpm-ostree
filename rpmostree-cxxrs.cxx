@@ -1744,6 +1744,7 @@ struct Treefile final : public ::rust::Opaque
   void sanitycheck_externals () const;
   ::rust::Box< ::rpmostreecxx::RpmImporterFlags>
   importer_flags (::rust::Str pkg_name) const noexcept;
+  ::rust::String write_repovars (::std::int32_t workdir_dfd_raw) const;
   void validate_for_container () const;
   ::rpmostreecxx::Refspec get_base_refspec () const noexcept;
   void rebase (::rust::Str new_refspec, ::rust::Str custom_origin_url,
@@ -2602,6 +2603,11 @@ extern "C"
   ::rpmostreecxx::RpmImporterFlags *
   rpmostreecxx$cxxbridge1$Treefile$importer_flags (const ::rpmostreecxx::Treefile &self,
                                                    ::rust::Str pkg_name) noexcept;
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$Treefile$write_repovars (const ::rpmostreecxx::Treefile &self,
+                                                   ::std::int32_t workdir_dfd_raw,
+                                                   ::rust::String *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$validate_for_container (
       const ::rpmostreecxx::Treefile &self) noexcept;
@@ -5151,6 +5157,19 @@ Treefile::importer_flags (::rust::Str pkg_name) const noexcept
 {
   return ::rust::Box< ::rpmostreecxx::RpmImporterFlags>::from_raw (
       rpmostreecxx$cxxbridge1$Treefile$importer_flags (*this, pkg_name));
+}
+
+::rust::String
+Treefile::write_repovars (::std::int32_t workdir_dfd_raw) const
+{
+  ::rust::MaybeUninit< ::rust::String> return$;
+  ::rust::repr::PtrLen error$
+      = rpmostreecxx$cxxbridge1$Treefile$write_repovars (*this, workdir_dfd_raw, &return$.value);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+  return ::std::move (return$.value);
 }
 
 void
