@@ -282,6 +282,15 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self, GCancellable *can
 }
 
 static gboolean
+set_repos_dir (DnfContext *dnfctx, rpmostreecxx::Treefile &treefile, GCancellable *cancellable,
+               GError **error)
+{
+  auto treefile_dir = std::string (treefile.get_workdir ());
+  dnf_context_set_repo_dir (dnfctx, treefile_dir.c_str ());
+  return TRUE;
+}
+
+static gboolean
 install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
                   char **out_new_inputhash, GCancellable *cancellable, GError **error)
 {
@@ -302,10 +311,8 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
     rpmlogSetFile (NULL);
   }
 
-  {
-    auto treefile_dir = std::string ((*self->treefile_rs)->get_workdir ());
-    dnf_context_set_repo_dir (dnfctx, treefile_dir.c_str ());
-  }
+  if (!set_repos_dir (dnfctx, **self->treefile_rs, cancellable, error))
+    return FALSE;
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
    * we're doing unified core, in which case the pkgcache repo is the cache.
@@ -1643,10 +1650,8 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   g_autoptr (RpmOstreeContext) ctx
       = rpmostree_context_new_compose (cachedir_dfd, repo, *extension_tf);
 
-  {
-    auto treefile_dir = std::string (src_treefile->get_workdir ());
-    dnf_context_set_repo_dir (rpmostree_context_get_dnf (ctx), treefile_dir.c_str ());
-  }
+  if (!set_repos_dir (rpmostree_context_get_dnf (ctx), *extension_tf, cancellable, error))
+    return FALSE;
 
 #define TMP_EXTENSIONS_ROOTFS "rpmostree-extensions.tmp"
 
