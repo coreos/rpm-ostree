@@ -1448,22 +1448,22 @@ OSTREE_VERSION='33.4'
 
     #[test]
     fn test_prepare_symlinks() {
-        let temp_rootfs = tempfile::tempdir().unwrap();
-        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
-        rootfs.ensure_dir_all("usr/local", 0o755).unwrap();
-        rootfs
-            .ensure_dir_all("var/lib/alternatives", 0o755)
-            .unwrap();
-        rootfs.ensure_dir_all("var/lib/vagrant", 0o755).unwrap();
+        let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
+        let mut db = DirBuilder::new();
+        db.recursive(true);
+        db.mode(0o755);
+        rootfs.ensure_dir_with("usr/local", &db).unwrap();
+        rootfs.ensure_dir_with("var/lib/alternatives", &db).unwrap();
+        rootfs.ensure_dir_with("var/lib/vagrant", &db).unwrap();
 
         rootfs_prepare_links(rootfs.as_raw_fd()).unwrap();
         {
-            let usr_dir = rootfs.sub_dir("usr").unwrap();
+            let usr_dir = rootfs.open_dir("usr").unwrap();
             let local_target = usr_dir.read_link("local").unwrap();
             assert_eq!(local_target.to_str(), Some("../var/usrlocal"));
         }
         {
-            let varlib_dir = rootfs.sub_dir("var/lib").unwrap();
+            let varlib_dir = rootfs.open_dir("var/lib").unwrap();
             let varcases = &[
                 ("alternatives", "../../usr/lib/alternatives"),
                 ("vagrant", "../../usr/lib/vagrant"),
