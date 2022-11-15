@@ -356,17 +356,15 @@ fn compose_postprocess_units(rootfs_dfd: &Dir, treefile: &mut Treefile) -> Resul
 }
 
 #[context("Handling treefile 'default-target'")]
-fn compose_postprocess_default_target(rootfs_dfd: &openat::Dir, target: &str) -> Result<()> {
+fn compose_postprocess_default_target(rootfs: &Dir, target: &str) -> Result<()> {
     /* This used to be in /etc, but doing it in /usr makes more sense, as it's
      * part of the OS defaults. This was changed in particular to work with
      * ConditionFirstBoot= which runs `systemctl preset-all`:
      * https://github.com/projectatomic/rpm-ostree/pull/1425
      */
     let default_target_path = "usr/lib/systemd/system/default.target";
-    rootfs_dfd.remove_file_optional(default_target_path)?;
-    let dest = format!("/usr/lib/systemd/system/{target}");
-    rootfs_dfd.symlink(default_target_path, dest)?;
-
+    rootfs.remove_file_optional(default_target_path)?;
+    rootfs.symlink(target, default_target_path)?;
     Ok(())
 }
 
@@ -528,7 +526,7 @@ pub fn compose_postprocess(
     compose_postprocess_rpmdb(rootfs_dfd)?;
     compose_postprocess_units(rootfs_cap_std, treefile)?;
     if let Some(t) = treefile.parsed.base.default_target.as_deref() {
-        compose_postprocess_default_target(rootfs_dfd, t)?;
+        compose_postprocess_default_target(rootfs_cap_std, t)?;
     }
 
     treefile.write_compose_json(rootfs_cap_std)?;
