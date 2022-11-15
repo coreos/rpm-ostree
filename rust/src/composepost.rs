@@ -423,7 +423,7 @@ fn compose_postprocess_scripts(
 /// Logic for handling treefile `remove-files`.
 #[context("Handling `remove-files`")]
 pub fn compose_postprocess_remove_files(
-    rootfs_dfd: &openat::Dir,
+    rootfs_dfd: &Dir,
     treefile: &mut Treefile,
 ) -> CxxResult<()> {
     for name in treefile.parsed.base.remove_files.iter().flatten() {
@@ -435,7 +435,7 @@ pub fn compose_postprocess_remove_files(
             return Err(anyhow!("Invalid '..' in path: {}", name).into());
         }
         println!("Deleting: {}", name);
-        rootfs_dfd.remove_all(name)?;
+        rootfs_dfd.remove_all_optional(name)?;
     }
     Ok(())
 }
@@ -534,7 +534,7 @@ pub fn compose_postprocess(
     let etc_guard = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
     // These ones depend on the /etc path
     compose_postprocess_mutate_os_release(rootfs_dfd, treefile, next_version)?;
-    compose_postprocess_remove_files(rootfs_dfd, treefile)?;
+    compose_postprocess_remove_files(rootfs_cap_std, treefile)?;
     compose_postprocess_add_files(rootfs_cap_std, treefile)?;
     etc_guard.undo()?;
 
