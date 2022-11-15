@@ -287,6 +287,8 @@ set_repos_dir (DnfContext *dnfctx, rpmostreecxx::Treefile &treefile, GCancellabl
 {
   auto treefile_dir = std::string (treefile.get_workdir ());
   dnf_context_set_repo_dir (dnfctx, treefile_dir.c_str ());
+  const char *no_dirs[] = { NULL };
+  dnf_context_set_vars_dir (dnfctx, no_dirs);
   return TRUE;
 }
 
