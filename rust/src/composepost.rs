@@ -497,7 +497,7 @@ fn compose_postprocess_add_files(rootfs_dfd: &Dir, treefile: &mut Treefile) -> R
 }
 
 #[context("Symlinking {}", TRADITIONAL_RPMDB_LOCATION)]
-fn compose_postprocess_rpmdb(rootfs_dfd: &openat::Dir) -> Result<()> {
+fn compose_postprocess_rpmdb(rootfs_dfd: &Dir) -> Result<()> {
     /* This works around a potential issue with libsolv if we go down the
      * rpmostree_get_pkglist_for_root() path. Though rpm has been using the
      * /usr/share/rpm location (since the RpmOstreeContext set the _dbpath macro),
@@ -509,10 +509,10 @@ fn compose_postprocess_rpmdb(rootfs_dfd: &openat::Dir) -> Result<()> {
      * So we set the symlink now. This is also what we do on boot anyway for
      * compatibility reasons using tmpfiles.
      * */
-    rootfs_dfd.remove_all(TRADITIONAL_RPMDB_LOCATION)?;
+    rootfs_dfd.remove_all_optional(TRADITIONAL_RPMDB_LOCATION)?;
     rootfs_dfd.symlink(
-        TRADITIONAL_RPMDB_LOCATION,
         format!("../../{}", RPMOSTREE_RPMDB_LOCATION),
+        TRADITIONAL_RPMDB_LOCATION,
     )?;
     Ok(())
 }
@@ -533,7 +533,7 @@ pub fn compose_postprocess(
         rootfs_dfd.local_rename("etc", "usr/etc")?;
     }
 
-    compose_postprocess_rpmdb(rootfs_dfd)?;
+    compose_postprocess_rpmdb(rootfs_cap_std)?;
     compose_postprocess_units(rootfs_cap_std, treefile)?;
     if let Some(t) = treefile.parsed.base.default_target.as_deref() {
         compose_postprocess_default_target(rootfs_cap_std, t)?;
