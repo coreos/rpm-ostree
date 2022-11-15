@@ -41,7 +41,8 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeImporter, g_object_unref)
 
 RpmOstreeImporter *rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
                                                    rpmostreecxx::RpmImporterFlags &flags,
-                                                   OstreeSePolicy *sepolicy, GError **error);
+                                                   OstreeSePolicy *sepolicy,
+                                                   GCancellable *cancellable, GError **error);
 
 gboolean rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_offset,
                                            rpmfi *out_fi, GError **error);
