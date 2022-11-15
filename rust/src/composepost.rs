@@ -1046,24 +1046,20 @@ pub fn prepare_rpmdb_base_location(
 #[context("Computing directory size")]
 pub fn directory_size(dfd: i32, cancellable: &crate::FFIGCancellable) -> CxxResult<u64> {
     let cancellable = cancellable.glib_reborrow();
-    let dfd = crate::ffiutil::ffi_view_openat_dir(dfd);
-    fn directory_size_recurse(d: &openat::Dir, cancellable: &gio::Cancellable) -> Result<u64> {
+    let dfd = unsafe { &crate::ffiutil::ffi_dirfd(dfd)? };
+    fn directory_size_recurse(d: &Dir, cancellable: &gio::Cancellable) -> Result<u64> {
         let mut r = 0;
-        for ent in d.list_dir(".")? {
+        for ent in d.entries()? {
             cancellable.set_error_if_cancelled()?;
             let ent = ent?;
-            let meta = d
-                .metadata(ent.file_name())
+            let meta = ent
+                .metadata()
                 .with_context(|| format!("Failed to access {:?}", ent.file_name()))?;
-            match meta.simple_type() {
-                openat::SimpleType::Dir => {
-                    let child = d.sub_dir(ent.file_name())?;
-                    r += directory_size_recurse(&child, cancellable)?;
-                }
-                openat::SimpleType::File => {
-                    r += meta.stat().st_size as u64;
-                }
-                _ => {}
+            if meta.is_dir() {
+                let child = d.open_dir(ent.file_name())?;
+                r += directory_size_recurse(&child, cancellable)?;
+            } else if meta.is_file() {
+                r += meta.size() as u64;
             }
         }
         Ok(r)
