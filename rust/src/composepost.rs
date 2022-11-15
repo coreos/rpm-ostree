@@ -524,31 +524,30 @@ pub fn compose_postprocess(
     next_version: &str,
     unified_core: bool,
 ) -> CxxResult<()> {
-    let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
-    let rootfs_cap_std = &crate::capstdext::from_openat(rootfs_dfd)?;
+    let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
 
     // One of several dances we do around this that really needs to be completely
     // reworked.
-    if rootfs_dfd.exists("etc")? {
-        rootfs_dfd.local_rename("etc", "usr/etc")?;
+    if rootfs.try_exists("etc")? {
+        rootfs.rename("etc", rootfs, "usr/etc")?;
     }
 
-    compose_postprocess_rpmdb(rootfs_cap_std)?;
-    compose_postprocess_units(rootfs_cap_std, treefile)?;
+    compose_postprocess_rpmdb(rootfs)?;
+    compose_postprocess_units(rootfs, treefile)?;
     if let Some(t) = treefile.parsed.base.default_target.as_deref() {
-        compose_postprocess_default_target(rootfs_cap_std, t)?;
+        compose_postprocess_default_target(rootfs, t)?;
     }
 
-    treefile.write_compose_json(rootfs_cap_std)?;
+    treefile.write_compose_json(rootfs)?;
 
     let etc_guard = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
     // These ones depend on the /etc path
-    compose_postprocess_mutate_os_release(rootfs_cap_std, treefile, next_version)?;
-    compose_postprocess_remove_files(rootfs_cap_std, treefile)?;
-    compose_postprocess_add_files(rootfs_cap_std, treefile)?;
+    compose_postprocess_mutate_os_release(rootfs, treefile, next_version)?;
+    compose_postprocess_remove_files(rootfs, treefile)?;
+    compose_postprocess_add_files(rootfs, treefile)?;
     etc_guard.undo()?;
 
-    compose_postprocess_scripts(rootfs_cap_std, treefile, unified_core)?;
+    compose_postprocess_scripts(rootfs, treefile, unified_core)?;
 
     Ok(())
 }
