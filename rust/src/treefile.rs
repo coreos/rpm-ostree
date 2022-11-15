@@ -40,6 +40,7 @@ use std::str::FromStr;
 use std::{fs, io};
 use tracing::{event, instrument, Level};
 
+use crate::capstdext::dirbuilder_from_mode;
 use crate::core;
 use crate::importer::RpmImporterFlags;
 use crate::utils;
@@ -439,7 +440,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         rpmdb_normalize
     );
     merge_hashsets!(ignore_removed_groups, ignore_removed_users);
-    merge_maps!(add_commit_metadata, variables, metadata);
+    merge_maps!(add_commit_metadata, variables, metadata, repovars);
     merge_vecs!(
         repos,
         lockfile_repos,
@@ -1251,6 +1252,32 @@ impl Treefile {
         self.parsed.base.repos.clone().unwrap_or_default()
     }
 
+    // XXX: Ideally we'd just give the key/vals to libdnf directly and it'd feed that into its
+    // `urlvars` member. Sadly, right now the only API is awkwardly creating a dnf vars dirs.
+    pub(crate) fn write_repovars(&self, workdir_dfd_raw: i32) -> CxxResult<String> {
+        let workdir_dfd = unsafe { &crate::ffiutil::ffi_dirfd(workdir_dfd_raw)? };
+        if let Some(repovars) = self.parsed.base.repovars.as_ref() {
+            let dirbuilder = &dirbuilder_from_mode(0o755);
+            workdir_dfd
+                .remove_all_optional("dnfvars")
+                .context("deleting dnfvars dir")?;
+            workdir_dfd
+                .ensure_dir_with("dnfvars", dirbuilder)
+                .context("creating dnfvars dir")?;
+            let dnfvars = workdir_dfd
+                .open_dir("dnfvars")
+                .context("opening dnfvars dir")?;
+            for (k, v) in repovars {
+                dnfvars
+                    .write(k, v)
+                    .with_context(|| format!("writing dnfvars/{k}"))?;
+            }
+            Ok(format!("/proc/self/fd/{workdir_dfd_raw}/dnfvars"))
+        } else {
+            Ok("".to_string())
+        }
+    }
+
     pub(crate) fn get_lockfile_repos(&self) -> Vec<String> {
         self.parsed.base.lockfile_repos.clone().unwrap_or_default()
     }
@@ -1414,6 +1441,24 @@ impl Treefile {
             return Err(anyhow!(
                 r#"Treefile has neither "repos" nor "lockfile-repos""#
             ));
+        }
+        if config
+            .base
+            .repovars
+            .as_ref()
+            .map(|m| m.contains_key("releasever"))
+            .unwrap_or_default()
+        {
+            bail!(r#"Treefile repo var "releasever" invalid; use "releasever" field instead"#);
+        }
+        if config
+            .base
+            .repovars
+            .as_ref()
+            .map(|m| m.contains_key("basearch"))
+            .unwrap_or_default()
+        {
+            bail!(r#"Treefile repo var "basearch" invalid; it is automatically filled in"#);
         }
         Ok(())
     }
@@ -2396,6 +2441,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) basearch: Option<String>,
     #[serde(skip_serializing)]
     pub(crate) variables: Option<BTreeMap<String, VarValue>>,
+    #[serde(skip_serializing)]
+    pub(crate) repovars: Option<BTreeMap<String, String>>,
     // Optional rojig data
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) rojig: Option<Rojig>,
@@ -2864,6 +2911,8 @@ pub(crate) mod tests {
             reasons: ["because", "universe"]
         repos:
          - baserepo
+        repovars:
+          foobar: bazboo
         lockfile-repos:
          - lockrepo
         ostree-layers:
@@ -2899,6 +2948,7 @@ pub(crate) mod tests {
          "ref": "exampleos/${basearch}/blah",
          "comment-packages": "We want baz to enable frobnication",
          "repos": ["baserepo"],
+         "repovars": {"foobar": "bazboo"},
          "packages": ["foo", "bar", "baz"],
          "packages-x86_64": ["grub2", "grub2-tools"],
          "comment-packages-s390x": "Note that s390x uses its own bootloader",
@@ -2925,6 +2975,12 @@ pub(crate) mod tests {
                 repo: "baserepo".into(),
                 packages: maplit::btreeset!("blah".into(), "bloo".into()),
             }])
+        );
+        assert_eq!(
+            treefile.base.repovars.unwrap(),
+            maplit::btreemap!(
+                "foobar".into() => "bazboo".into(),
+            )
         );
     }
 

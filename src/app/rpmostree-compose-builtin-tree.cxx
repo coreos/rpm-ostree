@@ -282,13 +282,21 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self, GCancellable *can
 }
 
 static gboolean
-set_repos_dir (DnfContext *dnfctx, rpmostreecxx::Treefile &treefile, GCancellable *cancellable,
-               GError **error)
+set_repos_dir (DnfContext *dnfctx, rpmostreecxx::Treefile &treefile, int workdir_dfd,
+               GCancellable *cancellable, GError **error)
 {
   auto treefile_dir = std::string (treefile.get_workdir ());
   dnf_context_set_repo_dir (dnfctx, treefile_dir.c_str ());
-  const char *no_dirs[] = { NULL };
-  dnf_context_set_vars_dir (dnfctx, no_dirs);
+  g_autoptr (GPtrArray) var_dirs = g_ptr_array_new ();
+
+  /* And add our own vars if defined. */
+  CXX_TRY_VAR (repovars, treefile.write_repovars (workdir_dfd), error);
+  if (!repovars.empty ())
+    g_ptr_array_add (var_dirs, (char *)repovars.c_str ());
+
+  g_ptr_array_add (var_dirs, NULL);
+  dnf_context_set_vars_dir (dnfctx, (const gchar *const *)var_dirs->pdata);
+
   return TRUE;
 }
 
@@ -313,7 +321,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
     rpmlogSetFile (NULL);
   }
 
-  if (!set_repos_dir (dnfctx, **self->treefile_rs, cancellable, error))
+  if (!set_repos_dir (dnfctx, **self->treefile_rs, self->workdir_dfd, cancellable, error))
     return FALSE;
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
@@ -1652,7 +1660,9 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   g_autoptr (RpmOstreeContext) ctx
       = rpmostree_context_new_compose (cachedir_dfd, repo, *extension_tf);
 
-  if (!set_repos_dir (rpmostree_context_get_dnf (ctx), *extension_tf, cancellable, error))
+  // we're abusing the cachedir as a workdir here, like we do below too
+  if (!set_repos_dir (rpmostree_context_get_dnf (ctx), *extension_tf, cachedir_dfd, cancellable,
+                      error))
     return FALSE;
 
 #define TMP_EXTENSIONS_ROOTFS "rpmostree-extensions.tmp"
