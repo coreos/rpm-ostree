@@ -586,7 +586,7 @@ rpmostree_dnfcontext_fix_vars_dir (DnfContext *context, GError **error)
       g_string_append (slashdotdot_prefix, "/..");
 
   // Tweak each directory, prepending the relevant amount of `..`.
-  g_autoptr (GPtrArray) tweaked_dirs = g_ptr_array_new ();
+  g_autoptr (GPtrArray) tweaked_dirs = g_ptr_array_new_with_free_func (g_free);
   for (int dir_index = 0; orig_dirs[dir_index] != NULL; dir_index++)
     {
       const gchar *dir = orig_dirs[dir_index];
