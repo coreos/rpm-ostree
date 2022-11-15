@@ -168,8 +168,8 @@ ima_check_zero_hdr (const unsigned char *fsig, size_t siglen)
   return (memcmp (fsig, &zero_hdr, sizeof (zero_hdr)) == 0);
 }
 
-static void
-build_rpmfi_overrides (RpmOstreeImporter *self)
+static gboolean
+build_rpmfi_overrides (RpmOstreeImporter *self, GCancellable *cancellable, GError **error)
 {
   int i;
 
@@ -182,14 +182,18 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
   const gboolean doc_files_are_filtered = (*self->importer_rs)->doc_files_are_filtered ();
   while ((i = rpmfiNext (self->fi)) >= 0)
     {
+      if (g_cancellable_set_error_if_cancelled (cancellable, error))
+        return FALSE;
       const char *user = rpmfiFUser (self->fi);
       const char *group = rpmfiFGroup (self->fi);
       const char *fcaps = rpmfiFCaps (self->fi);
       const char *abs_filepath = rpmfiFN (self->fi);
-      g_assert (abs_filepath != NULL);
-      g_assert (abs_filepath[0] == '/');
-      rpmfileAttrs fattrs = rpmfiFFlags (self->fi);
+      if (abs_filepath == NULL)
+        return glnx_throw (error, "Missing expected filepath");
+      if (abs_filepath[0] != '/')
+        return glnx_throw (error, "Invalid absolute filepath '%s'", abs_filepath);
 
+      rpmfileAttrs fattrs = rpmfiFFlags (self->fi);
       size_t siglen = 0;
       const unsigned char *fsig = rpmfiFSignature (self->fi, &siglen);
       const bool have_ima = (siglen > 0 && fsig && (ima_check_zero_hdr (fsig, siglen) == 0));
@@ -206,6 +210,8 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
       if (doc_files_are_filtered && is_doc)
         (*self->importer_rs)->doc_files_insert (abs_filepath);
     }
+
+  return TRUE;
 }
 
 /*
@@ -215,6 +221,7 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
  * @pkg: (optional): Package reference, used for metadata
  * @flags: flags
  * @sepolicy: (optional): SELinux policy
+ * @cancellable: Cancellable
  * @error: error
  *
  * Create a new unpacker instance.  The @pkg argument, if
@@ -224,7 +231,7 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
 RpmOstreeImporter *
 rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
                                 rpmostreecxx::RpmImporterFlags &flags, OstreeSePolicy *sepolicy,
-                                GError **error)
+                                GCancellable *cancellable, GError **error)
 {
   RpmOstreeImporter *ret = NULL;
   g_auto (Header) hdr = NULL;
@@ -256,7 +263,9 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage *)(pkg ? g_object_ref (pkg) : NULL);
 
-  build_rpmfi_overrides (ret);
+  if (!build_rpmfi_overrides (ret, cancellable, error))
+    return (RpmOstreeImporter *)glnx_prefix_error_null (
+        error, "Processing file-overrides for package %s", pkg_name);
 
   return ret;
 }

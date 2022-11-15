@@ -2471,7 +2471,7 @@ start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg, GCancel
 
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autoptr (RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (
-      &fd, ostreerepo, pkg, *importer_flags, self->sepolicy, error);
+      &fd, ostreerepo, pkg, *importer_flags, self->sepolicy, cancellable, error);
   if (!unpacker)
     return glnx_prefix_error (error, "creating importer");
 
