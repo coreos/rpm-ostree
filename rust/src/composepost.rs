@@ -32,7 +32,7 @@ use rayon::prelude::*;
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Write as FmtWrite;
-use std::io::{BufRead, BufReader, Read, Seek, Write};
+use std::io::{BufRead, BufReader, Seek, Write};
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::IntoRawFd;
@@ -678,19 +678,16 @@ fn add_altfiles(buf: &str) -> Result<String> {
 /// rpm-ostree currently depends on `altfiles`
 #[context("Adding altfiles to /etc/nsswitch.conf")]
 pub fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
-    let rootfs_dfd = &crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let path = "usr/etc/nsswitch.conf";
-    if let Some(meta) = rootfs_dfd.metadata_optional(path)? {
+    if let Some(meta) = rootfs_dfd.symlink_metadata_optional(path)? {
         // If it's a symlink, then something else e.g. authselect must own it.
-        if meta.simple_type() == openat::SimpleType::Symlink {
+        if meta.is_symlink() {
             return Ok(());
         }
-        let fd = rootfs_dfd.open_file(path)?;
-        let mut fd = std::io::BufReader::new(fd);
-        let mut nsswitch = String::new();
-        fd.read_to_string(&mut nsswitch)?;
+        let nsswitch = rootfs_dfd.read_to_string(path)?;
         let nsswitch = add_altfiles(&nsswitch)?;
-        rootfs_dfd.write_file_contents(path, 0o644, nsswitch.as_bytes())?;
+        rootfs_dfd.atomic_write(path, nsswitch.as_bytes())?;
     }
 
     Ok(())
@@ -1046,24 +1043,20 @@ pub fn prepare_rpmdb_base_location(
 #[context("Computing directory size")]
 pub fn directory_size(dfd: i32, cancellable: &crate::FFIGCancellable) -> CxxResult<u64> {
     let cancellable = cancellable.glib_reborrow();
-    let dfd = crate::ffiutil::ffi_view_openat_dir(dfd);
-    fn directory_size_recurse(d: &openat::Dir, cancellable: &gio::Cancellable) -> Result<u64> {
+    let dfd = unsafe { &crate::ffiutil::ffi_dirfd(dfd)? };
+    fn directory_size_recurse(d: &Dir, cancellable: &gio::Cancellable) -> Result<u64> {
         let mut r = 0;
-        for ent in d.list_dir(".")? {
+        for ent in d.entries()? {
             cancellable.set_error_if_cancelled()?;
             let ent = ent?;
-            let meta = d
-                .metadata(ent.file_name())
+            let meta = ent
+                .metadata()
                 .with_context(|| format!("Failed to access {:?}", ent.file_name()))?;
-            match meta.simple_type() {
-                openat::SimpleType::Dir => {
-                    let child = d.sub_dir(ent.file_name())?;
-                    r += directory_size_recurse(&child, cancellable)?;
-                }
-                openat::SimpleType::File => {
-                    r += meta.stat().st_size as u64;
-                }
-                _ => {}
+            if meta.is_dir() {
+                let child = d.open_dir(ent.file_name())?;
+                r += directory_size_recurse(&child, cancellable)?;
+            } else if meta.is_file() {
+                r += meta.size() as u64;
             }
         }
         Ok(r)
