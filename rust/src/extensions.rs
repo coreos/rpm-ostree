@@ -183,11 +183,12 @@ impl Extensions {
             .context("while serializing")?)
     }
 
-    /// Create a treefile representing just what needs to be installed for extensions.
+    /// Create a treefile representing just what needs to be installed for extensions. This
+    /// includes all information related to packages, modules, and repos.
     pub(crate) fn generate_treefile(&self, src: &Treefile) -> CxxResult<Box<Treefile>> {
         let mut repos = src.parsed.base.repos.clone().unwrap_or_default();
         repos.extend(self.repos.iter().flatten().cloned());
-        let ret = TreeComposeConfig {
+        let parsed = TreeComposeConfig {
             base: BaseComposeConfigFields {
                 repos: Some(repos),
                 releasever: src.parsed.base.releasever.clone(),
@@ -197,7 +198,11 @@ impl Extensions {
             modules: self.modules.clone(),
             ..Default::default()
         };
-        Ok(Box::new(Treefile::new_from_config(ret)?))
+        Ok(Box::new(Treefile {
+            directory: src.directory.clone(),
+            parsed,
+            externals: Default::default(),
+        }))
     }
 }
 
