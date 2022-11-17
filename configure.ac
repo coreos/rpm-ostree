@@ -85,6 +85,9 @@ PKG_CHECK_MODULES(PKGDEP_LIBRPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0 ost
 dnl And these additional ones are used by for the rpmostreeinternals C/C++ library
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [polkit-gobject-1 libarchive])
 
+AS_IF([pkg-config --atleast-version=4.18.0 rpm],
+  AC_DEFINE([BUILDOPT_RPM_INTERRUPT_SAFETY_DEFAULT], 1, [Set if we do not need to turn on interrupt safety in librpm]))
+
 dnl RHEL8.1 has old libarchive
 AS_IF([pkg-config --atleast-version=3.3.3 libarchive],
   [AC_DEFINE([HAVE_LIBARCHIVE_ZSTD], 1, [Define if we have libarchive with zstd])])
