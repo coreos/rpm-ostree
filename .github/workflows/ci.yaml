@@ -40,7 +40,13 @@ jobs:
   build-tests:
     name: "Build Integration Test Data"
     runs-on: ubuntu-latest
-    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+    container:
+      image: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+      # Run privileged to hack around createrepo_c hitting the classic seccomp
+      # broken behaviour of returning EPERM instead of ENOSYS. We should be able
+      # to drop this once `ubuntu-latest` is bumped to include the fix for
+      # https://github.com/opencontainers/runc/issues/2151.
+      options: "--user root --privileged"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
