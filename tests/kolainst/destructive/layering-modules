@@ -11,10 +11,8 @@ versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 # Let's start by trying to install a bona fide module.
 # NOTE: If changing this also change test-container.sh
 case $versionid in
-  # yes, this is going backwards, see:
-  # https://github.com/coreos/fedora-coreos-tracker/issues/767#issuecomment-917191270
-  35) module=cri-o:1.19/default;;
   36) module=cri-o:1.23/default;;
+  37) module=cri-o:1.24/default;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 rpm-ostree ex module install "${module}"

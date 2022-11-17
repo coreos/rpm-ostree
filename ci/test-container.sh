@@ -58,10 +58,8 @@ versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 # Let's start by trying to install a bona fide module.
 # NOTE: If changing this also change the layering-modules test
 case $versionid in
-  # yes, this is going backwards, see:
-  # https://github.com/coreos/fedora-coreos-tracker/issues/767#issuecomment-917191270
-  35) module=cri-o:1.19/default;;
   36) module=cri-o:1.23/default;;
+  37) module=cri-o:1.24/default;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 rpm-ostree ex module install "${module}"
@@ -78,14 +76,6 @@ fi
 versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
 case $versionid in
-  35)
-    url_suffix=2.13.0/5.fc35/x86_64/ignition-2.13.0-5.fc35.x86_64.rpm
-    # 2.14.0
-    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1967838
-    koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1970751
-    kver=5.17.11
-    krev=200
-    ;;
   36)
     url_suffix=2.13.0/5.fc36/x86_64/ignition-2.13.0-5.fc36.x86_64.rpm
     # 2.14.0
@@ -93,6 +83,14 @@ case $versionid in
     koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1970749
     kver=5.17.11
     krev=300
+    ;;
+  37)
+    url_suffix=2.14.0/3.fc37/x86_64/ignition-2.14.0-3.fc37.x86_64.rpm
+    # 2.14.0-4
+    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2013062
+    koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2084352
+    kver=6.0.7
+    krev=301
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
 esac
