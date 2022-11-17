@@ -241,3 +241,7 @@ $PYTHON autofiles.py > files.devel \
 %files libs -f files.lib
 
 %files devel -f files.devel
+
+%changelog
+* Thu Nov 17 2022 Colin Walters <walters@verbum.org> - 2022.15-3
+- Dummy change to satisfy rpm timestamp clamping
