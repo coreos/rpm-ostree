@@ -124,12 +124,6 @@ Requires:       librepo%{?_isa} >= %{librepo_version}
 #                     end of libdnf build deps                          #
 #########################################################################
 
-%if 0%{?rhel} <= 8
-# In current Fedora, this is a dependency of gpgme-devel, but
-# not in RHEL8.  Missing this package breaks -znow.
-BuildRequires:  libassuan-devel
-%endif
-
 # For now...see https://github.com/projectatomic/rpm-ostree/pull/637
 # and https://github.com/fedora-infra/fedmsg-atomic-composer/pull/17
 # etc.  We'll drop this dependency at some point in the future when
