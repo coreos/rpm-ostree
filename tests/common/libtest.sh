@@ -238,6 +238,10 @@ rm -rf %{buildroot}
 %files
 /usr/bin/$name
 $files
+
+%changelog
+* Thu Nov 17 2022 Colin Walters <walters@verbum.org>
+- Dummy change to satisfy rpm timestamp clamping
 EOF
 
     # because it'd be overkill to set up mock for this, let's just fool

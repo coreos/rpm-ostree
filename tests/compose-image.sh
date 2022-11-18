@@ -32,7 +32,7 @@ cd minimal-test
 cat > minimal.yaml << 'EOF'
 container: true
 recommends: false
-releasever: 36
+releasever: 37
 packages:
   - rootfiles
   - fedora-repos-modular
@@ -60,7 +60,7 @@ mkdir minimal-test
 cd minimal-test
 cat > minimal.yaml << 'EOF'
 boot-location: modules
-releasever: 36
+releasever: 37
 packages:
   - bash
   - rpm

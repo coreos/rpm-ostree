@@ -198,7 +198,9 @@ rpmostree_context_new_base (OstreeRepo *repo)
    * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
    * various places.
    */
+#ifndef BUILDOPT_RPM_INTERRUPT_SAFETY_DEFAULT
   rpmsqSetInterruptSafety (FALSE);
+#endif
 
   self->dnfctx = dnf_context_new ();
   dnf_context_set_http_proxy (self->dnfctx, g_getenv ("http_proxy"));
