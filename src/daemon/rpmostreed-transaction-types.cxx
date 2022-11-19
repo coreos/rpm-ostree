@@ -2679,7 +2679,6 @@ kernel_arg_apply_patching (KernelArgTransaction *self, RpmOstreeSysrootUpgrader 
       = static_cast<char **> (vardict_lookup_strv_canonical (self->options, "append-if-missing"));
   g_autofree char **delete_if_present
       = static_cast<char **> (vardict_lookup_strv_canonical (self->options, "delete-if-present"));
-  g_auto (GStrv) existing_kargs = g_strsplit (self->existing_kernel_args, " ", -1);
   gboolean changed = FALSE;
 
   /* Delete all the entries included in the kernel args */
@@ -2708,9 +2707,9 @@ kernel_arg_apply_patching (KernelArgTransaction *self, RpmOstreeSysrootUpgrader 
   for (char **iter = append_if_missing; iter && *iter; iter++)
     {
       const char *arg = *iter;
-      if (!g_strv_contains (existing_kargs, arg))
+      if (!ostree_kernel_args_contains (kargs, arg))
         {
-          ostree_kernel_args_append (kargs, arg);
+          ostree_kernel_args_append_if_missing (kargs, arg);
           changed = TRUE;
         }
     }
@@ -2718,9 +2717,9 @@ kernel_arg_apply_patching (KernelArgTransaction *self, RpmOstreeSysrootUpgrader 
   for (char **iter = delete_if_present; iter && *iter; iter++)
     {
       const char *arg = *iter;
-      if (g_strv_contains (existing_kargs, arg))
+      if (ostree_kernel_args_contains (kargs, arg))
         {
-          if (!ostree_kernel_args_delete (kargs, arg, error))
+          if (!ostree_kernel_args_delete_if_present (kargs, arg, error))
             return FALSE;
           changed = TRUE;
         }
