@@ -210,7 +210,7 @@ fn gv_nevra_to_string(pkg: &glib::Variant) -> String {
 }
 
 /// Like `ostree container encapsulate`, but uses chunks derived from package data.
-pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
+pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     let args = args.iter().skip(1).map(|s| s.as_str());
     let opt = ContainerEncapsulateOpts::parse_from(args);
     let repo = &ostree_ext::cli::parse_repo(&opt.repo)?;
@@ -294,10 +294,18 @@ pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
 
     let kernel_dir = ostree_ext::bootabletree::find_kernel_dir(&root, gio::NONE_CANCELLABLE)?;
     if let Some(kernel_dir) = kernel_dir {
-        let kernel_ver: Utf8PathBuf = kernel_dir.basename().unwrap().try_into()?;
+        let kernel_ver: Utf8PathBuf = kernel_dir
+            .basename()
+            .unwrap()
+            .try_into()
+            .map_err(anyhow::Error::msg)?;
         let initramfs = kernel_dir.child("initramfs.img");
         if initramfs.query_exists(gio::NONE_CANCELLABLE) {
-            let path: Utf8PathBuf = initramfs.path().unwrap().try_into()?;
+            let path: Utf8PathBuf = initramfs
+                .path()
+                .unwrap()
+                .try_into()
+                .map_err(anyhow::Error::msg)?;
             let initramfs = initramfs.downcast_ref::<ostree::RepoFile>().unwrap();
             let checksum = initramfs.checksum().unwrap();
             let name = format!("initramfs (kernel {})", kernel_ver).into_boxed_str();
@@ -382,7 +390,7 @@ pub fn container_encapsulate(args: Vec<String>) -> Result<()> {
     let format = match opt.format_version {
         0 => ExportLayout::V0,
         1 => ExportLayout::V1,
-        n => anyhow::bail!("Invalid format version {n}"),
+        n => return Err(anyhow::anyhow!("Invalid format version {n}").into()),
     };
     let opts = ExportOpts {
         copy_meta_keys,
