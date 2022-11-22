@@ -875,24 +875,26 @@ fn convert_path_to_tmpfiles_d_recurse(
 ///  - If present, symlink /var/lib/vagrant -> /usr/lib/vagrant
 #[context("Preparing symlinks in rootfs")]
 pub fn rootfs_prepare_links(rootfs_dfd: i32) -> CxxResult<()> {
-    let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
+    let mut db = dirbuilder_from_mode(0o755);
+    db.recursive(true);
 
     // Unconditionally drop /usr/local and replace it with a symlink.
     rootfs
-        .remove_all("usr/local")
+        .remove_all_optional("usr/local")
         .context("Removing /usr/local")?;
-    ensure_symlink(&rootfs, "../var/usrlocal", "usr/local")
+    ensure_symlink(rootfs, "../var/usrlocal", "usr/local")
         .context("Creating /usr/local symlink")?;
 
     // Move existing content to /usr/lib, then put a symlink in its
     // place under /var/lib.
     rootfs
-        .ensure_dir_all("usr/lib", 0o0755)
+        .ensure_dir_with("usr/lib", &db)
         .context("Creating /usr/lib")?;
     for entry in COMPAT_VARLIB_SYMLINKS {
         let varlib_path = format!("var/lib/{}", entry);
         let is_var_dir = rootfs
-            .metadata_optional(&varlib_path)?
+            .symlink_metadata_optional(&varlib_path)?
             .map(|m| m.is_dir())
             .unwrap_or(false);
         if !is_var_dir {
@@ -901,10 +903,10 @@ pub fn rootfs_prepare_links(rootfs_dfd: i32) -> CxxResult<()> {
 
         let usrlib_path = format!("usr/lib/{}", entry);
         rootfs
-            .remove_all(&usrlib_path)
+            .remove_all_optional(&usrlib_path)
             .with_context(|| format!("Removing /{}", &usrlib_path))?;
         rootfs
-            .local_rename(&varlib_path, &usrlib_path)
+            .rename(&varlib_path, rootfs, &usrlib_path)
             .with_context(|| format!("Moving /{} to /{}", &varlib_path, &usrlib_path))?;
 
         let target = format!("../../{}", &usrlib_path);
@@ -920,30 +922,30 @@ pub fn rootfs_prepare_links(rootfs_dfd: i32) -> CxxResult<()> {
 /// This is idempotent and does not alter any content already existing at `linkpath`.
 /// It returns `true` if the symlink has been created, `false` otherwise.
 #[context("Symlinking '/{}' to empty directory '/{}'", linkpath, target)]
-fn ensure_symlink(rootfs: &openat::Dir, target: &str, linkpath: &str) -> Result<bool> {
-    use openat::SimpleType;
-
-    if let Some(meta) = rootfs.metadata_optional(linkpath)? {
-        match meta.simple_type() {
-            SimpleType::Symlink => {
-                // We assume linkpath already points to the correct target,
-                // thus this short-circuits in an idempotent way.
-                return Ok(false);
-            }
-            SimpleType::Dir => rootfs.remove_dir(linkpath)?,
-            _ => bail!("Content already exists at link path"),
-        };
+fn ensure_symlink(rootfs: &Dir, target: &str, linkpath: &str) -> Result<bool> {
+    let mut db = dirbuilder_from_mode(0o755);
+    db.recursive(true);
+    if let Some(meta) = rootfs.symlink_metadata_optional(linkpath)? {
+        if meta.is_symlink() {
+            // We assume linkpath already points to the correct target,
+            // thus this short-circuits in an idempotent way.
+            return Ok(false);
+        } else if meta.is_dir() {
+            rootfs.remove_dir(linkpath)?;
+        } else {
+            bail!("Content already exists at link path");
+        }
     } else {
         // For maximum compatibility, create parent directories too.  This
         // is necessary when we're doing layering on top of a base commit,
         // and the /var will be empty.  We should probably consider running
         // systemd-tmpfiles to setup the temporary /var.
         if let Some(parent) = Path::new(linkpath).parent() {
-            rootfs.ensure_dir_all(parent, 0o755)?;
+            rootfs.ensure_dir_with(parent, &db)?;
         }
     }
 
-    rootfs.symlink(linkpath, target)?;
+    rootfs.symlink(target, linkpath)?;
     Ok(true)
 }
 
