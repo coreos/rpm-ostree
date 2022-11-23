@@ -1034,10 +1034,10 @@ pub fn prepare_rpmdb_base_location(
     rootfs_dfd: i32,
     mut cancellable: Pin<&mut crate::FFIGCancellable>,
 ) -> CxxResult<()> {
-    let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let cancellable = &cancellable.gobj_wrap();
 
-    hardlink_rpmdb_base_location(&rootfs, Some(cancellable))?;
+    hardlink_rpmdb_base_location(rootfs, Some(cancellable))?;
     Ok(())
 }
 
@@ -1068,17 +1068,20 @@ pub fn directory_size(dfd: i32, cancellable: &crate::FFIGCancellable) -> CxxResu
 
 #[context("Hardlinking rpmdb to base location")]
 fn hardlink_rpmdb_base_location(
-    rootfs: &openat::Dir,
+    rootfs: &Dir,
     cancellable: Option<&gio::Cancellable>,
 ) -> Result<bool> {
-    if !rootfs.exists(RPMOSTREE_RPMDB_LOCATION)? {
+    if !rootfs.try_exists(RPMOSTREE_RPMDB_LOCATION)? {
         return Ok(false);
     }
 
     // Hardlink our own `/usr/lib/sysimage/rpm-ostree-base-db/` hierarchy
     // to the well-known `/usr/share/rpm/`.
-    rootfs.ensure_dir_all(RPMOSTREE_BASE_RPMDB, 0o755)?;
-    rootfs.set_mode(RPMOSTREE_BASE_RPMDB, 0o755)?;
+    let mut db = dirbuilder_from_mode(0o755);
+    db.recursive(true);
+    rootfs.ensure_dir_with(RPMOSTREE_BASE_RPMDB, &db)?;
+    let perms = Permissions::from_mode(0o755);
+    rootfs.set_permissions(RPMOSTREE_BASE_RPMDB, perms)?;
     hardlink_hierarchy(
         rootfs,
         RPMOSTREE_RPMDB_LOCATION,
@@ -1093,8 +1096,8 @@ fn hardlink_rpmdb_base_location(
     // Also, delete a stamp file created by https://src.fedoraproject.org/rpms/rpm/c/391c3aeb66e8c2a0ac684580ac82c41d7da2128b?branch=rawhide
     let stampfile = &Path::new(RPMOSTREE_SYSIMAGE_RPMDB).join(".rpmdbdirsymlink_created");
     rootfs.remove_file_optional(stampfile)?;
-    rootfs.remove_dir_optional(RPMOSTREE_SYSIMAGE_RPMDB)?;
-    rootfs.symlink(RPMOSTREE_SYSIMAGE_RPMDB, "../../share/rpm")?;
+    rootfs.remove_all_optional(RPMOSTREE_SYSIMAGE_RPMDB)?;
+    rootfs.symlink("../../share/rpm", RPMOSTREE_SYSIMAGE_RPMDB)?;
 
     Ok(true)
 }
@@ -1167,7 +1170,7 @@ pub(crate) fn rewrite_rpmdb_for_target(rootfs_dfd: i32, normalize: bool) -> CxxR
 /// Both directories must exist beforehand.
 #[context("Hardlinking /{} to /{}", source, target)]
 fn hardlink_hierarchy(
-    rootfs: &openat::Dir,
+    rootfs: &Dir,
     source: &str,
     target: &str,
     cancellable: Option<&gio::Cancellable>,
@@ -1184,17 +1187,15 @@ fn hardlink_hierarchy(
 /// `relative_path` is updated at each recursive step, so that in case of errors
 /// it can be used to pinpoint the faulty path.
 fn hardlink_recurse(
-    rootfs: &openat::Dir,
+    rootfs: &Dir,
     source_prefix: &str,
     dest_prefix: &str,
     relative_path: &mut String,
     cancellable: &Option<&gio::Cancellable>,
 ) -> Result<()> {
-    use openat::SimpleType;
-
     let current_dir = relative_path.clone();
     let current_source_dir = format!("{}/{}", source_prefix, relative_path);
-    for subpath in rootfs.list_dir(&current_source_dir)? {
+    for subpath in rootfs.read_dir(&current_source_dir)? {
         if let Some(c) = cancellable {
             c.set_error_if_cancelled()?;
         }
@@ -1213,13 +1214,14 @@ fn hardlink_recurse(
         };
         let source_path = format!("{}/{}", source_prefix, full_path);
         let dest_path = format!("{}/{}", dest_prefix, full_path);
-        let path_type = subpath.simple_type().unwrap_or(SimpleType::Other);
 
-        if path_type == SimpleType::Dir {
+        if subpath.file_type()?.is_dir() {
             // New subdirectory discovered, create it at the target.
-            let perms = rootfs.metadata(&source_path)?.stat().st_mode & !libc::S_IFMT;
-            rootfs.ensure_dir(&dest_path, perms)?;
-            rootfs.set_mode(&dest_path, perms)?;
+            let perms = rootfs.metadata(&source_path)?.mode() & !libc::S_IFMT;
+            let db = dirbuilder_from_mode(perms);
+            rootfs.ensure_dir_with(&dest_path, &db)?;
+            let perms = Permissions::from_mode(perms);
+            rootfs.set_permissions(&dest_path, perms)?;
 
             // Recurse into the subdirectory.
             *relative_path = full_path.clone();
@@ -1231,7 +1233,13 @@ fn hardlink_recurse(
                 cancellable,
             )?;
         } else {
-            openat::hardlink(rootfs, source_path, rootfs, dest_path)?;
+            rustix::fs::linkat(
+                rootfs,
+                source_path,
+                rootfs,
+                dest_path,
+                rustix::fs::AtFlags::empty(),
+            )?;
         }
     }
     Ok(())
@@ -1508,8 +1516,7 @@ OSTREE_VERSION='33.4'
 
     #[test]
     fn test_hardlink_rpmdb_base_location() {
-        let temp_rootfs = tempfile::tempdir().unwrap();
-        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+        let rootfs = &cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
 
         {
             let done = hardlink_rpmdb_base_location(&rootfs, gio::NONE_CANCELLABLE).unwrap();
@@ -1517,21 +1524,23 @@ OSTREE_VERSION='33.4'
         }
 
         let dirs = &[RPMOSTREE_RPMDB_LOCATION, "usr/share/rpm/foo/bar"];
+        let mut db = dirbuilder_from_mode(0o755);
+        db.recursive(true);
         for entry in dirs {
-            rootfs.ensure_dir_all(*entry, 0o755).unwrap();
+            rootfs.ensure_dir_with(*entry, &db).unwrap();
         }
         let files = &[
             "usr/share/rpm/rpmdb.sqlite",
             "usr/share/rpm/foo/bar/placeholder",
         ];
         for entry in files {
-            rootfs.write_file(*entry, 0o755).unwrap();
+            rootfs.create(*entry).unwrap();
         }
 
         let done = hardlink_rpmdb_base_location(&rootfs, gio::NONE_CANCELLABLE).unwrap();
         assert_eq!(done, true);
 
-        assert_eq!(rootfs.exists(RPMOSTREE_BASE_RPMDB).unwrap(), true);
+        assert_eq!(rootfs.try_exists(RPMOSTREE_BASE_RPMDB).unwrap(), true);
         let placeholder = rootfs
             .metadata(format!("{}/foo/bar/placeholder", RPMOSTREE_BASE_RPMDB))
             .unwrap();
