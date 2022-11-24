@@ -344,13 +344,18 @@ fn compose_postprocess_units(rootfs_dfd: &Dir, treefile: &mut Treefile) -> Resul
 
     for unit in units {
         let dest = multiuser_wants.join(unit);
-        if rootfs_dfd.try_exists(&dest)? {
+        if rootfs_dfd
+            .symlink_metadata_optional(&dest)
+            .with_context(|| format!("Querying {unit}"))?
+            .is_some()
+        {
             continue;
         }
 
         println!("Adding {} to multi-user.target.wants", unit);
         let target = format!("/usr/lib/systemd/system/{unit}");
-        cap_primitives::fs::symlink_contents(target, &rootfs_dfd.as_filelike_view(), dest)?;
+        cap_primitives::fs::symlink_contents(target, &rootfs_dfd.as_filelike_view(), dest)
+            .with_context(|| format!("Linking {unit}"))?;
     }
     Ok(())
 }
