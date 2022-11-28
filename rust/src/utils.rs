@@ -270,7 +270,7 @@ pub(crate) fn translate_path_for_ostree_impl(path: &str) -> Option<String> {
     assert!(!path.starts_with("./"));
 
     // etc/foo -> usr/etc/foo
-    if path.starts_with("etc/") {
+    if path == "etc" || path.starts_with("etc/") {
         return Some("usr/".to_string() + path);
     }
 
@@ -288,7 +288,7 @@ pub(crate) fn translate_path_for_ostree_impl(path: &str) -> Option<String> {
     }
 
     // opt/foo -> usr/lib/opt/foo
-    if path.starts_with("opt/") {
+    if path == "opt" || path.starts_with("opt/") {
         return Some("usr/lib/".to_string() + path);
     }
 
@@ -505,12 +505,14 @@ mod tests {
         let cases = [
             ("usr/lib/foo", None),
             ("var/lib/foo", None),
+            ("etc", Some("usr/etc")),
             ("etc/foo", Some("usr/etc/foo")),
             ("boot/foo", Some("usr/lib/ostree-boot/foo")),
             (
                 "var/lib/selinux/targeted/foo",
                 Some("usr/etc/selinux/targeted/foo"),
             ),
+            ("opt", Some("usr/lib/opt")),
             ("opt/foo", Some("usr/lib/opt/foo")),
             ("var/lib/alternatives/foo", Some("usr/lib/alternatives/foo")),
             ("var/lib/vagrant/foo", Some("usr/lib/vagrant/foo")),
