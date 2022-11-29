@@ -111,13 +111,13 @@ fn modules_impl_host(key: &str, opts: &InstallOpts) -> Result<()> {
         .ok_or_else(|| anyhow!("Failed to find default-deployment property"))?;
     let modifiers = get_modifiers_variant(key, &opts.modules)?;
     let options = get_options_variant(opts)?;
-    let params = Variant::from_tuple(&[modifiers, options]);
+    let params = Variant::tuple_from_iter([modifiers, options]);
     let reply = &client.get_os_proxy().call_sync(
         "UpdateDeployment",
         Some(&params),
         gio::DBusCallFlags::NONE,
         -1,
-        gio::NONE_CANCELLABLE,
+        gio::Cancellable::NONE,
     )?;
     let reply = reply
         .get::<(String,)>()

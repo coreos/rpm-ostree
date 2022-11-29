@@ -88,13 +88,13 @@ fn write_live_state(
     let found_live_stamp = rundir.exists(LIVE_STATE_NAME);
 
     let commit = Some(state.commit.as_str()).filter(|s| !s.is_empty());
-    repo.set_ref_immediate(None, LIVE_REF, commit, gio::NONE_CANCELLABLE)?;
+    repo.set_ref_immediate(None, LIVE_REF, commit, gio::Cancellable::NONE)?;
     let inprogress_commit = Some(state.inprogress.as_str()).filter(|s| !s.is_empty());
     repo.set_ref_immediate(
         None,
         LIVE_REF_INPROGRESS,
         inprogress_commit,
-        gio::NONE_CANCELLABLE,
+        gio::Cancellable::NONE,
     )?;
 
     // Ensure the stamp file exists
@@ -125,7 +125,7 @@ fn apply_diff(repo: &ostree::Repo, diff: &FileTreeDiff, commit: &str, destdir: &
     if !diff.changed_dirs.is_empty() {
         anyhow::bail!("Changed directories are not supported yet");
     }
-    let cancellable = gio::NONE_CANCELLABLE;
+    let cancellable = gio::Cancellable::NONE;
     // This applies to all added/changed content, we just
     // overwrite `subpath` in each run.
     let mut opts = ostree::RepoCheckoutAtOptions {
@@ -222,7 +222,7 @@ fn update_etc(
         anyhow::bail!("Changed directories are not supported yet");
     }
 
-    let cancellable = gio::NONE_CANCELLABLE;
+    let cancellable = gio::Cancellable::NONE;
     // This applies to all added/changed content, we just
     // overwrite `subpath` in each run.
     let mut opts = ostree::RepoCheckoutAtOptions {
@@ -456,7 +456,7 @@ pub(crate) fn transaction_apply_live(
     let mut state = state.unwrap_or_default();
 
     let rootfs_dfd = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
-    let sepolicy = ostree::SePolicy::new_at(rootfs_dfd.as_raw_fd(), gio::NONE_CANCELLABLE)?;
+    let sepolicy = ostree::SePolicy::new_at(rootfs_dfd.as_raw_fd(), gio::Cancellable::NONE)?;
 
     // Record that we're targeting this commit
     state.inprogress = target_commit.to_string();

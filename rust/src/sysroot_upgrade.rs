@@ -8,7 +8,6 @@ use std::sync::Arc;
 use crate::cxxrsutil::*;
 use crate::ffi::{output_message, ContainerImageState};
 use anyhow::Result;
-use cap_std::io_lifetimes::IntoFd;
 use cap_std_ext::cmdext::CapStdExtCommandExt;
 use ostree::glib;
 use ostree_container::store::{
@@ -71,7 +70,7 @@ fn default_container_pull_config() -> Result<ImageProxyConfig> {
     if let Some(authfile) = cfg.authfile.take() {
         let authbytes = std::fs::read(authfile)?;
         let authfd = crate::utils::impl_sealed_memfd("pullsecret", &authbytes)?;
-        let authfd = Arc::new(authfd.into_fd().into());
+        let authfd: Arc<cap_std::io_lifetimes::OwnedFd> = Arc::new(authfd.into());
         drop(authbytes);
         let n = 5;
         cmd.take_fd_n(authfd, n);
@@ -174,7 +173,7 @@ pub(crate) fn purge_refspec(repo: &crate::FFIOstreeRepo, imgref: &str) -> CxxRes
                     remote.as_ref().map(|s| s.as_str()),
                     &ostreeref,
                     None,
-                    ostree::gio::NONE_CANCELLABLE,
+                    ostree::gio::Cancellable::NONE,
                 )?;
             }
             Err(e) => {

@@ -227,7 +227,7 @@ fn get_base_package_list() -> Result<HashSet<String>> {
         )
     } else {
         let sysroot = &ostree::Sysroot::new_default();
-        sysroot.load(gio::NONE_CANCELLABLE)?;
+        sysroot.load(gio::Cancellable::NONE)?;
         let deployments = sysroot.deployments();
         let default = deployments
             .get(0)

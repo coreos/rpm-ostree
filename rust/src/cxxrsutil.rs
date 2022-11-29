@@ -220,7 +220,7 @@ mod test {
 
     #[test]
     fn passthrough() -> Result<()> {
-        let cancellable = gio::NONE_CANCELLABLE;
+        let cancellable = gio::Cancellable::NONE;
         let td = tempfile::tempdir()?;
         let p = td.path().join("repo");
         let r = ostree::Repo::new_for_path(&p);

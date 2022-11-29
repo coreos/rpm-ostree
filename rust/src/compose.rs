@@ -165,7 +165,7 @@ fn manifest_diff(src: &ImageManifest, dest: &ImageManifest) -> ManifestDiff {
 
 pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     use crate::isolation::self_command;
-    let cancellable = gio::NONE_CANCELLABLE;
+    let cancellable = gio::Cancellable::NONE;
 
     let opt = Opt::parse_from(args.iter().skip(1));
 

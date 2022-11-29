@@ -51,17 +51,17 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
     let opts = &Opts::parse_from(args.iter());
     let client = &mut crate::client::ClientConnection::new()?;
     let sysroot = &ostree::Sysroot::new_default();
-    sysroot.load(gio::NONE_CANCELLABLE)?;
+    sysroot.load(gio::Cancellable::NONE)?;
 
     let args = get_args_variant(sysroot, opts)?;
 
-    let params = Variant::from_tuple(&[args]);
+    let params = Variant::tuple_from_iter([args]);
     let reply = &client.get_os_ex_proxy().call_sync(
         "LiveFs",
         Some(&params),
         gio::DBusCallFlags::NONE,
         -1,
-        gio::NONE_CANCELLABLE,
+        gio::Cancellable::NONE,
     )?;
     let txn_address = reply
         .get::<(String,)>()
@@ -74,7 +74,7 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
 // Postprocessing after the daemon has reported completion; print an rpmdb diff.
 pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
     let sysroot = sysroot.glib_reborrow();
-    let cancellable = gio::NONE_CANCELLABLE;
+    let cancellable = gio::Cancellable::NONE;
     sysroot.load_if_changed(cancellable)?;
     let repo = &sysroot.repo().unwrap();
     let booted = &sysroot.require_booted_deployment()?;

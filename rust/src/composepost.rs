@@ -1422,7 +1422,7 @@ OSTREE_VERSION='33.4'
             expected_disk_size
         );
 
-        var_to_tmpfiles(&rootfs, gio::NONE_CANCELLABLE).unwrap();
+        var_to_tmpfiles(&rootfs, gio::Cancellable::NONE).unwrap();
 
         let autovar_path = "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf";
         assert!(!rootfs.try_exists("var/lib").unwrap());
@@ -1500,7 +1500,7 @@ OSTREE_VERSION='33.4'
         // File timestamps may not increment faster than e.g. 10ms.  Really
         // what we should be doing is using inode versions.
         std::thread::sleep(std::time::Duration::from_millis(100));
-        tweak_selinux_timestamps(&rootfs, gio::NONE_CANCELLABLE).unwrap();
+        tweak_selinux_timestamps(&rootfs, gio::Cancellable::NONE).unwrap();
 
         for (fname, before_meta) in files.iter().zip(metas.iter()) {
             let fpath = format!("{}/{}", PREFIX, fname);
@@ -1517,7 +1517,7 @@ OSTREE_VERSION='33.4'
         let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
 
         {
-            let done = hardlink_rpmdb_base_location(&rootfs, gio::NONE_CANCELLABLE).unwrap();
+            let done = hardlink_rpmdb_base_location(&rootfs, gio::Cancellable::NONE).unwrap();
             assert_eq!(done, false);
         }
 
@@ -1533,7 +1533,7 @@ OSTREE_VERSION='33.4'
             rootfs.write_file(*entry, 0o755).unwrap();
         }
 
-        let done = hardlink_rpmdb_base_location(&rootfs, gio::NONE_CANCELLABLE).unwrap();
+        let done = hardlink_rpmdb_base_location(&rootfs, gio::Cancellable::NONE).unwrap();
         assert_eq!(done, true);
 
         assert_eq!(rootfs.exists(RPMOSTREE_BASE_RPMDB).unwrap(), true);
