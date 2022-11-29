@@ -956,7 +956,7 @@ fn ensure_symlink(rootfs: &Dir, target: &str, linkpath: &str) -> Result<bool> {
 
 pub fn workaround_selinux_cross_labeling(
     rootfs_dfd: i32,
-    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+    cancellable: Pin<&mut crate::FFIGCancellable>,
 ) -> CxxResult<()> {
     let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
     let cancellable = &cancellable.gobj_wrap();
@@ -1037,7 +1037,7 @@ fn workaround_selinux_cross_labeling_recurse(
 
 pub fn prepare_rpmdb_base_location(
     rootfs_dfd: i32,
-    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+    cancellable: Pin<&mut crate::FFIGCancellable>,
 ) -> CxxResult<()> {
     let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let cancellable = &cancellable.gobj_wrap();

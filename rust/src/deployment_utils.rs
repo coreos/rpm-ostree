@@ -27,7 +27,7 @@ pub(crate) fn deployment_generate_id_impl(deployment: &ostree::Deployment) -> St
 }
 
 pub fn deployment_for_id(
-    mut ffi_sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+    ffi_sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
     deploy_id: &str,
 ) -> CxxResult<*mut crate::FFIOstreeDeployment> {
     let sysroot = &ffi_sysroot.gobj_wrap();
@@ -57,7 +57,7 @@ fn deployment_for_id_impl(
 }
 
 pub fn deployment_checksum_for_id(
-    mut ffi_sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+    ffi_sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
     deploy_id: &str,
 ) -> CxxResult<String> {
     let sysroot = &ffi_sysroot.gobj_wrap();
@@ -69,7 +69,7 @@ pub fn deployment_checksum_for_id(
 }
 
 pub fn deployment_get_base(
-    mut ffi_sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
+    ffi_sysroot: Pin<&mut crate::ffi::OstreeSysroot>,
     opt_deploy_id: &str,
     opt_os_name: &str,
 ) -> CxxResult<*mut crate::FFIOstreeDeployment> {
