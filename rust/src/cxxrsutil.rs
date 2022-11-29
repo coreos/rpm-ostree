@@ -28,7 +28,7 @@ pub trait FFIGObjectWrapper {
     /// Use this function in Rust code that accepts glib-rs
     /// objects passed via cxx-rs to synthesize the expected glib-rs
     /// wrapper type.
-    fn gobj_wrap(&mut self) -> Self::Wrapper;
+    fn gobj_wrap(&self) -> Self::Wrapper;
 
     /// Convert a borrowed cxx-rs type back into a borrowed version
     /// of the glib-rs type.
@@ -48,8 +48,8 @@ macro_rules! impl_wrap {
     ($w:ident, $bound:path, $sys:path) => {
         impl FFIGObjectWrapper for $w {
             type Wrapper = $bound;
-            fn gobj_wrap(&mut self) -> Self::Wrapper {
-                unsafe { glib::translate::from_glib_none(&mut self.0 as *mut _) }
+            fn gobj_wrap(&self) -> Self::Wrapper {
+                unsafe { glib::translate::from_glib_none(&self.0 as *const _) }
             }
 
             fn glib_reborrow(&self) -> glib::translate::Borrowed<Self::Wrapper> {

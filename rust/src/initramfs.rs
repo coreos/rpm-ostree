@@ -143,7 +143,7 @@ pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
 #[context("Generating initramfs overlay")]
 pub(crate) fn initramfs_overlay_generate(
     files: &Vec<String>,
-    mut cancellable: Pin<&mut crate::FFIGCancellable>,
+    cancellable: Pin<&mut crate::FFIGCancellable>,
 ) -> CxxResult<i32> {
     let cancellable = &cancellable.gobj_wrap();
     let files: HashSet<String> = files.iter().cloned().collect();

@@ -8,7 +8,7 @@ use indoc::printdoc;
 use std::pin::Pin;
 
 /// Print statistics related to an ostree transaction.
-pub fn print_ostree_txn_stats(mut stats: Pin<&mut crate::FFIOstreeRepoTransactionStats>) {
+pub fn print_ostree_txn_stats(stats: Pin<&mut crate::FFIOstreeRepoTransactionStats>) {
     let stats = &stats.gobj_wrap();
     printdoc!(
         "Metadata Total: {meta_total}
