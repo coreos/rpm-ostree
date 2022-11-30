@@ -214,6 +214,8 @@ rpmostree_syscore_cleanup (OstreeSysroot *sysroot, OstreeRepo *repo, GCancellabl
   /* Refs for the live state */
   ROSCXX_TRY (applylive_sync_ref (*sysroot), error);
 
+  CXX_TRY (rpmostreecxx::container_prune (*repo, *cancellable), error);
+
   /* And do a prune */
   guint64 freed_space;
   gint n_objects_total, n_objects_pruned;

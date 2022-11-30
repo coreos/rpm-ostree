@@ -6,8 +6,8 @@ use crate::cxxrsutil::*;
 use crate::ffi::{output_message, ContainerImageState};
 use anyhow::Result;
 use ostree::glib;
-use ostree_container::store::ImageImporter;
-use ostree_container::store::PrepareResult;
+use ostree::prelude::*;
+use ostree_container::store::{ImageImporter, PrepareResult};
 use ostree_container::OstreeImageReference;
 use ostree_ext::container as ostree_container;
 use ostree_ext::container::store::{ImportProgress, ManifestLayerState};
@@ -115,6 +115,20 @@ pub(crate) fn pull_container(
         .await
     })?;
     Ok(Box::new(r))
+}
+
+/// Run a prune of container image layers.
+pub(crate) fn container_prune(
+    repo: &crate::FFIOstreeRepo,
+    cancellable: &crate::FFIGCancellable,
+) -> CxxResult<()> {
+    let repo = &repo.glib_reborrow();
+    let cancellable = &cancellable.glib_reborrow();
+    cancellable.set_error_if_cancelled()?;
+    tracing::debug!("pruning image layers");
+    let n_pruned = ostree_ext::container::store::gc_image_layers(repo)?;
+    systemd::journal::print(6, &format!("Pruned container image layers: {n_pruned}"));
+    Ok(())
 }
 
 /// C++ wrapper for querying image state; requires a pulled image
