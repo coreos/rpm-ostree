@@ -1762,6 +1762,9 @@ void deploy_from_self_entrypoint (::rust::Vec< ::rust::String> args);
 pull_container (const ::rpmostreecxx::OstreeRepo &repo,
                 const ::rpmostreecxx::GCancellable &cancellable, ::rust::Str imgref);
 
+void container_prune (const ::rpmostreecxx::OstreeRepo &repo,
+                      const ::rpmostreecxx::GCancellable &cancellable);
+
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c);
 

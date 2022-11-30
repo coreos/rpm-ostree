@@ -195,6 +195,7 @@ pub mod ffi {
             cancellable: &GCancellable,
             imgref: &str,
         ) -> Result<Box<ContainerImageState>>;
+        fn container_prune(repo: &OstreeRepo, cancellable: &GCancellable) -> Result<()>;
         fn query_container_image_commit(
             repo: &OstreeRepo,
             c: &str,
