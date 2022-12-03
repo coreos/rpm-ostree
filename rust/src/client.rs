@@ -49,7 +49,7 @@ impl ClientConnection {
             Some(BUS_NAME),
             SYSROOT_PATH,
             "org.projectatomic.rpmostree1.Sysroot",
-            gio::NONE_CANCELLABLE,
+            gio::Cancellable::NONE,
         )?;
         // Today the daemon mode requires running inside a booted deployment.
         let booted = sysroot_proxy
@@ -65,7 +65,7 @@ impl ClientConnection {
             Some(BUS_NAME),
             booted,
             OS_INTERFACE,
-            gio::NONE_CANCELLABLE,
+            gio::Cancellable::NONE,
         )?;
         let booted_ex_proxy = gio::DBusProxy::new_sync(
             &bus_conn,
@@ -74,7 +74,7 @@ impl ClientConnection {
             Some(BUS_NAME),
             booted,
             OS_EX_INTERFACE,
-            gio::NONE_CANCELLABLE,
+            gio::Cancellable::NONE,
         )?;
         Ok(Self {
             conn,

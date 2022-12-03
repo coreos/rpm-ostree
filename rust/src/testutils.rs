@@ -242,7 +242,7 @@ fn test_moo() -> Result<()> {
     let bus_conn = client_conn.pin_mut().get_connection();
     let bus_conn = bus_conn.glib_reborrow();
 
-    let params = Variant::from_tuple(&[true.to_variant()]);
+    let params = Variant::tuple_from_iter([true.to_variant()]);
     let reply = &bus_conn.call_sync(
         Some("org.projectatomic.rpmostree1"),
         "/org/projectatomic/rpmostree1/fedora_coreos",
@@ -252,7 +252,7 @@ fn test_moo() -> Result<()> {
         Some(glib::VariantTy::new("(s)").unwrap()),
         gio::DBusCallFlags::NONE,
         -1,
-        gio::NONE_CANCELLABLE,
+        gio::Cancellable::NONE,
     )?;
     let reply = reply.child_value(0);
     // Unwrap safety: We validated the (s) above.
@@ -295,7 +295,7 @@ fn test_pkg_variants(repo: &ostree::Repo, booted_commit: &str) -> Result<()> {
 }
 
 fn integration_read_only() -> Result<()> {
-    let cancellable = gio::NONE_CANCELLABLE;
+    let cancellable = gio::Cancellable::NONE;
     let sysroot = &ostree::Sysroot::new_default();
     sysroot.load(cancellable)?;
     let repo = &sysroot.repo().unwrap();

@@ -349,14 +349,14 @@ fn get_cached_signatures_variant(
 
     cachedir.create_dir_all(remote_dir)?;
     cachedir.remove_file_optional(&cached_relpath)?;
-    let verify_result = repo.verify_commit_for_remote(checksum, remote, gio::NONE_CANCELLABLE)?;
+    let verify_result = repo.verify_commit_for_remote(checksum, remote, gio::Cancellable::NONE)?;
     let n = verify_result.count_all();
     let mut sigs: Vec<glib::Variant> = Vec::with_capacity(n as usize);
     for i in 0..n {
         sigs.push(glib::Variant::from_variant(&verify_result.all(i).unwrap())); // we know index is in range
     }
 
-    let v = glib::Variant::from_array::<glib::Variant>(&sigs);
+    let v = glib::Variant::array_from_iter_with_type(&*glib::Variant::static_variant_type(), sigs);
     let perms = cap_std::fs::Permissions::from_mode(0o600);
     cachedir.atomic_write_with_perms(&cached_relpath, &v.data_as_bytes(), perms)?;
     Ok(v)

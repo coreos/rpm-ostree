@@ -124,7 +124,7 @@ fn build_mapping_recurse(
     state: &mut MappingBuilder,
 ) -> Result<()> {
     use std::collections::btree_map::Entry;
-    let cancellable = gio::NONE_CANCELLABLE;
+    let cancellable = gio::Cancellable::NONE;
     let e = dir.enumerate_children(
         "standard::name,standard::type",
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
@@ -214,7 +214,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     let args = args.iter().skip(1).map(|s| s.as_str());
     let opt = ContainerEncapsulateOpts::parse_from(args);
     let repo = &ostree_ext::cli::parse_repo(&opt.repo)?;
-    let (root, rev) = repo.read_commit(opt.ostree_ref.as_str(), gio::NONE_CANCELLABLE)?;
+    let (root, rev) = repo.read_commit(opt.ostree_ref.as_str(), gio::Cancellable::NONE)?;
     let pkglist = progress_task("Reading packages", || -> Result<_> {
         let cancellable = gio::Cancellable::new();
         let r = crate::ffi::package_variant_list_for_commit(
@@ -292,7 +292,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         });
     }
 
-    let kernel_dir = ostree_ext::bootabletree::find_kernel_dir(&root, gio::NONE_CANCELLABLE)?;
+    let kernel_dir = ostree_ext::bootabletree::find_kernel_dir(&root, gio::Cancellable::NONE)?;
     if let Some(kernel_dir) = kernel_dir {
         let kernel_ver: Utf8PathBuf = kernel_dir
             .basename()
@@ -300,7 +300,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
             .try_into()
             .map_err(anyhow::Error::msg)?;
         let initramfs = kernel_dir.child("initramfs.img");
-        if initramfs.query_exists(gio::NONE_CANCELLABLE) {
+        if initramfs.query_exists(gio::Cancellable::NONE) {
             let path: Utf8PathBuf = initramfs
                 .path()
                 .unwrap()
@@ -322,7 +322,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     }
 
     let rpmdb = root.resolve_relative_path(crate::composepost::RPMOSTREE_RPMDB_LOCATION);
-    if rpmdb.query_exists(gio::NONE_CANCELLABLE) {
+    if rpmdb.query_exists(gio::Cancellable::NONE) {
         // TODO add mapping for rpmdb
     }
 
@@ -470,7 +470,7 @@ fn find_encapsulated_commits(repo: &Utf8Path) -> Result<Vec<String>> {
 /// the container ostree commit to the host and deploys it, optionally rebooting.
 pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     use nix::sys::statvfs;
-    let cancellable = gio::NONE_CANCELLABLE;
+    let cancellable = gio::Cancellable::NONE;
     let opts = UpdateFromRunningOpts::parse_from(args);
 
     let sysroot = opts.target_root.join("sysroot");

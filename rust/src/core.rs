@@ -15,7 +15,6 @@ use cap_std_ext::prelude::CapStdExtDirExt;
 use ffiutil::*;
 use fn_error_context::context;
 use glib::prelude::StaticVariantType;
-use glib::translate::ToGlibPtr;
 use libdnf_sys::*;
 use ostree_ext::container::OstreeImageReference;
 use ostree_ext::glib;
@@ -299,7 +298,9 @@ pub(crate) fn get_header_variant(
             let nevra = crate::rpmutils::cache_branch_to_nevra(cachebranch);
             format!("In commit {cached_rev} for {nevra}")
         })?;
-    Ok(r.to_glib_full() as *mut _)
+    let p = r.as_ptr();
+    std::mem::forget(r);
+    Ok(p as *mut _)
 }
 
 pub(crate) fn stage_container_rpms(rpms: Vec<String>) -> CxxResult<Vec<String>> {

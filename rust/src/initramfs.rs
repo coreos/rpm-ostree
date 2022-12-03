@@ -157,7 +157,7 @@ mod test {
 
     #[test]
     fn test_initramfs_overlay() -> Result<()> {
-        let cancellable = gio::NONE_CANCELLABLE;
+        let cancellable = gio::Cancellable::NONE;
         let tmpd = cap_tempfile::tempdir(cap_std::ambient_authority())?;
         tmpd.create_dir_all("etc/foo")?;
         tmpd.write("etc/foo/somefile", "somecontents")?;

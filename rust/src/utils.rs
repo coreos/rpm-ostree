@@ -11,7 +11,6 @@ use crate::cxxrsutil::*;
 use crate::variant_utils;
 use anyhow::{bail, Context, Result};
 use cap_std_ext::cap_std;
-use glib::translate::ToGlibPtr;
 use glib::Variant;
 use once_cell::sync::Lazy;
 use ostree_ext::prelude::*;
@@ -438,7 +437,7 @@ mod tests {
         assert_eq!(util_next_version("10.1", "-", "10.1-5").unwrap(), "10.1-6");
 
         fn t(pre: &str, last: &str, final_datefmt: &str) {
-            let now = glib::DateTime::new_now_utc().unwrap();
+            let now = glib::DateTime::now_utc().unwrap();
             let final_version = now.format(final_datefmt).unwrap();
             let ver = util_next_version(pre, "", last).expect("version");
             assert_eq!(ver, final_version);
@@ -449,7 +448,7 @@ mod tests {
         // Test increment reset when date changed.
         t("10.<date:%Y%m%d>", "10.20001010.5", "10.%Y%m%d.0");
 
-        let now = glib::DateTime::new_now_utc().unwrap();
+        let now = glib::DateTime::now_utc().unwrap();
         // Test increment up when same date.
         let prev_version = now.format("10.%Y%m%d.1").unwrap();
         t("10.<date:%Y%m%d>", prev_version.as_str(), "10.%Y%m%d.2");
@@ -632,10 +631,12 @@ pub(crate) fn calculate_advisories_diff(
         }
     }
 
-    let r = Variant::from_array::<(&str, u32, u32, &[&str], HashMap<&str, glib::Variant>)>(
-        &new_advisories,
+    let r = Variant::array_from_iter::<(&str, u32, u32, &[&str], HashMap<&str, glib::Variant>)>(
+        new_advisories,
     );
-    Ok(r.to_glib_full() as *mut _)
+    let p = r.as_ptr();
+    std::mem::forget(r);
+    Ok(p as *mut _)
 }
 
 pub(crate) fn print_treepkg_diff(sysroot: &str) {
