@@ -351,10 +351,10 @@ pub(crate) fn lockfile_write(
     mut rpmmd_repos: Pin<&mut crate::ffi::CxxGObjectArray>,
 ) -> CxxResult<()> {
     // get current time, but scrub nanoseconds; it's overkill to serialize that
-    let now = {
-        let t = Utc::now();
-        Utc::today().and_hms_nano(t.hour(), t.minute(), t.second(), 0)
-    };
+    let now = DateTime::from_utc(
+        Utc::now().date_naive().and_time(Default::default()),
+        chrono::Utc,
+    );
 
     let mut lockfile = LockfileConfig {
         packages: Some(BTreeMap::new()),
@@ -413,7 +413,7 @@ pub(crate) fn lockfile_write(
             chrono::offset::LocalResult::Single(t) => t,
             _ => {
                 eprintln!("Invalid rpm-md repo {} timestamp: {}", id, generated);
-                Utc.timestamp(0, 0)
+                Utc.timestamp_nanos(0)
             }
         };
         lockfile_repos.insert(id, LockfileRepoMetadata { generated });
