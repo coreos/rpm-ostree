@@ -117,18 +117,25 @@ pub(crate) fn pull_container(
     Ok(Box::new(r))
 }
 
+pub(crate) fn layer_prune(
+    repo: &ostree::Repo,
+    cancellable: Option<&ostree::gio::Cancellable>,
+) -> Result<()> {
+    if let Some(c) = cancellable {
+        c.set_error_if_cancelled()?;
+    }
+    tracing::debug!("pruning image layers");
+    let n_pruned = ostree_ext::container::store::gc_image_layers(repo)?;
+    systemd::journal::print(6, &format!("Pruned container image layers: {n_pruned}"));
+    Ok(())
+}
+
 /// Run a prune of container image layers.
 pub(crate) fn container_prune(
     repo: &crate::FFIOstreeRepo,
     cancellable: &crate::FFIGCancellable,
 ) -> CxxResult<()> {
-    let repo = &repo.glib_reborrow();
-    let cancellable = &cancellable.glib_reborrow();
-    cancellable.set_error_if_cancelled()?;
-    tracing::debug!("pruning image layers");
-    let n_pruned = ostree_ext::container::store::gc_image_layers(repo)?;
-    systemd::journal::print(6, &format!("Pruned container image layers: {n_pruned}"));
-    Ok(())
+    layer_prune(&repo.glib_reborrow(), Some(&cancellable.glib_reborrow())).map_err(Into::into)
 }
 
 /// C++ wrapper for querying image state; requires a pulled image
@@ -149,8 +156,7 @@ pub(crate) fn purge_refspec(repo: &crate::FFIOstreeRepo, imgref: &str) -> CxxRes
         // It's a container, use the ostree-ext APIs to prune it.
         let iref = &cref.imgref;
         ostree_container::store::remove_images(repo, [iref])?;
-        let n = ostree_container::store::gc_image_layers(repo)?;
-        tracing::debug!("Pruned {n} layers");
+        layer_prune(repo, None)?;
     } else if ostree::validate_checksum_string(imgref).is_ok() {
         // Nothing to do here
     } else {
