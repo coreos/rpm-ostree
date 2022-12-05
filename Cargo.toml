@@ -53,7 +53,7 @@ containers-image-proxy = "0.5.1"
 rustix = { version = "0.36", features = ["use-libc"] }
 cap-primitives = "1.0.1"
 cap-tempfile = "1.0.1"
-chrono = { version = "0.4.22", features = ["serde"] }
+chrono = { version = "0.4.23", features = ["serde"] }
 clap = { version = "3.2.23", features = ["derive"] }
 cxx = "1.0.82"
 envsubst = "0.2.0"
