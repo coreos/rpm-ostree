@@ -39,6 +39,11 @@ rpm-ostree upgrade
 # https://github.com/coreos/rpm-ostree/issues/4107
 podman image rm -f shouldnotexist || true
 test -d /run/containers
+# https://github.com/coreos/rpm-ostree/issues/4176
+if rpm-ostree upgrade --check 2>err.txt; then
+    fatal "expected upgrade --check not to work yet"
+fi
+assert_file_has_content_literal err.txt "Cannot currently check for updates without downloading"
 rpm-ostree upgrade
 
 echo "ok upgrade after podman"

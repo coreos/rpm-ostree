@@ -413,6 +413,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
 {
   g_assert (cancellable);
 
+  const gboolean check = (flags & OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY) > 0;
   const gboolean allow_older = (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
   const gboolean synthetic = (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL) > 0;
 
@@ -432,6 +433,8 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
         if (override_commit)
           return glnx_throw (error, "Specifying commit overrides for container-image-reference "
                                     "type refspecs is not supported");
+        if (check)
+          return glnx_throw (error, "Cannot currently check for updates without downloading");
 
         CXX_TRY_VAR (import,
                      rpmostreecxx::pull_container (*self->repo, *cancellable, r.refspec.c_str ()),
