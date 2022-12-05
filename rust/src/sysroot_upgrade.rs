@@ -182,8 +182,7 @@ pub(crate) fn purge_refspec(repo: &crate::FFIOstreeRepo, imgref: &str) -> CxxRes
     tracing::debug!("Purging {imgref}");
     if let Ok(cref) = OstreeImageReference::try_from(imgref) {
         // It's a container, use the ostree-ext APIs to prune it.
-        let iref = &cref.imgref;
-        ostree_container::store::remove_images(repo, [iref])?;
+        ostree_container::store::remove_image(repo, &cref.imgref)?;
         layer_prune(repo, None)?;
     } else if ostree::validate_checksum_string(imgref).is_ok() {
         // Nothing to do here
