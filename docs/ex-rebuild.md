@@ -6,7 +6,7 @@ nav_order: 1
 # Declarative system changes
 
 For historical reasons, the build side of rpm-ostree is fully declarative; it
-accepts [treefiles](treefiles.md) as input.  The client side is imperative, with a CLI and
+accepts [treefiles](treefile.md) as input.  The client side is imperative, with a CLI and
 DBus API.  
 
 The goal of this feature is to unify things by supporting declarative
