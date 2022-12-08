@@ -28,6 +28,11 @@ For example, `rpm-ostree upgrade` will look for a new container version.
 You can also `rpm-ostree apply-live`, etc.  It also does still work
 to do "client side" `rpm-ostree install` etc.
 
+## Registry authentication
+
+Today, the ostree stack will read `/etc/ostree/auth.json` and `/run/ostree/auth.json`
+which are in the same format as documented by [man containers-auth.json](https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md).
+
 ## Using custom builds
 
 The ostree container functionality supports layered container images; you can
