@@ -7,35 +7,36 @@ and accepts RPM on both the client and server side, sharing code with the
 [libdnf](https://github.com/rpm-software-management/libdnf). and thus bringing
 many of the benefits of both together.
 
+🆕 as of [release 2022.16](https://github.com/coreos/rpm-ostree/releases/tag/v2022.16) rpm-ostree now also supports [ostree native containers](docs/container.md).
+
 ```
-                         +-----------------------------------------+
-                         |                                         |
-                         |       rpm-ostree (daemon + CLI)         |
-                  +------>                                         <---------+
-                  |      |     status, upgrade, rollback,          |         |
-                  |      |     pkg layering, initramfs --enable    |         |
-                  |      |                                         |         |
-                  |      +-----------------------------------------+         |
-                  |                                                          |
-                  |                                                          |
-                  |                                                          |
-+-----------------|-------------------------+        +-----------------------|-----------------+
-|                                           |        |                                         |
-|         libostree (image system)          |        |            libdnf (pkg system)          |
-|                                           |        |                                         |
-|   C API, hardlink fs trees, system repo,  |        |    ties together libsolv (SAT solver)   |
-|   commits, atomic bootloader swap         |        |    with librepo (RPM repo downloads)    |
-|                                           |        |                                         |
-+-------------------------------------------+        +-----------------------------------------+
+                         ┌─────────────────────────────────────────┐
+                         │                                         │
+                         │       rpm-ostree (daemon + CLI)         │
+                  ┌──────┤                                         ├─────────┐
+                  │      │     status, upgrade, rollback,          │         │
+                  │      │     pkg layering, initramfs --enable    │         │
+                  │      │                                         │         │
+                  │      └─────────────────────────────────────────┘         │
+                  │                                                          │
+                  │                                                          │
+                  │                                                          │
+┌─────────────────┴─────────────────────────┐        ┌───────────────────────┴─────────────────┐
+│                                           │        │                                         │
+│         ostree (image system)             │        │            libdnf (pkg system)          │
+│                                           │        │                                         │
+│  fetch ostree repos and container images, │        │    ties together libsolv (SAT solver)   │
+│  atomic filesystem trees, rollbacks       │        │    with librepo (RPM repo downloads)    │
+│                                           │        │                                         │
+└───────────────────────────────────────────┘        └─────────────────────────────────────────┘
 ```
 
 **Features:**
 
- - Transactional, background image-based (versioned/checksummed) upgrades
+ - Transactional, background image-based (versioned/checksummed) upgrades, using both bootable container images as well as an "ostree native" HTTP model
  - OS rollback without affecting user data (`/usr` but not `/etc`, `/var`) via libostree
  - Client-side package layering (and overrides)
- - Easily make your own: `rpm-ostree compose tree` and [CoreOS Assembler](https://github.com/coreos/coreos-assembler)
-   as well as https://fedoraproject.org/wiki/Changes/OstreeNativeContainer
+ - Custom base images via `rpm-ostree compose image` (container) or `rpm-ostree compose tree` (ostree repo)
 
 ## Documentation
 
