@@ -25,7 +25,7 @@ pub(crate) use cxxrsutil::*;
 ///
 /// # Regenerating
 ///
-/// After you change APIs in here, you must run `make -f Makefile.bindings bindings`
+/// After you change APIs in here, you must run `make -f Makefile.bindings`
 /// to regenerate the C++ bridge side.
 ///
 /// # File layout

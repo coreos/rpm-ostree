@@ -2,6 +2,9 @@
 # Makefile needs to be independent
 binding_rust_sources = $(shell find rust/src/ -name '*.rs') Cargo.toml Cargo.lock
 
+all: rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
+.PHONY: all
+
 rust/cxx.h: Makefile.bindings
 	./target/cxxbridge/bin/cxxbridge --header | clang-format --assume-filename=$@ >$@.tmp && mv $@.tmp $@
 
@@ -21,7 +24,3 @@ rpmostree-cxxrs.cxx: $(binding_rust_sources) rpmostree-cxxrs.h
 	else \
 	  echo cxxbridge failed; exit 1; \
 	fi
-
-# Invoked in CI
-bindings: rpmostree-cxxrs.h rpmostree-cxxrs.cxx rust/cxx.h
-.PHONY: bindings
