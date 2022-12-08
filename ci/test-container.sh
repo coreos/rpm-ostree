@@ -124,11 +124,15 @@ rpm-ostree override replace --experimental --from repo=fedora-coreos-pool \
 
 rpm -q afterburn-5.2.0-4.fc36.x86_64 afterburn-dracut-5.2.0-4.fc36.x86_64
 
-# test repo override by pkgname
-rpm-ostree override replace --experimental \
+# test repo override by pkgname, and also test --install
+if rpm -q strace; then
+  echo "strace should not be installed"; exit 1
+fi
+rpm-ostree override replace --install strace --experimental \
   --from repo=copr:copr.fedorainfracloud.org:group_CoreOS:continuous \
   afterburn \
   afterburn-dracut
+rpm -q strace
 
 # the continuous build's version has the git rev, prefixed with g
 rpm -q afterburn | grep g

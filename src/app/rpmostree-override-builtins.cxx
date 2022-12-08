@@ -205,6 +205,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
           CXX_TRY_VAR (pkgs, rpmostreecxx::stage_container_rpm_raw_fds (fds), error);
           treefile->add_packages_override_replace_local (pkgs);
         }
+      treefile->add_packages (util::rust_stringvec_from_strv (install_pkgs), true);
       treefile->add_packages_override_remove (util::rust_stringvec_from_strv (override_remove));
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
