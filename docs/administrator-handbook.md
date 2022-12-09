@@ -155,7 +155,7 @@ layered packages and local state will be carried across.
 ### Other local state changes
 
 See `man rpm-ostree` for more.  For example, there is an `rpm-ostree initramfs`
-command that enables local initramfs generation.
+command that enables local initramfs generation by rerunning dracut.
 
 ### Experimental interface
 
