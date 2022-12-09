@@ -692,9 +692,10 @@ Boston, MA 02111-1307, USA.
 
           <para>
             Use <command>--enable</command> to turn on client side initramfs
-            regeneration. A new deployment will be generated, and after reboot,
-            further upgrades will continue regenerating. You must reboot for the
-            new initramfs to take effect.
+            regeneration. This runs dracut to create the new initramfs. A new
+            deployment will be generated with this new initramfs, and after
+            reboot, further upgrades will continue regenerating. You must reboot
+            for the new initramfs to take effect.
           </para>
 
           <para>

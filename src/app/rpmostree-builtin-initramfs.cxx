@@ -38,8 +38,8 @@ static gboolean opt_lock_finalization;
 
 static GOptionEntry option_entries[]
     = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-        { "enable", 0, 0, G_OPTION_ARG_NONE, &opt_enable, "Enable regenerating initramfs locally",
-          NULL },
+        { "enable", 0, 0, G_OPTION_ARG_NONE, &opt_enable,
+          "Enable regenerating initramfs locally using dracut", NULL },
         { "arg", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_add_arg,
           "Append ARG to the dracut arguments", "ARG" },
         { "disable", 0, 0, G_OPTION_ARG_NONE, &opt_disable,
