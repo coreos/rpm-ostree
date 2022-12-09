@@ -708,6 +708,12 @@ Boston, MA 02111-1307, USA.
             The <command>--disable</command> option will disable
             regeneration.  You must reboot for the change to take effect.
           </para>
+
+          <para>
+            Note that for the simpler use case of adding a few files to the
+            initramfs, you can use <command>rpm-ostree initramfs-etc</command>
+            instead. It is more lightweight and does not involve running dracut.
+          </para>
         </listitem>
       </varlistentry>
 
