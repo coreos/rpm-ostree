@@ -778,13 +778,9 @@ $ systemctl start postgresql  # Some setup required
 
 
       <varlistentry>
-        <term><command>ex initramfs-etc</command></term>
+        <term><command>initramfs-etc</command></term>
 
         <listitem>
-          <para>
-            Experimental feature; subject to change.
-          </para>
-
           <para>
             Add configuration (<literal>/etc</literal>) files into the initramfs without
             regenerating the entire initramfs. This is useful to be able to configure
