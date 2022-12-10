@@ -39,8 +39,24 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
         }
     }
     if let Some(k) = new_kernel {
+        undo_systemctl_wrap()?;
         run_dracut(&k)?;
+        redo_systemctl_wrap()?;
     }
+    Ok(())
+}
+
+fn undo_systemctl_wrap() -> Result<()> {
+    let bin_path = Utf8Dir::open_ambient_dir("usr/bin", cap_std::ambient_authority())?;
+    bin_path.rename("systemctl", &bin_path, "systemctl.backup")?;
+    bin_path.rename("systemctl.rpmostreesave", &bin_path, "systemctl")?;
+    Ok(())
+}
+
+fn redo_systemctl_wrap() -> Result<()> {
+    let bin_path = Utf8Dir::open_ambient_dir("usr/bin", cap_std::ambient_authority())?;
+    bin_path.rename("systemctl", &bin_path, "systemctl.rpmostreesave")?;
+    bin_path.rename("systemctl.backup", &bin_path, "systemctl")?;
     Ok(())
 }
 
