@@ -688,9 +688,15 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
           break;
         case rpmostreecxx::RefspecType::Container:
           {
-            g_assert (g_variant_dict_lookup (dict, "container-image-reference-digest", "s",
-                                             &container_image_reference_digest));
-            g_print ("%s", origin_refspec);
+            if (g_variant_dict_lookup (dict, "container-image-reference-digest", "s",
+                                       &container_image_reference_digest))
+              {
+                g_print ("%s", origin_refspec);
+              }
+            else
+              {
+                g_print ("(error fetching image metadata)");
+              }
           }
           break;
         }
