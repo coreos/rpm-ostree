@@ -958,10 +958,10 @@ pub fn workaround_selinux_cross_labeling(
     rootfs_dfd: i32,
     cancellable: Pin<&mut crate::FFIGCancellable>,
 ) -> CxxResult<()> {
-    let rootfs = crate::ffiutil::ffi_view_openat_dir(rootfs_dfd);
+    let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let cancellable = &cancellable.gobj_wrap();
 
-    tweak_selinux_timestamps(&rootfs, Some(cancellable))?;
+    tweak_selinux_timestamps(rootfs, Some(cancellable))?;
     Ok(())
 }
 
@@ -974,19 +974,16 @@ pub fn workaround_selinux_cross_labeling(
 /// Note also this function is probably already broken in Fedora
 /// 23+ from https://bugzilla.redhat.com/show_bug.cgi?id=1265406
 #[context("Tweaking SELinux timestamps")]
-fn tweak_selinux_timestamps(
-    rootfs: &openat::Dir,
-    cancellable: Option<&gio::Cancellable>,
-) -> Result<()> {
+fn tweak_selinux_timestamps(rootfs: &Dir, cancellable: Option<&gio::Cancellable>) -> Result<()> {
     // Handle the policy being in both /usr/etc and /etc since
     // this function can be called at different points.
-    let policy_path = if rootfs.exists("usr/etc")? {
+    let policy_path = if rootfs.try_exists("usr/etc")? {
         "usr/etc/selinux"
     } else {
         "etc/selinux"
     };
 
-    if rootfs.exists(policy_path)? {
+    if rootfs.try_exists(policy_path)? {
         let mut prefix = policy_path.to_string();
         workaround_selinux_cross_labeling_recurse(rootfs, &mut prefix, &cancellable)
             .with_context(|| format!("Analyzing /{} content", prefix))?;
@@ -1000,14 +997,12 @@ fn tweak_selinux_timestamps(
 /// `prefix` is updated at each recursive step, so that in case of errors it can be
 /// used to pinpoint the faulty path.
 fn workaround_selinux_cross_labeling_recurse(
-    rootfs: &openat::Dir,
+    rootfs: &Dir,
     prefix: &mut String,
     cancellable: &Option<&gio::Cancellable>,
 ) -> Result<()> {
-    use openat::SimpleType;
-
     let current_prefix = prefix.clone();
-    for subpath in rootfs.list_dir(&current_prefix)? {
+    for subpath in rootfs.read_dir(&current_prefix)? {
         if let Some(c) = cancellable {
             c.set_error_if_cancelled()?;
         }
@@ -1020,9 +1015,8 @@ fn workaround_selinux_cross_labeling_recurse(
                 .ok_or_else(|| anyhow!("invalid non-UTF-8 path: {:?}", fname))?;
             format!("{}/{}", &current_prefix, &path_name)
         };
-        let path_type = subpath.simple_type().unwrap_or(SimpleType::Other);
 
-        if path_type == SimpleType::Dir {
+        if subpath.file_type()?.is_dir() {
             // New subdirectory discovered, recurse into it.
             *prefix = full_path.clone();
             workaround_selinux_cross_labeling_recurse(rootfs, prefix, cancellable)?;
@@ -1488,20 +1482,26 @@ OSTREE_VERSION='33.4'
     fn test_tweak_selinux_timestamps() {
         static PREFIX: &str = "usr/etc/selinux/targeted/contexts/files";
 
-        let temp_rootfs = tempfile::tempdir().unwrap();
-        let rootfs = openat::Dir::open(temp_rootfs.path()).unwrap();
+        let rootfs = &cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
+        let mut db = dirbuilder_from_mode(0o755);
+        db.recursive(true);
         rootfs
-            .ensure_dir_all("usr/etc/selinux/targeted/contexts/files", 0o755)
+            .ensure_dir_with("usr/etc/selinux/targeted/contexts/files", &db)
             .unwrap();
         let files = &["file_contexts", "file_contexts.homedirs"];
+        let perms = cap_std::fs::Permissions::from_mode(0o755);
 
         let mut metas = vec![];
         for fname in files {
             let binpath = format!("{PREFIX}/{fname}.bin");
-            rootfs.new_file(&binpath, 0o755).unwrap();
+            rootfs
+                .atomic_write_with_perms(&binpath, "", perms.clone())
+                .unwrap();
             let fpath = format!("{PREFIX}/{fname}");
-            rootfs.new_file(&fpath, 0o755).unwrap();
-            let before_meta = rootfs.metadata(fpath).unwrap();
+            rootfs
+                .atomic_write_with_perms(&fpath, "", perms.clone())
+                .unwrap();
+            let before_meta = rootfs.symlink_metadata(fpath).unwrap();
             metas.push(before_meta);
         }
 
@@ -1512,9 +1512,9 @@ OSTREE_VERSION='33.4'
 
         for (fname, before_meta) in files.iter().zip(metas.iter()) {
             let fpath = format!("{}/{}", PREFIX, fname);
-            let after = rootfs.metadata(&fpath).unwrap();
-            if before_meta.stat().st_mtime == after.stat().st_mtime {
-                assert_ne!(before_meta.stat().st_mtime_nsec, after.stat().st_mtime_nsec);
+            let after = rootfs.symlink_metadata(&fpath).unwrap();
+            if before_meta.mtime() == after.mtime() {
+                assert_ne!(before_meta.mtime_nsec(), after.mtime_nsec());
             }
         }
     }
