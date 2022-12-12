@@ -33,7 +33,7 @@ jobs:
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: install.tar
           path: install.tar
@@ -56,7 +56,7 @@ jobs:
       - name: Build
         run: make -C tests/kolainst && make -C tests/kolainst install DESTDIR=$(pwd)/install && tar -C install -czf tests.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: tests.tar
           path: tests.tar
@@ -238,7 +238,7 @@ jobs:
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: install-c9s.tar
           path: install.tar
