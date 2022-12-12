@@ -63,7 +63,7 @@ fail = { version = "0.5", features = ["failpoints"] }
 fn-error-context = "0.2.0"
 futures = "0.3.25"
 indoc = "1.0.7"
-indicatif = "0.17.1"
+indicatif = "0.17.2"
 libc = "0.2.137"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
