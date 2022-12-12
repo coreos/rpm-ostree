@@ -171,6 +171,7 @@ EOF
     /tmp/autopkgtest-reboot 3
     ;;
   3) 
+    rpm -q foo
     grep -qF 'some config file' /etc/someconfig.conf || (echo missing someconfig.conf; exit 1)
     grep -qF somedata /usr/share/somenewdata || (echo missing somenewdata; exit 1)
     for p in bar testdaemon; do
@@ -181,6 +182,23 @@ EOF
     test -f /usr/bin/baz
     ! rpm -q nano
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:derived\""
+
+    # Now revert back to the base image, but keep our layered package foo
+    rm "${image_dir}" -rf
+    skopeo copy containers-storage:localhost/fcos ${image}:latest
+    rpm-ostree rebase ostree-unverified-image:${image}:latest
+    /tmp/autopkgtest-reboot 4
+    ;;
+  4) 
+    # This should carry over
+    rpm -q foo
+    # But the other custom base image stuff should not
+    for p in bar testdaemon; do
+      if rpm -q $p 2>/dev/null; then
+        fatal "found $p"
+      fi
+    done
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:latest\""
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
 esac
