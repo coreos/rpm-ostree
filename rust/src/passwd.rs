@@ -655,9 +655,9 @@ impl PasswdDB {
     /// Add content from a `passwd` file.
     #[context("Parsing users from /{}", passwd_path)]
     fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> Result<()> {
-        let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-        let db = rootfs.open_file(passwd_path)?;
-        let entries = nameservice::passwd::parse_passwd_content(BufReader::new(db))?;
+        let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
+        let db = rootfs.open(passwd_path).map(BufReader::new)?;
+        let entries = nameservice::passwd::parse_passwd_content(db)?;
 
         for user in entries {
             let id = Uid::from_raw(user.uid);
@@ -682,9 +682,9 @@ pub fn new_passwd_entries() -> Box<PasswdEntries> {
 impl PasswdEntries {
     /// Add all groups from a given `group` file.
     pub fn add_group_content(&mut self, rootfs_dfd: i32, group_path: &str) -> CxxResult<()> {
-        let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-        let db = rootfs.open_file(group_path)?;
-        let entries = nameservice::group::parse_group_content(BufReader::new(db))?;
+        let rootfs = unsafe { crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
+        let db = rootfs.open(group_path).map(BufReader::new)?;
+        let entries = nameservice::group::parse_group_content(db)?;
 
         for group in entries {
             let id = Gid::from_raw(group.gid);
@@ -695,9 +695,9 @@ impl PasswdEntries {
 
     /// Add all users from a given `passwd` file.
     pub fn add_passwd_content(&mut self, rootfs_dfd: i32, passwd_path: &str) -> CxxResult<()> {
-        let rootfs = ffiutil::ffi_view_openat_dir(rootfs_dfd);
-        let db = rootfs.open_file(passwd_path)?;
-        let entries = nameservice::passwd::parse_passwd_content(BufReader::new(db))?;
+        let rootfs = unsafe { crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
+        let db = rootfs.open(passwd_path).map(BufReader::new)?;
+        let entries = nameservice::passwd::parse_passwd_content(db)?;
 
         for user in entries {
             let uid = Uid::from_raw(user.uid);

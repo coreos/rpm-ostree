@@ -9,7 +9,7 @@ use crate::bwrap::Bubblewrap;
 use crate::capstdext::dirbuilder_from_mode;
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
-use crate::ffiutil::{ffi_dirfd, ffi_view_openat_dir};
+use crate::ffiutil::ffi_dirfd;
 use crate::normalization;
 use crate::passwd::PasswdDB;
 use crate::treefile::Treefile;
@@ -26,7 +26,6 @@ use cap_std_ext::rustix::fs::MetadataExt;
 use fn_error_context::context;
 use gio::prelude::*;
 use gio::FileType;
-use openat_ext::OpenatDirExt;
 use ostree_ext::{gio, glib};
 use rayon::prelude::*;
 use std::borrow::Cow;
@@ -1102,7 +1101,7 @@ fn hardlink_rpmdb_base_location(
 }
 
 #[context("Rewriting rpmdb for target native format")]
-fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> Result<()> {
+fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &Dir, normalize: bool) -> Result<()> {
     let tempetc = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
 
     let mut dbfd = memfd::MemfdOptions::default()
@@ -1122,8 +1121,9 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
     }
 
     // Clear out the db on disk
-    rootfs_dfd.remove_all(RPMOSTREE_RPMDB_LOCATION)?;
-    rootfs_dfd.create_dir(RPMOSTREE_RPMDB_LOCATION, 0o755)?;
+    rootfs_dfd.remove_all_optional(RPMOSTREE_RPMDB_LOCATION)?;
+    let db = dirbuilder_from_mode(0o755);
+    rootfs_dfd.create_dir_with(RPMOSTREE_RPMDB_LOCATION, &db)?;
 
     // Only one owner now
     dbfd.seek(std::io::SeekFrom::Start(0))?;
@@ -1135,9 +1135,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
     }
 
     // Fork the target rpmdb to write the content from memory to disk
-    let rootfs_cap_std = crate::capstdext::from_openat(rootfs_dfd)?;
-    let mut bwrap =
-        Bubblewrap::new_with_mutability(&rootfs_cap_std, BubblewrapMutability::RoFiles)?;
+    let mut bwrap = Bubblewrap::new_with_mutability(&rootfs_dfd, BubblewrapMutability::RoFiles)?;
     bwrap.append_child_argv(["rpmdb", dbpath_arg.as_str(), "--importdb"]);
     bwrap.take_stdin_fd(dbfd.into_raw_fd());
     let cancellable = gio::Cancellable::new();
@@ -1148,7 +1146,6 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
     // Sometimes we can end up with build-to-build variance in the underlying rpmdb
     // files. Attempt to sort that out, if requested.
     if normalize {
-        let rootfs_dfd = crate::capstdext::from_openat(rootfs_dfd)?;
         normalization::normalize_rpmdb(&rootfs_dfd, RPMOSTREE_RPMDB_LOCATION)?;
     }
 
@@ -1159,7 +1156,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &openat::Dir, normalize: bool) -> 
 
 pub(crate) fn rewrite_rpmdb_for_target(rootfs_dfd: i32, normalize: bool) -> CxxResult<()> {
     Ok(rewrite_rpmdb_for_target_inner(
-        &ffi_view_openat_dir(rootfs_dfd),
+        unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? },
         normalize,
     )?)
 }
