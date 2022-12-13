@@ -143,6 +143,9 @@ rpmostree_builtin_initramfs (int argc, char **argv, RpmOstreeCommandInvocation *
         return FALSE;
 
       g_print ("Initramfs regeneration is now: %s\n", opt_enable ? "enabled" : "disabled");
+
+      if (!opt_enable)
+        g_print ("Initramfs will be reset to default on next reboot.\n");
     }
 
   return TRUE;
