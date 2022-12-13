@@ -603,6 +603,7 @@ transaction_initable_init (GInitable *initable, GCancellable *cancellable, GErro
 
       if (!ostree_sysroot_load (priv->sysroot, cancellable, error))
         return FALSE;
+      sd_journal_print (LOG_INFO, "Loaded sysroot");
 
       if (!ostree_sysroot_try_lock (priv->sysroot, &lock_acquired, error))
         return FALSE;
