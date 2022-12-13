@@ -99,7 +99,7 @@ rpmostree_builtin_cleanup (int argc, char **argv, RpmOstreeCommandInvocation *in
 
   if (!rpmostree_os_call_cleanup_sync (os_proxy, (const char *const *)cleanup_types->pdata,
                                        &transaction_address, cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Invoking cleanup");
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address, cancellable,
                                                 error))
