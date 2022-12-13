@@ -24,7 +24,7 @@ jobs:
     container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -33,7 +33,7 @@ jobs:
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: install.tar
           path: install.tar
@@ -49,14 +49,14 @@ jobs:
       options: "--user root --privileged"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build
         run: make -C tests/kolainst && make -C tests/kolainst install DESTDIR=$(pwd)/install && tar -C install -czf tests.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: tests.tar
           path: tests.tar
@@ -66,7 +66,7 @@ jobs:
     container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -104,7 +104,7 @@ jobs:
     container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -117,7 +117,7 @@ jobs:
     container: quay.io/fedora/fedora-coreos:testing-devel
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Download build
         uses: actions/download-artifact@v2
         with:
@@ -139,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Checkout coreos-layering-examples
         uses: actions/checkout@v3
         with:
@@ -154,7 +154,7 @@ jobs:
   cargo-deny:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
       with:
         log-level: warn
@@ -168,7 +168,7 @@ jobs:
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install test dependencies
         run: ./ci/install-test-deps.sh
       - name: Download build
@@ -188,7 +188,7 @@ jobs:
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install test dependencies
         run: ./ci/install-test-deps.sh
       - name: Download build
@@ -208,7 +208,7 @@ jobs:
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Download build
         uses: actions/download-artifact@v2
         with:
@@ -225,7 +225,7 @@ jobs:
       - name: Install git
         run: yum -y install git
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
       # https://github.com/actions/checkout/issues/760
@@ -238,7 +238,7 @@ jobs:
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: install-c9s.tar
           path: install.tar
