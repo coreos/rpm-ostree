@@ -10,7 +10,6 @@
 use crate::cxxrsutil::*;
 use crate::variant_utils;
 use anyhow::{bail, Context, Result};
-use cap_std_ext::cap_std;
 use glib::Variant;
 use once_cell::sync::Lazy;
 use ostree_ext::prelude::*;
@@ -19,7 +18,7 @@ use regex::Regex;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io::prelude::*;
-use std::os::unix::io::{AsRawFd, IntoRawFd};
+use std::os::unix::io::IntoRawFd;
 use std::path::Path;
 use std::{fs, io};
 
@@ -243,16 +242,6 @@ pub(crate) fn shellsafe_quote(input: Cow<str>) -> Cow<str> {
         // SAFETY: if input is UTF-8, so is the quoted string.
         Cow::Owned(quoted.into_string().expect("non UTF-8 quoted output"))
     }
-}
-
-/// Create a new cap_std directory for an openat version.
-/// This creates a new file descriptor, because we can't guarantee they are
-/// interchangable; for example right now openat uses `O_PATH`
-#[allow(dead_code)]
-pub(crate) fn openat_to_dirfd(f: &openat::Dir) -> Result<cap_std::fs::Dir> {
-    // For now we just delegate to the FFI code
-    let r = unsafe { crate::ffiutil::ffi_dirfd(f.as_raw_fd())? };
-    Ok(r)
 }
 
 /// Translate a relative unprefixed path according to ostree rules, if needed.

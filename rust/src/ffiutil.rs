@@ -36,17 +36,7 @@ use cap_std_ext::{cap_std, rustix};
 use ostree_ext::{gio, glib};
 use std::ffi::CString;
 use std::fmt::Display;
-use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::ptr;
-
-// View `fd` as an `openat::Dir` instance.  Lifetime of return value
-// must be less than or equal to that of parameter.
-pub(crate) fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
-    let src = unsafe { openat::Dir::from_raw_fd(fd) };
-    let r = src.sub_dir(".").expect("ffi_view_openat_dir");
-    let _ = src.into_raw_fd();
-    r
-}
 
 /// Create a new cap_std directory for an openat version.
 /// This creates a new file descriptor, because we can't guarantee they are
@@ -54,16 +44,6 @@ pub(crate) fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
 pub(crate) unsafe fn ffi_dirfd(fd: libc::c_int) -> std::io::Result<cap_std::fs::Dir> {
     let fd = unsafe { rustix::fd::BorrowedFd::borrow_raw(fd) };
     cap_std::fs::Dir::reopen_dir(&fd)
-}
-
-// View `fd` as an `Option<openat::Dir>` instance.  Lifetime of return value
-// must be less than or equal to that of parameter.
-#[allow(dead_code)]
-pub(crate) fn ffi_view_openat_dir_option(fd: libc::c_int) -> Option<openat::Dir> {
-    match fd {
-        -1 => None,
-        _ => Some(ffi_view_openat_dir(fd)),
-    }
 }
 
 // Functions to map Rust's Error into the "GError convention":
