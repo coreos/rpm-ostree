@@ -188,6 +188,7 @@ gboolean
 rpmostree_load_sysroot (const char *sysroot, GCancellable *cancellable,
                         RPMOSTreeSysroot **out_sysroot_proxy, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Loading sysroot", error);
   g_autoptr (GDBusConnection) connection = NULL;
 
   if (!app_load_sysroot_impl (sysroot, cancellable, &connection, error))
@@ -215,6 +216,7 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy, const char *opt_osna
                            GCancellable *cancellable, RPMOSTreeOS **out_os_proxy,
                            RPMOSTreeOSExperimental **out_osexperimental_proxy, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Creating OS client proxy", error);
   g_autofree char *os_object_path = NULL;
   if (opt_osname == NULL)
     os_object_path = rpmostree_sysroot_dup_booted (sysroot_proxy);
@@ -459,6 +461,7 @@ spin_mainloop_for_a_second (void)
 static RPMOSTreeTransaction *
 transaction_connect (const char *transaction_address, GCancellable *cancellable, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Failed to connect to client transaction", error);
   g_autoptr (GDBusConnection) peer_connection = g_dbus_connection_new_for_address_sync (
       transaction_address, G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT, NULL, cancellable, error);
 
@@ -556,7 +559,7 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
           "/org/projectatomic/rpmostree1", cancellable, error);
 
       if (object_manager == NULL)
-        return FALSE;
+        return glnx_prefix_error (error, "Failed to initialize object manager client");
 
       g_signal_connect (object_manager, "notify::name-owner", G_CALLBACK (on_owner_changed), tp);
     }
@@ -580,7 +583,7 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
   if (!rpmostree_transaction_call_start_sync (transaction, &just_started, cancellable, error))
     {
       transaction_disconnect (transaction, sigintid, signal_handler);
-      return FALSE;
+      return glnx_prefix_error (error, "Failed to start transaction");
     }
 
   /* FIXME Use the 'just_started' flag to determine whether to print
