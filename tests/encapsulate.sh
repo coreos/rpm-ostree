@@ -17,8 +17,10 @@ ostree container unencapsulate --write-ref=testref --repo=repo ostree-remote-reg
 # Re-pack it as a (chunked) container
 
 rpm-ostree compose container-encapsulate --repo=repo \
-    --label=foo=bar --label baz=blah \
+    --label=foo=bar --label baz=blah --copymeta-opt fedora-coreos.stream --copymeta-opt nonexistent.key \
     testref oci:test.oci
-skopeo inspect oci:test.oci | jq -r .Labels.foo > labels.txt
-grep -qFe bar labels.txt
+skopeo inspect oci:test.oci | jq -r .Labels > labels.json
+for label in foo baz 'fedora-coreos.stream'; do 
+    jq -re ".\"${label}\"" < labels.json
+done
 echo ok
