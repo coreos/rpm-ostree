@@ -59,6 +59,10 @@ struct ContainerEncapsulateOpts {
     #[clap(name = "copymeta", long)]
     copy_meta_keys: Vec<String>,
 
+    /// Propagate an optionally-present OSTree commit metadata key to container label
+    #[clap(name = "copymeta-opt", long)]
+    copy_meta_opt_keys: Vec<String>,
+
     /// Corresponds to the Dockerfile `CMD` instruction.
     #[clap(long)]
     cmd: Option<Vec<String>>,
@@ -382,6 +386,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     let mut copy_meta_keys = opt.copy_meta_keys;
     // Default to copying the input hash to support cheap change detection
     copy_meta_keys.push("rpmostree.inputhash".to_string());
+    let copy_meta_opt_keys = opt.copy_meta_opt_keys;
 
     let config = Config {
         labels: Some(labels),
@@ -394,6 +399,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     };
     let opts = ExportOpts {
         copy_meta_keys,
+        copy_meta_opt_keys,
         max_layers: opt.max_layers,
         format,
         ..Default::default()
