@@ -2929,7 +2929,7 @@ checkout_package_into_root (RpmOstreeContext *self, DnfPackage *pkg, int dfd, co
       = self->treefile_rs->get_files_remove_regex (dnf_package_get_name (pkg));
   files_remove_regex
       = g_ptr_array_new_full (files_remove_regex_patterns.size (), (GDestroyNotify)g_regex_unref);
-  for (auto pattern : files_remove_regex_patterns)
+  for (auto &pattern : files_remove_regex_patterns)
     {
       GRegex *regex = g_regex_new (pattern.c_str (), G_REGEX_JAVASCRIPT_COMPAT,
                                    static_cast<GRegexMatchFlags> (0), NULL);
@@ -3870,7 +3870,7 @@ process_ostree_layers (RpmOstreeContext *self, int rootfs_dfd, GCancellable *can
 
   auto progress = rpmostreecxx::progress_nitems_begin (n, "Checking out ostree layers");
   size_t i = 0;
-  for (auto ref : layers)
+  for (auto &ref : layers)
     {
       if (!process_one_ostree_layer (self, rootfs_dfd, ref.c_str (),
                                      OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL, cancellable,
@@ -3879,7 +3879,7 @@ process_ostree_layers (RpmOstreeContext *self, int rootfs_dfd, GCancellable *can
       i++;
       progress->nitems_update (i);
     }
-  for (auto ref : override_layers)
+  for (auto &ref : override_layers)
     {
       if (!process_one_ostree_layer (self, rootfs_dfd, ref.c_str (),
                                      OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, cancellable,
