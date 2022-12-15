@@ -328,13 +328,24 @@ Boston, MA 02111-1307, USA.
 
         <listitem>
           <para>
-            Switch to a different branch (possibly using a new remote),
-            while preserving all of the state that <command>upgrade</command>
+            Switch to a different base image, while preserving all of the state that <command>upgrade</command>
             does, such as <literal>/etc</literal> changes, any layered RPM
             packages, etc.
           </para>
           <para>
-            The full syntax is <literal>rebase REMOTENAME:BRANCHNAME</literal>.
+            For rebasing to container images, the syntax uses ostree container image references, which combine
+            container image transports (see <literal>man skopeo</literal>) along with a required integrity
+            scheme.  The ostree model encourages container images to be signed, because they must be ultimately
+            trusted.
+          </para>
+          <para><literal>ostree-image-signed:docker://quay.io/exampleos/custom:latest</literal> - this will pull
+            from a remote registry, and error out if the container backend does not require signatures.</para>
+          <para><literal>ostree-unverified-registry:quay.io/exampleos/custom:latest</literal> - this will pull
+            from a remote registry, and no signature will be required.  In practice, this is just a shorthand for
+            <literal>ostree-unverified-image:docker://quay.io/exampleos/custom:latest</literal>.</para>
+          <para><literal>ostree-unverified-image:oci:/path/to/dir.oci</literal> Fetch from a local unsigned OCI directory (integrity of this directory may have been verified out of band).</para>
+          <para>
+            For rebasing to OSTree branches, the full syntax is <literal>rebase REMOTENAME:BRANCHNAME</literal>.
             Alternatively, you can use the <command>--branch</command> or
             <command>--remote</command> options mentioned below. With the
             argument syntax, specifying just <literal>BRANCHNAME</literal> will
