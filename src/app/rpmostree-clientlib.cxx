@@ -45,6 +45,10 @@ static gboolean impl_transaction_get_response_sync (GDBusConnection *connection,
                                                     GCancellable *cancellable, GError **error);
 
 #define RPMOSTREE_CLI_ID "cli"
+// Default DBus timeout is 25s, which is quite short.  Bump it significantly to reduce
+// the flake rate on heavily loaded machines.  It's tempting to bump it to infinity,
+// but for now let's greatly increase it.
+#define DEFAULT_DBUS_TIMEOUT_MILLIS (5 * 60 * 1000)
 
 /* Used to close race conditions by ensuring the daemon status is up-to-date */
 static void
@@ -118,7 +122,8 @@ app_load_sysroot_impl (const char *sysroot, GCancellable *cancellable, GDBusConn
       g_autoptr (GVariant) res = g_dbus_connection_call_sync (
           connection, bus_name, sysroot_objpath, "org.projectatomic.rpmostree1.Sysroot",
           "RegisterClient", g_variant_new ("(@a{sv})", g_variant_builder_end (options_builder)),
-          (GVariantType *)"()", G_DBUS_CALL_FLAGS_NONE, -1, cancellable, &local_error);
+          (GVariantType *)"()", G_DBUS_CALL_FLAGS_NONE, DEFAULT_DBUS_TIMEOUT_MILLIS, cancellable,
+          &local_error);
       if (res)
         break; /* Success! */
 
@@ -203,6 +208,7 @@ rpmostree_load_sysroot (const char *sysroot, GCancellable *cancellable,
                                           "/org/projectatomic/rpmostree1/Sysroot", NULL, error);
   if (sysroot_proxy == NULL)
     return FALSE;
+  g_dbus_proxy_set_default_timeout (G_DBUS_PROXY (sysroot_proxy), DEFAULT_DBUS_TIMEOUT_MILLIS);
 
   /* TODO: Change RegisterClient to also do a reload and do it async instead */
   await_reload_sync (sysroot_proxy);
@@ -244,6 +250,7 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy, const char *opt_osna
       connection, G_DBUS_PROXY_FLAGS_NONE, bus_name, os_object_path, cancellable, error);
   if (os_proxy == NULL)
     return FALSE;
+  g_dbus_proxy_set_default_timeout (G_DBUS_PROXY (os_proxy), DEFAULT_DBUS_TIMEOUT_MILLIS);
 
   glnx_unref_object RPMOSTreeOSExperimental *ret_osexperimental_proxy = NULL;
   if (out_osexperimental_proxy)
@@ -252,6 +259,8 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy, const char *opt_osna
           connection, G_DBUS_PROXY_FLAGS_NONE, bus_name, os_object_path, cancellable, error);
       if (!ret_osexperimental_proxy)
         return FALSE;
+      g_dbus_proxy_set_default_timeout (G_DBUS_PROXY (ret_osexperimental_proxy),
+                                        DEFAULT_DBUS_TIMEOUT_MILLIS);
     }
 
   *out_os_proxy = util::move_nullify (os_proxy);
