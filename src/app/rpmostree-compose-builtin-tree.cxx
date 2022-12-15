@@ -841,7 +841,7 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
     {
       g_auto (GVariantBuilder) builder;
       g_variant_builder_init (&builder, G_VARIANT_TYPE ("as"));
-      for (auto s : cmd)
+      for (auto &s : cmd)
         {
           g_variant_builder_add (&builder, "s", s.c_str ());
         }
@@ -861,7 +861,7 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
 
   if (layer_repo_src != nullptr)
     {
-      for (auto layer : layers)
+      for (auto &layer : layers)
         {
           if (!pull_local_into_target_repo (layer_repo_src, self->build_repo, layer.c_str (),
                                             cancellable, error))
