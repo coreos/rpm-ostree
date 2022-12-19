@@ -268,18 +268,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cjson"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2b601fb350e2fdbbd2ffb19aef2141fa90864d8fdca83d64466cb9bdb5694a7"
-dependencies = [
- "itoa 0.4.7",
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
 name = "clap"
 version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1601,6 +1589,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "olpc-cjson"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87dc75cf72208cd853671c1abccc5d5d1e43b1e378dde67340ef933219a8c13c"
+dependencies = [
+ "serde",
+ "serde_json",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1697,9 +1696,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97a42fe3d8c03891e75cca54d34850996c3dadcdd3f275f8baa5e8d2150bad93"
+checksum = "ef836913a9f14fb36da644f977c82fa59a72097d6185ff0281618aa0419ad6d7"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1708,7 +1707,6 @@ dependencies = [
  "cap-std-ext",
  "cap-tempfile",
  "chrono",
- "cjson",
  "clap",
  "containers-image-proxy",
  "flate2",
@@ -1721,6 +1719,7 @@ dependencies = [
  "libc",
  "libsystemd",
  "oci-spec",
+ "olpc-cjson",
  "once_cell",
  "openssl",
  "ostree",
