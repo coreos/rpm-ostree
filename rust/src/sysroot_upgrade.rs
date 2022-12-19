@@ -2,13 +2,9 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use crate::cxxrsutil::*;
 use crate::ffi::{output_message, ContainerImageState};
 use anyhow::Result;
-use cap_std_ext::cmdext::CapStdExtCommandExt;
 use ostree::glib;
 use ostree::prelude::*;
 use ostree_container::store::{
@@ -64,20 +60,12 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
 
 fn default_container_pull_config() -> Result<ImageProxyConfig> {
     let mut cfg = ImageProxyConfig::default();
-    ostree_container::merge_default_container_proxy_opts(&mut cfg)?;
-    let mut cmd = crate::isolation::unprivileged_subprocess("skopeo");
-    // Read the default authfile if it exists and pass it via file descriptor
-    // which will ensure it's readable when we drop privileges.
-    if let Some(authfile) = cfg.authfile.take() {
-        let authbytes = std::fs::read(authfile)?;
-        let authfd = crate::utils::impl_sealed_memfd("pullsecret", &authbytes)?;
-        let authfd: Arc<cap_std::io_lifetimes::OwnedFd> = Arc::new(authfd.into());
-        drop(authbytes);
-        let n = 5;
-        cmd.take_fd_n(authfd, n);
-        cfg.authfile = Some(PathBuf::from(format!("/proc/self/fd/{n}")));
-    }
-    cfg.skopeo_cmd = Some(cmd);
+    let isolation_systemd = crate::utils::running_in_systemd().then(|| "rpm-ostree");
+    let isolation_default = cap_std_ext::rustix::process::getuid()
+        .is_root()
+        .then(|| "nobody");
+    let isolation_user = isolation_systemd.or(isolation_default);
+    ostree_container::merge_default_container_proxy_opts_with_isolation(&mut cfg, isolation_user)?;
     Ok(cfg)
 }
 
