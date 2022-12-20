@@ -1,0 +1,14 @@
+# This container will be executed in Prow (but could also be run elsewhere)
+# and spawns a VM which will verify updates work
+# This really just depends on `cosa run`, which we could
+# in theory split out separately at some point later.
+FROM quay.io/coreos-assembler/coreos-assembler:latest
+WORKDIR /srv
+USER root
+# Grab all of our ci scripts
+COPY /ci/ /ci/
+# Install the script in /usr/bin, and put the kola test in place
+RUN ln -sr /ci/prow/e2e-upgrades.sh /usr/bin/e2e-upgrades && cp -a /ci/prow/kola /usr/lib/coreos-assembler/tests/kola/rpm-ostree
+USER builder
+ENTRYPOINT []
+CMD ["/usr/bin/e2e-upgrades"]
