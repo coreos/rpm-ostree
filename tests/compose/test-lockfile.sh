@@ -173,6 +173,15 @@ fi
 assert_file_has_content err.txt "Couldn't find locked package 'unmatched-pkg-1.0-1.x86_64'"
 echo "ok strict mode locked pkg missing from rpmmd"
 
+# check that a locked pkg which isn't actually in the repos causes a warning in
+# non-strict mode
+runcompose \
+    --ex-lockfile="$PWD/versions.lock" \
+    --ex-lockfile="$PWD/override.lock" \
+    --dry-run "${treefile}" &>err.txt
+assert_file_has_content err.txt "warning: Couldn't find locked package 'unmatched-pkg'"
+echo "ok non-strict mode locked pkg missing from rpmmd"
+
 # test lockfile-repos, i.e. check that a pkg in a lockfile repo with higher
 # NEVRA isn't picked unless if it's not in the lockfile
 
