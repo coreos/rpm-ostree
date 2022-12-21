@@ -1877,6 +1877,12 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
         return FALSE;
     }
 
+  /* All modules are opt-in, so start off with everything disabled. We'll enable/install
+   * user-provided ones down below. We need to do this before `find_locked_packages` so that it can
+   * find non-modular versions of a package. */
+  if (!dnf_context_module_disable_all (dnfctx, error))
+    return FALSE;
+
   /* Now that we're done adding stuff to the sack, we can actually mark pkgs for install and
    * uninstall. We don't want to mix those two steps, otherwise we might confuse libdnf,
    * see: https://github.com/rpm-software-management/libdnf/issues/700 */
@@ -1975,11 +1981,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   /* Then, handle local packages to install */
   GLNX_HASH_TABLE_FOREACH_V (local_pkgs_to_install, DnfPackage *, pkg)
     hy_goal_install (goal, pkg);
-
-  /* All modules are opt-in, so start off with everything disabled. We'll
-   * enable/install user-provided ones down below. */
-  if (!dnf_context_module_disable_all (dnfctx, error))
-    return FALSE;
 
   /* Now repo-packages */
   g_autoptr (DnfPackageSet) pinned_pkgs = dnf_packageset_new (sack);
