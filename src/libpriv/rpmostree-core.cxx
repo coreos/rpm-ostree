@@ -1723,9 +1723,19 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
           if (other_matches->len > 0)
             g_string_append_printf (other_matches_txt, "  Packages matching name and arch (%u):\n",
                                     other_matches->len);
-          else
+          else if (self->lockfile_strict)
             g_string_append_printf (other_matches_txt, "  No packages matched name: %s arch: %s",
                                     pkg.name.c_str (), pkg.arch.c_str ());
+          else
+            {
+              // If no package matches that name at all, then there is nothing to exclude anyway. So
+              // just ignore it. If the manifest tries to install it, we will fail. If not, then no
+              // harm done. In either case, the lockfile remains respected. This allows lockfiles to
+              // be more easily re-used across arches.
+              g_printerr ("warning: Couldn't find locked package '%s'\n", pkg.name.c_str ());
+              continue;
+            }
+
           for (guint i = 0; i < other_matches->len; i++)
             {
               auto match = static_cast<DnfPackage *> (other_matches->pdata[i]);
