@@ -89,10 +89,9 @@ jobs:
   #     - name: Remove system Rust toolchain
   #       run: dnf remove -y rust cargo
   #     - name: Install toolchain
-  #       uses: actions-rs/toolchain@v1
+  #       uses: dtolnay/rust-toolchain@v1
   #       with:
   #         toolchain: ${{ env['ACTION_LINTS_TOOLCHAIN']  }}
-  #         default: true
   #         components: rustfmt, clippy
   #     - name: cargo fmt (check)
   #       run: cargo fmt -- --check -l
