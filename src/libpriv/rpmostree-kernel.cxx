@@ -261,6 +261,14 @@ rpmostree_find_kernel (int rootfs_dfd, GCancellable *cancellable, GError **error
         return NULL;
     }
 
+  /* Strip off the digest if we got it from /boot or /usr/lib/ostree-boot */
+  if (kernel_path != NULL)
+    {
+      const size_t n = strlen (kver);
+      if (n > 65 && kver[n - 65] == '-' && ostree_validate_checksum_string (kver + n - 64, NULL))
+        kver[n - 65] = '\0';
+    }
+
   /* Finally, the newer model of having the kernel with the modules */
   if (kernel_path == NULL)
     {
