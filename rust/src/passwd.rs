@@ -51,6 +51,7 @@ static PWGRP_LOCK_AND_BACKUP_FILES: &[&str] = &[
 /// script runner). We also copy the merge deployment's /etc/passwd to
 /// /usr/lib/passwd, so that %pre scripts are aware of newly added system users
 /// not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
+#[context("Preparing passwd content")]
 pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResult<bool> {
     passwd_cleanup(rootfs_dfd)?;
     let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
@@ -495,6 +496,7 @@ fn has_usrlib_passwd(rootfs: &Dir) -> std::io::Result<bool> {
     rootfs.try_exists("usr/lib/passwd")
 }
 
+#[context("Preparing pwgrp")]
 fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<PathBuf>) -> Result<()> {
     for filename in USRLIB_PWGRP_FILES {
         let etc_file = format!("etc/{}", filename);
@@ -502,19 +504,28 @@ fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<PathBuf>) -> Result<()> 
         let usrlib_file = format!("usr/lib/{}", filename);
 
         // Retain the current copies in /etc as backups.
-        rootfs.rename(&etc_file, rootfs, &etc_backup)?;
+        rootfs
+            .rename(&etc_file, rootfs, &etc_backup)
+            .with_context(|| format!("Renaming original {etc_file}"))?;
 
         // Copy /usr/lib/{passwd,group} -> /etc (breaking hardlinks).
         {
             let mut src = std::io::BufReader::new(rootfs.open(&usrlib_file)?);
-            rootfs.atomic_replace_with(etc_file, |w| std::io::copy(&mut src, w))?;
+            rootfs
+                .atomic_replace_with(&etc_file, |w| std::io::copy(&mut src, w))
+                .with_context(|| format!("Writing {etc_file}"))?;
         }
 
         // Copy the merge's passwd/group to usr/lib (breaking hardlinks).
         if let Some(ref merge_dir) = merge_passwd_dir {
             let current_root = Dir::open_ambient_dir(merge_dir, cap_std::ambient_authority())?;
-            let mut src = current_root.open(filename).map(BufReader::new)?;
-            rootfs.atomic_replace_with(usrlib_file, |mut w| std::io::copy(&mut src, &mut w))?;
+            let mut src = current_root
+                .open(filename)
+                .map(BufReader::new)
+                .with_context(|| format!("Opening {filename}"))?;
+            rootfs
+                .atomic_replace_with(&usrlib_file, |mut w| std::io::copy(&mut src, &mut w))
+                .with_context(|| format!("Writing {usrlib_file}"))?;
         }
     }
 
