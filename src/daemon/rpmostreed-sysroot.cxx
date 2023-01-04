@@ -808,6 +808,7 @@ rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot *self, GDBusMethodInvocation 
     {
       if (rpmostreed_transaction_is_compatible (self->transaction, invocation))
         {
+          sd_journal_print (LOG_INFO, "Client joining existing transaction");
           *out_compat_txn = (RpmostreedTransaction *)g_object_ref (self->transaction);
           return TRUE;
         }
