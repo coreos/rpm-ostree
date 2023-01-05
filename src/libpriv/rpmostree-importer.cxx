@@ -677,6 +677,8 @@ rpmostree_importer_run (RpmOstreeImporter *self, char **out_csum, char **out_met
   if (g_cancellable_set_error_if_cancelled (cancellable, error))
     return FALSE;
 
+  CXX_TRY (rpmostreecxx::failpoint ("rpm-importer::run"), error);
+
   g_autofree char *metadata_sha256 = NULL;
   g_autofree char *csum = NULL;
   if (!import_rpm_to_repo (self, &csum, &metadata_sha256, cancellable, error))

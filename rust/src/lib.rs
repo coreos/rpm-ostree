@@ -360,7 +360,7 @@ pub mod ffi {
         fn generate_object_path(base: &str, next_segment: &str) -> Result<String>;
     }
 
-    // failpoint_bridge.rs
+    // failpoints.rs
     extern "Rust" {
         fn failpoint(p: &str) -> Result<()>;
     }
@@ -914,8 +914,8 @@ pub(crate) use daemon::*;
 mod deployment_utils;
 pub(crate) use deployment_utils::*;
 mod dirdiff;
-pub mod failpoint_bridge;
-use failpoint_bridge::*;
+pub mod failpoints;
+use failpoints::*;
 mod extensions;
 pub(crate) use extensions::*;
 #[cfg(feature = "fedora-integration")]
@@ -956,6 +956,6 @@ mod testutils;
 pub(crate) use self::testutils::*;
 mod treefile;
 pub use self::treefile::*;
-mod utils;
+pub(crate) mod utils;
 pub use self::utils::*;
 mod variant_utils;
