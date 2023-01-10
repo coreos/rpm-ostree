@@ -1597,19 +1597,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         return FALSE;
 
       /* Are we rebasing?  May want to delete the previous ref */
-      if (self->refspec && !(deploy_has_bool_option (self, "skip-purge")))
+      if (self->refspec && !(deploy_has_bool_option (self, "skip-purge")) && old_refspec)
         {
-          g_autofree char *remote = NULL;
-          g_autofree char *ref = NULL;
-
-          /* The actual rebase has already succeeded, so ignore errors. */
-          if (old_refspec && ostree_parse_refspec (old_refspec, &remote, &ref, NULL))
-            {
-              /* Note: In some cases the source origin ref may not actually
-               * exist; say the admin did a cleanup, or the OS expects post-
-               * install configuration like subscription-manager. */
-              (void)ostree_repo_set_ref_immediate (repo, remote, ref, NULL, cancellable, NULL);
-            }
+          CXX_TRY (rpmostreecxx::purge_refspec (*repo, old_refspec), error);
         }
 
       /* Always write out an update variant on vanilla upgrades since it's clearly the most

@@ -6,8 +6,8 @@ use crate::cxxrsutil::*;
 use crate::ffi::{output_message, ContainerImageState};
 use anyhow::Result;
 use ostree::glib;
-use ostree_container::store::ImageImporter;
-use ostree_container::store::PrepareResult;
+use ostree::prelude::*;
+use ostree_container::store::{ImageImporter, PrepareResult};
 use ostree_container::OstreeImageReference;
 use ostree_ext::container as ostree_container;
 use ostree_ext::container::store::{ImportProgress, ManifestLayerState};
@@ -18,11 +18,20 @@ use tokio::sync::mpsc::Receiver;
 
 impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::ContainerImageState {
     fn from(s: Box<ostree_container::store::LayeredImageState>) -> crate::ffi::ContainerImageState {
+        let version = s
+            .configuration
+            .as_ref()
+            .and_then(|c| c.config().as_ref())
+            .and_then(|c| c.labels().as_ref())
+            .and_then(|l| l.get("version"))
+            .cloned()
+            .unwrap_or_default();
         crate::ffi::ContainerImageState {
             base_commit: s.base_commit,
             merge_commit: s.merge_commit,
             is_layered: s.is_layered,
             image_digest: s.manifest_digest,
+            version,
         }
     }
 }
@@ -108,14 +117,62 @@ pub(crate) fn pull_container(
     Ok(Box::new(r))
 }
 
+pub(crate) fn layer_prune(
+    repo: &ostree::Repo,
+    cancellable: Option<&ostree::gio::Cancellable>,
+) -> Result<()> {
+    if let Some(c) = cancellable {
+        c.set_error_if_cancelled()?;
+    }
+    tracing::debug!("pruning image layers");
+    let n_pruned = ostree_ext::container::store::gc_image_layers(repo)?;
+    systemd::journal::print(6, &format!("Pruned container image layers: {n_pruned}"));
+    Ok(())
+}
+
+/// Run a prune of container image layers.
+pub(crate) fn container_prune(
+    repo: &crate::FFIOstreeRepo,
+    cancellable: &crate::FFIGCancellable,
+) -> CxxResult<()> {
+    layer_prune(&repo.glib_reborrow(), Some(&cancellable.glib_reborrow())).map_err(Into::into)
+}
+
 /// C++ wrapper for querying image state; requires a pulled image
-pub(crate) fn query_container_image(
-    mut repo: Pin<&mut crate::FFIOstreeRepo>,
-    imgref: &str,
+pub(crate) fn query_container_image_commit(
+    repo: &crate::FFIOstreeRepo,
+    imgcommit: &str,
 ) -> CxxResult<Box<crate::ffi::ContainerImageState>> {
-    let repo = &repo.gobj_wrap();
-    let imgref = &OstreeImageReference::try_from(imgref)?;
-    let state = ostree_container::store::query_image(repo, imgref)?
-        .ok_or_else(|| anyhow::anyhow!("Failed to find image {}", imgref))?;
+    let repo = &repo.glib_reborrow();
+    let state = ostree_container::store::query_image_commit(repo, imgcommit)?;
     Ok(Box::new(state.into()))
+}
+
+/// Remove a refspec, which can be either an ostree branch or a container image.
+pub(crate) fn purge_refspec(repo: &crate::FFIOstreeRepo, imgref: &str) -> CxxResult<()> {
+    let repo = &repo.glib_reborrow();
+    tracing::debug!("Purging {imgref}");
+    if let Ok(cref) = OstreeImageReference::try_from(imgref) {
+        // It's a container, use the ostree-ext APIs to prune it.
+        ostree_container::store::remove_image(repo, &cref.imgref)?;
+        layer_prune(repo, None)?;
+    } else if ostree::validate_checksum_string(imgref).is_ok() {
+        // Nothing to do here
+    } else {
+        match ostree::parse_refspec(imgref) {
+            Ok((remote, ostreeref)) => {
+                repo.set_ref_immediate(
+                    remote.as_ref().map(|s| s.as_str()),
+                    &ostreeref,
+                    None,
+                    ostree::gio::NONE_CANCELLABLE,
+                )?;
+            }
+            Err(e) => {
+                // For historical reasons, we ignore errors here
+                tracing::warn!("{e}");
+            }
+        }
+    }
+    Ok(())
 }

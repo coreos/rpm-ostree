@@ -174,6 +174,7 @@ pub mod ffi {
         pub merge_commit: String,
         pub is_layered: bool,
         pub image_digest: String,
+        pub version: String,
     }
 
     // sysroot_upgrade.rs
@@ -183,10 +184,12 @@ pub mod ffi {
             cancellable: Pin<&mut GCancellable>,
             imgref: &str,
         ) -> Result<Box<ContainerImageState>>;
-        fn query_container_image(
-            repo: Pin<&mut OstreeRepo>,
-            imgref: &str,
+        fn container_prune(repo: &OstreeRepo, cancellable: &GCancellable) -> Result<()>;
+        fn query_container_image_commit(
+            repo: &OstreeRepo,
+            c: &str,
         ) -> Result<Box<ContainerImageState>>;
+        fn purge_refspec(repo: &OstreeRepo, refspec: &str) -> Result<()>;
     }
 
     // core.rs
