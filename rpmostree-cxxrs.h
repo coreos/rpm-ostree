@@ -1673,7 +1673,6 @@ struct LockedPackage final
 struct LockfileConfig final : public ::rust::Opaque
 {
   ::rust::Vec< ::rpmostreecxx::LockedPackage> get_locked_packages () const;
-  ::rust::Vec< ::rpmostreecxx::LockedPackage> get_locked_src_packages () const;
   ~LockfileConfig () = delete;
 
 private:

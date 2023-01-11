@@ -11,20 +11,18 @@ build_rpm test-pkg-common
 build_rpm test-pkg requires test-pkg-common
 build_rpm another-test-pkg-a
 build_rpm another-test-pkg-b
-build_rpm another-test-pkg-c
 
 # The test suite writes to pwd, but we need repos together with the manifests
 # Also we need to disable gpgcheck
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
-treefile_append "packages" '["test-pkg", "another-test-pkg-a", "another-test-pkg-b", "another-test-pkg-c"]'
+treefile_append "packages" '["test-pkg", "another-test-pkg-a", "another-test-pkg-b"]'
 
 runcompose --ex-write-lockfile-to="$PWD/versions.lock"
 rpm-ostree --repo=${repo} db list ${treeref} > test-pkg-list.txt
 assert_file_has_content test-pkg-list.txt 'test-pkg-1.0-1.x86_64'
 assert_file_has_content test-pkg-list.txt 'another-test-pkg-a-1.0-1.x86_64'
 assert_file_has_content test-pkg-list.txt 'another-test-pkg-b-1.0-1.x86_64'
-assert_file_has_content test-pkg-list.txt 'another-test-pkg-c-1.0-1.x86_64'
 echo "ok compose"
 
 assert_has_file "versions.lock"
@@ -33,7 +31,6 @@ assert_jq "versions.lock" \
   '.packages["test-pkg-common"].evra = "1.0-1.x86_64"' \
   '.packages["another-test-pkg-a"].evra = "1.0-1.x86_64"' \
   '.packages["another-test-pkg-b"].evra = "1.0-1.x86_64"' \
-  '.packages["another-test-pkg-c"].evra = "1.0-1.x86_64"' \
   '.metadata.rpmmd_repos|length > 0' \
   '.metadata.generated'
 echo "ok lockfile created"
@@ -43,7 +40,6 @@ build_rpm test-pkg-common version 2.0
 build_rpm test-pkg version 2.0 requires test-pkg-common
 build_rpm another-test-pkg-a version 2.0
 build_rpm another-test-pkg-b version 2.0
-build_rpm another-test-pkg-c version 2.0
 runcompose --ex-lockfile="$PWD/versions.lock" |& tee out.txt
 
 rpm-ostree --repo=${repo} db list ${treeref} > test-pkg-list.txt
@@ -51,7 +47,6 @@ assert_file_has_content out.txt 'test-pkg-1.0-1.x86_64'
 assert_file_has_content out.txt 'test-pkg-common-1.0-1.x86_64'
 assert_file_has_content out.txt 'another-test-pkg-a-1.0-1.x86_64'
 assert_file_has_content out.txt 'another-test-pkg-b-1.0-1.x86_64'
-assert_file_has_content out.txt 'another-test-pkg-c-1.0-1.x86_64'
 echo "ok lockfile read"
 
 # now add an override and check that not specifying a digest is allowed
@@ -65,9 +60,6 @@ cat > override.lock <<EOF
     "another-test-pkg-b": {
       "evr": "2.0-1"
     }
-  },
-  "source-packages": {
-    "another-test-pkg-c": "2.0-1"
   }
 }
 EOF
@@ -81,13 +73,11 @@ assert_file_has_content out.txt 'test-pkg-1.0-1.x86_64'
 assert_file_has_content out.txt 'test-pkg-common-1.0-1.x86_64'
 assert_file_has_content out.txt 'another-test-pkg-a-2.0-1.x86_64'
 assert_file_has_content out.txt 'another-test-pkg-b-2.0-1.x86_64'
-assert_file_has_content out.txt 'another-test-pkg-c-2.0-1.x86_64'
 assert_jq versions.lock.new \
   '.packages["test-pkg"].evra = "1.0-1.x86_64"' \
   '.packages["test-pkg-common"].evra = "1.0-1.x86_64"' \
   '.packages["another-test-pkg-a"].evra = "2.0-1.x86_64"' \
-  '.packages["another-test-pkg-b"].evra = "2.0-1.x86_64"' \
-  '.packages["another-test-pkg-c"].evra = "2.0-1.x86_64"'
+  '.packages["another-test-pkg-b"].evra = "2.0-1.x86_64"'
 echo "ok override"
 
 # sanity-check that we can remove packages in relaxed mode
