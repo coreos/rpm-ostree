@@ -45,9 +45,9 @@ fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Result<LockfileCo
     let mut final_lockfile: Option<LockfileConfig> = None;
     for filename in filenames {
         let lf = lockfile_parse(filename)?;
-        if lf.packages.is_none() && lf.source_packages.is_none() {
+        if lf.packages.is_none() {
             bail!(
-                "Neither 'packages' nor 'source-packages' found in {}",
+                "Key 'packages' not found in {}",
                 filename.as_ref().display()
             );
         }
@@ -90,9 +90,6 @@ fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Result<LockfileCo
 ///             "digest": "<digest-algo>:<digest>"
 ///        },
 ///        ...
-///    },
-///    "source-packages": {
-///        "name4": "EVR"
 ///    }
 /// }
 /// ```
@@ -105,8 +102,6 @@ fn lockfile_parse_multiple<P: AsRef<Path>>(filenames: &[P]) -> Result<LockfileCo
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct LockfileConfig {
     packages: Option<BTreeMap<String, LockedPackage>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    source_packages: Option<BTreeMap<String, String>>,
     metadata: Option<LockfileConfigMetadata>,
 }
 
@@ -157,7 +152,6 @@ fn merge_map_field<T>(
 impl LockfileConfig {
     fn merge(&mut self, mut other: LockfileConfig) {
         merge_map_field(&mut self.packages, &mut other.packages);
-        merge_map_field(&mut self.source_packages, &mut other.source_packages);
     }
 
     pub(crate) fn get_locked_packages(&self) -> CxxResult<Vec<crate::ffi::LockedPackage>> {
@@ -187,20 +181,6 @@ impl LockfileConfig {
             })
             .collect()
     }
-
-    pub(crate) fn get_locked_src_packages(&self) -> CxxResult<Vec<crate::ffi::LockedPackage>> {
-        Ok(self
-            .source_packages
-            .iter()
-            .flatten()
-            .map(|(k, v)| crate::ffi::LockedPackage {
-                name: k.clone(),
-                evr: v.clone(),
-                arch: "src".into(),
-                digest: "".into(),
-            })
-            .collect())
-    }
 }
 
 #[cfg(test)]
@@ -226,10 +206,6 @@ mod tests {
             "evr": "2.1.1-1",
             "metadata": {}
         }
-    },
-    "source-packages": {
-        "boo": "3.2.1-5",
-        "bam": "1.2.3-4"
     }
 }
 "###;
@@ -262,10 +238,6 @@ mod tests {
         assert_evra(assert_entry(&lockfile.packages, "foo"), "1.0-1.noarch");
         assert_evra(assert_entry(&lockfile.packages, "bar"), "0.8-15.x86_64");
         assert_evr(assert_entry(&lockfile.packages, "baz"), "2.1.1-1");
-        assert!(lockfile.source_packages.is_some());
-        assert_eq!(lockfile.source_packages.as_ref().unwrap().len(), 2);
-        assert_eq!(assert_entry(&lockfile.source_packages, "boo"), "3.2.1-5");
-        assert_eq!(assert_entry(&lockfile.source_packages, "bam"), "1.2.3-4");
     }
 
     static OVERRIDE_JS: &str = r###"
@@ -275,9 +247,6 @@ mod tests {
             "evra": "2.0-2.noarch",
             "digest": "sha256:dada"
         }
-    },
-    "source-packages": {
-        "bam": "5.6.7-8"
     }
 }
 "###;
@@ -289,36 +258,22 @@ mod tests {
             utils::parse_stream(&utils::InputFormat::JSON, &mut base_input).unwrap();
         assert!(base_lockfile.packages.is_some());
         assert_eq!(base_lockfile.packages.as_ref().unwrap().len(), 3);
-        assert!(base_lockfile.source_packages.is_some());
-        assert_eq!(base_lockfile.source_packages.as_ref().unwrap().len(), 2);
 
         let mut override_input = io::BufReader::new(OVERRIDE_JS.as_bytes());
         let override_lockfile: LockfileConfig =
             utils::parse_stream(&utils::InputFormat::JSON, &mut override_input).unwrap();
         assert!(base_lockfile.packages.is_some());
         assert_eq!(override_lockfile.packages.as_ref().unwrap().len(), 1);
-        assert!(base_lockfile.source_packages.is_some());
-        assert_eq!(override_lockfile.source_packages.as_ref().unwrap().len(), 1);
 
         base_lockfile.merge(override_lockfile);
         assert!(base_lockfile.packages.is_some());
         assert!(base_lockfile.packages.as_ref().unwrap().len() == 3);
-        assert!(base_lockfile.source_packages.is_some());
-        assert!(base_lockfile.source_packages.as_ref().unwrap().len() == 2);
         assert_evra(assert_entry(&base_lockfile.packages, "foo"), "2.0-2.noarch");
         assert_evra(
             assert_entry(&base_lockfile.packages, "bar"),
             "0.8-15.x86_64",
         );
         assert_evr(assert_entry(&base_lockfile.packages, "baz"), "2.1.1-1");
-        assert_eq!(
-            assert_entry(&base_lockfile.source_packages, "boo"),
-            "3.2.1-5"
-        );
-        assert_eq!(
-            assert_entry(&base_lockfile.source_packages, "bam"),
-            "5.6.7-8"
-        );
     }
 
     static INVALID_PRELUDE_JS: &str = r###"
@@ -358,7 +313,6 @@ pub(crate) fn lockfile_write(
 
     let mut lockfile = LockfileConfig {
         packages: Some(BTreeMap::new()),
-        source_packages: Option::None,
         metadata: Some(LockfileConfigMetadata {
             generated: Some(now),
             rpmmd_repos: Some(BTreeMap::new()),

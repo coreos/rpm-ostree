@@ -1179,7 +1179,7 @@ class Fail final
   ::rust::repr::PtrLen &throw$;
 
 public:
-  Fail (::rust::repr::PtrLen &throw$) : throw$ (throw$) {}
+  Fail (::rust::repr::PtrLen &throw$) noexcept : throw$ (throw$) {}
   void operator() (const char *) noexcept;
   void operator() (const std::string &) noexcept;
 };
@@ -1891,7 +1891,6 @@ struct LockedPackage final
 struct LockfileConfig final : public ::rust::Opaque
 {
   ::rust::Vec< ::rpmostreecxx::LockedPackage> get_locked_packages () const;
-  ::rust::Vec< ::rpmostreecxx::LockedPackage> get_locked_src_packages () const;
   ~LockfileConfig () = delete;
 
 private:
@@ -2844,10 +2843,6 @@ extern "C"
                                           ::rpmostreecxx::CxxGObjectArray &rpmmd_repos) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$LockfileConfig$get_locked_packages (
-      const ::rpmostreecxx::LockfileConfig &self,
-      ::rust::Vec< ::rpmostreecxx::LockedPackage> *return$) noexcept;
-
-  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$LockfileConfig$get_locked_src_packages (
       const ::rpmostreecxx::LockfileConfig &self,
       ::rust::Vec< ::rpmostreecxx::LockedPackage> *return$) noexcept;
 
@@ -5861,19 +5856,6 @@ LockfileConfig::get_locked_packages () const
   ::rust::MaybeUninit< ::rust::Vec< ::rpmostreecxx::LockedPackage> > return$;
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$LockfileConfig$get_locked_packages (*this, &return$.value);
-  if (error$.ptr)
-    {
-      throw ::rust::impl< ::rust::Error>::error (error$);
-    }
-  return ::std::move (return$.value);
-}
-
-::rust::Vec< ::rpmostreecxx::LockedPackage>
-LockfileConfig::get_locked_src_packages () const
-{
-  ::rust::MaybeUninit< ::rust::Vec< ::rpmostreecxx::LockedPackage> > return$;
-  ::rust::repr::PtrLen error$
-      = rpmostreecxx$cxxbridge1$LockfileConfig$get_locked_src_packages (*this, &return$.value);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
