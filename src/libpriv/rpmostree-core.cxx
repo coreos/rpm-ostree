@@ -1689,19 +1689,9 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
           if (other_matches->len > 0)
             g_string_append_printf (other_matches_txt, "  Packages matching name and arch (%u):\n",
                                     other_matches->len);
-          else if (self->lockfile_strict)
-            g_string_append_printf (other_matches_txt, "  No packages matched name: %s arch: %s",
-                                    pkg.name.c_str (), pkg.arch.c_str ());
           else
-            {
-              // If no package matches that name at all, then there is nothing to exclude anyway. So
-              // just ignore it. If the manifest tries to install it, we will fail. If not, then no
-              // harm done. In either case, the lockfile remains respected. This allows lockfiles to
-              // be more easily re-used across arches.
-              g_printerr ("warning: Couldn't find locked package '%s'\n", pkg.name.c_str ());
-              continue;
-            }
-
+            g_string_append_printf (other_matches_txt, "  No packages matched name: %s arch: %s\n",
+                                    pkg.name.c_str (), pkg.arch.c_str ());
           for (guint i = 0; i < other_matches->len; i++)
             {
               auto match = static_cast<DnfPackage *> (other_matches->pdata[i]);
@@ -1712,12 +1702,11 @@ find_locked_packages (RpmOstreeContext *self, GPtrArray **out_pkgs, GError **err
           g_autofree char *spec = g_strdup_printf ("%s-%s%s%s", pkg.name.c_str (), pkg.evr.c_str (),
                                                    pkg.arch.length () > 0 ? "." : "",
                                                    pkg.arch.length () > 0 ? pkg.arch.c_str () : "");
-          return glnx_throw (error,
-                             "Couldn't find locked package '%s'%s%s "
-                             "(pkgs matching NEVRA: %d; mismatched checksums: %d)\n%s",
-                             spec, pkg.digest.length () > 0 ? " with checksum " : "",
-                             pkg.digest.length () > 0 ? pkg.digest.c_str () : "", matches->len,
-                             n_checksum_mismatches, other_matches_txt->str);
+          g_printerr ("warning: Couldn't find locked package '%s'%s%s\n"
+                      "  Packages matching NEVRA: %d; Mismatched checksums: %d\n%s",
+                      spec, pkg.digest.length () > 0 ? " with checksum " : "",
+                      pkg.digest.length () > 0 ? pkg.digest.c_str () : "", matches->len,
+                      n_checksum_mismatches, other_matches_txt->str);
         }
     }
 
@@ -1881,7 +1870,8 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
           /* In strict mode, we basically *only* want locked packages to be considered, so
            * exclude everything else. Note we still don't directly do `hy_goal_install`
            * here; we want the treefile to still be canonical, but we just make sure that
-           * the end result matches what we expect. */
+           * the end result matches what we expect. IOW, lockfiles simply define a superset
+           * of what should be installed. */
           DnfPackageSet *pset = dnf_packageset_new (sack);
           Map *map = dnf_packageset_get_map (pset);
           map_setall (map);

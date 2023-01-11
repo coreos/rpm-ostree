@@ -153,14 +153,12 @@ cat > override.lock <<EOF
   }
 }
 EOF
-if runcompose \
+runcompose \
     --ex-lockfile-strict \
     --ex-lockfile="$PWD/versions.lock" \
     --ex-lockfile="$PWD/override.lock" \
-    --dry-run "${treefile}" &>err.txt; then
-  fatal "compose unexpectedly succeeded"
-fi
-assert_file_has_content err.txt "Couldn't find locked package 'unmatched-pkg-1.0-1.x86_64'"
+    --dry-run "${treefile}" &>err.txt
+assert_file_has_content err.txt "warning: Couldn't find locked package 'unmatched-pkg-1.0-1.x86_64'"
 echo "ok strict mode locked pkg missing from rpmmd"
 
 # check that a locked pkg which isn't actually in the repos causes a warning in
@@ -169,7 +167,7 @@ runcompose \
     --ex-lockfile="$PWD/versions.lock" \
     --ex-lockfile="$PWD/override.lock" \
     --dry-run "${treefile}" &>err.txt
-assert_file_has_content err.txt "warning: Couldn't find locked package 'unmatched-pkg'"
+assert_file_has_content err.txt "warning: Couldn't find locked package 'unmatched-pkg-1.0-1.x86_64'"
 echo "ok non-strict mode locked pkg missing from rpmmd"
 
 # test lockfile-repos, i.e. check that a pkg in a lockfile repo with higher
