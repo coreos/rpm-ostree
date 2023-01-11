@@ -106,3 +106,7 @@
 /tests/check/test-lib-introspection.sh.trs
 /tests/kola
 _libs
+
+# for clangd: https://clangd.llvm.org/installation#project-setup
+/compile_commands.json
+/.cache
