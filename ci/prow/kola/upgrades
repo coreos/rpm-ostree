@@ -17,6 +17,8 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     
     test "$expected_image" = "$booted_image"
 
+    systemctl mask --now zincati
+
     rpm-ostree upgrade >out.txt
     grep -qF 'No upgrade available' out.txt
 
