@@ -123,7 +123,7 @@ fn inner_main() -> Result<i32> {
     }
     // Initialize failpoints
     let _scenario = fail::FailScenario::setup();
-    fail::fail_point!("main");
+    rpmostree_rust::try_fail_point!("main");
     // Call this early on; it invokes e.g. setenv() so must be done
     // before we create threads.
     rpmostree_rust::ffi::early_main();

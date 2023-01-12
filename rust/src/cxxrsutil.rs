@@ -150,6 +150,12 @@ mod err {
         }
     }
 
+    impl From<Box<dyn std::error::Error + Send + Sync>> for CxxError {
+        fn from(e: Box<dyn std::error::Error + Send + Sync>) -> Self {
+            Self(e.to_string())
+        }
+    }
+
     impl From<cxx::Exception> for CxxError {
         fn from(v: cxx::Exception) -> Self {
             Self(format!("{:#}", v))

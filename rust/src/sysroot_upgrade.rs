@@ -123,6 +123,8 @@ pub(crate) fn pull_container(
     let cancellable = cancellable.glib_reborrow();
     let imgref = &OstreeImageReference::try_from(imgref)?;
 
+    crate::try_fail_point!("sysroot-upgrade::container-pull");
+
     let r = Handle::current().block_on(async {
         crate::utils::run_with_cancellable(
             async { pull_container_async(repo, imgref).await },
@@ -141,6 +143,7 @@ pub(crate) fn layer_prune(
         c.set_error_if_cancelled()?;
     }
     tracing::debug!("pruning image layers");
+    crate::try_fail_point!("sysroot-upgrade::layer-prune");
     let n_pruned = ostree_ext::container::store::gc_image_layers(repo)?;
     systemd::journal::print(6, &format!("Pruned container image layers: {n_pruned}"));
     Ok(())

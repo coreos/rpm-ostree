@@ -1416,6 +1416,7 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
                      GHashTable *replaced_pkgnames, GError **error)
 {
   HyGoal goal = dnf_context_get_goal (self->dnfctx);
+  CXX_TRY (rpmostreecxx::failpoint ("core::check-goal-solution"), error);
 
   /* check that we're not removing anything we didn't expect */
   {
@@ -4057,6 +4058,8 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
     return FALSE;
   int tmprootfs_dfd = self->tmprootfs_dfd; /* Alias to avoid bigger diff */
 
+  CXX_TRY (rpmostreecxx::failpoint ("core::assemble"), error);
+
   /* In e.g. removing a package we walk librpm which doesn't have canonical
    * /usr, so we need to build up a mapping.
    */
@@ -4503,6 +4506,8 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 gboolean
 rpmostree_context_assemble_end (RpmOstreeContext *self, GCancellable *cancellable, GError **error)
 {
+  CXX_TRY (rpmostreecxx::failpoint ("core::assemble-end"), error);
+
   if (!ensure_tmprootfs_dfd (self, error))
     return FALSE;
   if (self->treefile_rs->get_cliwrap ())
@@ -4534,6 +4539,7 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
   g_autofree char *ret_commit_checksum = NULL;
 
   auto task = rpmostreecxx::progress_begin_task ("Writing OSTree commit");
+  CXX_TRY (rpmostreecxx::failpoint ("core::commit"), error);
 
   g_auto (RpmOstreeRepoAutoTransaction) txn = {
     0,

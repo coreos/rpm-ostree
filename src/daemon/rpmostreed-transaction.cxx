@@ -329,7 +329,17 @@ transaction_execute_thread (GTask *task, gpointer source_object, gpointer task_d
   // Further, we join the main Tokio async runtime.
   auto guard = rpmostreecxx::rpmostreed_daemon_tokio_enter (rpmostreed_daemon_get ());
 
-  if (clazz->execute != NULL)
+  try
+    {
+      rpmostreecxx::failpoint ("transaction::execute");
+    }
+  catch (std::exception &e)
+    {
+      success = FALSE;
+      glnx_throw (&local_error, "%s", e.what ());
+    }
+
+  if (success && clazz->execute != NULL)
     {
       // This try/catch shouldn't be needed; every CXX call should be wrapped with the CXX macro.
       // But in case we regress on this, it's better to error out than crash.
@@ -604,6 +614,8 @@ transaction_initable_init (GInitable *initable, GCancellable *cancellable, GErro
       if (!ostree_sysroot_load (priv->sysroot, cancellable, error))
         return FALSE;
       sd_journal_print (LOG_INFO, "Loaded sysroot");
+
+      CXX_TRY (rpmostreecxx::failpoint ("transaction::lock"), error);
 
       if (!ostree_sysroot_try_lock (priv->sysroot, &lock_acquired, error))
         return FALSE;
