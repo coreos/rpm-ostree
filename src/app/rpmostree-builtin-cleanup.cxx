@@ -51,6 +51,7 @@ gboolean
 rpmostree_builtin_cleanup (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("cleanup", error);
   g_autoptr (GOptionContext) context = g_option_context_new ("");
   g_autoptr (GPtrArray) cleanup_types = g_ptr_array_new ();
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
@@ -87,7 +88,9 @@ rpmostree_builtin_cleanup (int argc, char **argv, RpmOstreeCommandInvocation *in
       if (cleanup_types->len == 1 && opt_repomd)
         {
           /* just directly nuke the cachedir */
-          return glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error);
+          if (!glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error))
+            return glnx_prefix_error (error, "Failed to remove %s", RPMOSTREE_CORE_CACHEDIR);
+          return TRUE;
         }
       return rpmostreecxx::client_throw_non_ostree_host_error (error);
     }
