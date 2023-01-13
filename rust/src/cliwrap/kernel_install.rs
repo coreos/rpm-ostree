@@ -7,10 +7,12 @@ use camino::Utf8Path;
 use cap_std::fs::FileType;
 use cap_std::fs_utf8::Dir as Utf8Dir;
 use cap_std_ext::cap_std;
+use fn_error_context::context;
 use std::io::Write;
 use std::process::Command;
 
 /// Primary entrypoint to running our wrapped `kernel-install` handling.
+#[context("rpm-ostree kernel-install wrapper")]
 pub(crate) fn main(argv: &[&str]) -> Result<()> {
     if !ostree_ext::container_utils::is_ostree_container()? {
         return cliutil::exec_real_binary("kernel-install", argv);
@@ -46,6 +48,7 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
     Ok(())
 }
 
+#[context("Unwrapping systemctl")]
 fn undo_systemctl_wrap() -> Result<()> {
     let bin_path = Utf8Dir::open_ambient_dir("usr/bin", cap_std::ambient_authority())?;
     bin_path.rename("systemctl", &bin_path, "systemctl.backup")?;
@@ -53,6 +56,7 @@ fn undo_systemctl_wrap() -> Result<()> {
     Ok(())
 }
 
+#[context("Wrapping systemctl")]
 fn redo_systemctl_wrap() -> Result<()> {
     let bin_path = Utf8Dir::open_ambient_dir("usr/bin", cap_std::ambient_authority())?;
     bin_path.rename("systemctl", &bin_path, "systemctl.rpmostreesave")?;
@@ -60,6 +64,7 @@ fn redo_systemctl_wrap() -> Result<()> {
     Ok(())
 }
 
+#[context("Running dracut")]
 fn run_dracut(kernel_dir: &str) -> Result<()> {
     let root_fs = Utf8Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
     let tmp_dir = tempfile::tempdir()?;
