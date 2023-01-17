@@ -125,9 +125,10 @@ fn fetch_previous_metadata(
         .get(INPUTHASH_KEY)
         .ok_or_else(|| anyhow!("Missing config label {INPUTHASH_KEY}"))?
         .to_owned();
+    let version = ostree_container::version_for_config(&config).map(ToOwned::to_owned);
     Ok(ImageMetadata {
         manifest,
-        version: labels.get("version").map(ToOwned::to_owned),
+        version,
         inputhash,
     })
 }
