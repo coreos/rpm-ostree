@@ -21,10 +21,8 @@ impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::Conta
         let version = s
             .configuration
             .as_ref()
-            .and_then(|c| c.config().as_ref())
-            .and_then(|c| c.labels().as_ref())
-            .and_then(|l| l.get("version"))
-            .cloned()
+            .and_then(|c| ostree_container::version_for_config(c))
+            .map(ToOwned::to_owned)
             .unwrap_or_default();
         crate::ffi::ContainerImageState {
             base_commit: s.base_commit,
