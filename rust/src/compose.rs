@@ -84,6 +84,10 @@ struct Opt {
     /// Update the timestamp or create this file on changes
     touch_if_changed: Option<Utf8PathBuf>,
 
+    #[clap(long)]
+    /// Number of times to retry copying an image to remote destination (e.g. registry)
+    copy_retry_times: Option<u32>,
+
     #[clap(value_parser)]
     /// Path to the manifest file
     manifest: Utf8PathBuf,
@@ -302,6 +306,10 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         c.arg("copy");
         if let Some(authfile) = opt.authfile.as_ref() {
             c.args(["--authfile", authfile.as_str()]);
+        }
+        let retry_times = opt.copy_retry_times.unwrap_or_default();
+        if retry_times > 0 {
+            c.arg(format!("--retry-times={retry_times}"));
         }
         c.args([tempdest.as_str(), target_imgref.as_str()]);
         let status = c.status()?;
