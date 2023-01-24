@@ -490,7 +490,8 @@ enable_one_repo (GPtrArray *sources, const char *reponame, GError **error)
       return TRUE;
     }
 
-  return glnx_throw (error, "Unknown rpm-md repository: %s", reponame);
+  return glnx_throw (error, "Unknown rpm-md repository: %s (discovered %u)", reponame,
+                     (guint)sources->len);
 }
 
 static void
@@ -716,6 +717,7 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
       /* NB: missing "repos" --> let libdnf figure it out for itself (we're likely doing a
        * client-side compose where we want to use /etc/yum.repos.d/) */
       auto repos = self->treefile_rs->get_repos ();
+      g_debug ("Found %u repos", (guint)repos.size ());
       if (!repos.empty ())
         {
           if (!disabled_all_repos)
