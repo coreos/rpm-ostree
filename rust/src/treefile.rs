@@ -631,8 +631,7 @@ impl Treefile {
     /// The main treefile creation entrypoint.
     #[instrument]
     fn new_boxed(filename: &Utf8Path, basearch: Option<&str>) -> Result<Box<Treefile>> {
-        let directory = filename
-            .parent()
+        let directory = utils::parent_dir_utf8(filename)
             .ok_or_else(|| anyhow!("{} is not a file path", filename))
             .map(|v| Some(v.to_owned()))?;
         let parsed = treefile_parse_and_process(filename, basearch)?;

@@ -10,6 +10,7 @@
 use crate::cxxrsutil::*;
 use crate::variant_utils;
 use anyhow::{bail, Context, Result};
+use camino::Utf8Path;
 use glib::Variant;
 use once_cell::sync::Lazy;
 use ostree_ext::prelude::*;
@@ -142,6 +143,13 @@ pub fn create_file<P: AsRef<Path>>(filename: P) -> Result<fs::File> {
 // Surprising we need a wrapper for this... parent() returns a slice of its buffer, so doesn't
 // handle going up relative paths well: https://github.com/rust-lang/rust/issues/36861
 pub fn parent_dir(filename: &Path) -> Option<&Path> {
+    filename
+        .parent()
+        .map(|p| if p.as_os_str() == "" { ".".as_ref() } else { p })
+}
+
+/// Like [`parent_dir`] above but for UTF-8 paths.
+pub fn parent_dir_utf8(filename: &Utf8Path) -> Option<&Utf8Path> {
     filename
         .parent()
         .map(|p| if p.as_os_str() == "" { ".".as_ref() } else { p })
