@@ -55,6 +55,7 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
                     rpmostree_rust::container::container_encapsulate(args_orig).map(|_| 0)
                     .map_err(anyhow::Error::msg)
                 },
+                "internal-repo-manager" => rpmostree_rust::rpmmd_repos::entrypoint(args).map(|_| 0),
                 // C++ main
                 _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
             }

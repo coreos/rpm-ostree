@@ -951,6 +951,7 @@ mod sysroot_upgrade;
 pub(crate) use crate::sysroot_upgrade::*;
 mod rpmutils;
 pub(crate) use self::rpmutils::*;
+pub mod rpmmd_repos;
 mod testutils;
 pub(crate) use self::testutils::*;
 mod treefile;
