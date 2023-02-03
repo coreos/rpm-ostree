@@ -90,6 +90,15 @@ Boston, MA 02111-1307, USA.
         disable auto-exit. Defaults to 60.</para>
         </listitem>
       </varlistentry>
+      <varlistentry>
+        <term><varname>LockLayering=</varname></term>
+
+        <listitem>
+        <para>Controls whether any mutation of the base OSTree commit is
+        supported (for example, package overlays or overrides, initramfs
+        overlays or regeneration). Defaults to false.</para>
+        </listitem>
+      </varlistentry>
     <!--
       <varlistentry>
         <term><varname>OptionName=</varname></term>

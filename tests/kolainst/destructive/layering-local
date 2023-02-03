@@ -31,6 +31,16 @@ if rpm -q foo 2>/dev/null; then
   fatal "found foo"
 fi
 
+# check that we can't overlay in locked mode
+cp /etc/rpm-ostreed.conf{,.bak}
+echo 'LockLayering=true' >> /etc/rpm-ostreed.conf && rpm-ostree reload
+if rpm-ostree install ${KOLA_EXT_DATA}/rpm-repos/0/packages/x86_64/foo-1.2-3.x86_64.rpm 2>out.txt; then
+  fatal "should have failed in locked mode"
+fi
+assert_file_has_content_literal out.txt "LockLayering=true"
+rm out.txt
+mv /etc/rpm-ostreed.conf{.bak,} && rpm-ostree reload
+
 # Disable repos, no Internet access should be required
 rm -rf /etc/yum.repos.d/
 # Also disable zincati since we're rebasing

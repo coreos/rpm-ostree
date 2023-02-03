@@ -25,7 +25,17 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     mkdir -p /etc/cmdline.d
     echo 'foobar' > /etc/cmdline.d/foobar.conf
 
-    rpm-ostree initramfs-etc --track /etc/cmdline.d/foobar.conf
+    # check that we can't overlay in locked mode
+    cp /etc/rpm-ostreed.conf{,.bak}
+    echo 'LockLayering=true' >> /etc/rpm-ostreed.conf && rpm-ostree reload
+    if rpm-ostree initramfs-etc --track /etc/cmdline.d/foobar.conf 2>out.txt; then
+      fatal "should have failed in locked mode"
+    fi
+    assert_file_has_content_literal out.txt "LockLayering=true"
+    rm out.txt
+    mv /etc/rpm-ostreed.conf{.bak,} && rpm-ostree reload
+
+    rpm-ostree initramfs-etc --track /etc/cmdline.d/foobar.conf 2>out.txt
     rpm-ostree status > status.txt
     assert_file_has_content_literal status.txt "InitramfsEtc: /etc/cmdline.d/foobar.conf"
     rpm-ostree status --json > status.json

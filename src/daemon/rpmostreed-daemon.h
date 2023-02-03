@@ -61,6 +61,7 @@ gboolean rpmostreed_daemon_reload_config (RpmostreedDaemon *self, gboolean *out_
 gboolean rpmostreed_authorize_method_for_uid0 (GDBusMethodInvocation *invocation);
 
 RpmostreedAutomaticUpdatePolicy rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self);
+gboolean rpmostreed_get_lock_layering (RpmostreedDaemon *self);
 
 G_END_DECLS
 
