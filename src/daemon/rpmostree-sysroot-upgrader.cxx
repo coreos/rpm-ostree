@@ -1011,6 +1011,9 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellabl
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_NONE)
     return TRUE;
 
+  /* this should've been checked by rpmostree_sysroot_upgrader_prep_layering */
+  g_assert (!rpmostreed_get_lock_layering (rpmostreed_daemon_get ()));
+
   rpmostree_context_set_devino_cache (self->ctx, self->devino_cache);
   rpmostree_context_set_tmprootfs_dfd (self->ctx, self->tmprootfs_dfd);
 
@@ -1163,6 +1166,9 @@ rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
       /* No assembly? We're done then */
       return TRUE;
     }
+
+  if (rpmostreed_get_lock_layering (rpmostreed_daemon_get ()))
+    return glnx_throw (error, "Cannot operate; `LockLayering=true` in configuration.");
 
   /* Do a bit more work to see whether or not we have to do assembly */
   if (!load_base_rsack (self, cancellable, error))
@@ -1362,6 +1368,8 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   const char *overlay_v[] = { NULL, NULL };
   if (rpmostree_origin_has_initramfs_etc_files (self->computed_origin))
     {
+      /* this should've been checked by rpmostree_sysroot_upgrader_prep_layering */
+      g_assert (!rpmostreed_get_lock_layering (rpmostreed_daemon_get ()));
       auto etc_files = rpmostree_origin_get_initramfs_etc_files (self->computed_origin);
       CXX_TRY_VAR (fdv, rpmostreecxx::initramfs_overlay_generate (etc_files, *cancellable), error);
       glnx_fd_close int fd = fdv;

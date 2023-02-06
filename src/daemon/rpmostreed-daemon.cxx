@@ -75,6 +75,7 @@ struct _RpmostreedDaemon
   /* Settings from the config file */
   guint idle_exit_timeout;
   RpmostreedAutomaticUpdatePolicy auto_update_policy;
+  gboolean lock_layering;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
@@ -350,6 +351,19 @@ get_config_str (GKeyFile *keyfile, const char *key, const char *default_val)
   return util::move_nullify (val) ?: g_strdup (default_val);
 }
 
+static gboolean
+get_config_bool (GKeyFile *keyfile, const char *key, gboolean default_val)
+{
+  g_autoptr (GError) local_error = NULL;
+  gboolean r = g_key_file_get_boolean (keyfile, DAEMON_CONFIG_GROUP, key, &local_error);
+  if (!local_error)
+    return r;
+  if (!g_error_matches (local_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND))
+    sd_journal_print (LOG_WARNING, "Reading config key '%s': %s; using compiled defaults", key,
+                      local_error->message);
+  return default_val;
+}
+
 static guint64
 get_config_uint64 (GKeyFile *keyfile, const char *key, guint64 default_val)
 {
@@ -379,6 +393,12 @@ RpmostreedAutomaticUpdatePolicy
 rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self)
 {
   return self->auto_update_policy;
+}
+
+gboolean
+rpmostreed_get_lock_layering (RpmostreedDaemon *self)
+{
+  return self->lock_layering;
 }
 
 /* in-place version of g_ascii_strdown */
@@ -411,9 +431,10 @@ rpmostreed_daemon_reload_config (RpmostreedDaemon *self, gboolean *out_changed, 
         return FALSE;
     }
 
-  /* don't update changed for this; it's contained to RpmostreedDaemon so no other objects
+  /* don't update changed for these; it's contained to RpmostreedDaemon so no other objects
    * need to be reloaded if it changes */
   self->idle_exit_timeout = idle_exit_timeout;
+  self->lock_layering = get_config_bool (config, "LockLayering", FALSE);
 
   gboolean changed = FALSE;
 
