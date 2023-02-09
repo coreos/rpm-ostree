@@ -78,6 +78,10 @@ struct ContainerEncapsulateOpts {
     #[clap(long)]
     /// Output content metadata as JSON
     write_contentmeta_json: Option<Utf8PathBuf>,
+
+    /// Compare OCI layers of current build with another(imgref)
+    #[clap(name = "compare-with-build", long, short)]
+    compare_with_build: Option<String>,
 }
 
 #[derive(Debug)]
@@ -215,6 +219,7 @@ fn gv_nevra_to_string(pkg: &glib::Variant) -> String {
 
 /// Like `ostree container encapsulate`, but uses chunks derived from package data.
 pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
+    let org_args = args.clone();
     let args = args.iter().skip(1).map(|s| s.as_str());
     let opt = ContainerEncapsulateOpts::parse_from(args);
     let repo = &ostree_ext::cli::parse_repo(&opt.repo)?;
@@ -418,6 +423,41 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
             .await
         })
     })?;
+
+    match &opt.compare_with_build {
+        Some(compare_with_build) => handle.block_on(async {
+            let proxy = containers_image_proxy::ImageProxy::new()
+                .await
+                .expect("c/img-proxy");
+            let oi_old = proxy
+                .open_image(compare_with_build)
+                .await
+                .expect("open_image");
+            let (_, manifest_old) = proxy.fetch_manifest(&oi_old).await.expect("fetch_manifest");
+            let oi_now = proxy
+                .open_image(org_args.last().expect("arguments").as_str())
+                .await
+                .expect("open_image");
+            let (_, new_manifest) = proxy.fetch_manifest(&oi_now).await.expect("fetch_manifest");
+            let diff = crate::manifest_diff(&manifest_old, &new_manifest);
+            let layersum = |layers: &Vec<oci_spec::image::Descriptor>| -> u64 {
+                layers.iter().map(|layer| layer.size() as u64).sum()
+            };
+            let new_total = new_manifest.layers().len();
+            let new_total_size = glib::format_size(layersum(new_manifest.layers()));
+            let n_removed = diff.removed.len();
+            let n_added = diff.added.len();
+            let removed_size = layersum(&diff.removed);
+            let removed_size_str = glib::format_size(removed_size);
+            let added_size = layersum(&diff.removed);
+            let added_size_str = glib::format_size(added_size);
+            println!("Total new layers: {new_total}  Size: {new_total_size}");
+            println!("Removed layers: {n_removed}  Size: {removed_size_str}");
+            println!("Added layers: {n_added}  Size: {added_size_str}");
+        }),
+        None => (),
+    };
+
     println!("Pushed digest: {}", digest);
     Ok(())
 }

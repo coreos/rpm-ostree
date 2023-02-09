@@ -138,12 +138,12 @@ fn fetch_previous_metadata(
 }
 
 #[derive(Debug, Default)]
-struct ManifestDiff {
-    removed: Vec<oci_spec::image::Descriptor>,
-    added: Vec<oci_spec::image::Descriptor>,
+pub struct ManifestDiff {
+    pub removed: Vec<oci_spec::image::Descriptor>,
+    pub added: Vec<oci_spec::image::Descriptor>,
 }
 
-fn manifest_diff(src: &ImageManifest, dest: &ImageManifest) -> ManifestDiff {
+pub fn manifest_diff(src: &ImageManifest, dest: &ImageManifest) -> ManifestDiff {
     let src_layers = src
         .layers()
         .iter()
