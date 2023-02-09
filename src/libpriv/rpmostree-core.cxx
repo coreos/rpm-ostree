@@ -4641,7 +4641,7 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
 
     auto modflags
         = static_cast<OstreeRepoCommitModifierFlags> (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE);
-    /* For ex-container (bare-user-only), we always need canonical permissions */
+    /* For container (bare-user-only), we always need canonical permissions */
     if (ostree_repo_get_mode (self->ostreerepo) == OSTREE_REPO_MODE_BARE_USER_ONLY)
       modflags = static_cast<OstreeRepoCommitModifierFlags> (
           static_cast<int> (modflags) | OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS);
