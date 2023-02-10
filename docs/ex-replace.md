@@ -17,54 +17,39 @@ This is something useful for example if you want to try reproducing a bug on
 a recent vanilla Linux kernel to make sure this is not something coming from a
 Fedora specific patch.
 
-First, we setup the custom RPM repository:
+First, we setup the custom RPM repository, in this case for the
+mainline-wo-mergew repo of the Vanilla Kernel repositories:
 
 ```
-$ curl -s https://repos.fedorapeople.org/repos/thl/kernel-vanilla.repo | sudo tee /etc/yum.repos.d/kernel-vanilla.repo
-```
-
-Then we manually enable the `kernel-vanilla-mainline` repo by editing
-`/etc/yum.repos.d/kernel-vanilla.repo`:
-
-```
-$ $EDITOR /etc/yum.repos.d/kernel-vanilla.repo
-[kernel-vanilla-mainline]
-name=Linux vanilla kernels from mainline series
-baseurl=http://repos.fedorapeople.org/repos/thl/kernel-vanilla-mainline/fedora-$releasever/$basearch/
-enabled=1
-skip_if_unavailable=1
-gpgcheck=1
-gpgkey=https://repos.fedorapeople.org/repos/thl/RPM-GPG-KEY-knurd-kernel-vanilla
-metadata_expire=2h
-
-...
+$ curl -s https://copr.fedorainfracloud.org/coprs/g/kernel-vanilla/mainline-wo-mergew/repo/fedora-rawhide/group_kernel-vanilla-mainline-wo-mergew-fedora-rawhide.repo | sudo tee /etc/yum.repos.d/kernel-vanilla-mainline-wo-mergew.repo
 ```
 
 Then we ask rpm-ostree to override the current kernel package with the ones from the repository:
 
 ```
-$ rpm-ostree override replace --experimental --freeze --from repo=kernel-vanilla-mainline kernel kernel-core kernel-modules
-Enabled rpm-md repositories: fedora-cisco-openh264 fedora-modular updates-modular updates fedora kernel-vanilla-mainline updates-archive
+$ sudo rpm-ostree override replace --experimental --freeze --from repo='copr:copr.fedorainfracloud.org:group_kernel-vanilla:mainline-wo-mergew' kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
+Inactive base replacements:
+  kernel-modules-core-6.2.0-0.rc7.20230208gt0983f6bf.251.vanilla.fc37.x86_64
+Checking out tree 8c16620... done
+Enabled rpm-md repositories: fedora-cisco-openh264 fedora-modular updates-modular updates fedora copr:copr.fedorainfracloud.org:group_kernel-vanilla:next copr:copr.fedorainfracloud.org:group_kernel-vanilla:mainline-wo-mergew coprdep:copr.fedorainfracloud.org:group_kernel-vanilla:fedora coprdep:copr.fedorainfracloud.org:group_kernel-vanilla:stable-rc coprdep:copr.fedorainfracloud.org:group_kernel-vanilla:stable updates-archive
 Importing rpm-md... done
-rpm-md repo 'fedora-cisco-openh264' (cached); generated: 2021-09-21T18:07:30Z solvables: 4
-rpm-md repo 'fedora-modular' (cached); generated: 2021-10-26T05:08:36Z solvables: 1283
-rpm-md repo 'updates-modular' (cached); generated: 2022-01-20T03:00:41Z solvables: 1361
-rpm-md repo 'updates' (cached); generated: 2022-01-19T01:42:17Z solvables: 14915
-rpm-md repo 'fedora' (cached); generated: 2021-10-26T05:31:27Z solvables: 65732
-rpm-md repo 'kernel-vanilla-mainline' (cached); generated: 2022-01-19T17:32:20Z solvables: 18
-rpm-md repo 'updates-archive' (cached); generated: 2022-01-19T02:49:26Z solvables: 21161
-Checking out tree a90b696... done
-Enabled rpm-md repositories: fedora-cisco-openh264 fedora-modular updates-modular updates fedora kernel-vanilla-mainline updates-archive
-Importing rpm-md... done
-rpm-md repo 'fedora-cisco-openh264' (cached); generated: 2021-09-21T18:07:30Z solvables: 4
-rpm-md repo 'fedora-modular' (cached); generated: 2021-10-26T05:08:36Z solvables: 1283
-rpm-md repo 'updates-modular' (cached); generated: 2022-01-20T03:00:41Z solvables: 1371
-rpm-md repo 'updates' (cached); generated: 2022-01-19T01:42:17Z solvables: 17285
-rpm-md repo 'fedora' (cached); generated: 2021-10-26T05:31:27Z solvables: 65732
-rpm-md repo 'kernel-vanilla-mainline' (cached); generated: 2022-01-19T17:32:20Z solvables: 18
-rpm-md repo 'updates-archive' (cached); generated: 2022-01-19T02:49:26Z solvables: 21161
+rpm-md repo 'fedora-cisco-openh264' (cached); generated: 2022-10-06T11:01:40Z solvables: 4
+rpm-md repo 'fedora-modular' (cached); generated: 2022-11-05T07:58:03Z solvables: 1454
+rpm-md repo 'updates-modular' (cached); generated: 2023-01-03T01:27:52Z solvables: 1464
+rpm-md repo 'updates' (cached); generated: 2023-02-10T00:30:00Z solvables: 18414
+rpm-md repo 'fedora' (cached); generated: 2022-11-05T08:04:38Z solvables: 66822
+rpm-md repo 'copr:copr.fedorainfracloud.org:group_kernel-vanilla:next' (cached); generated: 2023-02-08T20:43:20Z solvables: 99
+rpm-md repo 'copr:copr.fedorainfracloud.org:group_kernel-vanilla:mainline-wo-mergew' (cached); generated: 2023-02-10T03:54:23Z solvables: 132
+rpm-md repo 'coprdep:copr.fedorainfracloud.org:group_kernel-vanilla:fedora' (cached); generated: 2023-02-09T12:51:18Z solvables: 30
+rpm-md repo 'coprdep:copr.fedorainfracloud.org:group_kernel-vanilla:stable-rc' (cached); generated: 2023-02-07T15:56:26Z solvables: 40
+rpm-md repo 'coprdep:copr.fedorainfracloud.org:group_kernel-vanilla:stable' (cached); generated: 2023-01-21T14:43:13Z solvables: 0
+rpm-md repo 'updates-archive' (cached); generated: 2023-02-10T00:59:42Z solvables: 23391
 Resolving dependencies... done
-Applying 5 overrides
+Will download: 1 package (38,7 MB)
+Downloading from 'copr:copr.fedorainfracloud.org:group_kernel-vanilla:mainline-wo-mergew'... done
+Importing packages... done
+Relabeling... done
+Applying 4 overrides
 Processing packages... done
 Running pre scripts... done
 Running post scripts... done
@@ -73,10 +58,14 @@ Writing rpmdb... done
 Generating initramfs... done
 Writing OSTree commit... done
 Staging deployment... done
+Freed: 191,3 MB (pkgcache branches: 0)
 Upgraded:
-  kernel 5.15.10-200.fc35 -> 5.17.0-0.rc0.20220118gitfe81ba137ebc.69.vanilla.1.fc35
-  kernel-core 5.15.10-200.fc35 -> 5.17.0-0.rc0.20220118gitfe81ba137ebc.69.vanilla.1.fc35
-  kernel-modules 5.15.10-200.fc35 -> 5.17.0-0.rc0.20220118gitfe81ba137ebc.69.vanilla.1.fc35
+  kernel 6.1.8-200.fc37 -> 6.2.0-0.rc7.20230208gt0983f6bf.251.vanilla.fc37
+  kernel-core 6.1.8-200.fc37 -> 6.2.0-0.rc7.20230208gt0983f6bf.251.vanilla.fc37
+  kernel-modules 6.1.8-200.fc37 -> 6.2.0-0.rc7.20230208gt0983f6bf.251.vanilla.fc37
+  kernel-modules-extra 6.1.8-200.fc37 -> 6.2.0-0.rc7.20230208gt0983f6bf.251.vanilla.fc37
+Added:
+  kernel-modules-core-6.2.0-0.rc7.20230208gt0983f6bf.251.vanilla.fc37.x86_64
 Use "rpm-ostree override reset" to undo overrides
 Run "systemctl reboot" to start a reboot
 
@@ -84,13 +73,12 @@ $ rpm-ostree status
 State: idle
 ...
 Deployments:
-  fedora:fedora/x86_64/coreos/next
-                   Version: 35.20220116.1.0 (2022-01-17T16:50:49Z)
-                BaseCommit: a90b69600554ca68ab5304c9fe9be53488970b5cefa15cb3d46942e157796c60
-                    Commit: ed8e9dc881dba12840a4a85549e37c7e869ee4780010d5bfebeaf7960794ae91
-              GPGSignature: Valid signature by 787EA6AE1147EEE56C40B30CDB4639719867C58F
-                      Diff: 3 upgraded
-            LocalOverrides: kernel kernel-modules kernel-core 5.15.10-200.fc35 -> 5.17.0-0.rc0.20220118gitfe81ba137ebc.69.vanilla.1.fc35
+  fedora:fedora/37/x86_64/silverblue
+                  Version: 37.20230201.0 (2023-02-01T02:01:44Z)
+               BaseCommit: 8c16620566268918906174992bfacfe41e9f47dd433393fa95e3439736961791
+             GPGSignature: Valid signature by ACB5EE4E831C74BB7C168D27F55AD3FB5323552A
+                     Diff: 4 upgraded, 1 added
+           LocalOverrides: kernel-core kernel-modules kernel kernel-modules-extra 6.1.8-200.fc37 -> 6.2.0-0.rc7.20230208gt0983f6bf.251.vanilla.fc37
 ...
 ```
 
@@ -105,7 +93,7 @@ $ rpm-ostree rollback
 or reset the overrides with:
 
 ```
-$ rpm-ostree override reset kernel kernel-core kernel-modules
+$ rpm-ostree override reset kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra 
 ```
 
 or reset all overrides:
