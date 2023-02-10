@@ -23,6 +23,7 @@
 #include <gio/gunixoutputstream.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
+#include <rpm/rpmmacro.h>
 #include <stdio.h>
 #include <string.h>
 #include <systemd/sd-journal.h>
@@ -259,6 +260,14 @@ int
 testutil_validate_cxxrs_passthrough (const OstreeRepo &repo) noexcept
 {
   return ostree_repo_get_dfd (&const_cast<OstreeRepo &> (repo));
+}
+
+// Return a string containing the default RPM backend format (e.g. sqlite, bdb)
+rust::String
+util_get_rpmdb_format () noexcept
+{
+  g_autofree char *buf = rpmExpand ("%{?_db_backend}", NULL);
+  return rust::String (buf);
 }
 
 } /* namespace */

@@ -2067,6 +2067,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$purge_refspec (const ::rpmostreecxx::OstreeRepo &repo,
                                          ::rust::Str refspec) noexcept;
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$handle_rpmdb_transition (::std::int32_t rootfs_dfd) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$alignof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$FilesystemScriptPrep$operator$sizeof () noexcept;
@@ -2904,6 +2907,13 @@ extern "C"
   }
 
   void
+  rpmostreecxx$cxxbridge1$util_get_rpmdb_format (::rust::String *return$) noexcept
+  {
+    ::rust::String (*util_get_rpmdb_format$) () = ::rpmostreecxx::util_get_rpmdb_format;
+    new (return$)::rust::String (util_get_rpmdb_format$ ());
+  }
+
+  void
   rpmostreecxx$cxxbridge1$early_main () noexcept
   {
     void (*early_main$) () = ::rpmostreecxx::early_main;
@@ -3642,6 +3652,16 @@ void
 purge_refspec (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str refspec)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$purge_refspec (repo, refspec);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
+handle_rpmdb_transition (::std::int32_t rootfs_dfd)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$handle_rpmdb_transition (rootfs_dfd);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);

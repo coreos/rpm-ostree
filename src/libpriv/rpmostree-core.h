@@ -70,6 +70,7 @@ G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, G
 namespace rpmostreecxx
 {
 void core_libdnf_process_global_init ();
+rust::String core_get_rpmdb_format ();
 }
 
 RpmOstreeContext *rpmostree_context_new_base (OstreeRepo *repo);

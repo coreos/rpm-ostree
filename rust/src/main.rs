@@ -134,6 +134,7 @@ fn inner_main() -> Result<i32> {
         .with_writer(std::io::stderr)
         .init();
     tracing::trace!("starting");
+    tracing::error!("hello world");
 
     // Gather and pre-process command-line arguments.
     let (callname, args) = gather_cli_args(std::env::args_os())?;

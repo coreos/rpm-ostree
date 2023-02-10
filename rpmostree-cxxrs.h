@@ -1769,6 +1769,8 @@ query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::St
 
 void purge_refspec (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str refspec);
 
+void handle_rpmdb_transition (::std::int32_t rootfs_dfd);
+
 ::rust::Box< ::rpmostreecxx::TempEtcGuard> prepare_tempetc_guard (::std::int32_t rootfs);
 
 ::rust::Box< ::rpmostreecxx::FilesystemScriptPrep>

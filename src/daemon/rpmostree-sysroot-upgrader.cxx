@@ -1017,6 +1017,8 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellabl
   rpmostree_context_set_devino_cache (self->ctx, self->devino_cache);
   rpmostree_context_set_tmprootfs_dfd (self->ctx, self->tmprootfs_dfd);
 
+  ROSCXX_TRY (handle_rpmdb_transition (self->tmprootfs_dfd), error);
+
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
     {
       g_clear_pointer (&self->final_revision, g_free);

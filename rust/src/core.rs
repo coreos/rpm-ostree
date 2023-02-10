@@ -350,6 +350,16 @@ fn stage_container_rpm_files(rpms: Vec<File>) -> CxxResult<Vec<String>> {
     Ok(r)
 }
 
+/// Return the filename used for the RPM database of the given type.
+pub(crate) fn filename_for_rpmdb_type(t: &str) -> Option<&'static str> {
+    match t {
+        // TODO: Dedup this with libdnf code (and really librpm code)
+        "bdb" => Some("Packages"),
+        "sqlite" => Some("rpmdb.sqlite"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
