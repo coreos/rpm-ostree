@@ -190,6 +190,7 @@ pub mod ffi {
             c: &str,
         ) -> Result<Box<ContainerImageState>>;
         fn purge_refspec(repo: &OstreeRepo, refspec: &str) -> Result<()>;
+        fn handle_rpmdb_transition(rootfs_dfd: i32) -> Result<()>;
     }
 
     // core.rs
@@ -760,6 +761,7 @@ pub mod ffi {
             last_version: &str,
         ) -> Result<String>;
         fn testutil_validate_cxxrs_passthrough(repo: Pin<&mut OstreeRepo>) -> i32;
+        fn util_get_rpmdb_format() -> String;
     }
 
     unsafe extern "C++" {
@@ -875,8 +877,8 @@ mod client;
 pub(crate) use client::*;
 pub mod cliwrap;
 pub mod container;
-pub use container::*;
 pub use cliwrap::*;
+pub use container::*;
 mod composepost;
 pub mod countme;
 pub(crate) use composepost::*;

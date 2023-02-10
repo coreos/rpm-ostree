@@ -2,9 +2,18 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use std::io::Seek;
+use std::process::Stdio;
+
+use crate::capstdext::dirbuilder_from_mode;
 use crate::cxxrsutil::*;
 use crate::ffi::{output_message, ContainerImageState};
-use anyhow::Result;
+use crate::progress::progress_task;
+use anyhow::{anyhow, Context, Result};
+use camino::Utf8Path;
+use cap_std::fs::Dir;
+use cap_std_ext::prelude::CapStdExtCommandExt;
+use fn_error_context::context;
 use ostree::glib;
 use ostree::prelude::*;
 use ostree_container::store::{ImageImporter, PrepareResult};
@@ -174,5 +183,91 @@ pub(crate) fn purge_refspec(repo: &crate::FFIOstreeRepo, imgref: &str) -> CxxRes
             }
         }
     }
+    Ok(())
+}
+
+#[context("Rewriting rpmdb")]
+fn rewrite_rpmdb(rootfs_dfd: &Dir) -> Result<()> {
+    use crate::composepost::RPMOSTREE_RPMDB_LOCATION;
+
+    let mut dbfd = cap_tempfile::TempFile::new_anonymous(rootfs_dfd)?;
+
+    // rpmdb wants an absolute file path for some reason
+    let dbpath_arg = format!("--dbpath=/proc/self/cwd/{RPMOSTREE_RPMDB_LOCATION}");
+    // Fork rpmdb from the *host* rootfs to read the rpmdb back into memory
+    let r = std::process::Command::new("rpmdb")
+        .args(&[dbpath_arg.as_str(), "--exportdb"])
+        .cwd_dir(rootfs_dfd.try_clone()?)
+        .stdout(Stdio::from(dbfd.try_clone()?))
+        .status()
+        .context("Spawning exportdb")?;
+    if !r.success() {
+        return Err(anyhow!("Failed to execute rpmdb --exportdb: {:?}", r));
+    }
+
+    // Clear out the db on disk
+    if rootfs_dfd.exists(RPMOSTREE_RPMDB_LOCATION) {
+        rootfs_dfd.remove_dir_all(RPMOSTREE_RPMDB_LOCATION)?;
+    }
+    let db = dirbuilder_from_mode(0o755);
+    rootfs_dfd.create_dir_with(RPMOSTREE_RPMDB_LOCATION, &db)?;
+
+    // Ensure the subsequent reader is starting from the beginning
+    dbfd.seek(std::io::SeekFrom::Start(0))?;
+
+    // And write the rpmdb back
+    let r = std::process::Command::new("rpmdb")
+        .args(&[dbpath_arg.as_str(), "--importdb"])
+        .cwd_dir(rootfs_dfd.try_clone()?)
+        .stdin(Stdio::from(dbfd))
+        .status()
+        .context("Spawning importdb")?;
+    if !r.success() {
+        return Err(anyhow!("Failed to execute rpmdb --importdb: {:?}", r));
+    }
+
+    Ok(())
+}
+
+/// Use the host's rpmdb to rewrite the RPM database in the host's preferred format.
+/// This is used in our implementation of transitioning between RHEL8 (bdb) and RHEL9 (sqlite)
+/// rpmdb formats.
+fn handle_rpmdb_transition_impl(rootfs_dfd: &Dir) -> Result<()> {
+    use crate::composepost::RPMOSTREE_RPMDB_LOCATION;
+
+    // Since we're only shipping this code for RHEL8, this *should* return `bdb`
+    let host_rpmdb_format = crate::ffi::util_get_rpmdb_format();
+    let file_path = if let Some(n) = crate::core::filename_for_rpmdb_type(&host_rpmdb_format) {
+        n
+    } else {
+        eprintln!("warning: Unhandled rpmdb format {host_rpmdb_format}; this may lead to unpredictable failures");
+        return Ok(());
+    };
+    // We want to avoid the expense of export/import of the RPM database if we're *not* doing
+    // a major version upgrade.  In other words, in the case where the rpmdb format is bdb
+    // and the target root is bdb, then we have nothing to do here.
+    if rootfs_dfd.try_exists(Utf8Path::new(RPMOSTREE_RPMDB_LOCATION).join(file_path))? {
+        tracing::debug!("target rpmdb matches host {host_rpmdb_format}");
+        return Ok(());
+    }
+
+    progress_task(
+        &format!("Rewriting rpmdb back to host {host_rpmdb_format}"),
+        || -> Result<_> { rewrite_rpmdb(rootfs_dfd) },
+    )
+}
+
+#[context("Rewriting rpmdb back to host format")]
+/// Rewrite the RPM database if we detect the target format is sqlite, and we're on bdb.
+///
+/// Since this patch is only destined for RHEL8 rpm-ostree, we assume that the running process can read/write bdb,
+/// and just *read* sqlite.  Hence, we do a transition from sqlite back down to bdb.
+///
+/// Then, today while it wasn't intentional, things work out back in sqlite because
+/// the `rewrite_rpmdb_for_target` code will kick in after all the package operations are done
+/// and use the *target* system's `rpmdb --importdb` to convert back from bdb to sqlite.
+pub(crate) fn handle_rpmdb_transition(rootfs_dfd: i32) -> Result<()> {
+    let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
+    handle_rpmdb_transition_impl(rootfs_dfd)?;
     Ok(())
 }
