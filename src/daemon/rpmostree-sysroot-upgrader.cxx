@@ -924,6 +924,8 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
   if (!checkout_base_tree (self, cancellable, error))
     return FALSE;
 
+  CXX_TRY (rpmostreecxx::handle_rpmdb_transition (self->tmprootfs_dfd), error);
+
   self->ctx = rpmostree_context_new_client (self->repo);
 
   g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");

@@ -184,7 +184,7 @@ rust::String util_next_version (rust::Str auto_version_prefix, rust::Str version
                                 rust::Str last_version);
 
 int testutil_validate_cxxrs_passthrough (OstreeRepo &repo) noexcept;
-
+rust::String util_get_rpmdb_format () noexcept;
 }
 
 // Below here is C code
