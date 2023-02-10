@@ -2,17 +2,14 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use std::collections::HashMap;
 use std::process::Command;
 
 use anyhow::{anyhow, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
-use oci_spec::image::Descriptor;
 use oci_spec::image::ImageManifest;
 use ostree::gio;
 use ostree_ext::container as ostree_container;
-use ostree_ext::glib;
 use ostree_ext::ostree;
 
 use crate::cxxrsutil::CxxResult;
@@ -135,37 +132,6 @@ fn fetch_previous_metadata(
         version,
         inputhash,
     })
-}
-
-#[derive(Debug, Default)]
-struct ManifestDiff {
-    removed: Vec<oci_spec::image::Descriptor>,
-    added: Vec<oci_spec::image::Descriptor>,
-}
-
-fn manifest_diff(src: &ImageManifest, dest: &ImageManifest) -> ManifestDiff {
-    let src_layers = src
-        .layers()
-        .iter()
-        .map(|l| (l.digest(), l))
-        .collect::<HashMap<_, _>>();
-    let dest_layers = dest
-        .layers()
-        .iter()
-        .map(|l| (l.digest(), l))
-        .collect::<HashMap<_, _>>();
-    let mut diff = ManifestDiff::default();
-    for (blobid, &descriptor) in src_layers.iter() {
-        if !dest_layers.contains_key(blobid) {
-            diff.removed.push(descriptor.clone());
-        }
-    }
-    for (blobid, &descriptor) in dest_layers.iter() {
-        if !src_layers.contains_key(blobid) {
-            diff.added.push(descriptor.clone());
-        }
-    }
-    diff
 }
 
 pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
@@ -325,21 +291,8 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
             Ok::<_, anyhow::Error>(manifest)
         })?;
 
-        let diff = manifest_diff(&previous_meta.manifest, &new_manifest);
-        let layersum = |layers: &Vec<Descriptor>| -> u64 {
-            layers.iter().map(|layer| layer.size() as u64).sum()
-        };
-        let new_total = new_manifest.layers().len();
-        let new_total_size = glib::format_size(layersum(new_manifest.layers()));
-        let n_removed = diff.removed.len();
-        let n_added = diff.added.len();
-        let removed_size = layersum(&diff.removed);
-        let removed_size_str = glib::format_size(removed_size);
-        let added_size = layersum(&diff.removed);
-        let added_size_str = glib::format_size(added_size);
-        println!("Total new layers: {new_total}  Size: {new_total_size}");
-        println!("Removed layers: {n_removed}  Size: {removed_size_str}");
-        println!("Added layers: {n_added}  Size: {added_size_str}");
+        let diff = ostree_ext::container::manifest_diff(&previous_meta.manifest, &new_manifest);
+        diff.print();
     }
 
     println!("Wrote: {target_imgref}");

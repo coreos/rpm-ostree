@@ -78,6 +78,10 @@ struct ContainerEncapsulateOpts {
     #[clap(long)]
     /// Output content metadata as JSON
     write_contentmeta_json: Option<Utf8PathBuf>,
+
+    /// Compare OCI layers of current build with another(imgref)
+    #[clap(name = "compare-with-build", long)]
+    compare_with_build: Option<String>,
 }
 
 #[derive(Debug)]
@@ -211,6 +215,17 @@ fn gv_nevra_to_string(pkg: &glib::Variant) -> String {
     } else {
         format!("{}-{}:{}-{}.{}", name, epoch, version, release, arch)
     }
+}
+
+async fn compare_builds(old_build: &str, new_build: &str) -> Result<()> {
+    let proxy = containers_image_proxy::ImageProxy::new().await?;
+    let oi_old = proxy.open_image(old_build).await?;
+    let (_, manifest_old) = proxy.fetch_manifest(&oi_old).await?;
+    let oi_now = proxy.open_image(new_build).await?;
+    let (_, new_manifest) = proxy.fetch_manifest(&oi_now).await?;
+    let diff = ostree_ext::container::manifest_diff(&manifest_old, &new_manifest);
+    diff.print();
+    Ok(())
 }
 
 /// Like `ostree container encapsulate`, but uses chunks derived from package data.
@@ -418,6 +433,15 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
             .await
         })
     })?;
+
+    if let Some(compare_with_build) = opt.compare_with_build.as_ref() {
+        progress_task("Comparing Builds", || {
+            handle.block_on(async {
+                compare_builds(&compare_with_build, &format!("{}", &opt.imgref)).await
+            })
+        })?;
+    };
+
     println!("Pushed digest: {}", digest);
     Ok(())
 }
