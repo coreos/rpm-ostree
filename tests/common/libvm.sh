@@ -546,7 +546,7 @@ vm_run_container() {
   # (use -n so this ssh invocation doesn't consume stdin)
   vm_cmd -n mkdir -p /var/cache/dnf
   vm_cmd podman run --rm -v /var/cache/dnf:/var/cache/dnf:z $podman_args \
-    quay.io/fedora/fedora:32-x86_64 "$@"
+    quay.io/centos/centos:stream9 "$@"
 }
 
 # $1 - service name
