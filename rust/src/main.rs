@@ -18,20 +18,6 @@ use termcolor::WriteColor;
 // those, and if there's something we don't know about, invoke the C++
 // main().
 async fn inner_async_main(args: Vec<String>) -> Result<i32> {
-    let args_borrowed: Vec<_> = args.iter().map(|s| s.as_str()).collect();
-    let arg = args_borrowed.get(1).copied().unwrap_or("");
-    // Async-native code goes here
-    #[allow(clippy::single_match)]
-    match arg {
-        // TODO(lucab): move consumers to the multicall entrypoint, then drop this.
-        "ex-container" => {
-            rpmostree_rust::client::warn_future_incompatibility(
-                "This entrypoint is deprecated; use `ostree container` instead",
-            );
-            return rpmostree_rust::container::entrypoint(&args_borrowed).await;
-        }
-        _ => {}
-    }
     // Everything below here is a blocking API, and run on a worker thread so
     // that the main thread is dedicated to the Tokio reactor.
     tokio::task::spawn_blocking(move || -> Result<i32, anyhow::Error> {

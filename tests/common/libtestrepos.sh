@@ -1,4 +1,4 @@
-# Shared functions for compose/ex-container tests
+# Shared functions for compose/container tests
 #
 # Copyright (C) 2017 Colin Walters <walters@verbum.org>
 #
