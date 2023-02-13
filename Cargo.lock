@@ -180,9 +180,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "1.0.1"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b515b8f641ddea066fc2ce25f2c27b60c1f7c2f50f7b8c8c4acfe70a1a51646"
+checksum = "e4ad2b9e262a5c3b67ee92e4b9607ace704384c50c32aa6017a9282ddf15df20"
 dependencies = [
  "camino",
  "cap-primitives",
