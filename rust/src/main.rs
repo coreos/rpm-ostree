@@ -33,14 +33,6 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
                 "usroverlay" | "unlock" => builtins::usroverlay::entrypoint(args).map(|_| 0),
                 // A hidden wrapper to intercept some binaries in RPM scriptlets.
                 "scriptlet-intercept" => builtins::scriptlet_intercept::entrypoint(args).map(|_| 0),
-                // This is a deprecated entrypoint
-                "container-encapsulate" => {
-                    rpmostree_rust::client::warn_future_incompatibility(
-                    "This entrypoint is deprecated; use `rpm-ostree compose container-encapsulate` instead",
-                    );
-                    rpmostree_rust::container::container_encapsulate(args_orig).map(|_| 0)
-                    .map_err(anyhow::Error::msg)
-                },
                 // C++ main
                 _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
             }
