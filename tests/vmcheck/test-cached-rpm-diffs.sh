@@ -68,7 +68,7 @@ run_transaction() {
   sig=$1; shift
   args=$1; shift
   cur=$(vm_get_journal_cursor)
-  vm_run_container --privileged -i -v /var/run/dbus:/var/run/dbus --net=host -- \
+  vm_run_container --privileged -i -v /run:/run/host/run -v /var/run/dbus:/var/run/dbus --net=host -- \
     /bin/bash << EOF
 set -xeuo pipefail
 dnf install -y python3-dbus
@@ -77,6 +77,7 @@ import dbus
 addr = dbus.SystemBus().call_blocking(
   "org.projectatomic.rpmostree1", "$ospath", "org.projectatomic.rpmostree1.OS",
   "$method", "$sig", ($args))
+addr = addr.replace("/run/", "/run/host/run/")
 t = dbus.connection.Connection(addr)
 t.call_blocking(
   "org.projectatomic.rpmostree1", "/",
