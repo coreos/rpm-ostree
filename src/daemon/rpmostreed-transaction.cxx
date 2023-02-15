@@ -581,7 +581,7 @@ transaction_initable_init (GInitable *initable, GCancellable *cancellable, GErro
    * progress and informational messages to the caller. */
 
   g_autofree char *guid = g_dbus_generate_guid ();
-  priv->server = g_dbus_server_new_sync ("unix:tmpdir=/tmp/rpm-ostree", G_DBUS_SERVER_FLAGS_NONE,
+  priv->server = g_dbus_server_new_sync ("unix:path=/tmp/rpm-ostree", G_DBUS_SERVER_FLAGS_NONE,
                                          guid, NULL, cancellable, error);
   if (priv->server == NULL)
     return FALSE;
