@@ -214,12 +214,20 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     case rpmostreecxx::RefspecType::Container:
       {
         g_variant_dict_insert (dict, "container-image-reference", "s", refspec);
-        CXX_TRY_VAR (state, rpmostreecxx::query_container_image_commit (*repo, base_checksum),
-                     error);
-        g_variant_dict_insert (dict, "container-image-reference-digest", "s",
-                               state->image_digest.c_str ());
-        if (state->version.size () > 0)
-          g_variant_dict_insert (dict, "version", "s", state->version.c_str ());
+        // For now, make this non-fatal https://github.com/coreos/rpm-ostree/issues/4185
+        try
+          {
+            auto state = rpmostreecxx::query_container_image_commit (*repo, base_checksum);
+            g_variant_dict_insert (dict, "container-image-reference-digest", "s",
+                                   state->image_digest.c_str ());
+            if (state->version.size () > 0)
+              g_variant_dict_insert (dict, "version", "s", state->version.c_str ());
+          }
+        catch (std::exception &e)
+          {
+            sd_journal_print (LOG_ERR, "failed to query container image base metadata: %s",
+                              e.what ());
+          }
       }
       break;
     case rpmostreecxx::RefspecType::Checksum:
