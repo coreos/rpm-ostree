@@ -40,6 +40,6 @@ if test -z "${BASE_QEMU_IMAGE:-}"; then
     coreos-installer download -p qemu -f qcow2.xz --decompress
     BASE_QEMU_IMAGE=./"$(echo *.qcow2)"
 fi
-kola run  --append-ignition config.ign --oscontainer ostree-unverified-registry:${TARGET_IMAGE} --qemu-image "${BASE_QEMU_IMAGE}" ext.rpm-ostree.upgrades
+cosa kola run --append-ignition config.ign --oscontainer ostree-unverified-registry:${TARGET_IMAGE} --qemu-image "${BASE_QEMU_IMAGE}" ext.rpm-ostree.upgrades
 
 echo "ok kola upgrades"

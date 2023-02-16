@@ -31,6 +31,10 @@
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-transaction.h"
 
+// The well-known transaction socket path.  This used to be randomly
+// generated, but there's no point because there can be at most one transaction.
+#define CLIENT_TRANSACTION_PATH "/run/rpm-ostree-transaction.sock"
+
 struct _RpmostreedTransactionPrivate
 {
   GDBusMethodInvocation *invocation;
@@ -482,6 +486,10 @@ transaction_dispose (GObject *object)
   g_clear_object (&priv->invocation);
   g_clear_object (&priv->cancellable);
   g_clear_object (&priv->sysroot);
+  if (priv->server)
+    {
+      g_dbus_server_stop (priv->server);
+    }
   g_clear_object (&priv->server);
   g_clear_pointer (&priv->sysroot_path, g_free);
 
@@ -578,13 +586,23 @@ transaction_initable_init (GInitable *initable, GCancellable *cancellable, GErro
     priv->cancellable = (GCancellable *)g_object_ref (cancellable);
 
   /* Set up a private D-Bus server over which to emit
-   * progress and informational messages to the caller. */
-
+   * progress and informational messages to the caller.
+   * The socket needs to be non-abstract (for security reasons so it can't
+   * be accessed outside of our namespace)
+   * and it needs to be in `/run` so that it can be found by the client;
+   * the default daemon sandboxing uses PrivateTmp= implicitly.
+   */
   g_autofree char *guid = g_dbus_generate_guid ();
-  priv->server = g_dbus_server_new_sync ("unix:tmpdir=/tmp/rpm-ostree", G_DBUS_SERVER_FLAGS_NONE,
-                                         guid, NULL, cancellable, error);
+  if (unlink (CLIENT_TRANSACTION_PATH) < 0 && errno != ENOENT)
+    return glnx_throw_errno_prefix (error, "Failed to unlink %s", CLIENT_TRANSACTION_PATH);
+  g_autofree char *addr = g_strdup_printf ("unix:path=%s", CLIENT_TRANSACTION_PATH);
+  priv->server
+      = g_dbus_server_new_sync (addr, G_DBUS_SERVER_FLAGS_NONE, guid, NULL, cancellable, error);
   if (priv->server == NULL)
     return FALSE;
+
+  if (chmod (CLIENT_TRANSACTION_PATH, 0666) < 0)
+    return glnx_throw_errno_prefix (error, "Failed to chmod %s", CLIENT_TRANSACTION_PATH);
 
   g_signal_connect_object (priv->server, "new-connection",
                            G_CALLBACK (transaction_new_connection_cb), self,
