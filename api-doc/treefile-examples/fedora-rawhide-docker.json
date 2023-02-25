@@ -1,9 +1,0 @@
-{
-    "ref": "fedora-atomic/rawhide/x86_64/server/docker",
-
-    "include": "fedora-rawhide-base.json",
-
-    "packages": ["docker-io"],
-
-    "units": ["docker.service", "docker.socket"]
-}

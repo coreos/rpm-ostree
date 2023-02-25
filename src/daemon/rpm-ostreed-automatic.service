@@ -1,9 +1,0 @@
-[Unit]
-Description=rpm-ostree Automatic Update
-Documentation=man:rpm-ostree(1) man:rpm-ostreed.conf(5)
-ConditionPathExists=/run/ostree-booted
-
-[Service]
-Type=simple
-ExecStart=rpm-ostree upgrade --trigger-automatic-update-policy
-StandardOutput=null

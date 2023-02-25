@@ -1,4 +1,0 @@
-# This Dockerfile should actually derive from the first build,
-# and verifies a subsequent update
-FROM quay.io/fedora/fedora-coreos:testing-devel
-RUN touch /etc/somenewfile && rpm -e moby-engine && ostree container commit 
