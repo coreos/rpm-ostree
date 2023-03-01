@@ -116,6 +116,14 @@ rpm -q ignition
 dnf -y uninstall kexec-tools
 if rpm -q kexec-tools; then fatal "failed to remove kexec-tools"; fi
 
+rpm -q kernel
+# Fedora doesn't ship kernel variants, so we just install some other package
+rpm-ostree install --remove-installed-kernel strace
+if rpm -qa |grep -E '^kernel'; then
+  fatal "Found installed kernel after --remove-installed-kernel"
+fi
+rpm -e strace
+
 # test replacement by Koji URL
 rpm-ostree override replace $koji_url |& tee out.txt
 n_downloaded=$(grep Downloading out.txt | wc -l)

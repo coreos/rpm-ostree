@@ -54,6 +54,15 @@
 #define RPMOSTREE_MESSAGE_PKG_IMPORT                                                               \
   SD_ID128_MAKE (df, 8b, b5, 4f, 04, fa, 47, 08, ac, 16, 11, 1b, bf, 4b, a3, 52)
 
+// This is a copy of the defaults from libdnf because it's not public API
+// see INSTALLONLYPKGS there.
+static const char *KERNEL_PACKAGES[] = { "kernel",
+                                         "kernel-PAE",
+                                         "installonlypkg(kernel)",
+                                         "installonlypkg(kernel-module)",
+                                         "installonlypkg(vm)",
+                                         "multiversion(kernel)" };
+
 static OstreeRepo *get_pkgcache_repo (RpmOstreeContext *self);
 
 static int
@@ -1734,6 +1743,7 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   auto exclude_packages = self->treefile_rs->get_exclude_packages ();
   auto modules_enable = self->treefile_rs->get_modules_enable ();
   auto modules_install = self->treefile_rs->get_modules_install ();
+  auto remove_kernel = self->treefile_rs->has_remove_kernel ();
 
   /* we only support pure installs for now (compose case) */
   if (self->lockfile)
@@ -1943,6 +1953,25 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
         return FALSE;
 
       g_ptr_array_add (removed_pkgnames, (gpointer)pkgname);
+    }
+
+  if (remove_kernel)
+    {
+      for (guint i = 0; i < G_N_ELEMENTS (KERNEL_PACKAGES); i++)
+        {
+          const char *pkg = KERNEL_PACKAGES[i];
+          hy_autoquery HyQuery query = hy_query_create (sack);
+          hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+          hy_query_filter (query, HY_PKG_PROVIDES, HY_EQ, pkg);
+          g_autoptr (GPtrArray) packages = hy_query_run (query);
+          for (guint i = 0; i < packages->len; i++)
+            {
+              auto pkg = static_cast<DnfPackage *> (g_ptr_array_index (packages, i));
+              g_printerr ("Removing kernel pkg: %s\n", dnf_package_get_name (pkg));
+              g_ptr_array_add (removed_pkgnames, (gpointer)dnf_package_get_name (pkg));
+              hy_goal_erase (goal, pkg);
+            }
+        }
     }
 
   /* Then, handle local packages to install */

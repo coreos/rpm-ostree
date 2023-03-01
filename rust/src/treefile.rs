@@ -486,6 +486,10 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         &mut dest.derive.override_replace,
         &mut src.derive.override_replace,
     );
+    merge_basic_field(
+        &mut dest.derive.override_remove_kernel,
+        &mut src.derive.override_remove_kernel,
+    );
     dest.handle_repo_packages_override_replacements();
     merge_map_field(
         &mut dest.derive.override_replace_local,
@@ -1040,6 +1044,15 @@ impl Treefile {
             .unwrap_or_default()
     }
 
+    /// Kernel removal is configured
+    pub(crate) fn has_remove_kernel(&self) -> bool {
+        self.parsed
+            .derive
+            .override_remove_kernel
+            .clone()
+            .unwrap_or_default()
+    }
+
     // Check that the same overrides don't already exist. Of course, in the local replace
     // case, this doesn't catch same pkg name but different EVRA; we'll just barf at that
     // later on in the core. This is an early easy sanity check.
@@ -1135,6 +1148,21 @@ impl Treefile {
         Some(old_map) != self.parsed.derive.override_replace
     }
 
+    /// Change the state of kernel removal for derived images
+    pub(crate) fn set_remove_kernel(&mut self, remove: bool) -> bool {
+        let current = self
+            .parsed
+            .derive
+            .override_remove_kernel
+            .take()
+            .unwrap_or_default();
+        // Note we did .take() above, so this also canonicalizes false -> None
+        if remove {
+            self.parsed.derive.override_remove_kernel = Some(true);
+        }
+        current != remove
+    }
+
     pub(crate) fn remove_package_override_replace(&mut self, package: &str) -> bool {
         self.parsed
             .derive
@@ -1196,6 +1224,7 @@ impl Treefile {
             .map(|x| !x.is_empty())
             .unwrap_or_default()
             || changed;
+        changed = self.set_remove_kernel(false) || changed;
         changed
     }
 
@@ -1621,6 +1650,7 @@ impl Treefile {
         clone.override_replace.take();
         clone.override_remove.take();
         clone.override_replace_local.take();
+        clone.override_remove_kernel.take();
         if clone != Default::default() {
             let j = serde_json::to_string_pretty(&clone)?;
             bail!(
@@ -1893,6 +1923,12 @@ impl Treefile {
                 .modules
                 .as_ref()
                 .and_then(|m| m.install.as_ref().map(|i| !i.is_empty()))
+                .unwrap_or_default()
+            || self
+                .parsed
+                .derive
+                .override_remove_kernel
+                .clone()
                 .unwrap_or_default()
     }
 
@@ -2714,6 +2750,9 @@ pub(crate) struct DeriveConfigFields {
     pub(crate) packages_local_fileoverride: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_remove: Option<BTreeSet<String>>,
+    /// Remove the kernel
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) override_remove_kernel: Option<bool>,
     #[serde(rename = "ex-override-replace")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) override_replace: Option<Vec<RemoteOverrideReplace>>,

@@ -1703,6 +1703,8 @@ struct Treefile final : public ::rust::Opaque
   bool remove_package_override_remove (::rust::Str package) noexcept;
   bool has_packages_override_remove_name (::rust::Str name) const noexcept;
   bool remove_all_overrides () noexcept;
+  bool has_remove_kernel () const noexcept;
+  bool set_remove_kernel (bool remove) noexcept;
   ::rust::Vec< ::rust::String> get_modules_enable () const noexcept;
   bool has_modules_enable () const noexcept;
   ::rust::Vec< ::rust::String> get_modules_install () const noexcept;
@@ -2486,6 +2488,12 @@ extern "C"
 
   bool
   rpmostreecxx$cxxbridge1$Treefile$remove_all_overrides (::rpmostreecxx::Treefile &self) noexcept;
+
+  bool rpmostreecxx$cxxbridge1$Treefile$has_remove_kernel (
+      const ::rpmostreecxx::Treefile &self) noexcept;
+
+  bool rpmostreecxx$cxxbridge1$Treefile$set_remove_kernel (::rpmostreecxx::Treefile &self,
+                                                           bool remove) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_modules_enable (
       const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
@@ -4900,6 +4908,18 @@ bool
 Treefile::remove_all_overrides () noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$remove_all_overrides (*this);
+}
+
+bool
+Treefile::has_remove_kernel () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$has_remove_kernel (*this);
+}
+
+bool
+Treefile::set_remove_kernel (bool remove) noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$set_remove_kernel (*this, remove);
 }
 
 ::rust::Vec< ::rust::String>
