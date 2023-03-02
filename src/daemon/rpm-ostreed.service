@@ -3,6 +3,7 @@ Description=rpm-ostree System Management Daemon
 Documentation=man:rpm-ostree(1)
 ConditionPathExists=/ostree
 RequiresMountsFor=/boot
+After=polkit.service
 
 [Service]
 # See similar code in rpm-ostree-countme.service
