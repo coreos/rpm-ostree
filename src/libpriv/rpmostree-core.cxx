@@ -2703,8 +2703,9 @@ handle_file_dispositions (RpmOstreeContext *self, int tmprootfs_dfd, rpmts ts,
       if (g_hash_table_contains (pkgs_deleted, GUINT_TO_POINTER (off)))
         continue;
 
-      /* try to only load what we need: filenames and colors */
-      rpmfiFlags flags = RPMFI_FLAGS_ONLY_FILENAMES;
+      /* try to only load what we need: filenames and colors.  Also due to
+       * https://bugzilla.redhat.com/show_bug.cgi?id=2177088 we explicitly exclude IMA */
+      rpmfiFlags flags = RPMFI_FLAGS_ONLY_FILENAMES | RPMFI_NOFILESIGNATURES;
       flags &= ~RPMFI_NOFILECOLORS;
 
       g_auto (rpmfi) fi = rpmfiNew (ts, h, RPMTAG_BASENAMES, flags);
@@ -3443,7 +3444,9 @@ get_package_metainfo (RpmOstreeContext *self, const char *path, Header *out_head
   if (!glnx_openat_rdonly (self->tmpdir.fd, path, TRUE, &metadata_fd, error))
     return FALSE;
 
-  return rpmostree_importer_read_metainfo (metadata_fd, out_header, NULL, out_fi, error);
+  // We just care about reading the stuff librpm wants to put in the database, so no IMA etc.
+  auto flags = rpmostreecxx::rpm_importer_flags_new_empty ();
+  return rpmostree_importer_read_metainfo (metadata_fd, *flags, out_header, NULL, out_fi, error);
 }
 
 typedef enum

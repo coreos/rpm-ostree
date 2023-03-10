@@ -103,8 +103,8 @@ rpmostree_importer_init (RpmOstreeImporter *self)
 }
 
 gboolean
-rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_offset, rpmfi *out_fi,
-                                  GError **error)
+rpmostree_importer_read_metainfo (int fd, rpmostreecxx::RpmImporterFlags &flags, Header *out_header,
+                                  gsize *out_cpio_offset, rpmfi *out_fi, GError **error)
 {
   g_auto (rpmts) ts = NULL;
   g_auto (FD_t) rpmfd = NULL;
@@ -131,7 +131,10 @@ rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_of
 
   if (out_fi)
     {
-      ret_fi = rpmfiNew (ts, ret_header, RPMTAG_BASENAMES, RPMFI_NOHEADER | RPMFI_FLAGS_QUERY);
+      rpmfiFlags rpmfi_flags = RPMFI_NOHEADER | RPMFI_FLAGS_QUERY;
+      if (!flags.is_ima_enabled ())
+        rpmfi_flags |= RPMFI_NOFILESIGNATURES;
+      ret_fi = rpmfiNew (ts, ret_header, RPMTAG_BASENAMES, rpmfi_flags);
       ret_fi = rpmfiInit (ret_fi, 0);
     }
 
@@ -242,7 +245,7 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   if (ar == NULL)
     return NULL;
 
-  if (!rpmostree_importer_read_metainfo (*fd, &hdr, &cpio_offset, &fi, error))
+  if (!rpmostree_importer_read_metainfo (*fd, flags, &hdr, &cpio_offset, &fi, error))
     return (RpmOstreeImporter *)glnx_prefix_error_null (error, "Reading metainfo");
   g_assert (hdr != NULL);
 

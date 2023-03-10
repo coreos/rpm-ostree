@@ -1286,6 +1286,7 @@ struct ParsedRevision final
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$RpmImporterFlags
 struct RpmImporterFlags final : public ::rust::Opaque
 {
+  bool is_ima_enabled () const noexcept;
   ~RpmImporterFlags () = delete;
 
 private:
