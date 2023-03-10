@@ -39,6 +39,12 @@ pub fn rpm_importer_flags_new_empty() -> Box<RpmImporterFlags> {
     Box::new(RpmImporterFlags::empty())
 }
 
+impl RpmImporterFlags {
+    pub(crate) fn is_ima_enabled(&self) -> bool {
+        self.contains(Self::IMA)
+    }
+}
+
 #[derive(Debug)]
 pub struct RpmImporter {
     // Hashset of all file entries marked as 'doc' in an RPM;

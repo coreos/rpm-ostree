@@ -43,7 +43,8 @@ RpmOstreeImporter *rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, Dn
                                                    rpmostreecxx::RpmImporterFlags &flags,
                                                    OstreeSePolicy *sepolicy, GError **error);
 
-gboolean rpmostree_importer_read_metainfo (int fd, Header *out_header, gsize *out_cpio_offset,
+gboolean rpmostree_importer_read_metainfo (int fd, rpmostreecxx::RpmImporterFlags &flags,
+                                           Header *out_header, gsize *out_cpio_offset,
                                            rpmfi *out_fi, GError **error);
 
 gboolean rpmostree_importer_run (RpmOstreeImporter *unpacker, char **out_commit,
