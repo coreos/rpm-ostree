@@ -369,6 +369,7 @@ pub mod ffi {
     extern "Rust" {
         type RpmImporterFlags;
         fn rpm_importer_flags_new_empty() -> Box<RpmImporterFlags>;
+        fn is_ima_enabled(self: &RpmImporterFlags) -> bool;
 
         type RpmImporter;
         fn rpm_importer_new(

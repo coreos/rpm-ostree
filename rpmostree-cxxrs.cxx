@@ -1504,6 +1504,7 @@ struct ParsedRevision final
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$RpmImporterFlags
 struct RpmImporterFlags final : public ::rust::Opaque
 {
+  bool is_ima_enabled () const noexcept;
   ~RpmImporterFlags () = delete;
 
 private:
@@ -2231,6 +2232,9 @@ extern "C"
 
   ::rpmostreecxx::RpmImporterFlags *
   rpmostreecxx$cxxbridge1$rpm_importer_flags_new_empty () noexcept;
+
+  bool rpmostreecxx$cxxbridge1$RpmImporterFlags$is_ima_enabled (
+      const ::rpmostreecxx::RpmImporterFlags &self) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$RpmImporter$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$RpmImporter$operator$alignof () noexcept;
 
@@ -4144,6 +4148,12 @@ rpm_importer_flags_new_empty () noexcept
 {
   return ::rust::Box< ::rpmostreecxx::RpmImporterFlags>::from_raw (
       rpmostreecxx$cxxbridge1$rpm_importer_flags_new_empty ());
+}
+
+bool
+RpmImporterFlags::is_ima_enabled () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$RpmImporterFlags$is_ima_enabled (*this);
 }
 
 ::std::size_t
