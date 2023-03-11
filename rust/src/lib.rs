@@ -955,6 +955,6 @@ mod testutils;
 pub(crate) use self::testutils::*;
 mod treefile;
 pub use self::treefile::*;
-pub(crate) mod utils;
+pub mod utils;
 pub use self::utils::*;
 mod variant_utils;
