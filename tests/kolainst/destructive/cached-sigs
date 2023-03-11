@@ -10,10 +10,18 @@ cd "$(mktemp -d)"
 
 # For this test we want a signed OSTree commit deployed. Check if a sig already
 # exists, otherwise let's self-sign it.
-booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
-if ! rpm-ostree status --json | jq -e '.deployments[0].signatures' > /dev/null; then
+rpm-ostree status --json > status.json
+booted_commit=$(jq -r '.deployments[0].checksum' < status.json)
+if ! jq -e '.deployments[0].signatures' < status.json > /dev/null; then
   ostree gpg-sign --gpg-homedir "${KOLA_EXT_DATA}/gpghome" "$booted_commit" "${TEST_GPG_KEYID_1}"
   cp "${KOLA_EXT_DATA}/gpghome/key1.asc" /etc/pki/rpm-gpg/
+fi
+
+# cosa build-fast will not use a refspec; let's synthesize one since it's required for this test
+origin="$(jq -r '.deployments[0].origin' < status.json)"
+if test "${origin}" = "${booted_commit}"; then
+  ostree refs --create dummy:synthetic-ref-for-test "${booted_commit}"
+  ostree admin set-origin dummy https://localhost synthetic-ref-for-test
 fi
 
 systemctl stop rpm-ostreed
