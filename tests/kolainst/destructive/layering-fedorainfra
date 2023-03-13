@@ -19,7 +19,7 @@ rpm-ostree cleanup -p
 rpm-ostree override replace https://koji.fedoraproject.org/koji/buildinfo?buildID=1671410
 
 n_systemd_installed=$(rpm -qa | grep ^systemd | wc -l)
-rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2022-0bbb402870 |& tee out.txt
+rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2023-f72fbc711a |& tee out.txt
 n_systemd_downloaded=$(grep Downloading out.txt | wc -l)
 n_systemd_replaced=$(rpm-ostree db diff | grep systemd | wc -l)
 if [[ $n_systemd_installed != $n_systemd_downloaded ]]; then

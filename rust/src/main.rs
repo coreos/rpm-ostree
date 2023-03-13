@@ -107,8 +107,18 @@ fn inner_main() -> Result<i32> {
     rpmostree_rust::ffi::early_main();
     // Logging goes to stderr, because stdout is used for output by some of
     // our commands like `rpm-ostree compose tree --print-json`.
+    // Don't include timestamps and such because they're not really useful and
+    // too verbose, and plus several log targets such as journald will already
+    // include timestamps.  Relatedly, if we're running in systemd, don't include colors
+    // because that will make our messages appear as binary data in the journal.
+    let format = tracing_subscriber::fmt::format()
+        .without_time()
+        .with_target(false)
+        .with_ansi(!rpmostree_rust::utils::running_in_systemd())
+        .compact();
     tracing_subscriber::fmt::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .event_format(format)
         .with_writer(std::io::stderr)
         .init();
     tracing::trace!("starting");

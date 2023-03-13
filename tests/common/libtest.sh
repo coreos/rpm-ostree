@@ -466,7 +466,10 @@ rpmostree_assert_status() {
 journal_poll() {
     timeout=60
     for x in $(seq $timeout); do
-      if journalctl -q -n 1 "$@"; then
+      # We used to use -n 1 here, but that regressed
+      #  https://github.com/systemd/systemd/pull/26476#issuecomment-1465038424
+      out=$(journalctl -q "$@" || true | head -1)
+      if test -n "${out}"; then
         return
       fi
       sleep 1

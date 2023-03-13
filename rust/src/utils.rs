@@ -232,7 +232,7 @@ static RUNNING_IN_SYSTEMD: Lazy<bool> = Lazy::new(|| {
 /// Checks if the current process is (apparently at least)
 /// running under systemd.  We use this in various places
 /// to e.g. log to the journal instead of printing to stdout.
-pub(crate) fn running_in_systemd() -> bool {
+pub fn running_in_systemd() -> bool {
     *RUNNING_IN_SYSTEMD
 }
 
