@@ -800,6 +800,32 @@ impl Treefile {
         Ok(set.len() != n)
     }
 
+    pub(crate) fn enable_repo(&mut self, repo: &str) -> Result<()> {
+        let repos = self.parsed.base.repos.get_or_insert_with(|| Vec::new());
+        let repos_vec = &mut Vec::new();
+        if repo.contains(",") {
+            let repo_list = repo.split(",");
+            for r in repo_list {
+                repos_vec.push(r.to_string());
+            }
+            repos.append(repos_vec);
+        } else {
+            repos.push(repo.to_string());
+        }
+        self.parsed.base.repos = Some(repos.to_vec());
+        Ok(())
+    }
+
+    pub(crate) fn disable_repo(&mut self, repo: &str) -> Result<()> {
+        if repo != "*" {
+            return Err(anyhow!(
+                "Invalid --disablerepo={:?} value, currently only '*' is supported",
+                repo
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn get_local_packages(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -1353,6 +1379,11 @@ impl Treefile {
 
     pub(crate) fn get_ima(&self) -> bool {
         self.parsed.base.ima.unwrap_or(false)
+    }
+
+    pub(crate) fn set_releasever(&mut self, releasever: &str) -> Result<()> {
+        self.parsed.base.releasever = Some(ReleaseVer::String(releasever.into()));
+        Ok(())
     }
 
     pub(crate) fn get_releasever(&self) -> String {
@@ -2716,12 +2747,15 @@ pub(crate) struct DeriveConfigFields {
 
 impl BaseComposeConfigFields {
     pub(crate) fn error_if_nonempty(&self) -> Result<()> {
-        // Exemption for `basearch`, which we set to the current arch during parsing. Also mask
-        // `variables`, which can have `basearch` be auto-added but doesn't matter in this context
+        // Exemption for `basearch`, which we set to the current arch during parsing.
+        // Exemption for `releasever` and `repos` which can be set on container builds via de cli.
+        // Also mask `variables`, which can have `basearch` be auto-added but doesn't matter in this context
         // since it's not used during the actual compose, only during treefile processing itself.
         let s = Self {
             basearch: self.basearch.clone(),
             variables: self.variables.clone(),
+            releasever: self.releasever.clone(),
+            repos: self.repos.clone(),
             ..Default::default()
         };
         if &s != self {
@@ -3133,6 +3167,29 @@ pub(crate) mod tests {
         let treefile = append_and_parse("automatic_version_prefix: ${releasever}");
         assert!(treefile.base.releasever == None);
         assert!(treefile.base.automatic_version_prefix.unwrap() == "${releasever}");
+    }
+
+    #[test]
+    fn test_set_releasever() {
+        let mut tf = new_test_tf_basic(VALID_PRELUDE).unwrap();
+        tf.set_releasever("25").unwrap();
+        assert!(tf.get_releasever() == "25");
+        tf.set_releasever("26").unwrap();
+        assert!(tf.get_releasever() != "25");
+    }
+
+    #[test]
+    fn test_repo_management() {
+        let mut tf = new_test_tf_basic(VALID_PRELUDE).unwrap();
+        tf.enable_repo("update,fedora").unwrap();
+        assert!(tf.get_repos() == ["baserepo", "update", "fedora"]);
+        tf.enable_repo("testing").unwrap();
+        assert!(tf.get_repos() == ["baserepo", "update", "fedora", "testing"]);
+        let err = tf.disable_repo("testing").unwrap_err();
+        assert_eq!(
+            format!("{}", err.root_cause()),
+            "Invalid --disablerepo=\"testing\" value, currently only '*' is supported"
+        );
     }
 
     #[test]
