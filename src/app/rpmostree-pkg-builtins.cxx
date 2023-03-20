@@ -46,6 +46,9 @@ static gboolean opt_uninstall_all;
 static gboolean opt_unchanged_exit_77;
 static gboolean opt_lock_finalization;
 static gboolean opt_force_replacefiles;
+static char **opt_enable_repo;
+static char **opt_disable_repo;
+static char **opt_release_ver;
 
 static GOptionEntry option_entries[]
     = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -63,6 +66,12 @@ static GOptionEntry option_entries[]
           "If no overlays were changed, exit 77", NULL },
         { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
           "Prevent automatic deployment finalization on shutdown", NULL },
+        { "enablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_enable_repo,
+          "Enable the repository based on the repo id", NULL },
+        { "disablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_disable_repo,
+          "Only disabling all (*) repositories is supported currently", NULL },
+        { "releasever", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_release_ver, "Set the releasever",
+          NULL },
         { NULL } };
 
 static GOptionEntry uninstall_option_entry[]
@@ -235,6 +244,21 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
               rust::Vec v = { rust::String (pkg) };
               CXX_TRY (treefile->add_packages (v, true), error);
             }
+        }
+      for (char **it = opt_enable_repo; it && *it; it++)
+        {
+          auto repo = rust::Str (*it);
+          treefile->enable_repo (repo);
+        }
+      for (char **it = opt_disable_repo; it && *it; it++)
+        {
+          auto repo = rust::Str (*it);
+          treefile->disable_repo (repo);
+        }
+      for (char **it = opt_release_ver; it && *it; it++)
+        {
+          auto ver = rust::Str (*it);
+          treefile->set_releasever (ver);
         }
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }

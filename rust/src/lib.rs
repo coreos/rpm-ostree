@@ -602,7 +602,9 @@ pub mod ffi {
         fn sanitycheck_externals(&self) -> Result<()>;
         fn importer_flags(&self, pkg_name: &str) -> Box<RpmImporterFlags>;
         fn write_repovars(&self, workdir_dfd_raw: i32) -> Result<String>;
-
+        fn set_releasever(&mut self, releasever: &str) -> Result<()>;
+        fn enable_repo(&mut self, repo: &str) -> Result<()>;
+        fn disable_repo(&mut self, repo: &str) -> Result<()>;
         // these functions are more related to derivation
         fn validate_for_container(&self) -> Result<()>;
         fn get_base_refspec(&self) -> Refspec;
