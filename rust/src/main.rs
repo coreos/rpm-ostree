@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{Context, Result};
+use is_terminal::IsTerminal;
 use nix::sys::signal;
 use rpmostree_rust::builtins;
 use std::ffi::OsString;
@@ -137,7 +138,12 @@ fn print_error(e: anyhow::Error) {
     // See discussion in CxxResult for why we use this format
     let msg = format!("{:#}", e);
     // Print the error: prefix in red if we're on a tty
-    let stderr = termcolor::BufferWriter::stderr(termcolor::ColorChoice::Auto);
+    let colored = if std::io::stderr().is_terminal() {
+        termcolor::ColorChoice::Auto
+    } else {
+        termcolor::ColorChoice::Never
+    };
+    let stderr = termcolor::BufferWriter::stderr(colored);
     let stderrbuf = {
         let mut stderrbuf = stderr.buffer();
         let _ =

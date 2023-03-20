@@ -2148,6 +2148,7 @@ dependencies = [
  "futures",
  "indicatif",
  "indoc",
+ "is-terminal",
  "libc",
  "libdnf-sys",
  "maplit",

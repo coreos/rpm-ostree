@@ -64,6 +64,7 @@ fn-error-context = "0.2.0"
 futures = "0.3.25"
 indoc = "2.0.1"
 indicatif = "0.17.3"
+is-terminal = "0.4"
 libc = "0.2.137"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
