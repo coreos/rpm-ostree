@@ -549,11 +549,21 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
   /* Only use polkit when running as root on system bus; self-tests don't need it */
   if (!self->on_session_bus)
     {
-      g_autoptr (GError) local_error = NULL;
-      self->authority = polkit_authority_get_sync (NULL, &local_error);
-      if (self->authority == NULL)
+      // See https://github.com/coreos/rpm-ostree/issues/4323 and
+      // https://github.com/coreos/fedora-coreos-tracker/issues/334 and
+      // https://lists.freedesktop.org/archives/dbus/2023-March/018252.html Basically, starting
+      // polkit can time out on slow systems; we want to just keep retrying so that we hit the
+      // systemd unit activation timeout (90s); crucially whatever it's configured to be, so that
+      // slow systems can bump that timeout.
+      while (self->authority == NULL)
         {
-          errx (EXIT_FAILURE, "Can't get polkit authority: %s", local_error->message);
+          g_autoptr (GError) local_error = NULL;
+          self->authority = polkit_authority_get_sync (NULL, &local_error);
+          if (self->authority == NULL)
+            {
+              sd_journal_print (LOG_WARNING, "Can't get polkit authority: %s",
+                                local_error->message);
+            }
         }
     }
 
