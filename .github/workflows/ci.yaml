@@ -244,7 +244,6 @@ jobs:
   # Doc: https://github.com/redhat-plumbers-in-action/differential-shellcheck#usage
   differential-shellcheck:
     name: Differential ShellCheck
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -253,7 +252,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Differential ShellCheck
-        uses: redhat-plumbers-in-action/differential-shellcheck@v3
+        uses: redhat-plumbers-in-action/differential-shellcheck@v4
         with:
           severity: warning
           token: ${{ secrets.GITHUB_TOKEN }}
