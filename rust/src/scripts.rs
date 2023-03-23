@@ -23,7 +23,11 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     "kernel-core.posttrans",
     "kernel-debug-core.posttrans",
     "kernel-automotive-core.posttrans",
+    "kernel-automotive-debug-core.posttrans",
+    "kernel-automotive-debug-modules.posttrans",
     "kernel-rt-core.posttrans",
+    "kernel-rt-debug-core.posttrans",
+    "kernel-rt-debug-modules.posttrans",
     // Additionally ignore posttrans scripts for the Oracle Linux `kernel-uek` package
     "kernel-uek.posttrans",
     // Legacy workaround
