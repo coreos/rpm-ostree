@@ -50,7 +50,10 @@ grep -E '^ kernel-[0-9]' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.tx
 assert_streq "$(wc -l < orig-kernel.txt)" "1"
 orig_kernel=$(cat orig-kernel.txt)
 URL_ROOT="https://dl.fedoraproject.org/pub/fedora/linux/releases/$versionid/Everything/x86_64/os/Packages/k"
-vm_rpmostree override replace \
+if vm_cmd rpm -q kernel-modules-core; then 
+    echo "kernel-modules-core installed.. removing"; remove="--remove kernel-modules-core"; 
+fi
+vm_rpmostree override replace $remove \
   "$URL_ROOT/kernel{,-core,-modules{,-extra}}-$kernel_release.rpm"
 new=$(vm_get_pending_csum)
 vm_cmd rpm-ostree db list "${new}" > new-dblist.txt
