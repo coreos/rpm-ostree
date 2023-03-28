@@ -16,7 +16,7 @@ use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum ProgressType {
     Task,
     NItems(u64),
@@ -50,6 +50,7 @@ impl ProgressState {
     fn new<M: Into<String>>(msg: M, ptype: ProgressType) -> Self {
         use std::fmt::Write;
         let msg = msg.into();
+        tracing::debug!("Creating progress {msg:?} with type {ptype:?}");
         let target = ProgressDrawTarget::stdout();
         let style = ProgressStyle::default_bar();
         let pb = match ptype {
@@ -121,14 +122,21 @@ impl ProgressState {
 
     /// For a percent or nitems progress, set the progress state.
     fn update(&self, n: u64) {
-        assert!(!(self.ptype == ProgressType::Task));
+        let ptype = &self.ptype;
+        if ptype == &ProgressType::Task {
+            let message = &self.message;
+            panic!("expected non-task progress type; current message is {message}")
+        }
         self.bar.set_position(n);
     }
 
     /// Clear the progress bar and print a completion message even on non-ttys.
     fn end<T: AsRef<str>>(&self, suffix: Option<T>) {
+        let ptype = &self.ptype;
+        let suffix = suffix.as_ref().map(|s| s.as_ref());
+        tracing::debug!("Ending progress {ptype:?}; suffix={suffix:?}");
         self.bar.finish_and_clear();
-        let suffix = suffix.as_ref().map(|s| s.as_ref()).unwrap_or("done");
+        let suffix = suffix.unwrap_or("done");
         if self.is_hidden {
             println!("{}", suffix);
         } else {

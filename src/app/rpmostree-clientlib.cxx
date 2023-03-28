@@ -324,6 +324,8 @@ on_transaction_progress (GDBusProxy *proxy, gchar *sender_name, gchar *signal_na
 {
   auto tp = static_cast<TransactionProgress *> (user_data);
 
+  g_debug ("txn progress %s", signal_name);
+
   if (g_strcmp0 (signal_name, "SignatureProgress") == 0)
     {
       /* We used to print the signature here, but doing so interferes with the
