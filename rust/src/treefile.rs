@@ -802,17 +802,7 @@ impl Treefile {
 
     pub(crate) fn enable_repo(&mut self, repo: &str) -> Result<()> {
         let repos = self.parsed.base.repos.get_or_insert_with(|| Vec::new());
-        let repos_vec = &mut Vec::new();
-        if repo.contains(",") {
-            let repo_list = repo.split(",");
-            for r in repo_list {
-                repos_vec.push(r.to_string());
-            }
-            repos.append(repos_vec);
-        } else {
-            repos.push(repo.to_string());
-        }
-        self.parsed.base.repos = Some(repos.to_vec());
+        repos.extend(repo.split(',').map(ToOwned::to_owned));
         Ok(())
     }
 
