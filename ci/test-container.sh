@@ -142,6 +142,11 @@ rpm-ostree override replace $koji_kernel_url
 # test that the new initramfs was generated
 test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
 
+# test --enablerepo --disablerepo --releasever
+rpm-ostree --releasever=36 --disablerepo="*" \
+    --enablerepo=fedora install tmux
+rpm -q tmux-3.2a-3.fc36.x86_64
+
 # test skipping cliwraps
 export RPMOSTREE_CLIWRAP_SKIP=1
 if yum swap foo 2>err.txt; then
