@@ -174,9 +174,10 @@ mod tests {
     }
 }
 
-fn assert_empty(m: &MutexGuard<Option<ProgressState>>) {
+fn assert_empty(m: &MutexGuard<Option<ProgressState>>, new_msg: &str) {
     if let Some(ref state) = **m {
-        panic!("Overwriting task: \"{}\"", state.message)
+        let prev = state.message.as_str();
+        panic!("Overwriting task: {prev:?} with {new_msg:?}")
     }
 }
 
@@ -189,19 +190,19 @@ fn optional_str(s: &str) -> Option<&str> {
 // API.
 pub(crate) fn console_progress_begin_task(msg: &str) {
     let mut lock = PROGRESS.lock().unwrap();
-    assert_empty(&lock);
+    assert_empty(&lock, msg);
     *lock = Some(ProgressState::new(msg, ProgressType::Task));
 }
 
 pub(crate) fn console_progress_begin_n_items(msg: &str, n: u64) {
     let mut lock = PROGRESS.lock().unwrap();
-    assert_empty(&lock);
+    assert_empty(&lock, msg);
     *lock = Some(ProgressState::new(msg, ProgressType::NItems(n as u64)));
 }
 
 pub(crate) fn console_progress_begin_percent(msg: &str) {
     let mut lock = PROGRESS.lock().unwrap();
-    assert_empty(&lock);
+    assert_empty(&lock, msg);
     *lock = Some(ProgressState::new(msg, ProgressType::Percent));
 }
 
