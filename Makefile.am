@@ -34,7 +34,7 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DLOCALEDIR=\"$(datadir)/locale\" \
 	-DSYSCONFDIR='"$(sysconfdir)"' \
 	-DRPM_OSTREE_GITREV='"$(RPM_OSTREE_GITREV)"' \
-	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_56 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_56
+	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_56 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_70
 # Compiler warnings
 warnings_skipped = sign-compare
 warnings_error = empty-body format=2 format-security format-nonliteral \
@@ -46,7 +46,7 @@ warning_flags = -Wall \
   $(patsubst %,-Werror=%,$(warnings_error)) \
   $(NULL)
 if BUILDOPT_WERROR
-warning_flags += -Werror
+warning_flags += -Werror -Wno-error=deprecated-declarations
 endif
 # We make some C warnings always a hard error; these should never happen in our code.
 # These flags are not valid for C++.
