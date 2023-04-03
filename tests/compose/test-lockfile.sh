@@ -139,7 +139,7 @@ if runcompose \
   fatal "compose unexpectedly succeeded"
 fi
 assert_file_has_content err.txt 'Could not depsolve transaction'
-assert_file_has_content err.txt 'unlocked-pkg-dep-2.0-1.x86_64 is filtered out by exclude filtering'
+assert_file_has_content err.txt 'unlocked-pkg-dep-2.0-1.x86_64 .*filtered out by exclude filtering'
 treefile_remove "packages" '"unlocked-pkg"'
 echo "ok strict mode no unlocked pkg deps"
 
