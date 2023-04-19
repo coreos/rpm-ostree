@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Pin to branch for some reproducibility
-BRANCH=f37
+BRANCH=f38
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
@@ -32,7 +32,7 @@ cd minimal-test
 cat > minimal.yaml << 'EOF'
 container: true
 recommends: false
-releasever: 37
+releasever: 38
 packages:
   - rootfiles
   - fedora-repos-modular
@@ -60,7 +60,7 @@ mkdir minimal-test
 cd minimal-test
 cat > minimal.yaml << 'EOF'
 boot-location: modules
-releasever: 37
+releasever: 38
 packages:
   - bash
   - rpm
@@ -78,8 +78,12 @@ cd ..
 echo "ok minimal"
 
 # Next, test the full Fedora Silverblue config
-test -d workstation-ostree-config || git clone --depth=1 https://pagure.io/workstation-ostree-config --branch "${BRANCH}"
-
+test -d workstation-ostree-config || git clone --depth=100 https://pagure.io/workstation-ostree-config --branch "${BRANCH}"
+# Temporary workaround while this update hits stable
+# https://pagure.io/workstation-ostree-config/c/7c5245aafe69a2f24572e19e7fd81be713f74af6?branch=f38
+# When removing workaround re-adjust the --depth=100 to --depth=1.
+git -c user.email="composetest@localhost.com" -c user.name="composetest" \
+   -C workstation-ostree-config revert 7c5245aafe69a2f24572e19e7fd81be713f74af6
 rpm-ostree compose image --cachedir=cache --touch-if-changed=changed.stamp --initialize workstation-ostree-config/fedora-silverblue.yaml fedora-silverblue.ociarchive
 skopeo inspect oci-archive:fedora-silverblue.ociarchive
 test -f changed.stamp

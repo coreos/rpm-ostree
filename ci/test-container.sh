@@ -60,6 +60,7 @@ versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 case $versionid in
   36) module=cri-o:1.23/default;;
   37) module=cri-o:1.24/default;;
+  38) module=cri-o:1.25/default;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 rpm-ostree ex module install "${module}"
@@ -79,18 +80,26 @@ case $versionid in
   36)
     url_suffix=2.13.0/5.fc36/x86_64/ignition-2.13.0-5.fc36.x86_64.rpm
     # 2.14.0
-    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1967836
-    koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=1970749
+    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=1967836"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=1970749"
     kver=5.17.11
     krev=300
     ;;
   37)
     url_suffix=2.14.0/3.fc37/x86_64/ignition-2.14.0-3.fc37.x86_64.rpm
     # 2.14.0-4
-    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2013062
-    koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2084352
+    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2013062"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2084352"
     kver=6.0.7
     krev=301
+    ;;
+  38)
+    url_suffix=2.15.0/2.fc38/x86_64/ignition-2.15.0-2.fc38.x86_64.rpm
+    # 2.15.0-3
+    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2174317"
+    kver=6.2.8
+    krev=300
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
 esac
