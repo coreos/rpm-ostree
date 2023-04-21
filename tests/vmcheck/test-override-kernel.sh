@@ -41,20 +41,15 @@ versionid=${versionid:11} # trim off VERSION_ID=
 current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 case $versionid in
-  36) kernel_release=5.17.5-300.fc36.x86_64;;
-  37) kernel_release=6.0.7-301.fc37.x86_64;;
+  38) kernel_release=6.2.9-300.fc38.x86_64;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt $kernel_release
 grep -E '^ kernel-[0-9]' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
 assert_streq "$(wc -l < orig-kernel.txt)" "1"
 orig_kernel=$(cat orig-kernel.txt)
-URL_ROOT="https://dl.fedoraproject.org/pub/fedora/linux/releases/$versionid/Everything/x86_64/os/Packages/k"
-if vm_cmd rpm -q kernel-modules-core; then 
-    echo "kernel-modules-core installed.. removing"; remove="--remove kernel-modules-core"; 
-fi
-vm_rpmostree override replace $remove \
-  "$URL_ROOT/kernel{,-core,-modules{,-extra}}-$kernel_release.rpm"
+koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2178613"
+vm_rpmostree override replace $koji_kernel_url
 new=$(vm_get_pending_csum)
 vm_cmd rpm-ostree db list "${new}" > new-dblist.txt
 assert_file_has_content_literal new-dblist.txt $kernel_release

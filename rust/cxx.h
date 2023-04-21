@@ -84,7 +84,7 @@ public:
 
   bool operator== (const String &) const noexcept;
   bool operator!= (const String &) const noexcept;
-  bool operator<(const String &) const noexcept;
+  bool operator< (const String &) const noexcept;
   bool operator<= (const String &) const noexcept;
   bool operator> (const String &) const noexcept;
   bool operator>= (const String &) const noexcept;
@@ -144,7 +144,7 @@ public:
 
   bool operator== (const Str &) const noexcept;
   bool operator!= (const Str &) const noexcept;
-  bool operator<(const Str &) const noexcept;
+  bool operator< (const Str &) const noexcept;
   bool operator<= (const Str &) const noexcept;
   bool operator> (const Str &) const noexcept;
   bool operator>= (const Str &) const noexcept;
@@ -246,7 +246,7 @@ public:
 
   bool operator== (const iterator &) const noexcept;
   bool operator!= (const iterator &) const noexcept;
-  bool operator<(const iterator &) const noexcept;
+  bool operator< (const iterator &) const noexcept;
   bool operator<= (const iterator &) const noexcept;
   bool operator> (const iterator &) const noexcept;
   bool operator>= (const iterator &) const noexcept;
@@ -719,7 +719,7 @@ Slice<T>::iterator::operator!= (const iterator &other) const noexcept
 
 template <typename T>
 bool
-Slice<T>::iterator::operator<(const iterator &other) const noexcept
+Slice<T>::iterator::operator< (const iterator &other) const noexcept
 {
   return this->pos < other.pos;
 }
