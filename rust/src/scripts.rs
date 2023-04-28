@@ -21,7 +21,9 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     // XXX: we should probably change this to instead ignore based on the kernel virtual Provides
     "kernel.posttrans",
     "kernel-core.posttrans",
+    "kernel-redhat-core.posttrans",
     "kernel-debug-core.posttrans",
+    "kernel-redhat-debug-core.posttrans",
     "kernel-automotive-core.posttrans",
     "kernel-automotive-debug-core.posttrans",
     "kernel-automotive-debug-modules.posttrans",
