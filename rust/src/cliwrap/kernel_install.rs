@@ -91,7 +91,7 @@ fn run_dracut(kernel_dir: &str) -> Result<()> {
         .status()?;
     if !res.success() {
         return Err(anyhow!(
-            "Failed to generate initramfs (via dracut) for for kernel: {kernel_dir}: {:?}",
+            "Failed to generate initramfs (via dracut) for kernel: {kernel_dir}: {:?}",
             res
         ));
     }
