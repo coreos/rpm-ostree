@@ -2114,7 +2114,6 @@ dependencies = [
  "maplit",
  "memfd",
  "nix 0.26.2",
- "oci-spec",
  "once_cell",
  "openssl",
  "os-release",

@@ -10,7 +10,7 @@ use clap::Parser;
 use oci_spec::image::ImageManifest;
 use ostree::gio;
 use ostree_ext::container as ostree_container;
-use ostree_ext::ostree;
+use ostree_ext::{oci_spec, ostree};
 
 use crate::cxxrsutil::CxxResult;
 
