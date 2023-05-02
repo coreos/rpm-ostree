@@ -128,6 +128,7 @@ static RpmOstreeCommand commands[] = {
 };
 
 static gboolean opt_version;
+static gboolean opt_quiet;
 static gboolean opt_force_peer;
 static char *opt_sysroot;
 static gchar **opt_install;
@@ -135,6 +136,8 @@ static gchar **opt_uninstall;
 
 static GOptionEntry global_entries[] = { { "version", 0, 0, G_OPTION_ARG_NONE, &opt_version,
                                            "Print version information and exit", NULL },
+                                         { "quiet", 'q', 0, G_OPTION_ARG_NONE, &opt_quiet,
+                                           "Avoid printing most informational messages", NULL },
                                          { NULL } };
 
 static GOptionEntry daemon_entries[]
@@ -210,6 +213,13 @@ client_throw_non_ostree_host_error (GError **error)
 }
 
 } /* namespace */
+
+// Returns TRUE if the global quiet flag was specified
+bool
+rpmostree_global_quiet (void)
+{
+  return opt_quiet;
+}
 
 gboolean
 rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *main_entries,

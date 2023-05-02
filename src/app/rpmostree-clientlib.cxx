@@ -326,6 +326,30 @@ on_transaction_progress (GDBusProxy *proxy, gchar *sender_name, gchar *signal_na
 
   g_debug ("txn progress %s", signal_name);
 
+  if (g_strcmp0 (signal_name, "Finished") == 0)
+    {
+      if (tp->error == NULL)
+        {
+          g_autofree char *error_message = NULL;
+          gboolean success = FALSE;
+
+          g_variant_get (parameters, "(bs)", &success, &error_message);
+
+          if (!success)
+            {
+              tp->error = g_dbus_error_new_for_dbus_error (
+                  "org.projectatomic.rpmostreed.Error.Failed", error_message);
+            }
+        }
+
+      transaction_progress_end (tp);
+      return;
+    }
+
+  // Everything else below here is just printing progress, which we suppress in quiet mode
+  if (rpmostree_global_quiet ())
+    return;
+
   if (g_strcmp0 (signal_name, "SignatureProgress") == 0)
     {
       /* We used to print the signature here, but doing so interferes with the
@@ -389,24 +413,6 @@ on_transaction_progress (GDBusProxy *proxy, gchar *sender_name, gchar *signal_na
         }
       else
         rpmostreecxx::console_progress_set_message (line.c_str ());
-    }
-  else if (g_strcmp0 (signal_name, "Finished") == 0)
-    {
-      if (tp->error == NULL)
-        {
-          g_autofree char *error_message = NULL;
-          gboolean success = FALSE;
-
-          g_variant_get (parameters, "(bs)", &success, &error_message);
-
-          if (!success)
-            {
-              tp->error = g_dbus_error_new_for_dbus_error (
-                  "org.projectatomic.rpmostreed.Error.Failed", error_message);
-            }
-        }
-
-      transaction_progress_end (tp);
     }
 }
 
