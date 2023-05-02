@@ -63,6 +63,8 @@ BUILTINPROTO (initramfs_etc);
 
 #undef BUILTINPROTO
 
+bool rpmostree_global_quiet (void);
+
 gboolean rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *main_entries,
                                          int *argc, char ***argv,
                                          RpmOstreeCommandInvocation *invocation,
