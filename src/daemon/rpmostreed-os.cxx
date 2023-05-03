@@ -725,6 +725,13 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface, GDBusMethodInvocatio
         }
     }
 
+  /* if output-to-self is not explicitly set, default to TRUE */
+  g_autoptr (GVariant) arg_options_owned = NULL;
+  if (!g_variant_dict_contains (&dict, "output-to-self"))
+    {
+      g_variant_dict_insert (&dict, "output-to-self", "b", TRUE);
+    }
+
   /* Now we translate policy into flags the deploy transaction understands. But avoid
    * starting it at all if we're not even on. The benefit of this approach is that we keep
    * the Deploy transaction simpler. */
@@ -744,17 +751,16 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface, GDBusMethodInvocatio
       break;
     case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_STAGE:
       break;
+    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_APPLY:
+      // For now, we always reboot for any change.  In the future, we may start e.g. detecting
+      // the case where there are no kernel changes, and doing a fast userspace apply via systemd.
+      g_variant_dict_insert (&dict, "reboot", "b", TRUE);
+      break;
     default:
       g_assert_not_reached ();
     }
 
-  /* if output-to-self is not explicitly set, default to TRUE */
-  g_autoptr (GVariant) arg_options_owned = NULL;
-  if (!g_variant_dict_contains (&dict, "output-to-self"))
-    {
-      g_variant_dict_insert (&dict, "output-to-self", "b", TRUE);
-      arg_options = arg_options_owned = g_variant_ref_sink (g_variant_dict_end (&dict));
-    }
+  arg_options = arg_options_owned = g_variant_ref_sink (g_variant_dict_end (&dict));
   (void)arg_options_owned; /* Pacify static analysis */
 
   return os_merge_or_start_deployment_txn (interface, invocation, dfault, arg_options, NULL, NULL,
