@@ -2123,7 +2123,7 @@ dependencies = [
  "reqwest",
  "rpmostree-client",
  "rust-ini",
- "rustix 0.36.13",
+ "rustix 0.37.18",
  "serde",
  "serde_derive",
  "serde_json",
