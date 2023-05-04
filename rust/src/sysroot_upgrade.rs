@@ -92,18 +92,22 @@ async fn pull_container_async(
         .iter()
         .chain(std::iter::once(&prep.ostree_commit_layer));
     let (stored, (n_to_fetch, size_to_fetch)) = layer_counts(ostree_layers);
-    if stored > 0 || n_to_fetch > 0 {
+    if stored > 0 {
+        output_message(&format!("ostree chunk layers already present: {stored}"));
+    }
+    if n_to_fetch > 0 {
         let size = glib::format_size(size_to_fetch);
         output_message(&format!(
-            "ostree chunk layers stored: {stored} needed: {n_to_fetch} ({size})"
+            "ostree chunk layers needed: {n_to_fetch} ({size})"
         ));
     }
     let (stored, (n_to_fetch, size_to_fetch)) = layer_counts(prep.layers.iter());
-    if stored > 0 || n_to_fetch > 0 {
+    if stored > 0 {
+        output_message(&format!("custom layers already present: {stored}"));
+    }
+    if n_to_fetch > 0 {
         let size = glib::format_size(size_to_fetch);
-        output_message(&format!(
-            "custom layers stored: {stored} needed: {n_to_fetch} ({size})"
-        ));
+        output_message(&format!("custom layers needed: {n_to_fetch} ({size})"));
     }
     let import = imp.import(prep).await;
     let _ = progress_printer.await;
