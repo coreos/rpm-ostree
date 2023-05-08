@@ -1031,6 +1031,8 @@ rpmostree_auto_update_policy_to_str (RpmostreedAutomaticUpdatePolicy policy, GEr
       return "check";
     case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_STAGE:
       return "stage";
+    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_APPLY:
+      return "apply";
     default:
       return (char *)glnx_null_throw (error, "Invalid policy value %u", policy);
     }
@@ -1047,6 +1049,8 @@ rpmostree_str_to_auto_update_policy (const char *str, RpmostreedAutomaticUpdateP
     *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK;
   else if (g_str_equal (str, "stage") || g_str_equal (str, "ex-stage") /* backcompat */)
     *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_STAGE;
+  else if (g_str_equal (str, "apply"))
+    *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_APPLY;
   else
     return glnx_throw (error, "Invalid value for AutomaticUpdatePolicy: '%s'", str);
   return TRUE;

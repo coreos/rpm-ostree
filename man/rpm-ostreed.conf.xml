@@ -71,14 +71,21 @@ Boston, MA 02111-1307, USA.
         <term><varname>AutomaticUpdatePolicy=</varname></term>
 
         <listitem>
-        <para>Controls the automatic update policy. Currently "none", "check", or "stage".
+        <para>Controls the automatic update policy. Currently "none", "check", "stage", "apply".
         "none" disables automatic updates. "check" downloads just enough metadata to check
         for updates and display them in <command>rpm-ostree status</command>. Defaults to
         "none". The <citerefentry><refentrytitle>rpm-ostreed-automatic.timer</refentrytitle><manvolnum>8</manvolnum></citerefentry>
         unit determines the actual frequency of updates.</para>
-        <para>Finally, the "stage" policy downloads and unpacks the update, performing
-        any package layering.  Only a small amount of work is left to be performed at
+        <para>The "stage" policy downloads and unpacks the update, queuing it for the next boot.
+        This leaves initiating a reboot to other automation tools.
+        Only a small amount of work is left to be performed at
         shutdown time via the <literal>ostree-finalize-staged.service</literal> systemd unit.
+        </para>
+        <para>Finally, the "apply" policy will currently always initiate a reboot.  However,
+        in the future it may apply userspace-only fixes without a physical reboot.
+        Any reboots initiated via rpm-ostree will default to honoring active systemd inhibitors.
+        For example, to temporarily suppress automatic "apply" updates while debugging a system,
+        you can use <literal>systemd-inhibit bash</literal>; exiting the shell will lift the inhibitor.
         </para>
         </listitem>
       </varlistentry>
