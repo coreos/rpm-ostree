@@ -80,7 +80,7 @@ rayon = "1.6.0"
 regex = "1.7"
 reqwest = { version = "0.11", features = ["native-tls", "blocking", "gzip"] }
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
-rust-ini = "0.18.0"
+rust-ini = "0.19.0"
 serde = { version = "1.0.162", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.96"
