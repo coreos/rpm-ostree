@@ -87,6 +87,7 @@ fn cli_cmd() -> Command<'static> {
                 .long("groups")
                 .takes_value(true),
         )
+        .arg(Arg::new("no-create-home").short('M').long("no-create-home"))
         .arg(Arg::new("system").short('r').long("system"))
         .arg(Arg::new("shell").short('s').long("shell").takes_value(true))
         .arg(Arg::new("uid").short('u').long("uid").takes_value(true))
@@ -176,6 +177,7 @@ mod test {
         let cmd = cli_cmd();
         let static_uid = [
             "/usr/sbin/useradd",
+            "-M",
             "-d",
             "testhome",
             "-u",
