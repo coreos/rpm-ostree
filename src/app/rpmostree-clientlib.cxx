@@ -603,15 +603,9 @@ impl_transaction_get_response_sync (GDBusConnection *connection, const char *tra
       return glnx_prefix_error (error, "Failed to start transaction");
     }
 
-  /* FIXME Use the 'just_started' flag to determine whether to print
-   *       a message about reattaching to an in-progress transaction,
-   *       like:
-   *
-   *       Existing upgrade in progress, reattaching.  Control-C to cancel.
-   *
-   *       But that requires having a printable description of the
-   *       operation.  Maybe just add a string arg to this function?
-   */
+  if (!just_started)
+    g_print ("Attaching to existing transaction: %s\n",
+             rpmostree_transaction_get_title (transaction));
   g_main_loop_run (tp->loop);
 
   gboolean success = FALSE;
