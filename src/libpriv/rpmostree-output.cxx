@@ -105,6 +105,16 @@ rpmostree_output_message (const char *format, ...)
 namespace rpmostreecxx
 {
 
+// Implementation detail of Progress that helps assign
+// a unique integer to aid debugging
+guint64
+_output_alloc_serial (void)
+{
+  static guint64 serial;
+  serial++;
+  return serial;
+}
+
 void
 output_message (const rust::Str msg)
 {
@@ -121,7 +131,9 @@ progress_begin_task (const rust::Str msg) noexcept
   auto msg_c = std::string (msg);
   RpmOstreeOutputProgressBegin begin = { msg_c.c_str (), false, 0 };
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
-  return std::make_unique<Progress> (ProgressType::TASK);
+  auto v = std::make_unique<Progress> (ProgressType::TASK);
+  g_debug ("init progress task serial=%" G_GUINT64_FORMAT " text=%s", v->serial, msg_c.c_str ());
+  return v;
 }
 
 // When working on a task/percent/nitems, often we want to display a particular
@@ -140,7 +152,9 @@ progress_nitems_begin (guint n, const rust::Str msg) noexcept
   auto msg_c = std::string (msg);
   RpmOstreeOutputProgressBegin begin = { msg_c.c_str (), false, n };
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
-  return std::make_unique<Progress> (ProgressType::N_ITEMS);
+  auto v = std::make_unique<Progress> (ProgressType::N_ITEMS);
+  g_debug ("init progress nitems serial=%" G_GUINT64_FORMAT " text=%s", v->serial, msg_c.c_str ());
+  return v;
 }
 
 // Update the nitems counter.
@@ -148,6 +162,7 @@ void
 Progress::nitems_update (guint n)
 {
   RpmOstreeOutputProgressUpdate progress = { n };
+  g_debug ("progress nitems update serial=%" G_GUINT64_FORMAT, this->serial);
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
 }
 
@@ -158,7 +173,9 @@ progress_percent_begin (const rust::Str msg) noexcept
   auto msg_c = std::string (msg);
   RpmOstreeOutputProgressBegin begin = { msg_c.c_str (), true, 0 };
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
-  return std::make_unique<Progress> (ProgressType::PERCENT);
+  auto v = std::make_unique<Progress> (ProgressType::PERCENT);
+  g_debug ("init progress percent serial=%" G_GUINT64_FORMAT " text=%s", v->serial, msg_c.c_str ());
+  return v;
 }
 
 // Update the percentage.
@@ -166,6 +183,7 @@ void
 Progress::percent_update (guint n)
 {
   RpmOstreeOutputProgressUpdate progress = { (guint)n };
+  g_debug ("progress percent update serial=%" G_GUINT64_FORMAT, this->serial);
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
 }
 
@@ -176,6 +194,7 @@ Progress::end (const rust::Str msg)
   g_assert (!this->ended);
   g_autofree char *final_msg = util::ruststr_dup_c_optempty (msg);
   RpmOstreeOutputProgressEnd done = { final_msg };
+  g_debug ("progress end serial=%" G_GUINT64_FORMAT, this->serial);
   active_cb (RPMOSTREE_OUTPUT_PROGRESS_END, &done, active_cb_opaque);
   this->ended = true;
 }

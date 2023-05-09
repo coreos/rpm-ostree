@@ -35,6 +35,9 @@ enum class ProgressType
 
 void output_message (rust::Str msg);
 
+// Implementation detail of Progress
+guint64 _output_alloc_serial (void);
+
 struct Progress
 {
 public:
@@ -52,7 +55,9 @@ public:
   {
     ptype = t;
     ended = false;
+    serial = _output_alloc_serial ();
   }
+  guint64 serial;
   ProgressType ptype;
   bool ended;
 };
