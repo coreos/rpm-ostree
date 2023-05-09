@@ -22,12 +22,12 @@ use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::cap_std;
 use cap_std_ext::cap_std::fs::Permissions;
 use cap_std_ext::dirext::CapStdExtDirExt;
-use cap_std_ext::rustix::fs::MetadataExt;
 use fn_error_context::context;
 use gio::prelude::*;
 use gio::FileType;
 use ostree_ext::{gio, glib};
 use rayon::prelude::*;
+use rustix::fs::MetadataExt;
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Write as FmtWrite;
@@ -1245,7 +1245,7 @@ fn hardlink_recurse(
 mod tests {
     use super::*;
     use cap_std::fs::{Dir, DirBuilder};
-    use cap_std_ext::{cap_std, rustix};
+    use cap_std_ext::cap_std;
 
     #[test]
     fn stripany() {

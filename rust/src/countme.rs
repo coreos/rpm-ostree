@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::{bail, Context, Result};
-use cap_std_ext::rustix;
 use os_release::OsRelease;
 use std::path;
 

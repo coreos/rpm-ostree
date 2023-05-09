@@ -59,9 +59,7 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
 fn default_container_pull_config() -> Result<ImageProxyConfig> {
     let mut cfg = ImageProxyConfig::default();
     let isolation_systemd = crate::utils::running_in_systemd().then(|| "rpm-ostree");
-    let isolation_default = cap_std_ext::rustix::process::getuid()
-        .is_root()
-        .then(|| "nobody");
+    let isolation_default = rustix::process::getuid().is_root().then(|| "nobody");
     let isolation_user = isolation_systemd.or(isolation_default);
     ostree_container::merge_default_container_proxy_opts_with_isolation(&mut cfg, isolation_user)?;
     Ok(cfg)
@@ -79,10 +77,6 @@ async fn pull_container_async(
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
         PrepareResult::Ready(r) => r,
     };
-    if prep.export_layout == ostree_container::ExportLayout::V0 {
-        output_message(&format!("warning: pulled image is using deprecated v0 format; support will be dropped in a future release"));
-        std::thread::sleep(std::time::Duration::from_secs(5));
-    }
     let progress_printer =
         tokio::task::spawn(async move { layer_progress_print(layer_progress).await });
     let digest = prep.manifest_digest.clone();

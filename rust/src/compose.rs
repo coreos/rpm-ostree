@@ -291,7 +291,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
             Ok::<_, anyhow::Error>(manifest)
         })?;
 
-        let diff = ostree_ext::container::manifest_diff(&previous_meta.manifest, &new_manifest);
+        let diff = ostree_ext::container::ManifestDiff::new(&previous_meta.manifest, &new_manifest);
         diff.print();
     }
 
