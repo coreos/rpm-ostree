@@ -16,7 +16,7 @@ use chrono::prelude::*;
 use clap::Parser;
 use ostree::glib;
 use ostree_ext::chunking::ObjectMetaSized;
-use ostree_ext::container::{Config, ExportLayout, ExportOpts, ImageReference};
+use ostree_ext::container::{Config, ExportOpts, ImageReference};
 use ostree_ext::objectsource::{
     ContentID, ObjectMeta, ObjectMetaMap, ObjectMetaSet, ObjectSourceMeta,
 };
@@ -166,13 +166,13 @@ fn build_mapping_recurse(
                     }
                 }
 
-                let checksum = child.checksum().unwrap().to_string();
+                let checksum = child.checksum().to_string();
                 match state.content.entry(checksum) {
                     Entry::Vacant(v) => {
                         v.insert(pkgid);
                     }
                     Entry::Occupied(_) => {
-                        let checksum = child.checksum().unwrap().to_string();
+                        let checksum = child.checksum().to_string();
                         let v = state.duplicates.entry(checksum).or_default();
                         v.push(pkgid);
                     }
@@ -212,7 +212,7 @@ async fn compare_builds(old_build: &str, new_build: &str) -> Result<()> {
     let (_, manifest_old) = proxy.fetch_manifest(&oi_old).await?;
     let oi_now = proxy.open_image(new_build).await?;
     let (_, new_manifest) = proxy.fetch_manifest(&oi_now).await?;
-    let diff = ostree_ext::container::manifest_diff(&manifest_old, &new_manifest);
+    let diff = ostree_ext::container::ManifestDiff::new(&manifest_old, &new_manifest);
     diff.print();
     Ok(())
 }
@@ -315,7 +315,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
                 .try_into()
                 .map_err(anyhow::Error::msg)?;
             let initramfs = initramfs.downcast_ref::<ostree::RepoFile>().unwrap();
-            let checksum = initramfs.checksum().unwrap();
+            let checksum = initramfs.checksum();
             let name = format!("initramfs (kernel {})", kernel_ver).into_boxed_str();
             let name = Rc::from(name);
             state.content.insert(checksum.to_string(), Rc::clone(&name));
@@ -396,16 +396,10 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         labels: Some(labels),
         cmd: opt.cmd,
     };
-    let format = match opt.format_version {
-        0 => ExportLayout::V0,
-        1 => ExportLayout::V1,
-        n => return Err(anyhow::anyhow!("Invalid format version {n}").into()),
-    };
     let opts = ExportOpts {
         copy_meta_keys,
         copy_meta_opt_keys,
         max_layers: opt.max_layers,
-        format,
         ..Default::default()
     };
     let handle = tokio::runtime::Handle::current();

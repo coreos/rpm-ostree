@@ -20,8 +20,8 @@ pub(crate) fn deployment_generate_id_impl(deployment: &ostree::Deployment) -> St
     // SAFETY: the results of these are not-nullable in the C API.
     format!(
         "{}-{}.{}",
-        deployment.osname().unwrap(),
-        deployment.csum().unwrap(),
+        deployment.osname(),
+        deployment.csum(),
         deployment.deployserial()
     )
 }
@@ -64,7 +64,7 @@ pub fn deployment_checksum_for_id(
 
     let deployment = deployment_for_id_impl(sysroot, deploy_id)?;
     // SAFETY: result is not-nullable in the C API.
-    let csum = deployment.csum().unwrap();
+    let csum = deployment.csum();
     Ok(csum.to_string())
 }
 

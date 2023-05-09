@@ -20,7 +20,7 @@ if test "${R_O_DIGEST}" != "${O_C_DIGEST}" ; then
 fi
 for verb in container ima-sign; do
     ostree "$verb" --help > cli_help.txt
-    assert_file_has_content_literal cli_help.txt "USAGE:"
+    assert_file_has_content_literal cli_help.txt "Usage:"
     assert_file_has_content_literal cli_help.txt "ostree-$verb $verb"
     rm cli_help.txt
 done

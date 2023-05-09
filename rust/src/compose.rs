@@ -292,7 +292,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
             Ok::<_, anyhow::Error>(manifest)
         })?;
 
-        let diff = ostree_ext::container::manifest_diff(&previous_meta.manifest, &new_manifest);
+        let diff = ostree_ext::container::ManifestDiff::new(&previous_meta.manifest, &new_manifest);
         diff.print();
     }
 
@@ -316,8 +316,8 @@ pub(crate) fn configure_build_repo_from_target(
     let target_repo = &target_repo.glib_reborrow();
 
     let mut changed = false;
-    let build_config = build_repo.config().unwrap();
-    let target_config = target_repo.copy_config().unwrap();
+    let build_config = build_repo.config();
+    let target_config = target_repo.copy_config();
     for (group, key) in propagated_bools {
         if let Some(v) = target_config.optional_bool(group, key)? {
             changed = true;

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::Result;
-use cap_std_ext::rustix;
 use nix::sys::statvfs;
 use std::os::unix::process::CommandExt;
 use std::{thread, time};

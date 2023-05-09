@@ -7,7 +7,6 @@ use crate::cxxrsutil::*;
 use crate::ffi::SystemHostType;
 use crate::utils;
 use anyhow::{anyhow, Result};
-use cap_std_ext::rustix;
 use fn_error_context::context;
 use gio::prelude::*;
 use ostree_ext::{gio, glib};
