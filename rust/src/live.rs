@@ -49,7 +49,7 @@ fn get_runstate_dir(deploy: &ostree::Deployment) -> PathBuf {
     format!(
         "{}/{}.{}",
         OSTREE_RUNSTATE_DIR,
-        deploy.csum().expect("csum"),
+        deploy.csum(),
         deploy.deployserial()
     )
     .into()
@@ -233,7 +233,7 @@ fn update_etc(
     // The labels for /etc and /usr/etc may differ; ensure that we label
     // the files with the /etc target, even though we're checking out
     // from /usr/etc.  This is the same as what libostree does.
-    if sepolicy.name().is_some() {
+    if sepolicy.name().len() > 0 {
         opts.sepolicy = Some(sepolicy.clone());
     }
     // Added directories and files
@@ -344,11 +344,11 @@ pub(crate) fn transaction_apply_live(
         .lookup(OPT_REPLACE)
         .map_err(anyhow::Error::msg)?
         .unwrap_or_default();
-    let repo = &sysroot.repo().expect("repo");
+    let repo = &sysroot.repo();
 
     let booted = sysroot.require_booted_deployment()?;
-    let osname = booted.osname().expect("osname");
-    let booted_commit = booted.csum().expect("csum");
+    let osname = booted.osname();
+    let booted_commit = booted.csum();
     let booted_commit = booted_commit.as_str();
 
     let target_commit = if let Some(t) = target {
@@ -356,7 +356,7 @@ pub(crate) fn transaction_apply_live(
     } else {
         match sysroot.query_deployments_for(Some(osname.as_str())) {
             (Some(pending), _) => {
-                let pending_commit = pending.csum().expect("csum");
+                let pending_commit = pending.csum();
                 let pending_commit = pending_commit.as_str();
                 Cow::Owned(pending_commit.to_string())
             }
@@ -497,7 +497,7 @@ pub(crate) fn transaction_apply_live(
 /// doesn't have a live apply state in /run.
 pub(crate) fn applylive_sync_ref(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
     let sysroot = sysroot.glib_reborrow();
-    let repo = &sysroot.repo().unwrap();
+    let repo = &sysroot.repo();
     let booted = if let Some(b) = sysroot.booted_deployment() {
         b
     } else {
@@ -534,7 +534,7 @@ pub(crate) fn get_live_apply_state(
 ) -> CxxResult<LiveApplyState> {
     let sysroot = sysroot.glib_reborrow();
     let deployment = deployment.glib_reborrow();
-    let repo = &sysroot.repo().unwrap();
+    let repo = &sysroot.repo();
     if let Some(state) = get_live_state(repo, &deployment)? {
         Ok(state)
     } else {

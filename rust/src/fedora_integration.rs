@@ -232,8 +232,8 @@ fn get_base_package_list() -> Result<HashSet<String>> {
         let default = deployments
             .get(0)
             .ok_or_else(|| anyhow::anyhow!("No deployments found"))?;
-        let checksum = default.csum().unwrap();
-        let repo = sysroot.repo().unwrap();
+        let checksum = default.csum();
+        let repo = sysroot.repo();
         let pkglist = {
             let cancellable = gio::Cancellable::new();
             let r = crate::ffi::package_variant_list_for_commit(

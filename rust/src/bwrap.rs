@@ -8,7 +8,6 @@ use crate::normalization;
 use anyhow::{Context, Result};
 use cap_std::fs::Dir;
 use cap_std_ext::prelude::{CapStdExtCommandExt, CapStdExtDirExt};
-use cap_std_ext::rustix;
 use fn_error_context::context;
 use ostree_ext::{gio, glib};
 use std::num::NonZeroUsize;

@@ -101,17 +101,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atty"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
-dependencies = [
- "hermit-abi 0.1.19",
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -214,7 +203,7 @@ dependencies = [
  "io-lifetimes",
  "ipnet",
  "maybe-owned",
- "rustix 0.37.18",
+ "rustix 0.37.19",
  "windows-sys 0.48.0",
  "winx",
 ]
@@ -229,7 +218,7 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes",
- "rustix 0.37.18",
+ "rustix 0.37.19",
 ]
 
 [[package]]
@@ -243,6 +232,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-std-ext"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6012b1e726e3e3ccf8151e2dc9cb454e593e0e7623b0e35464f5e62a15158c27"
+dependencies = [
+ "cap-tempfile",
+ "rustix 0.37.19",
+]
+
+[[package]]
 name = "cap-tempfile"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -250,7 +249,7 @@ checksum = "92372a5de78a858f20c22a8dbe3ea55e1cc2daeb82016a3150dab8cf51ea3235"
 dependencies = [
  "cap-std",
  "rand",
- "rustix 0.37.18",
+ "rustix 0.37.19",
  "uuid 1.3.2",
 ]
 
@@ -305,29 +304,12 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
-dependencies = [
- "atty",
- "bitflags 1.3.2",
- "clap_derive 3.2.25",
- "clap_lex 0.2.4",
- "indexmap",
- "once_cell",
- "strsim",
- "termcolor",
- "textwrap",
-]
-
-[[package]]
-name = "clap"
 version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93aae7a4192245f70fe75dd9157fc7b4a5bf53e88d30bd4396f7d8f9284d5acc"
 dependencies = [
  "clap_builder",
- "clap_derive 4.3.0",
+ "clap_derive",
  "once_cell",
 ]
 
@@ -340,21 +322,8 @@ dependencies = [
  "anstream",
  "anstyle",
  "bitflags 1.3.2",
- "clap_lex 0.5.0",
+ "clap_lex",
  "strsim",
-]
-
-[[package]]
-name = "clap_derive"
-version = "3.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
-dependencies = [
- "heck",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -367,15 +336,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.15",
-]
-
-[[package]]
-name = "clap_lex"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
-dependencies = [
- "os_str_bytes",
 ]
 
 [[package]]
@@ -451,7 +411,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fc8ef9cc4d183f3bfd3c232f304286b91cff5c9aa35665ea2e89499e1e0d021"
 dependencies = [
  "anyhow",
- "cap-std-ext",
+ "cap-std-ext 1.0.3",
  "cap-tempfile",
  "capctl",
  "fn-error-context",
@@ -882,7 +842,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7833d0f115a013d51c55950a3b09d30e4b057be9961b709acb9b5b17a1108861"
 dependencies = [
  "io-lifetimes",
- "rustix 0.37.18",
+ "rustix 0.37.19",
  "windows-sys 0.48.0",
 ]
 
@@ -1158,15 +1118,6 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "hermit-abi"
-version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "hermit-abi"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee512640fe35acbfb4bb779db6f0d80704c2cacfa2e39b601ef3e3f47d1ae4c7"
@@ -1384,7 +1335,7 @@ checksum = "adcf93614601c8129ddf72e2d5633df827ba6551541c6d8c59520a371475be1f"
 dependencies = [
  "hermit-abi 0.3.1",
  "io-lifetimes",
- "rustix 0.37.18",
+ "rustix 0.37.19",
  "windows-sys 0.48.0",
 ]
 
@@ -1538,7 +1489,7 @@ version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffc89ccdc6e10d6907450f753537ebc5c5d3460d2e4e62ea74bd571db62c0f9e"
 dependencies = [
- "rustix 0.37.18",
+ "rustix 0.37.19",
 ]
 
 [[package]]
@@ -1795,16 +1746,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "os_str_bytes"
-version = "6.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceedf44fb00f2d1984b0bc98102627ce622e083e49a5bacdb3e514fa4238e267"
-
-[[package]]
 name = "ostree"
-version = "0.17.1"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f9c3da362376d17ac2e2d5759fe544cdc7471b66e98c324be5efd2c7995672d"
+checksum = "054f5bd13c1ac78c922aa05fbf4c55730d7a3fc6490b1b65335b00e880a63334"
 dependencies = [
  "base64 0.20.0",
  "bitflags 1.3.2",
@@ -1821,18 +1766,18 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.10.7"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "887272baf181e1e2e9333cb7c57d7ee7b3e1f07278798b0f3e4403a5b823ebd2"
+checksum = "8903d59c4a56794b6ef8a2b11a5674fe85b370f1da33ae34450a6de1e39a20d6"
 dependencies = [
  "anyhow",
  "async-compression",
  "bitflags 1.3.2",
  "camino",
- "cap-std-ext",
+ "cap-std-ext 2.0.0",
  "cap-tempfile",
  "chrono",
- "clap 3.2.25",
+ "clap",
  "containers-image-proxy",
  "flate2",
  "fn-error-context",
@@ -1843,13 +1788,13 @@ dependencies = [
  "io-lifetimes",
  "libc",
  "libsystemd",
- "oci-spec",
  "olpc-cjson",
  "once_cell",
  "openssl",
  "ostree",
  "pin-project",
  "regex",
+ "rustix 0.37.19",
  "serde",
  "serde_json",
  "tar",
@@ -1863,9 +1808,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-sys"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe57dcbabc3b1ef80f97eb614453d90dc81a39c8f26eb540bd8e68bcae4d0e2f"
+checksum = "de67826255aa25d812bcd9b9f9dafb575b0b160adbe34d83d69c73c19d6b3e0c"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -2223,10 +2168,10 @@ dependencies = [
  "camino",
  "cap-primitives",
  "cap-std",
- "cap-std-ext",
+ "cap-std-ext 2.0.0",
  "cap-tempfile",
  "chrono",
- "clap 4.3.0",
+ "clap",
  "containers-image-proxy",
  "cxx",
  "either",
@@ -2255,7 +2200,7 @@ dependencies = [
  "reqwest",
  "rpmostree-client",
  "rust-ini",
- "rustix 0.36.13",
+ "rustix 0.37.19",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2298,9 +2243,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.37.18"
+version = "0.37.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bbfc1d1c7c40c01715f47d71444744a81669ca84e8b63e25a55e169b1f86433"
+checksum = "acf8729d8542766f1b2cf77eb034d52f40d375bb8b615d0b147089946e16613d"
 dependencies = [
  "bitflags 1.3.2",
  "errno",
@@ -2593,7 +2538,7 @@ dependencies = [
  "cfg-if",
  "fastrand",
  "redox_syscall 0.3.5",
- "rustix 0.37.18",
+ "rustix 0.37.19",
  "windows-sys 0.45.0",
 ]
 
@@ -2615,12 +2560,6 @@ checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
 dependencies = [
  "winapi-util",
 ]
-
-[[package]]
-name = "textwrap"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 
 [[package]]
 name = "thiserror"
