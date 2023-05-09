@@ -36,7 +36,7 @@ fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Vari
     } else if opts.reset {
         let booted = sysroot.require_booted_deployment()?;
         // Unwrap safety: This can't return NULL
-        let csum = booted.csum().expect("csum");
+        let csum = booted.csum();
         r.insert(live::OPT_TARGET, &csum.as_str());
     }
 
@@ -76,9 +76,9 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
     let sysroot = sysroot.glib_reborrow();
     let cancellable = gio::Cancellable::NONE;
     sysroot.load_if_changed(cancellable)?;
-    let repo = &sysroot.repo().unwrap();
+    let repo = &sysroot.repo();
     let booted = &sysroot.require_booted_deployment()?;
-    let booted_commit = booted.csum().expect("csum");
+    let booted_commit = booted.csum();
     let booted_commit = booted_commit.as_str();
 
     let live_state = live::get_live_state(repo, booted)?

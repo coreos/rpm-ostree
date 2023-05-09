@@ -31,7 +31,7 @@
 //! Functions named `ffi_new_` create a copy of their inputs, and can safely
 //! outlive the function call.
 
-use cap_std_ext::{cap_std, rustix};
+use cap_std_ext::cap_std;
 
 /// Create a new cap_std directory for an openat version.
 /// This creates a new file descriptor, because we can't guarantee they are

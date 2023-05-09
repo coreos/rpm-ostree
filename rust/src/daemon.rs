@@ -10,8 +10,8 @@ use crate::ffi::{
 };
 use anyhow::{anyhow, format_err, Result};
 use cap_std::fs::Dir;
+use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
-use cap_std_ext::{cap_std, rustix};
 use fn_error_context::context;
 use glib::prelude::*;
 use ostree_ext::{gio, glib, ostree};
@@ -146,8 +146,8 @@ pub(crate) fn deployment_populate_variant(
     // First, basic values from ostree
     dict.insert("id", &id);
 
-    dict.insert("osname", &deployment.osname().expect("osname").as_str());
-    dict.insert("checksum", &deployment.csum().expect("csum").as_str());
+    dict.insert("osname", &deployment.osname().as_str());
+    dict.insert("checksum", &deployment.csum().as_str());
     dict.insert_value("serial", &(deployment.deployserial() as i32).to_variant());
 
     let booted: bool = sysroot
@@ -178,9 +178,7 @@ pub(crate) fn deployment_populate_variant(
     // Unwrap safety: This always returns a value
     dict.insert(
         "unlocked",
-        &ostree::Deployment::unlocked_state_to_string(unlocked)
-            .unwrap()
-            .as_str(),
+        &ostree::Deployment::unlocked_state_to_string(unlocked).as_str(),
     );
 
     // Some of the origin-based state.  But not all yet; see the rest of the
@@ -220,7 +218,7 @@ fn deployment_layeredmeta_from_commit_impl(
         .unwrap_or_else(|| dict.contains("rpmostree.spec"));
     if !is_layered {
         // SAFETY: return value is "not nullable".
-        let checksum = deployment.csum().unwrap();
+        let checksum = deployment.csum();
         Ok(crate::ffi::DeploymentLayeredMeta {
             is_layered,
             base_commit: checksum.into(),
@@ -258,7 +256,7 @@ pub(crate) fn deployment_layeredmeta_load_commit(
     deployment: &ostree::Deployment,
 ) -> Result<crate::ffi::DeploymentLayeredMeta> {
     // SAFETY: return value is "not nullable".
-    let checksum = deployment.csum().unwrap();
+    let checksum = deployment.csum();
     let commit = &repo.load_variant(ostree::ObjectType::Commit, &checksum)?;
     deployment_layeredmeta_from_commit_impl(deployment, commit)
 }
@@ -353,7 +351,7 @@ fn get_cached_signatures_variant(
     let n = verify_result.count_all();
     let mut sigs: Vec<glib::Variant> = Vec::with_capacity(n as usize);
     for i in 0..n {
-        sigs.push(glib::Variant::from_variant(&verify_result.all(i).unwrap())); // we know index is in range
+        sigs.push(glib::Variant::from_variant(&verify_result.all(i))); // we know index is in range
     }
 
     let v = glib::Variant::array_from_iter_with_type(&*glib::Variant::static_variant_type(), sigs);

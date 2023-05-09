@@ -10,9 +10,9 @@ use crate::nameservice::shadow::parse_shadow_content;
 use anyhow::{anyhow, Result};
 use cap_std::fs::{Dir, OpenOptions};
 use cap_std_ext::cap_std;
-use cap_std_ext::rustix::fs::OpenOptionsExt;
 use fn_error_context::context;
 use ostree_ext::gio;
+use rustix::fs::OpenOptionsExt;
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
