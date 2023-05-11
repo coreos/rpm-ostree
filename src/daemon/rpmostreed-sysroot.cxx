@@ -104,100 +104,6 @@ static RpmostreedSysroot *_sysroot_instance;
 /* ----------------------------------------------------------------------------------------------------
  */
 
-static void
-sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
-{
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (opaque);
-  gboolean output_to_self = FALSE;
-
-  // The API previously passed these each time, but now we retain them as
-  // statics.
-  static char *progress_str;
-  static bool progress_state_percent;
-  static guint progress_state_n_items;
-
-  if (self->transaction)
-    g_object_get (self->transaction, "output-to-self", &output_to_self, NULL);
-
-  if (!self->transaction || output_to_self)
-    {
-      rpmostree_output_default_handler (type, data, opaque);
-      return;
-    }
-
-  RPMOSTreeTransaction *transaction = RPMOSTREE_TRANSACTION (self->transaction);
-  switch (type)
-    {
-    case RPMOSTREE_OUTPUT_MESSAGE:
-      rpmostree_transaction_emit_message (transaction, ((RpmOstreeOutputMessage *)data)->text);
-      break;
-    case RPMOSTREE_OUTPUT_PROGRESS_BEGIN:
-      {
-        auto begin = static_cast<RpmOstreeOutputProgressBegin *> (data);
-        g_clear_pointer (&progress_str, g_free);
-        progress_state_percent = false;
-        progress_state_n_items = 0;
-        if (begin->percent)
-          {
-            progress_str = g_strdup (begin->prefix);
-            rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
-            progress_state_percent = true;
-          }
-        else if (begin->n > 0)
-          {
-            progress_str = g_strdup (begin->prefix);
-            progress_state_n_items = begin->n;
-            /* For backcompat, this is a percentage.  See below */
-            rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
-          }
-        else
-          {
-            rpmostree_transaction_emit_task_begin (transaction, begin->prefix);
-          }
-      }
-      break;
-    case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
-      {
-        auto update = static_cast<RpmOstreeOutputProgressUpdate *> (data);
-        if (progress_state_n_items)
-          {
-            /* We still emit PercentProgress for compatibility with older clients as
-             * well as Cockpit. It's not worth trying to deal with version skew just
-             * for this yet.
-             */
-            int percentage = (update->c == progress_state_n_items)
-                                 ? 100
-                                 : (((double)(update->c)) / (progress_state_n_items)*100);
-            g_autofree char *newtext
-                = g_strdup_printf ("%s (%u/%u)", progress_str, update->c, progress_state_n_items);
-            rpmostree_transaction_emit_percent_progress (transaction, newtext, percentage);
-          }
-        else
-          {
-            rpmostree_transaction_emit_percent_progress (transaction, progress_str, update->c);
-          }
-      }
-      break;
-    case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
-      {
-        /* Not handled right now */
-      }
-      break;
-    case RPMOSTREE_OUTPUT_PROGRESS_END:
-      {
-        if (progress_state_percent || progress_state_n_items > 0)
-          {
-            rpmostree_transaction_emit_progress_end (transaction);
-          }
-        else
-          {
-            rpmostree_transaction_emit_task_end (transaction, "done");
-          }
-      }
-      break;
-    }
-}
-
 static gboolean
 handle_get_os (RPMOSTreeSysroot *object, GDBusMethodInvocation *invocation, const char *arg_name)
 {
@@ -528,8 +434,6 @@ sysroot_finalize (GObject *object)
 
   g_clear_object (&self->monitor);
 
-  rpmostree_output_set_callback (NULL, NULL);
-
   G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->finalize (object);
 }
 
@@ -545,8 +449,6 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
       = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_object_unref);
 
   self->monitor = NULL;
-
-  rpmostree_output_set_callback (sysroot_output_cb, self);
 }
 
 static gboolean
