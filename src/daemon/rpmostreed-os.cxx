@@ -72,6 +72,8 @@ sysroot_changed (RpmostreedSysroot *sysroot, gpointer user_data)
   g_autoptr (GError) local_error = NULL;
   GError **error = &local_error;
 
+  g_debug ("os: handling sysroot change");
+
   if (!rpmostreed_os_load_internals (self, error))
     g_warning ("%s", local_error->message);
 }
@@ -957,6 +959,9 @@ os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
   GError *local_error = NULL;
   g_autoptr (DnfContext) dnfctx = NULL;
 
+  sd_journal_print (LOG_INFO, "Handling ListRepos for caller %s",
+                    g_dbus_method_invocation_get_sender (invocation));
+
   dnfctx = os_create_dnf_context_simple (interface, FALSE, NULL, &local_error);
   if (dnfctx == NULL)
     return os_throw_dbus_invocation_error (invocation, &local_error);
@@ -1059,6 +1064,9 @@ os_handle_what_provides (RPMOSTreeOS *interface, GDBusMethodInvocation *invocati
   g_autoptr (GCancellable) cancellable = NULL;
   g_autoptr (DnfContext) dnfctx = NULL;
 
+  sd_journal_print (LOG_INFO, "Handling WhatProvides for caller %s",
+                    g_dbus_method_invocation_get_sender (invocation));
+
   dnfctx = os_create_dnf_context_simple (interface, TRUE, cancellable, &local_error);
   if (dnfctx == NULL)
     return os_throw_dbus_invocation_error (invocation, &local_error);
@@ -1094,6 +1102,9 @@ os_handle_get_packages (RPMOSTreeOS *interface, GDBusMethodInvocation *invocatio
   GError *local_error = NULL;
   g_autoptr (GCancellable) cancellable = NULL;
   g_autoptr (DnfContext) dnfctx = NULL;
+
+  sd_journal_print (LOG_INFO, "Handling GetPackages for caller %s",
+                    g_dbus_method_invocation_get_sender (invocation));
 
   dnfctx = os_create_dnf_context_simple (interface, TRUE, cancellable, &local_error);
   if (dnfctx == NULL)
@@ -1726,7 +1737,7 @@ static gboolean
 rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
 {
   const gchar *name = rpmostree_os_get_name (RPMOSTREE_OS (self));
-  g_debug ("loading %s", name);
+  g_debug ("reloading OS state for %s", name);
 
   OstreeSysroot *ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
   OstreeRepo *ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
