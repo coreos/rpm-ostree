@@ -314,6 +314,99 @@ transaction_gpg_verify_result_cb (OstreeRepo *repo, const char *checksum,
 }
 
 static void
+transaction_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
+{
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (opaque);
+  gboolean output_to_self = FALSE;
+
+  // The API previously passed these each time, but now we retain them as
+  // statics.
+  static char *progress_str;
+  static bool progress_state_percent;
+  static guint progress_state_n_items;
+
+  g_object_get (self, "output-to-self", &output_to_self, NULL);
+  if (output_to_self)
+    {
+      rpmostree_output_default_handler (type, data, NULL);
+      return;
+    }
+
+  RPMOSTreeTransaction *transaction = RPMOSTREE_TRANSACTION (self);
+
+  switch (type)
+    {
+    case RPMOSTREE_OUTPUT_MESSAGE:
+      rpmostree_transaction_emit_message (transaction, ((RpmOstreeOutputMessage *)data)->text);
+      break;
+    case RPMOSTREE_OUTPUT_PROGRESS_BEGIN:
+      {
+        auto begin = static_cast<RpmOstreeOutputProgressBegin *> (data);
+        g_clear_pointer (&progress_str, g_free);
+        progress_state_percent = false;
+        progress_state_n_items = 0;
+        if (begin->percent)
+          {
+            progress_str = g_strdup (begin->prefix);
+            rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
+            progress_state_percent = true;
+          }
+        else if (begin->n > 0)
+          {
+            progress_str = g_strdup (begin->prefix);
+            progress_state_n_items = begin->n;
+            /* For backcompat, this is a percentage.  See below */
+            rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
+          }
+        else
+          {
+            rpmostree_transaction_emit_task_begin (transaction, begin->prefix);
+          }
+      }
+      break;
+    case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
+      {
+        auto update = static_cast<RpmOstreeOutputProgressUpdate *> (data);
+        if (progress_state_n_items)
+          {
+            /* We still emit PercentProgress for compatibility with older clients as
+             * well as Cockpit. It's not worth trying to deal with version skew just
+             * for this yet.
+             */
+            int percentage = (update->c == progress_state_n_items)
+                                 ? 100
+                                 : (((double)(update->c)) / (progress_state_n_items)*100);
+            g_autofree char *newtext
+                = g_strdup_printf ("%s (%u/%u)", progress_str, update->c, progress_state_n_items);
+            rpmostree_transaction_emit_percent_progress (transaction, newtext, percentage);
+          }
+        else
+          {
+            rpmostree_transaction_emit_percent_progress (transaction, progress_str, update->c);
+          }
+      }
+      break;
+    case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
+      {
+        /* Not handled right now */
+      }
+      break;
+    case RPMOSTREE_OUTPUT_PROGRESS_END:
+      {
+        if (progress_state_percent || progress_state_n_items > 0)
+          {
+            rpmostree_transaction_emit_progress_end (transaction);
+          }
+        else
+          {
+            rpmostree_transaction_emit_task_end (transaction, "done");
+          }
+      }
+      break;
+    }
+}
+
+static void
 transaction_execute_thread (GTask *task, gpointer source_object, gpointer task_data,
                             GCancellable *cancellable)
 {
@@ -332,6 +425,8 @@ transaction_execute_thread (GTask *task, gpointer source_object, gpointer task_d
   g_main_context_push_thread_default (mctx);
   // Further, we join the main Tokio async runtime.
   auto guard = rpmostreecxx::rpmostreed_daemon_tokio_enter (rpmostreed_daemon_get ());
+
+  rpmostree_output_set_callback (transaction_output_cb, self);
 
   try
     {
@@ -376,6 +471,8 @@ transaction_execute_thread (GTask *task, gpointer source_object, gpointer task_d
                         g_dbus_method_invocation_get_object_path (priv->invocation));
       g_task_return_boolean (task, success);
     }
+
+  rpmostree_output_set_callback (NULL, NULL);
 
   /* Clean up context */
   g_main_context_pop_thread_default (mctx);

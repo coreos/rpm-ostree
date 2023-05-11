@@ -81,7 +81,8 @@ typedef enum
 
 void rpmostree_output_default_handler (RpmOstreeOutputType type, void *data, void *opaque);
 
-void rpmostree_output_set_callback (void (*cb) (RpmOstreeOutputType, void *, void *), void *);
+typedef void (*OutputCallback) (RpmOstreeOutputType, void *, void *);
+void rpmostree_output_set_callback (OutputCallback cb, void *);
 
 typedef struct
 {

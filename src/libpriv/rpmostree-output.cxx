@@ -71,15 +71,28 @@ rpmostree_output_default_handler (RpmOstreeOutputType type, void *data, void *op
     }
 }
 
-static void (*active_cb) (RpmOstreeOutputType, void *, void *) = rpmostree_output_default_handler;
+// Thread-local output functions.  This is needed because for transactions (which are always run in
+// a thread today) we want output to go to the transaction's DBus progress.  But for other methods
+// which are not transactions, we don't have a channel for status reporting, so output needs to
+// continue to go to the journal.   If we mix these two things due to concurrent method invocations,
+// the client may get confused and crash. https://github.com/coreos/rpm-ostree/issues/4284
+static GPrivate active_cb;
+static GPrivate active_cb_opaque;
 
-static void *active_cb_opaque;
+static void
+invoke_output (RpmOstreeOutputType ty, void *task)
+{
+  OutputCallback cb
+      = (OutputCallback)g_private_get (&active_cb) ?: rpmostree_output_default_handler;
+  void *data = g_private_get (&active_cb_opaque);
+  cb (ty, task, data);
+}
 
 void
-rpmostree_output_set_callback (void (*cb) (RpmOstreeOutputType, void *, void *), void *opaque)
+rpmostree_output_set_callback (OutputCallback cb, void *opaque)
 {
-  active_cb = cb ?: rpmostree_output_default_handler;
-  active_cb_opaque = opaque;
+  g_private_replace (&active_cb, (void *)cb);
+  g_private_replace (&active_cb_opaque, opaque);
 }
 
 #define strdup_vprintf(format)                                                                     \
@@ -99,7 +112,7 @@ rpmostree_output_message (const char *format, ...)
 {
   g_autofree char *final_msg = strdup_vprintf (format);
   RpmOstreeOutputMessage task = { final_msg };
-  active_cb (RPMOSTREE_OUTPUT_MESSAGE, &task, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_MESSAGE, &task);
 }
 
 namespace rpmostreecxx
@@ -120,7 +133,7 @@ output_message (const rust::Str msg)
 {
   auto msg_c = std::string (msg);
   RpmOstreeOutputMessage task = { msg_c.c_str () };
-  active_cb (RPMOSTREE_OUTPUT_MESSAGE, &task, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_MESSAGE, &task);
 }
 
 // Begin a task (that can't easily be "nitems" or percentage).
@@ -130,7 +143,7 @@ progress_begin_task (const rust::Str msg) noexcept
 {
   auto msg_c = std::string (msg);
   RpmOstreeOutputProgressBegin begin = { msg_c.c_str (), false, 0 };
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin);
   auto v = std::make_unique<Progress> (ProgressType::TASK);
   g_debug ("init progress task serial=%" G_GUINT64_FORMAT " text=%s", v->serial, msg_c.c_str ());
   return v;
@@ -142,7 +155,7 @@ void
 Progress::set_sub_message (const rust::Str msg)
 {
   g_autofree char *msg_c = util::ruststr_dup_c_optempty (msg);
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE, (void *)msg_c, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE, (void *)msg_c);
 }
 
 // Start working on a 0-n task.
@@ -151,7 +164,7 @@ progress_nitems_begin (guint n, const rust::Str msg) noexcept
 {
   auto msg_c = std::string (msg);
   RpmOstreeOutputProgressBegin begin = { msg_c.c_str (), false, n };
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin);
   auto v = std::make_unique<Progress> (ProgressType::N_ITEMS);
   g_debug ("init progress nitems serial=%" G_GUINT64_FORMAT " text=%s", v->serial, msg_c.c_str ());
   return v;
@@ -163,7 +176,7 @@ Progress::nitems_update (guint n)
 {
   RpmOstreeOutputProgressUpdate progress = { n };
   g_debug ("progress nitems update serial=%" G_GUINT64_FORMAT, this->serial);
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress);
 }
 
 // Start a percentage task.
@@ -172,7 +185,7 @@ progress_percent_begin (const rust::Str msg) noexcept
 {
   auto msg_c = std::string (msg);
   RpmOstreeOutputProgressBegin begin = { msg_c.c_str (), true, 0 };
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_PROGRESS_BEGIN, &begin);
   auto v = std::make_unique<Progress> (ProgressType::PERCENT);
   g_debug ("init progress percent serial=%" G_GUINT64_FORMAT " text=%s", v->serial, msg_c.c_str ());
   return v;
@@ -184,7 +197,7 @@ Progress::percent_update (guint n)
 {
   RpmOstreeOutputProgressUpdate progress = { (guint)n };
   g_debug ("progress percent update serial=%" G_GUINT64_FORMAT, this->serial);
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_PROGRESS_UPDATE, &progress);
 }
 
 // End the current task.
@@ -195,7 +208,7 @@ Progress::end (const rust::Str msg)
   g_autofree char *final_msg = util::ruststr_dup_c_optempty (msg);
   RpmOstreeOutputProgressEnd done = { final_msg };
   g_debug ("progress end serial=%" G_GUINT64_FORMAT, this->serial);
-  active_cb (RPMOSTREE_OUTPUT_PROGRESS_END, &done, active_cb_opaque);
+  invoke_output (RPMOSTREE_OUTPUT_PROGRESS_END, &done);
   this->ended = true;
 }
 
