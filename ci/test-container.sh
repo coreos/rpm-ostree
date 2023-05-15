@@ -77,14 +77,6 @@ fi
 versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
 case $versionid in
-  36)
-    url_suffix=2.13.0/5.fc36/x86_64/ignition-2.13.0-5.fc36.x86_64.rpm
-    # 2.14.0
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=1967836"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=1970749"
-    kver=5.17.11
-    krev=300
-    ;;
   37)
     url_suffix=2.14.0/3.fc37/x86_64/ignition-2.14.0-3.fc37.x86_64.rpm
     # 2.14.0-4
@@ -127,11 +119,11 @@ fi
 (cd /etc/yum.repos.d/ && curl -LO https://raw.githubusercontent.com/coreos/fedora-coreos-config/testing-devel/ci/continuous/fcos-continuous.repo)
 
 # test repo override by NEVRA
+afterburn_version=5.4.0-1.fc38."$(arch)"
 rpm-ostree override replace --experimental --from repo=fedora-coreos-pool \
-  afterburn-5.2.0-4.fc36.x86_64 \
-  afterburn-dracut-5.2.0-4.fc36.x86_64
+  afterburn-{,dracut-}"${afterburn_version}"
 
-rpm -q afterburn-5.2.0-4.fc36.x86_64 afterburn-dracut-5.2.0-4.fc36.x86_64
+rpm -q afterburn-{,dracut-}"${afterburn_version}"
 
 # test repo override by pkgname, and also test --install
 if rpm -q strace; then
@@ -152,9 +144,9 @@ rpm-ostree override replace $koji_kernel_url
 test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
 
 # test --enablerepo --disablerepo --releasever
-rpm-ostree --releasever=36 --disablerepo="*" \
+rpm-ostree --releasever=38 --disablerepo="*" \
     --enablerepo=fedora install tmux
-rpm -q tmux-3.2a-3.fc36.x86_64
+rpm -q tmux-3.3a-3.fc38."$(arch)"
 
 # test skipping cliwraps
 export RPMOSTREE_CLIWRAP_SKIP=1
