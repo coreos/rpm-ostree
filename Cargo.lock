@@ -188,6 +188,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-std-ext"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6012b1e726e3e3ccf8151e2dc9cb454e593e0e7623b0e35464f5e62a15158c27"
+dependencies = [
+ "cap-tempfile",
+ "rustix 0.37.18",
+]
+
+[[package]]
 name = "cap-tempfile"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -348,7 +358,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fc8ef9cc4d183f3bfd3c232f304286b91cff5c9aa35665ea2e89499e1e0d021"
 dependencies = [
  "anyhow",
- "cap-std-ext",
+ "cap-std-ext 1.0.3",
  "cap-tempfile",
  "capctl",
  "fn-error-context",
@@ -1726,7 +1736,7 @@ dependencies = [
  "async-compression",
  "bitflags",
  "camino",
- "cap-std-ext",
+ "cap-std-ext 1.0.3",
  "cap-tempfile",
  "chrono",
  "clap",
@@ -2120,7 +2130,7 @@ dependencies = [
  "camino",
  "cap-primitives",
  "cap-std",
- "cap-std-ext",
+ "cap-std-ext 2.0.0",
  "cap-tempfile",
  "chrono",
  "clap",
