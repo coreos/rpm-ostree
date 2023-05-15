@@ -423,6 +423,39 @@ Boston, MA 02111-1307, USA.
             indicates the most recent upgrade (the newest deployment
             version).
           </para>
+
+          <para>
+            <command>--verbose</command> or <command>-v</command> to
+            display more information, such as package diff, advisories,
+            GPG signature user IDs, and StateRoot names.
+          </para>
+
+          <para>
+            <command>--advisories</command> or <command>-a</command> to
+            expand the advisories listing, if any.
+          </para>
+
+          <para>
+            <command>--booted</command> or <command>-b</command> to
+            only print information about the booted deployment.
+          </para>
+
+          <para>
+            <command>--pending-exit-77</command> to exit status 77 if
+            a pending deployment is available. This can be useful in
+            scripting.
+          </para>
+
+          <para>
+            <command>--json</command> to output the status information
+            in JSON format for easier scripting.
+          </para>
+
+          <para>
+            <command>--jsonpath=EXPRESSION</command> or
+            <command>-J</command> to filter JSON output by JSONPath
+            expression.
+          </para>
         </listitem>
       </varlistentry>
 
