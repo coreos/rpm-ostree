@@ -108,7 +108,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     # finally, check that passing no args prints the tracked files
     # also verify that the `ex` alias still works for now
-    rpm-ostree ex initramfs-etc > out.txt
+    rpm-ostree initramfs-etc > out.txt
     assert_file_has_content_literal out.txt "Tracked files:"
     assert_file_has_content_literal out.txt "/etc/cmdline.d"
     ;;
