@@ -882,6 +882,7 @@ pub mod ffi {
         // Methods on PackageMeta
         fn size(self: &PackageMeta) -> u64;
         fn buildtime(self: &PackageMeta) -> u64;
+        fn changelogs(self: &PackageMeta) -> Vec<u64>;
         fn src_pkg(self: &PackageMeta) -> &CxxString;
     }
 

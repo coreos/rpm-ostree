@@ -2,6 +2,8 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::process::Command;
 
 use anyhow::{anyhow, Result};
@@ -250,10 +252,22 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     let target_imgref = target_imgref.to_string();
 
     let label_args = opt.labels.into_iter().map(|v| format!("--label={v}"));
+    // If we have a prior build, pass its manifest to the encapsulation command to allow reuse of packing structure.
+    let previous_arg = previous_meta
+        .as_ref()
+        .map(|previous_meta| {
+            let manifest_path = tempdir.join("previous-manifest.json");
+            let mut f = File::create(&manifest_path).map(BufWriter::new)?;
+            serde_json::to_writer(&mut f, &previous_meta.manifest).map_err(anyhow::Error::new)?;
+            f.flush()?;
+            anyhow::Ok(format!("--previous-build-manifest={manifest_path}"))
+        })
+        .transpose()?;
 
     let s = self_command()
         .args(&["compose", "container-encapsulate"])
         .args(label_args)
+        .args(previous_arg)
         .args(&[
             "--repo",
             repo.as_str(),
