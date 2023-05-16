@@ -19,6 +19,19 @@ use termcolor::WriteColor;
 // those, and if there's something we don't know about, invoke the C++
 // main().
 async fn inner_async_main(args: Vec<String>) -> Result<i32> {
+    if let Some(argv1) = args.get(1) {
+        // CLI verbs matched here are native Rust async functions.  However, they will
+        // currently *not* show up in rpm-ostree --help.  Which today limits them to the
+        // `exp` function here.
+        match argv1.as_str() {
+            "exp" => {
+                return rpmostree_rust::experimental::entrypoint(args)
+                    .await
+                    .map(|()| 0);
+            }
+            _ => { /* fallthrough */ }
+        }
+    }
     // Everything below here is a blocking API, and run on a worker thread so
     // that the main thread is dedicated to the Tokio reactor.
     tokio::task::spawn_blocking(move || -> Result<i32, anyhow::Error> {

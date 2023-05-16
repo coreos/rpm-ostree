@@ -918,6 +918,7 @@ pub(crate) use deployment_utils::*;
 mod dirdiff;
 pub mod failpoints;
 use failpoints::*;
+pub mod experimental;
 mod extensions;
 pub(crate) use extensions::*;
 #[cfg(feature = "fedora-integration")]
