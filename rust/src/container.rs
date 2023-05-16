@@ -21,7 +21,7 @@ use ostree_ext::objectsource::{
     ContentID, ObjectMeta, ObjectMetaMap, ObjectMetaSet, ObjectSourceMeta,
 };
 use ostree_ext::prelude::*;
-use ostree_ext::{gio, ostree};
+use ostree_ext::{gio, oci_spec, ostree};
 
 use crate::cxxrsutil::FFIGObjectReWrap;
 use crate::progress::progress_task;
@@ -71,6 +71,11 @@ struct ContainerEncapsulateOpts {
     /// Compare OCI layers of current build with another(imgref)
     #[clap(name = "compare-with-build", long)]
     compare_with_build: Option<String>,
+
+    /// Prevent a change in packing structure by taking a previous build metadata (oci config and
+    /// manifest)
+    #[clap(long)]
+    previous_build_manifest: Option<Utf8PathBuf>,
 }
 
 #[derive(Debug)]
@@ -246,16 +251,18 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         skip: Default::default(),
         rpmsize: Default::default(),
     };
-    // Insert metadata for unpakaged content.
+    // Insert metadata for unpackaged content.
     state.packagemeta.insert(ObjectSourceMeta {
         identifier: Rc::clone(&state.unpackaged_id),
         name: Rc::clone(&state.unpackaged_id),
         srcid: Rc::clone(&state.unpackaged_id),
         // Assume that content in here changes frequently.
         change_time_offset: u32::MAX,
+        change_frequency: u32::MAX,
     });
 
     let mut lowest_change_time = None;
+    let mut highest_change_time = None;
     let mut package_meta = HashMap::new();
     for pkg in pkglist.iter() {
         let name = pkg.child_value(0);
@@ -271,6 +278,13 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         } else {
             lowest_change_time = Some((Rc::clone(&nevra), pkgmeta.buildtime()))
         }
+        if let Some(hightime) = highest_change_time.as_mut() {
+            if *hightime < buildtime {
+                *hightime = buildtime;
+            }
+        } else {
+            highest_change_time = Some(pkgmeta.buildtime())
+        }
         state.rpmsize += pkgmeta.size();
         package_meta.insert(nevra, pkgmeta);
     }
@@ -278,6 +292,8 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     // SAFETY: There must be at least one package.
     let (lowest_change_name, lowest_change_time) =
         lowest_change_time.expect("Failed to find any packages");
+    let highest_change_time = highest_change_time.expect("Failed to find any packages");
+
     // Walk over the packages, and generate the `packagemeta` mapping, which is basically a subset of
     // package metadata abstracted for ostree.  Note that right now, the package metadata includes
     // both a "unique identifer" and a "human readable name", but for rpm-ostree we're just making
@@ -292,11 +308,26 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         // Convert to hours, because there's no strong use for caring about the relative difference of builds in terms
         // of minutes or seconds.
         let change_time_offset = change_time_offset_secs / (60 * 60);
+        let changelogs = pkgmeta.changelogs();
+        // Ignore the updates to packages more than a year away from the latest built package as its
+        // contribution becomes increasingly irrelevant to the likelihood of the package updating
+        // in the future
+        // TODO: Weighted Moving Averages (Weights decaying by year) to calculate the frequency
+        let pruned_changelogs: Vec<&u64> = changelogs
+            .iter()
+            .filter(|e| {
+                let curr_build = glib::DateTime::from_unix_utc(**e as i64).unwrap();
+                let highest_time_build =
+                    glib::DateTime::from_unix_utc(highest_change_time as i64).unwrap();
+                highest_time_build.difference(&curr_build).as_days() <= 365_i64
+            })
+            .collect();
         state.packagemeta.insert(ObjectSourceMeta {
             identifier: Rc::clone(nevra),
-            name: Rc::clone(nevra),
+            name: Rc::from(libdnf_sys::hy_split_nevra(&nevra)?.name),
             srcid: Rc::from(pkgmeta.src_pkg().to_str().unwrap()),
             change_time_offset,
+            change_frequency: pruned_changelogs.len() as u32,
         });
     }
 
@@ -316,14 +347,18 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
                 .map_err(anyhow::Error::msg)?;
             let initramfs = initramfs.downcast_ref::<ostree::RepoFile>().unwrap();
             let checksum = initramfs.checksum();
-            let name = format!("initramfs (kernel {})", kernel_ver).into_boxed_str();
-            let name = Rc::from(name);
-            state.content.insert(checksum.to_string(), Rc::clone(&name));
+            let name = format!("initramfs");
+            let identifier = format!("{} (kernel {})", name, kernel_ver).into_boxed_str();
+            let identifier = Rc::from(identifier);
+            state
+                .content
+                .insert(checksum.to_string(), Rc::clone(&identifier));
             state.packagemeta.insert(ObjectSourceMeta {
-                identifier: Rc::clone(&name),
-                name: Rc::clone(&name),
-                srcid: Rc::clone(&name),
+                identifier: Rc::clone(&identifier),
+                name: Rc::from(name),
+                srcid: Rc::clone(&identifier),
                 change_time_offset: u32::MAX,
+                change_frequency: u32::MAX,
             });
             state.skip.insert(path);
         }
@@ -387,6 +422,12 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         })
         .collect::<Result<_>>()?;
 
+    let package_structure = opt
+        .previous_build_manifest
+        .as_ref()
+        .map(|p| oci_spec::image::ImageManifest::from_file(&p).map_err(anyhow::Error::new))
+        .transpose()?;
+
     let mut copy_meta_keys = opt.copy_meta_keys;
     // Default to copying the input hash to support cheap change detection
     copy_meta_keys.push("rpmostree.inputhash".to_string());
@@ -409,6 +450,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
                 repo,
                 rev.as_str(),
                 &config,
+                package_structure.as_ref(),
                 Some(opts),
                 Some(meta),
                 &opt.imgref,

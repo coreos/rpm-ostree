@@ -52,6 +52,7 @@ struct PackageMeta
 {
   uint64_t _size;
   uint64_t _buildtime;
+  rust::Vec<uint64_t> _changelogs;
   std::string _src_pkg;
 
   uint64_t
@@ -64,6 +65,12 @@ struct PackageMeta
   {
     return _buildtime;
   };
+  rust::Vec<uint64_t>
+  changelogs () const
+  {
+    return _changelogs;
+  };
+
   const std::string &
   src_pkg () const
   {

@@ -27,6 +27,15 @@
 #include <rpm/rpmtag.h>
 #include <string.h>
 
+static inline void
+cleanup_rpmtdFreeData (rpmtd *tdp)
+{
+  rpmtd td = *tdp;
+  if (td)
+    rpmtdFreeData (td);
+}
+#define _cleanup_rpmtddata_ __attribute__ ((cleanup (cleanup_rpmtdFreeData)))
+
 /*
  * A wrapper for an `rpmts` that supports:
  *
@@ -114,6 +123,22 @@ RpmTs::package_meta (const rust::Str name) const
           retval->_size = headerGetNumber (h, RPMTAG_LONGARCHIVESIZE);
           retval->_buildtime = headerGetNumber (h, RPMTAG_BUILDTIME);
           retval->_src_pkg = headerGetString (h, RPMTAG_SOURCERPM);
+
+          // Get the changelogs
+          struct rpmtd_s nchanges_date_s;
+          _cleanup_rpmtddata_ rpmtd nchanges_date = NULL;
+          nchanges_date = &nchanges_date_s;
+          headerGet (h, RPMTAG_CHANGELOGTIME, nchanges_date, HEADERGET_MINMEM);
+          int ncnum = rpmtdCount (nchanges_date);
+          rust::Vec<uint64_t> epochs;
+          for (int i = 0; i < ncnum; i++)
+            {
+              uint64_t nchange_date = 0;
+              rpmtdNext (nchanges_date);
+              nchange_date = rpmtdGetNumber (nchanges_date);
+              epochs.push_back (nchange_date);
+            }
+          retval->_changelogs = std::move (epochs);
         }
       else
         {
