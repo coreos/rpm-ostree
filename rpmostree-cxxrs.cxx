@@ -3226,6 +3226,15 @@ extern "C"
     return (self.*buildtime$) ();
   }
 
+  void
+  rpmostreecxx$cxxbridge1$PackageMeta$changelogs (const ::rpmostreecxx::PackageMeta &self,
+                                                  ::rust::Vec< ::std::uint64_t> *return$) noexcept
+  {
+    ::rust::Vec< ::std::uint64_t> (::rpmostreecxx::PackageMeta::*changelogs$) () const
+        = &::rpmostreecxx::PackageMeta::changelogs;
+    new (return$)::rust::Vec< ::std::uint64_t> ((self.*changelogs$) ());
+  }
+
   const ::std::string *
   rpmostreecxx$cxxbridge1$PackageMeta$src_pkg (const ::rpmostreecxx::PackageMeta &self) noexcept
   {
