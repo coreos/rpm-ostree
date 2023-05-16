@@ -1746,9 +1746,9 @@ struct Treefile final : public ::rust::Opaque
   ::rust::Box< ::rpmostreecxx::RpmImporterFlags>
   importer_flags (::rust::Str pkg_name) const noexcept;
   ::rust::String write_repovars (::std::int32_t workdir_dfd_raw) const;
-  bool set_releasever (::rust::Str releasever);
-  bool enable_repo (::rust::Str repo);
-  bool disable_repo (::rust::Str repo);
+  void set_releasever (::rust::Str releasever);
+  void enable_repo (::rust::Str repo);
+  void disable_repo (::rust::Str repo);
   void validate_for_container () const;
   ::rpmostreecxx::Refspec get_base_refspec () const noexcept;
   void rebase (::rust::Str new_refspec, ::rust::Str custom_origin_url,
@@ -2621,15 +2621,14 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Treefile$set_releasever (::rpmostreecxx::Treefile &self,
-                                                   ::rust::Str releasever, bool *return$) noexcept;
+                                                   ::rust::Str releasever) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$enable_repo (::rpmostreecxx::Treefile &self,
-                                                                     ::rust::Str repo,
-                                                                     bool *return$) noexcept;
+                                                                     ::rust::Str repo) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$Treefile$disable_repo (::rpmostreecxx::Treefile &self, ::rust::Str repo,
-                                                 bool *return$) noexcept;
+  rpmostreecxx$cxxbridge1$Treefile$disable_repo (::rpmostreecxx::Treefile &self,
+                                                 ::rust::Str repo) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$validate_for_container (
       const ::rpmostreecxx::Treefile &self) noexcept;
@@ -5207,43 +5206,34 @@ Treefile::write_repovars (::std::int32_t workdir_dfd_raw) const
   return ::std::move (return$.value);
 }
 
-bool
+void
 Treefile::set_releasever (::rust::Str releasever)
 {
-  ::rust::MaybeUninit<bool> return$;
-  ::rust::repr::PtrLen error$
-      = rpmostreecxx$cxxbridge1$Treefile$set_releasever (*this, releasever, &return$.value);
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Treefile$set_releasever (*this, releasever);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
-  return ::std::move (return$.value);
 }
 
-bool
+void
 Treefile::enable_repo (::rust::Str repo)
 {
-  ::rust::MaybeUninit<bool> return$;
-  ::rust::repr::PtrLen error$
-      = rpmostreecxx$cxxbridge1$Treefile$enable_repo (*this, repo, &return$.value);
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Treefile$enable_repo (*this, repo);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
-  return ::std::move (return$.value);
 }
 
-bool
+void
 Treefile::disable_repo (::rust::Str repo)
 {
-  ::rust::MaybeUninit<bool> return$;
-  ::rust::repr::PtrLen error$
-      = rpmostreecxx$cxxbridge1$Treefile$disable_repo (*this, repo, &return$.value);
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Treefile$disable_repo (*this, repo);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
-  return ::std::move (return$.value);
 }
 
 void
