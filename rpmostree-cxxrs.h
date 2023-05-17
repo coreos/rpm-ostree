@@ -1528,9 +1528,9 @@ struct Treefile final : public ::rust::Opaque
   ::rust::Box< ::rpmostreecxx::RpmImporterFlags>
   importer_flags (::rust::Str pkg_name) const noexcept;
   ::rust::String write_repovars (::std::int32_t workdir_dfd_raw) const;
-  bool set_releasever (::rust::Str releasever);
-  bool enable_repo (::rust::Str repo);
-  bool disable_repo (::rust::Str repo);
+  void set_releasever (::rust::Str releasever);
+  void enable_repo (::rust::Str repo);
+  void disable_repo (::rust::Str repo);
   void validate_for_container () const;
   ::rpmostreecxx::Refspec get_base_refspec () const noexcept;
   void rebase (::rust::Str new_refspec, ::rust::Str custom_origin_url,
