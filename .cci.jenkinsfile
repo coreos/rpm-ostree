@@ -24,9 +24,14 @@ codestyle: {
 }
 }
 
-def nhosts = 4
+// Recently we're hitting soft lockup problems in CCI, so we have a pretty low parallelism here.
+// xref https://github.com/coreos/coreos-assembler/pull/3450#issuecomment-1548496916
+def nhosts = 2
+// Add an extra CPU for overhead
+def ncpu = nhosts + 1
+// Assume 1536 MB per instance, plus 512 overhead
 def mem = (nhosts * 1536) + 512
-cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
+cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${ncpu}") {
   stage("Unit Tests") {
     checkout scm
     unstash 'rpms'
