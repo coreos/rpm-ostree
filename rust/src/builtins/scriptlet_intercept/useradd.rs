@@ -6,7 +6,7 @@ use super::common::{self, SYSUSERS_DIR};
 use anyhow::{anyhow, Context, Result};
 use cap_std::fs::{Dir, Permissions};
 use cap_std_ext::prelude::CapStdExtDirExt;
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 use fn_error_context::context;
 use std::io::Write;
 use std::os::unix::prelude::PermissionsExt;
@@ -21,21 +21,21 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     // (if present).
     let matches = cli_cmd().get_matches_from(args);
     let username = matches
-        .value_of("username")
+        .get_one::<String>("username")
         .ok_or_else(|| anyhow!("missing required username argument"))?;
     let uid = matches
-        .value_of("uid")
+        .get_one::<String>("uid")
         .map(|s| s.parse::<u32>())
         .transpose()?;
-    let primary_group = matches.value_of("group");
+    let primary_group = matches.get_one::<String>("group");
     let supplementary_groups = matches
-        .value_of("groups")
+        .get_one::<String>("groups")
         .map(|s| s.split(',').collect::<Vec<_>>());
-    let gecos = matches.value_of("comment");
-    let homedir = matches.value_of("homedir");
-    let shell = matches.value_of("shell");
+    let gecos = matches.get_one::<String>("comment");
+    let homedir = matches.get_one::<String>("homedir");
+    let shell = matches.get_one::<String>("shell");
 
-    if !matches.is_present("system") {
+    if !matches.contains_id("system") {
         crate::client::warn_future_incompatibility(
             format!("Trying to create non-system user '{username}'; this will become an error in the future.")
         );
@@ -45,10 +45,10 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     generate_sysusers_fragment(
         &rootdir,
         username,
-        (uid, primary_group),
-        gecos,
-        homedir,
-        shell,
+        (uid, primary_group.map(|s| s.as_str())),
+        gecos.map(|s| s.as_str()),
+        homedir.map(|s| s.as_str()),
+        shell.map(|s| s.as_str()),
     )?;
 
     if let Some(groups) = supplementary_groups {
@@ -63,7 +63,7 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
 }
 
 /// CLI parser, matches <https://linux.die.net/man/8/useradd>.
-fn cli_cmd() -> Command<'static> {
+fn cli_cmd() -> Command {
     let name = "useradd";
     Command::new(name)
         .bin_name(name)
@@ -72,25 +72,50 @@ fn cli_cmd() -> Command<'static> {
             Arg::new("comment")
                 .short('c')
                 .long("comment")
-                .takes_value(true),
+                .action(ArgAction::Set),
         )
         .arg(
             Arg::new("homedir")
                 .short('d')
                 .long("home-dir")
-                .takes_value(true),
+                .action(ArgAction::Set),
         )
-        .arg(Arg::new("group").short('g').long("gid").takes_value(true))
+        .arg(
+            Arg::new("group")
+                .short('g')
+                .long("gid")
+                .action(ArgAction::Set),
+        )
         .arg(
             Arg::new("groups")
                 .short('G')
                 .long("groups")
-                .takes_value(true),
+                .action(ArgAction::Set),
         )
-        .arg(Arg::new("no-create-home").short('M').long("no-create-home"))
-        .arg(Arg::new("system").short('r').long("system"))
-        .arg(Arg::new("shell").short('s').long("shell").takes_value(true))
-        .arg(Arg::new("uid").short('u').long("uid").takes_value(true))
+        .arg(
+            Arg::new("no-create-home")
+                .short('M')
+                .long("no-create-home")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("system")
+                .short('r')
+                .long("system")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("shell")
+                .short('s')
+                .long("shell")
+                .action(ArgAction::Set),
+        )
+        .arg(
+            Arg::new("uid")
+                .short('u')
+                .long("uid")
+                .action(ArgAction::Set),
+        )
         .arg(Arg::new("username").required(true))
 }
 
@@ -187,18 +212,18 @@ mod test {
             "halt",
         ];
         let matches = cmd.try_get_matches_from(static_uid).unwrap();
-        assert_eq!(matches.value_of("homedir"), Some("testhome"));
-        assert_eq!(matches.value_of("uid"), Some("7"));
-        assert_eq!(matches.value_of("group"), Some("root"));
-        assert_eq!(matches.value_of("username"), Some("halt"));
+        assert_eq!(matches.get_one::<String>("homedir").unwrap(), "testhome");
+        assert_eq!(matches.get_one::<String>("uid").unwrap(), "7");
+        assert_eq!(matches.get_one::<String>("group").unwrap(), "root");
+        assert_eq!(matches.get_one::<String>("username").unwrap(), "halt");
 
         let cmd = cli_cmd();
         let dynamic_uid = ["/usr/sbin/useradd", "-r", "-s", "testshell", "clevis"];
         let matches = cmd.try_get_matches_from(dynamic_uid).unwrap();
         assert!(matches.contains_id("system"));
-        assert_eq!(matches.value_of("uid"), None);
-        assert_eq!(matches.value_of("username"), Some("clevis"));
-        assert_eq!(matches.value_of("shell"), Some("testshell"));
+        assert_eq!(matches.get_one::<String>("uid"), None);
+        assert_eq!(matches.get_one::<String>("username").unwrap(), "clevis");
+        assert_eq!(matches.get_one::<String>("shell").unwrap(), "testshell");
 
         let err_cases = [vec!["/usr/sbin/useradd"]];
         for input in err_cases {

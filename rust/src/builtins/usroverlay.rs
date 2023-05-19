@@ -21,7 +21,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
 }
 
 /// CLI parser, handle --help and error on extra arguments.
-fn cli_cmd() -> Command<'static> {
+fn cli_cmd() -> Command {
     Command::new("rpm-ostree usroverlay")
         .bin_name("rpm-ostree usroverlay")
         .long_version("")

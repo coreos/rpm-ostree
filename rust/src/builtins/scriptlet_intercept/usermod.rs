@@ -21,13 +21,13 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     // groups.
     let matches = cli_cmd().get_matches_from(args);
     let username = matches
-        .value_of("username")
+        .get_one::<String>("username")
         .ok_or_else(|| anyhow!("Missing required argument (username)"))?;
-    if !matches.is_present("append") {
+    if !matches.contains_id("append") {
         return Err(anyhow!("usermod called without '--append' argument"));
     };
     let groups: Vec<_> = matches
-        .values_of("groups")
+        .get_many::<String>("groups")
         .ok_or_else(|| anyhow!("Missing supplementary groups"))?
         .collect();
     if groups.is_empty() {
@@ -44,17 +44,21 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
 }
 
 /// CLI parser, matches <https://linux.die.net/man/8/usermod>.
-fn cli_cmd() -> Command<'static> {
+fn cli_cmd() -> Command {
     let name = "usermod";
     Command::new(name)
         .bin_name(name)
         .about("modify a user account")
-        .arg(Arg::new("append").short('a').long("append"))
+        .arg(
+            Arg::new("append")
+                .short('a')
+                .long("append")
+                .action(ArgAction::SetTrue),
+        )
         .arg(
             Arg::new("groups")
                 .short('G')
                 .long("groups")
-                .takes_value(true)
                 .action(ArgAction::Append),
         )
         .arg(Arg::new("username").required(true))
@@ -118,7 +122,7 @@ mod test {
                 .collect::<Vec<_>>(),
             vec!["tss"]
         );
-        assert_eq!(matches.value_of("username"), Some("clevis"));
+        assert_eq!(matches.get_one::<String>("username").unwrap(), "clevis");
 
         let err_cases = [
             vec!["/usr/sbin/usermod"],
