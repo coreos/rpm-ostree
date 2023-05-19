@@ -306,19 +306,29 @@ pub(crate) fn configure_build_repo_from_target(
     build_repo: &crate::FFIOstreeRepo,
     target_repo: &crate::FFIOstreeRepo,
 ) -> CxxResult<()> {
-    // If we're not fsyncing the target, don't fsync the build repo either.
-    const PROPAGATED_BOOLS: &[(&str, &str)] = &[("core", "fsync")];
+    // If we're not fsyncing the target, don't fsync the build repo either.  We also
+    // want to have the same fsverity/composefs flags.
+    let propagated_bools = std::iter::once(("core", "fsync"))
+        .chain(["ex-fsverity", "ex-composefs"].map(|k| (k, "required")));
+    let propagated_strings = ["certfile", "keyfile"].map(|k| ("ex-composefs", k));
     let build_repo = &build_repo.glib_reborrow();
     let target_repo = &target_repo.glib_reborrow();
 
     let mut changed = false;
     let build_config = build_repo.config().unwrap();
     let target_config = target_repo.copy_config().unwrap();
-    for (group, key) in PROPAGATED_BOOLS {
+    for (group, key) in propagated_bools {
         if let Some(v) = target_config.optional_bool(group, key)? {
             changed = true;
             tracing::debug!("Propagating {group}.{key} with value {v}");
             build_config.set_boolean(group, key, v);
+        }
+    }
+    for (group, key) in propagated_strings {
+        if let Some(v) = target_config.optional_string(group, key)? {
+            changed = true;
+            tracing::debug!("Propagating {group}.{key} with value {v}");
+            build_config.set_string(group, key, v.as_str());
         }
     }
 
