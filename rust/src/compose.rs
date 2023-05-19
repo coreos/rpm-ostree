@@ -10,9 +10,10 @@ use clap::Parser;
 use oci_spec::image::ImageManifest;
 use ostree::gio;
 use ostree_ext::container as ostree_container;
+use ostree_ext::keyfileext::KeyFileExt;
 use ostree_ext::{oci_spec, ostree};
 
-use crate::cxxrsutil::CxxResult;
+use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum OutputFormat {
@@ -296,6 +297,34 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     }
 
     println!("Wrote: {target_imgref}");
+
+    Ok(())
+}
+
+/// Set up a cache/build repository using configuration present in the target repository.
+pub(crate) fn configure_build_repo_from_target(
+    build_repo: &crate::FFIOstreeRepo,
+    target_repo: &crate::FFIOstreeRepo,
+) -> CxxResult<()> {
+    // If we're not fsyncing the target, don't fsync the build repo either.
+    const PROPAGATED_BOOLS: &[(&str, &str)] = &[("core", "fsync")];
+    let build_repo = &build_repo.glib_reborrow();
+    let target_repo = &target_repo.glib_reborrow();
+
+    let mut changed = false;
+    let build_config = build_repo.config().unwrap();
+    let target_config = target_repo.copy_config().unwrap();
+    for (group, key) in PROPAGATED_BOOLS {
+        if let Some(v) = target_config.optional_bool(group, key)? {
+            changed = true;
+            tracing::debug!("Propagating {group}.{key} with value {v}");
+            build_config.set_boolean(group, key, v);
+        }
+    }
+
+    if changed {
+        build_repo.write_config(&build_config)?;
+    }
 
     Ok(())
 }
