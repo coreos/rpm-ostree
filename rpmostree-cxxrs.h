@@ -1800,6 +1800,9 @@ bool commit_has_matching_sepolicy (const ::rpmostreecxx::GVariant &commit,
 
 void compose_image (::rust::Vec< ::rust::String> args);
 
+void configure_build_repo_from_target (const ::rpmostreecxx::OstreeRepo &build_repo,
+                                       const ::rpmostreecxx::OstreeRepo &target_repo);
+
 void compose_prepare_rootfs (::std::int32_t src_rootfs_dfd, ::std::int32_t dest_rootfs_dfd,
                              ::rpmostreecxx::Treefile &treefile);
 

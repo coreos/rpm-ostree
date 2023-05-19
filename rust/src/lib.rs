@@ -243,6 +243,11 @@ pub mod ffi {
     // compose.rs
     extern "Rust" {
         fn compose_image(args: Vec<String>) -> Result<()>;
+
+        fn configure_build_repo_from_target(
+            build_repo: &OstreeRepo,
+            target_repo: &OstreeRepo,
+        ) -> Result<()>;
     }
 
     // composepost.rs
