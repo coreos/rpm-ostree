@@ -6,7 +6,7 @@ use super::common::{self, SYSUSERS_DIR};
 use anyhow::{anyhow, Context, Result};
 use cap_std::fs::{Dir, Permissions};
 use cap_std_ext::prelude::CapStdExtDirExt;
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 use fn_error_context::context;
 use std::io::Write;
 use std::os::unix::prelude::PermissionsExt;
@@ -21,14 +21,14 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     // present) the static GID.
     let matches = cli_cmd().get_matches_from(args);
     let gid = matches
-        .value_of("gid")
+        .get_one::<String>("gid")
         .map(|s| s.parse::<u32>())
         .transpose()
         .context("Parsing GID")?;
     let groupname = matches
-        .value_of("groupname")
+        .get_one::<String>("groupname")
         .ok_or_else(|| anyhow!("missing required groupname argument"))?;
-    if !matches.is_present("system") {
+    if !matches.contains_id("system") {
         crate::client::warn_future_incompatibility(
             format!("Trying to create non-system group '{groupname}'; this will become an error in the future.")
         );
@@ -41,41 +41,55 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
 }
 
 /// CLI parser, matches <https://linux.die.net/man/8/groupadd>.
-fn cli_cmd() -> Command<'static> {
+fn cli_cmd() -> Command {
     let name = "groupadd";
     Command::new(name)
         .bin_name(name)
         .about("create a new group")
         .arg(Arg::new("force").short('f').long("force"))
         .arg(
-            Arg::new("help")
-                .short('h')
-                .long("help")
-                .action(clap::ArgAction::Help),
+            Arg::new("gid")
+                .short('g')
+                .long("gid")
+                .action(ArgAction::Set),
         )
-        .arg(Arg::new("gid").short('g').long("gid").takes_value(true))
-        .arg(Arg::new("key").short('K').long("key").takes_value(true))
+        .arg(
+            Arg::new("key")
+                .short('K')
+                .long("key")
+                .action(ArgAction::Set),
+        )
         .arg(Arg::new("allow_duplicates").short('o').long("non-unique"))
         .arg(
             Arg::new("password")
                 .short('p')
                 .long("password")
-                .takes_value(true),
+                .action(ArgAction::Set),
         )
-        .arg(Arg::new("system").short('r').long("system"))
+        .arg(
+            Arg::new("system")
+                .short('r')
+                .long("system")
+                .action(ArgAction::SetTrue),
+        )
         .arg(
             Arg::new("chroot_dir")
                 .short('R')
                 .long("root")
-                .takes_value(true),
+                .action(ArgAction::Set),
         )
         .arg(
             Arg::new("prefix_dir")
                 .short('P')
                 .long("prefix")
-                .takes_value(true),
+                .action(ArgAction::Set),
         )
-        .arg(Arg::new("users").short('U').long("users").takes_value(true))
+        .arg(
+            Arg::new("users")
+                .short('U')
+                .long("users")
+                .action(ArgAction::Set),
+        )
         .arg(Arg::new("groupname").required(true))
 }
 
@@ -125,15 +139,15 @@ mod test {
         let cmd = cli_cmd();
         let static_gid = ["/usr/sbin/groupadd", "-g", "23", "squid"];
         let matches = cmd.try_get_matches_from(static_gid).unwrap();
-        assert_eq!(matches.value_of("gid"), Some("23"));
-        assert_eq!(matches.value_of("groupname"), Some("squid"));
+        assert_eq!(matches.get_one::<String>("gid").unwrap(), "23");
+        assert_eq!(matches.get_one::<String>("groupname").unwrap(), "squid");
 
         let cmd = cli_cmd();
         let dynamic_gid = ["/usr/sbin/groupadd", "-r", "chrony"];
         let matches = cmd.try_get_matches_from(dynamic_gid).unwrap();
         assert!(matches.contains_id("system"));
-        assert_eq!(matches.value_of("gid"), None);
-        assert_eq!(matches.value_of("groupname"), Some("chrony"));
+        assert_eq!(matches.get_one::<String>("gid"), None);
+        assert_eq!(matches.get_one::<String>("groupname").unwrap(), "chrony");
 
         let err_cases = [vec!["/usr/sbin/groupadd"]];
         for input in err_cases {
