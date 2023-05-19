@@ -470,6 +470,15 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocati
   if (authorized)
     return TRUE;
 
+  // For historical reasons, we default to allowing interactive auth.
+  // See https://github.com/coreos/rpm-ostree/issues/4415
+  // TODO: In the future we need to honor this.
+  // GDBusMessage *invoker_message = g_dbus_method_invocation_get_message (invocation);
+  // GDBusMessageFlags invoker_flags = g_dbus_message_get_flags (invoker_message);
+  // bool invoker_allows_interactive_auth = (invoker_flags &
+  // G_DBUS_MESSAGE_FLAGS_ALLOW_INTERACTIVE_AUTHORIZATION) > 0;
+  bool allow_interactive_auth = true;
+
   if (g_strcmp0 (method_name, "GetOS") == 0 || g_strcmp0 (method_name, "Reload") == 0)
     {
       /* GetOS() and Reload() are always allowed */
@@ -486,6 +495,8 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocati
   else if (g_strcmp0 (method_name, "RegisterClient") == 0
            || g_strcmp0 (method_name, "UnregisterClient") == 0)
     {
+      // We never do interactive auth for these
+      allow_interactive_auth = false;
       action = "org.projectatomic.rpmostree1.client-management";
 
       /* automatically allow register/unregister for users with active sessions */
@@ -523,10 +534,13 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocati
           return FALSE;
         }
 
+      int authflags = 0;
+      if (allow_interactive_auth)
+        authflags |= POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION;
       glnx_unref_object PolkitAuthorizationResult *result
           = polkit_authority_check_authorization_sync (
               self->authority, subject, action, NULL,
-              POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION, NULL, &local_error);
+              static_cast<PolkitCheckAuthorizationFlags> (authflags), NULL, &local_error);
       if (result == NULL)
         {
           g_assert (local_error);
