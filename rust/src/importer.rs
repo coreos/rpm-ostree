@@ -21,7 +21,7 @@ use std::fmt::Write;
 
 bitflags! {
     /// Flags to control the behavior of an RPM importer.
-    #[derive(Default)]
+    #[derive(Default, Debug, Clone, Copy)]
     pub struct RpmImporterFlags: u8 {
         /// Skip files/directories outside of supported ostree-compliant paths rather than erroring out.
         const SKIP_EXTRANEOUS = 0b0000_0001;
