@@ -6,10 +6,11 @@ use crate::cliwrap::cliutil;
 use crate::cliwrap::RunDisposition;
 use crate::ffi::SystemHostType;
 
-fn new_rpm_app() -> Command<'static> {
+fn new_rpm_app() -> Command {
     let name = "cli-ostree-wrapper-rpm";
     Command::new(name)
         .bin_name(name)
+        .disable_version_flag(true)
         .version("0.1")
         .about("Wrapper for rpm")
         .arg(Arg::new("verify").short('V').long("verify"))
@@ -21,7 +22,6 @@ fn new_rpm_app() -> Command<'static> {
         .arg(
             Arg::new("package")
                 .help("package")
-                .takes_value(true)
                 .action(clap::ArgAction::Append),
         )
 }
@@ -64,7 +64,9 @@ fn disposition(host: SystemHostType, argv: &[&str]) -> Result<RunDisposition> {
     let app = new_rpm_app();
     let matches = match app.try_get_matches_from(std::iter::once(&"rpm").chain(argv.iter())) {
         Ok(v) => v,
-        Err(e) if e.kind() == clap::ErrorKind::DisplayVersion => return Ok(RunDisposition::Ok),
+        Err(e) if e.kind() == clap::error::ErrorKind::DisplayVersion => {
+            return Ok(RunDisposition::Ok)
+        }
         Err(_) => {
             return Ok(RunDisposition::Warn);
         }
