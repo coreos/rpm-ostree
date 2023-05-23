@@ -191,12 +191,9 @@ EOF
 
     # Now revert back to the base image, but keep our layered package foo
     rm "${image_dir}" -rf
-    timeout 5m skopeo copy containers-storage:localhost/fcos ${image}:derived
-    /tmp/autopkgtest-reboot-prepare 4
-    cursor=$(journalctl -o json -n 1 | jq -r '.["__CURSOR"]')
-    systemctl start --no-block rpm-ostreed-automatic.service
-    echo "Blocking for reboot initiation"
-    journalctl --after-cursor="$cursor" -f -u rpm-ostreed
+    skopeo copy containers-storage:localhost/fcos ${image}:latest
+    rpm-ostree rebase ostree-unverified-image:${image}:latest
+    /tmp/autopkgtest-reboot 4
     ;;
   4) 
     # This should carry over
@@ -207,7 +204,7 @@ EOF
         fatal "found $p"
       fi
     done
-    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:derived\""
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:latest\""
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
 esac
