@@ -90,7 +90,7 @@ systemd = "0.10.0"
 tempfile = "3.3.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tokio = { version = "1.24.0", features = ["time", "process", "rt", "net"] }
+tokio = { version = "1.28.1", features = ["time", "process", "rt", "net"] }
 xmlrpc = "0.15.1"
 termcolor = "1.1.3"
 
