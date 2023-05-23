@@ -10,7 +10,7 @@ use clap::Parser;
 use oci_spec::image::ImageManifest;
 use ostree::gio;
 use ostree_ext::container as ostree_container;
-use ostree_ext::keyfileext::KeyFileExt;
+use ostree_ext::keyfileext::{map_keyfile_optional, KeyFileExt};
 use ostree_ext::{oci_spec, ostree};
 
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
@@ -308,9 +308,10 @@ pub(crate) fn configure_build_repo_from_target(
 ) -> CxxResult<()> {
     // If we're not fsyncing the target, don't fsync the build repo either.  We also
     // want to have the same fsverity/composefs flags.
-    let propagated_bools = std::iter::once(("core", "fsync"))
-        .chain(["ex-fsverity", "ex-composefs"].map(|k| (k, "required")));
-    let propagated_strings = ["certfile", "keyfile"].map(|k| ("ex-composefs", k));
+    let propagated_bools = [("core", "fsync")].iter();
+    // We entirely copy these groups.  See https://github.com/ostreedev/ostree/pull/2640 the initial
+    // creation of the ex-integrity group.
+    let propagated_groups = ["ex-integrity"].iter();
     let build_repo = &build_repo.glib_reborrow();
     let target_repo = &target_repo.glib_reborrow();
 
@@ -324,11 +325,16 @@ pub(crate) fn configure_build_repo_from_target(
             build_config.set_boolean(group, key, v);
         }
     }
-    for (group, key) in propagated_strings {
-        if let Some(v) = target_config.optional_string(group, key)? {
+    for group in propagated_groups {
+        for key in map_keyfile_optional(target_config.keys(group))?
+            .map(|v| v.0)
+            .iter()
+            .flatten()
+        {
             changed = true;
-            tracing::debug!("Propagating {group}.{key} with value {v}");
-            build_config.set_string(group, key, v.as_str());
+            let value = target_config.value(group, key)?;
+            tracing::debug!("Propagating {group}.{key} with value {value}");
+            build_config.set_value(group, key, &value);
         }
     }
 
