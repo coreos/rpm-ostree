@@ -210,9 +210,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "1.0.14"
+version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "559ad6fab5fedcc9bd5877160e1433fcd481f8af615068d6ca49472b1201cc6c"
+checksum = "3373a62accd150b4fcba056d4c5f3b552127f0ec86d3c8c102d60b978174a012"
 dependencies = [
  "camino",
  "cap-primitives",
@@ -243,9 +243,9 @@ dependencies = [
 
 [[package]]
 name = "cap-tempfile"
-version = "1.0.14"
+version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92372a5de78a858f20c22a8dbe3ea55e1cc2daeb82016a3150dab8cf51ea3235"
+checksum = "6fd9864347f55a9c31de436ec9d7d3577476f3e6eeb3cc44ae2204de9164f78d"
 dependencies = [
  "cap-std",
  "rand",
