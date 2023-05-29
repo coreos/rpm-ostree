@@ -47,7 +47,7 @@ binread = "2.2.0"
 bitflags = "2.3"
 camino = "1.1.1"
 cap-std-ext = "2.0"
-cap-std = { version = "1.0.3", features = ["fs_utf8"] }
+cap-std = { version = "1.0.15", features = ["fs_utf8"] }
 containers-image-proxy = "0.5.1"
 # Explicitly force on libc
 rustix = { version = "0.37", features = ["use-libc"] }
