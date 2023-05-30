@@ -94,6 +94,16 @@ that there are not other pending changes:
 ```
 # rpm-ostree install -yA <pkg>
 ```
+### Override rpm files
+
+Normally, RPM does not allow one package to overwrite files from another. 
+But it can make sense to relax this restriction in some cases; for example,
+where one just wants to overwrite one kernel module without rebuilding the whole kernel package.
+The install --force-replacefiles option allows this.
+
+```
+# rpm-ostree install --force-replacefiles <pkg>
+```
 
 ### Modularity
 
