@@ -294,6 +294,11 @@ Boston, MA 02111-1307, USA.
             <option>--apply-live</option> will perform a subsequent <command>apply-live</command>
             operation to apply changes to the booted deployment.
           </para>
+
+          <para>
+            <option>--force-replacefiles</option> allows one package to overwrite files from another without having to rebuild the whole kernel package.
+          </para>
+          
         </listitem>
       </varlistentry>
 
