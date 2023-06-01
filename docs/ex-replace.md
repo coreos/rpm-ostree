@@ -82,6 +82,71 @@ Deployments:
 ...
 ```
 
+In this second example, we will override the `podman` rpm package with the version of the package used in the Fedora *updates-testing* repository. The repository can be found in `/etc/yum.repos.d/fedora-updates-testing.repo` but is not enabled by default:
+```
+[updates-testing]
+name=Fedora $releasever - $basearch - Test Updates
+#baseurl=http://download.example/pub/fedora/linux/updates/testing/$releasever/Everything/$basearch/
+metalink=https://mirrors.fedoraproject.org/metalink?repo=updates-testing-f$releasever&arch=$basearch
+enabled=0
+countme=1
+repo_gpgcheck=0
+type=rpm
+gpgcheck=1
+metadata_expire=6h
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-$releasever-$basearch
+skip_if_unavailable=False
+
+[...]
+```
+To enable the repository, we will use the `sed` command to set the first occurrence of the `enabled` flag to true:
+```
+$ sudo sed -i '0,/enabled=0/s//enabled=1/' /etc/yum.repos.d/fedora-updates-testing.repo
+```
+
+```
+$ sudo rpm-ostree override replace podman --experimental --from repo='updates-testing'
+Checking out tree e88367e... done
+Enabled rpm-md repositories: fedora-cisco-openh264 fedora-modular updates-modular updates fedora updates-repo updates-archive
+Importing rpm-md... done
+rpm-md repo 'fedora-cisco-openh264' (cached); generated: 2023-03-14T10:56:46Z solvables: 4
+rpm-md repo 'fedora-modular' (cached); generated: 2023-04-13T20:30:47Z solvables: 1082
+rpm-md repo 'updates-modular' (cached); generated: 2018-02-20T19:18:14Z solvables: 0
+rpm-md repo 'updates' (cached); generated: 2023-06-01T03:25:51Z solvables: 13930
+rpm-md repo 'fedora' (cached); generated: 2023-04-13T20:37:10Z solvables: 69222
+rpm-md repo 'updates-repo' (cached); generated: 2023-06-01T03:05:18Z solvables: 13082
+rpm-md repo 'updates-archive' (cached); generated: 2023-06-01T03:49:37Z solvables: 14720
+Resolving dependencies... done
+Will download: 1 package (15.2 MB)
+Downloading from 'updates-repo'... done
+Importing packages... done
+Applying 1 override
+Processing packages... done
+Running pre scripts... done
+Running post scripts... done
+Running posttrans scripts... done
+Writing rpmdb... done
+Writing OSTree commit... done
+Staging deployment... done
+Freed: 2.1 MB (pkgcache branches: 0)
+Upgraded:
+  podman 5:4.5.0-1.fc38 -> 5:4.5.1-1.fc38
+Run "systemctl reboot" to start a reboot
+```
+Running the `rpm-ostree status` command shows that the `podman` package has undergone a remote override using the updates-repo repository we previously defined.
+```
+$ rpm-ostree status
+State: idle
+Deployments:
+  fedora:fedora/x86_64/coreos/testing-devel
+                  Version: 38.20230601.dev.0 (2023-06-01T18:17:16Z)
+               BaseCommit: e88367e123c1858979bccb19ead16a3f353cd5fdfcf014218f25a5fd28cab611
+             GPGSignature: (unsigned)
+                     Diff: 1 upgraded
+          RemoteOverrides: repo=updates-repo
+                           └─ podman 5:4.5.0-1.fc38 -> 5:4.5.1-1.fc38
+
+```
 ## Rolling back
 
 You can rollback to the previous deployment:
