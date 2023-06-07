@@ -154,6 +154,14 @@ static GOptionEntry pkg_entries[]
           "Remove overlayed additional package", "PKG" },
         { NULL } };
 
+static int
+cmp_by_name (const void *a, const void *b)
+{
+  struct RpmOstreeCommand *command_a = (RpmOstreeCommand *)a;
+  struct RpmOstreeCommand *command_b = (RpmOstreeCommand *)b;
+  return strcmp (command_a->name, command_b->name);
+}
+
 static GOptionContext *
 option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
                                   RpmOstreeCommand *commands)
@@ -171,6 +179,13 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
   else /* top level */
     g_string_append (summary, "Builtin Commands:");
 
+  int command_count = 0;
+  for (RpmOstreeCommand *command = commands; command->name != NULL; command++)
+    {
+      command_count++;
+    }
+
+  qsort (commands, command_count, sizeof (RpmOstreeCommand), cmp_by_name);
   for (RpmOstreeCommand *command = commands; command->name != NULL; command++)
     {
       gboolean hidden = (command->flags & RPM_OSTREE_BUILTIN_FLAG_HIDDEN) > 0;
