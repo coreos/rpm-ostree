@@ -175,9 +175,8 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
 
       g_string_append_printf (summary, "Builtin \"%s\" Commands:", invocation->command->name);
     }
-  else { /* top level */
+  else /* top level */
     g_string_append (summary, "Builtin Commands:");
-  }
 
   int command_count = 0;
   for (RpmOstreeCommand *command = commands; command->name != NULL; command++)
