@@ -346,16 +346,9 @@ fn tweak_imported_file_info(file_info: &FileInfo, ro_executables: bool) {
 #[context("Analyzing {}", path)]
 fn import_filter(
     path: &str,
-    file_info: &FileInfo,
+    _file_info: &FileInfo,
     skip_extraneous: bool,
 ) -> Result<RepoCommitFilterResult> {
-    // Sanity check that RPM isn't using CPIO id fields.
-    let uid = file_info.attribute_uint32("unix::uid");
-    let gid = file_info.attribute_uint32("unix::gid");
-    if uid != 0 || gid != 0 {
-        bail!("Unexpected non-root owned path (marked as {}:{})", uid, gid);
-    }
-
     // Skip some empty lock files, they are known to cause problems:
     // https://github.com/projectatomic/rpm-ostree/pull/1002
     if path.starts_with("/usr/etc/selinux") && path.ends_with(".LOCK") {
