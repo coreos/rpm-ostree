@@ -329,6 +329,20 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>search</command></term>
+
+        <listitem>
+          <para>
+            Takes one or more query terms as arguments. The packages are
+            searched within the enabled repositories in
+            <filename>/etc/yum.repos.d/</filename>. Packages can be
+            overlayed and removed using the <command>install</command> 
+            and <command>uninstall</command> commands.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>rebase</command></term>
 
         <listitem>

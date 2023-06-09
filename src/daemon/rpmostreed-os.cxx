@@ -36,6 +36,11 @@
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-utils.h"
 
+#include <libdnf/hy-util.cpp>
+
+#include <set>
+#include <vector>
+
 typedef struct _RpmostreedOSClass RpmostreedOSClass;
 
 struct _RpmostreedOS
@@ -141,7 +146,7 @@ os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *i
   else if (g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0
            || g_strcmp0 (method_name, "ListRepos") == 0
            || g_strcmp0 (method_name, "WhatProvides") == 0
-           || g_strcmp0 (method_name, "GetPackages") == 0)
+           || g_strcmp0 (method_name, "GetPackages") == 0 || g_strcmp0 (method_name, "Search") == 0)
     {
       /* Note: early return here because no need authentication
        * for these methods
@@ -1138,6 +1143,110 @@ os_handle_get_packages (RPMOSTreeOS *interface, GDBusMethodInvocation *invocatio
   return TRUE;
 }
 
+/* helper function to sort and search within a set of (const gchar *) */
+struct cstrless
+{
+  bool
+  operator() (const gchar *a, const gchar *b) const
+  {
+    return strcmp (a, b) < 0;
+  }
+};
+
+/* wrapper function to both query for packages and add them to the builder */
+static void
+query_results_to_builder (HyQuery query, GVariantBuilder *builder, const gchar *id)
+{
+  std::set<const gchar *, cstrless> result_set;
+  g_autoptr (GPtrArray) pkglist = hy_query_run (query);
+  for (guint i = 0; i < pkglist->len && result_set.size () < 50; i++)
+    {
+      auto pkg = static_cast<DnfPackage *> (g_ptr_array_index (pkglist, i));
+      if (!result_set.count (dnf_package_get_name (pkg)))
+        {
+          os_add_package_info_to_builder (pkg, builder, id);
+          result_set.insert (dnf_package_get_name (pkg));
+        }
+    }
+}
+
+/* helper function to filter package query results */
+static void
+search_packages_by_filter (HyQuery query, GVariantBuilder *builder, const gchar *const *names,
+                           std::vector<int> keynames, const gchar *id)
+{
+  /* case insensitive exact match between search term and package */
+  hy_query_clear (query);
+  for (guint j = 0; j < keynames.size (); j++)
+    {
+      for (guint i = 0; names[i] != NULL; i++)
+        {
+          if (!hy_is_glob_pattern (names[i]))
+            {
+              hy_query_filter (query, keynames[j], HY_EQ | HY_ICASE, names[i]);
+            }
+          else
+            {
+              hy_query_filter (query, keynames[j], HY_GLOB | HY_ICASE, names[i]);
+            }
+        }
+    }
+  query_results_to_builder (query, builder, id);
+
+  /* case insensitive substring match of search term within package */
+  hy_query_clear (query);
+  for (guint j = 0; j < keynames.size (); j++)
+    {
+      for (guint i = 0; names[i] != NULL; i++)
+        {
+          if (!hy_is_glob_pattern (names[i]))
+            {
+              hy_query_filter (query, keynames[j], HY_SUBSTR | HY_ICASE, names[i]);
+            }
+          else
+            {
+              hy_query_filter (query, keynames[j], HY_GLOB | HY_ICASE, names[i]);
+            }
+        }
+    }
+  query_results_to_builder (query, builder, id);
+}
+
+static gboolean
+os_handle_search (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
+                  const gchar *const *names)
+{
+  GError *local_error = NULL;
+  g_autoptr (GCancellable) cancellable = NULL;
+
+  sd_journal_print (LOG_INFO, "Handling Search for caller %s",
+                    g_dbus_method_invocation_get_sender (invocation));
+
+  g_autoptr (DnfContext) dnfctx
+      = os_create_dnf_context_simple (interface, TRUE, cancellable, &local_error);
+  if (dnfctx == NULL)
+    return os_throw_dbus_invocation_error (invocation, &local_error);
+
+  hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
+
+  GVariantBuilder builder;
+  g_variant_builder_init (&builder, (const GVariantType *)"aa{sv}");
+
+  std::vector<int> keynames_a = { HY_PKG_NAME, HY_PKG_SUMMARY };
+  search_packages_by_filter (query, &builder, names, keynames_a, "match_group_a");
+
+  std::vector<int> keynames_b = { HY_PKG_NAME };
+  search_packages_by_filter (query, &builder, names, keynames_b, "match_group_b");
+
+  std::vector<int> keynames_c = { HY_PKG_SUMMARY };
+  search_packages_by_filter (query, &builder, names, keynames_c, "match_group_c");
+
+  GVariant *pkgs_result = g_variant_builder_end (&builder);
+  g_dbus_method_invocation_return_value (invocation, g_variant_new ("(@aa{sv})", pkgs_result));
+
+  return TRUE;
+}
+
 /* This is an older variant of Cleanup, kept for backcompat */
 static gboolean
 os_handle_clear_rollback_target (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
@@ -1813,6 +1922,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_finalize_deployment = os_handle_finalize_deployment;
   iface->handle_what_provides = os_handle_what_provides;
   iface->handle_get_packages = os_handle_get_packages;
+  iface->handle_search = os_handle_search;
   /* legacy cleanup API; superseded by Cleanup() */
   iface->handle_clear_rollback_target = os_handle_clear_rollback_target;
   /* legacy deployment change API; superseded by UpdateDeployment() */
