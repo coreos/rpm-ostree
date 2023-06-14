@@ -162,9 +162,7 @@ EOF
     if test "${touched_resolv_conf}" -eq 1; then
       rm -vf /etc/resolv.conf
     fi
-    derived=oci:$image_dir:derived
-    skopeo copy containers-storage:localhost/fcos-derived $derived
-    rpm-ostree rebase ostree-unverified-image:$derived
+    rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos-derived
     ostree container image list --repo=/ostree/repo | tee imglist.txt
     assert_streq "$(wc -l < imglist.txt)" 1
     rm $image_dir -rf
@@ -181,7 +179,7 @@ EOF
     assert_streq $(rpm -q baz) baz-2.0-1.${arch}
     test -f /usr/bin/baz
     ! rpm -q nano
-    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:derived\""
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/fcos-derived\""
 
     # We'll test the "apply" automatic updates policy here
     systemctl stop rpm-ostreed
@@ -190,9 +188,7 @@ EOF
     rpm-ostree reload
 
     # Now revert back to the base image, but keep our layered package foo
-    rm "${image_dir}" -rf
-    skopeo copy containers-storage:localhost/fcos ${image}:latest
-    rpm-ostree rebase ostree-unverified-image:${image}:latest
+    rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos
     /tmp/autopkgtest-reboot 4
     ;;
   4) 
@@ -204,7 +200,7 @@ EOF
         fatal "found $p"
       fi
     done
-    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:oci:$image_dir:latest\""
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/fcos\""
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
 esac

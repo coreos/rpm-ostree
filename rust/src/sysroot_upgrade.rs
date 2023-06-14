@@ -56,12 +56,20 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
     }
 }
 
-fn default_container_pull_config() -> Result<ImageProxyConfig> {
+fn default_container_pull_config(imgref: &OstreeImageReference) -> Result<ImageProxyConfig> {
     let mut cfg = ImageProxyConfig::default();
-    let isolation_systemd = crate::utils::running_in_systemd().then(|| "rpm-ostree");
-    let isolation_default = rustix::process::getuid().is_root().then(|| "nobody");
-    let isolation_user = isolation_systemd.or(isolation_default);
-    ostree_container::merge_default_container_proxy_opts_with_isolation(&mut cfg, isolation_user)?;
+    if imgref.imgref.transport == ostree_container::Transport::ContainerStorage {
+        // Fetching from containers-storage, may require privileges to read files
+        ostree_container::merge_default_container_proxy_opts_with_isolation(&mut cfg, None)?;
+    } else {
+        let isolation_systemd = crate::utils::running_in_systemd().then(|| "rpm-ostree");
+        let isolation_default = rustix::process::getuid().is_root().then(|| "nobody");
+        let isolation_user = isolation_systemd.or(isolation_default);
+        ostree_container::merge_default_container_proxy_opts_with_isolation(
+            &mut cfg,
+            isolation_user,
+        )?;
+    }
     Ok(cfg)
 }
 
@@ -70,7 +78,7 @@ async fn pull_container_async(
     imgref: &OstreeImageReference,
 ) -> Result<ContainerImageState> {
     output_message(&format!("Pulling manifest: {}", &imgref));
-    let config = default_container_pull_config()?;
+    let config = default_container_pull_config(imgref)?;
     let mut imp = ImageImporter::new(repo, imgref, config).await?;
     let layer_progress = imp.request_progress();
     let prep = match imp.prepare().await? {
