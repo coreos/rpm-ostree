@@ -7,13 +7,14 @@ use std::num::NonZeroU32;
 use std::process::Command;
 use std::rc::Rc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::Dir;
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::*;
 use chrono::prelude::*;
 use clap::Parser;
+use fn_error_context::context;
 use ostree::glib;
 use ostree_ext::chunking::ObjectMetaSized;
 use ostree_ext::container::{Config, ExportOpts, ImageReference};
@@ -483,6 +484,7 @@ struct UpdateFromRunningOpts {
 }
 
 // This reimplements https://github.com/ostreedev/ostree/pull/2691 basically
+#[context("Finding encapsulated commits")]
 fn find_encapsulated_commits(repo: &Utf8Path) -> Result<Vec<String>> {
     let objects = Dir::open_ambient_dir(&repo.join("objects"), cap_std::ambient_authority())?;
     let mut r = Vec::new();
@@ -550,7 +552,10 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     let encapsulated_commits = find_encapsulated_commits(src_repo_path)?;
     let commit = match encapsulated_commits.as_slice() {
         [] => return Err(format!("No encapsulated commit found in container").into()),
-        [c] => c.as_str(),
+        [c] => {
+            ostree::validate_checksum_string(&c)?;
+            c.as_str()
+        }
         o => return Err(format!("Found {} commit objects, expected just one", o.len()).into()),
     };
 
@@ -564,12 +569,14 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
         opts.insert("refs", &&refs[..]);
         opts.insert("flags", &(flags.bits() as i32));
         let options = opts.to_variant();
-        target_repo.pull_with_options(
-            &format!("file://{src_repo_path}"),
-            &options,
-            None,
-            cancellable,
-        )?;
+        target_repo
+            .pull_with_options(
+                &format!("file://{src_repo_path}"),
+                &options,
+                None,
+                cancellable,
+            )
+            .context("Pulling from embedded repo")?;
     }
 
     println!("Imported: {commit}");
