@@ -66,7 +66,7 @@ vm_kola_spawn() {
     exit 1
   fi
   setpriv --pdeathsig SIGKILL -- \
-    env MANTLE_SSH_DIR="$PWD/kola-ssh" kola spawn -p qemu-unpriv \
+    env MANTLE_SSH_DIR="$PWD/kola-ssh" kola spawn -p qemu \
     --qemu-image "$test_image" -v --idle \
     --json-info-fd 4 --output-dir "$outputdir" &
   # hack; need cleaner API for async kola spawn
