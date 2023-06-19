@@ -397,8 +397,8 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
 
       /* Temporary workaround for https://github.com/openshift/os/issues/1036. */
       {
-        rust::Vec child_argv = { rust::String ("semodule"), rust::String ("-n"),
-                                 rust::String ("--rebuild-if-modules-changed") };
+        rust::Vec child_argv
+            = { rust::String ("semodule"), rust::String ("-n"), rust::String ("--refresh") };
         ROSCXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode),
                     error);
       }
