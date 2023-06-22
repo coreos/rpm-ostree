@@ -74,33 +74,20 @@ if ! grep -qFe "not yet implemented" err.txt; then
 fi
 
 # Test overrides
-versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
-versionid=${versionid:11} # trim off VERSION_ID=
+versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 case $versionid in
-  37)
-    url_suffix=2.14.0/3.fc37/x86_64/ignition-2.14.0-3.fc37.x86_64.rpm
-    # 2.14.0-4
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2013062"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2084352"
-    kver=6.0.7
-    krev=301
-    ;;
   38)
-    url_suffix=2.15.0/2.fc38/x86_64/ignition-2.15.0-2.fc38.x86_64.rpm
-    # 2.15.0-3
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
+    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
+    koji_ignition_direct=https://kojipkgs.fedoraproject.org//packages/ignition/2.15.0/3.fc38/$(arch)/ignition-2.15.0-3.fc38.$(arch).rpm
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2174317"
     kver=6.2.8
     krev=300
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
 esac
-URL=https://kojipkgs.fedoraproject.org//packages/ignition/$url_suffix
-# test replacement by URL
-rpm-ostree override replace $URL
 rpm-ostree override remove ignition
 # test local RPM install
-curl -Lo ignition.rpm $URL
+curl -Lo ignition.rpm "${koji_ignition_direct}"
 rpm-ostree install ignition.rpm
 rpm -q ignition
 
@@ -109,7 +96,7 @@ dnf -y uninstall kexec-tools
 if rpm -q kexec-tools; then fatal "failed to remove kexec-tools"; fi
 
 # test replacement by Koji URL
-rpm-ostree override replace $koji_url |& tee out.txt
+rpm-ostree override replace "${koji_ignition_url}" |& tee out.txt
 n_downloaded=$(grep Downloading out.txt | wc -l)
 if [[ $n_downloaded != 1 ]]; then
   fatal "Expected 1 'Downloading', but got $n_downloaded"
