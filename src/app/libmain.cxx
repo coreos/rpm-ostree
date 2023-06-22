@@ -73,6 +73,8 @@ static RpmOstreeCommand commands[] = {
     "Overlay additional packages", rpmostree_builtin_install },
   { "uninstall", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
     "Remove overlayed additional packages", rpmostree_builtin_uninstall },
+  { "search", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
+    "Search for packages", rpmostree_builtin_search },
   { "override", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD),
     "Manage base package overrides", rpmostree_builtin_override },
   { "reset", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS),

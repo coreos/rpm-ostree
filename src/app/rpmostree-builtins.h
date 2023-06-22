@@ -50,6 +50,7 @@ BUILTINPROTO (internals);
 BUILTINPROTO (container);
 BUILTINPROTO (install);
 BUILTINPROTO (uninstall);
+BUILTINPROTO (search);
 BUILTINPROTO (override);
 BUILTINPROTO (kargs);
 BUILTINPROTO (reset);
