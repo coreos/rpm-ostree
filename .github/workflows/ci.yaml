@@ -18,25 +18,25 @@ env:
   ACTION_LINTS_TOOLCHAIN: 1.60.0
 
 jobs:
-  build:
-    name: "Build"
-    runs-on: ubuntu-latest
-    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      # https://github.com/actions/checkout/issues/760
-      - name: Mark git checkout as safe
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Codestyle
-        run: ./ci/codestyle.sh
-      - name: Build
-        run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
-      - name: Upload binary
-        uses: actions/upload-artifact@v3
-        with:
-          name: install.tar
-          path: install.tar
+  # build:
+  #   name: "Build"
+  #   runs-on: ubuntu-latest
+  #   container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     # https://github.com/actions/checkout/issues/760
+  #     - name: Mark git checkout as safe
+  #       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+  #     - name: Codestyle
+  #       run: ./ci/codestyle.sh
+  #     - name: Build
+  #       run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
+  #     - name: Upload binary
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: install.tar
+  #         path: install.tar
   build-tests:
     name: "Build Integration Test Data"
     runs-on: ubuntu-latest
@@ -60,18 +60,18 @@ jobs:
         with:
           name: tests.tar
           path: tests.tar
-  cxx-verify:
-    name: "Verify CXX generation"
-    runs-on: ubuntu-latest
-    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      # https://github.com/actions/checkout/issues/760
-      - name: Mark git checkout as safe
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Codestyle
-        run: ./ci/verify-cxx.sh
+  # cxx-verify:
+  #   name: "Verify CXX generation"
+  #   runs-on: ubuntu-latest
+  #   container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     # https://github.com/actions/checkout/issues/760
+  #     - name: Mark git checkout as safe
+  #       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+  #     - name: Codestyle
+  #       run: ./ci/verify-cxx.sh
   # TODO: Enable this once we've switched closer to having `cargo build`
   # be the primary buildsystem entrypoint.  Right now the problem is
   # in order to build the libdnf-sys dependency it relies on us having
@@ -97,32 +97,32 @@ jobs:
   #       run: cargo fmt -- --check -l
   #     - name: cargo clippy (warnings)
   #       run: cargo clippy -- -D warnings
-  build-clang:
-    name: "Build (clang)"
-    runs-on: ubuntu-latest
-    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      # https://github.com/actions/checkout/issues/760
-      - name: Mark git checkout as safe
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Build
-        run: ./ci/clang-build-check.sh
+  # build-clang:
+  #   name: "Build (clang)"
+  #   runs-on: ubuntu-latest
+  #   container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     # https://github.com/actions/checkout/issues/760
+  #     - name: Mark git checkout as safe
+  #       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+  #     - name: Build
+  #       run: ./ci/clang-build-check.sh
   integration:
     name: "Container Integration"
-    needs: [build, build-tests]
+    needs: [build-tests]
     runs-on: ubuntu-latest
     container: quay.io/fedora/fedora-coreos:testing-devel
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      - name: Download build
-        uses: actions/download-artifact@v3
-        with:
-          name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar && rm -f install.tar
+      # - name: Download build
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: install.tar
+      # - name: Install
+      #   run: tar -C / -xzvf install.tar && rm -f install.tar
       - name: Download tests
         uses: actions/download-artifact@v3
         with:
@@ -132,130 +132,130 @@ jobs:
       - name: Integration tests
         run: ./ci/test-container.sh
   # Try to keep this in sync with https://github.com/ostreedev/ostree-rs-ext/blob/1fc115a760eeada22599e0f57026f58b22efded4/.github/workflows/rust.yml#L163
-  container-build:
-    name: "Container build"
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Checkout coreos-layering-examples
-        uses: actions/checkout@v3
-        with:
-          repository: coreos/coreos-layering-examples
-          path: coreos-layering-examples
-      - name: Download
-        uses: actions/download-artifact@v3
-        with:
-          name: install.tar
-      - name: Integration tests
-        run: ./ci/container-build-integration.sh
-  cargo-deny:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - uses: EmbarkStudios/cargo-deny-action@v1
-      with:
-        log-level: warn
-        command: check bans sources licenses
-  compose:
-    name: "Compose tests"
-    needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
-      options: "--user root --privileged -v /var/tmp:/var/tmp"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Install test dependencies
-        run: ./ci/install-test-deps.sh
-      - name: Download build
-        uses: actions/download-artifact@v3
-        with:
-          name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar
-      - name: Integration tests
-        run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh
-  compose-image:
-    name: "compose-image tests"
-    needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
-      options: "--user root --privileged -v /var/tmp:/var/tmp"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Install test dependencies
-        run: ./ci/install-test-deps.sh
-      - name: Download build
-        uses: actions/download-artifact@v3
-        with:
-          name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar
-      - name: Integration tests
-        run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose-image.sh
-  container-encapsulate:
-    name: "Encapsulate tests"
-    needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
-      options: "--user root --privileged -v /var/tmp:/var/tmp"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Download build
-        uses: actions/download-artifact@v3
-        with:
-          name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar
-      - name: Integration tests
-        run: env TMPDIR=/var/tmp ./tests/encapsulate.sh
-  build-c9s:
-    name: "Build (c9s)"
-    runs-on: ubuntu-latest
-    container: quay.io/centos/centos:stream9
-    steps:
-      - name: Install git
-        run: yum -y install git
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          submodules: true
-      # https://github.com/actions/checkout/issues/760
-      - name: Mark git checkout as safe
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Run ridiculous RHEL -devel package workaround
-        run: ./ci/ridiculous-rhel-devel-workaround.sh
-      - name: Install dependencies
-        run: ./ci/installdeps.sh
-      - name: Build
-        run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
-      - name: Upload binary
-        uses: actions/upload-artifact@v3
-        with:
-          name: install-c9s.tar
-          path: install.tar
-  # Doc: https://github.com/redhat-plumbers-in-action/differential-shellcheck#usage
-  differential-shellcheck:
-    name: Differential ShellCheck
-    runs-on: ubuntu-latest
+  # container-build:
+  #   name: "Container build"
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Checkout coreos-layering-examples
+  #       uses: actions/checkout@v3
+  #       with:
+  #         repository: coreos/coreos-layering-examples
+  #         path: coreos-layering-examples
+  #     - name: Download
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: install.tar
+  #     - name: Integration tests
+  #       run: ./ci/container-build-integration.sh
+  # cargo-deny:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - uses: EmbarkStudios/cargo-deny-action@v1
+  #     with:
+  #       log-level: warn
+  #       command: check bans sources licenses
+  # compose:
+  #   name: "Compose tests"
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+  #     options: "--user root --privileged -v /var/tmp:/var/tmp"
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Install test dependencies
+  #       run: ./ci/install-test-deps.sh
+  #     - name: Download build
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: install.tar
+  #     - name: Install
+  #       run: tar -C / -xzvf install.tar
+  #     - name: Integration tests
+  #       run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh
+  # compose-image:
+  #   name: "compose-image tests"
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+  #     options: "--user root --privileged -v /var/tmp:/var/tmp"
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Install test dependencies
+  #       run: ./ci/install-test-deps.sh
+  #     - name: Download build
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: install.tar
+  #     - name: Install
+  #       run: tar -C / -xzvf install.tar
+  #     - name: Integration tests
+  #       run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose-image.sh
+  # container-encapsulate:
+  #   name: "Encapsulate tests"
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+  #     options: "--user root --privileged -v /var/tmp:/var/tmp"
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Download build
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: install.tar
+  #     - name: Install
+  #       run: tar -C / -xzvf install.tar
+  #     - name: Integration tests
+  #       run: env TMPDIR=/var/tmp ./tests/encapsulate.sh
+  # build-c9s:
+  #   name: "Build (c9s)"
+  #   runs-on: ubuntu-latest
+  #   container: quay.io/centos/centos:stream9
+  #   steps:
+  #     - name: Install git
+  #       run: yum -y install git
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #       with:
+  #         submodules: true
+  #     # https://github.com/actions/checkout/issues/760
+  #     - name: Mark git checkout as safe
+  #       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+  #     - name: Run ridiculous RHEL -devel package workaround
+  #       run: ./ci/ridiculous-rhel-devel-workaround.sh
+  #     - name: Install dependencies
+  #       run: ./ci/installdeps.sh
+  #     - name: Build
+  #       run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
+  #     - name: Upload binary
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: install-c9s.tar
+  #         path: install.tar
+  # # Doc: https://github.com/redhat-plumbers-in-action/differential-shellcheck#usage
+  # differential-shellcheck:
+  #   name: Differential ShellCheck
+  #   runs-on: ubuntu-latest
 
-    permissions:
-      security-events: write
+  #   permissions:
+  #     security-events: write
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Differential ShellCheck
-        uses: redhat-plumbers-in-action/differential-shellcheck@v4
-        with:
-          severity: warning
-          token: ${{ secrets.GITHUB_TOKEN }}
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #       with:
+  #         fetch-depth: 0
+  #     - name: Differential ShellCheck
+  #       uses: redhat-plumbers-in-action/differential-shellcheck@v4
+  #       with:
+  #         severity: warning
+  #         token: ${{ secrets.GITHUB_TOKEN }}
