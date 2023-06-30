@@ -6,6 +6,8 @@ fatal() {
     exit 1
 }
 
+rpm -Uvh https://download.copr.fedorainfracloud.org/results/@CoreOS/continuous/fedora-38-x86_64/06105345-rpm-ostree/rpm-ostree-{libs-,}2023.5.4.g1701971d-1.fc38.x86_64.rpm
+
 repodir=/usr/lib/coreos-assembler/tests/kola/rpm-ostree/destructive/data/rpm-repos/
 
 cat >/etc/yum.repos.d/libtest.repo <<EOF
