@@ -80,18 +80,17 @@ versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 case $versionid in
   38)
     koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
-    koji_ignition_direct=https://kojipkgs.fedoraproject.org//packages/ignition/2.15.0/3.fc38/$(arch)/ignition-2.15.0-3.fc38.$(arch).rpm
+    koji_strace_direct="https://kojipkgs.fedoraproject.org//packages/strace/6.2/1.fc38/$(arch)/strace-6.2-1.fc38.$(arch).rpm"
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2174317"
     kver=6.2.8
     krev=300
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
 esac
-rpm-ostree override remove ignition
 # test local RPM install
-curl -Lo ignition.rpm "${koji_ignition_direct}"
-rpm-ostree install ignition.rpm
-rpm -q ignition
+curl -Lo strace.rpm "${koji_strace_direct}"
+rpm-ostree install strace.rpm
+rpm -q strace
 
 # And verify it's uninstalled
 dnf -y uninstall kexec-tools
