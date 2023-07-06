@@ -1155,18 +1155,32 @@ struct cstrless
 
 /* wrapper function to both query for packages and add them to the builder */
 static void
-query_results_to_builder (HyQuery query, GVariantBuilder *builder, const gchar *id)
+query_results_to_builder (HyQuery query, GVariantBuilder *builder, const gchar *id,
+                          std::set<const gchar *, cstrless> *result_set)
 {
-  std::set<const gchar *, cstrless> result_set;
   g_autoptr (GPtrArray) pkglist = hy_query_run (query);
-  for (guint i = 0; i < pkglist->len && result_set.size () < 50; i++)
+  for (guint i = 0; i < pkglist->len && (*result_set).size () < 50; i++)
     {
       auto pkg = static_cast<DnfPackage *> (g_ptr_array_index (pkglist, i));
-      if (!result_set.count (dnf_package_get_name (pkg)))
+      if (!(*result_set).count (dnf_package_get_name (pkg)))
         {
           os_add_package_info_to_builder (pkg, builder, id);
-          result_set.insert (dnf_package_get_name (pkg));
+          (*result_set).insert (dnf_package_get_name (pkg));
         }
+    }
+}
+
+/* helper function to apply Name/Summary or HY_EQ/HY_SUBSTR filters on search term */
+static void
+apply_search_filter (HyQuery *query, int keyname, const gchar *const name, int cmp_type)
+{
+  if (!hy_is_glob_pattern (name))
+    {
+      hy_query_filter (*query, keyname, cmp_type | HY_ICASE, name);
+    }
+  else
+    {
+      hy_query_filter (*query, keyname, HY_GLOB | HY_ICASE, name);
     }
 }
 
@@ -1175,41 +1189,106 @@ static void
 search_packages_by_filter (HyQuery query, GVariantBuilder *builder, const gchar *const *names,
                            std::vector<int> keynames, const gchar *id)
 {
-  /* case insensitive exact match between search term and package */
-  hy_query_clear (query);
-  for (guint j = 0; j < keynames.size (); j++)
-    {
-      for (guint i = 0; names[i] != NULL; i++)
-        {
-          if (!hy_is_glob_pattern (names[i]))
-            {
-              hy_query_filter (query, keynames[j], HY_EQ | HY_ICASE, names[i]);
-            }
-          else
-            {
-              hy_query_filter (query, keynames[j], HY_GLOB | HY_ICASE, names[i]);
-            }
-        }
-    }
-  query_results_to_builder (query, builder, id);
+  std::set<const gchar *, cstrless> result_set;
+  HyQuery intermediate_query = hy_query_clone (query);
+  HyQuery final_query = hy_query_clone (query);
 
-  /* case insensitive substring match of search term within package */
-  hy_query_clear (query);
-  for (guint j = 0; j < keynames.size (); j++)
+  int names_count = 0;
+  for (guint i = 0; names[i] != NULL; i++)
     {
+      names_count++;
+    }
+
+  /* Name/Summary matches */
+  if (keynames.size () < 2)
+    {
+      hy_query_clear (query);
       for (guint i = 0; names[i] != NULL; i++)
         {
-          if (!hy_is_glob_pattern (names[i]))
+          apply_search_filter (&query, keynames[0], names[i], HY_EQ);
+        }
+      query_results_to_builder (query, builder, id, &result_set);
+
+      hy_query_clear (query);
+      for (guint i = 0; names[i] != NULL; i++)
+        {
+          apply_search_filter (&query, keynames[0], names[i], HY_SUBSTR);
+        }
+      query_results_to_builder (query, builder, id, &result_set);
+    }
+
+  /* Name AND Summary matches for more than one search term */
+  /* =========================================================================================
+  For each search term, apply a query with the keyname filter (Name or Summary) and unions the
+  results. This allows multi-term searches to return matches when search terms are found in
+  either the Name or Summary of a package. After this, return the intersection of the results
+  for each search term to filter out results that do not contain all matching terms.
+  ========================================================================================= */
+  else if (keynames.size () >= 2 && names_count >= 2)
+    {
+
+      for (guint i = 0; names[i] != NULL; i++)
+        {
+          hy_query_clear (intermediate_query);
+          for (guint j = 0; j < keynames.size (); j++)
             {
-              hy_query_filter (query, keynames[j], HY_SUBSTR | HY_ICASE, names[i]);
+              hy_query_clear (query);
+              apply_search_filter (&query, keynames[j], names[i], HY_EQ);
+
+              if (j != 0)
+                {
+                  hy_query_union (intermediate_query, query);
+                }
+              else
+                {
+                  intermediate_query = hy_query_clone (query);
+                }
+
+              hy_query_clear (query);
+              apply_search_filter (&query, keynames[j], names[i], HY_SUBSTR);
+              hy_query_union (intermediate_query, query);
+            }
+
+          if (i != 0)
+            {
+              hy_query_intersection (final_query, intermediate_query);
             }
           else
             {
-              hy_query_filter (query, keynames[j], HY_GLOB | HY_ICASE, names[i]);
+              final_query = hy_query_clone (intermediate_query);
             }
         }
+      query_results_to_builder (final_query, builder, id, &result_set);
     }
-  query_results_to_builder (query, builder, id);
+
+  /* Name AND Summary matches for only one search term */
+  /* =========================================================================================
+  For the case of a single search term, return the intersection of both Name and Summary matches
+  of the search term (instead of the union for multi-term searches).
+  ========================================================================================= */
+  else if (keynames.size () >= 2 && names_count < 2)
+    {
+      for (guint i = 0; i < keynames.size (); i++)
+        {
+          hy_query_clear (query);
+          apply_search_filter (&query, keynames[i], names[0], HY_EQ);
+          intermediate_query = hy_query_clone (query);
+
+          hy_query_clear (query);
+          apply_search_filter (&query, keynames[i], names[0], HY_SUBSTR);
+          hy_query_union (intermediate_query, query);
+
+          if (i != 0)
+            {
+              hy_query_intersection (final_query, intermediate_query);
+            }
+          else
+            {
+              final_query = hy_query_clone (intermediate_query);
+            }
+        }
+      query_results_to_builder (final_query, builder, id, &result_set);
+    }
 }
 
 static gboolean

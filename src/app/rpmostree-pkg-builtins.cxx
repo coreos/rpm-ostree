@@ -406,7 +406,7 @@ rpmostree_builtin_search (int argc, char **argv, RpmOstreeCommandInvocation *inv
 
   if (query_set.size () == 0)
     {
-      g_print ("No matches found.");
+      g_print ("No matches found.\n");
     }
 
   return TRUE;
