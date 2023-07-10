@@ -89,7 +89,8 @@ find_kernel_and_initramfs_in_bootdir (int rootfs_dfd, const char *bootdir, char 
       if (out_ksuffix ? g_str_has_prefix (name, "vmlinuz-") : g_str_equal (name, "vmlinuz"))
         {
           if (ret_kernel)
-            return glnx_throw (error, "Multiple vmlinuz%s in %s", out_ksuffix ? "-" : "", bootdir);
+            return glnx_throw (error, "Multiple vmlinuz%s in %s, occurrences '%s' and '%s/%s'",
+                               out_ksuffix ? "-" : "", bootdir, ret_kernel, bootdir, name);
           if (out_ksuffix)
             ret_ksuffix = g_strdup (name + strlen ("vmlinuz-"));
           ret_kernel = g_strconcat (bootdir, "/", name, NULL);
@@ -97,7 +98,8 @@ find_kernel_and_initramfs_in_bootdir (int rootfs_dfd, const char *bootdir, char 
       else if (g_str_equal (name, "initramfs.img") || g_str_has_prefix (name, "initramfs-"))
         {
           if (ret_initramfs)
-            return glnx_throw (error, "Multiple initramfs- in %s", bootdir);
+            return glnx_throw (error, "Multiple initramfs- in %s, occurrences '%s' and '%s/%s'",
+                               bootdir, ret_initramfs, bootdir, name);
           ret_initramfs = g_strconcat (bootdir, "/", name, NULL);
         }
     }
