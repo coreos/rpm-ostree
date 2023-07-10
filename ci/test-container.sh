@@ -79,7 +79,7 @@ fi
 versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 case $versionid in
   38)
-    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
+    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2208300"
     koji_strace_direct="https://kojipkgs.fedoraproject.org//packages/strace/6.2/1.fc38/$(arch)/strace-6.2-1.fc38.$(arch).rpm"
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2174317"
     kver=6.2.8
