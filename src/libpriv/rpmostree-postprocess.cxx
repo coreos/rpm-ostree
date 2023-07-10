@@ -835,8 +835,21 @@ rpmostree_compose_commit (int rootfs_fd, OstreeRepo *repo, const char *parent_re
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
     return glnx_prefix_error (error, "While writing tree");
 
-  // Unfortunately this API takes GVariantDict, not GVariantBuilder, so convert
+  // Unfortunately these API takes GVariantDict, not GVariantBuilder, so convert
   g_autoptr (GVariantDict) metadata_dict = g_variant_dict_new (src_metadata);
+
+#if OSTREE_CHECK_VERSION(2023, 4)
+  g_autoptr (GError) local_error = NULL;
+  if (!ostree_repo_commit_add_composefs_metadata (
+          repo, 0, metadata_dict, (OstreeRepoFile *)root_tree, cancellable, &local_error)
+      && !g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED))
+    {
+      g_propagate_prefixed_error (error, util::move_nullify (local_error),
+                                  "Adding composefs metadata");
+      return FALSE;
+    }
+#endif
+
   if (!container)
     {
       if (!ostree_commit_metadata_for_bootable (root_tree, metadata_dict, cancellable, error))
