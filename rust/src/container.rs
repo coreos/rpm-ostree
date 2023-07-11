@@ -426,7 +426,10 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     let package_structure = opt
         .previous_build_manifest
         .as_ref()
-        .map(|p| oci_spec::image::ImageManifest::from_file(&p).map_err(anyhow::Error::new))
+        .map(|p| {
+            oci_spec::image::ImageManifest::from_file(&p)
+                .map_err(|e| anyhow::anyhow!("Failed to read previous manifest {p}: {e}"))
+        })
         .transpose()?;
 
     let mut copy_meta_keys = opt.copy_meta_keys;
