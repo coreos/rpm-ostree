@@ -315,8 +315,8 @@ fn passwd_compose_prep_impl(
     rootfs.create_dir_with(dest, &db)?;
 
     // TODO(lucab): consider reworking these to avoid boolean results.
-    let found_passwd_data = data_from_json(rootfs, treefile, dest, "passwd")?;
-    let found_groups_data = data_from_json(rootfs, treefile, dest, "group")?;
+    let found_passwd_data = write_data_from_treefile(rootfs, treefile, dest, "passwd")?;
+    let found_groups_data = write_data_from_treefile(rootfs, treefile, dest, "group")?;
 
     // We should error if we are getting passwd data from JSON and group from
     // previous commit, or vice versa, as that'll confuse everyone when it goes
@@ -340,7 +340,9 @@ fn passwd_compose_prep_impl(
     Ok(())
 }
 
-fn data_from_json(
+// This function writes the static passwd/group data from the treefile to the
+// target root filesystem.
+fn write_data_from_treefile(
     rootfs: &Dir,
     treefile: &mut Treefile,
     dest_path: &str,
