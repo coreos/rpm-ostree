@@ -389,6 +389,40 @@ fn write_data_from_treefile(
         })
         .with_context(|| format!("failed to write /{}", &target_etc_filename))?;
 
+    // Regenerate etc/{,g}shadow to sync with etc/{password,group}
+    let db = rootfs.open(target_etc_filename).map(BufReader::new)?;
+    let shadow_name = if target == "passwd" {
+        "shadow"
+    } else {
+        "gshadow"
+    };
+    let target_etc_shadow = format!("{}{}", dest_path, shadow_name);
+
+    match shadow_name {
+        "shadow" => {
+            let entries = nameservice::passwd::parse_passwd_content(db)?;
+            rootfs
+                .atomic_replace_with(&target_etc_shadow, |target_shadow| -> Result<()> {
+                    for user in entries {
+                        writeln!(target_shadow, "{}:*::0:99999:7:::", user.name)?;
+                    }
+                    Ok(())
+                })
+                .with_context(|| format!("Writing {target_etc_shadow}"))?;
+        }
+        "gshadow" => {
+            let entries = nameservice::group::parse_group_content(db)?;
+            rootfs
+                .atomic_replace_with(&target_etc_shadow, |target_shadow| -> Result<()> {
+                    for group in entries {
+                        writeln!(target_shadow, "{}:::", group.name)?;
+                    }
+                    Ok(())
+                })
+                .with_context(|| format!("Writing {target_etc_shadow}"))?;
+        }
+        _ => unreachable!("invalid file path: {}", target_etc_shadow),
+    }
     Ok(true)
 }
 
