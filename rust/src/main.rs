@@ -53,7 +53,9 @@ async fn dispatch_ostree_ext(args: Vec<String>) -> Result<i32> {
 /// Dispatch multicall binary to relevant logic, based on callname from `argv[0]`.
 async fn dispatch_multicall(callname: String, args: Vec<String>) -> Result<i32> {
     match callname.as_str() {
-        "ostree-container" | "ostree-ima-sign" => dispatch_ostree_ext(args).await,
+        "ostree-container" | "ostree-ima-sign" | "ostree-provisional-repair" => {
+            dispatch_ostree_ext(args).await
+        }
         _ => inner_async_main(args).await, // implicitly includes "rpm-ostree"
     }
 }
