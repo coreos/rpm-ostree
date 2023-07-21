@@ -1004,6 +1004,7 @@ rpmostree_update_deployment (
     const char *local_repo_remote, const char *treefile, GVariant *options,
     char **out_transaction_address, GCancellable *cancellable, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Updating deployment", error);
   g_autoptr (GVariant) modifiers = NULL;
   glnx_unref_object GUnixFDList *fd_list = NULL;
   if (!get_modifiers_variant (set_refspec, set_revision, install_pkgs, install_fileoverride_pkgs,
