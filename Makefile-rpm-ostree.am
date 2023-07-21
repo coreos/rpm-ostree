@@ -132,6 +132,7 @@ install-rpmostree-hook:
 	install -m 0755 -t $(DESTDIR)$(bindir) rpm-ostree
 	install -d -m 0755 $(ostreeextdir)
 	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(ostreeextdir)/ostree-ima-sign 
+	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(ostreeextdir)/ostree-provisional-repair 
 	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(ostreeextdir)/ostree-container
 INSTALL_EXEC_HOOKS += install-rpmostree-hook
 
