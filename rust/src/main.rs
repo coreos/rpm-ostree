@@ -50,12 +50,19 @@ async fn dispatch_ostree_ext(args: Vec<String>) -> Result<i32> {
     Ok(0)
 }
 
+/// Invoke the bootc CLI code.
+async fn dispatch_bootc(args: Vec<String>) -> Result<i32> {
+    bootc::cli::run_from_iter(args).await?;
+    Ok(0)
+}
+
 /// Dispatch multicall binary to relevant logic, based on callname from `argv[0]`.
 async fn dispatch_multicall(callname: String, args: Vec<String>) -> Result<i32> {
     match callname.as_str() {
         "ostree-container" | "ostree-ima-sign" | "ostree-provisional-repair" => {
             dispatch_ostree_ext(args).await
         }
+        "bootc" => dispatch_bootc(args).await,
         _ => inner_async_main(args).await, // implicitly includes "rpm-ostree"
     }
 }
