@@ -28,10 +28,44 @@ For example, `rpm-ostree upgrade` will look for a new container version.
 You can also `rpm-ostree apply-live`, etc.  It also does still work
 to do "client side" `rpm-ostree install` etc.
 
+## URL format for ostree native containers
+
+Ostree understand the following URL formats to retrieve and optionally verify
+the integrity of a container image or its content:
+
+- `ostree-unverified-image:registry:<oci image>` or
+  `ostree-unverified-image:docker://<oci image>`: Fetch a container image
+  without verify either the integrity of the container itself not its content.
+  The container image is usually fetched over HTTPS which still provides
+  integrity and confidentiality but not authenticity.
+
+- `ostree-unverified-registry:<oci image>`: Shortcut for the above use case.
+
+- `ostree-remote-image:<ostree remote>:registry:<oci image>` &
+  `ostree-remote-image:<ostree remote>:docker://<oci image>`: Fetch a container
+  image and verify that the included ostree commit is correctly signed by a key
+  as configured locally in the specified ostree remote
+  (`/etc/ostree/remotes.d/<ostree remote>.conf`).
+
+- `ostree-remote-registry:<ostree remote>:<oci image>`: Shortcut for the above
+use case.
+
+- `ostree-image-signed:registry:<oci image>` &
+  `ostree-image-signed:docker://<oci image>`: Fetch a container image and
+  verify that the container image is signed according to the policy set in
+  `/etc/containers/policy.json` (see
+  [containers-policy.json(5)](https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md#policy-requirements)).
+
+ostree ([ostree-rs-ext](https://github.com/ostreedev/ostree-rs-ext)) uses
+[skopeo](https://github.com/containers/skopeo) to fetch container images and
+thus supports the transports as documented in
+[containers-transports(5)](https://github.com/containers/image/blob/main/docs/containers-transports.5.md).
+
 ## Registry authentication
 
 Today, the ostree stack will read `/etc/ostree/auth.json` and `/run/ostree/auth.json`
-which are in the same format as documented by [man containers-auth.json](https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md).
+which are in the same format as documented by
+[containers-auth.json(5)](https://github.com/containers/image/blob/main/docs/containers-auth.json.5.md).
 
 ## Using custom builds
 
