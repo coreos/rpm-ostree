@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
+use crate::ffi::ExportedManifestDiff;
 use crate::ffi::{output_message, ContainerImageState};
 use anyhow::{Context, Result};
 use ostree::glib;
@@ -10,7 +11,7 @@ use ostree_container::store::{
     ImageImporter, ImageProxyConfig, ImportProgress, ManifestLayerState, PrepareResult,
 };
 use ostree_container::OstreeImageReference;
-use ostree_ext::container as ostree_container;
+use ostree_ext::container::{self as ostree_container, ManifestDiff};
 use ostree_ext::ostree;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::Receiver;
@@ -23,12 +24,20 @@ impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::Conta
             .and_then(|c| ostree_container::version_for_config(c))
             .map(ToOwned::to_owned)
             .unwrap_or_default();
+        let cached_update_diff = s
+            .cached_update
+            .map(|c| {
+                let diff = ManifestDiff::new(&s.manifest, &c.manifest);
+                export_diff(&diff)
+            })
+            .unwrap_or_default();
         crate::ffi::ContainerImageState {
             base_commit: s.base_commit,
             merge_commit: s.merge_commit,
             is_layered: s.is_layered,
             image_digest: s.manifest_digest,
             version,
+            cached_update_diff,
         }
     }
 }
@@ -72,14 +81,20 @@ fn default_container_pull_config(imgref: &OstreeImageReference) -> Result<ImageP
     Ok(cfg)
 }
 
+/// Create a new image importer using our default configuration.
+async fn new_importer(repo: &ostree::Repo, imgref: &OstreeImageReference) -> Result<ImageImporter> {
+    let config = default_container_pull_config(imgref)?;
+    let mut imp = ImageImporter::new(repo, imgref, config).await?;
+    imp.require_bootable();
+    Ok(imp)
+}
+
 async fn pull_container_async(
     repo: &ostree::Repo,
     imgref: &OstreeImageReference,
 ) -> Result<ContainerImageState> {
     output_message(&format!("Pulling manifest: {}", &imgref));
-    let config = default_container_pull_config(imgref)?;
-    let mut imp = ImageImporter::new(repo, imgref, config).await?;
-    imp.require_bootable();
+    let mut imp = new_importer(repo, imgref).await?;
     let layer_progress = imp.request_progress();
     let prep = match imp.prepare().await? {
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
@@ -185,5 +200,77 @@ pub(crate) fn purge_refspec(repo: &crate::FFIOstreeRepo, imgref: &str) -> CxxRes
             }
         }
     }
+    Ok(())
+}
+
+/// Check for an updated manifest for the given container image reference, and return a diff.
+pub(crate) fn check_container_update(
+    repo: &crate::FFIOstreeRepo,
+    cancellable: &crate::FFIGCancellable,
+    imgref: &str,
+) -> CxxResult<bool> {
+    let repo = &repo.glib_reborrow();
+    let cancellable = cancellable.glib_reborrow();
+    let imgref = &OstreeImageReference::try_from(imgref)?;
+    Handle::current()
+        .block_on(async {
+            crate::utils::run_with_cancellable(
+                async { impl_check_container_update(repo, imgref).await },
+                &cancellable,
+            )
+            .await
+        })
+        .map_err(Into::into)
+}
+
+/// Unfortunately we can't export external types into our C++ bridge, so manually copy things
+/// to another copy of the struct.
+fn export_diff(diff: &ManifestDiff) -> ExportedManifestDiff {
+    ExportedManifestDiff {
+        initialized: true,
+        total: diff.total,
+        total_size: diff.total_size,
+        n_removed: diff.n_removed,
+        removed_size: diff.removed_size,
+        n_added: diff.n_added,
+        added_size: diff.added_size,
+    }
+}
+
+/// Implementation of fetching a container manifest diff.
+async fn impl_check_container_update(
+    repo: &ostree::Repo,
+    imgref: &OstreeImageReference,
+) -> Result<bool> {
+    let mut imp = new_importer(repo, imgref).await?;
+    let have_update = match imp.prepare().await? {
+        PrepareResult::AlreadyPresent(_) => false,
+        PrepareResult::Ready(_) => true,
+    };
+    Ok(have_update)
+}
+
+#[test]
+fn test_container_manifest_diff() -> Result<()> {
+    use ostree_ext::container::ManifestDiff;
+    use ostree_ext::oci_spec::image::ImageManifest;
+    let a: ImageManifest = serde_json::from_str(include_str!("../test/manifest1.json")).unwrap();
+    let b: ImageManifest = serde_json::from_str(include_str!("../test/manifest2.json")).unwrap();
+    let diff = ManifestDiff::new(&a, &b);
+
+    let cmp_total = diff.total;
+    let cmp_total_size = diff.total_size;
+    let cmp_removed = diff.n_removed;
+    let cmp_removed_size = diff.removed_size;
+    let cmp_added = diff.n_added;
+    let cmp_added_size = diff.added_size;
+
+    assert_eq!(cmp_total, 51 as u64);
+    assert_eq!(cmp_total_size, 697035490 as u64);
+    assert_eq!(cmp_removed, 4 as u64);
+    assert_eq!(cmp_removed_size, 170473141 as u64);
+    assert_eq!(cmp_added, 4 as u64);
+    assert_eq!(cmp_added_size, 170472856 as u64);
+
     Ok(())
 }

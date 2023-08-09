@@ -1244,6 +1244,65 @@ rpmostree_print_diff_advisories (GVariant *rpm_diff, GVariant *advisories, gbool
   return TRUE;
 }
 
+/* print "manifest-diff" */
+gboolean
+rpmostree_print_manifest_diff (GVariant *manifest_diff, guint maxkeylen, GError **error)
+{
+  if (!manifest_diff)
+    return TRUE; /* Nothing to 🖨️ */
+
+  g_auto (GVariantDict) manifest_diff_dict;
+  g_variant_dict_init (&manifest_diff_dict, manifest_diff);
+
+  guint64 total = 0;
+  if (!g_variant_dict_lookup (&manifest_diff_dict, "total", "t", &total))
+    return glnx_throw (error, "Missing \"total\" key");
+
+  printf ("  %*s%s %" G_GUINT64_FORMAT "\n", maxkeylen, "Total layers",
+          strlen ("Total layers") ? ":" : " ", total);
+
+  {
+    guint64 total_size = 0;
+    if (!g_variant_dict_lookup (&manifest_diff_dict, "total-size", "t", &total_size))
+      return glnx_throw (error, "Missing \"total-size\" key");
+    g_autofree char *formatted = g_format_size (total_size);
+    printf ("  %*s%s %s", maxkeylen, "Size", strlen ("Size") ? ":" : " ", formatted);
+    printf ("\n");
+  }
+
+  guint64 total_removed = 0;
+  if (!g_variant_dict_lookup (&manifest_diff_dict, "n-removed", "t", &total_removed))
+    return glnx_throw (error, "Missing \"n-removed\" key");
+
+  printf (" %*s%s %" G_GUINT64_FORMAT "\n", maxkeylen, "Removed layers",
+          strlen ("Removed layers") ? ":" : " ", total_removed);
+
+  {
+    guint64 removed_size = 0;
+    if (!g_variant_dict_lookup (&manifest_diff_dict, "removed-size", "t", &removed_size))
+      return glnx_throw (error, "Missing \"removed-size\" key");
+    g_autofree char *formatted = g_format_size (removed_size);
+    printf ("  %*s%s %s\n", maxkeylen, "Size", strlen ("Size") ? ":" : " ", formatted);
+  }
+
+  guint64 total_added = 0;
+  if (!g_variant_dict_lookup (&manifest_diff_dict, "n-added", "t", &total_added))
+    return glnx_throw (error, "Missing \"n-added\" key");
+  printf ("  %*s%s %" G_GUINT64_FORMAT "\n", maxkeylen, "Added layers",
+          strlen ("Added layers") ? ":" : " ", total_added);
+
+  {
+    guint64 added_size = 0;
+    if (!g_variant_dict_lookup (&manifest_diff_dict, "added-size", "t", &added_size))
+      return glnx_throw (error, "Missing \"added-size\" key");
+
+    g_autofree char *formatted = g_format_size (added_size);
+    printf ("  %*s%s %s\n", maxkeylen, "Size", strlen ("Size") ? ":" : " ", formatted);
+  }
+
+  return TRUE;
+}
+
 /* this is used by both `status` and `upgrade --check/--preview` */
 gboolean
 rpmostree_print_cached_update (GVariant *cached_update, gboolean verbose,
@@ -1286,6 +1345,9 @@ rpmostree_print_cached_update (GVariant *cached_update, gboolean verbose,
   g_autoptr (GVariant) rpm_diff
       = g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
 
+  g_autoptr (GVariant) manifest_diff
+      = g_variant_dict_lookup_value (&dict, "manifest-diff", G_VARIANT_TYPE ("a{sv}"));
+
   g_autoptr (GVariant) advisories
       = g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
 
@@ -1306,6 +1368,9 @@ rpmostree_print_cached_update (GVariant *cached_update, gboolean verbose,
 
   if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose, verbose_advisories,
                                         max_key_len, error))
+    return FALSE;
+
+  if (!rpmostree_print_manifest_diff (manifest_diff, max_key_len, error))
     return FALSE;
 
   return TRUE;

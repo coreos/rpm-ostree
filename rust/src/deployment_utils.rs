@@ -5,7 +5,7 @@
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, format_err, Result};
 use ostree_ext::glib::translate::*;
-use ostree_ext::ostree;
+use ostree_ext::{glib, ostree};
 use std::pin::Pin;
 
 /// Get a currently unique (for this host) identifier for the deployment.
@@ -95,4 +95,25 @@ fn deployment_get_base_impl(
             format_err!("No deployments found for os '{}'", name)
         }),
     }
+}
+
+// Insert the pending manifest diff, if any.  Returns true iff the layers changed.
+pub fn deployment_add_manifest_diff(
+    dict: &crate::ffi::GVariantDict,
+    diff: &crate::ffi::ExportedManifestDiff,
+) -> bool {
+    if diff.n_removed == 0 && diff.n_added == 0 {
+        return false;
+    }
+    let dict = &dict.glib_reborrow();
+    // Add a child dict
+    let diffv = glib::VariantDict::new(None);
+    diffv.insert("total", diff.total);
+    diffv.insert("total-size", diff.total_size);
+    diffv.insert("n-removed", diff.n_removed);
+    diffv.insert("removed-size", diff.removed_size);
+    diffv.insert("n-added", diff.n_added);
+    diffv.insert("added-size", diff.added_size);
+    dict.insert("manifest-diff", diffv);
+    return true;
 }

@@ -1,0 +1,115 @@
+#!/bin/bash
+## kola:
+##   # Increase timeout since this test has a lot of I/O and involves rebasing
+##   timeoutMin: 30
+##   # This test only runs on FCOS due to a problem with skopeo copy on
+##   # RHCOS. See: https://github.com/containers/skopeo/issues/1846
+##   distros: fcos
+##   # Needs internet access as we fetch files from koji
+##   tags: "needs-internet platform-independent"
+##   minMemory: 2048
+#
+# Copyright (C) 2023 Red Hat, Inc.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+set -x
+
+libtest_prepare_offline
+cd "$(mktemp -d)"
+
+# TODO: It'd be much better to test this via a registry
+image_dir=/var/tmp/fcos
+image=oci:$image_dir
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+  "")
+    checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    rm ${image_dir} -rf
+    # Since we're switching OS update stream, turn off zincati
+    systemctl mask --now zincati
+    ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}" --label ostree.bootable=TRUE
+
+    skopeo copy $image containers-storage:localhost/fcos
+    rm "${image_dir}" -rf
+    td=$(mktemp -d)
+    cd ${td}
+cat > Containerfile << EOF
+FROM localhost/fcos
+# RUN rpm-ostree install man
+EOF
+
+    touched_resolv_conf=0
+    if test '!' -f /etc/resolv.conf; then
+      podmanv=$(podman --version)
+      case "${podmanv#podman version }" in
+        3.*) touched_resolv_conf=1; touch /etc/resolv.conf;;
+      esac
+    fi
+    podman build --net=host -t localhost/fcos-derived --squash .
+    if test "${touched_resolv_conf}" -eq 1; then
+      rm -vf /etc/resolv.conf
+    fi
+
+    rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos-derived
+    rm $image_dir -rf
+
+    /tmp/autopkgtest-reboot 1
+    ;;
+  1)
+  rpm-ostree status
+  rpm-ostree upgrade --check > out.txt || rc=$?
+  assert_file_has_content_literal out.txt 'No updates available.'
+  assert_streq "${rc}" 77
+
+  checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+  rm ${image_dir} -rf
+  systemctl mask --now zincati
+  ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}" --label ostree.bootable=TRUE
+
+  skopeo copy $image containers-storage:localhost/fcos
+    rm "${image_dir}" -rf
+    td=$(mktemp -d)
+    cd ${td}
+cat > Containerfile << EOF
+FROM localhost/fcos
+RUN rpm-ostree install man
+EOF
+
+  touched_resolv_conf=0
+  if test '!' -f /etc/resolv.conf; then
+    podmanv=$(podman --version)
+    case "${podmanv#podman version }" in
+      3.*) touched_resolv_conf=1; touch /etc/resolv.conf;;
+    esac
+  fi
+  podman build --net=host -t localhost/fcos-derived --squash .
+  if test "${touched_resolv_conf}" -eq 1; then
+    rm -vf /etc/resolv.conf
+  fi
+
+  rpm-ostree upgrade --check > out.txt
+  assert_file_has_content_literal out.txt 'AvailableUpdate:'
+  assert_file_has_content_literal out.txt 'Total layers:'
+  assert_file_has_content_literal out.txt 'Size:'
+  assert_file_has_content_literal out.txt 'Removed layers:'
+  assert_file_has_content_literal out.txt 'Added layers:'
+
+esac

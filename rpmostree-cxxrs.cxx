@@ -1293,6 +1293,7 @@ enum class SystemHostType : ::std::uint8_t;
 enum class BubblewrapMutability : ::std::uint8_t;
 struct Bubblewrap;
 struct ContainerImageState;
+struct ExportedManifestDiff;
 enum class RefspecType : ::std::uint8_t;
 struct TempEtcGuard;
 struct FilesystemScriptPrep;
@@ -1396,6 +1397,29 @@ private:
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$Bubblewrap
 
+#ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+#define CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+struct ExportedManifestDiff final
+{
+  // Check if the struct is initialized
+  bool initialized;
+  // The total number of packages in the next upgrade
+  ::std::uint64_t total;
+  // The size of the total number of packages in the next upgrade
+  ::std::uint64_t total_size;
+  // The total number of removed packages in the next upgrade
+  ::std::uint64_t n_removed;
+  // The size of total number of removed packages in the next upgrade
+  ::std::uint64_t removed_size;
+  // The total number of added packages in the next upgrade
+  ::std::uint64_t n_added;
+  // The size of total number of added packages in the next upgrade
+  ::std::uint64_t added_size;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+
 #ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$ContainerImageState
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$ContainerImageState
 // `ContainerImageState` is currently identical to ostree-rs-ext's `LayeredImageState` struct,
@@ -1408,6 +1432,7 @@ struct ContainerImageState final
   bool is_layered;
   ::rust::String image_digest;
   ::rust::String version;
+  ::rpmostreecxx::ExportedManifestDiff cached_update_diff;
 
   using IsRelocatable = ::std::true_type;
 };
@@ -2073,6 +2098,11 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$purge_refspec (::rpmostreecxx::OstreeRepo const &repo,
                                          ::rust::Str refspec) noexcept;
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$check_container_update (::rpmostreecxx::OstreeRepo const &repo,
+                                                  ::rpmostreecxx::GCancellable const &cancellable,
+                                                  ::rust::Str imgref, bool *return$) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$alignof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$FilesystemScriptPrep$operator$sizeof () noexcept;
@@ -2196,6 +2226,10 @@ extern "C"
   rpmostreecxx$cxxbridge1$deployment_get_base (::rpmostreecxx::OstreeSysroot &sysroot,
                                                ::rust::Str opt_deploy_id, ::rust::Str opt_os_name,
                                                ::rpmostreecxx::OstreeDeployment **return$) noexcept;
+
+  bool rpmostreecxx$cxxbridge1$deployment_add_manifest_diff (
+      ::rpmostreecxx::GVariantDict const &dict,
+      ::rpmostreecxx::ExportedManifestDiff const &diff) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$daemon_sanitycheck_environment (
       ::rpmostreecxx::OstreeSysroot const &sysroot) noexcept;
@@ -3690,6 +3724,20 @@ purge_refspec (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str refspec)
     }
 }
 
+bool
+check_container_update (::rpmostreecxx::OstreeRepo const &repo,
+                        ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref)
+{
+  ::rust::MaybeUninit<bool> return$;
+  ::rust::repr::PtrLen error$
+      = rpmostreecxx$cxxbridge1$check_container_update (repo, cancellable, imgref, &return$.value);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+  return ::std::move (return$.value);
+}
+
 ::std::size_t
 TempEtcGuard::layout::size () noexcept
 {
@@ -4047,6 +4095,13 @@ deployment_get_base (::rpmostreecxx::OstreeSysroot &sysroot, ::rust::Str opt_dep
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
   return ::std::move (return$.value);
+}
+
+bool
+deployment_add_manifest_diff (::rpmostreecxx::GVariantDict const &dict,
+                              ::rpmostreecxx::ExportedManifestDiff const &diff) noexcept
+{
+  return rpmostreecxx$cxxbridge1$deployment_add_manifest_diff (dict, diff);
 }
 
 void
