@@ -477,6 +477,12 @@
       <arg type="aa{sv}" name="packages" direction="out"/>
       <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
     </method>
+    
+    <method name="Search">
+      <arg type="as" name="names" direction="in"/>
+      <arg type="aa{sv}" name="packages" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantList"/>
+    </method>
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.OSExperimental">

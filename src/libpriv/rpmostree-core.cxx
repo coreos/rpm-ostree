@@ -1466,7 +1466,18 @@ check_goal_solution (RpmOstreeContext *self, GPtrArray *removed_pkgnames,
    * for it anyway so that we get a bug report in case it somehow happens. */
   {
     g_autoptr (GPtrArray) packages = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_REINSTALL, -1);
-    g_assert_cmpint (packages->len, ==, 0);
+    if (packages->len > 0)
+      {
+        g_autoptr (GString) buf = g_string_new ("");
+        for (guint i = 0; i < packages->len; i++)
+          {
+            if (i > 0)
+              g_string_append_c (buf, ' ');
+            auto pkg = static_cast<DnfPackage *> (packages->pdata[i]);
+            g_string_append (buf, dnf_package_get_name (pkg));
+          }
+        return glnx_throw (error, "Request to reinstall exact base package versions: %s", buf->str);
+      }
   }
 
   /* Look at UPDATE and DOWNGRADE, and see whether they're doing what we expect */

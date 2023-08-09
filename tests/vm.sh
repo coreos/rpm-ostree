@@ -39,7 +39,7 @@ spawn_vm() {
     exec 4> .kolavm/info.json
 
     env MANTLE_SSH_DIR="$PWD/.kolavm/ssh" \
-        kola spawn -k -p qemu-unpriv \
+        kola spawn -k -p qemu \
             --qemu-image "$image" -v --idle \
             --json-info-fd 4 --output-dir "$PWD/.kolavm/output" &
 

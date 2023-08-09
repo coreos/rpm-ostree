@@ -34,6 +34,14 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
                 "usroverlay" | "unlock" => builtins::usroverlay::entrypoint(args).map(|_| 0),
                 // A hidden wrapper to intercept some binaries in RPM scriptlets.
                 "scriptlet-intercept" => builtins::scriptlet_intercept::entrypoint(args).map(|_| 0),
+                // This is a deprecated entrypoint
+                "container-encapsulate" => {
+                    rpmostree_rust::client::warn_future_incompatibility(
+                    "This entrypoint is deprecated; use `rpm-ostree compose container-encapsulate` instead",
+                    );
+                    rpmostree_rust::container::container_encapsulate(args_orig).map(|_| 0)
+                    .map_err(anyhow::Error::msg)
+                },
                 // C++ main
                 _ => Ok(rpmostree_rust::ffi::rpmostree_main(args)?),
             }
@@ -50,10 +58,19 @@ async fn dispatch_ostree_ext(args: Vec<String>) -> Result<i32> {
     Ok(0)
 }
 
+/// Invoke the bootc CLI code.
+async fn dispatch_bootc(args: Vec<String>) -> Result<i32> {
+    bootc::cli::run_from_iter(args).await?;
+    Ok(0)
+}
+
 /// Dispatch multicall binary to relevant logic, based on callname from `argv[0]`.
 async fn dispatch_multicall(callname: String, args: Vec<String>) -> Result<i32> {
     match callname.as_str() {
-        "ostree-container" | "ostree-ima-sign" => dispatch_ostree_ext(args).await,
+        "ostree-container" | "ostree-ima-sign" | "ostree-provisional-repair" => {
+            dispatch_ostree_ext(args).await
+        }
+        "bootc" => dispatch_bootc(args).await,
         _ => inner_async_main(args).await, // implicitly includes "rpm-ostree"
     }
 }

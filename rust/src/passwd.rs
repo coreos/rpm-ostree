@@ -13,13 +13,13 @@ use cap_std::fs::OpenOptions;
 use cap_std_ext::cap_std;
 use cap_std_ext::cap_std::fs::Permissions;
 use cap_std_ext::dirext::CapStdExtDirExt;
-use cap_std_ext::rustix::fs::MetadataExt;
-use cap_std_ext::rustix::fs::OpenOptionsExt;
 use fn_error_context::context;
 use gio::prelude::*;
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
 use ostree_ext::{gio, ostree};
+use rustix::fs::MetadataExt;
+use rustix::fs::OpenOptionsExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::unix::fs::DirBuilderExt;
@@ -315,8 +315,8 @@ fn passwd_compose_prep_impl(
     rootfs.create_dir_with(dest, &db)?;
 
     // TODO(lucab): consider reworking these to avoid boolean results.
-    let found_passwd_data = data_from_json(rootfs, treefile, dest, "passwd")?;
-    let found_groups_data = data_from_json(rootfs, treefile, dest, "group")?;
+    let found_passwd_data = write_data_from_treefile(rootfs, treefile, dest, &PasswdKind::User)?;
+    let found_groups_data = write_data_from_treefile(rootfs, treefile, dest, &PasswdKind::Group)?;
 
     // We should error if we are getting passwd data from JSON and group from
     // previous commit, or vice versa, as that'll confuse everyone when it goes
@@ -340,53 +340,110 @@ fn passwd_compose_prep_impl(
     Ok(())
 }
 
-fn data_from_json(
+// PasswdKind includes 2 types: user and group.
+#[derive(Debug)]
+enum PasswdKind {
+    User,
+    Group,
+}
+
+impl PasswdKind {
+    // Get user/group passwd file
+    fn passwd_file(&self) -> &'static str {
+        return match *self {
+            PasswdKind::User => "passwd",
+            PasswdKind::Group => "group",
+        };
+    }
+    // Get user/group shadow file
+    fn shadow_file(&self) -> &'static str {
+        return match *self {
+            PasswdKind::User => "shadow",
+            PasswdKind::Group => "gshadow",
+        };
+    }
+}
+
+// This function writes the static passwd/group data from the treefile to the
+// target root filesystem.
+fn write_data_from_treefile(
     rootfs: &Dir,
     treefile: &mut Treefile,
     dest_path: &str,
-    target: &str,
+    target: &PasswdKind,
 ) -> Result<bool> {
     anyhow::ensure!(!dest_path.is_empty(), "missing destination path");
 
     let append_unique_entries = match target {
-        "passwd" => passwd_append_unique,
-        "group" => group_append_unique,
-        x => anyhow::bail!("invalid merge target '{}'", x),
+        PasswdKind::User => passwd_append_unique,
+        PasswdKind::Group => group_append_unique,
     };
 
-    let target_etc_filename = format!("{}{}", dest_path, target);
+    let passwd_name = target.passwd_file();
+    let target_passwd_path = format!("{}{}", dest_path, passwd_name);
 
     // Migrate the check data from the specified file to /etc.
-    let mut src_file = if target == "passwd" {
-        let check_passwd_file = match treefile.parsed.get_check_passwd() {
-            CheckPasswd::File(cfg) => cfg,
-            _ => return Ok(false),
-        };
-        treefile.externals.passwd_file_mut(check_passwd_file)?
-    } else if target == "group" {
-        let check_groups_file = match treefile.parsed.get_check_groups() {
-            CheckGroups::File(cfg) => cfg,
-            _ => return Ok(false),
-        };
-        treefile.externals.group_file_mut(check_groups_file)?
-    } else {
-        unreachable!("impossible merge target '{}'", target);
+    let mut src_file = match target {
+        PasswdKind::User => {
+            let check_passwd_file = match treefile.parsed.get_check_passwd() {
+                CheckPasswd::File(cfg) => cfg,
+                _ => return Ok(false),
+            };
+            treefile.externals.passwd_file_mut(check_passwd_file)?
+        }
+        PasswdKind::Group => {
+            let check_groups_file = match treefile.parsed.get_check_groups() {
+                CheckGroups::File(cfg) => cfg,
+                _ => return Ok(false),
+            };
+            treefile.externals.group_file_mut(check_groups_file)?
+        }
     };
 
     let mut seen_names = HashSet::new();
     rootfs
-        .atomic_replace_with(&target_etc_filename, |dest_bufwr| -> Result<()> {
+        .atomic_replace_with(&target_passwd_path, |dest_bufwr| -> Result<()> {
             dest_bufwr
                 .get_mut()
                 .as_file_mut()
                 .set_permissions(DEFAULT_PERMS.clone())?;
             let mut buf_rd = BufReader::new(&mut src_file);
-            append_unique_entries(&mut buf_rd, &mut seen_names, dest_bufwr)
-                .with_context(|| format!("failed to process '{}' content from JSON", &target))?;
+            append_unique_entries(&mut buf_rd, &mut seen_names, dest_bufwr).with_context(|| {
+                format!("failed to process '{}' content from JSON", &passwd_name)
+            })?;
             Ok(())
         })
-        .with_context(|| format!("failed to write /{}", &target_etc_filename))?;
+        .with_context(|| format!("failed to write /{}", &target_passwd_path))?;
 
+    // Regenerate etc/{,g}shadow to sync with etc/{passwd,group}
+    let db = rootfs.open(target_passwd_path).map(BufReader::new)?;
+    let shadow_name = target.shadow_file();
+    let target_shadow_path = format!("{}{}", dest_path, shadow_name);
+
+    match target {
+        PasswdKind::User => {
+            let entries = nameservice::passwd::parse_passwd_content(db)?;
+            rootfs
+                .atomic_replace_with(&target_shadow_path, |target_shadow| -> Result<()> {
+                    for user in entries {
+                        writeln!(target_shadow, "{}:*::0:99999:7:::", user.name)?;
+                    }
+                    Ok(())
+                })
+                .with_context(|| format!("Writing {target_shadow_path}"))?;
+        }
+        PasswdKind::Group => {
+            let entries = nameservice::group::parse_group_content(db)?;
+            rootfs
+                .atomic_replace_with(&target_shadow_path, |target_shadow| -> Result<()> {
+                    for group in entries {
+                        writeln!(target_shadow, "{}:::", group.name)?;
+                    }
+                    Ok(())
+                })
+                .with_context(|| format!("Writing {target_shadow_path}"))?;
+        }
+    }
     Ok(true)
 }
 

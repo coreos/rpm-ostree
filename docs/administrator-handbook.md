@@ -94,6 +94,16 @@ that there are not other pending changes:
 ```
 # rpm-ostree install -yA <pkg>
 ```
+### Override rpm files
+
+Normally, RPM does not allow one package to overwrite files from another. 
+But it can make sense to relax this restriction in some cases; for example,
+where one just wants to overwrite one kernel module without rebuilding the whole kernel package.
+The install --force-replacefiles option allows this.
+
+```
+# rpm-ostree install --force-replacefiles <pkg>
+```
 
 ### Modularity
 
@@ -179,7 +189,17 @@ For example, suppose you want to test a fix to `podman`.  You can pass
 both direct HTTP URLs as well as local files:
 
 ```
-$ rpm-ostree override replace https://kojipkgs.fedoraproject.org//packages/podman/3.3.1/1.fc34/x86_64/podman-3.3.1-1.fc34.x86_64.rpm
+$ sudo rpm-ostree override replace https://kojipkgs.fedoraproject.org//packages/podman/3.3.1/1.fc34/x86_64/podman-3.3.1-1.fc34.x86_64.rpm
+```
+```
+$ curl https://rpmfind.net/linux/fedora/linux/updates/testing/38/Everything/x86_64/Packages/p/podman-4.5.1-1.fc38.x86_64.rpm --output podman.rpm
+$ sudo rpm-ostree override replace ./podman.rpm
+```
+
+It is also supported to pull from the Fedora Koji/Bodhi systems. The following two examples override `podman` to a previous build listed in [Koji](https://koji.fedoraproject.org/koji/) and [Bodhi](https://bodhi.fedoraproject.org/updates/):
+```
+$ sudo rpm-ostree override replace https://koji.fedoraproject.org/koji/buildinfo?buildID=2150598
+$ sudo rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2023-130f786970
 ```
 
 Another example with the kernel package; note you need to override exactly the set of installed packages:

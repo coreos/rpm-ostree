@@ -20,7 +20,7 @@ if test "${R_O_DIGEST}" != "${O_C_DIGEST}" ; then
 fi
 for verb in container ima-sign; do
     ostree "$verb" --help > cli_help.txt
-    assert_file_has_content_literal cli_help.txt "USAGE:"
+    assert_file_has_content_literal cli_help.txt "Usage:"
     assert_file_has_content_literal cli_help.txt "ostree-$verb $verb"
     rm cli_help.txt
 done
@@ -100,6 +100,39 @@ assert_file_has_content_literal out.txt '"nevra" s "testdaemon'
 rpmostree_busctl_call_os GetPackages as 1 should-not-exist-p-equals-np > out.txt
 assert_file_has_content_literal out.txt 'aa{sv} 0'
 echo "ok dbus GetPackages"
+
+rpmostree_busctl_call_os Search as 1 testdaemon > out.txt
+assert_file_has_content_literal out.txt '"epoch" t 0'
+assert_file_has_content_literal out.txt '"reponame" s "libtest"'
+assert_file_has_content_literal out.txt '"nevra" s "testdaemon'
+rpmostree_busctl_call_os Search as 1 should-not-exist-p-equals-np > out.txt
+assert_file_has_content_literal out.txt 'aa{sv} 0'
+echo "ok dbus Search"
+
+rpm-ostree search testdaemon > out.txt
+assert_file_has_content_literal out.txt '===== Name Matched ====='
+assert_file_has_content_literal out.txt 'testdaemon : awesome-daemon-for-testing'
+echo "ok Search name match"
+
+rpm-ostree search awesome-daemon > out.txt
+assert_file_has_content_literal out.txt '===== Summary Matched ====='
+assert_file_has_content_literal out.txt 'testdaemon : awesome-daemon-for-testing'
+echo "ok Search summary match"
+
+rpm-ostree search testdaemon awesome-daemon > out.txt
+assert_file_has_content_literal out.txt '===== Summary & Name Matched ====='
+assert_file_has_content_literal out.txt 'testdaemon : awesome-daemon-for-testing'
+echo "ok Search name and summary match"
+
+rpm-ostree search "test*" > out.txt
+assert_file_has_content_literal out.txt '===== Summary & Name Matched ====='
+assert_file_has_content_literal out.txt '===== Name Matched ====='
+assert_file_has_content_literal out.txt '===== Summary Matched ====='
+assert_file_has_content_literal out.txt 'testdaemon : awesome-daemon-for-testing'
+assert_file_has_content_literal out.txt 'testpkg-etc : testpkg-etc'
+assert_file_has_content_literal out.txt 'testpkg-post-infinite-loop : testpkg-post-infinite-loop'
+assert_file_has_content_literal out.txt 'testpkg-touch-run : testpkg-touch-run'
+echo "ok Search glob pattern match"
 
 # Verify operations as non-root
 runuser -u core rpm-ostree status

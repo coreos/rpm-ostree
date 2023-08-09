@@ -46,7 +46,12 @@ fn cli_cmd() -> Command {
     Command::new(name)
         .bin_name(name)
         .about("create a new group")
-        .arg(Arg::new("force").short('f').long("force"))
+        .arg(
+            Arg::new("force")
+                .short('f')
+                .long("force")
+                .action(ArgAction::SetTrue),
+        )
         .arg(
             Arg::new("gid")
                 .short('g')

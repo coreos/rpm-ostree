@@ -31,6 +31,8 @@
 
 #include <gio/gunixfdlist.h>
 
+#include <set>
+
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_dry_run;
@@ -309,4 +311,103 @@ rpmostree_builtin_uninstall (int argc, char **argv, RpmOstreeCommandInvocation *
 
   return pkg_change (invocation, sysroot_proxy, FALSE, (const char *const *)opt_install,
                      (const char *const *)argv, cancellable, error);
+}
+
+struct cstrless
+{
+  bool
+  operator() (const gchar *a, const gchar *b) const
+  {
+    return strcmp (a, b) < 0;
+  }
+};
+
+gboolean
+rpmostree_builtin_search (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                          GCancellable *cancellable, GError **error)
+{
+  GOptionContext *context;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+
+  context = g_option_context_new ("PACKAGE [PACKAGE...]");
+  g_option_context_add_main_entries (context, install_option_entry, NULL);
+  g_option_context_add_main_entries (context, uninstall_option_entry, NULL);
+
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                       cancellable, NULL, NULL, &sysroot_proxy, error))
+    return FALSE;
+
+  if (argc < 2)
+    {
+      rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
+      return FALSE;
+    }
+
+  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
+
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, cancellable, &os_proxy, error))
+    return FALSE;
+
+  g_autoptr (GPtrArray) arg_names = g_ptr_array_new ();
+  for (guint i = 1; i < argc; i++)
+    {
+      g_ptr_array_add (arg_names, (char *)argv[i]);
+    }
+  g_ptr_array_add (arg_names, NULL);
+
+  g_autoptr (GVariant) out_packages = NULL;
+
+  if (!rpmostree_os_call_search_sync (os_proxy, (const char *const *)arg_names->pdata,
+                                      &out_packages, cancellable, error))
+    return FALSE;
+
+  g_autoptr (GVariantIter) iter1 = NULL;
+  g_variant_get (out_packages, "aa{sv}", &iter1);
+
+  g_autoptr (GVariantIter) iter2 = NULL;
+  std::set<const gchar *, cstrless> query_set;
+
+  while (g_variant_iter_loop (iter1, "a{sv}", &iter2))
+    {
+      const gchar *key;
+      const gchar *name;
+      const gchar *summary;
+      const gchar *query;
+      const gchar *match_group = "";
+
+      g_autoptr (GVariant) value = NULL;
+
+      while (g_variant_iter_loop (iter2, "{sv}", &key, &value))
+        {
+          if (strcmp (key, "key") == 0)
+            g_variant_get (value, "s", &query);
+          else if (strcmp (key, "name") == 0)
+            g_variant_get (value, "s", &name);
+          else if (strcmp (key, "summary") == 0)
+            g_variant_get (value, "s", &summary);
+        }
+
+      if (!query_set.count (query))
+        {
+          query_set.insert (query);
+
+          if (strcmp (query, "match_group_a") == 0)
+            match_group = "Summary & Name";
+          else if (strcmp (query, "match_group_b") == 0)
+            match_group = "Name";
+          else if (strcmp (query, "match_group_c") == 0)
+            match_group = "Summary";
+
+          g_print ("\n===== %s Matched =====\n", match_group);
+        }
+
+      g_print ("%s : %s\n", name, summary);
+    }
+
+  if (query_set.size () == 0)
+    {
+      g_print ("No matches found.\n");
+    }
+
+  return TRUE;
 }

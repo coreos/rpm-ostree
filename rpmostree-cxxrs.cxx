@@ -1293,6 +1293,7 @@ enum class SystemHostType : ::std::uint8_t;
 enum class BubblewrapMutability : ::std::uint8_t;
 struct Bubblewrap;
 struct ContainerImageState;
+struct ExportedManifestDiff;
 enum class RefspecType : ::std::uint8_t;
 struct TempEtcGuard;
 struct FilesystemScriptPrep;
@@ -1412,6 +1413,22 @@ struct ContainerImageState final
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$ContainerImageState
+
+#ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+#define CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+struct ExportedManifestDiff final
+{
+  bool initialized;
+  ::rust::u64 total;
+  ::rust::u64 total_size;
+  ::rust::u64 n_removed;
+  ::rust::u64 removed_size;
+  ::rust::u64 n_added;
+  ::rust::u64 added_size;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
 
 #ifndef CXXBRIDGE1_ENUM_rpmostreecxx$RefspecType
 #define CXXBRIDGE1_ENUM_rpmostreecxx$RefspecType
@@ -2063,6 +2080,10 @@ extern "C"
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$container_prune (
       const ::rpmostreecxx::OstreeRepo &repo,
       const ::rpmostreecxx::GCancellable &cancellable) noexcept;
+
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$compare_local_to_remote_container (
+      const ::rpmostreecxx::OstreeRepo &repo, const ::rpmostreecxx::GCancellable &cancellable,
+      ::rust::Str imgref, ::rust::Box< ::rpmostreecxx::ExportedManifestDiff> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$query_container_image_commit (
       const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c,
@@ -3226,6 +3247,15 @@ extern "C"
     return (self.*buildtime$) ();
   }
 
+  void
+  rpmostreecxx$cxxbridge1$PackageMeta$changelogs (const ::rpmostreecxx::PackageMeta &self,
+                                                  ::rust::Vec< ::std::uint64_t> *return$) noexcept
+  {
+    ::rust::Vec< ::std::uint64_t> (::rpmostreecxx::PackageMeta::*changelogs$) () const
+        = &::rpmostreecxx::PackageMeta::changelogs;
+    new (return$)::rust::Vec< ::std::uint64_t> ((self.*changelogs$) ());
+  }
+
   const ::std::string *
   rpmostreecxx$cxxbridge1$PackageMeta$src_pkg (const ::rpmostreecxx::PackageMeta &self) noexcept
   {
@@ -3645,6 +3675,21 @@ container_prune (const ::rpmostreecxx::OstreeRepo &repo,
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
+}
+
+::rust::Box< ::rpmostreecxx::ExportedManifestDiff>
+compare_local_to_remote_container (const ::rpmostreecxx::OstreeRepo &repo,
+                                   const ::rpmostreecxx::GCancellable &cancellable,
+                                   ::rust::Str imgref)
+{
+  ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::ExportedManifestDiff> > return$;
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$compare_local_to_remote_container (
+      repo, cancellable, imgref, &return$.value);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+  return ::std::move (return$.value);
 }
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
@@ -5986,6 +6031,13 @@ extern "C"
   void cxxbridge1$box$rpmostreecxx$ContainerImageState$drop (
       ::rust::Box< ::rpmostreecxx::ContainerImageState> *ptr) noexcept;
 
+  ::rpmostreecxx::ExportedManifestDiff *
+  cxxbridge1$box$rpmostreecxx$ExportedManifestDiff$alloc () noexcept;
+  void cxxbridge1$box$rpmostreecxx$ExportedManifestDiff$dealloc (
+      ::rpmostreecxx::ExportedManifestDiff *) noexcept;
+  void cxxbridge1$box$rpmostreecxx$ExportedManifestDiff$drop (
+      ::rust::Box< ::rpmostreecxx::ExportedManifestDiff> *ptr) noexcept;
+
   ::rpmostreecxx::TempEtcGuard *cxxbridge1$box$rpmostreecxx$TempEtcGuard$alloc () noexcept;
   void cxxbridge1$box$rpmostreecxx$TempEtcGuard$dealloc (::rpmostreecxx::TempEtcGuard *) noexcept;
   void cxxbridge1$box$rpmostreecxx$TempEtcGuard$drop (
@@ -6324,6 +6376,25 @@ void
 Box< ::rpmostreecxx::ContainerImageState>::drop () noexcept
 {
   cxxbridge1$box$rpmostreecxx$ContainerImageState$drop (this);
+}
+template <>
+::rpmostreecxx::ExportedManifestDiff *
+Box< ::rpmostreecxx::ExportedManifestDiff>::allocation::alloc () noexcept
+{
+  return cxxbridge1$box$rpmostreecxx$ExportedManifestDiff$alloc ();
+}
+template <>
+void
+Box< ::rpmostreecxx::ExportedManifestDiff>::allocation::dealloc (
+    ::rpmostreecxx::ExportedManifestDiff *ptr) noexcept
+{
+  cxxbridge1$box$rpmostreecxx$ExportedManifestDiff$dealloc (ptr);
+}
+template <>
+void
+Box< ::rpmostreecxx::ExportedManifestDiff>::drop () noexcept
+{
+  cxxbridge1$box$rpmostreecxx$ExportedManifestDiff$drop (this);
 }
 template <>
 ::rpmostreecxx::TempEtcGuard *

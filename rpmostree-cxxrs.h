@@ -1075,6 +1075,7 @@ enum class SystemHostType : ::std::uint8_t;
 enum class BubblewrapMutability : ::std::uint8_t;
 struct Bubblewrap;
 struct ContainerImageState;
+struct ExportedManifestDiff;
 enum class RefspecType : ::std::uint8_t;
 struct TempEtcGuard;
 struct FilesystemScriptPrep;
@@ -1194,6 +1195,22 @@ struct ContainerImageState final
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$ContainerImageState
+
+#ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+#define CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+struct ExportedManifestDiff final
+{
+  bool initialized;
+  ::rust::u64 total;
+  ::rust::u64 total_size;
+  ::rust::u64 n_removed;
+  ::rust::u64 removed_size;
+  ::rust::u64 n_added;
+  ::rust::u64 added_size;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
 
 #ifndef CXXBRIDGE1_ENUM_rpmostreecxx$RefspecType
 #define CXXBRIDGE1_ENUM_rpmostreecxx$RefspecType
@@ -1767,6 +1784,11 @@ pull_container (const ::rpmostreecxx::OstreeRepo &repo,
 
 void container_prune (const ::rpmostreecxx::OstreeRepo &repo,
                       const ::rpmostreecxx::GCancellable &cancellable);
+
+::rust::Box< ::rpmostreecxx::ExportedManifestDiff>
+compare_local_to_remote_container (const ::rpmostreecxx::OstreeRepo &repo,
+                                   const ::rpmostreecxx::GCancellable &cancellable,
+                                   ::rust::Str imgref);
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c);

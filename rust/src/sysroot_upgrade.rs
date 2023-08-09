@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
+use crate::ffi::ExportedManifestDiff;
 use crate::ffi::{output_message, ContainerImageState};
 use anyhow::Result;
 use ostree::glib;
@@ -56,14 +57,20 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
     }
 }
 
-fn default_container_pull_config() -> Result<ImageProxyConfig> {
+fn default_container_pull_config(imgref: &OstreeImageReference) -> Result<ImageProxyConfig> {
     let mut cfg = ImageProxyConfig::default();
-    let isolation_systemd = crate::utils::running_in_systemd().then(|| "rpm-ostree");
-    let isolation_default = cap_std_ext::rustix::process::getuid()
-        .is_root()
-        .then(|| "nobody");
-    let isolation_user = isolation_systemd.or(isolation_default);
-    ostree_container::merge_default_container_proxy_opts_with_isolation(&mut cfg, isolation_user)?;
+    if imgref.imgref.transport == ostree_container::Transport::ContainerStorage {
+        // Fetching from containers-storage, may require privileges to read files
+        ostree_container::merge_default_container_proxy_opts_with_isolation(&mut cfg, None)?;
+    } else {
+        let isolation_systemd = crate::utils::running_in_systemd().then(|| "rpm-ostree");
+        let isolation_default = rustix::process::getuid().is_root().then(|| "nobody");
+        let isolation_user = isolation_systemd.or(isolation_default);
+        ostree_container::merge_default_container_proxy_opts_with_isolation(
+            &mut cfg,
+            isolation_user,
+        )?;
+    }
     Ok(cfg)
 }
 
@@ -72,17 +79,13 @@ async fn pull_container_async(
     imgref: &OstreeImageReference,
 ) -> Result<ContainerImageState> {
     output_message(&format!("Pulling manifest: {}", &imgref));
-    let config = default_container_pull_config()?;
+    let config = default_container_pull_config(imgref)?;
     let mut imp = ImageImporter::new(repo, imgref, config).await?;
     let layer_progress = imp.request_progress();
     let prep = match imp.prepare().await? {
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
         PrepareResult::Ready(r) => r,
     };
-    if prep.export_layout == ostree_container::ExportLayout::V0 {
-        output_message(&format!("warning: pulled image is using deprecated v0 format; support will be dropped in a future release"));
-        std::thread::sleep(std::time::Duration::from_secs(5));
-    }
     let progress_printer =
         tokio::task::spawn(async move { layer_progress_print(layer_progress).await });
     let digest = prep.manifest_digest.clone();
@@ -195,5 +198,76 @@ pub(crate) fn purge_refspec(repo: &crate::FFIOstreeRepo, imgref: &str) -> CxxRes
             }
         }
     }
+    Ok(())
+}
+
+pub(crate) fn compare_local_to_remote_container(
+    repo: &crate::FFIOstreeRepo,
+    cancellable: &crate::FFIGCancellable,
+    imgref: &str,
+) -> CxxResult<Box<ExportedManifestDiff>> {
+    let repo = &repo.glib_reborrow();
+    let cancellable = cancellable.glib_reborrow();
+    let imgref = &OstreeImageReference::try_from(imgref)?;
+    let r = Handle::current().block_on(async {
+        crate::utils::run_with_cancellable(
+            async { get_container_manifest_diff(repo, imgref).await },
+            &cancellable,
+        )
+        .await
+    })?;
+    Ok(Box::new(r))
+}
+
+pub async fn get_container_manifest_diff(
+    repo: &ostree::Repo,
+    imgref: &OstreeImageReference,
+) -> Result<ExportedManifestDiff> {
+    use ostree_ext::container::ManifestDiff;
+    let previous_state =
+        if let Some(r) = ostree_ext::container::store::query_image_ref(&repo, &imgref.imgref)? {
+            r
+        } else {
+            return Ok(ExportedManifestDiff::default());
+        };
+
+    let (manifest, _) = ostree_ext::container::fetch_manifest(&imgref).await?;
+    let diff = ManifestDiff::new(&previous_state.manifest, &manifest);
+
+    let manifest_diff = ExportedManifestDiff {
+        initialized: true,
+        total: diff.total,
+        total_size: diff.total_size,
+        n_removed: diff.n_removed,
+        removed_size: diff.removed_size,
+        n_added: diff.n_added,
+        added_size: diff.added_size,
+    };
+
+    Ok(manifest_diff)
+}
+
+#[test]
+fn test_container_manifest_diff() -> Result<()> {
+    use ostree_ext::container::ManifestDiff;
+    use ostree_ext::oci_spec::image::ImageManifest;
+    let a: ImageManifest = serde_json::from_str(include_str!("../test/manifest1.json")).unwrap();
+    let b: ImageManifest = serde_json::from_str(include_str!("../test/manifest2.json")).unwrap();
+    let diff = ManifestDiff::new(&a, &b);
+
+    let cmp_total = diff.total;
+    let cmp_total_size = diff.total_size;
+    let cmp_removed = diff.n_removed;
+    let cmp_removed_size = diff.removed_size;
+    let cmp_added = diff.n_added;
+    let cmp_added_size = diff.added_size;
+
+    assert_eq!(cmp_total, 51 as u64);
+    assert_eq!(cmp_total_size, 697035490 as u64);
+    assert_eq!(cmp_removed, 4 as u64);
+    assert_eq!(cmp_removed_size, 170473141 as u64);
+    assert_eq!(cmp_added, 4 as u64);
+    assert_eq!(cmp_added_size, 170472856 as u64);
+
     Ok(())
 }

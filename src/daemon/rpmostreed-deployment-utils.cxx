@@ -539,6 +539,34 @@ rpm_diff_variant_new (RpmDiff *diff)
   return g_variant_dict_end (&dict);
 }
 
+static GVariant *
+manifest_diff_variant_from_exported (gboolean *none_added_or_removed,
+                                     rpmostreecxx::ExportedManifestDiff *manifest_diff)
+{
+  guint64 total_converted = manifest_diff->total;
+  guint64 total_size_converted = manifest_diff->total_size;
+  guint64 n_removed_converted = manifest_diff->n_removed;
+  guint64 removed_size_converted = manifest_diff->removed_size;
+  guint64 n_added_converted = manifest_diff->n_added;
+  guint64 added_size_converted = manifest_diff->added_size;
+
+  g_auto (GVariantDict) manifest_dict;
+  g_variant_dict_init (&manifest_dict, NULL);
+  g_variant_dict_insert (&manifest_dict, "total", "t", total_converted);
+  g_variant_dict_insert (&manifest_dict, "total_size", "t", total_size_converted);
+  g_variant_dict_insert (&manifest_dict, "total_removed", "t", n_removed_converted);
+  g_variant_dict_insert (&manifest_dict, "removed_size", "t", removed_size_converted);
+  g_variant_dict_insert (&manifest_dict, "total_added", "t", n_added_converted);
+  g_variant_dict_insert (&manifest_dict, "added_size", "t", added_size_converted);
+
+  if (!n_removed_converted && !n_added_converted)
+    {
+      *none_added_or_removed = TRUE;
+    }
+
+  return g_variant_dict_end (&manifest_dict);
+}
+
 static DnfPackage *
 find_package (DnfSack *sack, gboolean newer, RpmOstreePackage *pkg)
 {
@@ -677,6 +705,8 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
   const char *new_checksum = NULL;
   const char *new_base_checksum = NULL;
   g_autofree char *new_base_checksum_owned = NULL;
+  auto refspectype = rpmostreecxx::refspec_classify (r.refspec);
+
   if (staged_deployment)
     {
       new_checksum = ostree_deployment_get_csum (staged_deployment);
@@ -687,13 +717,18 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
     }
   else
     {
-      if (!ostree_repo_resolve_rev_ext (repo, r.refspec.c_str (), TRUE,
-                                        static_cast<OstreeRepoResolveRevExtFlags> (0),
-                                        &new_base_checksum_owned, error))
-        return FALSE;
-      new_base_checksum = new_base_checksum_owned;
-      /* just assume that the hypothetical new deployment would also be layered if we are */
-      is_new_layered = (current_base_checksum_owned != NULL);
+      if (refspectype != rpmostreecxx::RefspecType::Container)
+        {
+          if (!ostree_repo_resolve_rev_ext (repo, r.refspec.c_str (), TRUE,
+                                            static_cast<OstreeRepoResolveRevExtFlags> (0),
+                                            &new_base_checksum_owned, error))
+            {
+              return FALSE;
+            }
+          new_base_checksum = new_base_checksum_owned;
+          /* just assume that the hypothetical new deployment would also be layered if we are */
+          is_new_layered = (current_base_checksum_owned != NULL);
+        }
     }
 
   /* Graciously handle rev no longer in repo; e.g. mucking around with rebase/rollback; we
@@ -725,12 +760,15 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
   };
   rpm_diff_init (&rpm_diff);
 
-  /* we'll need these later for advisories, so just keep them around */
   g_autoptr (GPtrArray) ostree_modified_new = NULL;
   g_autoptr (GPtrArray) rpmmd_modified_new = NULL;
 
+  GVariant *manifest_diff = NULL;
+  gboolean none_added_or_removed = FALSE;
+
   if (staged_deployment)
     {
+      rpmostree_output_message ("enter staged");
       /* ok we have a staged deployment; we just need to do a simple diff and BOOM done! */
       /* XXX: we're marking all pkgs as BASE right now even though there could be layered
        * pkgs too -- we can tease those out in the future if needed */
@@ -744,15 +782,37 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
        *  - if a new base checksum was pulled, do a db diff of the old and new bases
        *  - if there are currently any layered pkgs, lookup in sack for newer versions
        */
-      if (is_new_checksum)
+
+      if (is_new_checksum && refspectype != rpmostreecxx::RefspecType::Container)
         {
           if (!rpm_diff_add_db_diff (&rpm_diff, repo, RPM_OSTREE_PKG_TYPE_BASE,
                                      current_base_checksum, new_base_checksum, &ostree_modified_new,
                                      cancellable, error))
-            return FALSE;
+            {
+              return FALSE;
+            }
         }
 
       /* now we look at the rpm-md/layering side */
+      const OstreeRepo &tmp_repo = *repo;
+      const GCancellable &tmp_cancellable = *cancellable;
+      g_autofree char *origin_remote = NULL;
+      g_autofree char *origin_ref = NULL;
+
+      if (refspectype != rpmostreecxx::RefspecType::Container)
+        {
+          if (!ostree_parse_refspec (r.refspec.c_str (), &origin_remote, &origin_ref, error))
+            return FALSE;
+        }
+      else
+        {
+          CXX_TRY_VAR (res,
+                       rpmostreecxx::compare_local_to_remote_container (tmp_repo, tmp_cancellable,
+                                                                        r.refspec.c_str ()),
+                       error);
+
+          manifest_diff = manifest_diff_variant_from_exported (&none_added_or_removed, &(*res));
+        }
 
       /* check that it's actually layered (i.e. the requests are not all just dormant) */
       if (sack && is_new_layered && rpmostree_origin_has_packages (origin))
@@ -767,8 +827,13 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
   if (!rpm_diff_is_empty (&rpm_diff))
     g_variant_dict_insert (dict, "rpm-diff", "@a{sv}", rpm_diff_variant_new (&rpm_diff));
 
-  /* now we look for advisories */
+  if (!none_added_or_removed && !staged_deployment
+      && refspectype == rpmostreecxx::RefspecType::Container)
+    {
+      g_variant_dict_insert (dict, "manifest-diff", "@a{sv}", manifest_diff);
+    }
 
+  /* now we look for advisories */
   if (sack && (ostree_modified_new || rpmmd_modified_new))
     {
       /* let's just merge the two now for convenience */
@@ -802,7 +867,9 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
     }
 
   /* but if there are no updates, then just ditch the whole thing and return NULL */
-  if (is_new_checksum || rpmmd_modified_new)
+  refspectype = rpmostreecxx::refspec_classify (r.refspec);
+  if (is_new_checksum || rpmmd_modified_new
+      || (!none_added_or_removed && refspectype == rpmostreecxx::RefspecType::Container))
     {
       /* include a "state" checksum for cache invalidation; for now this is just the
        * checksum of the deployment against which we ran, though we could base it off more
@@ -811,7 +878,9 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
       *out_update = g_variant_ref_sink (g_variant_dict_end (dict));
     }
   else
-    *out_update = NULL;
+    {
+      *out_update = NULL;
+    }
 
   return TRUE;
 }

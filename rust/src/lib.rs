@@ -188,6 +188,24 @@ pub mod ffi {
         pub version: String,
     }
 
+    #[derive(Debug, Default)]
+    pub(crate) struct ExportedManifestDiff {
+        /// Check if the struct is initialized
+        pub initialized: bool,
+        /// The total number of packages in the next upgrade
+        pub total: u64,
+        /// The size of the total number of packages in the next upgrade
+        pub total_size: u64,
+        /// The total number of removed packages in the next upgrade
+        pub n_removed: u64,
+        /// The size of total number of removed packages in the next upgrade
+        pub removed_size: u64,
+        /// The total number of added packages in the next upgrade
+        pub n_added: u64,
+        /// The size of total number of added packages in the next upgrade
+        pub added_size: u64,
+    }
+
     // sysroot_upgrade.rs
     extern "Rust" {
         fn pull_container(
@@ -201,6 +219,11 @@ pub mod ffi {
             c: &str,
         ) -> Result<Box<ContainerImageState>>;
         fn purge_refspec(repo: &OstreeRepo, refspec: &str) -> Result<()>;
+        fn compare_local_to_remote_container(
+            repo: &OstreeRepo,
+            cancellable: &GCancellable,
+            imgref: &str,
+        ) -> Result<Box<ExportedManifestDiff>>;
     }
 
     // core.rs
@@ -882,6 +905,7 @@ pub mod ffi {
         // Methods on PackageMeta
         fn size(self: &PackageMeta) -> u64;
         fn buildtime(self: &PackageMeta) -> u64;
+        fn changelogs(self: &PackageMeta) -> Vec<u64>;
         fn src_pkg(self: &PackageMeta) -> &CxxString;
     }
 

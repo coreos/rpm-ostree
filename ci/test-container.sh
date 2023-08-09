@@ -58,8 +58,6 @@ versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 # Let's start by trying to install a bona fide module.
 # NOTE: If changing this also change the layering-modules test
 case $versionid in
-  36) module=cri-o:1.23/default;;
-  37) module=cri-o:1.24/default;;
   38) module=cri-o:1.25/default;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
@@ -77,16 +75,8 @@ fi
 versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
 case $versionid in
-  37)
-    url_suffix=2.14.0/3.fc37/x86_64/ignition-2.14.0-3.fc37.x86_64.rpm
-    # 2.14.0-4
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2013062"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2084352"
-    kver=6.0.7
-    krev=301
-    ;;
   38)
-    url_suffix=2.15.0/2.fc38/x86_64/ignition-2.15.0-2.fc38.x86_64.rpm
+    url_suffix=2.15.0/4.fc37/x86_64/ignition-2.15.0-4.fc37.x86_64.rpm
     # 2.15.0-3
     koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2174317"
@@ -156,6 +146,14 @@ fi
 if ! grep -qe "error: No such file or directory" err.txt; then
     cat err.txt
     fatal "did not find expected error when skipping CLI wraps."
+fi
+
+# test bootc cli call
+ln -s /usr/bin/rpm-ostree /usr/bin/bootc
+bootc --help > out.txt
+if ! grep -qe "Deploy and upgrade via bootable container images" out.txt; then
+    cat out.txt
+    fatal "did not find expected bootc message when using sym link to rpm-ostree."
 fi
 
 echo ok

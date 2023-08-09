@@ -1004,6 +1004,7 @@ rpmostree_update_deployment (
     const char *local_repo_remote, const char *treefile, GVariant *options,
     char **out_transaction_address, GCancellable *cancellable, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Updating deployment", error);
   g_autoptr (GVariant) modifiers = NULL;
   glnx_unref_object GUnixFDList *fd_list = NULL;
   if (!get_modifiers_variant (set_refspec, set_revision, install_pkgs, install_fileoverride_pkgs,
@@ -1243,6 +1244,85 @@ rpmostree_print_diff_advisories (GVariant *rpm_diff, GVariant *advisories, gbool
   return TRUE;
 }
 
+/* print "manifest-diff" */
+gboolean
+rpmostree_print_manifest_diff (GVariant *manifest_diff, guint maxkeylen, GError **error)
+{
+  if (!manifest_diff)
+    return TRUE; /* Nothing to 🖨️ */
+
+  int total_str = 0;
+  int total_size_str = 0;
+  int total_removed_str = 0;
+  int removed_size_str = 0;
+  int total_added_str = 0;
+  int added_size_str = 0;
+
+  g_auto (GVariantDict) manifest_diff_dict;
+  g_variant_dict_init (&manifest_diff_dict, manifest_diff);
+
+  g_autoptr (GVariant) total
+      = g_variant_dict_lookup_value (&manifest_diff_dict, "total", G_VARIANT_TYPE ("t"));
+  if (!total)
+    return glnx_throw (error, "Missing \"total\" key");
+
+  g_variant_get (total, "t", &total_str);
+  printf ("  %*s%s %d", maxkeylen, "Total layers", strlen ("Total layers") ? ":" : " ", total_str);
+  printf ("\n");
+
+  g_autoptr (GVariant) total_size
+      = g_variant_dict_lookup_value (&manifest_diff_dict, "total_size", G_VARIANT_TYPE ("t"));
+  if (!total_size)
+    return glnx_throw (error, "Missing \"total_size\" key");
+
+  g_variant_get (total_size, "t", &total_size_str);
+  printf ("  %*s%s %s", maxkeylen, "Size", strlen ("Size") ? ":" : " ",
+          g_format_size (total_size_str));
+  printf ("\n");
+
+  g_autoptr (GVariant) total_removed
+      = g_variant_dict_lookup_value (&manifest_diff_dict, "total_removed", G_VARIANT_TYPE ("t"));
+  if (!total_removed)
+    return glnx_throw (error, "Missing \"total_removed\" key");
+
+  g_variant_get (total_removed, "t", &total_removed_str);
+  printf (" %*s%s %d", maxkeylen, "Removed layers", strlen ("Removed layers") ? ":" : " ",
+          total_removed_str);
+  printf ("\n");
+
+  g_autoptr (GVariant) removed_size
+      = g_variant_dict_lookup_value (&manifest_diff_dict, "removed_size", G_VARIANT_TYPE ("t"));
+  if (!removed_size)
+    return glnx_throw (error, "Missing \"removed_size\" key");
+
+  g_variant_get (removed_size, "t", &removed_size_str);
+  printf ("  %*s%s %s", maxkeylen, "Size", strlen ("Size") ? ":" : " ",
+          g_format_size (removed_size_str));
+  printf ("\n");
+
+  g_autoptr (GVariant) total_added
+      = g_variant_dict_lookup_value (&manifest_diff_dict, "total_added", G_VARIANT_TYPE ("t"));
+  if (!total_added)
+    return glnx_throw (error, "Missing \"total_added\" key");
+
+  g_variant_get (total_added, "t", &total_added_str);
+  printf ("  %*s%s %d", maxkeylen, "Added layers", strlen ("Added layers") ? ":" : " ",
+          total_added_str);
+  printf ("\n");
+
+  g_autoptr (GVariant) added_size
+      = g_variant_dict_lookup_value (&manifest_diff_dict, "added_size", G_VARIANT_TYPE ("t"));
+  if (!added_size)
+    return glnx_throw (error, "Missing \"added_size\" key");
+
+  g_variant_get (added_size, "t", &added_size_str);
+  printf ("  %*s%s %s", maxkeylen, "Size", strlen ("Size") ? ":" : " ",
+          g_format_size (added_size_str));
+  printf ("\n");
+
+  return TRUE;
+}
+
 /* this is used by both `status` and `upgrade --check/--preview` */
 gboolean
 rpmostree_print_cached_update (GVariant *cached_update, gboolean verbose,
@@ -1285,6 +1365,9 @@ rpmostree_print_cached_update (GVariant *cached_update, gboolean verbose,
   g_autoptr (GVariant) rpm_diff
       = g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
 
+  g_autoptr (GVariant) manifest_diff
+      = g_variant_dict_lookup_value (&dict, "manifest-diff", G_VARIANT_TYPE ("a{sv}"));
+
   g_autoptr (GVariant) advisories
       = g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
 
@@ -1305,6 +1388,9 @@ rpmostree_print_cached_update (GVariant *cached_update, gboolean verbose,
 
   if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose, verbose_advisories,
                                         max_key_len, error))
+    return FALSE;
+
+  if (!rpmostree_print_manifest_diff (manifest_diff, max_key_len, error))
     return FALSE;
 
   return TRUE;
