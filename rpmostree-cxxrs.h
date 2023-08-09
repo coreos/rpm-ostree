@@ -1075,6 +1075,7 @@ enum class SystemHostType : ::std::uint8_t;
 enum class BubblewrapMutability : ::std::uint8_t;
 struct Bubblewrap;
 struct ContainerImageState;
+struct ExportedManifestDiff;
 enum class RefspecType : ::std::uint8_t;
 struct TempEtcGuard;
 struct FilesystemScriptPrep;
@@ -1178,6 +1179,29 @@ private:
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$Bubblewrap
 
+#ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+#define CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+struct ExportedManifestDiff final
+{
+  // Check if the struct is initialized
+  bool initialized;
+  // The total number of packages in the next upgrade
+  ::std::uint64_t total;
+  // The size of the total number of packages in the next upgrade
+  ::std::uint64_t total_size;
+  // The total number of removed packages in the next upgrade
+  ::std::uint64_t n_removed;
+  // The size of total number of removed packages in the next upgrade
+  ::std::uint64_t removed_size;
+  // The total number of added packages in the next upgrade
+  ::std::uint64_t n_added;
+  // The size of total number of added packages in the next upgrade
+  ::std::uint64_t added_size;
+
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_rpmostreecxx$ExportedManifestDiff
+
 #ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$ContainerImageState
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$ContainerImageState
 // `ContainerImageState` is currently identical to ostree-rs-ext's `LayeredImageState` struct,
@@ -1190,6 +1214,7 @@ struct ContainerImageState final
   bool is_layered;
   ::rust::String image_digest;
   ::rust::String version;
+  ::rpmostreecxx::ExportedManifestDiff cached_update_diff;
 
   using IsRelocatable = ::std::true_type;
 };
@@ -1774,6 +1799,9 @@ query_container_image_commit (::rpmostreecxx::OstreeRepo const &repo, ::rust::St
 
 void purge_refspec (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str refspec);
 
+bool check_container_update (::rpmostreecxx::OstreeRepo const &repo,
+                             ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref);
+
 ::rust::Box< ::rpmostreecxx::TempEtcGuard> prepare_tempetc_guard (::std::int32_t rootfs);
 
 ::rust::Box< ::rpmostreecxx::FilesystemScriptPrep>
@@ -1843,6 +1871,9 @@ void rewrite_rpmdb_for_target (::std::int32_t rootfs_dfd, bool normalize);
 ::rpmostreecxx::OstreeDeployment *deployment_get_base (::rpmostreecxx::OstreeSysroot &sysroot,
                                                        ::rust::Str opt_deploy_id,
                                                        ::rust::Str opt_os_name);
+
+bool deployment_add_manifest_diff (::rpmostreecxx::GVariantDict const &dict,
+                                   ::rpmostreecxx::ExportedManifestDiff const &diff) noexcept;
 
 void daemon_sanitycheck_environment (::rpmostreecxx::OstreeSysroot const &sysroot);
 

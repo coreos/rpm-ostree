@@ -187,6 +187,25 @@ pub mod ffi {
         pub is_layered: bool,
         pub image_digest: String,
         pub version: String,
+        pub cached_update_diff: ExportedManifestDiff,
+    }
+
+    #[derive(Debug, Default)]
+    pub(crate) struct ExportedManifestDiff {
+        /// Check if the struct is initialized
+        pub initialized: bool,
+        /// The total number of packages in the next upgrade
+        pub total: u64,
+        /// The size of the total number of packages in the next upgrade
+        pub total_size: u64,
+        /// The total number of removed packages in the next upgrade
+        pub n_removed: u64,
+        /// The size of total number of removed packages in the next upgrade
+        pub removed_size: u64,
+        /// The total number of added packages in the next upgrade
+        pub n_added: u64,
+        /// The size of total number of added packages in the next upgrade
+        pub added_size: u64,
     }
 
     // sysroot_upgrade.rs
@@ -202,6 +221,11 @@ pub mod ffi {
             c: &str,
         ) -> Result<Box<ContainerImageState>>;
         fn purge_refspec(repo: &OstreeRepo, refspec: &str) -> Result<()>;
+        fn check_container_update(
+            repo: &OstreeRepo,
+            cancellable: &GCancellable,
+            imgref: &str,
+        ) -> Result<bool>;
     }
 
     // core.rs
@@ -303,7 +327,7 @@ pub mod ffi {
             opt_deploy_id: &str,
             opt_os_name: &str,
         ) -> Result<*mut OstreeDeployment>;
-
+        fn deployment_add_manifest_diff(dict: &GVariantDict, diff: &ExportedManifestDiff) -> bool;
     }
 
     // A grab-bag of metadata from the deployment's ostree commit
