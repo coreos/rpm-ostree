@@ -197,6 +197,7 @@ pub(crate) fn cliwrap_destdir() -> String {
 mod tests {
     use super::*;
     use anyhow::Context;
+    use cap_std_ext::cap_tempfile;
     use std::path::Path;
 
     fn file_contains(

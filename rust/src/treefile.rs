@@ -2919,6 +2919,7 @@ impl TreeComposeConfig {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use cap_std_ext::cap_tempfile;
     use indoc::indoc;
     use std::io::Cursor;
 

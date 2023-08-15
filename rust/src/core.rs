@@ -355,6 +355,7 @@ mod test {
     use super::*;
     use crate::capstdext::dirbuilder_from_mode;
     use anyhow::Result;
+    use cap_std_ext::cap_tempfile;
 
     #[test]
     fn etcguard() -> Result<()> {

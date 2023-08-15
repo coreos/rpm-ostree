@@ -1245,7 +1245,7 @@ fn hardlink_recurse(
 mod tests {
     use super::*;
     use cap_std::fs::{Dir, DirBuilder};
-    use cap_std_ext::cap_std;
+    use cap_std_ext::{cap_std, cap_tempfile};
 
     #[test]
     fn stripany() {

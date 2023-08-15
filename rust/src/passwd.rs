@@ -12,6 +12,7 @@ use cap_std::fs::Dir;
 use cap_std::fs::OpenOptions;
 use cap_std_ext::cap_std;
 use cap_std_ext::cap_std::fs::Permissions;
+use cap_std_ext::cap_tempfile;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use gio::prelude::*;
