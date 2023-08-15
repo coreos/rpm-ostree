@@ -193,6 +193,7 @@ fn generate_sysusers_fragment(
 #[cfg(test)]
 mod test {
     use super::*;
+    use cap_std_ext::cap_tempfile;
     use std::io::Read;
 
     #[test]

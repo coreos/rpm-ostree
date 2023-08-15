@@ -222,6 +222,7 @@ pub(crate) fn diff(src: &Dir, dest: &Dir) -> Result<Diff> {
 mod test {
     use super::*;
     use cap_std::fs::Permissions;
+    use cap_std_ext::cap_tempfile;
     use std::os::unix::fs::PermissionsExt;
 
     #[test]

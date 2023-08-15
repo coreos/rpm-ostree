@@ -135,6 +135,7 @@ fn generate_sysusers_fragment(rootdir: &Dir, groupname: &str, gid: Option<u32>) 
 #[cfg(test)]
 mod test {
     use super::*;
+    use cap_std_ext::cap_tempfile;
     use std::io::Read;
 
     #[test]

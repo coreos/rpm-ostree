@@ -2629,7 +2629,6 @@ dependencies = [
  "cap-primitives",
  "cap-std",
  "cap-std-ext 2.0.0",
- "cap-tempfile",
  "chrono",
  "clap",
  "containers-image-proxy",

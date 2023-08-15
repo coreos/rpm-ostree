@@ -154,6 +154,7 @@ pub(crate) fn initramfs_overlay_generate(
 #[cfg(test)]
 mod test {
     use super::*;
+    use cap_std_ext::cap_tempfile;
 
     #[test]
     fn test_initramfs_overlay() -> Result<()> {
