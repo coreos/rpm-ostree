@@ -421,7 +421,7 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy, GCancellable *cancellable, 
     {
       g_print ("AutomaticUpdates: %s", policy);
 
-      AutoUpdateSdState state;
+      AutoUpdateSdState state = AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN;
       g_autofree char *last_run = NULL;
       g_print ("; ");
       GDBusConnection *connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
