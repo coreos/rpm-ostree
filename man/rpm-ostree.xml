@@ -898,6 +898,31 @@ $ systemctl start postgresql  # Some setup required
   </refsect1>
 
   <refsect1>
+    <title>Repository configuration and GPG keys</title>
+
+    <para>
+      rpm-ostree uses the libdnf shared library, which honors <literal>/etc/yum.repos.d</literal>.
+      Note that rpm-md (yum/dnf) repositories are only checked if client-side package layering is
+      enabled.
+    </para>
+
+    <para>
+      However, the behavior for GPG keys is slightly different from a traditional <command>rpm</command>
+      system.  Essentially, all GPG keys in <literal>/etc/pki/rpm-gpg</literal> are loaded and trusted.
+      The <literal>.repo</literal> file should reference the file path in there.
+    </para>
+    <para>
+      The <literal>rpm --import /path/to/key.gpg</literal> command will not function today on a
+      live/booted system because rpm tries to write directly to the RPM database.
+    </para>
+
+    <para>
+      However, during a container build process, the RPM database is writable and such changes will
+      persist.
+    </para>
+  </refsect1>
+
+  <refsect1>
     <title>See Also</title>
 
     <para>
