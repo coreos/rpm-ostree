@@ -234,6 +234,16 @@ $PYTHON autofiles.py > files.devel \
   '%{_datadir}/gtk-doc/html/*' \
   '%{_datadir}/gir-1.0/*-1.0.gir'
 
+# Setup rpm-ostree-countme.timer according to presets
+%post
+%systemd_post rpm-ostree-countme.timer
+
+%preun
+%systemd_preun rpm-ostree-countme.timer
+
+%postun
+%systemd_postun_with_restart rpm-ostree-countme.timer
+
 %files -f files
 %doc COPYING.GPL COPYING.LGPL LICENSE README.md
 
