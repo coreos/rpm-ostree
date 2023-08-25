@@ -899,10 +899,10 @@ pub mod ffi {
 }
 
 pub mod builtins;
-pub(crate) use crate::builtins::usroverlay::usroverlay_entrypoint;
 pub(crate) use crate::builtins::apply_live::*;
 pub(crate) use crate::builtins::compose::commit::*;
 pub(crate) use crate::builtins::compose::*;
+pub(crate) use crate::builtins::usroverlay::usroverlay_entrypoint;
 mod bwrap;
 pub(crate) use bwrap::*;
 pub mod client;
