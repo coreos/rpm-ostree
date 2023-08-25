@@ -80,6 +80,7 @@ async fn pull_container_async(
     output_message(&format!("Pulling manifest: {}", &imgref));
     let config = default_container_pull_config(imgref)?;
     let mut imp = ImageImporter::new(repo, imgref, config).await?;
+    imp.require_bootable();
     let layer_progress = imp.request_progress();
     let prep = match imp.prepare().await? {
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
