@@ -152,6 +152,7 @@ pub mod ffi {
 
     // builtins/apply_live.rs
     extern "Rust" {
+        fn usroverlay_entrypoint(args: &Vec<String>) -> Result<()>;
         fn applylive_entrypoint(args: &Vec<String>) -> Result<()>;
         fn applylive_finish(sysroot: &OstreeSysroot) -> Result<()>;
     }
@@ -898,6 +899,7 @@ pub mod ffi {
 }
 
 pub mod builtins;
+pub(crate) use crate::builtins::usroverlay::usroverlay_entrypoint;
 pub(crate) use crate::builtins::apply_live::*;
 pub(crate) use crate::builtins::compose::commit::*;
 pub(crate) use crate::builtins::compose::*;

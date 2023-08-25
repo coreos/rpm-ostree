@@ -7,7 +7,7 @@ use clap::Command;
 use std::os::unix::prelude::CommandExt;
 
 /// Directly exec(ostree admin unlock) - does not return on success.
-pub fn entrypoint(args: &[&str]) -> Result<()> {
+pub fn usroverlay_entrypoint(args: &Vec<String>) -> Result<()> {
     let cmd = cli_cmd();
     cmd.get_matches_from(args.iter().skip(1));
 

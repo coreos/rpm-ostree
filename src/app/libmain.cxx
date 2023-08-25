@@ -38,6 +38,17 @@
 
 #include "libglnx.h"
 
+static gboolean
+dispatch_usroverlay (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                     GCancellable *cancellable, GError **error)
+{
+  rust::Vec<rust::String> rustargv;
+  for (int i = 0; i < argc; i++)
+    rustargv.push_back (std::string (argv[i]));
+  CXX_TRY (rpmostreecxx::usroverlay_entrypoint (rustargv), error);
+  return TRUE;
+}
+
 static RpmOstreeCommand commands[] = {
   { "compose",
     static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD
@@ -91,7 +102,12 @@ static RpmOstreeCommand commands[] = {
   { "scriptlet-intercept", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     "Intercept some commands used by RPM scriptlets", NULL },
   { "usroverlay", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT),
-    "Apply a transient overlayfs to /usr", NULL },
+    "Apply a transient overlayfs to /usr", dispatch_usroverlay },
+  // Alias for ostree compatibility
+  { "unlock",
+    static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT
+                                        | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
+    "Apply a transient overlayfs to /usr", dispatch_usroverlay },
   /* Legacy aliases */
   { "pkg-add", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_HIDDEN), NULL,
     rpmostree_builtin_install },

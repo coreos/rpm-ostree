@@ -2028,6 +2028,9 @@ extern "C"
                                           const ::rpmostreecxx::GCancellable &cancellable) noexcept;
 
   ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$usroverlay_entrypoint (const ::rust::Vec< ::rust::String> &args) noexcept;
+
+  ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$applylive_entrypoint (const ::rust::Vec< ::rust::String> &args) noexcept;
 
   ::rust::repr::PtrLen
@@ -3528,6 +3531,16 @@ void
 Bubblewrap::run (const ::rpmostreecxx::GCancellable &cancellable)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Bubblewrap$run (*this, cancellable);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
+usroverlay_entrypoint (const ::rust::Vec< ::rust::String> &args)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$usroverlay_entrypoint (args);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
