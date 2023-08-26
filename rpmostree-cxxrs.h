@@ -1741,6 +1741,8 @@ void bubblewrap_selftest ();
 bubblewrap_new_with_mutability (::std::int32_t rootfs_fd,
                                 ::rpmostreecxx::BubblewrapMutability mutability);
 
+void usroverlay_entrypoint (const ::rust::Vec< ::rust::String> &args);
+
 void applylive_entrypoint (const ::rust::Vec< ::rust::String> &args);
 
 void applylive_finish (const ::rpmostreecxx::OstreeSysroot &sysroot);

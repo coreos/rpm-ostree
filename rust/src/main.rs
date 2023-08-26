@@ -30,8 +30,6 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
                 // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
                 "countme" => rpmostree_rust::countme::entrypoint(args).map(|_| 0),
                 "cliwrap" => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
-                // The `unlock` is a hidden alias for "ostree CLI compatibility"
-                "usroverlay" | "unlock" => builtins::usroverlay::entrypoint(args).map(|_| 0),
                 // A hidden wrapper to intercept some binaries in RPM scriptlets.
                 "scriptlet-intercept" => builtins::scriptlet_intercept::entrypoint(args).map(|_| 0),
                 // This is a deprecated entrypoint

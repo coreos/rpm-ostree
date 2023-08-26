@@ -26,6 +26,13 @@ for verb in container ima-sign; do
 done
 echo "ok multicall corectly set up and working"
 
+# Verify that we process arguments correctly
+rpm-ostree usroverlay --help >out.txt
+assert_file_has_content out.txt "ostree admin unlock"
+rm -f out.txt
+rpm-ostree -h usroverlay >out.txt
+assert_file_has_content out.txt "ostree admin unlock"
+
 # make sure that package-related entries are always present,
 # even when they're empty.
 # Validate there's no live state by default.
