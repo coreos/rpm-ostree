@@ -247,7 +247,7 @@ dependencies = [
 [[package]]
 name = "bootc-lib"
 version = "0.1.0"
-source = "git+https://github.com/containers/bootc.git?branch=main#221e382cbe5fc5ff45b2064370cf58248406d4b6"
+source = "git+https://github.com/containers/bootc.git?branch=main#4b9728ca0b472006fd8c132cddb27409a8fe06b0"
 dependencies = [
  "anyhow",
  "camino",
