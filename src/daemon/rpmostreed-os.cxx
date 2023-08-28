@@ -1193,11 +1193,16 @@ search_packages_by_filter (HyQuery query, GVariantBuilder *builder, const gchar 
   hy_autoquery HyQuery intermediate_query = hy_query_clone (query);
   hy_autoquery HyQuery final_query = hy_query_clone (query);
 
+  // Must have at least one term
+  const char *first_term = names[0];
+  g_assert (first_term);
+
   int names_count = 0;
   for (guint i = 0; names[i] != NULL; i++)
     {
       names_count++;
     }
+  g_assert_cmpint (names_count, >, 0);
 
   /* Name/Summary matches */
   if (keynames.size () < 2)
@@ -1273,11 +1278,11 @@ search_packages_by_filter (HyQuery query, GVariantBuilder *builder, const gchar 
       for (guint i = 0; i < keynames.size (); i++)
         {
           hy_query_clear (query);
-          apply_search_filter (&query, keynames[i], names[0], HY_EQ);
+          apply_search_filter (&query, keynames[i], first_term, HY_EQ);
           intermediate_query = hy_query_clone (query);
 
           hy_query_clear (query);
-          apply_search_filter (&query, keynames[i], names[0], HY_SUBSTR);
+          apply_search_filter (&query, keynames[i], first_term, HY_SUBSTR);
           hy_query_union (intermediate_query, query);
 
           if (i != 0)
@@ -1302,6 +1307,13 @@ os_handle_search (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
 
   sd_journal_print (LOG_INFO, "Handling Search for caller %s",
                     g_dbus_method_invocation_get_sender (invocation));
+
+  if (!names || !*names)
+    {
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                             "Must specify a term for search");
+      return TRUE;
+    }
 
   g_autoptr (DnfContext) dnfctx
       = os_create_dnf_context_simple (interface, TRUE, cancellable, &local_error);
