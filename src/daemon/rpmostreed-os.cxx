@@ -1190,8 +1190,8 @@ search_packages_by_filter (HyQuery query, GVariantBuilder *builder, const gchar 
                            std::vector<int> keynames, const gchar *id)
 {
   std::set<const gchar *, cstrless> result_set;
-  HyQuery intermediate_query = hy_query_clone (query);
-  HyQuery final_query = hy_query_clone (query);
+  hy_autoquery HyQuery intermediate_query = hy_query_clone (query);
+  hy_autoquery HyQuery final_query = hy_query_clone (query);
 
   int names_count = 0;
   for (guint i = 0; names[i] != NULL; i++)
@@ -1241,6 +1241,7 @@ search_packages_by_filter (HyQuery query, GVariantBuilder *builder, const gchar 
                 }
               else
                 {
+                  hy_query_clear (intermediate_query);
                   intermediate_query = hy_query_clone (query);
                 }
 
@@ -1255,6 +1256,7 @@ search_packages_by_filter (HyQuery query, GVariantBuilder *builder, const gchar 
             }
           else
             {
+              hy_query_clear (final_query);
               final_query = hy_query_clone (intermediate_query);
             }
         }
