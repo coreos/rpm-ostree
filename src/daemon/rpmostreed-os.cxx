@@ -108,6 +108,7 @@ os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *i
       = rpmostreed_sysroot_get_polkit_authority (sysroot, &local_error);
   if (!authority)
     {
+      g_assert (local_error);
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
                                              "Failed to load polkit: %s", local_error->message);
       return FALSE;
