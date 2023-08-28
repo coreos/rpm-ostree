@@ -386,6 +386,10 @@ rpmostree_builtin_search (int argc, char **argv, RpmOstreeCommandInvocation *inv
           else if (strcmp (key, "summary") == 0)
             g_variant_get (value, "s", &summary);
         }
+      // The server must have sent these
+      g_assert (name);
+      g_assert (query);
+      g_assert (summary);
 
       if (!query_set.count (query))
         {
