@@ -27,7 +27,7 @@ ls -al ${TARFILE_TMP}
     tar -A -f ${TARFILE_TMP} submodule.tar
     rm submodule.tar
 done
-disttmp=.dist-tmp
+disttmp=target/dist-tmp
 tmpd=${TOP}/$disttmp
 trap cleanup EXIT
 function cleanup () {
