@@ -46,7 +46,7 @@ anyhow = "1.0.69"
 binread = "2.2.0"
 bitflags = "2.3"
 bootc = { git = "https://github.com/containers/bootc.git", branch = "main", package = "bootc-lib"}
-camino = "1.1.1"
+camino = "1.1.6"
 cap-std-ext = "2.0"
 cap-std = { version = "1.0.3", features = ["fs_utf8"] }
 containers-image-proxy = "0.5.1"
