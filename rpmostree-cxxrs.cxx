@@ -2063,9 +2063,8 @@ extern "C"
       ::rpmostreecxx::OstreeRepo const &repo, ::rpmostreecxx::GCancellable const &cancellable,
       ::rust::Str imgref, ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
 
-  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$container_prune (
-      ::rpmostreecxx::OstreeRepo const &repo,
-      ::rpmostreecxx::GCancellable const &cancellable) noexcept;
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$container_prune (::rpmostreecxx::OstreeSysroot const &sysroot) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$query_container_image_commit (
       ::rpmostreecxx::OstreeRepo const &repo, ::rust::Str c,
@@ -3659,10 +3658,9 @@ pull_container (::rpmostreecxx::OstreeRepo const &repo,
 }
 
 void
-container_prune (::rpmostreecxx::OstreeRepo const &repo,
-                 ::rpmostreecxx::GCancellable const &cancellable)
+container_prune (::rpmostreecxx::OstreeSysroot const &sysroot)
 {
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$container_prune (repo, cancellable);
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$container_prune (sysroot);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
