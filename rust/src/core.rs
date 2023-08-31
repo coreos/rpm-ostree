@@ -350,6 +350,14 @@ fn stage_container_rpm_files(rpms: Vec<File>) -> CxxResult<Vec<String>> {
     Ok(r)
 }
 
+/// Return an opaque identifier for the current executing binary.  This can
+/// be passed via IPC to verify that client and server are running the same code.
+pub(crate) fn self_id() -> Result<String> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = std::fs::metadata("/proc/self/exe").context("Failed to read /proc/self/exe")?;
+    Ok(format!("dev={};inode={}", metadata.dev(), metadata.ino()))
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

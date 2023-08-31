@@ -1,0 +1,10 @@
+[Unit]
+ConditionKernelCommandLine=ostree
+
+[Socket]
+ListenStream=/run/rpm-ostree/client.sock
+# We only allow root to connect out of conservatism for now
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target
