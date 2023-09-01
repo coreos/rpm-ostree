@@ -2312,7 +2312,7 @@ rpmostree_download_packages (GPtrArray *packages, GCancellable *cancellable, GEr
         return FALSE;
 
       if (!dnf_repo_download_packages (src, src_packages, target_dir, hifstate, error))
-        return FALSE;
+        return glnx_prefix_error (error, "Downloading from '%s'", dnf_repo_get_id (src));
 
       g_signal_handler_disconnect (hifstate, progress_sigid);
     }
