@@ -435,7 +435,7 @@ typename Slice<T>::iterator::difference_type
 Slice<T>::iterator::operator- (const iterator &other) const noexcept
 {
   auto diff = std::distance (static_cast<char *> (other.pos), static_cast<char *> (this->pos));
-  return diff / this->stride;
+  return diff / static_cast<typename Slice<T>::iterator::difference_type> (this->stride);
 }
 
 template <typename T>
@@ -1180,8 +1180,8 @@ class Fail final
 
 public:
   Fail (::rust::repr::PtrLen &throw$) noexcept : throw$ (throw$) {}
-  void operator() (const char *) noexcept;
-  void operator() (const std::string &) noexcept;
+  void operator() (char const *) noexcept;
+  void operator() (std::string const &) noexcept;
 };
 } // namespace detail
 
@@ -1237,7 +1237,7 @@ public:
   error (repr::PtrLen repr) noexcept
   {
     Error error;
-    error.msg = static_cast<const char *> (repr.ptr);
+    error.msg = static_cast<char const *> (repr.ptr);
     error.len = repr.len;
     return error;
   }
@@ -1279,7 +1279,7 @@ try
   {
     func ();
   }
-catch (const ::std::exception &e)
+catch (::std::exception const &e)
   {
     fail (e.what ());
   }
@@ -1383,7 +1383,7 @@ struct Bubblewrap final : public ::rust::Opaque
   void bind_read (::rust::Str src, ::rust::Str dest) noexcept;
   void bind_readwrite (::rust::Str src, ::rust::Str dest) noexcept;
   void setup_compat_var ();
-  void run (const ::rpmostreecxx::GCancellable &cancellable);
+  void run (::rpmostreecxx::GCancellable const &cancellable);
   ~Bubblewrap () = delete;
 
 private:
@@ -1531,10 +1531,10 @@ struct RpmImporter final : public ::rust::Opaque
   bool rpmfi_overrides_contains (::rust::Str path) const noexcept;
   ::std::uint64_t rpmfi_overrides_get (::rust::Str path) const noexcept;
   bool is_ima_enabled () const noexcept;
-  void tweak_imported_file_info (const ::rpmostreecxx::GFileInfo &file_info) const noexcept;
-  bool is_file_filtered (::rust::Str path, const ::rpmostreecxx::GFileInfo &file_info) const;
+  void tweak_imported_file_info (::rpmostreecxx::GFileInfo const &file_info) const noexcept;
+  bool is_file_filtered (::rust::Str path, ::rpmostreecxx::GFileInfo const &file_info) const;
   void translate_to_tmpfiles_entry (::rust::Str abs_path,
-                                    const ::rpmostreecxx::GFileInfo &file_info,
+                                    ::rpmostreecxx::GFileInfo const &file_info,
                                     ::rust::Str username, ::rust::Str groupname);
   bool has_tmpfiles_entries () const noexcept;
   ::rust::String serialize_tmpfiles_content () const noexcept;
@@ -1569,8 +1569,8 @@ struct HistoryEntry final
   // `true` if there are no more entries.
   bool eof;
 
-  bool operator== (const HistoryEntry &) const noexcept;
-  bool operator!= (const HistoryEntry &) const noexcept;
+  bool operator== (HistoryEntry const &) const noexcept;
+  bool operator!= (HistoryEntry const &) const noexcept;
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$HistoryEntry
@@ -1642,8 +1642,8 @@ struct Refspec final
   ::rpmostreecxx::RefspecType kind;
   ::rust::String refspec;
 
-  bool operator== (const Refspec &) const noexcept;
-  bool operator!= (const Refspec &) const noexcept;
+  bool operator== (Refspec const &) const noexcept;
+  bool operator!= (Refspec const &) const noexcept;
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$Refspec
@@ -1664,8 +1664,8 @@ struct OverrideReplacement final
   ::rpmostreecxx::OverrideReplacementType from_kind;
   ::rust::Vec< ::rust::String> packages;
 
-  bool operator== (const OverrideReplacement &) const noexcept;
-  bool operator!= (const OverrideReplacement &) const noexcept;
+  bool operator== (OverrideReplacement const &) const noexcept;
+  bool operator!= (OverrideReplacement const &) const noexcept;
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$OverrideReplacement
@@ -1735,9 +1735,9 @@ struct Treefile final : public ::rust::Opaque
   bool rpmdb_backend_is_target () const noexcept;
   bool should_normalize_rpmdb () const noexcept;
   ::rust::Vec< ::rust::String> get_files_remove_regex (::rust::Str package) const noexcept;
-  ::rust::String get_checksum (const ::rpmostreecxx::OstreeRepo &repo) const;
+  ::rust::String get_checksum (::rpmostreecxx::OstreeRepo const &repo) const;
   ::rust::String get_ostree_ref () const noexcept;
-  ::rust::Slice<const ::rpmostreecxx::RepoPackage> get_repo_packages () const noexcept;
+  ::rust::Slice< ::rpmostreecxx::RepoPackage const> get_repo_packages () const noexcept;
   void clear_repo_packages () noexcept;
   void prettyprint_json_stdout () const noexcept;
   void print_deprecation_warnings () const noexcept;
@@ -1864,7 +1864,7 @@ struct Extensions final : public ::rust::Opaque
   void update_state_checksum (::rust::Str chksum, ::rust::Str output_dir) const;
   void serialize_to_dir (::rust::Str output_dir) const;
   ::rust::Box< ::rpmostreecxx::Treefile>
-  generate_treefile (const ::rpmostreecxx::Treefile &src) const;
+  generate_treefile (::rpmostreecxx::Treefile const &src) const;
   ~Extensions () = delete;
 
 private:
@@ -1957,7 +1957,7 @@ extern "C"
       ::rust::Vec< ::std::int32_t> *return$) noexcept;
 
   void
-  rpmostreecxx$cxxbridge1$client_render_download_progress (const ::rpmostreecxx::GVariant &progress,
+  rpmostreecxx$cxxbridge1$client_render_download_progress (::rpmostreecxx::GVariant const &progress,
                                                            ::rust::String *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$running_in_container () noexcept;
@@ -1971,7 +1971,7 @@ extern "C"
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$bubblewrap_selftest () noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$bubblewrap_run_sync (
-      ::std::int32_t rootfs_dfd, const ::rust::Vec< ::rust::String> &args, bool capture_stdout,
+      ::std::int32_t rootfs_dfd, ::rust::Vec< ::rust::String> const &args, bool capture_stdout,
       bool unified_core, ::rust::Vec< ::std::uint8_t> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$bubblewrap_new (
@@ -1982,7 +1982,7 @@ extern "C"
       ::rust::Box< ::rpmostreecxx::Bubblewrap> *return$) noexcept;
 
   ::std::int32_t rpmostreecxx$cxxbridge1$Bubblewrap$get_rootfs_fd (
-      const ::rpmostreecxx::Bubblewrap &self) noexcept;
+      ::rpmostreecxx::Bubblewrap const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Bubblewrap$append_bwrap_arg (::rpmostreecxx::Bubblewrap &self,
                                                             ::rust::Str arg) noexcept;
@@ -2025,16 +2025,16 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Bubblewrap$run (::rpmostreecxx::Bubblewrap &self,
-                                          const ::rpmostreecxx::GCancellable &cancellable) noexcept;
+                                          ::rpmostreecxx::GCancellable const &cancellable) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$usroverlay_entrypoint (const ::rust::Vec< ::rust::String> &args) noexcept;
+  rpmostreecxx$cxxbridge1$usroverlay_entrypoint (::rust::Vec< ::rust::String> const &args) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$applylive_entrypoint (const ::rust::Vec< ::rust::String> &args) noexcept;
+  rpmostreecxx$cxxbridge1$applylive_entrypoint (::rust::Vec< ::rust::String> const &args) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$applylive_finish (const ::rpmostreecxx::OstreeSysroot &sysroot) noexcept;
+  rpmostreecxx$cxxbridge1$applylive_finish (::rpmostreecxx::OstreeSysroot const &sysroot) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$composeutil_legacy_prep_dev_and_run (::std::int32_t rootfs_dfd) noexcept;
@@ -2049,7 +2049,7 @@ extern "C"
   rpmostreecxx$cxxbridge1$cliwrap_write_wrappers (::std::int32_t rootfs) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$cliwrap_write_some_wrappers (
-      ::std::int32_t rootfs, const ::rust::Vec< ::rust::String> &args) noexcept;
+      ::std::int32_t rootfs, ::rust::Vec< ::rust::String> const &args) noexcept;
 
   void rpmostreecxx$cxxbridge1$cliwrap_destdir (::rust::String *return$) noexcept;
 
@@ -2060,19 +2060,19 @@ extern "C"
   rpmostreecxx$cxxbridge1$deploy_from_self_entrypoint (::rust::Vec< ::rust::String> *args) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$pull_container (
-      const ::rpmostreecxx::OstreeRepo &repo, const ::rpmostreecxx::GCancellable &cancellable,
+      ::rpmostreecxx::OstreeRepo const &repo, ::rpmostreecxx::GCancellable const &cancellable,
       ::rust::Str imgref, ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$container_prune (
-      const ::rpmostreecxx::OstreeRepo &repo,
-      const ::rpmostreecxx::GCancellable &cancellable) noexcept;
+      ::rpmostreecxx::OstreeRepo const &repo,
+      ::rpmostreecxx::GCancellable const &cancellable) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$query_container_image_commit (
-      const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c,
+      ::rpmostreecxx::OstreeRepo const &repo, ::rust::Str c,
       ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$purge_refspec (const ::rpmostreecxx::OstreeRepo &repo,
+  rpmostreecxx$cxxbridge1$purge_refspec (::rpmostreecxx::OstreeRepo const &repo,
                                          ::rust::Str refspec) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TempEtcGuard$operator$alignof () noexcept;
@@ -2083,7 +2083,7 @@ extern "C"
       ::std::int32_t rootfs, ::rust::Box< ::rpmostreecxx::TempEtcGuard> *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$TempEtcGuard$undo (const ::rpmostreecxx::TempEtcGuard &self) noexcept;
+  rpmostreecxx$cxxbridge1$TempEtcGuard$undo (::rpmostreecxx::TempEtcGuard const &self) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$prepare_filesystem_script_prep (
       ::std::int32_t rootfs, ::rust::Box< ::rpmostreecxx::FilesystemScriptPrep> *return$) noexcept;
@@ -2095,7 +2095,7 @@ extern "C"
                                                            ::rust::Str kver,
                                                            bool unified_core) noexcept;
 
-  void rpmostreecxx$cxxbridge1$log_treefile (const ::rpmostreecxx::Treefile &tf) noexcept;
+  void rpmostreecxx$cxxbridge1$log_treefile (::rpmostreecxx::Treefile const &tf) noexcept;
 
   bool rpmostreecxx$cxxbridge1$is_container_image_reference (::rust::Str refspec) noexcept;
 
@@ -2113,11 +2113,11 @@ extern "C"
       ::rust::Vec< ::std::int32_t> *fds, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$commit_has_matching_sepolicy (
-      const ::rpmostreecxx::GVariant &commit, const ::rpmostreecxx::OstreeSePolicy &policy,
+      ::rpmostreecxx::GVariant const &commit, ::rpmostreecxx::OstreeSePolicy const &policy,
       bool *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$get_header_variant (const ::rpmostreecxx::OstreeRepo &repo,
+  rpmostreecxx$cxxbridge1$get_header_variant (::rpmostreecxx::OstreeRepo const &repo,
                                               ::rust::Str cachebranch,
                                               ::rpmostreecxx::GVariant **return$) noexcept;
 
@@ -2125,8 +2125,8 @@ extern "C"
   rpmostreecxx$cxxbridge1$compose_image (::rust::Vec< ::rust::String> *args) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$configure_build_repo_from_target (
-      const ::rpmostreecxx::OstreeRepo &build_repo,
-      const ::rpmostreecxx::OstreeRepo &target_repo) noexcept;
+      ::rpmostreecxx::OstreeRepo const &build_repo,
+      ::rpmostreecxx::OstreeRepo const &target_repo) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$compose_prepare_rootfs (::std::int32_t src_rootfs_dfd,
@@ -2144,7 +2144,7 @@ extern "C"
   rpmostreecxx$cxxbridge1$compose_postprocess_final (::std::int32_t rootfs_dfd) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$convert_var_to_tmpfiles_d (
-      ::std::int32_t rootfs_dfd, const ::rpmostreecxx::GCancellable &cancellable) noexcept;
+      ::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable const &cancellable) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$rootfs_prepare_links (::std::int32_t rootfs_dfd) noexcept;
@@ -2166,7 +2166,7 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$directory_size (::std::int32_t dfd,
-                                          const ::rpmostreecxx::GCancellable &cancellable,
+                                          ::rpmostreecxx::GCancellable const &cancellable,
                                           ::std::uint64_t *return$) noexcept;
 
   ::rust::repr::PtrLen
@@ -2199,30 +2199,30 @@ extern "C"
                                                ::rpmostreecxx::OstreeDeployment **return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$daemon_sanitycheck_environment (
-      const ::rpmostreecxx::OstreeSysroot &sysroot) noexcept;
+      ::rpmostreecxx::OstreeSysroot const &sysroot) noexcept;
 
   void rpmostreecxx$cxxbridge1$deployment_generate_id (
-      const ::rpmostreecxx::OstreeDeployment &deployment, ::rust::String *return$) noexcept;
+      ::rpmostreecxx::OstreeDeployment const &deployment, ::rust::String *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$deployment_populate_variant (
-      const ::rpmostreecxx::OstreeSysroot &sysroot,
-      const ::rpmostreecxx::OstreeDeployment &deployment,
-      const ::rpmostreecxx::GVariantDict &dict) noexcept;
+      ::rpmostreecxx::OstreeSysroot const &sysroot,
+      ::rpmostreecxx::OstreeDeployment const &deployment,
+      ::rpmostreecxx::GVariantDict const &dict) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$generate_baselayer_refs (
-      const ::rpmostreecxx::OstreeSysroot &sysroot, const ::rpmostreecxx::OstreeRepo &repo,
-      const ::rpmostreecxx::GCancellable &cancellable) noexcept;
+      ::rpmostreecxx::OstreeSysroot const &sysroot, ::rpmostreecxx::OstreeRepo const &repo,
+      ::rpmostreecxx::GCancellable const &cancellable) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$variant_add_remote_status (
-      const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str refspec, ::rust::Str base_checksum,
-      const ::rpmostreecxx::GVariantDict &dict) noexcept;
+      ::rpmostreecxx::OstreeRepo const &repo, ::rust::Str refspec, ::rust::Str base_checksum,
+      ::rpmostreecxx::GVariantDict const &dict) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$deployment_layeredmeta_from_commit (
-      const ::rpmostreecxx::OstreeDeployment &deployment, const ::rpmostreecxx::GVariant &commit,
+      ::rpmostreecxx::OstreeDeployment const &deployment, ::rpmostreecxx::GVariant const &commit,
       ::rpmostreecxx::DeploymentLayeredMeta *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$deployment_layeredmeta_load (
-      const ::rpmostreecxx::OstreeRepo &repo, const ::rpmostreecxx::OstreeDeployment &deployment,
+      ::rpmostreecxx::OstreeRepo const &repo, ::rpmostreecxx::OstreeDeployment const &deployment,
       ::rpmostreecxx::DeploymentLayeredMeta *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$parse_override_source (
@@ -2244,73 +2244,73 @@ extern "C"
   rpmostreecxx$cxxbridge1$rpm_importer_flags_new_empty () noexcept;
 
   bool rpmostreecxx$cxxbridge1$RpmImporterFlags$is_ima_enabled (
-      const ::rpmostreecxx::RpmImporterFlags &self) noexcept;
+      ::rpmostreecxx::RpmImporterFlags const &self) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$RpmImporter$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$RpmImporter$operator$alignof () noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$rpm_importer_new (
       ::rust::Str pkg_name, ::rust::Str ostree_branch,
-      const ::rpmostreecxx::RpmImporterFlags &flags,
+      ::rpmostreecxx::RpmImporterFlags const &flags,
       ::rust::Box< ::rpmostreecxx::RpmImporter> *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$RpmImporter$handle_translate_pathname (
       ::rpmostreecxx::RpmImporter &self, ::rust::Str path, ::rust::String *return$) noexcept;
 
-  void rpmostreecxx$cxxbridge1$RpmImporter$ostree_branch (const ::rpmostreecxx::RpmImporter &self,
+  void rpmostreecxx$cxxbridge1$RpmImporter$ostree_branch (::rpmostreecxx::RpmImporter const &self,
                                                           ::rust::String *return$) noexcept;
 
-  void rpmostreecxx$cxxbridge1$RpmImporter$pkg_name (const ::rpmostreecxx::RpmImporter &self,
+  void rpmostreecxx$cxxbridge1$RpmImporter$pkg_name (::rpmostreecxx::RpmImporter const &self,
                                                      ::rust::String *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$RpmImporter$doc_files_are_filtered (
-      const ::rpmostreecxx::RpmImporter &self) noexcept;
+      ::rpmostreecxx::RpmImporter const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$RpmImporter$doc_files_insert (::rpmostreecxx::RpmImporter &self,
                                                              ::rust::Str path) noexcept;
 
   bool
-  rpmostreecxx$cxxbridge1$RpmImporter$doc_files_contains (const ::rpmostreecxx::RpmImporter &self,
+  rpmostreecxx$cxxbridge1$RpmImporter$doc_files_contains (::rpmostreecxx::RpmImporter const &self,
                                                           ::rust::Str path) noexcept;
 
   void rpmostreecxx$cxxbridge1$RpmImporter$rpmfi_overrides_insert (
       ::rpmostreecxx::RpmImporter &self, ::rust::Str path, ::std::uint64_t index) noexcept;
 
   bool rpmostreecxx$cxxbridge1$RpmImporter$rpmfi_overrides_contains (
-      const ::rpmostreecxx::RpmImporter &self, ::rust::Str path) noexcept;
+      ::rpmostreecxx::RpmImporter const &self, ::rust::Str path) noexcept;
 
   ::std::uint64_t
-  rpmostreecxx$cxxbridge1$RpmImporter$rpmfi_overrides_get (const ::rpmostreecxx::RpmImporter &self,
+  rpmostreecxx$cxxbridge1$RpmImporter$rpmfi_overrides_get (::rpmostreecxx::RpmImporter const &self,
                                                            ::rust::Str path) noexcept;
 
   bool rpmostreecxx$cxxbridge1$RpmImporter$is_ima_enabled (
-      const ::rpmostreecxx::RpmImporter &self) noexcept;
+      ::rpmostreecxx::RpmImporter const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$RpmImporter$tweak_imported_file_info (
-      const ::rpmostreecxx::RpmImporter &self, const ::rpmostreecxx::GFileInfo &file_info) noexcept;
+      ::rpmostreecxx::RpmImporter const &self, ::rpmostreecxx::GFileInfo const &file_info) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$RpmImporter$is_file_filtered (
-      const ::rpmostreecxx::RpmImporter &self, ::rust::Str path,
-      const ::rpmostreecxx::GFileInfo &file_info, bool *return$) noexcept;
+      ::rpmostreecxx::RpmImporter const &self, ::rust::Str path,
+      ::rpmostreecxx::GFileInfo const &file_info, bool *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$RpmImporter$translate_to_tmpfiles_entry (
       ::rpmostreecxx::RpmImporter &self, ::rust::Str abs_path,
-      const ::rpmostreecxx::GFileInfo &file_info, ::rust::Str username,
+      ::rpmostreecxx::GFileInfo const &file_info, ::rust::Str username,
       ::rust::Str groupname) noexcept;
 
   bool rpmostreecxx$cxxbridge1$RpmImporter$has_tmpfiles_entries (
-      const ::rpmostreecxx::RpmImporter &self) noexcept;
+      ::rpmostreecxx::RpmImporter const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$RpmImporter$serialize_tmpfiles_content (
-      const ::rpmostreecxx::RpmImporter &self, ::rust::String *return$) noexcept;
+      ::rpmostreecxx::RpmImporter const &self, ::rust::String *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$tmpfiles_translate (
-      ::rust::Str abs_path, const ::rpmostreecxx::GFileInfo &file_info, ::rust::Str username,
+      ::rust::Str abs_path, ::rpmostreecxx::GFileInfo const &file_info, ::rust::Str username,
       ::rust::Str groupname, ::rust::String *return$) noexcept;
 
   ::rust::repr::Fat rpmostreecxx$cxxbridge1$get_dracut_random_cpio () noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$initramfs_overlay_generate (const ::rust::Vec< ::rust::String> &files,
+  rpmostreecxx$cxxbridge1$initramfs_overlay_generate (::rust::Vec< ::rust::String> const &files,
                                                       ::rpmostreecxx::GCancellable &cancellable,
                                                       ::std::int32_t *return$) noexcept;
 
@@ -2330,10 +2330,10 @@ extern "C"
   void rpmostreecxx$cxxbridge1$console_progress_update (::std::uint64_t n) noexcept;
 
   void rpmostreecxx$cxxbridge1$console_progress_end (::rust::Str suffix) noexcept;
-  bool rpmostreecxx$cxxbridge1$HistoryEntry$operator$eq (const HistoryEntry &,
-                                                         const HistoryEntry &) noexcept;
-  bool rpmostreecxx$cxxbridge1$HistoryEntry$operator$ne (const HistoryEntry &,
-                                                         const HistoryEntry &) noexcept;
+  bool rpmostreecxx$cxxbridge1$HistoryEntry$operator$eq (HistoryEntry const &,
+                                                         HistoryEntry const &) noexcept;
+  bool rpmostreecxx$cxxbridge1$HistoryEntry$operator$ne (HistoryEntry const &,
+                                                         HistoryEntry const &) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$HistoryCtx$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$HistoryCtx$operator$alignof () noexcept;
 
@@ -2347,7 +2347,7 @@ extern "C"
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$history_prune () noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$modularity_entrypoint (const ::rust::Vec< ::rust::String> &args) noexcept;
+  rpmostreecxx$cxxbridge1$modularity_entrypoint (::rust::Vec< ::rust::String> const &args) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TokioHandle$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TokioHandle$operator$alignof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TokioEnterGuard$operator$sizeof () noexcept;
@@ -2356,7 +2356,7 @@ extern "C"
   ::rpmostreecxx::TokioHandle *rpmostreecxx$cxxbridge1$tokio_handle_get () noexcept;
 
   ::rpmostreecxx::TokioEnterGuard *
-  rpmostreecxx$cxxbridge1$TokioHandle$enter (const ::rpmostreecxx::TokioHandle &self) noexcept;
+  rpmostreecxx$cxxbridge1$TokioHandle$enter (::rpmostreecxx::TokioHandle const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$script_is_ignored (::rust::Str pkg, ::rust::Str script) noexcept;
 
@@ -2365,10 +2365,10 @@ extern "C"
 
   void rpmostreecxx$cxxbridge1$maybe_shell_quote (::rust::Str input,
                                                   ::rust::String *return$) noexcept;
-  bool rpmostreecxx$cxxbridge1$Refspec$operator$eq (const Refspec &, const Refspec &) noexcept;
+  bool rpmostreecxx$cxxbridge1$Refspec$operator$eq (Refspec const &, Refspec const &) noexcept;
   bool
-  rpmostreecxx$cxxbridge1$OverrideReplacement$operator$eq (const OverrideReplacement &,
-                                                           const OverrideReplacement &) noexcept;
+  rpmostreecxx$cxxbridge1$OverrideReplacement$operator$eq (OverrideReplacement const &,
+                                                           OverrideReplacement const &) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$Treefile$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$Treefile$operator$alignof () noexcept;
 
@@ -2397,7 +2397,7 @@ extern "C"
   rpmostreecxx$cxxbridge1$treefile_delete_client_etc (::std::uint32_t *return$) noexcept;
 
   ::rust::repr::Fat
-  rpmostreecxx$cxxbridge1$Treefile$get_workdir (const ::rpmostreecxx::Treefile &self) noexcept;
+  rpmostreecxx$cxxbridge1$Treefile$get_workdir (::rpmostreecxx::Treefile const &self) noexcept;
 
   ::std::int32_t
   rpmostreecxx$cxxbridge1$Treefile$get_passwd_fd (::rpmostreecxx::Treefile &self) noexcept;
@@ -2405,27 +2405,27 @@ extern "C"
   ::std::int32_t
   rpmostreecxx$cxxbridge1$Treefile$get_group_fd (::rpmostreecxx::Treefile &self) noexcept;
 
-  void rpmostreecxx$cxxbridge1$Treefile$get_json_string (const ::rpmostreecxx::Treefile &self,
+  void rpmostreecxx$cxxbridge1$Treefile$get_json_string (::rpmostreecxx::Treefile const &self,
                                                          ::rust::String *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_ostree_layers (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_ostree_override_layers (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_all_ostree_layers (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
-  void rpmostreecxx$cxxbridge1$Treefile$get_repos (const ::rpmostreecxx::Treefile &self,
+  void rpmostreecxx$cxxbridge1$Treefile$get_repos (::rpmostreecxx::Treefile const &self,
                                                    ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void
-  rpmostreecxx$cxxbridge1$Treefile$get_packages (const ::rpmostreecxx::Treefile &self,
+  rpmostreecxx$cxxbridge1$Treefile$get_packages (::rpmostreecxx::Treefile const &self,
                                                  ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$require_automatic_version_prefix (
-      const ::rpmostreecxx::Treefile &self, ::rust::String *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::String *return$) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Treefile$add_packages (::rpmostreecxx::Treefile &self,
@@ -2433,10 +2433,10 @@ extern "C"
                                                  bool allow_existing, bool *return$) noexcept;
 
   bool
-  rpmostreecxx$cxxbridge1$Treefile$has_packages (const ::rpmostreecxx::Treefile &self) noexcept;
+  rpmostreecxx$cxxbridge1$Treefile$has_packages (::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_local_packages (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Treefile$add_local_packages (::rpmostreecxx::Treefile &self,
@@ -2444,7 +2444,7 @@ extern "C"
                                                        bool allow_existing, bool *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_local_fileoverride_packages (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$add_local_fileoverride_packages (
       ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *packages, bool allow_existing,
@@ -2456,11 +2456,11 @@ extern "C"
                                                     bool allow_noent, bool *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_packages_override_replace (
-      const ::rpmostreecxx::Treefile &self,
+      ::rpmostreecxx::Treefile const &self,
       ::rust::Vec< ::rpmostreecxx::OverrideReplacement> *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$has_packages_override_replace (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$add_packages_override_replace (
       ::rpmostreecxx::Treefile &self, ::rpmostreecxx::OverrideReplacement *replacement) noexcept;
@@ -2470,7 +2470,7 @@ extern "C"
                                                                     ::rust::Str package) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_packages_override_replace_local (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$add_packages_override_replace_local (
       ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *packages) noexcept;
@@ -2479,7 +2479,7 @@ extern "C"
       ::rpmostreecxx::Treefile &self, ::rust::Str package) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_packages_override_remove (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$add_packages_override_remove (
       ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *packages) noexcept;
@@ -2489,19 +2489,19 @@ extern "C"
                                                                    ::rust::Str package) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$has_packages_override_remove_name (
-      const ::rpmostreecxx::Treefile &self, ::rust::Str name) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Str name) noexcept;
 
   bool
   rpmostreecxx$cxxbridge1$Treefile$remove_all_overrides (::rpmostreecxx::Treefile &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_modules_enable (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$has_modules_enable (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_modules_install (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$add_modules (::rpmostreecxx::Treefile &self,
                                                      ::rust::Vec< ::rust::String> *modules,
@@ -2515,114 +2515,114 @@ extern "C"
   rpmostreecxx$cxxbridge1$Treefile$remove_all_packages (::rpmostreecxx::Treefile &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_exclude_packages (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
-  void rpmostreecxx$cxxbridge1$Treefile$get_platform_module (const ::rpmostreecxx::Treefile &self,
+  void rpmostreecxx$cxxbridge1$Treefile$get_platform_module (::rpmostreecxx::Treefile const &self,
                                                              ::rust::String *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_install_langs (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void
-  rpmostreecxx$cxxbridge1$Treefile$format_install_langs_macro (const ::rpmostreecxx::Treefile &self,
+  rpmostreecxx$cxxbridge1$Treefile$format_install_langs_macro (::rpmostreecxx::Treefile const &self,
                                                                ::rust::String *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_lockfile_repos (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::Fat
-  rpmostreecxx$cxxbridge1$Treefile$get_ref (const ::rpmostreecxx::Treefile &self) noexcept;
+  rpmostreecxx$cxxbridge1$Treefile$get_ref (::rpmostreecxx::Treefile const &self) noexcept;
 
-  bool rpmostreecxx$cxxbridge1$Treefile$get_cliwrap (const ::rpmostreecxx::Treefile &self) noexcept;
+  bool rpmostreecxx$cxxbridge1$Treefile$get_cliwrap (::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_cliwrap_binaries (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$set_cliwrap (::rpmostreecxx::Treefile &self,
                                                      bool enabled) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_container_cmd (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_readonly_executables (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_documentation (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool
-  rpmostreecxx$cxxbridge1$Treefile$get_recommends (const ::rpmostreecxx::Treefile &self) noexcept;
+  rpmostreecxx$cxxbridge1$Treefile$get_recommends (::rpmostreecxx::Treefile const &self) noexcept;
 
-  bool rpmostreecxx$cxxbridge1$Treefile$get_selinux (const ::rpmostreecxx::Treefile &self) noexcept;
+  bool rpmostreecxx$cxxbridge1$Treefile$get_selinux (::rpmostreecxx::Treefile const &self) noexcept;
 
-  void rpmostreecxx$cxxbridge1$Treefile$get_gpg_key (const ::rpmostreecxx::Treefile &self,
+  void rpmostreecxx$cxxbridge1$Treefile$get_gpg_key (::rpmostreecxx::Treefile const &self,
                                                      ::rust::String *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_automatic_version_suffix (
-      const ::rpmostreecxx::Treefile &self, ::rust::String *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::String *return$) noexcept;
 
   bool
-  rpmostreecxx$cxxbridge1$Treefile$get_container (const ::rpmostreecxx::Treefile &self) noexcept;
+  rpmostreecxx$cxxbridge1$Treefile$get_container (::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_machineid_compat (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_etc_group_members (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_boot_location_is_modules (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
-  bool rpmostreecxx$cxxbridge1$Treefile$get_ima (const ::rpmostreecxx::Treefile &self) noexcept;
+  bool rpmostreecxx$cxxbridge1$Treefile$get_ima (::rpmostreecxx::Treefile const &self) noexcept;
 
-  void rpmostreecxx$cxxbridge1$Treefile$get_releasever (const ::rpmostreecxx::Treefile &self,
+  void rpmostreecxx$cxxbridge1$Treefile$get_releasever (::rpmostreecxx::Treefile const &self,
                                                         ::rust::String *return$) noexcept;
 
   ::rpmostreecxx::RepoMetadataTarget rpmostreecxx$cxxbridge1$Treefile$get_repo_metadata_target (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$rpmdb_backend_is_target (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$should_normalize_rpmdb (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_files_remove_regex (
-      const ::rpmostreecxx::Treefile &self, ::rust::Str package,
+      ::rpmostreecxx::Treefile const &self, ::rust::Str package,
       ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$Treefile$get_checksum (const ::rpmostreecxx::Treefile &self,
-                                                 const ::rpmostreecxx::OstreeRepo &repo,
+  rpmostreecxx$cxxbridge1$Treefile$get_checksum (::rpmostreecxx::Treefile const &self,
+                                                 ::rpmostreecxx::OstreeRepo const &repo,
                                                  ::rust::String *return$) noexcept;
 
-  void rpmostreecxx$cxxbridge1$Treefile$get_ostree_ref (const ::rpmostreecxx::Treefile &self,
+  void rpmostreecxx$cxxbridge1$Treefile$get_ostree_ref (::rpmostreecxx::Treefile const &self,
                                                         ::rust::String *return$) noexcept;
 
   ::rust::repr::Fat rpmostreecxx$cxxbridge1$Treefile$get_repo_packages (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void
   rpmostreecxx$cxxbridge1$Treefile$clear_repo_packages (::rpmostreecxx::Treefile &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$prettyprint_json_stdout (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$print_deprecation_warnings (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$print_experimental_notices (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$sanitycheck_externals (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   ::rpmostreecxx::RpmImporterFlags *
-  rpmostreecxx$cxxbridge1$Treefile$importer_flags (const ::rpmostreecxx::Treefile &self,
+  rpmostreecxx$cxxbridge1$Treefile$importer_flags (::rpmostreecxx::Treefile const &self,
                                                    ::rust::Str pkg_name) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$Treefile$write_repovars (const ::rpmostreecxx::Treefile &self,
+  rpmostreecxx$cxxbridge1$Treefile$write_repovars (::rpmostreecxx::Treefile const &self,
                                                    ::std::int32_t workdir_dfd_raw,
                                                    ::rust::String *return$) noexcept;
 
@@ -2638,10 +2638,10 @@ extern "C"
                                                  ::rust::Str repo) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$validate_for_container (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void
-  rpmostreecxx$cxxbridge1$Treefile$get_base_refspec (const ::rpmostreecxx::Treefile &self,
+  rpmostreecxx$cxxbridge1$Treefile$get_base_refspec (::rpmostreecxx::Treefile const &self,
                                                      ::rpmostreecxx::Refspec *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$rebase (::rpmostreecxx::Treefile &self,
@@ -2649,23 +2649,23 @@ extern "C"
                                                 ::rust::Str custom_origin_url,
                                                 ::rust::Str custom_origin_description) noexcept;
 
-  void rpmostreecxx$cxxbridge1$Treefile$get_origin_custom_url (const ::rpmostreecxx::Treefile &self,
+  void rpmostreecxx$cxxbridge1$Treefile$get_origin_custom_url (::rpmostreecxx::Treefile const &self,
                                                                ::rust::String *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_origin_custom_description (
-      const ::rpmostreecxx::Treefile &self, ::rust::String *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::String *return$) noexcept;
 
-  void rpmostreecxx$cxxbridge1$Treefile$get_override_commit (const ::rpmostreecxx::Treefile &self,
+  void rpmostreecxx$cxxbridge1$Treefile$get_override_commit (::rpmostreecxx::Treefile const &self,
                                                              ::rust::String *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$set_override_commit (::rpmostreecxx::Treefile &self,
                                                              ::rust::Str checksum) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_initramfs_etc_files (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$has_initramfs_etc_files (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$initramfs_etc_files_track (
       ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *files) noexcept;
@@ -2677,23 +2677,23 @@ extern "C"
       ::rpmostreecxx::Treefile &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_initramfs_regenerate (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_initramfs_args (
-      const ::rpmostreecxx::Treefile &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$set_initramfs_regenerate (
       ::rpmostreecxx::Treefile &self, bool enabled, ::rust::Vec< ::rust::String> *args) noexcept;
 
   void
-  rpmostreecxx$cxxbridge1$Treefile$get_unconfigured_state (const ::rpmostreecxx::Treefile &self,
+  rpmostreecxx$cxxbridge1$Treefile$get_unconfigured_state (::rpmostreecxx::Treefile const &self,
                                                            ::rust::String *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$may_require_local_assembly (
-      const ::rpmostreecxx::Treefile &self) noexcept;
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool
-  rpmostreecxx$cxxbridge1$Treefile$has_any_packages (const ::rpmostreecxx::Treefile &self) noexcept;
+  rpmostreecxx$cxxbridge1$Treefile$has_any_packages (::rpmostreecxx::Treefile const &self) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Treefile$merge_treefile (::rpmostreecxx::Treefile &self,
@@ -2702,15 +2702,15 @@ extern "C"
   ::std::size_t rpmostreecxx$cxxbridge1$RepoPackage$operator$alignof () noexcept;
 
   ::rust::repr::Fat
-  rpmostreecxx$cxxbridge1$RepoPackage$get_repo (const ::rpmostreecxx::RepoPackage &self) noexcept;
+  rpmostreecxx$cxxbridge1$RepoPackage$get_repo (::rpmostreecxx::RepoPackage const &self) noexcept;
 
   void
-  rpmostreecxx$cxxbridge1$RepoPackage$get_packages (const ::rpmostreecxx::RepoPackage &self,
+  rpmostreecxx$cxxbridge1$RepoPackage$get_packages (::rpmostreecxx::RepoPackage const &self,
                                                     ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$varsubstitute (::rust::Str s,
-                                         const ::rust::Vec< ::rpmostreecxx::StringMapping> &vars,
+                                         ::rust::Vec< ::rpmostreecxx::StringMapping> const &vars,
                                          ::rust::String *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$get_features (::rust::Vec< ::rust::String> *return$) noexcept;
@@ -2719,34 +2719,34 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$sealed_memfd (::rust::Str description,
-                                        ::rust::Slice<const ::std::uint8_t> content,
+                                        ::rust::Slice< ::std::uint8_t const> content,
                                         ::std::int32_t *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$running_in_systemd () noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$calculate_advisories_diff (
-      const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str checksum_from, ::rust::Str checksum_to,
+      ::rpmostreecxx::OstreeRepo const &repo, ::rust::Str checksum_from, ::rust::Str checksum_to,
       ::rpmostreecxx::GVariant **return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$translate_path_for_ostree (::rust::Str path,
                                                           ::rust::String *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$get_live_apply_state (const ::rpmostreecxx::OstreeSysroot &sysroot,
-                                                const ::rpmostreecxx::OstreeDeployment &deployment,
+  rpmostreecxx$cxxbridge1$get_live_apply_state (::rpmostreecxx::OstreeSysroot const &sysroot,
+                                                ::rpmostreecxx::OstreeDeployment const &deployment,
                                                 ::rpmostreecxx::LiveApplyState *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$has_live_apply_state (const ::rpmostreecxx::OstreeSysroot &sysroot,
-                                                const ::rpmostreecxx::OstreeDeployment &deployment,
+  rpmostreecxx$cxxbridge1$has_live_apply_state (::rpmostreecxx::OstreeSysroot const &sysroot,
+                                                ::rpmostreecxx::OstreeDeployment const &deployment,
                                                 bool *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$applylive_sync_ref (
-      const ::rpmostreecxx::OstreeSysroot &sysroot) noexcept;
+      ::rpmostreecxx::OstreeSysroot const &sysroot) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$transaction_apply_live (const ::rpmostreecxx::OstreeSysroot &sysroot,
-                                                  const ::rpmostreecxx::GVariant &target) noexcept;
+  rpmostreecxx$cxxbridge1$transaction_apply_live (::rpmostreecxx::OstreeSysroot const &sysroot,
+                                                  ::rpmostreecxx::GVariant const &target) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$prepare_rpm_layering (::std::int32_t rootfs,
                                                                      ::rust::Str merge_passwd_dir,
@@ -2758,7 +2758,7 @@ extern "C"
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$passwd_cleanup (::std::int32_t rootfs) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$migrate_group_except_root (
-      ::std::int32_t rootfs, const ::rust::Vec< ::rust::String> &preserved_groups) noexcept;
+      ::std::int32_t rootfs, ::rust::Vec< ::rust::String> const &preserved_groups) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$migrate_passwd_except_root (::std::int32_t rootfs) noexcept;
@@ -2769,7 +2769,7 @@ extern "C"
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$passwd_compose_prep_repo (
       ::std::int32_t rootfs, ::rpmostreecxx::Treefile &treefile,
-      const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str previous_checksum,
+      ::rpmostreecxx::OstreeRepo const &repo, ::rust::Str previous_checksum,
       bool unified_core) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$dir_contains_uid (::std::int32_t dirfd,
@@ -2781,7 +2781,7 @@ extern "C"
                                                                  bool *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$check_passwd_group_entries (
-      const ::rpmostreecxx::OstreeRepo &ffi_repo, ::std::int32_t rootfs_dfd,
+      ::rpmostreecxx::OstreeRepo const &ffi_repo, ::std::int32_t rootfs_dfd,
       ::rpmostreecxx::Treefile &treefile, ::rust::Str previous_rev) noexcept;
 
   ::rust::repr::PtrLen
@@ -2791,10 +2791,10 @@ extern "C"
   ::std::size_t rpmostreecxx$cxxbridge1$PasswdDB$operator$alignof () noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$PasswdDB$lookup_user (
-      const ::rpmostreecxx::PasswdDB &self, ::std::uint32_t uid, ::rust::String *return$) noexcept;
+      ::rpmostreecxx::PasswdDB const &self, ::std::uint32_t uid, ::rust::String *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$PasswdDB$lookup_group (
-      const ::rpmostreecxx::PasswdDB &self, ::std::uint32_t gid, ::rust::String *return$) noexcept;
+      ::rpmostreecxx::PasswdDB const &self, ::std::uint32_t gid, ::rust::String *return$) noexcept;
 
   ::rpmostreecxx::PasswdEntries *rpmostreecxx$cxxbridge1$new_passwd_entries () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$PasswdEntries$operator$sizeof () noexcept;
@@ -2807,20 +2807,20 @@ extern "C"
       ::rpmostreecxx::PasswdEntries &self, ::std::int32_t rootfs, ::rust::Str path) noexcept;
 
   bool
-  rpmostreecxx$cxxbridge1$PasswdEntries$contains_group (const ::rpmostreecxx::PasswdEntries &self,
+  rpmostreecxx$cxxbridge1$PasswdEntries$contains_group (::rpmostreecxx::PasswdEntries const &self,
                                                         ::rust::Str user) noexcept;
 
   bool
-  rpmostreecxx$cxxbridge1$PasswdEntries$contains_user (const ::rpmostreecxx::PasswdEntries &self,
+  rpmostreecxx$cxxbridge1$PasswdEntries$contains_user (::rpmostreecxx::PasswdEntries const &self,
                                                        ::rust::Str user) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$PasswdEntries$lookup_user_id (const ::rpmostreecxx::PasswdEntries &self,
+  rpmostreecxx$cxxbridge1$PasswdEntries$lookup_user_id (::rpmostreecxx::PasswdEntries const &self,
                                                         ::rust::Str user,
                                                         ::std::uint32_t *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$PasswdEntries$lookup_group_id (const ::rpmostreecxx::PasswdEntries &self,
+  rpmostreecxx$cxxbridge1$PasswdEntries$lookup_group_id (::rpmostreecxx::PasswdEntries const &self,
                                                          ::rust::Str group,
                                                          ::std::uint32_t *return$) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$Extensions$operator$sizeof () noexcept;
@@ -2828,38 +2828,38 @@ extern "C"
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$extensions_load (
       ::rust::Str path, ::rust::Str basearch,
-      const ::rust::Vec< ::rpmostreecxx::StringMapping> &base_pkgs,
+      ::rust::Vec< ::rpmostreecxx::StringMapping> const &base_pkgs,
       ::rust::Box< ::rpmostreecxx::Extensions> *return$) noexcept;
 
   void
-  rpmostreecxx$cxxbridge1$Extensions$get_repos (const ::rpmostreecxx::Extensions &self,
+  rpmostreecxx$cxxbridge1$Extensions$get_repos (::rpmostreecxx::Extensions const &self,
                                                 ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Extensions$get_os_extension_packages (
-      const ::rpmostreecxx::Extensions &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Extensions const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   void rpmostreecxx$cxxbridge1$Extensions$get_development_packages (
-      const ::rpmostreecxx::Extensions &self, ::rust::Vec< ::rust::String> *return$) noexcept;
+      ::rpmostreecxx::Extensions const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Extensions$state_checksum_changed (
-      const ::rpmostreecxx::Extensions &self, ::rust::Str chksum, ::rust::Str output_dir,
+      ::rpmostreecxx::Extensions const &self, ::rust::Str chksum, ::rust::Str output_dir,
       bool *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Extensions$update_state_checksum (
-      const ::rpmostreecxx::Extensions &self, ::rust::Str chksum, ::rust::Str output_dir) noexcept;
+      ::rpmostreecxx::Extensions const &self, ::rust::Str chksum, ::rust::Str output_dir) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$Extensions$serialize_to_dir (const ::rpmostreecxx::Extensions &self,
+  rpmostreecxx$cxxbridge1$Extensions$serialize_to_dir (::rpmostreecxx::Extensions const &self,
                                                        ::rust::Str output_dir) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Extensions$generate_treefile (
-      const ::rpmostreecxx::Extensions &self, const ::rpmostreecxx::Treefile &src,
+      ::rpmostreecxx::Extensions const &self, ::rpmostreecxx::Treefile const &src,
       ::rust::Box< ::rpmostreecxx::Treefile> *return$) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$LockfileConfig$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$LockfileConfig$operator$alignof () noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$lockfile_read (
-      const ::rust::Vec< ::rust::String> &filenames,
+      ::rust::Vec< ::rust::String> const &filenames,
       ::rust::Box< ::rpmostreecxx::LockfileConfig> *return$) noexcept;
 
   ::rust::repr::PtrLen
@@ -2868,18 +2868,18 @@ extern "C"
                                           ::rpmostreecxx::CxxGObjectArray &rpmmd_repos) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$LockfileConfig$get_locked_packages (
-      const ::rpmostreecxx::LockfileConfig &self,
+      ::rpmostreecxx::LockfileConfig const &self,
       ::rust::Vec< ::rpmostreecxx::LockedPackage> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$origin_to_treefile (
-      const ::rpmostreecxx::GKeyFile &kf, ::rust::Box< ::rpmostreecxx::Treefile> *return$) noexcept;
+      ::rpmostreecxx::GKeyFile const &kf, ::rust::Box< ::rpmostreecxx::Treefile> *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$treefile_to_origin (const ::rpmostreecxx::Treefile &tf,
+  rpmostreecxx$cxxbridge1$treefile_to_origin (::rpmostreecxx::Treefile const &tf,
                                               ::rpmostreecxx::GKeyFile **return$) noexcept;
 
   void
-  rpmostreecxx$cxxbridge1$origin_validate_roundtrip (const ::rpmostreecxx::GKeyFile &kf) noexcept;
+  rpmostreecxx$cxxbridge1$origin_validate_roundtrip (::rpmostreecxx::GKeyFile const &kf) noexcept;
 
   void rpmostreecxx$cxxbridge1$cache_branch_to_nevra (::rust::Str nevra,
                                                       ::rust::String *return$) noexcept;
@@ -2921,9 +2921,9 @@ extern "C"
 
   ::std::int32_t
   rpmostreecxx$cxxbridge1$testutil_validate_cxxrs_passthrough (
-      const ::rpmostreecxx::OstreeRepo &repo) noexcept
+      ::rpmostreecxx::OstreeRepo const &repo) noexcept
   {
-    ::std::int32_t (*testutil_validate_cxxrs_passthrough$) (const ::rpmostreecxx::OstreeRepo &)
+    ::std::int32_t (*testutil_validate_cxxrs_passthrough$) (::rpmostreecxx::OstreeRepo const &)
         = ::rpmostreecxx::testutil_validate_cxxrs_passthrough;
     return testutil_validate_cxxrs_passthrough$ (repo);
   }
@@ -2936,10 +2936,10 @@ extern "C"
   }
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$rpmostree_main (::rust::Slice<const ::rust::Str> args,
+  rpmostreecxx$cxxbridge1$rpmostree_main (::rust::Slice< ::rust::Str const> args,
                                           ::std::int32_t *return$) noexcept
   {
-    ::std::int32_t (*rpmostree_main$) (::rust::Slice<const ::rust::Str>)
+    ::std::int32_t (*rpmostree_main$) (::rust::Slice< ::rust::Str const>)
         = ::rpmostreecxx::rpmostree_main;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
@@ -3003,18 +3003,18 @@ extern "C"
     return throw$;
   }
 
-  const ::rpmostreecxx::GDBusConnection *
+  ::rpmostreecxx::GDBusConnection const *
   rpmostreecxx$cxxbridge1$ClientConnection$get_connection (
       ::rpmostreecxx::ClientConnection &self) noexcept
   {
-    const ::rpmostreecxx::GDBusConnection &(::rpmostreecxx::ClientConnection::*get_connection$) ()
+    ::rpmostreecxx::GDBusConnection const &(::rpmostreecxx::ClientConnection::*get_connection$) ()
         = &::rpmostreecxx::ClientConnection::get_connection;
     return &(self.*get_connection$) ();
   }
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$ClientConnection$transaction_connect_progress_sync (
-      const ::rpmostreecxx::ClientConnection &self, ::rust::Str address) noexcept
+      ::rpmostreecxx::ClientConnection const &self, ::rust::Str address) noexcept
   {
     void (::rpmostreecxx::ClientConnection::*transaction_connect_progress_sync$) (::rust::Str) const
         = &::rpmostreecxx::ClientConnection::transaction_connect_progress_sync;
@@ -3029,7 +3029,7 @@ extern "C"
   }
 
   ::std::int32_t
-  rpmostreecxx$cxxbridge1$RPMDiff$n_removed (const ::rpmostreecxx::RPMDiff &self) noexcept
+  rpmostreecxx$cxxbridge1$RPMDiff$n_removed (::rpmostreecxx::RPMDiff const &self) noexcept
   {
     ::std::int32_t (::rpmostreecxx::RPMDiff::*n_removed$) () const
         = &::rpmostreecxx::RPMDiff::n_removed;
@@ -3037,7 +3037,7 @@ extern "C"
   }
 
   ::std::int32_t
-  rpmostreecxx$cxxbridge1$RPMDiff$n_added (const ::rpmostreecxx::RPMDiff &self) noexcept
+  rpmostreecxx$cxxbridge1$RPMDiff$n_added (::rpmostreecxx::RPMDiff const &self) noexcept
   {
     ::std::int32_t (::rpmostreecxx::RPMDiff::*n_added$) () const
         = &::rpmostreecxx::RPMDiff::n_added;
@@ -3045,7 +3045,7 @@ extern "C"
   }
 
   ::std::int32_t
-  rpmostreecxx$cxxbridge1$RPMDiff$n_modified (const ::rpmostreecxx::RPMDiff &self) noexcept
+  rpmostreecxx$cxxbridge1$RPMDiff$n_modified (::rpmostreecxx::RPMDiff const &self) noexcept
   {
     ::std::int32_t (::rpmostreecxx::RPMDiff::*n_modified$) () const
         = &::rpmostreecxx::RPMDiff::n_modified;
@@ -3053,12 +3053,12 @@ extern "C"
   }
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$rpmdb_diff (const ::rpmostreecxx::OstreeRepo &repo,
-                                      const ::std::string &src, const ::std::string &dest,
+  rpmostreecxx$cxxbridge1$rpmdb_diff (::rpmostreecxx::OstreeRepo const &repo,
+                                      ::std::string const &src, ::std::string const &dest,
                                       bool allow_noent, ::rpmostreecxx::RPMDiff **return$) noexcept
   {
     ::std::unique_ptr< ::rpmostreecxx::RPMDiff> (*rpmdb_diff$) (
-        const ::rpmostreecxx::OstreeRepo &, const ::std::string &, const ::std::string &, bool)
+        ::rpmostreecxx::OstreeRepo const &, ::std::string const &, ::std::string const &, bool)
         = ::rpmostreecxx::rpmdb_diff;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
@@ -3072,7 +3072,7 @@ extern "C"
   }
 
   void
-  rpmostreecxx$cxxbridge1$RPMDiff$print (const ::rpmostreecxx::RPMDiff &self) noexcept
+  rpmostreecxx$cxxbridge1$RPMDiff$print (::rpmostreecxx::RPMDiff const &self) noexcept
   {
     void (::rpmostreecxx::RPMDiff::*print$) () const = &::rpmostreecxx::RPMDiff::print;
     (self.*print$) ();
@@ -3113,10 +3113,10 @@ extern "C"
   }
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$nevra_to_cache_branch (const ::std::string &nevra,
+  rpmostreecxx$cxxbridge1$nevra_to_cache_branch (::std::string const &nevra,
                                                  ::rust::String *return$) noexcept
   {
-    ::rust::String (*nevra_to_cache_branch$) (const ::std::string &)
+    ::rust::String (*nevra_to_cache_branch$) (::std::string const &)
         = ::rpmostreecxx::nevra_to_cache_branch;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
@@ -3145,11 +3145,11 @@ extern "C"
   }
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$rpmts_for_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str rev,
+  rpmostreecxx$cxxbridge1$rpmts_for_commit (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str rev,
                                             ::rpmostreecxx::RpmTs **return$) noexcept
   {
     ::std::unique_ptr< ::rpmostreecxx::RpmTs> (*rpmts_for_commit$) (
-        const ::rpmostreecxx::OstreeRepo &, ::rust::Str)
+        ::rpmostreecxx::OstreeRepo const &, ::rust::Str)
         = ::rpmostreecxx::rpmts_for_commit;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
@@ -3162,7 +3162,7 @@ extern "C"
   }
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$rpmdb_package_name_list (::std::int32_t dfd, const ::rust::String *path,
+  rpmostreecxx$cxxbridge1$rpmdb_package_name_list (::std::int32_t dfd, ::rust::String const *path,
                                                    ::rust::Vec< ::rust::String> *return$) noexcept
   {
     ::rust::Vec< ::rust::String> (*rpmdb_package_name_list$) (::std::int32_t, ::rust::String)
@@ -3180,7 +3180,7 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$RpmTs$packages_providing_file (
-      const ::rpmostreecxx::RpmTs &self, ::rust::Str path,
+      ::rpmostreecxx::RpmTs const &self, ::rust::Str path,
       ::rust::Vec< ::rust::String> *return$) noexcept
   {
     ::rust::Vec< ::rust::String> (::rpmostreecxx::RpmTs::*packages_providing_file$) (::rust::Str)
@@ -3197,7 +3197,7 @@ extern "C"
   }
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$RpmTs$package_meta (const ::rpmostreecxx::RpmTs &self, ::rust::Str name,
+  rpmostreecxx$cxxbridge1$RpmTs$package_meta (::rpmostreecxx::RpmTs const &self, ::rust::Str name,
                                               ::rpmostreecxx::PackageMeta **return$) noexcept
   {
     ::std::unique_ptr< ::rpmostreecxx::PackageMeta> (::rpmostreecxx::RpmTs::*package_meta$) (
@@ -3214,7 +3214,7 @@ extern "C"
   }
 
   ::std::uint64_t
-  rpmostreecxx$cxxbridge1$PackageMeta$size (const ::rpmostreecxx::PackageMeta &self) noexcept
+  rpmostreecxx$cxxbridge1$PackageMeta$size (::rpmostreecxx::PackageMeta const &self) noexcept
   {
     ::std::uint64_t (::rpmostreecxx::PackageMeta::*size$) () const
         = &::rpmostreecxx::PackageMeta::size;
@@ -3222,7 +3222,7 @@ extern "C"
   }
 
   ::std::uint64_t
-  rpmostreecxx$cxxbridge1$PackageMeta$buildtime (const ::rpmostreecxx::PackageMeta &self) noexcept
+  rpmostreecxx$cxxbridge1$PackageMeta$buildtime (::rpmostreecxx::PackageMeta const &self) noexcept
   {
     ::std::uint64_t (::rpmostreecxx::PackageMeta::*buildtime$) () const
         = &::rpmostreecxx::PackageMeta::buildtime;
@@ -3230,7 +3230,7 @@ extern "C"
   }
 
   void
-  rpmostreecxx$cxxbridge1$PackageMeta$changelogs (const ::rpmostreecxx::PackageMeta &self,
+  rpmostreecxx$cxxbridge1$PackageMeta$changelogs (::rpmostreecxx::PackageMeta const &self,
                                                   ::rust::Vec< ::std::uint64_t> *return$) noexcept
   {
     ::rust::Vec< ::std::uint64_t> (::rpmostreecxx::PackageMeta::*changelogs$) () const
@@ -3238,21 +3238,21 @@ extern "C"
     new (return$)::rust::Vec< ::std::uint64_t> ((self.*changelogs$) ());
   }
 
-  const ::std::string *
-  rpmostreecxx$cxxbridge1$PackageMeta$src_pkg (const ::rpmostreecxx::PackageMeta &self) noexcept
+  ::std::string const *
+  rpmostreecxx$cxxbridge1$PackageMeta$src_pkg (::rpmostreecxx::PackageMeta const &self) noexcept
   {
-    const ::std::string &(::rpmostreecxx::PackageMeta::*src_pkg$) () const
+    ::std::string const &(::rpmostreecxx::PackageMeta::*src_pkg$) () const
         = &::rpmostreecxx::PackageMeta::src_pkg;
     return &(self.*src_pkg$) ();
   }
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$package_variant_list_for_commit (
-      const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str rev,
-      const ::rpmostreecxx::GCancellable &cancellable, ::rpmostreecxx::GVariant **return$) noexcept
+      ::rpmostreecxx::OstreeRepo const &repo, ::rust::Str rev,
+      ::rpmostreecxx::GCancellable const &cancellable, ::rpmostreecxx::GVariant **return$) noexcept
   {
     ::rpmostreecxx::GVariant *(*package_variant_list_for_commit$) (
-        const ::rpmostreecxx::OstreeRepo &, ::rust::Str, const ::rpmostreecxx::GCancellable &)
+        ::rpmostreecxx::OstreeRepo const &, ::rust::Str, ::rpmostreecxx::GCancellable const &)
         = ::rpmostreecxx::package_variant_list_for_commit;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
@@ -3348,7 +3348,7 @@ client_handle_fd_argument (::rust::Str arg, ::rust::Str arch, bool is_replace)
 }
 
 ::rust::String
-client_render_download_progress (const ::rpmostreecxx::GVariant &progress) noexcept
+client_render_download_progress (::rpmostreecxx::GVariant const &progress) noexcept
 {
   ::rust::MaybeUninit< ::rust::String> return$;
   rpmostreecxx$cxxbridge1$client_render_download_progress (progress, &return$.value);
@@ -3406,7 +3406,7 @@ bubblewrap_selftest ()
 }
 
 ::rust::Vec< ::std::uint8_t>
-bubblewrap_run_sync (::std::int32_t rootfs_dfd, const ::rust::Vec< ::rust::String> &args,
+bubblewrap_run_sync (::std::int32_t rootfs_dfd, ::rust::Vec< ::rust::String> const &args,
                      bool capture_stdout, bool unified_core)
 {
   ::rust::MaybeUninit< ::rust::Vec< ::std::uint8_t> > return$;
@@ -3528,7 +3528,7 @@ Bubblewrap::setup_compat_var ()
 }
 
 void
-Bubblewrap::run (const ::rpmostreecxx::GCancellable &cancellable)
+Bubblewrap::run (::rpmostreecxx::GCancellable const &cancellable)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Bubblewrap$run (*this, cancellable);
   if (error$.ptr)
@@ -3538,7 +3538,7 @@ Bubblewrap::run (const ::rpmostreecxx::GCancellable &cancellable)
 }
 
 void
-usroverlay_entrypoint (const ::rust::Vec< ::rust::String> &args)
+usroverlay_entrypoint (::rust::Vec< ::rust::String> const &args)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$usroverlay_entrypoint (args);
   if (error$.ptr)
@@ -3548,7 +3548,7 @@ usroverlay_entrypoint (const ::rust::Vec< ::rust::String> &args)
 }
 
 void
-applylive_entrypoint (const ::rust::Vec< ::rust::String> &args)
+applylive_entrypoint (::rust::Vec< ::rust::String> const &args)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$applylive_entrypoint (args);
   if (error$.ptr)
@@ -3558,7 +3558,7 @@ applylive_entrypoint (const ::rust::Vec< ::rust::String> &args)
 }
 
 void
-applylive_finish (const ::rpmostreecxx::OstreeSysroot &sysroot)
+applylive_finish (::rpmostreecxx::OstreeSysroot const &sysroot)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$applylive_finish (sysroot);
   if (error$.ptr)
@@ -3605,7 +3605,7 @@ cliwrap_write_wrappers (::std::int32_t rootfs)
 }
 
 void
-cliwrap_write_some_wrappers (::std::int32_t rootfs, const ::rust::Vec< ::rust::String> &args)
+cliwrap_write_some_wrappers (::std::int32_t rootfs, ::rust::Vec< ::rust::String> const &args)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$cliwrap_write_some_wrappers (rootfs, args);
   if (error$.ptr)
@@ -3645,8 +3645,8 @@ deploy_from_self_entrypoint (::rust::Vec< ::rust::String> args)
 }
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
-pull_container (const ::rpmostreecxx::OstreeRepo &repo,
-                const ::rpmostreecxx::GCancellable &cancellable, ::rust::Str imgref)
+pull_container (::rpmostreecxx::OstreeRepo const &repo,
+                ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref)
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::ContainerImageState> > return$;
   ::rust::repr::PtrLen error$
@@ -3659,8 +3659,8 @@ pull_container (const ::rpmostreecxx::OstreeRepo &repo,
 }
 
 void
-container_prune (const ::rpmostreecxx::OstreeRepo &repo,
-                 const ::rpmostreecxx::GCancellable &cancellable)
+container_prune (::rpmostreecxx::OstreeRepo const &repo,
+                 ::rpmostreecxx::GCancellable const &cancellable)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$container_prune (repo, cancellable);
   if (error$.ptr)
@@ -3670,7 +3670,7 @@ container_prune (const ::rpmostreecxx::OstreeRepo &repo,
 }
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
-query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str c)
+query_container_image_commit (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str c)
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::ContainerImageState> > return$;
   ::rust::repr::PtrLen error$
@@ -3683,7 +3683,7 @@ query_container_image_commit (const ::rpmostreecxx::OstreeRepo &repo, ::rust::St
 }
 
 void
-purge_refspec (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str refspec)
+purge_refspec (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str refspec)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$purge_refspec (repo, refspec);
   if (error$.ptr)
@@ -3773,7 +3773,7 @@ run_depmod (::std::int32_t rootfs_dfd, ::rust::Str kver, bool unified_core)
 }
 
 void
-log_treefile (const ::rpmostreecxx::Treefile &tf) noexcept
+log_treefile (::rpmostreecxx::Treefile const &tf) noexcept
 {
   rpmostreecxx$cxxbridge1$log_treefile (tf);
 }
@@ -3829,8 +3829,8 @@ stage_container_rpm_raw_fds (::rust::Vec< ::std::int32_t> fds)
 }
 
 bool
-commit_has_matching_sepolicy (const ::rpmostreecxx::GVariant &commit,
-                              const ::rpmostreecxx::OstreeSePolicy &policy)
+commit_has_matching_sepolicy (::rpmostreecxx::GVariant const &commit,
+                              ::rpmostreecxx::OstreeSePolicy const &policy)
 {
   ::rust::MaybeUninit<bool> return$;
   ::rust::repr::PtrLen error$
@@ -3843,7 +3843,7 @@ commit_has_matching_sepolicy (const ::rpmostreecxx::GVariant &commit,
 }
 
 ::rpmostreecxx::GVariant *
-get_header_variant (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str cachebranch)
+get_header_variant (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str cachebranch)
 {
   ::rust::MaybeUninit< ::rpmostreecxx::GVariant *> return$;
   ::rust::repr::PtrLen error$
@@ -3867,8 +3867,8 @@ compose_image (::rust::Vec< ::rust::String> args)
 }
 
 void
-configure_build_repo_from_target (const ::rpmostreecxx::OstreeRepo &build_repo,
-                                  const ::rpmostreecxx::OstreeRepo &target_repo)
+configure_build_repo_from_target (::rpmostreecxx::OstreeRepo const &build_repo,
+                                  ::rpmostreecxx::OstreeRepo const &target_repo)
 {
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$configure_build_repo_from_target (build_repo, target_repo);
@@ -3924,7 +3924,7 @@ compose_postprocess_final (::std::int32_t rootfs_dfd)
 
 void
 convert_var_to_tmpfiles_d (::std::int32_t rootfs_dfd,
-                           const ::rpmostreecxx::GCancellable &cancellable)
+                           ::rpmostreecxx::GCancellable const &cancellable)
 {
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$convert_var_to_tmpfiles_d (rootfs_dfd, cancellable);
@@ -3999,7 +3999,7 @@ rewrite_rpmdb_for_target (::std::int32_t rootfs_dfd, bool normalize)
 }
 
 ::std::uint64_t
-directory_size (::std::int32_t dfd, const ::rpmostreecxx::GCancellable &cancellable)
+directory_size (::std::int32_t dfd, ::rpmostreecxx::GCancellable const &cancellable)
 {
   ::rust::MaybeUninit< ::std::uint64_t> return$;
   ::rust::repr::PtrLen error$
@@ -4052,7 +4052,7 @@ deployment_get_base (::rpmostreecxx::OstreeSysroot &sysroot, ::rust::Str opt_dep
 }
 
 void
-daemon_sanitycheck_environment (const ::rpmostreecxx::OstreeSysroot &sysroot)
+daemon_sanitycheck_environment (::rpmostreecxx::OstreeSysroot const &sysroot)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$daemon_sanitycheck_environment (sysroot);
   if (error$.ptr)
@@ -4062,7 +4062,7 @@ daemon_sanitycheck_environment (const ::rpmostreecxx::OstreeSysroot &sysroot)
 }
 
 ::rust::String
-deployment_generate_id (const ::rpmostreecxx::OstreeDeployment &deployment) noexcept
+deployment_generate_id (::rpmostreecxx::OstreeDeployment const &deployment) noexcept
 {
   ::rust::MaybeUninit< ::rust::String> return$;
   rpmostreecxx$cxxbridge1$deployment_generate_id (deployment, &return$.value);
@@ -4070,9 +4070,9 @@ deployment_generate_id (const ::rpmostreecxx::OstreeDeployment &deployment) noex
 }
 
 void
-deployment_populate_variant (const ::rpmostreecxx::OstreeSysroot &sysroot,
-                             const ::rpmostreecxx::OstreeDeployment &deployment,
-                             const ::rpmostreecxx::GVariantDict &dict)
+deployment_populate_variant (::rpmostreecxx::OstreeSysroot const &sysroot,
+                             ::rpmostreecxx::OstreeDeployment const &deployment,
+                             ::rpmostreecxx::GVariantDict const &dict)
 {
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$deployment_populate_variant (sysroot, deployment, dict);
@@ -4083,9 +4083,9 @@ deployment_populate_variant (const ::rpmostreecxx::OstreeSysroot &sysroot,
 }
 
 void
-generate_baselayer_refs (const ::rpmostreecxx::OstreeSysroot &sysroot,
-                         const ::rpmostreecxx::OstreeRepo &repo,
-                         const ::rpmostreecxx::GCancellable &cancellable)
+generate_baselayer_refs (::rpmostreecxx::OstreeSysroot const &sysroot,
+                         ::rpmostreecxx::OstreeRepo const &repo,
+                         ::rpmostreecxx::GCancellable const &cancellable)
 {
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$generate_baselayer_refs (sysroot, repo, cancellable);
@@ -4096,8 +4096,8 @@ generate_baselayer_refs (const ::rpmostreecxx::OstreeSysroot &sysroot,
 }
 
 void
-variant_add_remote_status (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str refspec,
-                           ::rust::Str base_checksum, const ::rpmostreecxx::GVariantDict &dict)
+variant_add_remote_status (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str refspec,
+                           ::rust::Str base_checksum, ::rpmostreecxx::GVariantDict const &dict)
 {
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$variant_add_remote_status (repo, refspec, base_checksum, dict);
@@ -4108,8 +4108,8 @@ variant_add_remote_status (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str r
 }
 
 ::rpmostreecxx::DeploymentLayeredMeta
-deployment_layeredmeta_from_commit (const ::rpmostreecxx::OstreeDeployment &deployment,
-                                    const ::rpmostreecxx::GVariant &commit)
+deployment_layeredmeta_from_commit (::rpmostreecxx::OstreeDeployment const &deployment,
+                                    ::rpmostreecxx::GVariant const &commit)
 {
   ::rust::MaybeUninit< ::rpmostreecxx::DeploymentLayeredMeta> return$;
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$deployment_layeredmeta_from_commit (
@@ -4122,8 +4122,8 @@ deployment_layeredmeta_from_commit (const ::rpmostreecxx::OstreeDeployment &depl
 }
 
 ::rpmostreecxx::DeploymentLayeredMeta
-deployment_layeredmeta_load (const ::rpmostreecxx::OstreeRepo &repo,
-                             const ::rpmostreecxx::OstreeDeployment &deployment)
+deployment_layeredmeta_load (::rpmostreecxx::OstreeRepo const &repo,
+                             ::rpmostreecxx::OstreeDeployment const &deployment)
 {
   ::rust::MaybeUninit< ::rpmostreecxx::DeploymentLayeredMeta> return$;
   ::rust::repr::PtrLen error$
@@ -4222,7 +4222,7 @@ RpmImporter::layout::align () noexcept
 
 ::rust::Box< ::rpmostreecxx::RpmImporter>
 rpm_importer_new (::rust::Str pkg_name, ::rust::Str ostree_branch,
-                  const ::rpmostreecxx::RpmImporterFlags &flags)
+                  ::rpmostreecxx::RpmImporterFlags const &flags)
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::RpmImporter> > return$;
   ::rust::repr::PtrLen error$
@@ -4301,13 +4301,13 @@ RpmImporter::is_ima_enabled () const noexcept
 }
 
 void
-RpmImporter::tweak_imported_file_info (const ::rpmostreecxx::GFileInfo &file_info) const noexcept
+RpmImporter::tweak_imported_file_info (::rpmostreecxx::GFileInfo const &file_info) const noexcept
 {
   rpmostreecxx$cxxbridge1$RpmImporter$tweak_imported_file_info (*this, file_info);
 }
 
 bool
-RpmImporter::is_file_filtered (::rust::Str path, const ::rpmostreecxx::GFileInfo &file_info) const
+RpmImporter::is_file_filtered (::rust::Str path, ::rpmostreecxx::GFileInfo const &file_info) const
 {
   ::rust::MaybeUninit<bool> return$;
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$RpmImporter$is_file_filtered (
@@ -4321,7 +4321,7 @@ RpmImporter::is_file_filtered (::rust::Str path, const ::rpmostreecxx::GFileInfo
 
 void
 RpmImporter::translate_to_tmpfiles_entry (::rust::Str abs_path,
-                                          const ::rpmostreecxx::GFileInfo &file_info,
+                                          ::rpmostreecxx::GFileInfo const &file_info,
                                           ::rust::Str username, ::rust::Str groupname)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$RpmImporter$translate_to_tmpfiles_entry (
@@ -4347,7 +4347,7 @@ RpmImporter::serialize_tmpfiles_content () const noexcept
 }
 
 ::rust::String
-tmpfiles_translate (::rust::Str abs_path, const ::rpmostreecxx::GFileInfo &file_info,
+tmpfiles_translate (::rust::Str abs_path, ::rpmostreecxx::GFileInfo const &file_info,
                     ::rust::Str username, ::rust::Str groupname)
 {
   ::rust::MaybeUninit< ::rust::String> return$;
@@ -4360,15 +4360,15 @@ tmpfiles_translate (::rust::Str abs_path, const ::rpmostreecxx::GFileInfo &file_
   return ::std::move (return$.value);
 }
 
-::rust::Slice<const ::std::uint8_t>
+::rust::Slice< ::std::uint8_t const>
 get_dracut_random_cpio () noexcept
 {
-  return ::rust::impl< ::rust::Slice<const ::std::uint8_t> >::slice (
+  return ::rust::impl< ::rust::Slice< ::std::uint8_t const> >::slice (
       rpmostreecxx$cxxbridge1$get_dracut_random_cpio ());
 }
 
 ::std::int32_t
-initramfs_overlay_generate (const ::rust::Vec< ::rust::String> &files,
+initramfs_overlay_generate (::rust::Vec< ::rust::String> const &files,
                             ::rpmostreecxx::GCancellable &cancellable)
 {
   ::rust::MaybeUninit< ::std::int32_t> return$;
@@ -4430,13 +4430,13 @@ console_progress_end (::rust::Str suffix) noexcept
 }
 
 bool
-HistoryEntry::operator== (const HistoryEntry &rhs) const noexcept
+HistoryEntry::operator== (HistoryEntry const &rhs) const noexcept
 {
   return rpmostreecxx$cxxbridge1$HistoryEntry$operator$eq (*this, rhs);
 }
 
 bool
-HistoryEntry::operator!= (const HistoryEntry &rhs) const noexcept
+HistoryEntry::operator!= (HistoryEntry const &rhs) const noexcept
 {
   return rpmostreecxx$cxxbridge1$HistoryEntry$operator$ne (*this, rhs);
 }
@@ -4489,7 +4489,7 @@ history_prune ()
 }
 
 void
-modularity_entrypoint (const ::rust::Vec< ::rust::String> &args)
+modularity_entrypoint (::rust::Vec< ::rust::String> const &args)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$modularity_entrypoint (args);
   if (error$.ptr)
@@ -4562,25 +4562,25 @@ maybe_shell_quote (::rust::Str input) noexcept
 }
 
 bool
-Refspec::operator== (const Refspec &rhs) const noexcept
+Refspec::operator== (Refspec const &rhs) const noexcept
 {
   return rpmostreecxx$cxxbridge1$Refspec$operator$eq (*this, rhs);
 }
 
 bool
-Refspec::operator!= (const Refspec &rhs) const noexcept
+Refspec::operator!= (Refspec const &rhs) const noexcept
 {
   return !(*this == rhs);
 }
 
 bool
-OverrideReplacement::operator== (const OverrideReplacement &rhs) const noexcept
+OverrideReplacement::operator== (OverrideReplacement const &rhs) const noexcept
 {
   return rpmostreecxx$cxxbridge1$OverrideReplacement$operator$eq (*this, rhs);
 }
 
 bool
-OverrideReplacement::operator!= (const OverrideReplacement &rhs) const noexcept
+OverrideReplacement::operator!= (OverrideReplacement const &rhs) const noexcept
 {
   return !(*this == rhs);
 }
@@ -5163,7 +5163,7 @@ Treefile::get_files_remove_regex (::rust::Str package) const noexcept
 }
 
 ::rust::String
-Treefile::get_checksum (const ::rpmostreecxx::OstreeRepo &repo) const
+Treefile::get_checksum (::rpmostreecxx::OstreeRepo const &repo) const
 {
   ::rust::MaybeUninit< ::rust::String> return$;
   ::rust::repr::PtrLen error$
@@ -5183,10 +5183,10 @@ Treefile::get_ostree_ref () const noexcept
   return ::std::move (return$.value);
 }
 
-::rust::Slice<const ::rpmostreecxx::RepoPackage>
+::rust::Slice< ::rpmostreecxx::RepoPackage const>
 Treefile::get_repo_packages () const noexcept
 {
-  return ::rust::impl< ::rust::Slice<const ::rpmostreecxx::RepoPackage> >::slice (
+  return ::rust::impl< ::rust::Slice< ::rpmostreecxx::RepoPackage const> >::slice (
       rpmostreecxx$cxxbridge1$Treefile$get_repo_packages (*this));
 }
 
@@ -5446,7 +5446,7 @@ RepoPackage::get_packages () const noexcept
 }
 
 ::rust::String
-varsubstitute (::rust::Str s, const ::rust::Vec< ::rpmostreecxx::StringMapping> &vars)
+varsubstitute (::rust::Str s, ::rust::Vec< ::rpmostreecxx::StringMapping> const &vars)
 {
   ::rust::MaybeUninit< ::rust::String> return$;
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$varsubstitute (s, vars, &return$.value);
@@ -5474,7 +5474,7 @@ get_rpm_basearch () noexcept
 }
 
 ::std::int32_t
-sealed_memfd (::rust::Str description, ::rust::Slice<const ::std::uint8_t> content)
+sealed_memfd (::rust::Str description, ::rust::Slice< ::std::uint8_t const> content)
 {
   ::rust::MaybeUninit< ::std::int32_t> return$;
   ::rust::repr::PtrLen error$
@@ -5493,7 +5493,7 @@ running_in_systemd () noexcept
 }
 
 ::rpmostreecxx::GVariant *
-calculate_advisories_diff (const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str checksum_from,
+calculate_advisories_diff (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str checksum_from,
                            ::rust::Str checksum_to)
 {
   ::rust::MaybeUninit< ::rpmostreecxx::GVariant *> return$;
@@ -5515,8 +5515,8 @@ translate_path_for_ostree (::rust::Str path) noexcept
 }
 
 ::rpmostreecxx::LiveApplyState
-get_live_apply_state (const ::rpmostreecxx::OstreeSysroot &sysroot,
-                      const ::rpmostreecxx::OstreeDeployment &deployment)
+get_live_apply_state (::rpmostreecxx::OstreeSysroot const &sysroot,
+                      ::rpmostreecxx::OstreeDeployment const &deployment)
 {
   ::rust::MaybeUninit< ::rpmostreecxx::LiveApplyState> return$;
   ::rust::repr::PtrLen error$
@@ -5529,8 +5529,8 @@ get_live_apply_state (const ::rpmostreecxx::OstreeSysroot &sysroot,
 }
 
 bool
-has_live_apply_state (const ::rpmostreecxx::OstreeSysroot &sysroot,
-                      const ::rpmostreecxx::OstreeDeployment &deployment)
+has_live_apply_state (::rpmostreecxx::OstreeSysroot const &sysroot,
+                      ::rpmostreecxx::OstreeDeployment const &deployment)
 {
   ::rust::MaybeUninit<bool> return$;
   ::rust::repr::PtrLen error$
@@ -5543,7 +5543,7 @@ has_live_apply_state (const ::rpmostreecxx::OstreeSysroot &sysroot,
 }
 
 void
-applylive_sync_ref (const ::rpmostreecxx::OstreeSysroot &sysroot)
+applylive_sync_ref (::rpmostreecxx::OstreeSysroot const &sysroot)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$applylive_sync_ref (sysroot);
   if (error$.ptr)
@@ -5553,8 +5553,8 @@ applylive_sync_ref (const ::rpmostreecxx::OstreeSysroot &sysroot)
 }
 
 void
-transaction_apply_live (const ::rpmostreecxx::OstreeSysroot &sysroot,
-                        const ::rpmostreecxx::GVariant &target)
+transaction_apply_live (::rpmostreecxx::OstreeSysroot const &sysroot,
+                        ::rpmostreecxx::GVariant const &target)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$transaction_apply_live (sysroot, target);
   if (error$.ptr)
@@ -5598,7 +5598,7 @@ passwd_cleanup (::std::int32_t rootfs)
 
 void
 migrate_group_except_root (::std::int32_t rootfs,
-                           const ::rust::Vec< ::rust::String> &preserved_groups)
+                           ::rust::Vec< ::rust::String> const &preserved_groups)
 {
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$migrate_group_except_root (rootfs, preserved_groups);
@@ -5630,7 +5630,7 @@ passwd_compose_prep (::std::int32_t rootfs, ::rpmostreecxx::Treefile &treefile)
 
 void
 passwd_compose_prep_repo (::std::int32_t rootfs, ::rpmostreecxx::Treefile &treefile,
-                          const ::rpmostreecxx::OstreeRepo &repo, ::rust::Str previous_checksum,
+                          ::rpmostreecxx::OstreeRepo const &repo, ::rust::Str previous_checksum,
                           bool unified_core)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$passwd_compose_prep_repo (
@@ -5668,7 +5668,7 @@ dir_contains_gid (::std::int32_t dirfd, ::std::uint32_t id)
 }
 
 void
-check_passwd_group_entries (const ::rpmostreecxx::OstreeRepo &ffi_repo, ::std::int32_t rootfs_dfd,
+check_passwd_group_entries (::rpmostreecxx::OstreeRepo const &ffi_repo, ::std::int32_t rootfs_dfd,
                             ::rpmostreecxx::Treefile &treefile, ::rust::Str previous_rev)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$check_passwd_group_entries (
@@ -5822,7 +5822,7 @@ Extensions::layout::align () noexcept
 
 ::rust::Box< ::rpmostreecxx::Extensions>
 extensions_load (::rust::Str path, ::rust::Str basearch,
-                 const ::rust::Vec< ::rpmostreecxx::StringMapping> &base_pkgs)
+                 ::rust::Vec< ::rpmostreecxx::StringMapping> const &base_pkgs)
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::Extensions> > return$;
   ::rust::repr::PtrLen error$
@@ -5894,7 +5894,7 @@ Extensions::serialize_to_dir (::rust::Str output_dir) const
 }
 
 ::rust::Box< ::rpmostreecxx::Treefile>
-Extensions::generate_treefile (const ::rpmostreecxx::Treefile &src) const
+Extensions::generate_treefile (::rpmostreecxx::Treefile const &src) const
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::Treefile> > return$;
   ::rust::repr::PtrLen error$
@@ -5919,7 +5919,7 @@ LockfileConfig::layout::align () noexcept
 }
 
 ::rust::Box< ::rpmostreecxx::LockfileConfig>
-lockfile_read (const ::rust::Vec< ::rust::String> &filenames)
+lockfile_read (::rust::Vec< ::rust::String> const &filenames)
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::LockfileConfig> > return$;
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$lockfile_read (filenames, &return$.value);
@@ -5956,7 +5956,7 @@ LockfileConfig::get_locked_packages () const
 }
 
 ::rust::Box< ::rpmostreecxx::Treefile>
-origin_to_treefile (const ::rpmostreecxx::GKeyFile &kf)
+origin_to_treefile (::rpmostreecxx::GKeyFile const &kf)
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::Treefile> > return$;
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$origin_to_treefile (kf, &return$.value);
@@ -5968,7 +5968,7 @@ origin_to_treefile (const ::rpmostreecxx::GKeyFile &kf)
 }
 
 ::rpmostreecxx::GKeyFile *
-treefile_to_origin (const ::rpmostreecxx::Treefile &tf)
+treefile_to_origin (::rpmostreecxx::Treefile const &tf)
 {
   ::rust::MaybeUninit< ::rpmostreecxx::GKeyFile *> return$;
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$treefile_to_origin (tf, &return$.value);
@@ -5980,7 +5980,7 @@ treefile_to_origin (const ::rpmostreecxx::Treefile &tf)
 }
 
 void
-origin_validate_roundtrip (const ::rpmostreecxx::GKeyFile &kf) noexcept
+origin_validate_roundtrip (::rpmostreecxx::GKeyFile const &kf) noexcept
 {
   rpmostreecxx$cxxbridge1$origin_validate_roundtrip (kf);
 }
@@ -6053,16 +6053,16 @@ extern "C"
   cxxbridge1$box$rpmostreecxx$Treefile$drop (::rust::Box< ::rpmostreecxx::Treefile> *ptr) noexcept;
 
   void cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$new (
-      const ::rust::Vec< ::rpmostreecxx::OverrideReplacement> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::OverrideReplacement> const *ptr) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$drop (
       ::rust::Vec< ::rpmostreecxx::OverrideReplacement> *ptr) noexcept;
   ::std::size_t cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$len (
-      const ::rust::Vec< ::rpmostreecxx::OverrideReplacement> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::OverrideReplacement> const *ptr) noexcept;
   ::std::size_t cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$capacity (
-      const ::rust::Vec< ::rpmostreecxx::OverrideReplacement> *ptr) noexcept;
-  const ::rpmostreecxx::OverrideReplacement *
+      ::rust::Vec< ::rpmostreecxx::OverrideReplacement> const *ptr) noexcept;
+  ::rpmostreecxx::OverrideReplacement const *
   cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$data (
-      const ::rust::Vec< ::rpmostreecxx::OverrideReplacement> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::OverrideReplacement> const *ptr) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$reserve_total (
       ::rust::Vec< ::rpmostreecxx::OverrideReplacement> *ptr, ::std::size_t new_cap) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$set_len (
@@ -6071,15 +6071,15 @@ extern "C"
       ::rust::Vec< ::rpmostreecxx::OverrideReplacement> *ptr, ::std::size_t len) noexcept;
 
   void cxxbridge1$rust_vec$rpmostreecxx$StringMapping$new (
-      const ::rust::Vec< ::rpmostreecxx::StringMapping> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::StringMapping> const *ptr) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$StringMapping$drop (
       ::rust::Vec< ::rpmostreecxx::StringMapping> *ptr) noexcept;
   ::std::size_t cxxbridge1$rust_vec$rpmostreecxx$StringMapping$len (
-      const ::rust::Vec< ::rpmostreecxx::StringMapping> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::StringMapping> const *ptr) noexcept;
   ::std::size_t cxxbridge1$rust_vec$rpmostreecxx$StringMapping$capacity (
-      const ::rust::Vec< ::rpmostreecxx::StringMapping> *ptr) noexcept;
-  const ::rpmostreecxx::StringMapping *cxxbridge1$rust_vec$rpmostreecxx$StringMapping$data (
-      const ::rust::Vec< ::rpmostreecxx::StringMapping> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::StringMapping> const *ptr) noexcept;
+  ::rpmostreecxx::StringMapping const *cxxbridge1$rust_vec$rpmostreecxx$StringMapping$data (
+      ::rust::Vec< ::rpmostreecxx::StringMapping> const *ptr) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$StringMapping$reserve_total (
       ::rust::Vec< ::rpmostreecxx::StringMapping> *ptr, ::std::size_t new_cap) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$StringMapping$set_len (
@@ -6109,15 +6109,15 @@ extern "C"
       ::rust::Box< ::rpmostreecxx::LockfileConfig> *ptr) noexcept;
 
   void cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$new (
-      const ::rust::Vec< ::rpmostreecxx::LockedPackage> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::LockedPackage> const *ptr) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$drop (
       ::rust::Vec< ::rpmostreecxx::LockedPackage> *ptr) noexcept;
   ::std::size_t cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$len (
-      const ::rust::Vec< ::rpmostreecxx::LockedPackage> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::LockedPackage> const *ptr) noexcept;
   ::std::size_t cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$capacity (
-      const ::rust::Vec< ::rpmostreecxx::LockedPackage> *ptr) noexcept;
-  const ::rpmostreecxx::LockedPackage *cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$data (
-      const ::rust::Vec< ::rpmostreecxx::LockedPackage> *ptr) noexcept;
+      ::rust::Vec< ::rpmostreecxx::LockedPackage> const *ptr) noexcept;
+  ::rpmostreecxx::LockedPackage const *cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$data (
+      ::rust::Vec< ::rpmostreecxx::LockedPackage> const *ptr) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$reserve_total (
       ::rust::Vec< ::rpmostreecxx::LockedPackage> *ptr, ::std::size_t new_cap) noexcept;
   void cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$set_len (
@@ -6144,9 +6144,9 @@ extern "C"
   {
     ::new (ptr)::std::unique_ptr< ::rpmostreecxx::ClientConnection> (raw);
   }
-  const ::rpmostreecxx::ClientConnection *
+  ::rpmostreecxx::ClientConnection const *
   cxxbridge1$unique_ptr$rpmostreecxx$ClientConnection$get (
-      const ::std::unique_ptr< ::rpmostreecxx::ClientConnection> &ptr) noexcept
+      ::std::unique_ptr< ::rpmostreecxx::ClientConnection> const &ptr) noexcept
   {
     return ptr.get ();
   }
@@ -6180,9 +6180,9 @@ extern "C"
   {
     ::new (ptr)::std::unique_ptr< ::rpmostreecxx::RPMDiff> (raw);
   }
-  const ::rpmostreecxx::RPMDiff *
+  ::rpmostreecxx::RPMDiff const *
   cxxbridge1$unique_ptr$rpmostreecxx$RPMDiff$get (
-      const ::std::unique_ptr< ::rpmostreecxx::RPMDiff> &ptr) noexcept
+      ::std::unique_ptr< ::rpmostreecxx::RPMDiff> const &ptr) noexcept
   {
     return ptr.get ();
   }
@@ -6215,9 +6215,9 @@ extern "C"
   {
     ::new (ptr)::std::unique_ptr< ::rpmostreecxx::Progress> (raw);
   }
-  const ::rpmostreecxx::Progress *
+  ::rpmostreecxx::Progress const *
   cxxbridge1$unique_ptr$rpmostreecxx$Progress$get (
-      const ::std::unique_ptr< ::rpmostreecxx::Progress> &ptr) noexcept
+      ::std::unique_ptr< ::rpmostreecxx::Progress> const &ptr) noexcept
   {
     return ptr.get ();
   }
@@ -6250,9 +6250,9 @@ extern "C"
   {
     ::new (ptr)::std::unique_ptr< ::rpmostreecxx::RpmTs> (raw);
   }
-  const ::rpmostreecxx::RpmTs *
+  ::rpmostreecxx::RpmTs const *
   cxxbridge1$unique_ptr$rpmostreecxx$RpmTs$get (
-      const ::std::unique_ptr< ::rpmostreecxx::RpmTs> &ptr) noexcept
+      ::std::unique_ptr< ::rpmostreecxx::RpmTs> const &ptr) noexcept
   {
     return ptr.get ();
   }
@@ -6286,9 +6286,9 @@ extern "C"
   {
     ::new (ptr)::std::unique_ptr< ::rpmostreecxx::PackageMeta> (raw);
   }
-  const ::rpmostreecxx::PackageMeta *
+  ::rpmostreecxx::PackageMeta const *
   cxxbridge1$unique_ptr$rpmostreecxx$PackageMeta$get (
-      const ::std::unique_ptr< ::rpmostreecxx::PackageMeta> &ptr) noexcept
+      ::std::unique_ptr< ::rpmostreecxx::PackageMeta> const &ptr) noexcept
   {
     return ptr.get ();
   }
@@ -6517,7 +6517,7 @@ Vec< ::rpmostreecxx::OverrideReplacement>::capacity () const noexcept
   return cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$capacity (this);
 }
 template <>
-const ::rpmostreecxx::OverrideReplacement *
+::rpmostreecxx::OverrideReplacement const *
 Vec< ::rpmostreecxx::OverrideReplacement>::data () const noexcept
 {
   return cxxbridge1$rust_vec$rpmostreecxx$OverrideReplacement$data (this);
@@ -6563,7 +6563,7 @@ Vec< ::rpmostreecxx::StringMapping>::capacity () const noexcept
   return cxxbridge1$rust_vec$rpmostreecxx$StringMapping$capacity (this);
 }
 template <>
-const ::rpmostreecxx::StringMapping *
+::rpmostreecxx::StringMapping const *
 Vec< ::rpmostreecxx::StringMapping>::data () const noexcept
 {
   return cxxbridge1$rust_vec$rpmostreecxx$StringMapping$data (this);
@@ -6683,7 +6683,7 @@ Vec< ::rpmostreecxx::LockedPackage>::capacity () const noexcept
   return cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$capacity (this);
 }
 template <>
-const ::rpmostreecxx::LockedPackage *
+::rpmostreecxx::LockedPackage const *
 Vec< ::rpmostreecxx::LockedPackage>::data () const noexcept
 {
   return cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$data (this);
