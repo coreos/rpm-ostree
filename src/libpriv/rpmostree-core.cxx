@@ -2408,6 +2408,11 @@ rpmostree_context_download (RpmOstreeContext *self, GCancellable *cancellable, G
   else
     return TRUE;
 
+  // For now just make this a warning for debugging https://github.com/coreos/rpm-ostree/issues/4565
+  // It may be that people are actually relying on this behavior too...
+  if (self->dnf_cache_policy == RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER)
+    g_printerr ("warning: Found %u packages to download in cache-only mode\n",
+                self->pkgs_to_download->len);
   return rpmostree_download_packages (self->pkgs_to_download, cancellable, error);
 }
 
