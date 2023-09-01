@@ -2541,7 +2541,8 @@ rpmostree_context_import (RpmOstreeContext *self, GCancellable *cancellable, GEr
       return glnx_prefix_error (error, "importing RPMs");
     }
 
-  self->async_progress->end ("");
+  g_autofree char *import_done_msg = g_strdup_printf ("done: %u", self->pkgs_to_import->len);
+  self->async_progress->end (import_done_msg);
   self->async_progress.release ();
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
