@@ -80,6 +80,11 @@ if rpm-ostree ex rebuild 2>err.txt; then
 fi
 assert_file_has_content_literal err.txt 'error: This command can only run in an OSTree container'
 
+if rpm-ostree install --enablerepo=blah foo 2>err.txt; then
+    fatal "enablerepo should not have worked"
+fi
+assert_file_has_content err.txt 'enablerepo currently only works in a container build'
+
 rpm-ostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
 assert_file_has_content_literal jsonpath.txt 'true'
 echo "ok jsonpath"
