@@ -264,6 +264,14 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
         }
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
+  else
+    {
+      // This very much relates to https://github.com/coreos/rpm-ostree/issues/2326 etc.
+      if (opt_enable_repo)
+        return glnx_throw (error, "--enablerepo currently only works in a container build");
+      if (opt_disable_repo)
+        return glnx_throw (error, "--disablerepo currently only works in a container build");
+    }
 
   return pkg_change (invocation, sysroot_proxy, FALSE, (const char *const *)argv,
                      (const char *const *)opt_uninstall, cancellable, error);
