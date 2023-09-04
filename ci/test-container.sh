@@ -76,7 +76,7 @@ versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
 case $versionid in
   38)
-    url_suffix=2.15.0/4.fc37/x86_64/ignition-2.15.0-4.fc37.x86_64.rpm
+    url_suffix=2.15.0/4.fc39/x86_64/ignition-2.15.0-4.fc39.x86_64.rpm
     # 2.15.0-3
     koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2174317"
