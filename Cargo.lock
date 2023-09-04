@@ -266,7 +266,7 @@ dependencies = [
  "openssl",
  "ostree-ext",
  "regex",
- "rustix 0.37.20",
+ "rustix 0.37.23",
  "schemars",
  "serde",
  "serde_json",
@@ -319,7 +319,7 @@ dependencies = [
  "io-lifetimes",
  "ipnet",
  "maybe-owned",
- "rustix 0.37.20",
+ "rustix 0.37.23",
  "windows-sys 0.48.0",
  "winx",
 ]
@@ -334,7 +334,7 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes",
- "rustix 0.37.20",
+ "rustix 0.37.23",
 ]
 
 [[package]]
@@ -344,7 +344,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6012b1e726e3e3ccf8151e2dc9cb454e593e0e7623b0e35464f5e62a15158c27"
 dependencies = [
  "cap-tempfile",
- "rustix 0.37.20",
+ "rustix 0.37.23",
 ]
 
 [[package]]
@@ -355,7 +355,7 @@ checksum = "6fd9864347f55a9c31de436ec9d7d3577476f3e6eeb3cc44ae2204de9164f78d"
 dependencies = [
  "cap-std",
  "rand",
- "rustix 0.37.20",
+ "rustix 0.37.23",
  "uuid 1.3.2",
 ]
 
@@ -513,7 +513,7 @@ dependencies = [
  "nix 0.26.2",
  "oci-spec",
  "once_cell",
- "rustix 0.37.20",
+ "rustix 0.37.23",
  "semver",
  "serde",
  "serde_json",
@@ -1012,7 +1012,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7833d0f115a013d51c55950a3b09d30e4b057be9961b709acb9b5b17a1108861"
 dependencies = [
  "io-lifetimes",
- "rustix 0.37.20",
+ "rustix 0.37.23",
  "windows-sys 0.48.0",
 ]
 
@@ -1895,7 +1895,7 @@ version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffc89ccdc6e10d6907450f753537ebc5c5d3460d2e4e62ea74bd571db62c0f9e"
 dependencies = [
- "rustix 0.37.20",
+ "rustix 0.37.23",
 ]
 
 [[package]]
@@ -2222,7 +2222,7 @@ dependencies = [
  "ostree",
  "pin-project",
  "regex",
- "rustix 0.37.20",
+ "rustix 0.37.23",
  "serde",
  "serde_json",
  "tar",
@@ -2683,7 +2683,7 @@ dependencies = [
  "reqwest",
  "rpmostree-client",
  "rust-ini",
- "rustix 0.37.20",
+ "rustix 0.38.3",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2716,9 +2716,9 @@ checksum = "d626bb9dae77e28219937af045c257c28bfd3f69333c512553507f5f9798cb76"
 
 [[package]]
 name = "rustix"
-version = "0.37.20"
+version = "0.37.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b96e891d04aa506a6d1f318d2771bcb1c7dfda84e126660ace067c9b474bb2c0"
+checksum = "4d69718bf81c6127a49dc64e44a742e8bb9213c0ff8869a22c308f84c1d4ab06"
 dependencies = [
  "bitflags 1.3.2",
  "errno",
