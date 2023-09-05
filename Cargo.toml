@@ -69,7 +69,7 @@ libc = "0.2.146"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 memfd = "0.6.0"
-nix = "0.26.1"
+nix = "0.26.4"
 openssl = "0.10.57"
 once_cell = "1.18.0"
 os-release = "0.1.0"
