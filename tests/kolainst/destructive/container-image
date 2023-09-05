@@ -164,7 +164,8 @@ EOF
     fi
     rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos-derived
     ostree container image list --repo=/ostree/repo | tee imglist.txt
-    assert_streq "$(wc -l < imglist.txt)" 1
+    # We now only prune when the deployment is removed
+    assert_streq "$(wc -l < imglist.txt)" 2
     rm $image_dir -rf
     /tmp/autopkgtest-reboot 3
     ;;
@@ -186,6 +187,11 @@ EOF
     cp /usr/etc/rpm-ostreed.conf /etc
     echo -e "[Daemon]\nAutomaticUpdatePolicy=apply" > /etc/rpm-ostreed.conf
     rpm-ostree reload
+
+    # This should now prune the previous image
+    rpm-ostree cleanup -pr
+    ostree container image list --repo=/ostree/repo | tee imglist.txt
+    assert_streq "$(wc -l < imglist.txt)" 1
 
     # Now revert back to the base image, but keep our layered package foo
     rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos
