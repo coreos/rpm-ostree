@@ -11,7 +11,7 @@ use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use rustix::fd::AsFd;
-use rustix::fs::{FileType, MetadataExt};
+use rustix::fs::{AtFlags, FileType, MetadataExt};
 use std::io::Read;
 use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::prelude::PermissionsExt;
@@ -63,7 +63,7 @@ fn legacy_prepare_dev(rootfs: &Dir) -> Result<()> {
         // file so it can use `fchmod()` which may fail for special things like `/dev/tty`.
         // We have no concerns about following symlinks because we know we just created
         // the device and there are no concurrent writers.
-        rustix::fs::chmodat(&dest_dir.as_fd(), nodename, mode)
+        rustix::fs::chmodat(&dest_dir.as_fd(), nodename, mode, AtFlags::empty())
             .with_context(|| format!("Setting permissions of target {}", nodename))?;
     }
     smoketest_dev_null(dest_dir)?;
