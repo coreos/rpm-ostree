@@ -2312,7 +2312,7 @@ rpmostree_download_packages (GPtrArray *packages, GCancellable *cancellable, GEr
         return FALSE;
 
       if (!dnf_repo_download_packages (src, src_packages, target_dir, hifstate, error))
-        return FALSE;
+        return glnx_prefix_error (error, "Downloading from '%s'", dnf_repo_get_id (src));
 
       g_signal_handler_disconnect (hifstate, progress_sigid);
     }
@@ -2408,6 +2408,11 @@ rpmostree_context_download (RpmOstreeContext *self, GCancellable *cancellable, G
   else
     return TRUE;
 
+  // For now just make this a warning for debugging https://github.com/coreos/rpm-ostree/issues/4565
+  // It may be that people are actually relying on this behavior too...
+  if (self->dnf_cache_policy == RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER)
+    g_printerr ("warning: Found %u packages to download in cache-only mode\n",
+                self->pkgs_to_download->len);
   return rpmostree_download_packages (self->pkgs_to_download, cancellable, error);
 }
 
@@ -2541,7 +2546,8 @@ rpmostree_context_import (RpmOstreeContext *self, GCancellable *cancellable, GEr
       return glnx_prefix_error (error, "importing RPMs");
     }
 
-  self->async_progress->end ("");
+  g_autofree char *import_done_msg = g_strdup_printf ("done: %u", self->pkgs_to_import->len);
+  self->async_progress->end (import_done_msg);
   self->async_progress.release ();
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
