@@ -41,12 +41,12 @@ cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
   }
   stage("Build FCOS") {
     shwrap("""
-      coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
+      chown -R -h builder: .
+      runuser -u builder -- coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
       # include our built rpm-ostree in the image
-      mkdir -p overrides/rpm
       mv *.rpm overrides/rpm
-      coreos-assembler fetch
-      coreos-assembler build
+      runuser -u builder -- coreos-assembler fetch
+      runuser -u builder -- coreos-assembler build
        ${env.WORKSPACE}/ci/composepost-checks.sh
     """)
   }
