@@ -57,7 +57,7 @@ chrono = { version = "0.4.26", features = ["serde"] }
 clap = { version = "4.4", features = ["derive"] }
 cxx = "1.0.105"
 envsubst = "0.2.1"
-either = "1.8.1"
+either = "1.9.0"
 env_logger = "0.10.0"
 fail = { version = "0.5", features = ["failpoints"] }
 fn-error-context = "0.2.0"
