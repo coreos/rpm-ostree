@@ -4718,9 +4718,12 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
         if (!ostree_commit_metadata_for_bootable (root, metadata_dict, cancellable, error))
           return FALSE;
       }
-    g_autoptr (GVariant) metadata = g_variant_dict_end (metadata_dict);
+    if (!ostree_repo_commit_add_composefs_metadata (self->ostreerepo, 0, metadata_dict,
+                                                    (OstreeRepoFile *)root, cancellable, error))
+      return glnx_prefix_error (error, "Adding composefs metadata");
 
     {
+      g_autoptr (GVariant) metadata = g_variant_dict_end (metadata_dict);
       if (!ostree_repo_write_commit (self->ostreerepo, parent, "", "", metadata,
                                      OSTREE_REPO_FILE (root), &ret_commit_checksum, cancellable,
                                      error))

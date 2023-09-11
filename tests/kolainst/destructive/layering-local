@@ -76,6 +76,9 @@ fi
 ostree show --print-metadata-key=ostree.bootable ${booted_commit} >out.txt
 assert_file_has_content_literal out.txt 'true'
 echo "ok bootable metadata"
+ostree show --print-metadata-key=ostree.composefs.digest.v0 ${booted_commit} >out.txt
+assert_file_has_content_literal out.txt 'byte'
+echo "ok composefs metadata on client generated commit"
 
 # check we could uninstall the package using either its NEVRA or name
 rpm-ostree uninstall foo-1.2-3.x86_64
