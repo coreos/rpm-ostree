@@ -7,6 +7,7 @@ nav_order: 7
 # Experimental features
 {: .no_toc }
 
+1. [bootc](bootc.md)
 1. [Wrapping other CLI entrypoints](cliwrap.md)
 1. [ostree native containers](container.md)
 1. [rebuild](ex-rebuild.md)
