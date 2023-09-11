@@ -8,7 +8,7 @@
 
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::utils;
-use anyhow::{bail, format_err, Result};
+use anyhow::{anyhow, bail, format_err, Result};
 use bitflags::bitflags;
 use camino::{Utf8Path, Utf8PathBuf};
 use fn_error_context::context;
@@ -332,6 +332,8 @@ fn tweak_imported_file_info(file_info: &FileInfo, ro_executables: bool) {
 
     if filetype == FileType::SymbolicLink {
         if let Some(target) = file_info.symlink_target() {
+            // Safety: we should only see UTF-8 filenames here
+            let target = target.to_str().unwrap();
             // See above, this is a special case hack until
             // https://github.com/fedora-sysv/chkconfig/pull/67 propagates everywhere
             // and/or https://github.com/ostreedev/ostree-rs-ext/pull/182 merges.
@@ -431,6 +433,9 @@ pub(crate) fn translate_to_tmpfiles_d(
         let link_target = file_info
             .symlink_target()
             .ok_or_else(|| format_err!("missing symlink target"))?;
+        let link_target = link_target
+            .to_str()
+            .ok_or_else(|| anyhow!("Invalid non-UTF8 symlink: {link_target:?}"))?;
         write!(&mut bufwr, " - - - - {}", link_target)?;
     } else {
         let mode = file_info.attribute_uint32("unix::mode") & !libc::S_IFMT;
