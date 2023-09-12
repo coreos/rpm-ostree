@@ -300,16 +300,20 @@ pub(crate) fn lockfile_read(filenames: &Vec<String>) -> CxxResult<Box<LockfileCo
     Ok(Box::new(lockfile_parse_multiple(filenames)?))
 }
 
+/// Get current time (in UTC), but scrub nanoseconds; it's overkill to serialize that
+fn coarse_utc_timestamp_now() -> chrono::DateTime<chrono::Utc> {
+    DateTime::from_naive_utc_and_offset(
+        Utc::now().date_naive().and_time(Default::default()),
+        chrono::Utc,
+    )
+}
+
 pub(crate) fn lockfile_write(
     filename: &str,
     mut packages: Pin<&mut crate::ffi::CxxGObjectArray>,
     mut rpmmd_repos: Pin<&mut crate::ffi::CxxGObjectArray>,
 ) -> CxxResult<()> {
-    // get current time, but scrub nanoseconds; it's overkill to serialize that
-    let now = DateTime::from_utc(
-        Utc::now().date_naive().and_time(Default::default()),
-        chrono::Utc,
-    );
+    let now = coarse_utc_timestamp_now();
 
     let mut lockfile = LockfileConfig {
         packages: Some(BTreeMap::new()),
@@ -379,4 +383,12 @@ pub(crate) fn lockfile_write(
         Ok(serde_json::to_writer_pretty(w, &lockfile)?)
     })?;
     Ok(())
+}
+
+#[test]
+fn test_coarse_now() {
+    let now = Utc::now();
+    let now_coarse = coarse_utc_timestamp_now();
+    assert_eq!(now_coarse.format("%H:%M:%S").to_string(), "00:00:00");
+    assert_eq!(now.date_naive(), now_coarse.date_naive());
 }
