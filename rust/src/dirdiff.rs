@@ -109,6 +109,7 @@ fn is_changed(
     destmeta: &Metadata,
 ) -> Result<bool> {
     use cap_primitives::fs::read_link_contents;
+
     if srcmeta.permissions() != destmeta.permissions() {
         return Ok(true);
     }

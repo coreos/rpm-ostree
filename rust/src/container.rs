@@ -441,25 +441,17 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         labels: Some(labels),
         cmd: opt.cmd,
     };
-    let opts = ExportOpts {
-        copy_meta_keys,
-        copy_meta_opt_keys,
-        max_layers: opt.max_layers,
-        ..Default::default()
-    };
+    let mut opts = ExportOpts::default();
+    opts.copy_meta_keys = copy_meta_keys;
+    opts.copy_meta_opt_keys = copy_meta_opt_keys;
+    opts.max_layers = opt.max_layers;
+    opts.prior_build = package_structure.as_ref();
+    opts.contentmeta = Some(&meta);
     let handle = tokio::runtime::Handle::current();
     let digest = progress_task("Generating container image", || {
         handle.block_on(async {
-            ostree_ext::container::encapsulate(
-                repo,
-                rev.as_str(),
-                &config,
-                package_structure.as_ref(),
-                Some(opts),
-                Some(meta),
-                &opt.imgref,
-            )
-            .await
+            ostree_ext::container::encapsulate(repo, rev.as_str(), &config, Some(opts), &opt.imgref)
+                .await
         })
     })?;
 

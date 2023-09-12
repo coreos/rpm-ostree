@@ -341,10 +341,10 @@ pub(crate) fn configure_build_repo_from_target(
     }
     for group in propagated_groups {
         for key in map_keyfile_optional(target_config.keys(group))?
-            .map(|v| v.0)
             .iter()
             .flatten()
         {
+            let key = key.to_str();
             changed = true;
             let value = target_config.value(group, key)?;
             tracing::debug!("Propagating {group}.{key} with value {value}");
