@@ -40,6 +40,36 @@ impl Into<ostree_container::Transport> for OutputFormat {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum)]
+enum InitializeMode {
+    /// Require the image to already exist.  For backwards compatibility reasons, this is the default.
+    Query,
+    /// Always overwrite the target image, even if it already exists and there were no changes.
+    Always,
+    /// Error out if the target image does not already exist.
+    Never,
+    /// Initialize if the target image does not already exist.
+    IfNotExists,
+}
+
+impl std::fmt::Display for InitializeMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            InitializeMode::Query => "query",
+            InitializeMode::Always => "always",
+            InitializeMode::Never => "never",
+            InitializeMode::IfNotExists => "if-not-exists",
+        };
+        f.write_str(s)
+    }
+}
+
+impl Default for InitializeMode {
+    fn default() -> Self {
+        Self::Query
+    }
+}
+
 #[derive(Debug, Parser)]
 struct Opt {
     #[clap(long)]
@@ -57,9 +87,13 @@ struct Opt {
     #[clap(value_parser)]
     layer_repo: Option<Utf8PathBuf>,
 
-    #[clap(long, short = 'i')]
+    #[clap(long, short = 'i', conflicts_with = "initialize_mode")]
     /// Do not query previous image in target location; use this for the first build
     initialize: bool,
+
+    /// Control conditions under which the image is written
+    #[clap(long, conflicts_with = "initialize", default_value_t)]
+    initialize_mode: InitializeMode,
 
     #[clap(long, value_enum, default_value_t)]
     format: OutputFormat,
@@ -105,17 +139,12 @@ struct ImageMetadata {
 }
 
 /// Fetch the previous metadata from the container image metadata.
-fn fetch_previous_metadata(
+async fn fetch_previous_metadata(
     proxy: &containers_image_proxy::ImageProxy,
-    imgref: &ostree_container::ImageReference,
+    oi: &containers_image_proxy::OpenedImage,
 ) -> Result<ImageMetadata> {
-    let handle = tokio::runtime::Handle::current();
-    let (manifest, _digest, config) = handle.block_on(async {
-        let oi = &proxy.open_image(&imgref.to_string()).await?;
-        let (digest, manifest) = proxy.fetch_manifest(oi).await?;
-        let config = proxy.fetch_config(oi).await?;
-        Ok::<_, anyhow::Error>((manifest, digest, config))
-    })?;
+    let manifest = proxy.fetch_manifest(oi).await?.1;
+    let config = proxy.fetch_config(oi).await?;
     const INPUTHASH_KEY: &str = "rpmostree.inputhash";
     let labels = config
         .config()
@@ -186,9 +215,34 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         transport: opt.format.clone().into(),
         name: opt.output.to_string(),
     };
-    let previous_meta = (!opt.initialize)
-        .then(|| fetch_previous_metadata(&proxy, &target_imgref))
-        .transpose()?;
+    let previous_meta = if opt.initialize || matches!(opt.initialize_mode, InitializeMode::Always) {
+        None
+    } else {
+        assert!(!opt.initialize); // Checked by clap
+        let handle = tokio::runtime::Handle::current();
+        handle.block_on(async {
+            let oi = if matches!(opt.initialize_mode, InitializeMode::Query) {
+                // In the default query mode, we error if the image doesn't exist, so this always
+                // gets mapped to Some().
+                Some(proxy.open_image(&target_imgref.to_string()).await?)
+            } else {
+                // All other cases check the Option.
+                proxy
+                    .open_image_optional(&target_imgref.to_string())
+                    .await?
+            };
+            let meta = match (opt.initialize_mode, oi.as_ref()) {
+                (InitializeMode::Always, _) => unreachable!(), // Handled above
+                (InitializeMode::Query, None) => unreachable!(), // Handled above
+                (InitializeMode::Never, Some(_)) => anyhow::bail!("Target image already exists"),
+                (InitializeMode::IfNotExists | InitializeMode::Never, None) => None,
+                (InitializeMode::IfNotExists | InitializeMode::Query, Some(oi)) => {
+                    Some(fetch_previous_metadata(&proxy, oi).await?)
+                }
+            };
+            anyhow::Ok(meta)
+        })?
+    };
     let mut compose_args_extra = Vec::new();
     if let Some(m) = previous_meta.as_ref() {
         compose_args_extra.extend(["--previous-inputhash", m.inputhash.as_str()]);
