@@ -11,6 +11,7 @@ use crate::cxxrsutil::*;
 use crate::variant_utils;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
+use cap_std::io_lifetimes::AsFilelike;
 use glib::Variant;
 use once_cell::sync::Lazy;
 use ostree_ext::prelude::*;
@@ -19,6 +20,7 @@ use regex::Regex;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io::prelude::*;
+use std::os::fd::OwnedFd;
 use std::os::unix::io::IntoRawFd;
 use std::path::Path;
 use std::{fs, io};
@@ -548,25 +550,27 @@ pub(crate) fn get_features() -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn impl_sealed_memfd(description: &str, content: &[u8]) -> Result<std::fs::File> {
-    let mfd = memfd::MemfdOptions::default()
-        .allow_sealing(true)
-        .close_on_exec(true)
-        .create(description)?;
-    mfd.as_file().set_len(content.len() as u64)?;
-    mfd.as_file().write_all(content)?;
-    let mut seals = memfd::SealsHashSet::new();
-    seals.insert(memfd::FileSeal::SealShrink);
-    seals.insert(memfd::FileSeal::SealGrow);
-    seals.insert(memfd::FileSeal::SealWrite);
-    seals.insert(memfd::FileSeal::SealSeal);
-    mfd.add_seals(&seals)?;
-    Ok(mfd.into_file())
+pub(crate) fn impl_sealed_memfd(description: &str, content: &[u8]) -> Result<OwnedFd> {
+    use rustix::fs::{MemfdFlags, SealFlags};
+    let mfd =
+        rustix::fs::memfd_create(description, MemfdFlags::CLOEXEC | MemfdFlags::ALLOW_SEALING)?;
+
+    {
+        let mfd_file = mfd.as_filelike_view::<std::fs::File>();
+        (&*mfd_file).set_len(content.len() as u64)?;
+        (&*mfd_file).write_all(content)?;
+        (&*mfd_file).seek(std::io::SeekFrom::Start(0))?;
+    }
+
+    rustix::fs::fcntl_add_seals(
+        &mfd,
+        SealFlags::WRITE | SealFlags::GROW | SealFlags::SHRINK | SealFlags::SEAL,
+    )?;
+    Ok(mfd)
 }
 
 /// Create a fully sealed "memfd" (memory file descriptor) from an array of bytes.
-/// For more information see https://docs.rs/memfd/0.3.0/memfd/ and
-/// `man memfd_create`.
+/// For more information see `man memfd_create`.
 pub(crate) fn sealed_memfd(description: &str, content: &[u8]) -> CxxResult<i32> {
     let mfd = impl_sealed_memfd(description, content)?;
     Ok(mfd.into_raw_fd())
@@ -659,4 +663,17 @@ impl<T: Default> OptionExtGetOrInsertDefault<T> for Option<T> {
             None => self.insert(Default::default()),
         }
     }
+}
+
+#[test]
+fn test_sealed_memfd() -> Result<()> {
+    let contents = "some contents here";
+    let mfd = impl_sealed_memfd("foo", contents.as_bytes()).unwrap();
+    {
+        let mfd = mfd.as_filelike_view::<std::fs::File>();
+        let mut buf = String::new();
+        (&*mfd).read_to_string(&mut buf)?;
+        assert_eq!(buf, contents);
+    }
+    Ok(())
 }
