@@ -1104,10 +1104,7 @@ fn hardlink_rpmdb_base_location(
 fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &Dir, normalize: bool) -> Result<()> {
     let tempetc = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
 
-    let mut dbfd = memfd::MemfdOptions::default()
-        .allow_sealing(true)
-        .create("rpmdb")?
-        .into_file();
+    let mut dbfd = cap_std_ext::cap_tempfile::TempFile::new_anonymous(rootfs_dfd)?;
 
     let dbpath_arg = format!("--dbpath=/proc/self/cwd/{}", RPMOSTREE_RPMDB_LOCATION);
     // Fork rpmdb from the *host* rootfs to read the rpmdb back into memory
