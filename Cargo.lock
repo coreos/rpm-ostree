@@ -1996,6 +1996,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
+dependencies = [
+ "bitflags 2.4.0",
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2644,7 +2655,7 @@ dependencies = [
  "libc",
  "libdnf-sys",
  "maplit",
- "nix 0.26.4",
+ "nix 0.27.1",
  "once_cell",
  "openssl",
  "os-release",
