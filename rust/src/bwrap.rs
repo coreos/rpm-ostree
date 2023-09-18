@@ -167,9 +167,9 @@ impl Bubblewrap {
         let lang_var = Path::new(&lang_var);
 
         let launcher = gio::SubprocessLauncher::new(gio::SubprocessFlags::NONE);
-        let child_rootfs_fd = rootfs_fd.as_raw_fd();
+        let child_rootfs_fd = std::sync::Arc::new(rootfs_fd.try_clone()?);
         launcher.set_child_setup(move || {
-            nix::unistd::fchdir(child_rootfs_fd).expect("fchdir");
+            rustix::process::fchdir(&*child_rootfs_fd).expect("fchdir");
         });
 
         let path_var = Path::new(PATH_VAR);

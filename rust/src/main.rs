@@ -3,7 +3,6 @@
 
 use anyhow::{Context, Result};
 use is_terminal::IsTerminal;
-use nix::sys::signal;
 use rpmostree_rust::builtins;
 use std::ffi::OsString;
 use std::io::Write;
@@ -113,7 +112,8 @@ fn inner_main() -> Result<i32> {
     if std::env::var("RPMOSTREE_GDB_HOOK").is_ok() {
         println!("RPMOSTREE_GDB_HOOK detected; stopping...");
         println!("Attach via gdb using `gdb -p {}`.", std::process::id());
-        signal::raise(signal::Signal::SIGSTOP).expect("signal(SIGSTOP)");
+        rustix::process::kill_current_process_group(rustix::process::Signal::Stop)
+            .expect("signal(SIGSTOP)");
     }
     // Initialize failpoints
     let _scenario = fail::FailScenario::setup();

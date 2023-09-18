@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::Result;
-use nix::sys::statvfs;
 use std::os::unix::process::CommandExt;
 use std::{thread, time};
 
@@ -9,9 +8,10 @@ use crate::cliwrap;
 
 /// Returns true if /usr is not a read-only bind mount
 pub fn is_unlocked() -> Result<bool> {
-    Ok(!statvfs::statvfs("/usr")?
-        .flags()
-        .contains(statvfs::FsFlags::ST_RDONLY))
+    use rustix::fs::StatVfsMountFlags;
+    Ok(!rustix::fs::statvfs("/usr")?
+        .f_flag
+        .contains(StatVfsMountFlags::RDONLY))
 }
 
 /// Returns true if the current process is running as root.
