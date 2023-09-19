@@ -146,15 +146,15 @@ In the future, this command may perform more operations.
 There is now an `rpm-ostree compose image` command which generates a new base image using a treefile:
 
 ```
-$ rpm-ostree compose image --initialize --format=ociarchive workstation-ostree-config/fedora-silverblue.yaml fedora-silverblue.ociarchive
+$ rpm-ostree compose image --initialize-mode=if-not-exists --format=ociarchive workstation-ostree-config/fedora-silverblue.yaml fedora-silverblue.ociarchive
 ```
 
-The `--initialize` command here will create a new image unconditionally.  If not provided,
-the target image must exist, and will be used for change detection.  You can also directly push
-to a registry:
+The `--initialize-mode=if-not-exists` command here is what you almost always want: to create
+the image if it doesn't exist, but to otherwise check for changes.  It isn't the default
+for historical reasons.
 
 ```
-$ rpm-ostree compose image --initialize --format=registry workstation-ostree-config/fedora-silverblue.yaml quay.io/example/exampleos:latest
+$ rpm-ostree compose image  --initialize-mode=if-not-exists --format=registry workstation-ostree-config/fedora-silverblue.yaml quay.io/example/exampleos:latest
 ```
 
 ## Converting OSTree commits to new base images
