@@ -42,7 +42,7 @@ polkitgobject = { name = "polkit-gobject-1", version = "0" }
 rpm = "4"
 
 [dependencies]
-anyhow = "1.0.69"
+anyhow = "1.0.75"
 binread = "2.2.0"
 bitflags = "2.3"
 bootc = { git = "https://github.com/containers/bootc.git", tag = "v0.1.1", package = "bootc-lib"}
