@@ -432,17 +432,19 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         })
         .transpose()?;
 
-    let mut copy_meta_keys = opt.copy_meta_keys;
     // Default to copying the input hash to support cheap change detection
-    copy_meta_keys.push("rpmostree.inputhash".to_string());
-    let copy_meta_opt_keys = opt.copy_meta_opt_keys;
+    let copy_meta_opt_keys = opt
+        .copy_meta_opt_keys
+        .into_iter()
+        .chain(std::iter::once("rpmostree.inputhash".to_owned()))
+        .collect();
 
     let config = Config {
         labels: Some(labels),
         cmd: opt.cmd,
     };
     let mut opts = ExportOpts::default();
-    opts.copy_meta_keys = copy_meta_keys;
+    opts.copy_meta_keys = opt.copy_meta_keys;
     opts.copy_meta_opt_keys = copy_meta_opt_keys;
     opts.max_layers = opt.max_layers;
     opts.prior_build = package_structure.as_ref();
