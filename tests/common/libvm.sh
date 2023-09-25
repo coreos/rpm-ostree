@@ -47,7 +47,9 @@ vm_kola_spawn() {
   exec 4> info.json
   mkdir kola-ssh
   local test_image
-  if test -d ${topsrcdir}/.cosa; then
+  if test -n "${VMIMAGE:-}"; then
+    test_image=${VMIMAGE}
+  elif test -d ${topsrcdir}/.cosa; then
     test_image=$(echo ${topsrcdir}/.cosa/*.qcow2)
   else
     if test -n "${COSA_DIR:-}"; then
