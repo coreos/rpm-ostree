@@ -265,7 +265,7 @@ dependencies = [
  "openssl",
  "ostree-ext",
  "regex",
- "rustix 0.38.13",
+ "rustix 0.38.14",
  "schemars",
  "serde",
  "serde_json",
@@ -318,7 +318,7 @@ dependencies = [
  "io-lifetimes 2.0.2",
  "ipnet",
  "maybe-owned",
- "rustix 0.38.13",
+ "rustix 0.38.14",
  "windows-sys 0.48.0",
  "winx",
 ]
@@ -333,7 +333,7 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes 2.0.2",
- "rustix 0.38.13",
+ "rustix 0.38.14",
 ]
 
 [[package]]
@@ -343,7 +343,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8936a48cec680aac1e24d97259c9dc18ad848e731e4cef69220b147134cd0097"
 dependencies = [
  "cap-tempfile",
- "rustix 0.38.13",
+ "rustix 0.38.14",
 ]
 
 [[package]]
@@ -354,7 +354,7 @@ checksum = "7b9e3348a3510c4619b4c7a7bcdef09a71221da18f266bda3ed6b9aea2c509e2"
 dependencies = [
  "cap-std",
  "rand",
- "rustix 0.38.13",
+ "rustix 0.38.14",
  "uuid",
 ]
 
@@ -1008,7 +1008,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd738b84894214045e8414eaded76359b4a5773f0a0a56b16575110739cdcf39"
 dependencies = [
  "io-lifetimes 2.0.2",
- "rustix 0.38.13",
+ "rustix 0.38.14",
  "windows-sys 0.48.0",
 ]
 
@@ -1564,7 +1564,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb0889898416213fab133e1d33a0e5858a48177452750691bde3666d0fdbaf8b"
 dependencies = [
  "hermit-abi 0.3.1",
- "rustix 0.38.13",
+ "rustix 0.38.14",
  "windows-sys 0.48.0",
 ]
 
@@ -2208,7 +2208,7 @@ dependencies = [
  "ostree",
  "pin-project",
  "regex",
- "rustix 0.38.13",
+ "rustix 0.38.14",
  "serde",
  "serde_json",
  "tar",
@@ -2668,7 +2668,7 @@ dependencies = [
  "reqwest",
  "rpmostree-client",
  "rust-ini",
- "rustix 0.38.13",
+ "rustix 0.38.14",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2715,9 +2715,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.13"
+version = "0.38.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7db8590df6dfcd144d22afd1b83b36c21a18d7cbc1dc4bb5295a8712e9eb662"
+checksum = "747c788e9ce8e92b12cd485c49ddf90723550b654b32508f979b71a7b1ecda4f"
 dependencies = [
  "bitflags 2.4.0",
  "errno",
@@ -3091,7 +3091,7 @@ dependencies = [
  "cfg-if",
  "fastrand",
  "redox_syscall 0.3.5",
- "rustix 0.38.13",
+ "rustix 0.38.14",
  "windows-sys 0.48.0",
 ]
 
