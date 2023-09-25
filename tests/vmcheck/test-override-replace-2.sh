@@ -160,10 +160,12 @@ case $versionid in
   38)
     evr=38.25-1.fc38
     koji_url='https://koji.fedoraproject.org/koji/buildinfo?buildID=2274128'
+    # XXX: we need to replace container-selinux too for dep reasons
+    hack='https://koji.fedoraproject.org/koji/buildinfo?buildID=2281229'
     ;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt selinux-policy-$evr
-vm_rpmostree override replace "${koji_url}"
+vm_rpmostree override replace "${koji_url}" "${hack}"
 vm_rpmostree cleanup -p
 echo "ok override replace selinux-policy-targeted"
