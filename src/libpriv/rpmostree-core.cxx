@@ -3065,8 +3065,15 @@ delete_package_from_root (RpmOstreeContext *self, rpmte pkg, int rootfs_dfd, GHa
       if (!g_str_has_prefix (fn, "usr/"))
         continue;
 
+      /* match librpm: check the actual file type on disk rather than the rpmdb */
+      struct stat stbuf;
+      if (!glnx_fstatat_allow_noent (rootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT)
+        continue;
+
       /* Delete files first, we'll handle directories next */
-      if (S_ISDIR (mode))
+      if (S_ISDIR (stbuf.st_mode))
         g_sequence_insert_sorted (dirs_to_remove, g_strdup (fn), compare_strlen, NULL);
       else
         {
