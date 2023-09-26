@@ -2171,9 +2171,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dacdc19c406131f81f4edb264a5360db94dc5d014179d6d8f021d2b674a5d29"
+checksum = "5a36510065efecd8b08c9434175ade52aecb1c27313df7e9ce0d8a9947ec7db4"
 dependencies = [
  "anyhow",
  "async-compression 0.3.15",
@@ -2203,7 +2203,7 @@ dependencies = [
  "serde_json",
  "tar",
  "tempfile",
- "term_size",
+ "terminal_size",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -3084,22 +3084,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "term_size"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e4129646ca0ed8f45d09b929036bafad5377103edd06e50bf574b353d2b08d9"
-dependencies = [
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "termcolor"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "terminal_size"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21bebf2b7c9e0a515f6e0f8c51dc0f8e4696391e6f1ff30379559f8365fb0df7"
+dependencies = [
+ "rustix 0.38.14",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
