@@ -1842,6 +1842,9 @@ void compose_postprocess (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile &t
 
 void compose_postprocess_final_pre (::std::int32_t rootfs_dfd);
 
+void compose_postprocess_final (::std::int32_t rootfs_dfd,
+                                ::rpmostreecxx::Treefile const &treefile);
+
 void convert_var_to_tmpfiles_d (::std::int32_t rootfs_dfd,
                                 ::rpmostreecxx::GCancellable const &cancellable);
 
@@ -1849,9 +1852,6 @@ void rootfs_prepare_links (::std::int32_t rootfs_dfd);
 
 void workaround_selinux_cross_labeling (::std::int32_t rootfs_dfd,
                                         ::rpmostreecxx::GCancellable &cancellable);
-
-void prepare_rpmdb_base_location (::std::int32_t rootfs_dfd,
-                                  ::rpmostreecxx::GCancellable &cancellable);
 
 void compose_postprocess_rpm_macro (::std::int32_t rootfs_dfd);
 

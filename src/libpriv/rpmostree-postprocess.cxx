@@ -462,8 +462,8 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
         return glnx_prefix_error (error, "During kernel processing");
     }
 
-  /* we're composing a new tree; copy the rpmdb to the base location */
-  ROSCXX_TRY (prepare_rpmdb_base_location (rootfs_dfd, *cancellable), error);
+  /* And now the penultimate postprocessing */
+  ROSCXX_TRY (compose_postprocess_final (rootfs_dfd, treefile), error);
 
   return TRUE;
 }

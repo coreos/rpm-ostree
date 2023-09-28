@@ -2172,6 +2172,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$compose_postprocess_final_pre (::std::int32_t rootfs_dfd) noexcept;
 
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$compose_postprocess_final (
+      ::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile const &treefile) noexcept;
+
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$convert_var_to_tmpfiles_d (
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable const &cancellable) noexcept;
 
@@ -2179,9 +2182,6 @@ extern "C"
   rpmostreecxx$cxxbridge1$rootfs_prepare_links (::std::int32_t rootfs_dfd) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$workaround_selinux_cross_labeling (
-      ::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable &cancellable) noexcept;
-
-  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$prepare_rpmdb_base_location (
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable &cancellable) noexcept;
 
   ::rust::repr::PtrLen
@@ -3969,6 +3969,17 @@ compose_postprocess_final_pre (::std::int32_t rootfs_dfd)
 }
 
 void
+compose_postprocess_final (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile const &treefile)
+{
+  ::rust::repr::PtrLen error$
+      = rpmostreecxx$cxxbridge1$compose_postprocess_final (rootfs_dfd, treefile);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
 convert_var_to_tmpfiles_d (::std::int32_t rootfs_dfd,
                            ::rpmostreecxx::GCancellable const &cancellable)
 {
@@ -3996,17 +4007,6 @@ workaround_selinux_cross_labeling (::std::int32_t rootfs_dfd,
 {
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$workaround_selinux_cross_labeling (rootfs_dfd, cancellable);
-  if (error$.ptr)
-    {
-      throw ::rust::impl< ::rust::Error>::error (error$);
-    }
-}
-
-void
-prepare_rpmdb_base_location (::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable &cancellable)
-{
-  ::rust::repr::PtrLen error$
-      = rpmostreecxx$cxxbridge1$prepare_rpmdb_base_location (rootfs_dfd, cancellable);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
