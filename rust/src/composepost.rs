@@ -310,7 +310,7 @@ pub(crate) fn postprocess_cleanup_rpmdb(rootfs_dfd: i32) -> CxxResult<()> {
 /// it as the bits of that function that we've chosen to implement in Rust.
 /// It takes care of all things that are really required to use rpm-ostree
 /// on the target host.
-pub fn compose_postprocess_final(rootfs_dfd: i32) -> CxxResult<()> {
+pub fn compose_postprocess_final_pre(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     // These tasks can safely run in parallel, so just for fun we do so via rayon.
     let tasks = [

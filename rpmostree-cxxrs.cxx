@@ -2170,7 +2170,7 @@ extern "C"
       bool unified_core) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$compose_postprocess_final (::std::int32_t rootfs_dfd) noexcept;
+  rpmostreecxx$cxxbridge1$compose_postprocess_final_pre (::std::int32_t rootfs_dfd) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$convert_var_to_tmpfiles_d (
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable const &cancellable) noexcept;
@@ -3959,9 +3959,9 @@ compose_postprocess (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile &treefi
 }
 
 void
-compose_postprocess_final (::std::int32_t rootfs_dfd)
+compose_postprocess_final_pre (::std::int32_t rootfs_dfd)
 {
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$compose_postprocess_final (rootfs_dfd);
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$compose_postprocess_final_pre (rootfs_dfd);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
