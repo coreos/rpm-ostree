@@ -1840,7 +1840,7 @@ void composepost_nsswitch_altfiles (::std::int32_t rootfs_dfd);
 void compose_postprocess (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile &treefile,
                           ::rust::Str next_version, bool unified_core);
 
-void compose_postprocess_final (::std::int32_t rootfs_dfd);
+void compose_postprocess_final_pre (::std::int32_t rootfs_dfd);
 
 void convert_var_to_tmpfiles_d (::std::int32_t rootfs_dfd,
                                 ::rpmostreecxx::GCancellable const &cancellable);
