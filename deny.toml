@@ -4,7 +4,10 @@ copyleft = "allow"
 allow = ["Apache-2.0", "Apache-2.0 WITH LLVM-exception", "MIT", "BSD-3-Clause", "BSD-2-Clause", "Unlicense", "CC0-1.0", "Unicode-DFS-2016"]
 private = { ignore = true }
 
-[bans]
+[[bans.deny]]
+# We want to require FIPS validation downstream, so we use openssl
+name = "ring"
+
 
 [sources]
 unknown-registry = "deny"
