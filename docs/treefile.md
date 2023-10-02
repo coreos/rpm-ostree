@@ -138,6 +138,10 @@ It supports the following parameters:
     to the UNIX epoch time to be used as the build timestamp. Currently only
     fully supports the `bdb` backend. Somewhat experimental.
 
+ * `selinux-label-version`: integer, optional:  When set to `1`, this will
+    turn on an ostree flag which labels files in `/usr/etc` as if they were in
+    `/etc`.  This is important to aid in having a "transient" `/etc`.
+
  * `cliwrap`: boolean, optional.  Defaults to `false`.  If enabled,
     rpm-ostree will replace binaries such as `/usr/bin/rpm` with
     wrappers that intercept unsafe operations, or adjust functionality.
