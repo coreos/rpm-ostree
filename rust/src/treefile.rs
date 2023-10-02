@@ -416,6 +416,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         basearch,
         rojig,
         selinux,
+        selinux_label_version,
         ima,
         gpg_key,
         include,
@@ -1332,6 +1333,10 @@ impl Treefile {
         self.parsed.base.selinux.unwrap_or(true)
     }
 
+    pub(crate) fn get_selinux_label_version(&self) -> u32 {
+        self.parsed.base.selinux_label_version.unwrap_or_default()
+    }
+
     pub(crate) fn get_gpg_key(&self) -> String {
         self.parsed.base.gpg_key.clone().unwrap_or_default()
     }
@@ -1479,6 +1484,10 @@ impl Treefile {
             .unwrap_or_default()
         {
             bail!(r#"Treefile repo var "basearch" invalid; it is automatically filled in"#);
+        }
+        match config.selinux_label_version.unwrap_or_default() {
+            0 | 1 => {}
+            o => anyhow::bail!("Invalid selinux-label-version: {o}"),
         }
         Ok(())
     }
@@ -2472,6 +2481,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) lockfile_repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) selinux: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) selinux_label_version: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ima: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

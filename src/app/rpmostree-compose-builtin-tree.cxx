@@ -1135,7 +1135,6 @@ static gboolean
 impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, GError **error)
 {
   auto gpgkey = (*self->treefile_rs)->get_gpg_key ();
-  auto selinux = (*self->treefile_rs)->get_selinux ();
 
   /* pick up any initramfs regeneration args to shove into the metadata */
   JsonNode *initramfs_args = json_object_get_member (self->treefile, "initramfs-args");
@@ -1211,8 +1210,19 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
   if (!gpgkey.empty ())
     gpgkey_c = gpgkey.c_str ();
   auto container = (*self->treefile_rs)->get_container ();
+  RpmOstreeSELinuxMode selinux_mode;
+  {
+    auto selinux = (*self->treefile_rs)->get_selinux ();
+    auto selinux_label_version = (*self->treefile_rs)->get_selinux_label_version ();
+    if (selinux && selinux_label_version == 1)
+      selinux_mode = RPMOSTREE_SELINUX_MODE_V1;
+    else if (selinux)
+      selinux_mode = RPMOSTREE_SELINUX_MODE_V0;
+    else
+      selinux_mode = RPMOSTREE_SELINUX_MODE_DISABLED;
+  }
   if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision, metadata,
-                                 detached_metadata, gpgkey_c, container, selinux,
+                                 detached_metadata, gpgkey_c, container, selinux_mode,
                                  self->devino_cache, &new_revision, cancellable, error))
     return glnx_prefix_error (error, "Writing commit");
   g_assert (new_revision != NULL);

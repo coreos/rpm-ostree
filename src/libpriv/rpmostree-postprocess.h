@@ -34,12 +34,19 @@ gboolean rpmostree_prepare_rootfs_get_sepolicy (int dfd, OstreeSePolicy **out_se
 gboolean rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd, GCancellable *cancellable,
                                                     GError **error);
 
+typedef enum
+{
+  RPMOSTREE_SELINUX_MODE_DISABLED,
+  RPMOSTREE_SELINUX_MODE_V0, // Enabled
+  RPMOSTREE_SELINUX_MODE_V1, // Label /usr/etc as /etc
+} RpmOstreeSELinuxMode;
+
 gboolean rpmostree_compose_commit (int rootfs_dfd, OstreeRepo *repo, const char *parent,
                                    GVariant *metadata, GVariant *detached_metadata,
                                    const char *gpg_keyid, gboolean container,
-                                   gboolean enable_selinux, OstreeRepoDevInoCache *devino_cache,
-                                   char **out_new_revision, GCancellable *cancellable,
-                                   GError **error);
+                                   RpmOstreeSELinuxMode selinux,
+                                   OstreeRepoDevInoCache *devino_cache, char **out_new_revision,
+                                   GCancellable *cancellable, GError **error);
 
 G_END_DECLS
 

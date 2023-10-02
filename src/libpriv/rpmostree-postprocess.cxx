@@ -761,16 +761,19 @@ on_progress_timeout (gpointer datap)
 gboolean
 rpmostree_compose_commit (int rootfs_fd, OstreeRepo *repo, const char *parent_revision,
                           GVariant *src_metadata, GVariant *detached_metadata,
-                          const char *gpg_keyid, gboolean container, gboolean enable_selinux,
+                          const char *gpg_keyid, gboolean container, RpmOstreeSELinuxMode selinux,
                           OstreeRepoDevInoCache *devino_cache, char **out_new_revision,
                           GCancellable *cancellable, GError **error)
 {
+  int label_modifier_flags = 0;
   g_autoptr (OstreeSePolicy) sepolicy = NULL;
-  if (enable_selinux)
+  if (selinux != RPMOSTREE_SELINUX_MODE_DISABLED)
     {
       sepolicy = ostree_sepolicy_new_at (rootfs_fd, cancellable, error);
       if (!sepolicy)
         return FALSE;
+      if (selinux == RPMOSTREE_SELINUX_MODE_V1)
+        label_modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_SELINUX_LABEL_V1;
     }
 
   g_autoptr (OstreeMutableTree) mtree = ostree_mutable_tree_new ();
@@ -783,7 +786,7 @@ rpmostree_compose_commit (int rootfs_fd, OstreeRepo *repo, const char *parent_re
    */
   auto modifier_flags = static_cast<OstreeRepoCommitModifierFlags> (
       OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED
-      | OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CONSUME);
+      | OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CONSUME | label_modifier_flags);
   /* If changing this, also look at changing rpmostree-unpacker.c */
   g_autoptr (OstreeRepoCommitModifier) commit_modifier
       = ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
@@ -794,7 +797,7 @@ rpmostree_compose_commit (int rootfs_fd, OstreeRepo *repo, const char *parent_re
 
   if (sepolicy && ostree_sepolicy_get_name (sepolicy) != NULL)
     ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
-  else if (enable_selinux)
+  else if (selinux != RPMOSTREE_SELINUX_MODE_DISABLED)
     return glnx_throw (error, "SELinux enabled, but no policy found");
 
   if (devino_cache)

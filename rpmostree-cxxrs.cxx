@@ -1748,6 +1748,7 @@ struct Treefile final : public ::rust::Opaque
   bool get_documentation () const noexcept;
   bool get_recommends () const noexcept;
   bool get_selinux () const noexcept;
+  ::std::uint32_t get_selinux_label_version () const noexcept;
   ::rust::String get_gpg_key () const noexcept;
   ::rust::String get_automatic_version_suffix () const noexcept;
   bool get_container () const noexcept;
@@ -2587,6 +2588,9 @@ extern "C"
   rpmostreecxx$cxxbridge1$Treefile$get_recommends (::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_selinux (::rpmostreecxx::Treefile const &self) noexcept;
+
+  ::std::uint32_t rpmostreecxx$cxxbridge1$Treefile$get_selinux_label_version (
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_gpg_key (::rpmostreecxx::Treefile const &self,
                                                      ::rust::String *return$) noexcept;
@@ -5131,6 +5135,12 @@ bool
 Treefile::get_selinux () const noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$get_selinux (*this);
+}
+
+::std::uint32_t
+Treefile::get_selinux_label_version () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$get_selinux_label_version (*this);
 }
 
 ::rust::String

@@ -40,6 +40,7 @@ documentation: true
 EOF
 cat > config/other.yaml <<'EOF'
 recommends: true
+selinux-label-version: 1
 readonly-executables: true
 container-cmd:
   - /usr/bin/bash
@@ -134,6 +135,10 @@ export treefile=${new_treefile}
 # Do the compose
 runcompose
 echo "ok compose"
+
+ostree --repo=${repo} ls -X ${treeref} /usr/etc/sysctl.conf > ls.txt
+assert_file_has_content ls.txt ':system_conf_t:'
+echo "ok selinux-label-version"
 
 # Tests for docs
 ostree --repo=${repo} ls -R ${treeref} /usr/share/man > manpages.txt
