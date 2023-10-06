@@ -218,6 +218,19 @@ $ rpm-ostree override replace ./kernel*.rpm
 Use e.g. `rpm-ostree override reset podman` to undo the previous change.
 If invoked now, nothing will have happened to the booted filesystem tree.
 
+### Inactive overrides
+
+It can happen (especially in a "fast-tracking" workflow) that an override for
+a package version becomes redundant (i.e. the package version provided in the
+override is the exact same as the one in the base image). In this case, the
+override becomes *inactive*. Inactive overrides will appear in the output of
+`status -v`.
+
+Inactive overrides become active again once the base changes again and the
+package versions differ.  They can be reset as described in the previous
+section just like active overrides. There is currently no way to have rpm-ostree
+automatically 'drop out' inactive overrides once the base "catches up".
+
 ### Applying overrides live
 
 Now, suppose that you want to test this change *live*.  There are two choices.
