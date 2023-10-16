@@ -12,6 +12,7 @@ use fn_error_context::context;
 use ostree_ext::{gio, glib};
 use std::num::NonZeroUsize;
 use std::os::unix::io::AsRawFd;
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
 
@@ -83,12 +84,20 @@ impl RoFilesMount {
         let tempdir = tempfile::Builder::new()
             .prefix("rpmostree-rofiles-fuse")
             .tempdir()?;
-        let status = std::process::Command::new("rofiles-fuse")
-            .arg("--copyup")
+        let mut c = std::process::Command::new("rofiles-fuse");
+        c.arg("--copyup")
             .arg(path)
             .arg(tempdir.path())
-            .cwd_dir(rootfs.try_clone()?)
-            .status()?;
+            .cwd_dir(rootfs.try_clone()?);
+        unsafe {
+            c.pre_exec(|| {
+                rustix::process::set_parent_process_death_signal(Some(
+                    rustix::process::Signal::Term,
+                ))
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            });
+        }
+        let status = c.status()?;
         if !status.success() {
             return Err(anyhow::anyhow!("{}", status));
         }
