@@ -1133,10 +1133,16 @@ namespace rpmostreecxx
 rust::String
 get_repodata_chksum_repr (DnfPackage &pkg)
 {
+  static GMutex mutex;
   int chksum_type;
   g_autofree char *chksum = NULL;
   const unsigned char *chksum_raw = NULL;
 
+  /* Have to do this under lock since chksum_raw can be invalidated by another
+   * thread; the right fix for this is to not use libsolv in a multi-threaded
+   * context, but that's a larger refactor.
+   * See https://github.com/coreos/rpm-ostree/issues/4565. */
+  g_mutex_lock (&mutex);
   /* for rpmdb packages, use the hdr checksum */
   if (dnf_package_installed (&pkg))
     chksum_raw = dnf_package_get_hdr_chksum (&pkg, &chksum_type);
@@ -1144,6 +1150,7 @@ get_repodata_chksum_repr (DnfPackage &pkg)
     chksum_raw = dnf_package_get_chksum (&pkg, &chksum_type);
   if (chksum_raw)
     chksum = hy_chksum_str (chksum_raw, chksum_type);
+  g_mutex_unlock (&mutex);
 
   if (chksum == NULL)
     {
