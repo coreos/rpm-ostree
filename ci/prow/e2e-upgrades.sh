@@ -33,6 +33,10 @@ storage:
     - path: /etc/ostree/auth.json
       contents:
         local: auth.json
+systemd:
+  units:
+    - name: zincati.service
+      enable: false
 EOF
 butane -d . < config.bu > config.ign
 
