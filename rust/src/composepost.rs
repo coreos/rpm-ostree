@@ -267,15 +267,13 @@ fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
             for line in f.lines() {
                 let line = line?;
                 if line.starts_with("/var/home ") {
-                    w.write_all(b"# https://github.com/projectatomic/rpm-ostree/pull/1754\n")?;
-                    w.write_all(b"# ")?;
+                    writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
+                    write!(w, "# ")?;
                 }
-                w.write_all(line.as_bytes())?;
-                w.write_all(b"\n")?;
+                writeln!(w, "{}", line)?;
             }
-            w.write_all(b"# https://github.com/projectatomic/rpm-ostree/pull/1754\n")?;
-            w.write_all(b"/home /var/home")?;
-            w.write_all(b"\n")?;
+            writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
+            writeln!(w, "/home /var/home")?;
             Ok(())
         })?;
     }
