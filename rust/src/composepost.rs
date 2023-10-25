@@ -274,6 +274,8 @@ fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
             }
             writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
             writeln!(w, "/home /var/home")?;
+            writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/4640")?;
+            writeln!(w, "/usr/etc /etc")?;
             Ok(())
         })?;
     }
