@@ -608,6 +608,7 @@ pub mod ffi {
         fn get_recommends(&self) -> bool;
         fn get_selinux(&self) -> bool;
         fn get_selinux_label_version(&self) -> u32;
+        fn get_sysusers(&self) -> bool;
         fn get_gpg_key(&self) -> String;
         fn get_automatic_version_suffix(&self) -> String;
         fn get_container(&self) -> bool;

@@ -1531,6 +1531,7 @@ struct Treefile final : public ::rust::Opaque
   bool get_recommends () const noexcept;
   bool get_selinux () const noexcept;
   ::std::uint32_t get_selinux_label_version () const noexcept;
+  bool get_sysusers () const noexcept;
   ::rust::String get_gpg_key () const noexcept;
   ::rust::String get_automatic_version_suffix () const noexcept;
   bool get_container () const noexcept;
