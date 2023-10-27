@@ -5,4 +5,5 @@ ConditionPathExists=/run/ostree-booted
 
 [Service]
 Type=simple
+Nice=10
 ExecStart=rpm-ostree upgrade --quiet --trigger-automatic-update-policy
