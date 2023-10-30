@@ -30,7 +30,7 @@ _rpmostree_get_completion()
       then 
         if [ -z "${_rpmostree_command_completions:-}" ]
         then
-          declare _rpmostree_command_completions="$(rpm-ostree --help | grep -e '^  ' | grep -v 'rpm-ostree' | sed 's/-h, //' | awk '{print $1}')"
+          declare _rpmostree_command_completions="$(rpm-ostree --help | grep -e '^  ' | grep -v 'rpm-ostree' | sed 's/-., //' | awk '{print $1}')"
         fi
         COMPREPLY=( $(compgen -W "${_rpmostree_command_completions}" -- "${cur}") )
       fi
