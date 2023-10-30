@@ -209,7 +209,7 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
       gboolean hidden = (command->flags & RPM_OSTREE_BUILTIN_FLAG_HIDDEN) > 0;
       if (!hidden)
         {
-          g_string_append_printf (summary, "\n  %-17s", command->name);
+          g_string_append_printf (summary, "\n  %-23s", command->name);
           if (command->description != NULL)
             g_string_append_printf (summary, "%s", command->description);
         }
