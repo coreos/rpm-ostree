@@ -417,10 +417,11 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
 
       g_print ("Migrating /usr/etc/group to /usr/lib/\n");
       ROSCXX_TRY (migrate_group_except_root (rootfs_dfd, preserve_groups_set), error);
-
-      /* NSS configuration to look at the new files */
-      ROSCXX_TRY (composepost_nsswitch_altfiles (rootfs_dfd), error);
     }
+
+  /* NSS configuration to look at the new files. */
+  /* Should remove altfiles if we transfer to systemd-sysusers. */
+  ROSCXX_TRY (composepost_nsswitch_altfiles (rootfs_dfd, sysusers), error);
 
   if (selinux)
     {

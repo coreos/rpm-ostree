@@ -282,7 +282,7 @@ pub mod ffi {
             dest_rootfs_dfd: i32,
             treefile: &mut Treefile,
         ) -> Result<()>;
-        fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> Result<()>;
+        fn composepost_nsswitch_altfiles(rootfs_dfd: i32, sysusers: bool) -> Result<()>;
         fn compose_postprocess(
             rootfs_dfd: i32,
             treefile: &mut Treefile,

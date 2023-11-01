@@ -2165,7 +2165,8 @@ extern "C"
                                                   ::rpmostreecxx::Treefile &treefile) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$composepost_nsswitch_altfiles (::std::int32_t rootfs_dfd) noexcept;
+  rpmostreecxx$cxxbridge1$composepost_nsswitch_altfiles (::std::int32_t rootfs_dfd,
+                                                         bool sysusers) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$compose_postprocess (
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile &treefile, ::rust::Str next_version,
@@ -3945,9 +3946,10 @@ compose_prepare_rootfs (::std::int32_t src_rootfs_dfd, ::std::int32_t dest_rootf
 }
 
 void
-composepost_nsswitch_altfiles (::std::int32_t rootfs_dfd)
+composepost_nsswitch_altfiles (::std::int32_t rootfs_dfd, bool sysusers)
 {
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$composepost_nsswitch_altfiles (rootfs_dfd);
+  ::rust::repr::PtrLen error$
+      = rpmostreecxx$cxxbridge1$composepost_nsswitch_altfiles (rootfs_dfd, sysusers);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);

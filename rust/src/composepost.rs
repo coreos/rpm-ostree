@@ -640,7 +640,36 @@ fn strip_any_prefix<'a, 'b>(s: &'a str, prefixes: &[&'b str]) -> Option<(&'b str
         .find_map(|&p| s.strip_prefix(p).map(|r| (p, r)))
 }
 
+#[context("Delete altfiles for passwd and group entries")]
+fn del_altfiles(buf: &str) -> Result<String> {
+    let mut r = String::with_capacity(buf.len());
+    for line in buf.lines() {
+        let parts = if let Some(p) = strip_any_prefix(line, &["passwd:", "group:"]) {
+            p
+        } else {
+            r.push_str(line);
+            r.push('\n');
+            continue;
+        };
+        let (prefix, rest) = parts;
+        r.push_str(prefix);
+
+        for elt in rest.split_whitespace() {
+            if elt == "altfiles" {
+                // skip altfiles
+                continue;
+            } else {
+                r.push(' ');
+                r.push_str(elt);
+            }
+        }
+        r.push('\n');
+    }
+    Ok(r)
+}
+
 /// Inject `altfiles` after `files` for `passwd:` and `group:` entries.
+#[allow(dead_code)]
 fn add_altfiles(buf: &str) -> Result<String> {
     let mut r = String::with_capacity(buf.len());
     for line in buf.lines() {
@@ -677,20 +706,33 @@ fn add_altfiles(buf: &str) -> Result<String> {
     Ok(r)
 }
 
-/// Add `altfiles` entries to `nsswitch.conf`.
+/// Add or delete `altfiles` entries to `nsswitch.conf`.
 ///
-/// rpm-ostree currently depends on `altfiles`
-#[context("Adding altfiles to /etc/nsswitch.conf")]
-pub fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> CxxResult<()> {
+/// rpm-ostree currently depends on `altfiles`, should remove it when
+/// transfer to systemd-sysusers.
+#[context("Adding / deleting altfiles to /etc/nsswitch.conf")]
+pub fn composepost_nsswitch_altfiles(rootfs_dfd: i32, sysusers: bool) -> CxxResult<()> {
     let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let path = "usr/etc/nsswitch.conf";
     if let Some(meta) = rootfs_dfd.symlink_metadata_optional(path)? {
         // If it's a symlink, then something else e.g. authselect must own it.
+        // Do nothing if disable systemd-sysusers.
         if meta.is_symlink() {
-            return Ok(());
+            if !sysusers {
+                return Ok(());
+            }
         }
-        let nsswitch = rootfs_dfd.read_to_string(path)?;
-        let nsswitch = add_altfiles(&nsswitch)?;
+        // Delete the symlink, create and update the config.
+        let target = "usr/etc/authselect/nsswitch.conf";
+        let nsswitch = rootfs_dfd
+            .read_to_string(target)
+            .with_context(|| format!("Reading target {}", target))?;
+        rootfs_dfd
+            .remove_file(path)
+            .with_context(|| format!("Removing {}", path))?;
+        rootfs_dfd.create(path)?;
+
+        let nsswitch = del_altfiles(&nsswitch)?;
         rootfs_dfd.atomic_write(path, nsswitch.as_bytes())?;
     }
 
