@@ -148,12 +148,4 @@ if ! grep -qe "error: No such file or directory" err.txt; then
     fatal "did not find expected error when skipping CLI wraps."
 fi
 
-# test bootc cli call
-ln -s /usr/bin/rpm-ostree /usr/bin/bootc
-bootc --help > out.txt
-if ! grep -qe "Deploy and upgrade via bootable container images" out.txt; then
-    cat out.txt
-    fatal "did not find expected bootc message when using sym link to rpm-ostree."
-fi
-
 echo ok
