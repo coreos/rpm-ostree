@@ -64,7 +64,7 @@ futures = "0.3.28"
 indoc = "2.0.4"
 indicatif = "0.17.7"
 is-terminal = "0.4"
-libc = "0.2.148"
+libc = "0.2.150"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 nix = { version = "0.27.1", features = ["fs", "mount", "signal", "user"] }
