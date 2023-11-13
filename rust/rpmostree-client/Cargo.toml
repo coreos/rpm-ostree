@@ -12,6 +12,6 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.75"
-serde = { version = "1.0.188", features = ["derive"] }
+serde = { version = "1.0.192", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.107"

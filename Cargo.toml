@@ -80,7 +80,7 @@ regex = "1.9"
 reqwest = { version = "0.11", features = ["native-tls", "blocking", "gzip"] }
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 rust-ini = "0.19.0"
-serde = { version = "1.0.188", features = ["derive"] }
+serde = { version = "1.0.192", features = ["derive"] }
 serde_derive = "1.0.118"
 serde_json = "1.0.107"
 serde_yaml = "0.9.25"
