@@ -163,6 +163,11 @@ case $versionid in
     # XXX: we need to replace container-selinux too for dep reasons
     hack='https://koji.fedoraproject.org/koji/buildinfo?buildID=2281229'
     ;;
+  39)
+    evr=38.28-1.fc39
+    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2291271
+    hack=https://koji.fedoraproject.org/koji/buildinfo?buildID=2291519
+    ;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt selinux-policy-$evr
