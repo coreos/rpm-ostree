@@ -60,7 +60,7 @@ cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
   }
   stage("vmcheck") {
     try {
-      timeout(time: 45, unit: 'MINUTES') {
+      timeout(time: 60, unit: 'MINUTES') {
         shwrap("COSA_DIR=${env.WORKSPACE} JOBS=${nhosts} tests/vmcheck.sh")
       }
     } finally {

@@ -192,7 +192,6 @@ EOF
 Version: $version
 Release: $release
 ${epoch:+Epoch: $epoch}
-BuildArch: $arch
 
 %description
 %{summary}

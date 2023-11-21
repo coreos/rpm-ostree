@@ -9,17 +9,17 @@ cd $(mktemp -d)
 
 set -x
 
-# bodhi update for rpm-ostree (Fedora 33)
-rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2021-e55da2fc78
+# bodhi update for rpm-ostree (Fedora 39)
+rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2023-4ce1b013fb
 rpm-ostree status > status.txt
 rpm-ostree cleanup -p
 # A build directly via Koji (this is rpm-ostree-2021.1-2.fc33 - FIXME change
 # this to pull latest tagged...which would require learning more of the Koji API
 # *or* injecting it from the build container)
-rpm-ostree override replace https://koji.fedoraproject.org/koji/buildinfo?buildID=1671410
+rpm-ostree override replace https://koji.fedoraproject.org/koji/buildinfo?buildID=2317305
 
 n_systemd_installed=$(rpm -qa | grep ^systemd | wc -l)
-rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2023-f72fbc711a |& tee out.txt
+rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2023-f866360f34 |& tee out.txt
 n_systemd_downloaded=$(grep Downloading out.txt | wc -l)
 n_systemd_replaced=$(rpm-ostree db diff | grep systemd | wc -l)
 if [[ $n_systemd_installed != $n_systemd_downloaded ]]; then

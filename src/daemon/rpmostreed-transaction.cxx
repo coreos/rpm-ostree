@@ -373,9 +373,11 @@ transaction_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
              * well as Cockpit. It's not worth trying to deal with version skew just
              * for this yet.
              */
+            double update_c_float = (double)(update->c);
+            guint64 nitems_percentage = progress_state_n_items * 100;
             int percentage = (update->c == progress_state_n_items)
                                  ? 100
-                                 : (((double)(update->c)) / (progress_state_n_items)*100);
+                                 : (update_c_float / nitems_percentage);
             g_autofree char *newtext
                 = g_strdup_printf ("%s (%u/%u)", progress_str, update->c, progress_state_n_items);
             rpmostree_transaction_emit_percent_progress (transaction, newtext, percentage);

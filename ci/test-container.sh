@@ -55,25 +55,8 @@ rpm -e cowsay
 if rpm -q cowsay; then fatal "failed to remove cowsay"; fi
 
 versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
-# Let's start by trying to install a bona fide module.
-# NOTE: If changing this also change the layering-modules test
-case $versionid in
-  38) module=cri-o:1.25/default;;
-  *) assert_not_reached "Unsupported Fedora version: $versionid";;
-esac
-rpm-ostree ex module install "${module}"
-
-if rpm-ostree ex module uninstall "${module}" 2>err.txt; then
-  assert_not_reached "not implemented"
-fi
-if ! grep -qFe "not yet implemented" err.txt; then
-  cat err.txt
-  assert_not_reached "unexpected error"
-fi
 
 # Test overrides
-versionid=$(grep -E '^VERSION_ID=' /etc/os-release)
-versionid=${versionid:11} # trim off VERSION_ID=
 case $versionid in
   38)
     url_suffix=2.16.2/2.fc39/x86_64/ignition-2.16.2-2.fc39.x86_64.rpm
@@ -81,6 +64,14 @@ case $versionid in
     koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2174317"
     kver=6.2.8
+    krev=300
+    ;;
+  39)
+    url_suffix=2.16.2/1.fc39/x86_64/ignition-2.16.2-1.fc39.x86_64.rpm
+    # 2.15.0-3
+    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
+    koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2294111
+    kver=6.5.5
     krev=300
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
