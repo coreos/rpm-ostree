@@ -48,6 +48,9 @@ assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
 vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
 echo "ok locked rebase staging"
 
+# TODO drop when we can rely on the fix for https://github.com/systemd/systemd/issues/29275
+exit 0
+
 # This also tests custom client IDs in the journal and interaction with systemd inhibitor locks.
 cursor=$(vm_get_journal_cursor)
 vm_cmd env RPMOSTREE_CLIENT_ID=testing-agent-id \
