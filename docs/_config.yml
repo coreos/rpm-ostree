@@ -14,7 +14,7 @@ kramdown:
     ndash: "--"
     mdash: "---"
 
-remote_theme: just-the-docs/just-the-docs@v0.6.0
+remote_theme: just-the-docs/just-the-docs@v0.7.0
 plugins:
   - jekyll-remote-theme
 
