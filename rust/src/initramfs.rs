@@ -4,10 +4,12 @@
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
+use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtCommandExt;
 use fn_error_context::context;
 use ostree_ext::{gio, glib, prelude::*};
+use rustix::fd::BorrowedFd;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::io::prelude::*;
@@ -134,9 +136,37 @@ fn generate_initramfs_overlay_etc<P: glib::IsA<gio::Cancellable>>(
     generate_initramfs_overlay(root, files, cancellable)
 }
 
-pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
+fn impl_append_dracut_random_cpio(fd: BorrowedFd) -> Result<()> {
+    let fd = fd.as_filelike_view::<std::fs::File>();
+    let len = (&*fd).seek(std::io::SeekFrom::End(0))?;
+
+    // Add padding; see https://www.kernel.org/doc/Documentation/early-userspace/buffer-format.txt
+    //
+    // We *always* ensure 4 bytes of NUL padding, no matter what because at
+    // least the lz4 decompressor in the kernel uses it as an 'EOF' sign:
+    // https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=2c484419efc09e7234c667aa72698cb79ba8d8ed
+    let mut padding_len = 4;
+
+    // We also ensure alignment to 4; this isn't strictly required for
+    // compressed CPIOs, but matches what e.g. GRUB does. Also xref
+    // https://github.com/dracutdevs/dracut/blob/4971f443726360216a4ef3ba8baea258a1cd0f3b/src/dracut-cpio/src// main.rs#L644
+    // The final `% ALIGN` handles the case where we're already aligned.
+    const ALIGN: u64 = 4;
+    padding_len += (ALIGN - (len % ALIGN)) % ALIGN;
+
+    std::io::copy(&mut std::io::repeat(0).take(padding_len), &mut &*fd)?;
+
     // Generated with: fakeroot /bin/sh -c 'cd dracut-urandom && find . -print0 | sort -z | (mknod dev/random c 1 8 && mknod dev/urandom c 1 9 && cpio -o --null -H newc -R 0:0 --reproducible --quiet -D . -O /tmp/dracut-urandom.cpio)'
-    include_bytes!("../../src/libpriv/dracut-random.cpio.gz")
+    let buf = include_bytes!("../../src/libpriv/dracut-random.cpio.gz");
+    (&*fd).write_all(buf)?;
+    Ok(())
+}
+
+/// Append a small static initramfs chunk which includes /dev/{u,}random, because
+/// dracut's FIPS module may fail to do so in restricted environments.
+pub(crate) fn append_dracut_random_cpio(fd: i32) -> CxxResult<()> {
+    let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+    impl_append_dracut_random_cpio(fd).map_err(Into::into)
 }
 
 /// cxx-rs entrypoint; we can't use generics and need to return a raw integer for fd
@@ -171,6 +201,21 @@ mod test {
             std::io::copy(&mut f, &mut o)?;
         }
         let _ = tmpd.metadata("initramfs").context("stat")?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_append_initramfs() -> Result<()> {
+        use std::os::fd::AsFd;
+        // Current size of static file
+        let dracut_random_len = 171u64;
+        let tmpf = tempfile::tempfile()?;
+        impl_append_dracut_random_cpio(tmpf.as_fd()).unwrap();
+        assert_eq!(tmpf.metadata()?.len(), dracut_random_len + 4);
+        let mut tmpf = tempfile::tempfile()?;
+        tmpf.write_all(b"x")?;
+        impl_append_dracut_random_cpio(tmpf.as_fd()).unwrap();
+        assert_eq!(tmpf.metadata()?.len(), dracut_random_len + 8);
         Ok(())
     }
 }

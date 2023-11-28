@@ -1917,7 +1917,7 @@ rpm_importer_new (::rust::Str pkg_name, ::rust::Str ostree_branch,
 ::rust::String tmpfiles_translate (::rust::Str abs_path, ::rpmostreecxx::GFileInfo const &file_info,
                                    ::rust::Str username, ::rust::Str groupname);
 
-::rust::Slice< ::std::uint8_t const> get_dracut_random_cpio () noexcept;
+void append_dracut_random_cpio (::std::int32_t fd);
 
 ::std::int32_t initramfs_overlay_generate (::rust::Vec< ::rust::String> const &files,
                                            ::rpmostreecxx::GCancellable &cancellable);

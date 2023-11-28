@@ -436,7 +436,7 @@ pub mod ffi {
 
     // initramfs.rs
     extern "Rust" {
-        fn get_dracut_random_cpio() -> &'static [u8];
+        fn append_dracut_random_cpio(fd: i32) -> Result<()>;
         fn initramfs_overlay_generate(
             files: &Vec<String>,
             cancellable: Pin<&mut GCancellable>,

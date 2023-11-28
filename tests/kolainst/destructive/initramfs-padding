@@ -1,0 +1,37 @@
+#!/bin/bash
+# kola: { "tags": "needs-internet", "minMemory": 1536 }
+# Test https://github.com/coreos/rpm-ostree/pull/4705
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+cd "$(mktemp -d)"
+
+set -x
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+  "")
+    cur_initrd=$(ls /boot/ostree/*/initramfs-*.img)
+
+    # check we're not already on lz4
+    (/usr/lib/dracut/skipcpio "${cur_initrd}" || :) | head -c 100 > out.img
+    file out.img > out.img.file
+    assert_not_file_has_content out.img.file "LZ4"
+
+    rpm-ostree install lz4 -A
+    rpm-ostree initramfs --enable --arg='--compress=lz4'
+    /tmp/autopkgtest-reboot reboot
+    ;;
+  "reboot")
+    new_initrd=$(ls -t /boot/ostree/*/initramfs-*.img | head -n 1)
+    (/usr/lib/dracut/skipcpio "${new_initrd}" || :) | head -c 100 > out.new.img
+    file out.new.img > out.new.img.file
+    assert_file_has_content out.new.img.file "LZ4"
+    set +x # so our grepping doesn't get a hit on itself
+    if journalctl --grep 'Initramfs unpacking failed: Decoding failed'; then
+      fatal "Found initramfs unpacking failure in journal"
+    fi
+    ;;
+  *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac
+
+echo "ok"
