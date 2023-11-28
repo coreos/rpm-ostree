@@ -95,13 +95,18 @@ fn run_dracut(kernel_dir: &str) -> Result<()> {
             res
         ));
     }
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .append(true)
-        .open(&tmp_initramfs_path)?;
-    // Also append the dev/urandom bits here, see the duplicate bits in rpmostree-kernel.cxx
-    f.write(crate::initramfs::get_dracut_random_cpio())?;
-    drop(f);
+    // In container environments without capabilities to create device files, the dracut
+    // FIPS module will fail to create /dev/random, which will break booting in FIPS mode.
+    //
+    if let Some(blob) = crate::initramfs::get_dracut_random_cpio_impl() {
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(&tmp_initramfs_path)?;
+        // Also append the dev/urandom bits here, see the duplicate bits in rpmostree-kernel.cxx
+        f.write(blob)?;
+        drop(f);
+    }
     let utf8_tmp_dir_path = Utf8Path::from_path(tmp_dir.path().strip_prefix("/")?)
         .context("Error turning Path to Utf8Path")?;
     root_fs.rename(

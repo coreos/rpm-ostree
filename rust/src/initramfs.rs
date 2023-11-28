@@ -134,9 +134,29 @@ fn generate_initramfs_overlay_etc<P: glib::IsA<gio::Cancellable>>(
     generate_initramfs_overlay(root, files, cancellable)
 }
 
-pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
+/// In some cases we may return a pre-generated CPIO blob with /dev/{u,}random embedded.
+/// This is necessary when running dracut in a restricted container, where the current FIPS
+/// plugin may fail.
+///
+/// For FIPS mode we need /dev/urandom pre-created because the FIPS
+/// standards authors require that randomness is tested in a
+/// *shared library constructor* (instead of first use as would be
+/// the sane thing).
+/// https://bugzilla.redhat.com/show_bug.cgi?id=1778940
+/// https://bugzilla.redhat.com/show_bug.cgi?id=1401444
+/// https://bugzilla.redhat.com/show_bug.cgi?id=1380866
+pub(crate) fn get_dracut_random_cpio_impl() -> Option<&'static [u8]> {
+    // An opt-in environment variable to skip the embedding.
+    if std::env::var_os("RPMOSTREE_SKIP_DRACUT_RANDOM_EXTENSION").is_some() {
+        return None;
+    }
     // Generated with: fakeroot /bin/sh -c 'cd dracut-urandom && find . -print0 | sort -z | (mknod dev/random c 1 8 && mknod dev/urandom c 1 9 && cpio -o --null -H newc -R 0:0 --reproducible --quiet -D . -O /tmp/dracut-urandom.cpio)'
-    include_bytes!("../../src/libpriv/dracut-random.cpio.gz")
+    Some(include_bytes!("../../src/libpriv/dracut-random.cpio.gz"))
+}
+
+/// C++ compatible wrapper that returns a zero-size slice instead of `None`.
+pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
+    get_dracut_random_cpio_impl().unwrap_or(&[])
 }
 
 /// cxx-rs entrypoint; we can't use generics and need to return a raw integer for fd
