@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs::File;
+use std::io::BufReader;
 use std::num::NonZeroU32;
 use std::process::Command;
 use std::rc::Rc;
@@ -44,6 +46,11 @@ struct ContainerEncapsulateOpts {
     /// Additional labels for the container
     #[clap(name = "label", long, short)]
     labels: Vec<String>,
+
+    /// Path to container image configuration in JSON format.  This is the `config`
+    /// field of https://github.com/opencontainers/image-spec/blob/main/config.md
+    #[clap(long)]
+    image_config: Option<Utf8PathBuf>,
 
     /// Propagate an OSTree commit metadata key to container label
     #[clap(name = "copymeta", long)]
@@ -449,6 +456,11 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     opts.max_layers = opt.max_layers;
     opts.prior_build = package_structure.as_ref();
     opts.contentmeta = Some(&meta);
+    if let Some(config_path) = opt.image_config.as_deref() {
+        let config = serde_json::from_reader(File::open(config_path).map(BufReader::new)?)
+            .map_err(anyhow::Error::msg)?;
+        opts.container_config = Some(config);
+    }
     let handle = tokio::runtime::Handle::current();
     let digest = progress_task("Generating container image", || {
         handle.block_on(async {

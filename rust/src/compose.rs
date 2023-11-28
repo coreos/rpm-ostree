@@ -114,6 +114,11 @@ struct Opt {
     #[clap(name = "label", long, short)]
     labels: Vec<String>,
 
+    /// Path to container image configuration in JSON format.  This is the `config`
+    /// field of https://github.com/opencontainers/image-spec/blob/main/config.md
+    #[clap(long)]
+    image_config: Option<Utf8PathBuf>,
+
     #[clap(long, value_parser)]
     /// Update the timestamp or create this file on changes
     touch_if_changed: Option<Utf8PathBuf>,
@@ -322,6 +327,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         .args(&["compose", "container-encapsulate"])
         .args(label_args)
         .args(previous_arg)
+        .args(opt.image_config.map(|v| format!("--image-config={v}")))
         .args(&[
             "--repo",
             repo.as_str(),
