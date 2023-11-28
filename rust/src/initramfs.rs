@@ -136,7 +136,8 @@ fn generate_initramfs_overlay_etc<P: glib::IsA<gio::Cancellable>>(
 
 pub(crate) fn get_dracut_random_cpio() -> &'static [u8] {
     // Generated with: fakeroot /bin/sh -c 'cd dracut-urandom && find . -print0 | sort -z | (mknod dev/random c 1 8 && mknod dev/urandom c 1 9 && cpio -o --null -H newc -R 0:0 --reproducible --quiet -D . -O /tmp/dracut-urandom.cpio)'
-    include_bytes!("../../src/libpriv/dracut-random.cpio.gz")
+    let list_dir = Command::new("rpm-ostree-get-dracut-random-cpio").output().expect("failed to execute rpm-ostree-get-dracut-random-cpio process");
+    &list_dir.stdout;
 }
 
 /// cxx-rs entrypoint; we can't use generics and need to return a raw integer for fd
