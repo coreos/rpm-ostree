@@ -2341,7 +2341,8 @@ extern "C"
       ::rust::Str abs_path, ::rpmostreecxx::GFileInfo const &file_info, ::rust::Str username,
       ::rust::Str groupname, ::rust::String *return$) noexcept;
 
-  ::rust::repr::Fat rpmostreecxx$cxxbridge1$get_dracut_random_cpio () noexcept;
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$append_dracut_random_cpio (::std::int32_t fd) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$initramfs_overlay_generate (::rust::Vec< ::rust::String> const &files,
@@ -4417,11 +4418,14 @@ tmpfiles_translate (::rust::Str abs_path, ::rpmostreecxx::GFileInfo const &file_
   return ::std::move (return$.value);
 }
 
-::rust::Slice< ::std::uint8_t const>
-get_dracut_random_cpio () noexcept
+void
+append_dracut_random_cpio (::std::int32_t fd)
 {
-  return ::rust::impl< ::rust::Slice< ::std::uint8_t const> >::slice (
-      rpmostreecxx$cxxbridge1$get_dracut_random_cpio ());
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$append_dracut_random_cpio (fd);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
 }
 
 ::std::int32_t

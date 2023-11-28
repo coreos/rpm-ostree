@@ -580,11 +580,7 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
    * https://bugzilla.redhat.com/show_bug.cgi?id=1401444
    * https://bugzilla.redhat.com/show_bug.cgi?id=1380866
    * */
-  auto random_cpio_data = rpmostreecxx::get_dracut_random_cpio ();
-  if (lseek (tmpf.fd, 0, SEEK_END) < 0)
-    return glnx_throw_errno_prefix (error, "lseek");
-  if (glnx_loop_write (tmpf.fd, random_cpio_data.data (), random_cpio_data.length ()) < 0)
-    return glnx_throw_errno_prefix (error, "write");
+  CXX_TRY (rpmostreecxx::append_dracut_random_cpio (tmpf.fd), error);
 
   if (rebuild_from_initramfs)
     (void)unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
