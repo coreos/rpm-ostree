@@ -103,19 +103,6 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
 name = "async-compression"
-version = "0.3.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "942c7cd7ae39e91bde4820d74132e9862e62c2f386c3aa90ccf55949f5bad63a"
-dependencies = [
- "flate2",
- "futures-core",
- "memchr",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
-name = "async-compression"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b0122885821398cc923ece939e24d1056a2384ee719432397fa9db87230ff11"
@@ -242,7 +229,7 @@ dependencies = [
  "ambient-authority",
  "fs-set-times",
  "io-extras",
- "io-lifetimes 2.0.2",
+ "io-lifetimes",
  "ipnet",
  "maybe-owned",
  "rustix",
@@ -259,7 +246,7 @@ dependencies = [
  "camino",
  "cap-primitives",
  "io-extras",
- "io-lifetimes 2.0.2",
+ "io-lifetimes",
  "rustix",
 ]
 
@@ -850,7 +837,7 @@ version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd738b84894214045e8414eaded76359b4a5773f0a0a56b16575110739cdcf39"
 dependencies = [
- "io-lifetimes 2.0.2",
+ "io-lifetimes",
  "rustix",
  "windows-sys 0.48.0",
 ]
@@ -1337,18 +1324,7 @@ version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d3c230ee517ee76b1cc593b52939ff68deda3fae9e41eca426c6b4993df51c4"
 dependencies = [
- "io-lifetimes 2.0.2",
- "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "io-lifetimes"
-version = "1.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c66c74d2ae7e79a5a8f7ac924adbe38ee42a859c6539ad869eb51f0b52dc220"
-dependencies = [
- "hermit-abi 0.3.1",
- "libc",
+ "io-lifetimes",
  "windows-sys 0.48.0",
 ]
 
@@ -1424,14 +1400,14 @@ dependencies = [
 
 [[package]]
 name = "libsystemd"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88b9597a67aa1c81a6624603e6bd0bcefb9e0f94c9c54970ec53771082104b4e"
+checksum = "c592dc396b464005f78a5853555b9f240bc5378bf5221acc4e129910b2678869"
 dependencies = [
  "hmac",
  "libc",
  "log",
- "nix 0.26.4",
+ "nix",
  "nom",
  "once_cell",
  "serde",
@@ -1515,18 +1491,18 @@ checksum = "8f232d6ef707e1956a43342693d2a31e72989554d58299d7a88738cc95b0d35c"
 
 [[package]]
 name = "memoffset"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
+checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
 dependencies = [
  "autocfg",
 ]
 
 [[package]]
 name = "memoffset"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
+checksum = "5a634b1c61a95585bd15607c6ab0c4e5b226e695ff2800ba0cdccddf208c406c"
 dependencies = [
  "autocfg",
 ]
@@ -1584,18 +1560,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "598beaf3cc6fdd9a5dfb1630c2800c7acd31df7aaf0f565796fba2b53ca1af1b"
-dependencies = [
- "bitflags 1.3.2",
- "cfg-if",
- "libc",
- "memoffset 0.7.1",
-]
-
-[[package]]
-name = "nix"
 version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
@@ -1603,6 +1567,7 @@ dependencies = [
  "bitflags 2.4.1",
  "cfg-if",
  "libc",
+ "memoffset 0.9.0",
 ]
 
 [[package]]
@@ -1771,13 +1736,12 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.12.6"
+version = "0.12.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c62546260800af9524f1d971719d06efa6875f0730cb3830f744f71701b63ae1"
+checksum = "b7ff57214b8d77a9bb2d6bf6f8ff45173bec9d5239c7b91ebfd782ba2e2bf8d9"
 dependencies = [
  "anyhow",
- "async-compression 0.3.15",
- "bitflags 1.3.2",
+ "async-compression",
  "camino",
  "cap-std-ext",
  "chrono",
@@ -1789,7 +1753,7 @@ dependencies = [
  "gvariant",
  "hex",
  "indicatif",
- "io-lifetimes 1.0.10",
+ "io-lifetimes",
  "libc",
  "libsystemd",
  "olpc-cjson",
@@ -2129,7 +2093,7 @@ version = "0.11.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e9ad3fe7488d7e34558a2033d45a0c90b72d97b4f80705666fea71472e2e6a1"
 dependencies = [
- "async-compression 0.4.0",
+ "async-compression",
  "base64 0.21.0",
  "bytes",
  "encoding_rs",
@@ -2199,7 +2163,7 @@ dependencies = [
  "libc",
  "libdnf-sys",
  "maplit",
- "nix 0.27.1",
+ "nix",
  "once_cell",
  "openssl",
  "os-release",
