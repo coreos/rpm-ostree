@@ -53,6 +53,7 @@ pub mod ffi {
         fn get_name(self: Pin<&mut DnfPackage>) -> String;
         fn get_evr(self: Pin<&mut DnfPackage>) -> String;
         fn get_arch(self: Pin<&mut DnfPackage>) -> String;
+        fn get_sourcerpm(self: Pin<&mut DnfPackage>) -> String;
         /// SAFETY: This can only be called on a valid pointer
         unsafe fn dnf_package_from_ptr(pkg: *mut FFIDnfPackage) -> UniquePtr<DnfPackage>;
 
