@@ -63,6 +63,11 @@ public:
   {
     return rust::String (::dnf_package_get_arch (pkg));
   };
+  rust::String
+  get_sourcerpm ()
+  {
+    return rust::String (::dnf_package_get_sourcerpm (pkg));
+  };
 };
 
 std::unique_ptr<DnfPackage> dnf_package_from_ptr (FFIDnfPackage *pkg) noexcept;

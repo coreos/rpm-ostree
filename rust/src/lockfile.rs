@@ -124,13 +124,13 @@ enum LockedPackage {
     Evr {
         evr: String,
         digest: Option<String>,
-        #[serde(skip_serializing)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     Evra {
         evra: String,
         digest: Option<String>,
-        #[serde(skip_serializing)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
 }
@@ -333,13 +333,27 @@ pub(crate) fn lockfile_write(
         let evr = pkg.pin_mut().get_evr();
         let arch = pkg.pin_mut().get_arch();
 
+        // we just want the name; the EVR is redundant with `evra` and A is just 'src'
+        let srpm_metadata = {
+            let srpm_nvra = pkg.pin_mut().get_sourcerpm();
+            let split: Vec<&str> = srpm_nvra.rsplitn(3, '-').collect();
+            if split.len() != 3 {
+                // I don't think that can ever happen in the scenarios we care
+                // about, but seems excessive to fail the build for it
+                eprintln!("warning: RPM {name}-{evr}.{arch} has invalid SRPM field {srpm_nvra}");
+                None
+            } else {
+                Some(BTreeMap::from([("sourcerpm".into(), split[2].into())]))
+            }
+        };
+
         let chksum = crate::ffi::get_repodata_chksum_repr(&mut pkg.pin_mut().get_ref())?;
         output_pkgs.insert(
             name.as_str().to_string(),
             LockedPackage::Evra {
                 evra: format!("{evr}.{arch}"),
                 digest: Some(chksum),
-                metadata: None,
+                metadata: srpm_metadata,
             },
         );
     }
