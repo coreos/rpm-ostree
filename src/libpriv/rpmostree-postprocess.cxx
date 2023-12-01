@@ -425,7 +425,20 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
 
   ROSCXX_TRY (rootfs_prepare_links (rootfs_dfd), error);
 
-  ROSCXX_TRY (convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
+  if (!unified_core_mode)
+    ROSCXX_TRY (convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);
+  else
+    {
+      /* In unified core mode, /var entries are converted to tmpfiles.d at
+       * import time and scriptlets are prevented from writing to /var. What
+       * remains is just the compat symlinks that we created ourselves, which we
+       * should stop writing since it duplicates other tmpfiles.d entries. */
+      if (!glnx_shutil_rm_rf_at (rootfs_dfd, "var", cancellable, error))
+        return FALSE;
+      /* but we still want the mount point as part of the OSTree commit */
+      if (mkdirat (rootfs_dfd, "var", 0755) < 0)
+        return glnx_throw_errno_prefix (error, "mkdirat(var)");
+    }
 
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
