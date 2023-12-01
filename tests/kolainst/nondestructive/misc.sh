@@ -33,6 +33,28 @@ rm -f out.txt
 rpm-ostree -h usroverlay >out.txt
 assert_file_has_content out.txt "ostree admin unlock"
 
+# Verify https://github.com/coreos/rpm-ostree/issues/26
+tmpfiles="/usr/lib/tmpfiles.d/rpm-ostree-autovar.conf"
+# Duplication in tmp.conf
+assert_not_file_has_content $tmpfiles 'd /var/tmp'
+# Duplication in var.conf
+assert_not_file_has_content $tmpfiles 'd /var/cache '
+assert_file_has_content_literal $tmpfiles 'd /var/lib/chrony 0750 chrony chrony - -'
+
+set +x # so our grepping doesn't get a hit on itself
+if journalctl --grep 'Duplicate line'; then
+    fatal "Should not get logs (Duplicate line)"
+fi
+set -x # restore
+
+# Verify remove can trigger the generation of rpm-ostree-autovar.conf
+rpm-ostree override remove chrony
+deploy=$(rpm-ostree status --json | jq -r '.deployments[0]["id"]' | awk -F'-' '{print $3}')
+osname=$(rpm-ostree status --json | jq -r '.deployments[0]["osname"]')
+cat /ostree/deploy/${osname}/deploy/${deploy}/${tmpfiles} > autovar.txt
+assert_not_file_has_content autovar.txt '/var/lib/chrony'
+rpm-ostree cleanup -pr
+
 # make sure that package-related entries are always present,
 # even when they're empty.
 # Validate there's no live state by default.

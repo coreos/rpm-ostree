@@ -3085,13 +3085,11 @@ delete_package_from_root (RpmOstreeContext *self, rpmte pkg, int rootfs_dfd, GHa
         }
     }
 
-  /* And finally, delete any automatically generated tmpfiles.d dropin. Though
-   * ideally we'd have a way to be sure that this was the rpm-ostree generated
-   * one. */
+  /* And finally, delete any automatically generated tmpfiles.d dropin. */
   glnx_autofd int tmpfiles_dfd = -1;
-  if (!glnx_opendirat (rootfs_dfd, "usr/lib/tmpfiles.d", TRUE, &tmpfiles_dfd, error))
+  if (!glnx_opendirat (rootfs_dfd, "usr/lib/rpm-ostree/tmpfiles.d", TRUE, &tmpfiles_dfd, error))
     return FALSE;
-  g_autofree char *dropin = g_strdup_printf ("pkg-%s.conf", rpmteN (pkg));
+  g_autofree char *dropin = g_strdup_printf ("%s.conf", rpmteN (pkg));
   if (!glnx_shutil_rm_rf_at (tmpfiles_dfd, dropin, cancellable, error))
     return FALSE;
 
@@ -4463,6 +4461,12 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
       if (!rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
         return FALSE;
     }
+
+  /* Remove duplicated tmpfiles entries.
+   * See https://github.com/coreos/rpm-ostree/issues/26
+   */
+  if (overlays->len > 0 || overrides_remove->len > 0 || overrides_replace->len > 0)
+    ROSCXX_TRY (deduplicate_tmpfiles_entries (tmprootfs_dfd), error);
 
   /* Undo the /etc move above */
   CXX_TRY (etc_guard->undo (), error);

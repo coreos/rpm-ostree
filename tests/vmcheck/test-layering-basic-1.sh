@@ -52,9 +52,9 @@ vm_reboot
 
 vm_cmd rpm -qlv test-opt
 root=$(vm_get_deployment_root 0)
-vm_has_files $root/usr/lib/opt/app/bin/foo $root/usr/lib/tmpfiles.d/pkg-test-opt.conf
-vm_cmd cat $root/usr/lib/tmpfiles.d/pkg-test-opt.conf
-vm_cmd grep -q /usr/lib/opt/app $root/usr/lib/tmpfiles.d/pkg-test-opt.conf
+vm_has_files $root/usr/lib/opt/app/bin/foo $root/usr/lib/rpm-ostree/tmpfiles.d/test-opt.conf
+vm_cmd cat $root/usr/lib/rpm-ostree/tmpfiles.d/test-opt.conf
+vm_cmd grep -q /usr/lib/opt/app $root/usr/lib/rpm-ostree/tmpfiles.d/test-opt.conf
 vm_cmd ls -al /var/opt/ /var/app
 vm_cmd test -d "'/opt/some lib/subdir'"
 vm_cmd test -d '/opt/quote\"ed/subdir'

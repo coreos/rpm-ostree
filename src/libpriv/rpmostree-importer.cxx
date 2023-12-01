@@ -627,10 +627,12 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
 
       if (!glnx_mkdtemp ("rpm-ostree-import.XXXXXX", 0700, &tmpdir, error))
         return FALSE;
-      if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
+      if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "usr/lib/rpm-ostree/tmpfiles.d", 0755, cancellable,
+                                   error))
         return FALSE;
       if (!glnx_file_replace_contents_at (
-              tmpdir.fd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkg_name.c_str (), ".conf"),
+              tmpdir.fd,
+              glnx_strjoina ("usr/lib/rpm-ostree/tmpfiles.d/", pkg_name.c_str (), ".conf"),
               (guint8 *)content.data (), content.size (), GLNX_FILE_REPLACE_NODATASYNC, cancellable,
               error))
         return FALSE;

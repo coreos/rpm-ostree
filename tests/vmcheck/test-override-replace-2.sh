@@ -134,13 +134,15 @@ echo "ok override replace both"
 
 # And now verify https://github.com/coreos/rpm-ostree/pull/3228
 prev_root=$(vm_get_deployment_root 0)
-vm_cmd grep ' /var/pkg-with-var ' "${prev_root}/usr/lib/tmpfiles.d/pkg-pkg-with-var.conf"
+vm_cmd grep ' /var/pkg-with-var ' "${prev_root}/usr/lib/rpm-ostree/tmpfiles.d/pkg-with-var.conf"
 vm_build_rpm pkg-with-var version 2 \
   files "/var/pkg-with-different-var" \
   install "mkdir -p '%{buildroot}/var/pkg-with-different-var'"
 vm_rpmostree override replace $YUMREPO/pkg-with-var-2-1.x86_64.rpm
 new_root=$(vm_get_deployment_root 0)
-vm_cmd grep ' /var/pkg-with-different-var ' "${new_root}/usr/lib/tmpfiles.d/pkg-pkg-with-var.conf"
+vm_cmd grep ' /var/pkg-with-different-var ' "${new_root}/usr/lib/rpm-ostree/tmpfiles.d/pkg-with-var.conf"
+vm_cmd ! grep ' /var/pkg-with-var ' "${new_root}/usr/lib/rpm-ostree/tmpfiles.d/pkg-with-var.conf"
+vm_cmd ! grep ' /var/pkg-with-var ' "${new_root}/usr/lib/tmpfiles.d/rpm-ostree-autovar.conf"
 vm_rpmostree cleanup -p
 echo "ok override replace deletes tmpfiles.d dropin"
 
