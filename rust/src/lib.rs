@@ -710,6 +710,7 @@ pub mod ffi {
     extern "Rust" {
         fn prepare_rpm_layering(rootfs: i32, merge_passwd_dir: &str) -> Result<bool>;
         fn complete_rpm_layering(rootfs: i32) -> Result<()>;
+        fn deduplicate_tmpfiles_entries(rootfs: i32) -> Result<()>;
         fn passwd_cleanup(rootfs: i32) -> Result<()>;
         fn migrate_group_except_root(rootfs: i32, preserved_groups: &Vec<String>) -> Result<()>;
         fn migrate_passwd_except_root(rootfs: i32) -> Result<()>;
@@ -986,6 +987,8 @@ mod rpmutils;
 pub(crate) use self::rpmutils::*;
 mod testutils;
 pub(crate) use self::testutils::*;
+mod tmpfiles;
+pub use self::tmpfiles::*;
 mod treefile;
 pub use self::treefile::*;
 pub mod utils;

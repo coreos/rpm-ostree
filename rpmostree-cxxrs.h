@@ -2043,4 +2043,6 @@ void lockfile_write (::rust::Str filename, ::rpmostreecxx::CxxGObjectArray &pack
 void origin_validate_roundtrip (::rpmostreecxx::GKeyFile const &kf) noexcept;
 
 ::rust::String cache_branch_to_nevra (::rust::Str nevra) noexcept;
+
+void deduplicate_tmpfiles_entries (::std::int32_t rootfs);
 } // namespace rpmostreecxx

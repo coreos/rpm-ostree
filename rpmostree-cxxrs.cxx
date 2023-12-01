@@ -2922,6 +2922,9 @@ extern "C"
   void rpmostreecxx$cxxbridge1$cache_branch_to_nevra (::rust::Str nevra,
                                                       ::rust::String *return$) noexcept;
 
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (::std::int32_t rootfs) noexcept;
+
   ::std::uint32_t
   rpmostreecxx$cxxbridge1$CxxGObjectArray$length (::rpmostreecxx::CxxGObjectArray &self) noexcept
   {
@@ -6059,6 +6062,16 @@ cache_branch_to_nevra (::rust::Str nevra) noexcept
   rpmostreecxx$cxxbridge1$cache_branch_to_nevra (nevra, &return$.value);
   return ::std::move (return$.value);
 }
+
+void
+deduplicate_tmpfiles_entries (::std::int32_t rootfs)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (rootfs);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
 } // namespace rpmostreecxx
 
 extern "C"
@@ -6773,5 +6786,6 @@ Vec< ::rpmostreecxx::LockedPackage>::truncate (::std::size_t len)
 {
   return cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$truncate (this, len);
 }
+
 } // namespace cxxbridge1
 } // namespace rust

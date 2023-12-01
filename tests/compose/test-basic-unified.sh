@@ -119,20 +119,19 @@ echo "ok no cachedir"
 basic_test
 
 # This one is done by postprocessing /var
-ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/pkg-filesystem.conf > autovar.txt
+rpmostree_tmpfiles_path="/usr/lib/rpm-ostree/tmpfiles.d"
+ostree --repo="${repo}" cat "${treeref}" ${rpmostree_tmpfiles_path}/filesystem.conf > autovar.txt
 # Picked this one at random as an example of something that won't likely be
 # converted to tmpfiles.d upstream.  But if it is, we can change this test.
 assert_file_has_content_literal autovar.txt 'd /var/cache 0755 root root - -'
-ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/pkg-chrony.conf > autovar.txt
+ostree --repo="${repo}" cat "${treeref}" ${rpmostree_tmpfiles_path}/chrony.conf > autovar.txt
 # And this one has a non-root uid
 assert_file_has_content_literal autovar.txt 'd /var/lib/chrony 0750 chrony chrony - -'
 # see rpmostree-importer.c
-if ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/pkg-rpm.conf > rpm.txt 2>/dev/null; then
+if ostree --repo="${repo}" cat "${treeref}" ${rpmostree_tmpfiles_path}/rpm.conf > rpm.txt 2>/dev/null; then
     assert_not_file_has_content rpm.txt 'd /var/lib/rpm'
 fi
-ostree --repo="${repo}" cat "${treeref}" /usr/lib/tmpfiles.d/pkg-pam.conf > autovar.txt
-# Verify translating /var/run -> /run
-assert_file_has_content_literal autovar.txt 'd /run/console'
+
 echo "ok autovar"
 
 rpm-ostree db list --repo="${repo}" "${treeref}" --advisories > db-list-adv.txt
