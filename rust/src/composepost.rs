@@ -43,6 +43,11 @@ use std::process::Stdio;
 /// location to `/usr/lib/<entry>`.
 pub(crate) static COMPAT_VARLIB_SYMLINKS: &[&str] = &["alternatives", "vagrant"];
 
+const DEFAULT_DIRMODE: u32 = 0o755;
+
+/// Symlinks to ensure home directories persist by default.
+const OSTREE_HOME_SYMLINKS: &[(&str, &str)] = &[("var/roothome", "root"), ("var/home", "home")];
+
 /* See rpmostree-core.h */
 const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
 pub(crate) const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
@@ -59,26 +64,15 @@ fn dir_move_if_exists(src: &cap_std::fs::Dir, dest: &cap_std::fs::Dir, name: &st
 
 /// Initialize an ostree-oriented root filesystem.
 ///
-/// This is hardcoded; in the future we may make more things configurable,
-/// but the goal is for all state to be in `/etc` and `/var`.
-#[context("Initializing rootfs")]
-fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Result<()> {
-    println!("Initializing rootfs");
-
-    let default_dirmode: u32 = 0o755;
-    let default_dirbuilder = &dirbuilder_from_mode(default_dirmode);
-    let default_dirmode = cap_std::fs::Permissions::from_mode(default_dirmode);
-
+/// Now unfortunately today, we're not generating toplevel filesystem entries
+/// because the `filesystem` package does it from Lua code, which we don't run.
+/// (See rpmostree-core.cxx)
+#[context("Initializing rootfs (base)")]
+fn compose_init_rootfs_base(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Result<()> {
     const TOPLEVEL_DIRS: &[&str] = &["dev", "proc", "run", "sys", "var", "sysroot"];
-    const TOPLEVEL_SYMLINKS: &[(&str, &str)] = &[
-        ("var/opt", "opt"),
-        ("var/srv", "srv"),
-        ("var/mnt", "mnt"),
-        ("var/roothome", "root"),
-        ("var/home", "home"),
-        ("run/media", "media"),
-        ("sysroot/ostree", "ostree"),
-    ];
+
+    let default_dirbuilder = &dirbuilder_from_mode(DEFAULT_DIRMODE);
+    let default_dirmode = cap_std::fs::Permissions::from_mode(DEFAULT_DIRMODE);
 
     rootfs_dfd
         .set_permissions(".", default_dirmode)
@@ -89,11 +83,6 @@ fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Resul
             .ensure_dir_with(d, default_dirbuilder)
             .with_context(|| format!("Creating {d}"))
             .map(|_: bool| ())
-    })?;
-    TOPLEVEL_SYMLINKS.par_iter().try_for_each(|&(dest, src)| {
-        rootfs_dfd
-            .symlink(dest, src)
-            .with_context(|| format!("Creating {src}"))
     })?;
 
     if tmp_is_dir {
@@ -108,15 +97,86 @@ fn compose_init_rootfs(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Resul
         rootfs_dfd.symlink("sysroot/tmp", "tmp")?;
     }
 
+    OSTREE_HOME_SYMLINKS
+        .par_iter()
+        .try_for_each(|&(dest, src)| {
+            rootfs_dfd
+                .symlink(dest, src)
+                .with_context(|| format!("Creating {src}"))
+        })?;
+
+    rootfs_dfd
+        .symlink("sysroot/ostree", "ostree")
+        .context("Symlinking ostree -> sysroot/ostree")?;
+
+    Ok(())
+}
+
+/// Initialize a root filesystem set up for use with ostree's `root.transient` mode.
+#[context("Initializing rootfs (base)")]
+fn compose_init_rootfs_transient(rootfs_dfd: &cap_std::fs::Dir) -> Result<()> {
+    // Enforce tmp-is-dir in this, because there's really no reason not to.
+    compose_init_rootfs_base(rootfs_dfd, true)?;
+    // Again we need to make these directories here because we don't run
+    // the `filesystem` package's lua script.
+    const EXTRA_TOPLEVEL_DIRS: &[&str] = &["opt", "media", "mnt", "usr/local"];
+
+    let mut db = dirbuilder_from_mode(DEFAULT_DIRMODE);
+    db.recursive(true);
+    EXTRA_TOPLEVEL_DIRS.par_iter().try_for_each(|&d| {
+        // We need to handle the case where these may have been created as a symlink
+        // by tmpfiles.d snippets for example.
+        if let Some(meta) = rootfs_dfd.symlink_metadata_optional(d)? {
+            if !meta.is_dir() {
+                rootfs_dfd.remove_file(d)?;
+            }
+        }
+        rootfs_dfd
+            .ensure_dir_with(d, &db)
+            .with_context(|| format!("Creating {d}"))
+            .map(|_: bool| ())
+    })?;
+
+    Ok(())
+}
+
+/// Initialize an ostree-oriented root filesystem.
+///
+/// This is hardcoded; in the future we may make more things configurable,
+/// but the goal is for all state to be in `/etc` and `/var`.
+#[context("Initializing rootfs")]
+fn compose_init_rootfs_strict(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Result<()> {
+    println!("Initializing rootfs");
+
+    compose_init_rootfs_base(rootfs_dfd, tmp_is_dir)?;
+
+    // This is used in the case where we don't have a transient rootfs; redirect
+    // these toplevel directories underneath /var.
+    const OSTREE_STRICT_MODE_SYMLINKS: &[(&str, &str)] = &[
+        ("var/opt", "opt"),
+        ("var/srv", "srv"),
+        ("var/mnt", "mnt"),
+        ("run/media", "media"),
+    ];
+    OSTREE_STRICT_MODE_SYMLINKS
+        .par_iter()
+        .try_for_each(|&(dest, src)| {
+            rootfs_dfd
+                .symlink(dest, src)
+                .with_context(|| format!("Creating {src}"))
+        })?;
+
     Ok(())
 }
 
 /// Prepare rootfs for commit.
 ///
-/// Initialize a basic root filesystem in @target_root_dfd, then walk over the
+/// In the default mode, we initialize a basic root filesystem in @target_root_dfd, then walk over the
 /// root filesystem in @src_rootfs_fd and take the basic content (/usr, /boot, /var)
 /// and cherry pick only specific bits of the rest of the toplevel like compatibility
 /// symlinks (e.g. /lib64 -> /usr/lib64) if they exist.
+///
+/// However, if the rootfs is setup as transient, then we just copy everything.
 #[context("Preparing rootfs for commit")]
 pub fn compose_prepare_rootfs(
     src_rootfs_dfd: i32,
@@ -127,7 +187,32 @@ pub fn compose_prepare_rootfs(
     let target_rootfs_dfd = unsafe { &ffi_dirfd(target_rootfs_dfd)? };
 
     let tmp_is_dir = treefile.parsed.base.tmp_is_dir.unwrap_or_default();
-    compose_init_rootfs(target_rootfs_dfd, tmp_is_dir)?;
+
+    if crate::ostree_prepareroot::transient_root_enabled(src_rootfs_dfd)? {
+        println!("Target has transient root enabled");
+        // While sadly tmp-is-dir: false by default, we want to encourage
+        // people to switch, so just error out if they're somehow configured
+        // things for the newer transient root model but forgot to set `tmp-is-dir`.
+        if !tmp_is_dir {
+            return Err("Transient root conflicts with tmp-is-dir: false"
+                .to_string()
+                .into());
+        }
+        // We grab all the content from the source root by default on general principle,
+        // but note this won't be very much right now because
+        // we're not executing the `filesystem` package's lua script.
+        for entry in src_rootfs_dfd.entries()? {
+            let entry = entry?;
+            let name = entry.file_name();
+            src_rootfs_dfd
+                .rename(&name, target_rootfs_dfd, &name)
+                .with_context(|| format!("Moving {name:?}"))?;
+        }
+        compose_init_rootfs_transient(target_rootfs_dfd)?;
+        return Ok(());
+    }
+
+    compose_init_rootfs_strict(target_rootfs_dfd, tmp_is_dir)?;
 
     println!("Moving /usr to target");
     src_rootfs_dfd.rename("usr", target_rootfs_dfd, "usr")?;
@@ -883,12 +968,14 @@ pub fn rootfs_prepare_links(rootfs_dfd: i32) -> CxxResult<()> {
     let mut db = dirbuilder_from_mode(0o755);
     db.recursive(true);
 
-    // Unconditionally drop /usr/local and replace it with a symlink.
-    rootfs
-        .remove_all_optional("usr/local")
-        .context("Removing /usr/local")?;
-    ensure_symlink(rootfs, "../var/usrlocal", "usr/local")
-        .context("Creating /usr/local symlink")?;
+    if !crate::ostree_prepareroot::transient_root_enabled(rootfs)? {
+        // Unconditionally drop /usr/local and replace it with a symlink.
+        rootfs
+            .remove_all_optional("usr/local")
+            .context("Removing /usr/local")?;
+        ensure_symlink(rootfs, "../var/usrlocal", "usr/local")
+            .context("Creating /usr/local symlink")?;
+    }
 
     // Move existing content to /usr/lib, then put a symlink in its
     // place under /var/lib.
@@ -1308,20 +1395,52 @@ OSTREE_VERSION='33.4'
         assert_eq!(replaced.as_str(), expected);
     }
 
+    fn verify_base(rootfs: &Dir) -> Result<()> {
+        // Not exhaustive, just a sanity check
+        for d in ["proc", "sys"] {
+            assert!(rootfs.symlink_metadata(d)?.is_dir());
+        }
+        let homelink = rootfs.read_link("home")?;
+        assert_eq!(homelink.to_str().unwrap(), "var/home");
+        Ok(())
+    }
+
     #[test]
-    fn test_init_rootfs() -> Result<()> {
+    fn test_init_rootfs_strict() -> Result<()> {
+        // Test the legacy tmp_is_dir path
         {
             let rootfs = cap_tempfile::tempdir(cap_tempfile::ambient_authority())?;
-            compose_init_rootfs(&rootfs, false)?;
+            compose_init_rootfs_base(&rootfs, false)?;
             let target = rootfs.read_link("tmp").unwrap();
             assert_eq!(target, Path::new("sysroot/tmp"));
+            verify_base(&rootfs)?;
         }
-        {
-            let rootfs = cap_tempfile::tempdir(cap_tempfile::ambient_authority())?;
-            compose_init_rootfs(&rootfs, true)?;
-            let tmpdir_meta = rootfs.metadata("tmp").unwrap();
-            assert!(tmpdir_meta.is_dir());
-            assert_eq!(tmpdir_meta.permissions().mode() & 0o7777, 0o1777);
+        // Default expected strict mode
+        let rootfs = cap_tempfile::tempdir(cap_tempfile::ambient_authority())?;
+        compose_init_rootfs_base(&rootfs, true)?;
+        let tmpdir_meta = rootfs.metadata("tmp").unwrap();
+        assert!(tmpdir_meta.is_dir());
+        assert_eq!(tmpdir_meta.permissions().mode() & 0o7777, 0o1777);
+        verify_base(&rootfs)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_init_rootfs_transient() -> Result<()> {
+        let rootfs = cap_tempfile::tempdir(cap_tempfile::ambient_authority())?;
+        compose_init_rootfs_transient(&rootfs)?;
+        let tmpdir_meta = rootfs.metadata("tmp").unwrap();
+        assert!(tmpdir_meta.is_dir());
+        assert_eq!(tmpdir_meta.permissions().mode() & 0o7777, 0o1777);
+        verify_base(&rootfs)?;
+        for d in ["opt", "usr/local"] {
+            assert!(
+                rootfs
+                    .symlink_metadata(d)
+                    .with_context(|| format!("Verifying {d} is dir"))?
+                    .is_dir(),
+                "Verifying {d} is dir"
+            );
         }
         Ok(())
     }
