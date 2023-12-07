@@ -971,6 +971,7 @@ pub(crate) use self::modularity::*;
 mod nameservice;
 mod normalization;
 mod origin;
+mod ostree_prepareroot;
 pub(crate) use self::origin::*;
 mod passwd;
 use passwd::*;
