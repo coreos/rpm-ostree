@@ -1076,6 +1076,7 @@ enum class BubblewrapMutability : ::std::uint8_t;
 struct Bubblewrap;
 struct ContainerImageState;
 struct ExportedManifestDiff;
+struct PrunedContainerInfo;
 enum class RefspecType : ::std::uint8_t;
 struct TempEtcGuard;
 struct FilesystemScriptPrep;
@@ -1219,6 +1220,19 @@ struct ContainerImageState final
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$ContainerImageState
+
+#ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$PrunedContainerInfo
+#define CXXBRIDGE1_STRUCT_rpmostreecxx$PrunedContainerInfo
+struct PrunedContainerInfo final
+{
+  ::std::uint32_t images;
+  ::std::uint32_t layers;
+
+  bool operator== (PrunedContainerInfo const &) const noexcept;
+  bool operator!= (PrunedContainerInfo const &) const noexcept;
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_rpmostreecxx$PrunedContainerInfo
 
 #ifndef CXXBRIDGE1_ENUM_rpmostreecxx$RefspecType
 #define CXXBRIDGE1_ENUM_rpmostreecxx$RefspecType
@@ -1793,7 +1807,7 @@ void deploy_from_self_entrypoint (::rust::Vec< ::rust::String> args);
 pull_container (::rpmostreecxx::OstreeRepo const &repo,
                 ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref);
 
-void container_prune (::rpmostreecxx::OstreeSysroot const &sysroot);
+::rpmostreecxx::PrunedContainerInfo container_prune (::rpmostreecxx::OstreeSysroot const &sysroot);
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 query_container_image_commit (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str c);

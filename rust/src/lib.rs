@@ -208,6 +208,12 @@ pub mod ffi {
         pub added_size: u64,
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    struct PrunedContainerInfo {
+        images: u32,
+        layers: u32,
+    }
+
     // sysroot_upgrade.rs
     extern "Rust" {
         fn pull_container(
@@ -215,7 +221,7 @@ pub mod ffi {
             cancellable: &GCancellable,
             imgref: &str,
         ) -> Result<Box<ContainerImageState>>;
-        fn container_prune(sysroot: &OstreeSysroot) -> Result<()>;
+        fn container_prune(sysroot: &OstreeSysroot) -> Result<PrunedContainerInfo>;
         fn query_container_image_commit(
             repo: &OstreeRepo,
             c: &str,

@@ -155,13 +155,18 @@ pub(crate) fn pull_container(
 }
 
 /// Run a prune of container images that are not referenced by a deployment.
-pub(crate) fn container_prune(sysroot: &crate::FFIOstreeSysroot) -> CxxResult<()> {
+pub(crate) fn container_prune(
+    sysroot: &crate::FFIOstreeSysroot,
+) -> CxxResult<crate::ffi::PrunedContainerInfo> {
     let sysroot = &sysroot.glib_reborrow();
     tracing::debug!("Pruning container images");
     crate::try_fail_point!("sysroot-upgrade::container-prune");
     let sysroot = &ostree_ext::sysroot::SysrootLock::from_assumed_locked(sysroot);
-    ostree_container::deploy::remove_undeployed_images(sysroot).context("Pruning images")?;
-    Ok(())
+    let images = ostree_container::deploy::remove_undeployed_images(sysroot)
+        .context("Pruning images")?
+        .len() as u32;
+    let layers = ostree_container::store::gc_image_layers(&sysroot.repo())?;
+    Ok(crate::ffi::PrunedContainerInfo { images, layers })
 }
 
 /// C++ wrapper for querying image state; requires a pulled image
