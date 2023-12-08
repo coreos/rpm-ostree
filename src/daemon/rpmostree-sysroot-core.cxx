@@ -214,7 +214,12 @@ rpmostree_syscore_cleanup (OstreeSysroot *sysroot, OstreeRepo *repo, GCancellabl
   /* Refs for the live state */
   ROSCXX_TRY (applylive_sync_ref (*sysroot), error);
 
-  CXX_TRY (rpmostreecxx::container_prune (*sysroot), error);
+  CXX_TRY_VAR (image_pruned, rpmostreecxx::container_prune (*sysroot), error);
+  if (image_pruned.images > 0 || image_pruned.layers > 0)
+    {
+      rpmostree_output_message ("Pruned images: %u (layers: %u)", image_pruned.images,
+                                image_pruned.layers);
+    }
 
   /* And do a prune */
   guint64 freed_space;

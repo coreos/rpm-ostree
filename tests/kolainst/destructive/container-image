@@ -194,6 +194,7 @@ EOF
     assert_streq "$(wc -l < imglist.txt)" 1
 
     # Now revert back to the base image, but keep our layered package foo
+    echo $(ostree refs ostree/container/blob | wc -l) > /etc/previous-layers
     rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos
     /tmp/autopkgtest-reboot 4
     ;;
@@ -207,6 +208,10 @@ EOF
       fi
     done
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/fcos\""
+    rpm-ostree cleanup -r
+    previous_layers=$(cat /etc/previous-layers)
+    new_layers=$(ostree refs ostree/container/blob | wc -l)
+    test $new_layers -lt $previous_layers
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
 esac

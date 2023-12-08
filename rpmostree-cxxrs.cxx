@@ -1294,6 +1294,7 @@ enum class BubblewrapMutability : ::std::uint8_t;
 struct Bubblewrap;
 struct ContainerImageState;
 struct ExportedManifestDiff;
+struct PrunedContainerInfo;
 enum class RefspecType : ::std::uint8_t;
 struct TempEtcGuard;
 struct FilesystemScriptPrep;
@@ -1437,6 +1438,19 @@ struct ContainerImageState final
   using IsRelocatable = ::std::true_type;
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$ContainerImageState
+
+#ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$PrunedContainerInfo
+#define CXXBRIDGE1_STRUCT_rpmostreecxx$PrunedContainerInfo
+struct PrunedContainerInfo final
+{
+  ::std::uint32_t images;
+  ::std::uint32_t layers;
+
+  bool operator== (PrunedContainerInfo const &) const noexcept;
+  bool operator!= (PrunedContainerInfo const &) const noexcept;
+  using IsRelocatable = ::std::true_type;
+};
+#endif // CXXBRIDGE1_STRUCT_rpmostreecxx$PrunedContainerInfo
 
 #ifndef CXXBRIDGE1_ENUM_rpmostreecxx$RefspecType
 #define CXXBRIDGE1_ENUM_rpmostreecxx$RefspecType
@@ -2084,13 +2098,17 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$deploy_from_self_entrypoint (::rust::Vec< ::rust::String> *args) noexcept;
+  bool
+  rpmostreecxx$cxxbridge1$PrunedContainerInfo$operator$eq (PrunedContainerInfo const &,
+                                                           PrunedContainerInfo const &) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$pull_container (
       ::rpmostreecxx::OstreeRepo const &repo, ::rpmostreecxx::GCancellable const &cancellable,
       ::rust::Str imgref, ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$container_prune (::rpmostreecxx::OstreeSysroot const &sysroot) noexcept;
+  rpmostreecxx$cxxbridge1$container_prune (::rpmostreecxx::OstreeSysroot const &sysroot,
+                                           ::rpmostreecxx::PrunedContainerInfo *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$query_container_image_commit (
       ::rpmostreecxx::OstreeRepo const &repo, ::rust::Str c,
@@ -3682,6 +3700,18 @@ deploy_from_self_entrypoint (::rust::Vec< ::rust::String> args)
     }
 }
 
+bool
+PrunedContainerInfo::operator== (PrunedContainerInfo const &rhs) const noexcept
+{
+  return rpmostreecxx$cxxbridge1$PrunedContainerInfo$operator$eq (*this, rhs);
+}
+
+bool
+PrunedContainerInfo::operator!= (PrunedContainerInfo const &rhs) const noexcept
+{
+  return !(*this == rhs);
+}
+
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 pull_container (::rpmostreecxx::OstreeRepo const &repo,
                 ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref)
@@ -3696,14 +3726,16 @@ pull_container (::rpmostreecxx::OstreeRepo const &repo,
   return ::std::move (return$.value);
 }
 
-void
+::rpmostreecxx::PrunedContainerInfo
 container_prune (::rpmostreecxx::OstreeSysroot const &sysroot)
 {
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$container_prune (sysroot);
+  ::rust::MaybeUninit< ::rpmostreecxx::PrunedContainerInfo> return$;
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$container_prune (sysroot, &return$.value);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
+  return ::std::move (return$.value);
 }
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
