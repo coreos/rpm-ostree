@@ -9,7 +9,10 @@ use cap_std::fs_utf8::Dir as Utf8Dir;
 use cap_std_ext::cap_std;
 use fn_error_context::context;
 use std::os::fd::AsRawFd;
+use std::path::Path;
 use std::process::Command;
+
+const INITOVERLAY_INSTALL_CMD: &str = "/usr/bin/initoverlayfs-install";
 
 /// Primary entrypoint to running our wrapped `kernel-install` handling.
 #[context("rpm-ostree kernel-install wrapper")]
@@ -42,7 +45,7 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
     }
     if let Some(k) = new_kernel {
         undo_systemctl_wrap()?;
-        run_dracut(&k)?;
+        generate_initfs(&k)?;
         redo_systemctl_wrap()?;
     }
     Ok(())
@@ -64,13 +67,20 @@ fn redo_systemctl_wrap() -> Result<()> {
     Ok(())
 }
 
-#[context("Running dracut")]
-fn run_dracut(kernel_dir: &str) -> Result<()> {
+#[context("Generate initfs")]
+fn generate_initfs(kernel_dir: &str) -> Result<()> {
     let root_fs = Utf8Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
     let tmp_dir = tempfile::tempdir()?;
     let tmp_initramfs_path = tmp_dir.path().join("initramfs.img");
 
-    let cliwrap_dracut = Utf8Path::new(cliwrap::CLIWRAP_DESTDIR).join("dracut");
+    let mut initfs_tool = String::new();
+    let initoverlayfs_path = Path::new(INITOVERLAY_INSTALL_CMD);
+    if initoverlayfs_path.exists() {
+        initfs_tool = INITOVERLAY_INSTALL_CMD.to_string()
+    } else {
+        initfs_tool = "dracut".to_string()
+    }
+    let cliwrap_dracut = Utf8Path::new(cliwrap::CLIWRAP_DESTDIR).join(initfs_tool);
     let dracut_path = cliwrap_dracut
         .exists()
         .then(|| cliwrap_dracut)
