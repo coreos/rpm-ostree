@@ -27,7 +27,7 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     let tmpfiles_dir = tmprootfs_dfd
         .open_dir(RPMOSTREE_TMPFILESD)
         .context("readdir {RPMOSTREE_TMPFILESD}")?;
-    let mut rpmostree_tmpfiles_entries = save_tmpfile_entries(&tmpfiles_dir)?
+    let mut rpmostree_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?
         .map(|s| {
             let entry = tmpfiles_entry_get_path(&s.as_str())?;
             anyhow::Ok((entry.to_string(), s.to_string()))
@@ -42,7 +42,7 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     if tmpfiles_dir.try_exists(AUTOVAR_PATH)? {
         tmpfiles_dir.remove_file(AUTOVAR_PATH)?;
     }
-    let system_tmpfiles_entries = save_tmpfile_entries(&tmpfiles_dir)?
+    let system_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?
         .map(|s| {
             let entry = tmpfiles_entry_get_path(&s.as_str())?;
             anyhow::Ok(entry.to_string())
@@ -69,7 +69,7 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
 }
 
 // #[context("Scan all tmpfiles conf and save entries")]
-fn save_tmpfile_entries(tmpfiles_dir: &Dir) -> Result<impl Iterator<Item = String>> {
+fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<impl Iterator<Item = String>> {
     let entries = tmpfiles_dir
         .entries()?
         .filter_map(|name| {
