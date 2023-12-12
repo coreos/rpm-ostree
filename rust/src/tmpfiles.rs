@@ -37,14 +37,11 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     if tmpfiles_dir.try_exists(AUTOVAR_PATH)? {
         tmpfiles_dir.remove_file(AUTOVAR_PATH)?;
     }
-    let system_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?
-        .into_iter()
-        .map(|v| v.0)
-        .collect::<std::collections::HashSet<_>>();
+    let system_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?;
 
     // remove duplicated entries in auto-generated tmpfiles.d,
     // which are already in system tmpfiles
-    for key in system_tmpfiles_entries.into_iter() {
+    for (key, _) in system_tmpfiles_entries {
         rpmostree_tmpfiles_entries.retain(|k, _value| k != &key);
     }
 
