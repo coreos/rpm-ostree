@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use cap_std::fs::{Dir, Permissions};
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
-use std::collections::{HashMap, HashSet};
+use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
@@ -40,7 +40,7 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     let system_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?
         .into_iter()
         .map(|v| v.0)
-        .collect::<HashSet<_>>();
+        .collect::<std::collections::HashSet<_>>();
 
     // remove duplicated entries in auto-generated tmpfiles.d,
     // which are already in system tmpfiles
@@ -64,7 +64,7 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
 /// Read all tmpfiles.d entries in the target directory, and return a mapping
 /// from (file path) => (single tmpfiles.d entry line)
 #[context("Read systemd tmpfiles.d")]
-fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<HashMap<String, String>> {
+fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<BTreeMap<String, String>> {
     tmpfiles_dir
         .entries()?
         .filter_map(|name| {
