@@ -27,12 +27,7 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     let tmpfiles_dir = tmprootfs_dfd
         .open_dir(RPMOSTREE_TMPFILESD)
         .context("readdir {RPMOSTREE_TMPFILESD}")?;
-    let mut rpmostree_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?
-        .map(|s| {
-            let entry = tmpfiles_entry_get_path(&s.as_str())?;
-            anyhow::Ok((entry.to_string(), s.to_string()))
-        })
-        .collect::<Result<HashMap<String, String>>>()?;
+    let mut rpmostree_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?;
 
     // remove autovar.conf first, then scan all system entries and save
     let tmpfiles_dir = tmprootfs_dfd
@@ -43,11 +38,9 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
         tmpfiles_dir.remove_file(AUTOVAR_PATH)?;
     }
     let system_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?
-        .map(|s| {
-            let entry = tmpfiles_entry_get_path(&s.as_str())?;
-            anyhow::Ok(entry.to_string())
-        })
-        .collect::<Result<HashSet<String>>>()?;
+        .into_iter()
+        .map(|v| v.0)
+        .collect::<HashSet<_>>();
 
     // remove duplicated entries in auto-generated tmpfiles.d,
     // which are already in system tmpfiles
@@ -68,9 +61,11 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     Ok(())
 }
 
-// #[context("Scan all tmpfiles conf and save entries")]
-fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<impl Iterator<Item = String>> {
-    let entries = tmpfiles_dir
+/// Read all tmpfiles.d entries in the target directory, and return a mapping
+/// from (file path) => (single tmpfiles.d entry line)
+#[context("Read systemd tmpfiles.d")]
+fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<HashMap<String, String>> {
+    tmpfiles_dir
         .entries()?
         .filter_map(|name| {
             let name = name.unwrap().file_name();
@@ -92,9 +87,11 @@ fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<impl Iterator<Item = String>> {
             )
         })
         .flatten()
-        .collect::<Vec<_>>();
-
-    Ok(entries.into_iter())
+        .map(|s| {
+            let entry = tmpfiles_entry_get_path(s.as_str())?;
+            anyhow::Ok((entry.to_string(), s))
+        })
+        .collect()
 }
 
 #[context("Scan tmpfiles entries and get path")]
