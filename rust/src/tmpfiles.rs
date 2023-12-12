@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use cap_std::fs::{Dir, Permissions};
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
-use std::collections::{HashMap, HashSet};
+use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
@@ -27,12 +27,7 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     let tmpfiles_dir = tmprootfs_dfd
         .open_dir(RPMOSTREE_TMPFILESD)
         .context("readdir {RPMOSTREE_TMPFILESD}")?;
-    let mut rpmostree_tmpfiles_entries = save_tmpfile_entries(&tmpfiles_dir)?
-        .map(|s| {
-            let entry = tmpfiles_entry_get_path(&s.as_str())?;
-            anyhow::Ok((entry.to_string(), s.to_string()))
-        })
-        .collect::<Result<HashMap<String, String>>>()?;
+    let mut rpmostree_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?;
 
     // remove autovar.conf first, then scan all system entries and save
     let tmpfiles_dir = tmprootfs_dfd
@@ -42,16 +37,11 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     if tmpfiles_dir.try_exists(AUTOVAR_PATH)? {
         tmpfiles_dir.remove_file(AUTOVAR_PATH)?;
     }
-    let system_tmpfiles_entries = save_tmpfile_entries(&tmpfiles_dir)?
-        .map(|s| {
-            let entry = tmpfiles_entry_get_path(&s.as_str())?;
-            anyhow::Ok(entry.to_string())
-        })
-        .collect::<Result<HashSet<String>>>()?;
+    let system_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?;
 
     // remove duplicated entries in auto-generated tmpfiles.d,
     // which are already in system tmpfiles
-    for key in system_tmpfiles_entries.into_iter() {
+    for (key, _) in system_tmpfiles_entries {
         rpmostree_tmpfiles_entries.retain(|k, _value| k != &key);
     }
 
@@ -68,9 +58,11 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     Ok(())
 }
 
-// #[context("Scan all tmpfiles conf and save entries")]
-fn save_tmpfile_entries(tmpfiles_dir: &Dir) -> Result<impl Iterator<Item = String>> {
-    let entries = tmpfiles_dir
+/// Read all tmpfiles.d entries in the target directory, and return a mapping
+/// from (file path) => (single tmpfiles.d entry line)
+#[context("Read systemd tmpfiles.d")]
+fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<BTreeMap<String, String>> {
+    tmpfiles_dir
         .entries()?
         .filter_map(|name| {
             let name = name.unwrap().file_name();
@@ -92,9 +84,11 @@ fn save_tmpfile_entries(tmpfiles_dir: &Dir) -> Result<impl Iterator<Item = Strin
             )
         })
         .flatten()
-        .collect::<Vec<_>>();
-
-    Ok(entries.into_iter())
+        .map(|s| {
+            let entry = tmpfiles_entry_get_path(s.as_str())?;
+            anyhow::Ok((entry.to_string(), s))
+        })
+        .collect()
 }
 
 #[context("Scan tmpfiles entries and get path")]
