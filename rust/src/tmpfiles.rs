@@ -84,7 +84,7 @@ fn save_tmpfile_entries(tmpfiles_dir: &Dir) -> Result<impl Iterator<Item = Strin
             Some(
                 tmpfiles_dir
                     .read_to_string(name)
-                    .unwrap()
+                    .ok()?
                     .lines()
                     .filter(|s| !s.is_empty() && !s.starts_with('#'))
                     .map(|s| s.to_string())
