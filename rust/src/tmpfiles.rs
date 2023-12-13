@@ -26,13 +26,11 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
     // scan all rpm-ostree auto generated entries and save
     let tmpfiles_dir = tmprootfs_dfd
         .open_dir(RPMOSTREE_TMPFILESD)
-        .context("readdir {RPMOSTREE_TMPFILESD}")?;
+        .context(RPMOSTREE_TMPFILESD)?;
     let mut rpmostree_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?;
 
     // remove autovar.conf first, then scan all system entries and save
-    let tmpfiles_dir = tmprootfs_dfd
-        .open_dir(TMPFILESD)
-        .context("readdir {TMPFILESD}")?;
+    let tmpfiles_dir = tmprootfs_dfd.open_dir(TMPFILESD).context(TMPFILESD)?;
 
     if tmpfiles_dir.try_exists(AUTOVAR_PATH)? {
         tmpfiles_dir.remove_file(AUTOVAR_PATH)?;
