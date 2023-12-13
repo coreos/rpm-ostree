@@ -25,12 +25,29 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
 
     // scan all rpm-ostree auto generated entries and save
     let tmpfiles_dir = tmprootfs_dfd
-        .open_dir(RPMOSTREE_TMPFILESD)
+        .open_dir_optional(RPMOSTREE_TMPFILESD)
         .context(RPMOSTREE_TMPFILESD)?;
-    let mut rpmostree_tmpfiles_entries = read_tmpfiles(&tmpfiles_dir)?;
+    let mut rpmostree_tmpfiles_entries = if let Some(tmpfiles_dir) = tmpfiles_dir {
+        read_tmpfiles(&tmpfiles_dir)?
+    } else {
+        Default::default()
+    };
 
     // remove autovar.conf first, then scan all system entries and save
-    let tmpfiles_dir = tmprootfs_dfd.open_dir(TMPFILESD).context(TMPFILESD)?;
+    let tmpfiles_dir = if let Some(d) = tmprootfs_dfd
+        .open_dir_optional(TMPFILESD)
+        .context(TMPFILESD)?
+    {
+        d
+    } else {
+        if !rpmostree_tmpfiles_entries.is_empty() {
+            return Err(
+                format!("No {TMPFILESD} directory found, but have tmpfiles to process").into(),
+            );
+        }
+        // Nothing to do here
+        return Ok(());
+    };
 
     if tmpfiles_dir.try_exists(AUTOVAR_PATH)? {
         tmpfiles_dir.remove_file(AUTOVAR_PATH)?;
@@ -162,6 +179,14 @@ q /var/tmp 1777 root root 30d
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0], "d /var/lib/games 0755 root root - -");
         assert_eq!(entries[1], "d /var/spool/mail 0775 root mail - -");
+        Ok(())
+    }
+
+    #[test]
+    /// Verify that we no-op if the directories don't exist.
+    fn test_deduplicate_emptydir() -> Result<()> {
+        let root = &cap_std_ext::cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        deduplicate_tmpfiles_entries(root.as_raw_fd())?;
         Ok(())
     }
 }
