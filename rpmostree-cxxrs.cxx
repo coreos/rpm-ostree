@@ -1774,6 +1774,7 @@ struct Treefile final : public ::rust::Opaque
   ::rpmostreecxx::RepoMetadataTarget get_repo_metadata_target () const noexcept;
   bool rpmdb_backend_is_target () const noexcept;
   bool should_normalize_rpmdb () const noexcept;
+  bool get_opt_usrlocal_overlays () const noexcept;
   ::rust::Vec< ::rust::String> get_files_remove_regex (::rust::Str package) const noexcept;
   ::rust::String get_checksum (::rpmostreecxx::OstreeRepo const &repo) const;
   ::rust::String get_ostree_ref () const noexcept;
@@ -2641,6 +2642,9 @@ extern "C"
       ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$should_normalize_rpmdb (
+      ::rpmostreecxx::Treefile const &self) noexcept;
+
+  bool rpmostreecxx$cxxbridge1$Treefile$get_opt_usrlocal_overlays (
       ::rpmostreecxx::Treefile const &self) noexcept;
 
   void rpmostreecxx$cxxbridge1$Treefile$get_files_remove_regex (
@@ -5255,6 +5259,12 @@ bool
 Treefile::should_normalize_rpmdb () const noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$should_normalize_rpmdb (*this);
+}
+
+bool
+Treefile::get_opt_usrlocal_overlays () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$get_opt_usrlocal_overlays (*this);
 }
 
 ::rust::Vec< ::rust::String>

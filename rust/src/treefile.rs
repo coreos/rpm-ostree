@@ -1412,6 +1412,10 @@ impl Treefile {
         self.parsed.base.rpmdb_normalize.unwrap_or(false)
     }
 
+    pub(crate) fn get_opt_usrlocal_overlays(&self) -> bool {
+        self.parsed.base.opt_usrlocal_overlays.unwrap_or_default()
+    }
+
     pub(crate) fn get_files_remove_regex(&self, package: &str) -> Vec<String> {
         let mut files_to_remove: Vec<String> = Vec::new();
         if let Some(ref packages) = self.parsed.base.remove_from_packages {

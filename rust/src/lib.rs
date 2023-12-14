@@ -625,6 +625,7 @@ pub mod ffi {
         fn get_repo_metadata_target(&self) -> RepoMetadataTarget;
         fn rpmdb_backend_is_target(&self) -> bool;
         fn should_normalize_rpmdb(&self) -> bool;
+        fn get_opt_usrlocal_overlays(&self) -> bool;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn get_checksum(&self, repo: &OstreeRepo) -> Result<String>;
         fn get_ostree_ref(&self) -> String;
