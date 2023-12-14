@@ -392,7 +392,7 @@ fn path_is_ostree_compliant(path: &str) -> bool {
         return true;
     }
 
-    if path.starts_with("/usr/") && !path.starts_with("/usr/local") {
+    if path.starts_with("/usr/") {
         return true;
     }
 
@@ -491,7 +491,7 @@ mod tests {
             assert_eq!(path_is_ostree_compliant(entry), false, "{}", entry);
         }
 
-        let denied_cases = &["/var", "/etc", "/var/run", "/usr/local", "", "./", "usr/"];
+        let denied_cases = &["/var", "/etc", "/var/run", "", "./", "usr/"];
         for entry in denied_cases {
             assert_eq!(path_is_ostree_compliant(entry), false, "{}", entry);
         }
