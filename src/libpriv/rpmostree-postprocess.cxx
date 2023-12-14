@@ -461,12 +461,24 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
                           cancellable, error))
     return FALSE;
 
-  if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration-opt-usrlocal.conf", NULL,
-                          rootfs_dfd,
-                          "usr/lib/tmpfiles.d/rpm-ostree-0-integration-opt-usrlocal.conf",
-                          GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
-                          cancellable, error))
-    return FALSE;
+  if (treefile.get_opt_usrlocal_overlays ())
+    {
+      if (!glnx_file_copy_at (
+              pkglibdir_dfd, "rpm-ostree-0-integration-opt-usrlocal-compat.conf", NULL, rootfs_dfd,
+              "usr/lib/tmpfiles.d/rpm-ostree-0-integration-opt-usrlocal-compat.conf",
+              GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
+              cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration-opt-usrlocal.conf", NULL,
+                              rootfs_dfd,
+                              "usr/lib/tmpfiles.d/rpm-ostree-0-integration-opt-usrlocal.conf",
+                              GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
+                              cancellable, error))
+        return FALSE;
+    }
 
   /* Handle kernel/initramfs if we're not doing a container */
   if (!container)
