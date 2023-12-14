@@ -479,3 +479,9 @@ version of `rpm-ostree`.
    names to use when substituting variables in yum repo files. The `releasever`
    variable name is invalid. Use the `releasever` key instead. The `basearch`
    name is invalid; it is filled in automatically.
+ * `opt-usrlocal-overlays`: boolean, optional: Defaults to `false`.  By
+   default, `/opt` and `/usr/local` are symlinks to subdirectories in `/
+   var`. This prevents the ability to compose with packages that install in
+   those directories. If enabled, RPMs with `/opt` and `/usr/local` content
+   are allowed; client-side, both paths are writable overlay directories on.
+   Requires libostree v2023.9+.
