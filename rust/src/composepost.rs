@@ -145,20 +145,32 @@ fn compose_init_rootfs_transient(rootfs_dfd: &cap_std::fs::Dir) -> Result<()> {
 /// This is hardcoded; in the future we may make more things configurable,
 /// but the goal is for all state to be in `/etc` and `/var`.
 #[context("Initializing rootfs")]
-fn compose_init_rootfs_strict(rootfs_dfd: &cap_std::fs::Dir, tmp_is_dir: bool) -> Result<()> {
+fn compose_init_rootfs_strict(
+    rootfs_dfd: &cap_std::fs::Dir,
+    tmp_is_dir: bool,
+    opt_state_overlay: bool,
+) -> Result<()> {
     println!("Initializing rootfs");
 
     compose_init_rootfs_base(rootfs_dfd, tmp_is_dir)?;
 
+    const OPT_SYMLINK_LEGACY: &str = "var/opt";
+    const OPT_SYMLINK_STATEOVERLAY: &str = "usr/lib/opt";
+    let opt_symlink = if opt_state_overlay {
+        OPT_SYMLINK_STATEOVERLAY
+    } else {
+        OPT_SYMLINK_LEGACY
+    };
+
     // This is used in the case where we don't have a transient rootfs; redirect
     // these toplevel directories underneath /var.
-    const OSTREE_STRICT_MODE_SYMLINKS: &[(&str, &str)] = &[
-        ("var/opt", "opt"),
+    let ostree_strict_mode_symlinks: &[(&str, &str)] = &[
+        (opt_symlink, "opt"),
         ("var/srv", "srv"),
         ("var/mnt", "mnt"),
         ("run/media", "media"),
     ];
-    OSTREE_STRICT_MODE_SYMLINKS
+    ostree_strict_mode_symlinks
         .par_iter()
         .try_for_each(|&(dest, src)| {
             rootfs_dfd
@@ -212,7 +224,15 @@ pub fn compose_prepare_rootfs(
         return Ok(());
     }
 
-    compose_init_rootfs_strict(target_rootfs_dfd, tmp_is_dir)?;
+    compose_init_rootfs_strict(
+        target_rootfs_dfd,
+        tmp_is_dir,
+        treefile
+            .parsed
+            .base
+            .opt_usrlocal_overlays
+            .unwrap_or_default(),
+    )?;
 
     println!("Moving /usr to target");
     src_rootfs_dfd.rename("usr", target_rootfs_dfd, "usr")?;
@@ -606,6 +626,32 @@ fn compose_postprocess_rpmdb(rootfs_dfd: &Dir) -> Result<()> {
     Ok(())
 }
 
+/// Enables ostree-state-overlay@.service for /usr/lib/opt and /usr/local. These
+/// symlinks are also used later in the compose process (and client-side composes)
+/// as a way to check that state overlays are turned on.
+fn compose_postprocess_state_overlays(rootfs_dfd: &Dir) -> Result<()> {
+    let mut db = cap_std::fs::DirBuilder::new();
+    db.recursive(true);
+    db.mode(0o755);
+    let localfs_requires = Path::new("usr/lib/systemd/system/local-fs.target.requires");
+    rootfs_dfd.ensure_dir_with(localfs_requires, &db)?;
+
+    const UNITS: &[&str] = &[
+        "ostree-state-overlay@usr-lib-opt.service",
+        "ostree-state-overlay@usr-local.service",
+    ];
+
+    UNITS.par_iter().try_for_each(|&unit| {
+        let target = Path::new("..").join(unit);
+        let linkpath = localfs_requires.join(unit);
+        rootfs_dfd
+            .symlink(target, linkpath)
+            .with_context(|| format!("Enabling {unit}"))
+    })?;
+
+    Ok(())
+}
+
 /// Rust portion of rpmostree_treefile_postprocessing()
 pub fn compose_postprocess(
     rootfs_dfd: i32,
@@ -625,6 +671,15 @@ pub fn compose_postprocess(
     compose_postprocess_units(rootfs, treefile)?;
     if let Some(t) = treefile.parsed.base.default_target.as_deref() {
         compose_postprocess_default_target(rootfs, t)?;
+    }
+
+    if treefile
+        .parsed
+        .base
+        .opt_usrlocal_overlays
+        .unwrap_or_default()
+    {
+        compose_postprocess_state_overlays(rootfs)?;
     }
 
     treefile.write_compose_json(rootfs)?;
@@ -955,6 +1010,17 @@ fn convert_path_to_tmpfiles_d_recurse(
     Ok(())
 }
 
+fn state_overlay_enabled(rootfs_dfd: &cap_std::fs::Dir, state_overlay: &str) -> Result<bool> {
+    let linkname = format!(
+        "usr/lib/systemd/system/local-fs.target.requires/ostree-state-overlay@{state_overlay}.service"
+    );
+    match rootfs_dfd.symlink_metadata_optional(&linkname)? {
+        Some(meta) if meta.is_symlink() => Ok(true),
+        Some(_) => Err(anyhow!("{linkname} is not a symlink")),
+        None => Ok(false),
+    }
+}
+
 /// Walk over the root filesystem and perform some core conversions
 /// from RPM conventions to OSTree conventions.
 ///
@@ -969,7 +1035,11 @@ pub fn rootfs_prepare_links(rootfs_dfd: i32, skip_usrlocal: bool) -> CxxResult<(
     db.recursive(true);
 
     if !skip_usrlocal {
-        if !crate::ostree_prepareroot::transient_root_enabled(rootfs)? {
+        if state_overlay_enabled(rootfs, "usr-local")? {
+            // because of the filesystem lua issue (see
+            // compose_init_rootfs_base()) we need to create this manually
+            rootfs.ensure_dir_with("usr/local", &db)?;
+        } else if !crate::ostree_prepareroot::transient_root_enabled(rootfs)? {
             // Unconditionally drop /usr/local and replace it with a symlink.
             rootfs
                 .remove_all_optional("usr/local")

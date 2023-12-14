@@ -427,6 +427,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         documentation,
         boot_location,
         tmp_is_dir,
+        opt_usrlocal_overlays,
         default_target,
         machineid_compat,
         releasever,
@@ -2531,6 +2532,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) boot_location: Option<BootLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tmp_is_dir: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) opt_usrlocal_overlays: Option<bool>,
 
     // systemd
     #[serde(skip_serializing_if = "Option::is_none")]
