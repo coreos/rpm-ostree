@@ -963,18 +963,20 @@ fn convert_path_to_tmpfiles_d_recurse(
 ///  - If present, symlink /var/lib/alternatives -> /usr/lib/alternatives
 ///  - If present, symlink /var/lib/vagrant -> /usr/lib/vagrant
 #[context("Preparing symlinks in rootfs")]
-pub fn rootfs_prepare_links(rootfs_dfd: i32) -> CxxResult<()> {
+pub fn rootfs_prepare_links(rootfs_dfd: i32, skip_usrlocal: bool) -> CxxResult<()> {
     let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let mut db = dirbuilder_from_mode(0o755);
     db.recursive(true);
 
-    if !crate::ostree_prepareroot::transient_root_enabled(rootfs)? {
-        // Unconditionally drop /usr/local and replace it with a symlink.
-        rootfs
-            .remove_all_optional("usr/local")
-            .context("Removing /usr/local")?;
-        ensure_symlink(rootfs, "../var/usrlocal", "usr/local")
-            .context("Creating /usr/local symlink")?;
+    if !skip_usrlocal {
+        if !crate::ostree_prepareroot::transient_root_enabled(rootfs)? {
+            // Unconditionally drop /usr/local and replace it with a symlink.
+            rootfs
+                .remove_all_optional("usr/local")
+                .context("Removing /usr/local")?;
+            ensure_symlink(rootfs, "../var/usrlocal", "usr/local")
+                .context("Creating /usr/local symlink")?;
+        }
     }
 
     // Move existing content to /usr/lib, then put a symlink in its
@@ -1568,7 +1570,7 @@ OSTREE_VERSION='33.4'
         rootfs.ensure_dir_with("var/lib/alternatives", &db).unwrap();
         rootfs.ensure_dir_with("var/lib/vagrant", &db).unwrap();
 
-        rootfs_prepare_links(rootfs.as_raw_fd()).unwrap();
+        rootfs_prepare_links(rootfs.as_raw_fd(), false).unwrap();
         {
             let usr_dir = rootfs.open_dir("usr").unwrap();
             let local_target = usr_dir.read_link("local").unwrap();

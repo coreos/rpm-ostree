@@ -2197,8 +2197,8 @@ extern "C"
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$convert_var_to_tmpfiles_d (
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable const &cancellable) noexcept;
 
-  ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$rootfs_prepare_links (::std::int32_t rootfs_dfd) noexcept;
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$rootfs_prepare_links (::std::int32_t rootfs_dfd,
+                                                                     bool skip_usrlocal) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$workaround_selinux_cross_labeling (
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable &cancellable) noexcept;
@@ -4032,9 +4032,10 @@ convert_var_to_tmpfiles_d (::std::int32_t rootfs_dfd,
 }
 
 void
-rootfs_prepare_links (::std::int32_t rootfs_dfd)
+rootfs_prepare_links (::std::int32_t rootfs_dfd, bool skip_usrlocal)
 {
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$rootfs_prepare_links (rootfs_dfd);
+  ::rust::repr::PtrLen error$
+      = rpmostreecxx$cxxbridge1$rootfs_prepare_links (rootfs_dfd, skip_usrlocal);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
