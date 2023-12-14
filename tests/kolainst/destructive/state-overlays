@@ -1,0 +1,104 @@
+#!/bin/bash
+## kola:
+##   tags: "needs-internet"
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+rm -rf /etc/yum.repos.d/*
+cat > /etc/yum.repos.d/vmcheck.repo << EOF
+[test-repo]
+name=test-repo
+baseurl=file:///${KOLA_EXT_DATA}/rpm-repos/0
+gpgcheck=0
+enabled=1
+EOF
+
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+  "")
+    # switch over to local ref so upgrades are purely about package changes
+    booted_commit=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    ostree refs --create kolatest "${booted_commit}"
+    systemctl stop rpm-ostreed
+    unshare -m /bin/bash -c 'mount -o rw,remount /sysroot && sed -i -e "s/refspec=.*/refspec=kolatest/" /ostree/deploy/*/deploy/*.origin'
+
+    # XXX: until ostree v2024.1 hits FCOS
+    ostree_ver=$(rpm -q ostree  --qf '%{version}')
+    if [ "${ostree_ver}" != "2024.1" ] && \
+       [ "$(echo -e "${ostree_ver}\n2024.1" | sort -V | tail -n1)" = "2024.1" ]; then
+      rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2024-6c7480dd2f
+    fi
+
+    # FCOS doesn't enable opt-usrlocal-overlays so use the hack instead
+    mkdir -p /etc/systemd/system/rpm-ostreed.service.d/
+    cat > /etc/systemd/system/rpm-ostreed.service.d/state-overlay.conf <<EOF
+[Service]
+Environment=RPMOSTREE_EXPERIMENTAL_FORCE_OPT_USRLOCAL_OVERLAY=1
+EOF
+
+    # This script itself is in /usr/local, so we need to move it back on top
+    # of the overlay. This simultaneously demos one way upgrading nodes could
+    # retain content if we turn on opt-usrlocal-overlays in FCOS.
+    cat > /etc/systemd/system/move-usr-local.service <<EOF
+[Unit]
+Description=Move Previous /usr/local content back into /usr/local
+After=local-fs.target
+After=systemd-tmpfiles-setup.service
+Before=kola-runext.service
+
+[Service]
+Type=oneshot
+# I previously used rsync here to sync all of /var/usrlocal, but hit SELinux
+# issues; it seems like it runs as rsync_t which can't do things on top of
+# overlay? To investigate...
+ExecStart=cp /var/usrlocal/bin/kola-runext-state-overlays /usr/local/bin/
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl restart rpm-ostreed
+    systemctl enable move-usr-local.service
+
+    rpm-ostree install test-opt
+
+    /tmp/autopkgtest-reboot 1
+    ;;
+  1)
+    test -f /opt/megacorp/bin/test-opt
+    test -f /opt/megacorp/lib/mylib
+    test -d /opt/megacorp/state
+
+    /opt/megacorp/bin/test-opt > /tmp/out.txt
+    assert_file_has_content /tmp/out.txt 'test-opt'
+    assert_file_has_content /opt/megacorp/lib/mylib 'lib1'
+
+    # add some state files
+    echo 'foobar' > /opt/megacorp/state/mystate
+
+    # change some base files
+    echo 'badlib' > /opt/megacorp/lib/mylib
+    /tmp/autopkgtest-reboot 2
+    ;;
+  2)
+    # check our state is still there
+    assert_file_has_content /opt/megacorp/state/mystate 'foobar'
+    assert_file_has_content /opt/megacorp/lib/mylib 'badlib'
+
+    # upgrade to -2
+    sed -i -e 's,rpm-repos/0,rpm-repos/1,' /etc/yum.repos.d/vmcheck.repo
+    rpm-ostree upgrade
+    /tmp/autopkgtest-reboot 3
+    ;;
+  3)
+    # check our state is still there
+    assert_file_has_content /opt/megacorp/state/mystate 'foobar'
+
+    # but base content has been reset
+    assert_file_has_content /opt/megacorp/lib/mylib 'lib2'
+    ;;
+  *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac

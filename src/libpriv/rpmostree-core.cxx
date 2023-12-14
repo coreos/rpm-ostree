@@ -4062,6 +4062,55 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
   if (!build_rootfs_usrlinks (self, error))
     return FALSE;
 
+  /* This is purely for making it easier for people to test out the
+   * state-overlay stuff until it's stabilized and part of base composes. */
+  if (g_getenv ("RPMOSTREE_EXPERIMENTAL_FORCE_OPT_USRLOCAL_OVERLAY"))
+    {
+      rpmostree_output_message (
+          "Enabling experimental state overlay support for /opt and /usr/local");
+
+      struct stat stbuf;
+
+      if (!glnx_fstatat_allow_noent (tmprootfs_dfd, "opt", &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT || (errno == 0 && S_ISLNK (stbuf.st_mode)))
+        {
+          if (errno == 0 && !glnx_unlinkat (tmprootfs_dfd, "opt", 0, error))
+            return FALSE;
+          if (symlinkat ("usr/lib/opt", tmprootfs_dfd, "opt") < 0)
+            return glnx_throw_errno_prefix (error, "symlinkat(/opt)");
+        }
+
+      if (!glnx_fstatat_allow_noent (tmprootfs_dfd, "usr/local", &stbuf, AT_SYMLINK_NOFOLLOW,
+                                     error))
+        return FALSE;
+      if (errno == ENOENT || (errno == 0 && S_ISLNK (stbuf.st_mode)))
+        {
+          if (errno == 0 && !glnx_unlinkat (tmprootfs_dfd, "usr/local", 0, error))
+            return FALSE;
+          if (mkdirat (tmprootfs_dfd, "usr/local", 0755) < 0)
+            return glnx_throw_errno_prefix (error, "mkdirat(/usr/local)");
+        }
+
+      if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "usr/lib/systemd/system/local-fs.target.wants",
+                                   0755, cancellable, error))
+        return FALSE;
+
+      if (symlinkat ("ostree-state-overlay@usr-lib-opt.service", tmprootfs_dfd,
+                     "usr/lib/systemd/system/local-fs.target.wants/"
+                     "ostree-state-overlay@usr-lib-opt.service")
+              < 0
+          && errno != EEXIST)
+        return glnx_throw_errno_prefix (error, "enabling ostree-state-overlay for /usr/lib/opt");
+
+      if (symlinkat (
+              "ostree-state-overlay@usr-local.service", tmprootfs_dfd,
+              "usr/lib/systemd/system/local-fs.target.wants/ostree-state-overlay@usr-local.service")
+              < 0
+          && errno != EEXIST)
+        return glnx_throw_errno_prefix (error, "enabling ostree-state-overlay for /usr/local");
+    }
+
   /* We need up to date labels; the set of things needing relabeling
    * will have been calculated in sort_packages()
    */
