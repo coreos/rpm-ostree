@@ -96,6 +96,13 @@ build_module_defaults foomodular \
 build_rpm zincati version 99.99 release 2
 build_rpm zincati version 99.99 release 3
 
+# An RPM that installs in /opt
+build_rpm test-opt \
+             install "mkdir -p %{buildroot}/opt/megacorp/{bin,lib,state}
+                      install %{name} %{buildroot}/opt/megacorp/bin
+                      echo lib1 > %{buildroot}/opt/megacorp/lib/mylib" \
+             files "/opt/megacorp"
+
 mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
 
 # To test remote override replace update
@@ -111,6 +118,14 @@ build_rpm pkgsystemd \
   install "mkdir -p %{buildroot}/usr/lib/systemd/system 
            install %{name}.service %{buildroot}/usr/lib/systemd/system" \
   files "/usr/lib/systemd/system/%{name}.service"
+
+# to test updates to RPMs that install in /opt
+build_rpm test-opt release 2 \
+             install "mkdir -p %{buildroot}/opt/megacorp/{bin,lib,state}
+                      install %{name} %{buildroot}/opt/megacorp/bin
+                      echo lib2 > %{buildroot}/opt/megacorp/lib/mylib" \
+             files "/opt/megacorp"
+
 mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
 
 # Create an empty repo when we want to test inability to find a package
