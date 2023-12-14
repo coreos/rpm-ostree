@@ -1863,7 +1863,7 @@ void compose_postprocess_final (::std::int32_t rootfs_dfd,
 void convert_var_to_tmpfiles_d (::std::int32_t rootfs_dfd,
                                 ::rpmostreecxx::GCancellable const &cancellable);
 
-void rootfs_prepare_links (::std::int32_t rootfs_dfd);
+void rootfs_prepare_links (::std::int32_t rootfs_dfd, bool skip_usrlocal);
 
 void workaround_selinux_cross_labeling (::std::int32_t rootfs_dfd,
                                         ::rpmostreecxx::GCancellable &cancellable);

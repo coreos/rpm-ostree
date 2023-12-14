@@ -4302,7 +4302,11 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
    */
   if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "var/tmp", 0755, cancellable, error))
     return FALSE;
-  ROSCXX_TRY (rootfs_prepare_links (tmprootfs_dfd), error);
+  /* Note `true` here; this function confusingly creates /usr/local, which is
+   * under /usr as well as symlinks under /var. We're really interested here
+   * in the / var part. We don't want to change the /usr/local setting from the
+   * base tree (or in a base compose, from `filesystem`). */
+  ROSCXX_TRY (rootfs_prepare_links (tmprootfs_dfd, true), error);
 
   CXX_TRY_VAR (etc_guard, rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd), error);
 
