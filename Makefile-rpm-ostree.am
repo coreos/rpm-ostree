@@ -85,7 +85,7 @@ librpmostreeinternals_la_CXXFLAGS = $(AM_CXXFLAGS) $(sanitizer_flags) $(rpmostre
 librpmostreeinternals_la_LIBADD = $(rpmostree_common_libs)
 
 privdatadir=$(pkglibdir)
-privdata_DATA = src/app/rpm-ostree-0-integration.conf
+privdata_DATA = src/app/rpm-ostree-0-integration.conf src/app/rpm-ostree-0-integration-opt-usrlocal.conf
 
 # Propagate automake verbose mode
 cargo_build = $(cargo) build $(if $(subst 0,,$(V)),--verbose,)
