@@ -178,6 +178,28 @@ vm_rpmostree kargs --delete-if-present=PACKAGE3=TEST3 --unchanged-exit-77 || rc=
 assert_streq $rc 77
 echo "ok exit 77 when unchanged kargs with unchanged-exit-77"
 
+# Test append-if-missing and delete-if-present for existing key
+vm_rpmostree kargs --append-if-missing=PACKAGE4=TEST4
+vm_rpmostree kargs > kargs.txt
+assert_file_has_content_literal kargs.txt 'PACKAGE4=TEST4'
+vm_rpmostree kargs --append-if-missing=PACKAGE4=NEWTEST
+vm_rpmostree kargs > kargs.txt
+assert_file_has_content_literal kargs.txt 'PACKAGE4=NEWTEST'
+vm_rpmostree kargs --delete-if-present=PACKAGE4=TEST --unchanged-exit-77 || rc=$?
+assert_streq $rc 77
+echo "ok for append-if-missing and delete-if-present with existing key"
+
+# Test corner case for append and append-if-missing with the same value
+vm_rpmostree kargs --append=foo --append-if-missing=foo
+vm_rpmostree kargs > kargs.txt
+assert_not_file_has_content_literal kargs.txt 'foo foo'
+assert_file_has_content_literal kargs.txt 'foo'
+vm_rpmostree kargs --append-if-missing=bar=foo --append-if-missing=bar=foo
+vm_rpmostree kargs > kargs.txt
+assert_not_file_has_content_literal kargs.txt 'bar=foo bar=foo'
+assert_file_has_content_literal kargs.txt 'bar=foo'
+echo "ok for append and append-if-missing with the same value"
+
 # Test for 'rpm-ostree kargs --editor'.
 vm_rpmostree kargs > kargs.txt
 assert_not_file_has_content_literal kargs.txt 'nonexisting'
