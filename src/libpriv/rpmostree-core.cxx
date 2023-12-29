@@ -3086,10 +3086,25 @@ delete_package_from_root (RpmOstreeContext *self, rpmte pkg, int rootfs_dfd, GHa
     }
 
   /* And finally, delete any automatically generated tmpfiles.d dropin. */
-  glnx_autofd int tmpfiles_dfd = -1;
-  if (!glnx_opendirat (rootfs_dfd, "usr/lib/rpm-ostree/tmpfiles.d", TRUE, &tmpfiles_dfd, error))
+  const char *tmpfiles_path = "usr/lib/rpm-ostree/tmpfiles.d";
+  /* Check if the new rpm-ostree tmpfiles.d directory exists;
+   * if not, switch to old tmpfiles.d directory.
+   */
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, tmpfiles_path, NULL, AT_SYMLINK_NOFOLLOW, error))
     return FALSE;
-  g_autofree char *dropin = g_strdup_printf ("%s.conf", rpmteN (pkg));
+  glnx_autofd int tmpfiles_dfd = -1;
+  g_autofree char *dropin = NULL;
+  if (errno == 0)
+    {
+      dropin = g_strdup_printf ("%s.conf", rpmteN (pkg));
+    }
+  else if (errno == ENOENT)
+    {
+      tmpfiles_path = "usr/lib/tmpfiles.d";
+      dropin = g_strdup_printf ("pkg-%s.conf", rpmteN (pkg));
+    }
+  if (!glnx_opendirat (rootfs_dfd, tmpfiles_path, TRUE, &tmpfiles_dfd, error))
+    return FALSE;
   if (!glnx_shutil_rm_rf_at (tmpfiles_dfd, dropin, cancellable, error))
     return FALSE;
 
