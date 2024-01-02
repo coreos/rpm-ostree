@@ -451,6 +451,8 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
                                        GVariant **out_replaced_base_local_pkgs,
                                        GVariant **out_replaced_base_remote_pkgs, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Getting layered info", error);
+
   const char *csum = ostree_deployment_get_csum (deployment);
   g_autoptr (GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, csum, &commit, NULL, error))

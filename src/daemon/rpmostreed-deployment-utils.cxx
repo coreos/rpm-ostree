@@ -140,11 +140,15 @@ filter_commit_meta (GVariant *commit_meta)
   return g_variant_dict_end (&dict);
 }
 
+// This function takes an ostree deployment and reads lots of metadata associated with
+// it and generates a GVariant (serialized snapshot) as a single unit.
+// It is this GVariant format which appears on DBus.
 gboolean
 rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment *deployment,
                                         const char *booted_id, OstreeRepo *repo, gboolean filter,
                                         GVariant **out_variant, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Reading deployment metadata", error);
   g_autoptr (GVariantDict) dict = g_variant_dict_new (NULL);
 
   ROSCXX_TRY (deployment_populate_variant (*sysroot, *deployment, *dict), error);
@@ -179,7 +183,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     {
       if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, base_checksum, &base_commit,
                                      error))
-        return FALSE;
+        return glnx_prefix_error (error, "Reading base commit");
 
       g_variant_dict_insert (dict, "base-checksum", "s", base_checksum);
       variant_add_commit_details (dict, "base-", base_commit);
@@ -248,7 +252,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
         g_autofree char *pending_base_commitrev = NULL;
         if (!ostree_repo_resolve_rev (repo, r.refspec.c_str (), TRUE, &pending_base_commitrev,
                                       error))
-          return FALSE;
+          return glnx_prefix_error (error, "Resolving target ref");
 
         if (pending_base_commitrev && !g_str_equal (pending_base_commitrev, base_checksum))
           {
@@ -256,7 +260,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
 
             if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, pending_base_commitrev,
                                            &pending_base_commit, error))
-              return FALSE;
+              return glnx_prefix_error (error, "Reading pending base commit");
 
             g_variant_dict_insert (dict, "pending-base-checksum", "s", pending_base_commitrev);
             variant_add_commit_details (dict, "pending-base-", pending_base_commit);
