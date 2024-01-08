@@ -30,6 +30,8 @@ exclude-crate-paths = [ { name = "libz-sys", exclude = "src/zlib" },
                         { name = "rustix", exclude = "src/imp/linux_raw" },
                         # Test files that include binaries
                         { name = "system-deps", exclude = "src/tests" },
+                        # Test files that include invalid Unicode code points
+                        { name = "idna", exclude = "tests" },
                       ]
 
 # This currently needs to duplicate the libraries in configure.ac
