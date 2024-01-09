@@ -12,7 +12,9 @@ USER root
 # Copy binaries from the build
 COPY --from=builder /cosa /cosa
 # Merge them to the real root since we're used at compose time
-RUN rsync -rlv /cosa/component-install/ /
+# XXX: disabled for now
+# https://github.com/coreos/rpm-ostree/pull/4763#issuecomment-1883686187
+# RUN rsync -rlv /cosa/component-install/ /
 # Merge installed tests
 RUN rsync -rlv /cosa/component-tests/ /
 # Grab all of our ci scripts
