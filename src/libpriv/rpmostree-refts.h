@@ -22,11 +22,14 @@
 #pragma once
 
 #include "libglnx.h"
+#include "rpmostree-strcache.h"
 #include "rpmostree-util.h"
 #include "rust/cxx.h"
 #include <gio/gio.h>
 #include <libdnf/libdnf.h>
 #include <memory>
+#include <unordered_map>
+#include <unordered_set>
 
 G_BEGIN_DECLS
 
@@ -78,6 +81,38 @@ struct PackageMeta
   };
 };
 
+struct RpmFileDb final
+{
+  RpmFileDb (const GFile& fs_root_ref);
+  ~RpmFileDb ();
+
+  void
+  insert_entry (std::string_view pkg_nevra, std::string_view pkg_path);
+
+  rust::Vec<rust::String>
+  find_pkgs_for_file (rust::Str path) const;
+
+private:
+  struct PkgFileInfo
+  {
+    cached_string pkg_nevra;
+    cached_string dirname;
+  };
+  
+  bool
+  fs_paths_are_equivalent (cached_string dirname, const RpmFileDb::PkgFileInfo& entry) const;
+
+  std::optional<cached_string>
+  try_resolve_real_fs_path (cached_string path) const;
+
+private:
+  std::unordered_map<cached_string, std::vector<PkgFileInfo>> basename_to_pkginfo;
+  mutable std::unordered_map<cached_string, cached_string> fs_resolved_path_cache;
+  mutable string_cache str_cache;
+
+  GFile* fs_root;
+};
+
 // A simple C++ wrapper for a librpm C type, so we can expose it to Rust via cxx.rs.
 class RpmTs
 {
@@ -85,8 +120,8 @@ public:
   RpmTs (::RpmOstreeRefTs *ts);
   ~RpmTs ();
   rpmts get_ts () const;
-  rust::Vec<rust::String> packages_providing_file (const rust::Str path) const;
   std::unique_ptr<PackageMeta> package_meta (const rust::Str package) const;
+  std::unique_ptr<RpmFileDb> build_file_cache_from_rpmdb (const GFile& fs_root) const;
 
 private:
   ::RpmOstreeRefTs *_ts;
