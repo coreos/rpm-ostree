@@ -38,14 +38,14 @@ vm_cmd test -f /run/ostree/staged-deployment-locked
 cursor=$(vm_get_journal_cursor)
 vm_reboot
 assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
-vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
+vm_assert_journal_has_content $cursor 'Not finalizing; deployment is locked for finalization'
 echo "ok locked deploy staging"
 vm_rpmostree rebase :"${commit}" --lock-finalization --skip-purge
 vm_cmd test -f /run/ostree/staged-deployment-locked
 cursor=$(vm_get_journal_cursor)
 vm_reboot
 assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
-vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
+vm_assert_journal_has_content $cursor 'Not finalizing; deployment is locked for finalization'
 echo "ok locked rebase staging"
 
 # TODO drop when we can rely on the fix for https://github.com/systemd/systemd/issues/29275
