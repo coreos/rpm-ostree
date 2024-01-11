@@ -535,7 +535,9 @@ xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer use
   g_assert (*path == '/');
   g_assert (user_data != NULL);
 
-  auto self = static_cast<RpmOstreeImporter *> (user_data);
+  RpmOstreeImporter *self = ((cb_data *)user_data)->self;
+  GError **error = ((cb_data *)user_data)->error;
+
   const char *fcaps = NULL;
 
   GVariant *imasig = NULL;
@@ -546,7 +548,9 @@ xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer use
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
   if (fcaps != NULL && fcaps[0] != '\0')
     {
-      g_autoptr (GVariant) fcaps_v = rpmostree_fcap_to_ostree_xattr (fcaps);
+      g_autoptr (GVariant) fcaps_v = rpmostree_fcap_to_ostree_xattr (fcaps, error);
+      if (!fcaps_v)
+        return NULL;
       g_variant_builder_add_value (&builder, fcaps_v);
     }
 
@@ -591,7 +595,7 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
   int modifier_flags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
   g_autoptr (OstreeRepoCommitModifier) modifier = ostree_repo_commit_modifier_new (
       static_cast<OstreeRepoCommitModifierFlags> (modifier_flags), compose_filter_cb, &fdata, NULL);
-  ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb, NULL, self);
+  ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb, NULL, &fdata);
   ostree_repo_commit_modifier_set_sepolicy (modifier, self->sepolicy);
 
   OstreeRepoImportArchiveOptions opts = { 0 };
