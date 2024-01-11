@@ -1043,80 +1043,36 @@ rpmostree_print_transaction (DnfContext *dnfctx)
     rpmostree_output_message ("Empty transaction");
 }
 
-struct _cap_struct
-{
-  struct __user_cap_header_struct head;
-  union
-  {
-    struct __user_cap_data_struct set;
-    __u32 flat[3];
-  } u[_LINUX_CAPABILITY_U32S_2];
-};
-
-/* Rewritten version of _fcaps_save from libcap, since it's not
- * exposed, and we need to generate the raw value.
- */
-static void
-cap_t_to_vfs (cap_t cap_d, struct vfs_cap_data *rawvfscap, int *out_size)
-{
-  guint32 eff_not_zero, magic;
-  guint tocopy, i;
-
-  /* Hardcoded to 2.  There is apparently a version 3 but it just maps
-   * to 2.  I doubt another version would ever be implemented, and
-   * even if it was we'd need to be backcompatible forever.  Anyways,
-   * setuid/fcaps binaries should go away entirely.
-   */
-  magic = VFS_CAP_REVISION_2;
-  tocopy = VFS_CAP_U32_2;
-  *out_size = XATTR_CAPS_SZ_2;
-
-  for (eff_not_zero = 0, i = 0; i < tocopy; i++)
-    eff_not_zero |= cap_d->u[i].flat[CAP_EFFECTIVE];
-
-  /* Here we're also not validating that the kernel understands
-   * the capabilities.
-   */
-
-  for (i = 0; i < tocopy; i++)
-    {
-      rawvfscap->data[i].permitted = GUINT32_TO_LE (cap_d->u[i].flat[CAP_PERMITTED]);
-      rawvfscap->data[i].inheritable = GUINT32_TO_LE (cap_d->u[i].flat[CAP_INHERITABLE]);
-    }
-
-  if (eff_not_zero == 0)
-    rawvfscap->magic_etc = GUINT32_TO_LE (magic);
-  else
-    rawvfscap->magic_etc = GUINT32_TO_LE (magic | VFS_CAP_FLAGS_EFFECTIVE);
-}
-
-// Given a file capability string, convert it to the convention ostree uses
-// to an store extended attribute value: (@ay@ay)
 GVariant *
-rpmostree_fcap_to_ostree_xattr (const char *fcap)
+rpmostree_fcap_to_ostree_xattr (const char *fcap, GError **error)
 {
+  /* Unfortunately, libcap doesn't expose any APIs to get the raw xattr value.
+   * For now, we hackily dance around this by writting it out to a file and then
+   * re-reading from it. */
   cap_t caps = cap_from_text (fcap);
-  struct vfs_cap_data vfscap = {
-    0,
-  };
 
-  int vfscap_size;
-  cap_t_to_vfs (caps, &vfscap, &vfscap_size);
-  cap_free (caps);
-  g_autoptr (GBytes) vfsbytes = g_bytes_new (&vfscap, vfscap_size);
+  g_auto (GLnxTmpfile) tmpf = { 0 };
+  if (!glnx_open_anonymous_tmpfile (O_WRONLY | O_CLOEXEC, &tmpf, error))
+    return NULL;
+
+  if (cap_set_fd (tmpf.fd, caps) < 0)
+    return (GVariant *)glnx_null_throw_errno_prefix (error, "cap_set_fd");
+
+  g_autoptr (GBytes) bytes = glnx_fgetxattr_bytes (tmpf.fd, "security.capability", error);
+  if (!bytes)
+    return NULL;
 
   return g_variant_ref_sink (
       g_variant_new ("(@ay@ay)", g_variant_new_bytestring ("security.capability"),
-                     g_variant_new_from_bytes ((GVariantType *)"ay", vfsbytes, FALSE)));
+                     g_variant_new_from_bytes ((GVariantType *)"ay", bytes, FALSE)));
 }
 
-// Given a file capability string, convert it to a single-element array
-// of ostree-convention GVariant format.
 GVariant *
-rpmostree_fcap_to_xattr_variant (const char *fcap)
+rpmostree_fcap_to_xattr_variant (const char *fcap, GError **error)
 {
-
-  g_autoptr (GVariant) v = rpmostree_fcap_to_ostree_xattr (fcap);
+  g_autoptr (GVariant) v = rpmostree_fcap_to_ostree_xattr (fcap, error);
+  if (!v)
+    return NULL;
   g_auto (GVariantBuilder) builder;
   g_variant_builder_init (&builder, (GVariantType *)"a(ayay)");
   g_variant_builder_add_value (&builder, v);

@@ -3692,7 +3692,9 @@ apply_rpmfi_overrides (RpmOstreeContext *self, int tmprootfs_dfd, DnfPackage *pk
       /* the chown clears away file caps, so reapply it here */
       if (have_fcaps)
         {
-          g_autoptr (GVariant) xattrs = rpmostree_fcap_to_xattr_variant (fcaps);
+          g_autoptr (GVariant) xattrs = rpmostree_fcap_to_xattr_variant (fcaps, error);
+          if (!xattrs)
+            return FALSE;
           if (!glnx_dfd_name_set_all_xattrs (tmprootfs_dfd, fn, xattrs, cancellable, error))
             return glnx_prefix_error (error, "%s", fn);
         }
