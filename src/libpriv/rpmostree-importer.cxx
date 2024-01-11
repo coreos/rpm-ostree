@@ -111,21 +111,18 @@ rpmostree_importer_read_metainfo (int fd, rpmostreecxx::RpmImporterFlags &flags,
   g_auto (Header) ret_header = NULL;
   g_auto (rpmfi) ret_fi = NULL;
   gsize ret_cpio_offset;
-  g_autofree char *abspath = g_strdup_printf ("/proc/self/fd/%d", fd);
 
   ts = rpmtsCreate ();
   rpmtsSetVSFlags (ts, _RPMVSF_NOSIGNATURES);
 
-  /* librpm needs Fopenfd */
-  rpmfd = Fopen (abspath, "r.fdio");
+  rpmfd = fdDup (fd);
   if (rpmfd == NULL)
-    return glnx_throw (error, "Failed to open %s", abspath);
-
+    return glnx_throw (error, "Failed to reopen fd %d", fd);
   if (Ferror (rpmfd))
-    return glnx_throw (error, "Opening %s: %s", abspath, Fstrerror (rpmfd));
+    return glnx_throw (error, "Failed to reopen fd: %s", Fstrerror (rpmfd));
 
-  if (rpmReadPackageFile (ts, rpmfd, abspath, &ret_header) != RPMRC_OK)
-    return glnx_throw (error, "Verification of %s failed", abspath);
+  if (rpmReadPackageFile (ts, rpmfd, NULL, &ret_header) != RPMRC_OK)
+    return glnx_throw (error, "Verification failed");
 
   ret_cpio_offset = Ftell (rpmfd);
 
