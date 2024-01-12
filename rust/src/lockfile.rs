@@ -10,7 +10,6 @@
 /* Copied and adapted from: treefile.rs
  */
 
-pub use self::ffi::*;
 use crate::utils;
 use anyhow::{anyhow, bail, Result};
 use cap_std_ext::cap_std;
@@ -24,7 +23,6 @@ use std::path::Path;
 use std::pin::Pin;
 
 use crate::cxxrsutil::CxxResult;
-use libdnf_sys::*;
 
 /// Given a lockfile filename, parse it
 fn lockfile_parse<P: AsRef<Path>>(filename: P) -> Result<LockfileConfig> {
