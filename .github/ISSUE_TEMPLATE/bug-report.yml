@@ -1,0 +1,62 @@
+name: Report a bug
+description: Report an issue with rpm-ostree
+labels: ["kind/bug"]
+assignees: []
+body:
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: I'm trying to layer foo but it fails with bar.
+    validations:
+      required: true
+
+  - type: textarea
+    id: bug-reproduction
+    attributes:
+      label: Reproduction steps
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: bug-expected
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: Foo should succeed without errors.
+    validations:
+      required: true
+
+  - type: textarea
+    id: bug-actual
+    attributes:
+      label: Actual behavior
+      description: A clear and concise description of what actually happened.
+      placeholder: Foo failed with ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: bug-system
+    attributes:
+      label: System details
+      description: The version of rpm-ostree and the client system
+      placeholder: |
+       - `rpm-ostree --version`
+       - If the issue is client-side, `rpm-ostree status -b`
+    validations:
+      required: true
+
+  - type: textarea
+    id: bug-additional
+    attributes:
+      label: Additional information
+      description: Add any other information about the problem here.
+    validations:
+      required: false
