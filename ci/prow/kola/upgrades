@@ -25,6 +25,9 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     rpm -q moby-engine
     test '!' -f /etc/somenewfile
 
+    # do override remove with new rpm-ostree
+    rpm-ostree override remove vim-minimal
+
     upgrade_image=$(cat /etc/upgrade-image)
     rpm-ostree rebase ${upgrade_image}
     /tmp/autopkgtest-reboot 1
@@ -42,6 +45,11 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
       exit 1
     fi
     test -f /etc/somenewfile
+
+    if rpm -q vim-minimal 2>/dev/null; then
+      echo "found package expected to be removed"
+      exit 1
+    fi
 
     echo "ok e2e upgrade"
     ;;

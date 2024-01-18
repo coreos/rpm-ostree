@@ -7,4 +7,4 @@ RUN ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf 
 
 FROM quay.io/fedora/fedora-coreos:testing-devel
 COPY --from=builder /srv/install.tar /tmp
-RUN tar -xvf /tmp/install.tar && ostree container commit 
+RUN tar -C / -xvf /tmp/install.tar && ostree container commit
