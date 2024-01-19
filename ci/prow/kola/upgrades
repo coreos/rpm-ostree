@@ -8,6 +8,8 @@
 
 set -xeuo pipefail
 
+. /usr/lib/coreos-assembler/tests/kola/rpm-ostree/utils.sh
+
 cd $(mktemp -d)
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
@@ -24,6 +26,9 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     rpm -q moby-engine
     test '!' -f /etc/somenewfile
+
+    # test with new rpm-ostree
+    do_testing
 
     upgrade_image=$(cat /etc/upgrade-image)
     rpm-ostree rebase ${upgrade_image}
@@ -42,6 +47,8 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
       exit 1
     fi
     test -f /etc/somenewfile
+
+    do_checking
 
     echo "ok e2e upgrade"
     ;;
