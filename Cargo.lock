@@ -268,13 +268,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-std"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "266626ce180cf9709f317d0bf9754e3a5006359d87f4bf792f06c9c5f1b63c0f"
+dependencies = [
+ "cap-primitives 3.0.0",
+ "io-extras",
+ "io-lifetimes",
+ "rustix",
+]
+
+[[package]]
 name = "cap-std-ext"
 version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a5479723972b952e2d605925d8c7c1d0ed7f1101ebdfac5bdc9a68e67df357f"
 dependencies = [
  "cap-primitives 2.0.1",
- "cap-tempfile",
+ "cap-tempfile 2.0.0",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std-ext"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1285af420ee8cbf7ec30c02c08f9f25125fc0f7efd6d34eacad5b18e62d4e58"
+dependencies = [
+ "cap-primitives 3.0.0",
+ "cap-tempfile 3.0.0",
  "rustix",
 ]
 
@@ -284,7 +307,19 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b9e3348a3510c4619b4c7a7bcdef09a71221da18f266bda3ed6b9aea2c509e2"
 dependencies = [
- "cap-std",
+ "cap-std 2.0.0",
+ "rand",
+ "rustix",
+ "uuid",
+]
+
+[[package]]
+name = "cap-tempfile"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8748c8ae8186b7362da62c7cb8edf7aabae095c86175e988d76387a842574e16"
+dependencies = [
+ "cap-std 3.0.0",
  "rand",
  "rustix",
  "uuid",
@@ -434,7 +469,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "133a3547aad237a5ec89c45f5ad027d1ebe480b6a0a81c070629a931252770ad"
 dependencies = [
  "anyhow",
- "cap-std-ext",
+ "cap-std-ext 3.0.1",
  "fn-error-context",
  "futures-util",
  "libc",
@@ -1743,7 +1778,7 @@ dependencies = [
  "anyhow",
  "async-compression",
  "camino",
- "cap-std-ext",
+ "cap-std-ext 3.0.1",
  "chrono",
  "clap",
  "containers-image-proxy",
@@ -2146,8 +2181,8 @@ dependencies = [
  "bitflags 2.4.2",
  "camino",
  "cap-primitives 3.0.0",
- "cap-std",
- "cap-std-ext",
+ "cap-std 2.0.0",
+ "cap-std-ext 4.0.0",
  "chrono",
  "clap",
  "containers-image-proxy",
