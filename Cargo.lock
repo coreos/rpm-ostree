@@ -238,13 +238,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-primitives"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90a0b44fc796b1a84535a63753d50ba3972c4db55c7255c186f79140e63d56d0"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras",
+ "io-lifetimes",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "windows-sys 0.52.0",
+ "winx",
+]
+
+[[package]]
 name = "cap-std"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84bade423fa6403efeebeafe568fdb230e8c590a275fba2ba978dd112efcf6e9"
 dependencies = [
  "camino",
- "cap-primitives",
+ "cap-primitives 2.0.1",
  "io-extras",
  "io-lifetimes",
  "rustix",
@@ -256,7 +273,7 @@ version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a5479723972b952e2d605925d8c7c1d0ed7f1101ebdfac5bdc9a68e67df357f"
 dependencies = [
- "cap-primitives",
+ "cap-primitives 2.0.1",
  "cap-tempfile",
  "rustix",
 ]
@@ -2128,7 +2145,7 @@ dependencies = [
  "binread",
  "bitflags 2.4.1",
  "camino",
- "cap-primitives",
+ "cap-primitives 3.0.0",
  "cap-std",
  "cap-std-ext",
  "chrono",
