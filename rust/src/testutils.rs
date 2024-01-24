@@ -12,7 +12,7 @@
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use cap_std::fs::FileType;
-use cap_std::fs::{Dir, Permissions};
+use cap_std::fs::{Dir, MetadataExt, Permissions, PermissionsExt};
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
 use clap::Parser;
@@ -20,12 +20,11 @@ use fn_error_context::context;
 use glib::{ToVariant, Variant};
 use ostree_ext::{gio, glib, ostree};
 use rand::Rng;
-use rustix::fs::{MetadataExt, Mode};
+use rustix::fs::Mode;
 use std::fs;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::os::unix::fs::FileExt as UnixFileExt;
-use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 

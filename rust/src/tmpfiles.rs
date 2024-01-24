@@ -7,12 +7,11 @@ use crate::cxxrsutil::*;
 use crate::ffiutil;
 
 use anyhow::{Context, Result};
-use cap_std::fs::{Dir, Permissions};
+use cap_std::fs::{Dir, Permissions, PermissionsExt};
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use std::collections::BTreeMap;
 use std::fmt::Write;
-use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 
 const TMPFILESD: &str = "usr/lib/tmpfiles.d";

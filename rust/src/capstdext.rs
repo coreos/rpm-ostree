@@ -5,10 +5,9 @@
 
 use cap_std::fs::DirBuilder;
 use cap_std_ext::cap_std;
-use cap_std_ext::cap_std::fs::Dir;
+use cap_std_ext::cap_std::fs::{Dir, DirBuilderExt};
 use std::ffi::OsStr;
 use std::io::Result;
-use std::os::unix::fs::DirBuilderExt;
 use std::path::Path;
 
 pub(crate) fn dirbuilder_from_mode(m: u32) -> DirBuilder {

@@ -5,15 +5,13 @@
 
 use anyhow::{anyhow, Result};
 use camino::Utf8Path;
-use cap_std::fs::{Dir, DirBuilder, Permissions};
+use cap_std::fs::{Dir, DirBuilder, DirBuilderExt, Permissions, PermissionsExt};
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
 use fn_error_context::context;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::io::prelude::*;
-use std::os::unix::fs::DirBuilderExt;
-use std::os::unix::prelude::PermissionsExt;
 mod cliutil;
 mod dracut;
 mod grubby;

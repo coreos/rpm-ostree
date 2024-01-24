@@ -6,15 +6,13 @@ pub(crate) mod commit;
 
 use crate::cxxrsutil::CxxResult;
 use anyhow::{Context, Result};
-use cap_std::fs::{Dir, DirBuilder, Permissions};
+use cap_std::fs::{Dir, DirBuilder, DirBuilderExt, MetadataExt, Permissions, PermissionsExt};
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use rustix::fd::AsFd;
-use rustix::fs::{AtFlags, FileType, MetadataExt};
+use rustix::fs::{AtFlags, FileType};
 use std::io::Read;
-use std::os::unix::fs::DirBuilderExt;
-use std::os::unix::prelude::PermissionsExt;
 
 use crate::core::OSTREE_BOOTED;
 

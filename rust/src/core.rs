@@ -8,8 +8,7 @@ use crate::ffiutil;
 use anyhow::Context;
 use anyhow::{anyhow, Result};
 use camino::Utf8Path;
-use cap_std::fs::Dir;
-use cap_std::fs::Permissions;
+use cap_std::fs::{Dir, Permissions, PermissionsExt};
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtDirExt;
 use ffiutil::*;
@@ -22,7 +21,6 @@ use ostree_ext::ostree;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::os::unix::io::{AsRawFd, FromRawFd};
-use std::os::unix::prelude::PermissionsExt;
 
 /// The binary forked from useradd that pokes the sss cache.
 /// It spews warnings (and sometimes fatal errors) when used

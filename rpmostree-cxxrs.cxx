@@ -1430,7 +1430,6 @@ struct ContainerImageState final
 {
   ::rust::String base_commit;
   ::rust::String merge_commit;
-  bool is_layered;
   ::rust::String image_digest;
   ::rust::String version;
   ::rpmostreecxx::ExportedManifestDiff cached_update_diff;
@@ -2815,6 +2814,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$complete_rpm_layering (::std::int32_t rootfs) noexcept;
 
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (::std::int32_t rootfs) noexcept;
+
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$passwd_cleanup (::std::int32_t rootfs) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$migrate_group_except_root (
@@ -2943,9 +2945,6 @@ extern "C"
 
   void rpmostreecxx$cxxbridge1$cache_branch_to_nevra (::rust::Str nevra,
                                                       ::rust::String *return$) noexcept;
-
-  ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (::std::int32_t rootfs) noexcept;
 
   ::std::uint32_t
   rpmostreecxx$cxxbridge1$CxxGObjectArray$length (::rpmostreecxx::CxxGObjectArray &self) noexcept
@@ -5700,6 +5699,16 @@ complete_rpm_layering (::std::int32_t rootfs)
 }
 
 void
+deduplicate_tmpfiles_entries (::std::int32_t rootfs)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (rootfs);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
 passwd_cleanup (::std::int32_t rootfs)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$passwd_cleanup (rootfs);
@@ -6104,16 +6113,6 @@ cache_branch_to_nevra (::rust::Str nevra) noexcept
   ::rust::MaybeUninit< ::rust::String> return$;
   rpmostreecxx$cxxbridge1$cache_branch_to_nevra (nevra, &return$.value);
   return ::std::move (return$.value);
-}
-
-void
-deduplicate_tmpfiles_entries (::std::int32_t rootfs)
-{
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (rootfs);
-  if (error$.ptr)
-    {
-      throw ::rust::impl< ::rust::Error>::error (error$);
-    }
 }
 } // namespace rpmostreecxx
 
@@ -6829,6 +6828,5 @@ Vec< ::rpmostreecxx::LockedPackage>::truncate (::std::size_t len)
 {
   return cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$truncate (this, len);
 }
-
 } // namespace cxxbridge1
 } // namespace rust

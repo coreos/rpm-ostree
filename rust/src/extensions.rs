@@ -8,13 +8,12 @@
 
 use anyhow::{bail, Context, Result};
 use cap_std::fs::Dir;
-use cap_std::fs::Permissions;
+use cap_std::fs::{Permissions, PermissionsExt};
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Read;
-use std::os::unix::prelude::PermissionsExt;
 
 use crate::cxxrsutil::*;
 use crate::ffi::StringMapping;
