@@ -11,7 +11,9 @@ use anyhow::{anyhow, Context, Result};
 use cap_std::fs::Dir;
 use cap_std::fs::OpenOptions;
 use cap_std_ext::cap_std;
-use cap_std_ext::cap_std::fs::Permissions;
+use cap_std_ext::cap_std::fs::{
+    DirBuilderExt, MetadataExt, OpenOptionsExt, Permissions, PermissionsExt,
+};
 use cap_std_ext::cap_tempfile;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
@@ -19,13 +21,9 @@ use gio::prelude::*;
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
 use ostree_ext::{gio, ostree};
-use rustix::fs::MetadataExt;
-use rustix::fs::OpenOptionsExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, BufReader, BufWriter, Write};
-use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::io::AsRawFd;
-use std::os::unix::prelude::PermissionsExt;
 use std::path::PathBuf;
 
 const DEFAULT_MODE: u32 = 0o644;

@@ -184,7 +184,6 @@ pub mod ffi {
     pub(crate) struct ContainerImageState {
         pub base_commit: String,
         pub merge_commit: String,
-        pub is_layered: bool,
         pub image_digest: String,
         pub version: String,
         pub cached_update_diff: ExportedManifestDiff,

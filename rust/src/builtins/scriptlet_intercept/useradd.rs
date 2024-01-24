@@ -4,12 +4,11 @@
 
 use super::common::{self, SYSUSERS_DIR};
 use anyhow::{anyhow, Context, Result};
-use cap_std::fs::{Dir, Permissions};
+use cap_std::fs::{Dir, Permissions, PermissionsExt};
 use cap_std_ext::prelude::CapStdExtDirExt;
 use clap::{Arg, ArgAction, Command};
 use fn_error_context::context;
 use std::io::Write;
-use std::os::unix::prelude::PermissionsExt;
 
 /// Entrypoint for (the rpm-ostree implementation of) `useradd`.
 #[context("Intercepting useradd")]

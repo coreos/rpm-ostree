@@ -9,17 +9,15 @@ use crate::ffi::{
     OverrideReplacementSource, OverrideReplacementType, ParsedRevision, ParsedRevisionKind,
 };
 use anyhow::{anyhow, format_err, Result};
-use cap_std::fs::Dir;
+use cap_std::fs::{Dir, MetadataExt, PermissionsExt};
 use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use glib::prelude::*;
 use ostree_ext::{gio, glib, ostree};
 use rustix::fd::BorrowedFd;
-use rustix::fs::MetadataExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 const RPM_OSTREED_COMMIT_VERIFICATION_CACHE: &str = "rpm-ostree/gpgcheck-cache";

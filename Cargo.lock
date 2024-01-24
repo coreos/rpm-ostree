@@ -222,23 +222,6 @@ checksum = "c59e92b5a388f549b863a7bea62612c09f24c8393560709a54558a9abdfb3b9c"
 
 [[package]]
 name = "cap-primitives"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe16767ed8eee6d3f1f00d6a7576b81c226ab917eb54b96e5f77a5216ef67abb"
-dependencies = [
- "ambient-authority",
- "fs-set-times",
- "io-extras",
- "io-lifetimes",
- "ipnet",
- "maybe-owned",
- "rustix",
- "windows-sys 0.52.0",
- "winx",
-]
-
-[[package]]
-name = "cap-primitives"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90a0b44fc796b1a84535a63753d50ba3972c4db55c7255c186f79140e63d56d0"
@@ -256,12 +239,12 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84bade423fa6403efeebeafe568fdb230e8c590a275fba2ba978dd112efcf6e9"
+checksum = "266626ce180cf9709f317d0bf9754e3a5006359d87f4bf792f06c9c5f1b63c0f"
 dependencies = [
  "camino",
- "cap-primitives 2.0.1",
+ "cap-primitives",
  "io-extras",
  "io-lifetimes",
  "rustix",
@@ -269,20 +252,20 @@ dependencies = [
 
 [[package]]
 name = "cap-std-ext"
-version = "3.0.1"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a5479723972b952e2d605925d8c7c1d0ed7f1101ebdfac5bdc9a68e67df357f"
+checksum = "c1285af420ee8cbf7ec30c02c08f9f25125fc0f7efd6d34eacad5b18e62d4e58"
 dependencies = [
- "cap-primitives 2.0.1",
+ "cap-primitives",
  "cap-tempfile",
  "rustix",
 ]
 
 [[package]]
 name = "cap-tempfile"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b9e3348a3510c4619b4c7a7bcdef09a71221da18f266bda3ed6b9aea2c509e2"
+checksum = "8748c8ae8186b7362da62c7cb8edf7aabae095c86175e988d76387a842574e16"
 dependencies = [
  "cap-std",
  "rand",
@@ -1736,9 +1719,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.12.9"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e267318975f521863d8bae834bdc49876695421428b08e98da379712d675fd1"
+checksum = "8dc9d8c25b2603db582fb3786a2c3a4af7b874e11ebda1a04f151d307d4dc6fe"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2145,7 +2128,7 @@ dependencies = [
  "binread",
  "bitflags 2.4.2",
  "camino",
- "cap-primitives 3.0.0",
+ "cap-primitives",
  "cap-std",
  "cap-std-ext",
  "chrono",
