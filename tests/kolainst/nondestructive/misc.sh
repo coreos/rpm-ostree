@@ -311,3 +311,20 @@ echo "ok usroverlay"
 rpm-ostree deploy --register-driver "foo"
 rpm-ostree status > status.txt
 assert_file_has_content status.txt "AutomaticUpdatesDriver: foo"
+
+# Verify with wrong proxy, rpm-ostree rebase failed as expected
+# https://issues.redhat.com/browse/OCPBUGS-27200
+mkdir -p /etc/systemd/system/rpm-ostreed.service.d
+cat > /etc/systemd/system/rpm-ostreed.service.d/http-proxy.conf << EOF
+[Service]
+Environment="http_proxy=http://test123.com:3128"
+Environment="https_proxy=https://test123.com:3128"
+EOF
+systemctl daemon-reload
+systemctl restart rpm-ostreed.service
+if rpm-ostree rebase ostree-unverified-registry:quay.io/fedora/fedora-coreos:testing-devel &> err.txt; then
+    echo "should not success with wrong proxy"
+    exit 1
+fi
+assert_file_has_content_literal err.txt "proxyconnect tcp: dial tcp: lookup test123.com"
+echo "ok proxy"
