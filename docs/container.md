@@ -157,6 +157,40 @@ for historical reasons.
 $ rpm-ostree compose image  --initialize-mode=if-not-exists --format=registry workstation-ostree-config/fedora-silverblue.yaml quay.io/example/exampleos:latest
 ```
 
+## Adding container image configuration
+
+By default, the `rpm-ostree compose image` command creates container images
+with a minimal config. It notably does not include a default command or
+entrypoint.
+
+To add more configuration to the created OCI images, you can pass an image
+configuration JSON document via the `--image-config=` argument.
+
+Example image configuration JSON (`config.json`):
+
+```
+{
+    "Env": [
+        "FOO=BAR",
+    ],
+    "Cmd": [
+        "/bin/bash"
+    ],
+    "Labels": {
+        "license": "MIT",
+    }
+}
+```
+
+Example `rpm-ostree compose image` command:
+
+```
+rpm-ostree compose image --initialize --format=ociarchive --image-config=config.json manifest.yaml image.ociarchive
+```
+
+You can find the reference for the image configuration JSON format in the
+[OCI Image Format Specification](https://github.com/opencontainers/image-spec/blob/main/config.md).
+
 ## Converting OSTree commits to new base images
 
 The ostree-container model creates a bidirectional bridge between ostree and OCI
