@@ -256,12 +256,24 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84bade423fa6403efeebeafe568fdb230e8c590a275fba2ba978dd112efcf6e9"
+checksum = "593db20e4c51f62d3284bae7ee718849c3214f93a3b94ea1899ad85ba119d330"
+dependencies = [
+ "cap-primitives 2.0.1",
+ "io-extras",
+ "io-lifetimes",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "266626ce180cf9709f317d0bf9754e3a5006359d87f4bf792f06c9c5f1b63c0f"
 dependencies = [
  "camino",
- "cap-primitives 2.0.1",
+ "cap-primitives 3.0.0",
  "io-extras",
  "io-lifetimes",
  "rustix",
@@ -284,7 +296,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b9e3348a3510c4619b4c7a7bcdef09a71221da18f266bda3ed6b9aea2c509e2"
 dependencies = [
- "cap-std",
+ "cap-std 2.0.1",
  "rand",
  "rustix",
  "uuid",
@@ -2146,7 +2158,7 @@ dependencies = [
  "bitflags 2.4.2",
  "camino",
  "cap-primitives 3.0.0",
- "cap-std",
+ "cap-std 3.0.0",
  "cap-std-ext",
  "chrono",
  "clap",
