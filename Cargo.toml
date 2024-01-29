@@ -51,7 +51,7 @@ camino = "1.1.6"
 cap-std-ext = "3.0"
 cap-primitives = "3"
 cap-std = { version = "2", features = ["fs_utf8"] }
-containers-image-proxy = { version = "0.5.7", features = ["proxy_v0_2_4"] }
+containers-image-proxy = { version = "0.5.8", features = ["proxy_v0_2_4"] }
 # Explicitly force on libc
 rustix = { version = "0.38", features = ["use-libc", "process", "fs"] }
 chrono = { version = "0.4.31", features = ["serde"] }
