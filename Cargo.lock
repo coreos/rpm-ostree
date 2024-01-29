@@ -429,9 +429,9 @@ dependencies = [
 
 [[package]]
 name = "containers-image-proxy"
-version = "0.5.7"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "133a3547aad237a5ec89c45f5ad027d1ebe480b6a0a81c070629a931252770ad"
+checksum = "17da053ebe8d99edc9bfc5dcbdd74ec34e0657316ddcb6c6d4de6741fd4cac67"
 dependencies = [
  "anyhow",
  "cap-std-ext",
