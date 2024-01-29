@@ -171,13 +171,13 @@ Example image configuration JSON (`config.json`):
 ```
 {
     "Env": [
-        "FOO=BAR",
+        "FOO=BAR"
     ],
     "Cmd": [
         "/bin/bash"
     ],
     "Labels": {
-        "license": "MIT",
+        "license": "MIT"
     }
 }
 ```
