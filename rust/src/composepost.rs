@@ -52,6 +52,8 @@ pub(crate) const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
 const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
 pub(crate) const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
 
+const SD_LOCAL_FS_TARGET_REQUIRES: &str = "usr/lib/systemd/system/local-fs.target.requires";
+
 #[context("Moving {}", name)]
 fn dir_move_if_exists(src: &cap_std::fs::Dir, dest: &cap_std::fs::Dir, name: &str) -> Result<()> {
     if src.symlink_metadata(name).is_ok() {
@@ -633,7 +635,7 @@ fn compose_postprocess_state_overlays(rootfs_dfd: &Dir) -> Result<()> {
     let mut db = cap_std::fs::DirBuilder::new();
     db.recursive(true);
     db.mode(0o755);
-    let localfs_requires = Path::new("usr/lib/systemd/system/local-fs.target.requires");
+    let localfs_requires = Path::new(SD_LOCAL_FS_TARGET_REQUIRES);
     rootfs_dfd.ensure_dir_with(localfs_requires, &db)?;
 
     const UNITS: &[&str] = &[
@@ -1011,9 +1013,8 @@ fn convert_path_to_tmpfiles_d_recurse(
 }
 
 fn state_overlay_enabled(rootfs_dfd: &cap_std::fs::Dir, state_overlay: &str) -> Result<bool> {
-    let linkname = format!(
-        "usr/lib/systemd/system/local-fs.target.requires/ostree-state-overlay@{state_overlay}.service"
-    );
+    let linkname =
+        format!("{SD_LOCAL_FS_TARGET_REQUIRES}/ostree-state-overlay@{state_overlay}.service");
     match rootfs_dfd.symlink_metadata_optional(&linkname)? {
         Some(meta) if meta.is_symlink() => Ok(true),
         Some(_) => Err(anyhow!("{linkname} is not a symlink")),
