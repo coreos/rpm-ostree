@@ -1043,13 +1043,15 @@ rpmostree_print_transaction (DnfContext *dnfctx)
     rpmostree_output_message ("Empty transaction");
 }
 
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC (cap_t, cap_free, NULL)
+
 GVariant *
 rpmostree_fcap_to_ostree_xattr (const char *fcap, GError **error)
 {
   /* Unfortunately, libcap doesn't expose any APIs to get the raw xattr value.
    * For now, we hackily dance around this by writting it out to a file and then
    * re-reading from it. */
-  cap_t caps = cap_from_text (fcap);
+  g_auto (cap_t) caps = cap_from_text (fcap);
 
   g_auto (GLnxTmpfile) tmpf = { 0 };
   if (!glnx_open_anonymous_tmpfile (O_WRONLY | O_CLOEXEC, &tmpf, error))
