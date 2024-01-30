@@ -20,7 +20,6 @@ impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::Conta
     fn from(s: Box<ostree_container::store::LayeredImageState>) -> crate::ffi::ContainerImageState {
         let version = s
             .configuration
-            .as_ref()
             .and_then(|c| ostree_container::version_for_config(c))
             .map(ToOwned::to_owned)
             .unwrap_or_default();
@@ -34,7 +33,6 @@ impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::Conta
         crate::ffi::ContainerImageState {
             base_commit: s.base_commit,
             merge_commit: s.merge_commit,
-            is_layered: s.is_layered,
             image_digest: s.manifest_digest,
             version,
             cached_update_diff,
