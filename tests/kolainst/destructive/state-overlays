@@ -2,7 +2,7 @@
 ## kola:
 ##   tags: "needs-internet"
 
-set -euo pipefail
+set -xeuo pipefail
 
 . ${KOLA_EXT_DATA}/libtest.sh
 
@@ -31,19 +31,23 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
       rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2024-6c7480dd2f
     fi
 
-    # FCOS doesn't enable opt-usrlocal-overlays so use the hack instead
-    mkdir -p /etc/systemd/system/rpm-ostreed.service.d/
-    cat > /etc/systemd/system/rpm-ostreed.service.d/state-overlay.conf <<EOF
+    # FCOS doesn't enable opt-usrlocal-overlays yet. It's on in Prow CI though.
+    # Just check the treefile so we do the right thing regardless of CoreOS CI
+    # or Prow.
+    if ! jq -e '.["opt-usrlocal-overlays"]' /usr/share/rpm-ostree/treefile.json; then
+      mkdir -p /etc/systemd/system/rpm-ostreed.service.d/
+      cat > /etc/systemd/system/rpm-ostreed.service.d/state-overlay.conf <<EOF
 [Service]
 Environment=RPMOSTREE_EXPERIMENTAL_FORCE_OPT_USRLOCAL_OVERLAY=1
 EOF
 
-    # This script itself is in /usr/local, so we need to move it back on top
-    # of the overlay. This simultaneously demos one way upgrading nodes could
-    # retain content if we turn on opt-usrlocal-overlays in FCOS.
-    cat > /etc/systemd/system/move-usr-local.service <<EOF
+      # This script itself is in /usr/local, so we need to move it back on top
+      # of the overlay if we used the hack. This simultaneously demos one way
+      # upgrading nodes could retain content if we turn on opt-usrlocal-overlays
+      # in FCOS.
+      cat > /etc/systemd/system/move-usr-local.service <<EOF
 [Unit]
-Description=Move Previous /usr/local content back into /usr/local
+Description=Move Previous /usr/local Content Back Into /usr/local
 After=local-fs.target
 After=systemd-tmpfiles-setup.service
 Before=kola-runext.service
@@ -59,9 +63,10 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 EOF
-    systemctl daemon-reload
-    systemctl restart rpm-ostreed
-    systemctl enable move-usr-local.service
+      systemctl daemon-reload
+      systemctl restart rpm-ostreed
+      systemctl enable move-usr-local.service
+    fi
 
     rpm-ostree install test-opt
 
