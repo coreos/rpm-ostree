@@ -397,7 +397,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
         }
     }
 
-  if (!rpmostree_context_prepare (self->corectx, cancellable, error))
+  if (!rpmostree_context_prepare (self->corectx, TRUE, cancellable, error))
     return FALSE;
 
   rpmostree_print_transaction (dnfctx);
@@ -1685,7 +1685,7 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
 
 #undef TMP_EXTENSIONS_ROOTFS
 
-  if (!rpmostree_context_prepare (ctx, cancellable, error))
+  if (!rpmostree_context_prepare (ctx, FALSE, cancellable, error))
     return FALSE;
 
   if (!glnx_shutil_mkdir_p_at (AT_FDCWD, opt_extensions_output_dir, 0755, cancellable, error))

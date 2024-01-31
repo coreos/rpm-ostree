@@ -537,5 +537,5 @@ rpmostree_busctl_call_os() {
   stateroot=$(rpm-ostree status --booted --json | jq -r '.deployments[0].osname')
   ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
   busctl call org.projectatomic.rpmostree1 $ospath \
-    org.projectatomic.rpmostree1.OS "$@"
+    org.projectatomic.rpmostree1.OS "$@" --timeout=240s
 }

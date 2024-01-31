@@ -911,8 +911,8 @@ os_handle_modify_yum_repo (RPMOSTreeOS *interface, GDBusMethodInvocation *invoca
 }
 
 static DnfContext *
-os_create_dnf_context_simple (RPMOSTreeOS *interface, gboolean with_sack, GCancellable *cancellable,
-                              GError **error)
+os_create_dnf_context_simple (RPMOSTreeOS *interface, gboolean with_sack, gboolean enable_filelists,
+                              GCancellable *cancellable, GError **error)
 {
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   const gchar *os_name = rpmostree_os_get_name (interface);
@@ -947,14 +947,29 @@ os_create_dnf_context_simple (RPMOSTreeOS *interface, gboolean with_sack, GCance
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, ot_sysroot, cfg_merge_deployment);
 
-  if (with_sack
-      && !rpmostree_context_download_metadata (
-          ctx,
-          static_cast<DnfContextSetupSackFlags> (DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB
-                                                 | DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO),
-          cancellable, error))
-    return NULL;
+  auto flags = (DnfContextSetupSackFlags)(DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB
+                                          | DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS
+                                          | DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO);
 
+  char *download_filelists = (char *)"false";
+  if (g_getenv ("DOWNLOAD_FILELISTS"))
+    {
+      download_filelists = (char *)(g_getenv ("DOWNLOAD_FILELISTS"));
+      for (int i = 0; i < strlen (download_filelists); i++)
+        {
+          download_filelists[i] = tolower (download_filelists[i]);
+        }
+    }
+
+  /* check if filelist optimization is disabled */
+  if (strcmp (download_filelists, "true") == 0 || enable_filelists)
+    {
+      flags = (DnfContextSetupSackFlags)(DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB
+                                         | DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO);
+    }
+
+  if (with_sack && !rpmostree_context_download_metadata (ctx, flags, cancellable, error))
+    return NULL;
   DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
   return static_cast<DnfContext *> (g_object_ref (dnfctx));
 }
@@ -968,7 +983,7 @@ os_handle_list_repos (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation)
   sd_journal_print (LOG_INFO, "Handling ListRepos for caller %s",
                     g_dbus_method_invocation_get_sender (invocation));
 
-  dnfctx = os_create_dnf_context_simple (interface, FALSE, NULL, &local_error);
+  dnfctx = os_create_dnf_context_simple (interface, FALSE, FALSE, NULL, &local_error);
   if (dnfctx == NULL)
     return os_throw_dbus_invocation_error (invocation, &local_error);
 
@@ -1073,7 +1088,7 @@ os_handle_what_provides (RPMOSTreeOS *interface, GDBusMethodInvocation *invocati
   sd_journal_print (LOG_INFO, "Handling WhatProvides for caller %s",
                     g_dbus_method_invocation_get_sender (invocation));
 
-  dnfctx = os_create_dnf_context_simple (interface, TRUE, cancellable, &local_error);
+  dnfctx = os_create_dnf_context_simple (interface, TRUE, FALSE, cancellable, &local_error);
   if (dnfctx == NULL)
     return os_throw_dbus_invocation_error (invocation, &local_error);
 
@@ -1112,7 +1127,7 @@ os_handle_get_packages (RPMOSTreeOS *interface, GDBusMethodInvocation *invocatio
   sd_journal_print (LOG_INFO, "Handling GetPackages for caller %s",
                     g_dbus_method_invocation_get_sender (invocation));
 
-  dnfctx = os_create_dnf_context_simple (interface, TRUE, cancellable, &local_error);
+  dnfctx = os_create_dnf_context_simple (interface, TRUE, FALSE, cancellable, &local_error);
   if (dnfctx == NULL)
     return os_throw_dbus_invocation_error (invocation, &local_error);
 
@@ -1317,7 +1332,7 @@ os_handle_search (RPMOSTreeOS *interface, GDBusMethodInvocation *invocation,
     }
 
   g_autoptr (DnfContext) dnfctx
-      = os_create_dnf_context_simple (interface, TRUE, cancellable, &local_error);
+      = os_create_dnf_context_simple (interface, TRUE, FALSE, cancellable, &local_error);
   if (dnfctx == NULL)
     return os_throw_dbus_invocation_error (invocation, &local_error);
 

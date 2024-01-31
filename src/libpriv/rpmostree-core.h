@@ -134,8 +134,8 @@ gboolean rpmostree_context_download_metadata (RpmOstreeContext *context,
                                               GCancellable *cancellable, GError **error);
 
 /* This API allocates an install context, use with one of the later ones */
-gboolean rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable,
-                                    GError **error);
+gboolean rpmostree_context_prepare (RpmOstreeContext *self, gboolean enable_filelists,
+                                    GCancellable *cancellable, GError **error);
 
 GPtrArray *rpmostree_context_get_packages (RpmOstreeContext *self);
 
@@ -165,6 +165,10 @@ gboolean rpmostree_context_import (RpmOstreeContext *self, GCancellable *cancell
 
 gboolean rpmostree_context_force_relabel (RpmOstreeContext *self, GCancellable *cancellable,
                                           GError **error);
+
+gboolean rpmostree_context_get_filelists_exist (RpmOstreeContext *);
+
+void rpmostree_context_set_filelists_exist (RpmOstreeContext *, gboolean filelists_exist);
 
 typedef enum
 {

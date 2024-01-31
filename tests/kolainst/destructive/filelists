@@ -1,0 +1,178 @@
+#!/bin/bash
+## kola:
+##   timeoutMin: 30
+##   tags: "needs-internet"
+##   minMemory: 2048
+
+set -xeuo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+cd "$(mktemp -d)"
+
+
+# get the base filelists which exist before any package is installed
+(find / -name "*-filelists.*" > base_filelists.txt) || true
+
+# install a regular rpm, which should not install filelists
+rpm-ostree install htop
+(find / -name "*-filelists.*" > post_install_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_install_filelists.txt; echo $?)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Failure 1: Filelists differ after installing htop"
+    exit 1
+fi
+
+# run rpm-ostree refresh-md, which should not install filelists
+rpm-ostree refresh-md
+(find / -name "*-filelists.*" > post_refresh_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_refresh_filelists.txt; echo $?)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Failure 2: Filelists differ after running rpm-ostree refresh-md"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+# install with filename, which should install filelists
+rpm-ostree install /usr/bin/htop
+(find / -name "*-filelists.*" > post_install_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_install_filelists.txt; echo $?)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Failure 3: Filelists did not change after installing /usr/bin/htop"
+    exit 1
+fi
+
+# run rpm-ostree refresh-md, which should keep the installed filelists
+rpm-ostree refresh-md
+(find / -name "*-filelists.*" > post_refresh_filelists.txt) || true
+STATUS="$(cmp post_install_filelists.txt post_refresh_filelists.txt; echo $?)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Failure 4: Filelists differ after running rpm-ostree refresh-md"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+# check that calling the following commands do not install filelists
+rpmostree_busctl_call_os ListRepos
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt; echo $?)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Failure 5: Filelists differ after calling ListRepos"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os WhatProvides as 1 provided-testing-daemon
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp -s base_filelists.txt post_call_filelists.txt; echo $?)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Failure 6: Filelists differ after calling WhatProvides"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os GetPackages as 1 testdaemon 
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt; echo $?)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Failure 7: Filelists differ after calling GetPackages"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os Search as 1 testdaemon
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt; echo $?)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Failure 8: Filelists differ after calling Search"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+# disable filelist optimization and test that default behaviour is restored
+mkdir -p /etc/systemd/system/rpm-ostreed.service.d
+cat > /etc/systemd/system/rpm-ostreed.service.d/filelists.conf << EOF
+[Service]
+Environment="DOWNLOAD_FILELISTS=true"
+EOF
+systemctl daemon-reload
+systemctl restart rpm-ostreed.service
+
+rpm-ostree install htop
+(find / -name "*-filelists.*" > post_install_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_install_filelists.txt; echo $?)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Failure 9: Filelists were not downloaded after installing htop"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+rpm-ostree install /usr/bin/htop
+(find / -name "*-filelists.*" > post_install_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_install_filelists.txt; echo $?)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Failure 10: Filelists were not downloaded after installing /usr/bin/htop"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+rpm-ostree refresh-md
+(find / -name "*-filelists.*" > post_refresh_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_refresh_filelists.txt; echo $?)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Failure 11: Filelists were not downloaded after running rpm-ostree refresh-md"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os ListRepos
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt; echo $?)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Failure 12: Filelists differ after calling ListRepos"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os WhatProvides as 1 provided-testing-daemon
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt; echo $?)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Failure 13: Filelists were not downloaded after calling WhatProvides"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os GetPackages as 1 testdaemon 
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt; echo $?)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Failure 14: Filelists were not downloaded after calling GetPackages"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os Search as 1 testdaemon
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt; echo $?)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Failure 15: Filelists were not downloaded after calling Search"
+    exit 1
+fi
