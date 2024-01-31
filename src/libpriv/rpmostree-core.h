@@ -166,6 +166,10 @@ gboolean rpmostree_context_import (RpmOstreeContext *self, GCancellable *cancell
 gboolean rpmostree_context_force_relabel (RpmOstreeContext *self, GCancellable *cancellable,
                                           GError **error);
 
+gboolean rpmostree_context_get_filelists_exist(RpmOstreeContext*);
+
+void rpmostree_context_set_filelists_exist(RpmOstreeContext*, gboolean filelists_exist);
+
 typedef enum
 {
   RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
