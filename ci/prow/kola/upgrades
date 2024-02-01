@@ -3,6 +3,7 @@
 ## kola:
 ##   timeoutMin: 30
 ##   tags: "needs-internet"
+##   minMemory: 2048
 #
 # Copyright (C) 2022 Red Hat, Inc.
 
@@ -25,6 +26,14 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     rpm -q moby-engine
     test '!' -f /etc/somenewfile
 
+    # do client layerring tests using new rpm-ostree on old build
+    # https://github.com/coreos/rpm-ostree/pull/4727 and https://github.com/coreos/rpm-ostree/pull/4746
+    rpm-ostree install vim-filesystem
+    rpm-ostree override remove vim-minimal
+    rpm-ostree kargs --append foo=bar
+    touch /etc/foobar.conf
+    rpm-ostree initramfs --enable --arg=-I --arg=/etc/foobar.conf
+
     upgrade_image=$(cat /etc/upgrade-image)
     rpm-ostree rebase ${upgrade_image}
     /tmp/autopkgtest-reboot 1
@@ -42,6 +51,17 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
       exit 1
     fi
     test -f /etc/somenewfile
+
+    rpm -q vim-filesystem
+    if rpm -q vim-minimal 2>/dev/null; then
+      echo "found package expected to be removed"
+      exit 1
+    fi
+    cat /proc/cmdline > cmdlinekargs.txt
+    grep foo=bar cmdlinekargs.txt
+    
+    lsinitrd "/usr/lib/modules/$(uname -r)/initramfs.img" > lsinitrd.txt
+    grep etc/foobar.conf lsinitrd.txt
 
     echo "ok e2e upgrade"
     ;;

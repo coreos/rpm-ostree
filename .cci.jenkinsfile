@@ -77,4 +77,12 @@ cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
       archiveArtifacts allowEmptyArchive: true, artifacts: 'vmcheck-logs.tar.xz'
     }
   }
+  stage("kola-upgrades") {
+    unstash 'rpms'
+    shwrap("""
+      coreos-installer download -p qemu -f qcow2.xz -s testing --decompress
+      mv rpm-ostree-[0-9]*.rpm rpm-ostree-libs-[0-9]*.rpm /usr/lib/coreos-assembler/tests/kola/rpm-ostree/destructive/data/      
+    """)
+    kola(cosaDir: "${env.WORKSPACE}", extraArgs: "--qemu-image ./fedora-coreos*.qcow2 --tag rpm-ostree-upgrade ext.rpm-ostree.destructive.client-layering-upgrade")
+  }
 }
