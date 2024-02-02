@@ -101,6 +101,8 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     ;;
   "2")
     client_side_layering_checking
+    booted_ref=$(rpm-ostree status --json | jq -r '.deployments[0].origin')
+    test "kola" == ${booted_ref}
     echo "ok upgrade to another update"
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
