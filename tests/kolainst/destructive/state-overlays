@@ -68,6 +68,7 @@ EOF
     /tmp/autopkgtest-reboot 1
     ;;
   1)
+    test -f /opt/bin/test-opt
     test -f /opt/megacorp/bin/test-opt
     test -f /opt/megacorp/lib/mylib
     test -d /opt/megacorp/state
@@ -75,6 +76,11 @@ EOF
     /opt/megacorp/bin/test-opt > /tmp/out.txt
     assert_file_has_content /tmp/out.txt 'test-opt'
     assert_file_has_content /opt/megacorp/lib/mylib 'lib1'
+
+    stat -c '%C' /opt/bin/test-opt > /tmp/out.txt
+    assert_file_has_content /tmp/out.txt ':bin_t:'
+    stat -c '%C' /opt/megacorp > /tmp/out.txt
+    assert_file_has_content /tmp/out.txt ':usr_t:'
 
     # add some state files
     echo 'foobar' > /opt/megacorp/state/mystate

@@ -98,10 +98,12 @@ build_rpm zincati version 99.99 release 3
 
 # An RPM that installs in /opt
 build_rpm test-opt \
-             install "mkdir -p %{buildroot}/opt/megacorp/{bin,lib,state}
+             install "mkdir -p %{buildroot}/opt/megacorp/{bin,lib,state} %{buildroot}/opt/bin
+                      install %{name} %{buildroot}/opt/bin
                       install %{name} %{buildroot}/opt/megacorp/bin
                       echo lib1 > %{buildroot}/opt/megacorp/lib/mylib" \
-             files "/opt/megacorp"
+             files "/opt/megacorp
+                    /opt/bin/test-opt"
 
 mv ${test_tmpdir}/yumrepo/* ${test_tmpdir}/rpm-repos/${repover}
 
