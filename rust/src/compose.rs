@@ -284,9 +284,13 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         .args(opt.offline.then(|| "--cache-only"))
         .args(compose_args_extra)
         .arg(opt.manifest.as_str())
-        .status()?;
-    if !s.success() {
-        return Err(anyhow::anyhow!("compose tree failed: {:?}", s).into());
+        .output()?;
+    if !s.status.success() {
+        return Err(anyhow::anyhow!(
+            "compose tree failed: {:?}",
+            std::str::from_utf8(&s.stderr).unwrap()
+        )
+        .into());
     }
 
     if !changed_path.exists() {
@@ -337,9 +341,13 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
                 .map(|s| s.as_str())
                 .unwrap_or_else(|| target_imgref.as_str()),
         ])
-        .status()?;
-    if !s.success() {
-        return Err(anyhow::anyhow!("container-encapsulate failed: {:?}", s).into());
+        .output()?;
+    if !s.status.success() {
+        return Err(anyhow::anyhow!(
+            "container-encapsulate failed: {:?}",
+            std::str::from_utf8(&s.stderr).unwrap()
+        )
+        .into());
     }
 
     if let Some(tempdest) = tempdest {
