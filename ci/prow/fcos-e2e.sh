@@ -9,7 +9,7 @@ ls -al /usr/bin/rpm-ostree
 rpm-ostree --version
 cd $(mktemp -d)
 cosa init https://github.com/coreos/fedora-coreos-config/
-rsync -rlv /cosa/component-install/ overrides/rootfs/
+cp /cosa/component-rpms/*.rpm overrides/rpm
 cosa fetch
 cosa build
 cosa kola run 'ext.rpm-ostree.*'

@@ -1,7 +1,7 @@
 FROM registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel as builder
 WORKDIR /src
 COPY . .
-RUN ./ci/build.sh && make install DESTDIR=/cosa/component-install
+RUN ./ci/coreosci-rpmbuild.sh  && mkdir -p /cosa/component-rpms && mv rpm-ostree{,-libs}-20*.rpm /cosa/component-rpms
 RUN make -C tests/kolainst install DESTDIR=/cosa/component-tests
 # Uncomment this to fake a build to test the code below
 #RUN mkdir -p /cosa/component-install/usr/bin && echo foo > /cosa/component-install/usr/bin/foo
@@ -12,9 +12,7 @@ USER root
 # Copy binaries from the build
 COPY --from=builder /cosa /cosa
 # Merge them to the real root since we're used at compose time
-# XXX: disabled for now
-# https://github.com/coreos/rpm-ostree/pull/4763#issuecomment-1883686187
-# RUN rsync -rlv /cosa/component-install/ /
+RUN dnf install -y /cosa/component-rpms/*.rpm
 # Merge installed tests
 RUN rsync -rlv /cosa/component-tests/ /
 # Grab all of our ci scripts
