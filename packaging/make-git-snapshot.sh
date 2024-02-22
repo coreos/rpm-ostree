@@ -37,7 +37,7 @@ function cleanup () {
 }
 # Run it now
 cleanup
-mkdir ${tmpd} && touch ${tmpd}/.tmp
+mkdir -p ${tmpd} && touch ${tmpd}/.tmp
 
 vendor_cmd="cargo vendor-filterer"
 target_vendor_cmd=$srcdir/target/cargo-vendor-filterer/bin/cargo-vendor-filterer
