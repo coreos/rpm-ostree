@@ -27,9 +27,13 @@ libtest_prepare_offline
 libtest_enable_repover 0
 cd $(mktemp -d)
 
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+"")
 rpm-ostree deploy --ex-cliwrap=true
-rpm-ostree apply-live  # yep it works!
+/tmp/autopkgtest-reboot 1
+;;
 
+1)
 wrapdir="/usr/libexec/rpm-ostree/wrapped"
 if ! test -d "${wrapdir}"; then
     fatal "Missing ${wrapdir}"
@@ -67,3 +71,7 @@ rpm -qa >/dev/null
 rpm --verify bash >out.txt || true
 assert_not_file_has_content "ostree-based"
 echo "ok cliwrap undo"
+;;
+
+*) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac

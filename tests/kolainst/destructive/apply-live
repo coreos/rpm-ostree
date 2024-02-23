@@ -25,6 +25,13 @@ set -x
 
 cd $(mktemp -d)
 
+# apply-live is not yet compatible with state overlays
+# https://github.com/coreos/rpm-ostree/pull/4810#issuecomment-1939351259
+if jq -e '.["opt-usrlocal-overlays"]' /usr/share/rpm-ostree/treefile.json; then
+    echo "skip apply-live does not work currently with state overlays"
+    exit 0
+fi
+
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 "")
 
