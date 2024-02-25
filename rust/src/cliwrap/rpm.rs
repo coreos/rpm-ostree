@@ -20,6 +20,12 @@ fn new_rpm_app() -> Command {
                 .action(clap::ArgAction::Version),
         )
         .arg(
+            Arg::new("eval")
+                .long("eval")
+                .short('E')
+                .action(clap::ArgAction::Set),
+        )
+        .arg(
             Arg::new("package")
                 .help("package")
                 .action(clap::ArgAction::Append),
@@ -125,6 +131,19 @@ mod tests {
     fn test_query_all() -> Result<()> {
         assert_eq!(
             disposition(SystemHostType::OstreeHost, &["-qa"])?,
+            RunDisposition::Ok
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_eval() -> Result<()> {
+        assert_eq!(
+            disposition(SystemHostType::OstreeHost, &["-E", "%{_target_cpu}"])?,
+            RunDisposition::Ok
+        );
+        assert_eq!(
+            disposition(SystemHostType::OstreeHost, &["--eval=%{_target_cpu}}"])?,
             RunDisposition::Ok
         );
         Ok(())
