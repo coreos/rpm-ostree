@@ -591,6 +591,8 @@ cleanup_selinux_lockfiles (int rootfs_fd, GCancellable *cancellable, GError **er
 gboolean
 rpmostree_rootfs_postprocess_common (int rootfs_fd, GCancellable *cancellable, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Doing common postprocessing", error);
+
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 

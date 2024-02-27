@@ -871,6 +871,8 @@ static gboolean
 impl_install_tree (RpmOstreeTreeComposeContext *self, gboolean *out_changed,
                    GCancellable *cancellable, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Installing packages", error);
+
   /* Set this early here, so we only have to set it one more time in the
    * complete exit path too.
    */
@@ -1134,6 +1136,8 @@ pull_local_into_target_repo (OstreeRepo *src_repo, OstreeRepo *dest_repo, const 
 static gboolean
 impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Postprocessing and committing", error);
+
   auto gpgkey = (*self->treefile_rs)->get_gpg_key ();
 
   /* pick up any initramfs regeneration args to shove into the metadata */
