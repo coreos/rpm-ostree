@@ -794,25 +794,13 @@ fn add_altfiles(buf: &str) -> Result<String> {
         let (prefix, rest) = parts;
         r.push_str(prefix);
 
-        let mut inserted = false;
-        for elt in rest.split_whitespace() {
+        if rest.split_whitespace().any(|e| e == "altfiles") {
             // Already have altfiles?  We're done
-            if elt == "altfiles" {
-                return Ok(buf.to_string());
-            }
-            // We prefer `files altfiles`
-            if !inserted && elt == "files" {
-                r.push_str(" files altfiles");
-                inserted = true;
-            } else {
-                r.push(' ');
-                r.push_str(elt);
-            }
+            return Ok(buf.to_string());
         }
-        if !inserted {
-            r.push_str(" altfiles");
-        }
-        r.push('\n');
+        r.push_str(rest);
+        // We'll append to the end, which is ordinarily after systemd
+        r.push_str(" altfiles\n");
     }
     Ok(r)
 }
@@ -1432,11 +1420,32 @@ automount:  files sss
 # shadow: db files
 # shadow: db files
 
-passwd: sss files altfiles systemd
+passwd:     sss files systemd altfiles
 shadow:     files
-group: sss files altfiles systemd
+group:      sss files systemd altfiles
 hosts:      files resolve [!UNAVAIL=return] myhostname dns
 automount:  files sss
+"##;
+        let replaced = add_altfiles(orig).unwrap();
+        assert_eq!(replaced.as_str(), expected);
+        let replaced2 = add_altfiles(replaced.as_str()).unwrap();
+        assert_eq!(replaced2.as_str(), expected);
+    }
+
+    #[test]
+    fn altfiles_replaced_v2() {
+        // A subset of what's in current Fedora as of 2024-02-27
+        let orig = r##"
+passwd:     files systemd
+shadow:     files
+group:      files [SUCCESS=merge] systemd
+hosts:      files myhostname dns
+"##;
+        let expected = r##"
+passwd:     files systemd altfiles
+shadow:     files
+group:      files [SUCCESS=merge] systemd altfiles
+hosts:      files myhostname dns
 "##;
         let replaced = add_altfiles(orig).unwrap();
         assert_eq!(replaced.as_str(), expected);
