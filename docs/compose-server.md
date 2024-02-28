@@ -38,7 +38,7 @@ it is strongly oriented towards "CoreOS-like" systems which include rpm-ostree
 and Ignition.
 
 The [osbuild](https://www.osbuild.org/) project has some support for
-rpm-ostree based systems.  See [this blog entry](https://www.osbuild.org/news/2020-06-01-how-to-ostree-anaconda.html)
+rpm-ostree based systems.  See [the project documentation](https://osbuild.org/docs/on-premises/commandline/building-ostree-images/)
 for example.
 
 ## Background on managing an OSTree repository
@@ -136,6 +136,6 @@ are encouraged.
 
 ## More information
 
- - https://www.osbuild.org/news/2020-06-01-how-to-ostree-anaconda.html
+ - https://osbuild.org/docs/on-premises/commandline/building-ostree-images/
  - https://github.com/coreos/coreos-assembler
 
