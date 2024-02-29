@@ -90,8 +90,12 @@ fn install_to_root(args: &[&str]) -> Result<()> {
         .map(Utf8Path::new)
         .ok_or_else(|| anyhow!("Missing required argument: ROOTDIR"))?;
     let rootdir = &Dir::open_ambient_dir(root, cap_std::ambient_authority())?;
-    write_wrappers(rootdir, None)?;
-    println!("Successfully enabled cliwrap for {root}");
+    if rootdir.is_dir(CLIWRAP_DESTDIR) {
+        println!("cliwrap already enabled for {root}");
+    } else {
+        write_wrappers(rootdir, None)?;
+        println!("Successfully enabled cliwrap for {root}");
+    }
     Ok(())
 }
 

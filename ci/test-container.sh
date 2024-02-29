@@ -42,9 +42,7 @@ fi
 rm "${origindir}/clienterror.yaml"
 rpm-ostree ex rebuild
 
-if ! test -x /usr/bin/yum; then
-    rpm-ostree cliwrap install-to-root /
-fi
+rpm-ostree cliwrap install-to-root /
 
 # Test a critical path package
 yum -y install cowsay && yum clean all
