@@ -426,7 +426,7 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
         return glnx_prefix_error (error, "SELinux postprocess");
     }
 
-  ROSCXX_TRY (rootfs_prepare_links (rootfs_dfd, false), error);
+  ROSCXX_TRY (rootfs_prepare_links (rootfs_dfd, treefile, false), error);
 
   if (!unified_core_mode)
     ROSCXX_TRY (convert_var_to_tmpfiles_d (rootfs_dfd, *cancellable), error);

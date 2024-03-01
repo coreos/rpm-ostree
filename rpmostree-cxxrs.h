@@ -1094,6 +1094,7 @@ enum class RepoMetadataTarget : ::std::uint8_t;
 struct Refspec;
 enum class OverrideReplacementType : ::std::uint8_t;
 struct OverrideReplacement;
+enum class OptUsrLocal : ::std::uint8_t;
 struct Treefile;
 struct RepoPackage;
 struct LiveApplyState;
@@ -1490,6 +1491,16 @@ struct OverrideReplacement final
 };
 #endif // CXXBRIDGE1_STRUCT_rpmostreecxx$OverrideReplacement
 
+#ifndef CXXBRIDGE1_ENUM_rpmostreecxx$OptUsrLocal
+#define CXXBRIDGE1_ENUM_rpmostreecxx$OptUsrLocal
+enum class OptUsrLocal : ::std::uint8_t
+{
+  Var = 0,
+  Root = 1,
+  StateOverlay = 2,
+};
+#endif // CXXBRIDGE1_ENUM_rpmostreecxx$OptUsrLocal
+
 #ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$Treefile
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$Treefile
 struct Treefile final : public ::rust::Opaque
@@ -1555,7 +1566,7 @@ struct Treefile final : public ::rust::Opaque
   ::rpmostreecxx::RepoMetadataTarget get_repo_metadata_target () const noexcept;
   bool rpmdb_backend_is_target () const noexcept;
   bool should_normalize_rpmdb () const noexcept;
-  bool get_opt_usrlocal_overlays () const noexcept;
+  ::rpmostreecxx::OptUsrLocal get_opt_usrlocal () const noexcept;
   ::rust::Vec< ::rust::String> get_files_remove_regex (::rust::Str package) const noexcept;
   ::rust::String get_checksum (::rpmostreecxx::OstreeRepo const &repo) const;
   ::rust::String get_ostree_ref () const noexcept;
@@ -1866,7 +1877,8 @@ void compose_postprocess_final (::std::int32_t rootfs_dfd,
 void convert_var_to_tmpfiles_d (::std::int32_t rootfs_dfd,
                                 ::rpmostreecxx::GCancellable const &cancellable);
 
-void rootfs_prepare_links (::std::int32_t rootfs_dfd, bool skip_usrlocal);
+void rootfs_prepare_links (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile const &treefile,
+                           bool skip_usrlocal);
 
 void workaround_selinux_cross_labeling (::std::int32_t rootfs_dfd,
                                         ::rpmostreecxx::GCancellable &cancellable);

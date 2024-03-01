@@ -498,7 +498,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
                           cancellable, error))
     return FALSE;
 
-  if ((*self->treefile_rs)->get_opt_usrlocal_overlays ())
+  if ((*self->treefile_rs)->get_opt_usrlocal () == rpmostreecxx::OptUsrLocal::StateOverlay)
     {
       if (!glnx_file_copy_at (
               pkglibdir_dfd, "rpm-ostree-0-integration-opt-usrlocal-compat.conf", NULL, rootfs_dfd,

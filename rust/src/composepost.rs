@@ -12,7 +12,7 @@ use crate::ffi::BubblewrapMutability;
 use crate::ffiutil::ffi_dirfd;
 use crate::normalization;
 use crate::passwd::PasswdDB;
-use crate::treefile::Treefile;
+use crate::treefile::{OptUsrLocal, Treefile};
 use crate::{bwrap, importer};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -148,31 +148,33 @@ fn compose_init_rootfs_transient(rootfs_dfd: &cap_std::fs::Dir) -> Result<()> {
 fn compose_init_rootfs_strict(
     rootfs_dfd: &cap_std::fs::Dir,
     tmp_is_dir: bool,
-    opt_state_overlay: bool,
+    opt_usrlocal: OptUsrLocal,
 ) -> Result<()> {
     println!("Initializing rootfs");
 
     compose_init_rootfs_base(rootfs_dfd, tmp_is_dir)?;
 
-    const OPT_SYMLINK_LEGACY: &str = "var/opt";
-    const OPT_SYMLINK_STATEOVERLAY: &str = "usr/lib/opt";
-    let opt_symlink = if opt_state_overlay {
-        OPT_SYMLINK_STATEOVERLAY
-    } else {
-        OPT_SYMLINK_LEGACY
+    let opt_symlink = match opt_usrlocal {
+        OptUsrLocal::Var => Some("var/opt"),
+        OptUsrLocal::Root => {
+            rootfs_dfd.create_dir_all("opt")?;
+            None
+        }
+        OptUsrLocal::StateOverlay => Some("usr/lib/opt"),
     };
 
     // This is used in the case where we don't have a transient rootfs; redirect
     // these toplevel directories underneath /var.
-    let ostree_strict_mode_symlinks: &[(&str, &str)] = &[
-        (opt_symlink, "opt"),
+    let ostree_strict_mode_symlinks = [
         ("var/srv", "srv"),
         ("var/mnt", "mnt"),
         ("run/media", "media"),
     ];
+
     ostree_strict_mode_symlinks
-        .par_iter()
-        .try_for_each(|&(dest, src)| {
+        .into_iter()
+        .chain(opt_symlink.map(|link| (link, "opt")))
+        .try_for_each(|(dest, src)| {
             rootfs_dfd
                 .symlink(dest, src)
                 .with_context(|| format!("Creating {src}"))
@@ -230,7 +232,8 @@ pub fn compose_prepare_rootfs(
         treefile
             .parsed
             .base
-            .opt_usrlocal_overlays
+            .opt_usrlocal
+            .clone()
             .unwrap_or_default(),
     )?;
 
@@ -679,12 +682,10 @@ pub fn compose_postprocess(
         compose_postprocess_default_target(rootfs, t)?;
     }
 
-    if treefile
-        .parsed
-        .base
-        .opt_usrlocal_overlays
-        .unwrap_or_default()
-    {
+    if matches!(
+        treefile.parsed.base.opt_usrlocal,
+        Some(OptUsrLocal::StateOverlay)
+    ) {
         compose_postprocess_state_overlays(rootfs)?;
     }
 
@@ -1034,13 +1035,18 @@ fn state_overlay_enabled(rootfs_dfd: &cap_std::fs::Dir, state_overlay: &str) -> 
 ///  - If present, symlink /var/lib/alternatives -> /usr/lib/alternatives
 ///  - If present, symlink /var/lib/vagrant -> /usr/lib/vagrant
 #[context("Preparing symlinks in rootfs")]
-pub fn rootfs_prepare_links(rootfs_dfd: i32, skip_usrlocal: bool) -> CxxResult<()> {
+pub fn rootfs_prepare_links(
+    rootfs_dfd: i32,
+    treefile: &Treefile,
+    skip_usrlocal: bool,
+) -> CxxResult<()> {
     let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let mut db = dirbuilder_from_mode(0o755);
     db.recursive(true);
 
     if !skip_usrlocal {
-        if state_overlay_enabled(rootfs, "usr-local")? {
+        let usrlocal_root = matches!(treefile.parsed.base.opt_usrlocal, Some(OptUsrLocal::Root));
+        if usrlocal_root || state_overlay_enabled(rootfs, "usr-local")? {
             // because of the filesystem lua issue (see
             // compose_init_rootfs_base()) we need to create this manually
             rootfs.ensure_dir_with("usr/local", &db)?;
@@ -1636,8 +1642,11 @@ OSTREE_VERSION='33.4'
     }
 
     #[test]
-    fn test_prepare_symlinks() {
-        let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
+    fn test_prepare_symlinks() -> Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let tempdir: &Utf8Path = tempdir.path().try_into().unwrap();
+        let tf = crate::treefile::tests::new_test_treefile(tempdir, "", None)?;
+        let rootfs = Dir::open_ambient_dir(tempdir, cap_std::ambient_authority())?;
         let mut db = DirBuilder::new();
         db.recursive(true);
         db.mode(0o755);
@@ -1645,7 +1654,7 @@ OSTREE_VERSION='33.4'
         rootfs.ensure_dir_with("var/lib/alternatives", &db).unwrap();
         rootfs.ensure_dir_with("var/lib/vagrant", &db).unwrap();
 
-        rootfs_prepare_links(rootfs.as_raw_fd(), false).unwrap();
+        rootfs_prepare_links(rootfs.as_raw_fd(), &tf, false).unwrap();
         {
             let usr_dir = rootfs.open_dir("usr").unwrap();
             let local_target = usr_dir.read_link("local").unwrap();
@@ -1663,6 +1672,7 @@ OSTREE_VERSION='33.4'
                 assert_eq!(target.unwrap().to_str(), Some(*content));
             }
         }
+        Ok(())
     }
 
     #[test]

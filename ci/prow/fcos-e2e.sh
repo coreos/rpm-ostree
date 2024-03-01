@@ -9,9 +9,9 @@ ls -al /usr/bin/rpm-ostree
 rpm-ostree --version
 cd $(mktemp -d)
 cosa init https://github.com/coreos/fedora-coreos-config/
-# let's turn on opt-usrlocal-overlays in this test since CoreOS CI already
+# let's turn on stateoverlays in this test since CoreOS CI already
 # covers the off path
-echo -e '\nopt-usrlocal-overlays: true\n' >> src/config/manifest.yaml
+echo -e '\nopt-usrlocal: "stateoverlay"\n' >> src/config/manifest.yaml
 cp /cosa/component-rpms/*.rpm overrides/rpm
 # XXX: temporarily import new ostree until it makes it into FCOS
 (cd overrides/rpm && curl -L --remote-name-all https://kojipkgs.fedoraproject.org//packages/ostree/2024.2/1.fc39/x86_64/ostree-{,libs-}2024.2-1.fc39.x86_64.rpm)

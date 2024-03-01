@@ -427,7 +427,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         documentation,
         boot_location,
         tmp_is_dir,
-        opt_usrlocal_overlays,
+        opt_usrlocal,
         default_target,
         machineid_compat,
         releasever,
@@ -1412,8 +1412,8 @@ impl Treefile {
         self.parsed.base.rpmdb_normalize.unwrap_or(false)
     }
 
-    pub(crate) fn get_opt_usrlocal_overlays(&self) -> bool {
-        self.parsed.base.opt_usrlocal_overlays.unwrap_or_default()
+    pub(crate) fn get_opt_usrlocal(&self) -> crate::ffi::OptUsrLocal {
+        self.parsed.base.opt_usrlocal.unwrap_or_default().into()
     }
 
     pub(crate) fn get_files_remove_regex(&self, package: &str) -> Vec<String> {
@@ -2405,6 +2405,31 @@ impl From<RepoMetadataTarget> for crate::ffi::RepoMetadataTarget {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum OptUsrLocal {
+    Var,
+    Root,
+    #[serde(alias = "stateoverlay")]
+    StateOverlay,
+}
+
+impl Default for OptUsrLocal {
+    fn default() -> Self {
+        Self::Var
+    }
+}
+
+impl From<OptUsrLocal> for crate::ffi::OptUsrLocal {
+    fn from(target: OptUsrLocal) -> Self {
+        match target {
+            OptUsrLocal::Var => Self::Var,
+            OptUsrLocal::Root => Self::Root,
+            OptUsrLocal::StateOverlay => Self::StateOverlay,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// The database backend; see https://github.com/coreos/fedora-coreos-tracker/issues/609
@@ -2537,7 +2562,7 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tmp_is_dir: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) opt_usrlocal_overlays: Option<bool>,
+    pub(crate) opt_usrlocal: Option<OptUsrLocal>,
 
     // systemd
     #[serde(skip_serializing_if = "Option::is_none")]
