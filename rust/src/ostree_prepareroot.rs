@@ -37,14 +37,37 @@ pub(crate) fn load_config(rootfs: &Dir) -> Result<Option<glib::KeyFile>> {
     Ok(None)
 }
 
+pub(crate) enum Rootfs {
+    Legacy,
+    Composefs,
+    Transient,
+}
+
+pub fn rootfs_setup(rootfs: &Dir) -> Result<Rootfs> {
+    let config = if let Some(config) = load_config(rootfs)? {
+        config
+    } else {
+        return Ok(Rootfs::Legacy);
+    };
+    let r = if config
+        .optional_bool("root", "transient")?
+        .unwrap_or_default()
+    {
+        Rootfs::Transient
+    } else if config
+        .optional_string("composefs", "enabled")?
+        .map(|s| s.as_str() == "yes")
+        .unwrap_or_default()
+    {
+        Rootfs::Composefs
+    } else {
+        Rootfs::Legacy
+    };
+    Ok(r)
+}
+
 /// Query whether the target root has the `root.transient` key
 /// which sets up a transient overlayfs.
 pub(crate) fn transient_root_enabled(rootfs: &Dir) -> Result<bool> {
-    if let Some(config) = load_config(rootfs)? {
-        Ok(config
-            .optional_bool("root", "transient")?
-            .unwrap_or_default())
-    } else {
-        Ok(false)
-    }
+    Ok(matches!(rootfs_setup(rootfs)?, Rootfs::Transient))
 }
