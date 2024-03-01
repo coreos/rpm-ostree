@@ -31,10 +31,10 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
       rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2024-6c7480dd2f
     fi
 
-    # FCOS doesn't enable opt-usrlocal-overlays yet. It's on in Prow CI though.
+    # FCOS doesn't enable opt-usrlocal = stateoverlay yet. It's on in Prow CI though.
     # Just check the treefile so we do the right thing regardless of CoreOS CI
     # or Prow.
-    if ! jq -e '.["opt-usrlocal-overlays"]' /usr/share/rpm-ostree/treefile.json; then
+    if test "$(jq -r '.["opt-usrlocal"]' /usr/share/rpm-ostree/treefile.json)" = null; then
       mkdir -p /etc/systemd/system/rpm-ostreed.service.d/
       cat > /etc/systemd/system/rpm-ostreed.service.d/state-overlay.conf <<EOF
 [Service]

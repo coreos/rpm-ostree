@@ -128,6 +128,8 @@ ostree --repo="${repo}" ls "${treeref}" /usr/lib/alternatives | grep '^d00755'> 
 assert_file_has_content_literal dirs.txt '/usr/lib/alternatives'
 ostree --repo="${repo}" ls "${treeref}" /usr/local | grep '^l00777' > symlinks.txt
 assert_file_has_content_literal symlinks.txt '/usr/local -> ../var/usrlocal'
+ostree --repo="${repo}" ls "${treeref}" /opt > symlinks.txt
+assert_file_has_content_literal symlinks.txt '/opt -> var/opt'
 echo "ok symlinks"
 
 # Check iptables setup through alternatives.

@@ -300,7 +300,11 @@ pub mod ffi {
         fn compose_postprocess_final_pre(rootfs_dfd: i32) -> Result<()>;
         fn compose_postprocess_final(rootfs_dfd: i32, treefile: &Treefile) -> Result<()>;
         fn convert_var_to_tmpfiles_d(rootfs_dfd: i32, cancellable: &GCancellable) -> Result<()>;
-        fn rootfs_prepare_links(rootfs_dfd: i32, skip_usrlocal: bool) -> Result<()>;
+        fn rootfs_prepare_links(
+            rootfs_dfd: i32,
+            treefile: &Treefile,
+            skip_usrlocal: bool,
+        ) -> Result<()>;
         fn workaround_selinux_cross_labeling(
             rootfs_dfd: i32,
             cancellable: Pin<&mut GCancellable>,
@@ -547,6 +551,14 @@ pub mod ffi {
         packages: Vec<String>,
     }
 
+    // treefile.rs
+    #[derive(Debug)]
+    enum OptUsrLocal {
+        Var,
+        Root,
+        StateOverlay,
+    }
+
     extern "Rust" {
         type Treefile;
 
@@ -627,7 +639,7 @@ pub mod ffi {
         fn get_repo_metadata_target(&self) -> RepoMetadataTarget;
         fn rpmdb_backend_is_target(&self) -> bool;
         fn should_normalize_rpmdb(&self) -> bool;
-        fn get_opt_usrlocal_overlays(&self) -> bool;
+        fn get_opt_usrlocal(&self) -> OptUsrLocal;
         fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
         fn get_checksum(&self, repo: &OstreeRepo) -> Result<String>;
         fn get_ostree_ref(&self) -> String;

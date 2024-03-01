@@ -84,6 +84,7 @@ runcompose() {
 
 runasroot() {
     if has_compose_privileges; then
+	set -x
         "$@"
     else
         runvm "$@"

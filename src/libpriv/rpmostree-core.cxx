@@ -4357,7 +4357,7 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
    * under /usr as well as symlinks under /var. We're really interested here
    * in the / var part. We don't want to change the /usr/local setting from the
    * base tree (or in a base compose, from `filesystem`). */
-  ROSCXX_TRY (rootfs_prepare_links (tmprootfs_dfd, true), error);
+  ROSCXX_TRY (rootfs_prepare_links (tmprootfs_dfd, *self->treefile_rs, true), error);
 
   CXX_TRY_VAR (etc_guard, rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd), error);
 

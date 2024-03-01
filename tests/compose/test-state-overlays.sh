@@ -27,7 +27,7 @@ ln "$PWD/yumrepo.repo" config/yumrepo.repo
 treefile_append "packages" '["test-opt", "test-usr-local"]'
 
 # enable state overlays
-treefile_set "opt-usrlocal-overlays" 'True'
+treefile_set "opt-usrlocal" '"stateoverlay"'
 
 runcompose
 

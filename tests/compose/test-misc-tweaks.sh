@@ -44,6 +44,7 @@ selinux-label-version: 1
 readonly-executables: true
 container-cmd:
   - /usr/bin/bash
+opt-usrlocal: "root"
 EOF
 treefile_append "include" '["documentation.yaml", "other.yaml"]'
 for x in 'recommends' 'documentation' 'readonly-executables'; do
@@ -178,6 +179,12 @@ assert_not_file_has_content out.txt 'bin/barbarextra'
 ostree --repo=${repo} ls ${treeref} /usr/etc > out.txt
 assert_file_has_content out.txt 'etc/sharedfile'
 echo "ok remove-from-packages"
+
+ostree --repo=${repo} ls ${treeref} /opt > ls.txt
+assert_file_has_content ls.txt '^d0'
+ostree --repo=${repo} ls ${treeref} /usr/local > ls.txt
+assert_file_has_content ls.txt '^d0' 
+echo "ok opt-usrlocal"
 
 # https://github.com/projectatomic/rpm-ostree/issues/669
 ostree --repo=${repo} ls  ${treeref} /tmp > ls.txt
