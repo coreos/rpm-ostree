@@ -97,7 +97,12 @@ pub(crate) fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Cxx
         .into_iter()
         .map(|s| s.to_string())
         .collect();
-    let _ = crate::bwrap::bubblewrap_run_sync(rootfs_dfd, &args, false, unified_core)?;
+    let _ = crate::bwrap::bubblewrap_run_sync(
+        rootfs_dfd,
+        &args,
+        false,
+        crate::ffi::BubblewrapMutability::for_unified_core(unified_core),
+    )?;
     Ok(())
 }
 

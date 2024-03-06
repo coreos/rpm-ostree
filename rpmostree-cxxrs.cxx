@@ -2012,7 +2012,8 @@ extern "C"
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$bubblewrap_run_sync (
       ::std::int32_t rootfs_dfd, ::rust::Vec< ::rust::String> const &args, bool capture_stdout,
-      bool unified_core, ::rust::Vec< ::std::uint8_t> *return$) noexcept;
+      ::rpmostreecxx::BubblewrapMutability mutability,
+      ::rust::Vec< ::std::uint8_t> *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$bubblewrap_new (
       ::std::int32_t rootfs_fd, ::rust::Box< ::rpmostreecxx::Bubblewrap> *return$) noexcept;
@@ -2066,6 +2067,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Bubblewrap$run (::rpmostreecxx::Bubblewrap &self,
                                           ::rpmostreecxx::GCancellable const &cancellable) noexcept;
+
+  ::rpmostreecxx::BubblewrapMutability
+  rpmostreecxx$cxxbridge1$mutability_for_unified_core (bool unified_core) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$usroverlay_entrypoint (::rust::Vec< ::rust::String> const &args) noexcept;
@@ -3469,11 +3473,11 @@ bubblewrap_selftest ()
 
 ::rust::Vec< ::std::uint8_t>
 bubblewrap_run_sync (::std::int32_t rootfs_dfd, ::rust::Vec< ::rust::String> const &args,
-                     bool capture_stdout, bool unified_core)
+                     bool capture_stdout, ::rpmostreecxx::BubblewrapMutability mutability)
 {
   ::rust::MaybeUninit< ::rust::Vec< ::std::uint8_t> > return$;
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$bubblewrap_run_sync (
-      rootfs_dfd, args, capture_stdout, unified_core, &return$.value);
+      rootfs_dfd, args, capture_stdout, mutability, &return$.value);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
@@ -3597,6 +3601,12 @@ Bubblewrap::run (::rpmostreecxx::GCancellable const &cancellable)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
+}
+
+::rpmostreecxx::BubblewrapMutability
+mutability_for_unified_core (bool unified_core) noexcept
+{
+  return rpmostreecxx$cxxbridge1$mutability_for_unified_core (unified_core);
 }
 
 void

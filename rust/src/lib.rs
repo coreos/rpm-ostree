@@ -20,6 +20,7 @@ mod cxxrsutil;
 mod ffiutil;
 pub(crate) mod ffiwrappers;
 pub(crate) use cxxrsutil::*;
+use ffi::BubblewrapMutability;
 
 /// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
 ///
@@ -123,7 +124,7 @@ pub mod ffi {
             rootfs_dfd: i32,
             args: &Vec<String>,
             capture_stdout: bool,
-            unified_core: bool,
+            mutability: BubblewrapMutability,
         ) -> Result<Vec<u8>>;
 
         fn bubblewrap_new(rootfs_fd: i32) -> Result<Box<Bubblewrap>>;
@@ -148,6 +149,8 @@ pub mod ffi {
         fn setup_compat_var(&mut self) -> Result<()>;
 
         fn run(&mut self, cancellable: &GCancellable) -> Result<()>;
+
+        fn mutability_for_unified_core(unified_core: bool) -> BubblewrapMutability;
     }
 
     // builtins/apply_live.rs
@@ -925,6 +928,19 @@ pub mod ffi {
             cancellable: &GCancellable,
         ) -> Result<*mut GVariant>;
     }
+}
+
+impl BubblewrapMutability {
+    pub(crate) fn for_unified_core(unified_core: bool) -> Self {
+        if unified_core {
+            Self::RoFiles
+        } else {
+            Self::MutateFreely
+        }
+    }
+}
+pub(crate) fn mutability_for_unified_core(unified_core: bool) -> BubblewrapMutability {
+    BubblewrapMutability::for_unified_core(unified_core)
 }
 
 pub mod builtins;

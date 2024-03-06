@@ -506,8 +506,12 @@ fn compose_postprocess_scripts(
         )?;
         println!("Executing `postprocess` inline script '{}'", i);
         let child_argv = vec![binpath.to_string()];
-        let _ =
-            bwrap::bubblewrap_run_sync(rootfs_dfd.as_raw_fd(), &child_argv, false, unified_core)?;
+        let _ = bwrap::bubblewrap_run_sync(
+            rootfs_dfd.as_raw_fd(),
+            &child_argv,
+            false,
+            BubblewrapMutability::for_unified_core(unified_core),
+        )?;
         rootfs_dfd.remove_file(target_binpath)?;
     }
 
@@ -531,7 +535,7 @@ fn compose_postprocess_scripts(
             rootfs_dfd.as_raw_fd(),
             child_argv,
             false,
-            unified_core,
+            BubblewrapMutability::for_unified_core(unified_core),
         )
         .context("Executing postprocessing script")?;
 

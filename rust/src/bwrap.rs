@@ -473,19 +473,14 @@ pub(crate) fn bubblewrap_run_sync(
     rootfs_dfd: i32,
     args: &Vec<String>,
     capture_stdout: bool,
-    unified_core: bool,
+    mutability: BubblewrapMutability,
 ) -> CxxResult<Vec<u8>> {
     let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     let tempetc = crate::core::prepare_tempetc_guard(rootfs_dfd.as_raw_fd())?;
-    let mutability = if unified_core {
-        BubblewrapMutability::RoFiles
-    } else {
-        BubblewrapMutability::MutateFreely
-    };
     let mut bwrap = Bubblewrap::new_with_mutability(rootfs_dfd, mutability)?;
 
-    if unified_core {
-        bwrap.bind_read("var", "/var");
+    if mutability != BubblewrapMutability::MutateFreely {
+        bwrap.bind_read("var", "/var")
     } else {
         bwrap.bind_readwrite("var", "/var")
     }
