@@ -128,6 +128,7 @@ pub(crate) fn is_src_rpm_arg(arg: &str) -> bool {
 /// descriptors for the content.
 /// TODO(cxx-rs): This would be slightly more elegant as Result<Option<Vec<i32>>>
 #[context("Handling argument {}", arg)]
+#[allow(unused_variables)] // Because of the #[cfg] below
 pub(crate) fn client_handle_fd_argument(
     arg: &str,
     arch: &str,
