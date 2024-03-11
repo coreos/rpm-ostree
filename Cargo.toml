@@ -55,7 +55,7 @@ containers-image-proxy = { version = "0.5.8", features = ["proxy_v0_2_4"] }
 # Explicitly force on libc
 rustix = { version = "0.38", features = ["use-libc", "process", "fs"] }
 chrono = { version = "0.4.34", features = ["serde"] }
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 cxx = "1.0.119"
 envsubst = "0.2.1"
 either = "1.9.0"
