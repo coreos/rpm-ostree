@@ -1773,13 +1773,16 @@ void bubblewrap_selftest ();
 
 ::rust::Vec< ::std::uint8_t> bubblewrap_run_sync (::std::int32_t rootfs_dfd,
                                                   ::rust::Vec< ::rust::String> const &args,
-                                                  bool capture_stdout, bool unified_core);
+                                                  bool capture_stdout,
+                                                  ::rpmostreecxx::BubblewrapMutability mutability);
 
 ::rust::Box< ::rpmostreecxx::Bubblewrap> bubblewrap_new (::std::int32_t rootfs_fd);
 
 ::rust::Box< ::rpmostreecxx::Bubblewrap>
 bubblewrap_new_with_mutability (::std::int32_t rootfs_fd,
                                 ::rpmostreecxx::BubblewrapMutability mutability);
+
+::rpmostreecxx::BubblewrapMutability mutability_for_unified_core (bool unified_core) noexcept;
 
 void usroverlay_entrypoint (::rust::Vec< ::rust::String> const &args);
 

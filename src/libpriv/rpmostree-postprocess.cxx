@@ -390,16 +390,20 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
         /* Now regenerate SELinux policy so that postprocess scripts from users and from us
          * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
         rust::Vec child_argv = { rust::String ("semodule"), rust::String ("-nB") };
-        ROSCXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode),
-                    error);
+        ROSCXX_TRY (
+            bubblewrap_run_sync (rootfs_dfd, child_argv, false,
+                                 rpmostreecxx::mutability_for_unified_core (unified_core_mode)),
+            error);
       }
 
       /* Temporary workaround for https://github.com/openshift/os/issues/1036. */
       {
         rust::Vec child_argv
             = { rust::String ("semodule"), rust::String ("-n"), rust::String ("--refresh") };
-        ROSCXX_TRY (bubblewrap_run_sync (rootfs_dfd, child_argv, false, (bool)unified_core_mode),
-                    error);
+        ROSCXX_TRY (
+            bubblewrap_run_sync (rootfs_dfd, child_argv, false,
+                                 rpmostreecxx::mutability_for_unified_core (unified_core_mode)),
+            error);
       }
     }
 
