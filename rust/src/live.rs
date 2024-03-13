@@ -431,14 +431,14 @@ pub(crate) fn transaction_apply_live(
     if !allow_replacement {
         if pkgdiff.n_removed() > 0 {
             return Err(anyhow!(
-                "packages would be removed: {}, enable replacement to override",
+                "packages would be removed: {}, allow replacement to override",
                 pkgdiff.n_removed()
             )
             .into());
         }
         if pkgdiff.n_modified() > 0 {
             return Err(anyhow!(
-                "packages would be changed: {}, enable replacement to override",
+                "packages would be changed: {}, allow replacement to override",
                 pkgdiff.n_modified()
             )
             .into());
