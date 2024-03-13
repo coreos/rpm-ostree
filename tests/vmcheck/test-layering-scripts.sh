@@ -153,7 +153,8 @@ license_combos="zlib-rpm systemd-tar-rpm sed-tzdata"
 license_un_combos="zlib systemd-rpm"
 vm_build_rpm scriptpkg4 \
              transfiletriggerin "/usr/share/licenses/zlib /usr/share/licenses/rpm" 'sort >/usr/share/transfiletriggerin-license-zlib-rpm.txt' \
-             transfiletriggerun "/usr/share/licenses/zlib" 'sort >/usr/share/transfiletriggerun-license-zlib.txt'
+             transfiletriggerun "/usr/share/licenses/zlib" 'sort >/usr/share/transfiletriggerun-license-zlib.txt' \
+             transfiletriggerin2 "/usr/share/licenses/xz/COPYING" 'cat > /usr/share/transfiletriggerin-license-file-xz.txt'
 vm_build_rpm scriptpkg5 \
              transfiletriggerin "/usr/share/licenses/systemd /usr/share/licenses/rpm /usr/share/licenses/tar" 'sort >/usr/share/transfiletriggerin-license-systemd-tar-rpm.txt' \
              transfiletriggerun "/usr/share/licenses/systemd /usr/share/licenses/rpm" 'sort >/usr/share/transfiletriggerun-license-systemd-rpm.txt' \
@@ -171,6 +172,7 @@ done
 for combo in ${license_un_combos}; do
     vm_cmd test '!' -f /usr/share/licenses/transfiletriggerun-license-${combo}.txt
 done
+vm_cmd grep /usr/share/licenses/xz/COPYING /usr/share/transfiletriggerin-license-file-xz.txt
 # We really need a reset command to go back to the base layer
 vm_rpmostree uninstall scriptpkg{4,5}
 echo "ok transfiletriggerin"
