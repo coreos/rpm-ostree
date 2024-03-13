@@ -632,7 +632,13 @@ write_subdir (int dfd, const char *path, GString *prefix, FILE *f, guint *inout_
   glnx_autofd int target_dfd = glnx_opendirat_with_errno (dfd, path, TRUE);
   if (target_dfd < 0)
     {
-      if (errno != ENOENT)
+      if (errno == ENOTDIR)
+        {
+          if (!write_filename (f, prefix, error))
+            return FALSE;
+          (*inout_n_matched)++;
+        }
+      else if (errno != ENOENT)
         return glnx_throw_errno_prefix (error, "opendirat");
       /* Not early return */
       return TRUE;
