@@ -22,6 +22,11 @@ validate_passwd group
 ostree --repo=${repo} ls ${treeref} /usr/etc/passwd > passwd.txt
 assert_file_has_content_literal passwd.txt '00644 '
 
+ostree --repo=${repo} ls ${treeref} /usr/etc/shadow > shadow.txt
+assert_file_has_content_literal shadow.txt '00000 '
+ostree --repo=${repo} ls ${treeref} /usr/etc/gshadow > gshadow.txt
+assert_file_has_content_literal gshadow.txt '00000 '
+
 ostree --repo=${repo} cat ${treeref} /usr/etc/default/useradd > useradd.txt
 assert_file_has_content_literal useradd.txt HOME=/var/home
 
