@@ -60,6 +60,7 @@ systemdunit_service_file_names = \
 	rpm-ostreed-automatic.service \
 	rpm-ostree-bootstatus.service \
 	rpm-ostree-countme.service \
+	rpm-ostree-fix-shadow-mode.service \
 	$(NULL)
 
 systemdunit_service_files = $(addprefix $(srcdir)/src/daemon/,$(systemdunit_service_file_names))
