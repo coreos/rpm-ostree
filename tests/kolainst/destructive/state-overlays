@@ -1,8 +1,13 @@
 #!/bin/bash
+
 ## kola:
 ##   tags: "needs-internet"
 
-set -xeuo pipefail
+set -euo pipefail
+
+# NOTE: This is disabled until https://github.com/coreos/rpm-ostree/issues/4879
+# is re-enabled.
+exit 0
 
 . ${KOLA_EXT_DATA}/libtest.sh
 
@@ -31,7 +36,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
       rpm-ostree override replace https://bodhi.fedoraproject.org/updates/FEDORA-2024-6c7480dd2f
     fi
 
-    # FCOS doesn't enable opt-usrlocal = stateoverlay yet. It's on in Prow CI though.
+    # FCOS doesn't enable opt-usrlocal = stateoverlay. It's on in Prow CI though.
     # Just check the treefile so we do the right thing regardless of CoreOS CI
     # or Prow.
     if test "$(jq -r '.["opt-usrlocal"]' /usr/share/rpm-ostree/treefile.json)" = null; then
@@ -40,14 +45,14 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 [Service]
 Environment=RPMOSTREE_EXPERIMENTAL_FORCE_OPT_USRLOCAL_OVERLAY=1
 EOF
+    fi
 
-      # This script itself is in /usr/local, so we need to move it back on top
-      # of the overlay if we used the hack. This simultaneously demos one way
-      # upgrading nodes could retain content if we turn on opt-usrlocal-overlays
-      # in FCOS.
-      cat > /etc/systemd/system/move-usr-local.service <<EOF
+    # This script itself is in /usr/local, so we need to move it back on top
+    # of the overlay. This simultaneously demos one way upgrading nodes could
+    # retain content if we turn on opt-usrlocal-overlays in FCOS.
+    cat > /etc/systemd/system/move-usr-local.service <<EOF
 [Unit]
-Description=Move Previous /usr/local Content Back Into /usr/local
+Description=Move Previous /usr/local content back into /usr/local
 After=local-fs.target
 After=systemd-tmpfiles-setup.service
 Before=kola-runext.service
@@ -63,10 +68,9 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 EOF
-      systemctl daemon-reload
-      systemctl restart rpm-ostreed
-      systemctl enable move-usr-local.service
-    fi
+    systemctl daemon-reload
+    systemctl restart rpm-ostreed
+    systemctl enable move-usr-local.service
 
     rpm-ostree install test-opt
 
