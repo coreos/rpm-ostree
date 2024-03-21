@@ -106,9 +106,6 @@ pub fn passwd_cleanup(rootfs_dfd: i32) -> Result<()> {
 /// in /usr/etc at this point), and splitting it into two streams: a new
 /// /etc/passwd that just contains the root entry, and /usr/lib/passwd which
 /// contains everything else.
-///
-/// Note: the presence of /usr/lib/passwd is used in postprocess_final() to make
-/// it idempotent. See related comment there.
 #[context("Migrating 'passwd' to /usr/lib")]
 pub fn migrate_passwd_except_root(rootfs_dfd: i32) -> CxxResult<()> {
     static ETCSRC_PATH: &str = "usr/etc/passwd";
