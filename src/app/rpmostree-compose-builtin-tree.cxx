@@ -477,46 +477,6 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
                                         std::string (previous_ref), opt_unified_core),
               error);
 
-  /* Assembly will regen the rpm-ostree-autovar.conf tmpfiles.d dropin; let's
-   * make sure to add our own static dropins before that so that they're taken
-   * into account when looking for dupes. */
-  g_print ("Adding rpm-ostree-0-integration.conf\n");
-
-  /* This is useful if we're running in an uninstalled configuration, e.g.
-   * during tests. */
-  const char *pkglibdir_path = g_getenv ("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
-  glnx_autofd int pkglibdir_dfd = -1;
-  if (!glnx_opendirat (AT_FDCWD, pkglibdir_path, TRUE, &pkglibdir_dfd, error))
-    return FALSE;
-
-  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
-    return FALSE;
-
-  if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration.conf", NULL, rootfs_dfd,
-                          "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf",
-                          GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
-                          cancellable, error))
-    return FALSE;
-
-  if ((*self->treefile_rs)->get_opt_usrlocal () == rpmostreecxx::OptUsrLocal::StateOverlay)
-    {
-      if (!glnx_file_copy_at (
-              pkglibdir_dfd, "rpm-ostree-0-integration-opt-usrlocal-compat.conf", NULL, rootfs_dfd,
-              "usr/lib/tmpfiles.d/rpm-ostree-0-integration-opt-usrlocal-compat.conf",
-              GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
-              cancellable, error))
-        return FALSE;
-    }
-  else
-    {
-      if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration-opt-usrlocal.conf", NULL,
-                              rootfs_dfd,
-                              "usr/lib/tmpfiles.d/rpm-ostree-0-integration-opt-usrlocal.conf",
-                              GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
-                              cancellable, error))
-        return FALSE;
-    }
-
   if (opt_unified_core)
     {
       if (!rpmostree_context_import (self->corectx, cancellable, error))
