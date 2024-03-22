@@ -69,11 +69,14 @@ static GOptionEntry option_entries[]
         { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
           "Prevent automatic deployment finalization on shutdown", NULL },
         { "enablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_enable_repo,
-          "Enable the repository based on the repo id", NULL },
-        { "disablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_disable_repo,
-          "Only disabling all (*) repositories is supported currently", NULL },
-        { "releasever", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_release_ver, "Set the releasever",
+          "Enable the repository based on the repo id. Is only supported in a container build.",
           NULL },
+        { "disablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_disable_repo,
+          "Only disabling all (*) repositories is supported currently. Is only supported in a "
+          "container build.",
+          NULL },
+        { "releasever", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_release_ver,
+          "Set the releasever. Is only supported in a container build.", NULL },
         { NULL } };
 
 static GOptionEntry uninstall_option_entry[]
