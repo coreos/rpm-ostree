@@ -6,7 +6,7 @@
 
 for arg in "$@"; do
     case $arg in
-        preset | --root | --root=*) exec /usr/bin/systemctl.rpmostreesave "$@" ;;
+        preset | --root | --root=* | enable | disable) exec /usr/bin/systemctl.rpmostreesave "$@" ;;
     esac
 done
 echo "rpm-ostree-systemctl: Ignored non-preset command:" "$@"
