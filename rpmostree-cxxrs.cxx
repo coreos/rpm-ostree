@@ -1216,6 +1216,11 @@ public:
     str.repr = repr;
     return str;
   }
+  static repr::Fat
+  repr (Str str) noexcept
+  {
+    return str.repr;
+  }
 };
 
 template <typename T> class impl<Slice<T> > final
@@ -2811,6 +2816,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$complete_rpm_layering (::std::int32_t rootfs) noexcept;
 
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (::std::int32_t rootfs) noexcept;
+
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$passwd_cleanup (::std::int32_t rootfs) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$migrate_group_except_root (
@@ -2939,9 +2947,6 @@ extern "C"
 
   void rpmostreecxx$cxxbridge1$cache_branch_to_nevra (::rust::Str nevra,
                                                       ::rust::String *return$) noexcept;
-
-  ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (::std::int32_t rootfs) noexcept;
 
   ::std::uint32_t
   rpmostreecxx$cxxbridge1$CxxGObjectArray$length (::rpmostreecxx::CxxGObjectArray &self) noexcept
@@ -3238,24 +3243,6 @@ extern "C"
   }
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$RpmTs$packages_providing_file (
-      ::rpmostreecxx::RpmTs const &self, ::rust::Str path,
-      ::rust::Vec< ::rust::String> *return$) noexcept
-  {
-    ::rust::Vec< ::rust::String> (::rpmostreecxx::RpmTs::*packages_providing_file$) (::rust::Str)
-        const
-        = &::rpmostreecxx::RpmTs::packages_providing_file;
-    ::rust::repr::PtrLen throw$;
-    ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rust::Vec< ::rust::String> ((self.*packages_providing_file$) (path));
-          throw$.ptr = nullptr;
-        },
-        ::rust::detail::Fail (throw$));
-    return throw$;
-  }
-
-  ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$RpmTs$package_meta (::rpmostreecxx::RpmTs const &self, ::rust::Str name,
                                               ::rpmostreecxx::PackageMeta **return$) noexcept
   {
@@ -3297,12 +3284,28 @@ extern "C"
     new (return$)::rust::Vec< ::std::uint64_t> ((self.*changelogs$) ());
   }
 
-  ::std::string const *
+  ::rust::repr::Fat
   rpmostreecxx$cxxbridge1$PackageMeta$src_pkg (::rpmostreecxx::PackageMeta const &self) noexcept
   {
-    ::std::string const &(::rpmostreecxx::PackageMeta::*src_pkg$) () const
+    ::rust::Str (::rpmostreecxx::PackageMeta::*src_pkg$) () const
         = &::rpmostreecxx::PackageMeta::src_pkg;
-    return &(self.*src_pkg$) ();
+    return ::rust::impl< ::rust::Str>::repr ((self.*src_pkg$) ());
+  }
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$PackageMeta$provided_paths (
+      ::rpmostreecxx::PackageMeta const &self, ::rust::Vec< ::rust::String> *return$) noexcept
+  {
+    ::rust::Vec< ::rust::String> (::rpmostreecxx::PackageMeta::*provided_paths$) () const
+        = &::rpmostreecxx::PackageMeta::provided_paths;
+    ::rust::repr::PtrLen throw$;
+    ::rust::behavior::trycatch (
+        [&] {
+          new (return$)::rust::Vec< ::rust::String> ((self.*provided_paths$) ());
+          throw$.ptr = nullptr;
+        },
+        ::rust::detail::Fail (throw$));
+    return throw$;
   }
 
   ::rust::repr::PtrLen
@@ -5689,6 +5692,16 @@ complete_rpm_layering (::std::int32_t rootfs)
 }
 
 void
+deduplicate_tmpfiles_entries (::std::int32_t rootfs)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (rootfs);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
 passwd_cleanup (::std::int32_t rootfs)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$passwd_cleanup (rootfs);
@@ -6093,16 +6106,6 @@ cache_branch_to_nevra (::rust::Str nevra) noexcept
   ::rust::MaybeUninit< ::rust::String> return$;
   rpmostreecxx$cxxbridge1$cache_branch_to_nevra (nevra, &return$.value);
   return ::std::move (return$.value);
-}
-
-void
-deduplicate_tmpfiles_entries (::std::int32_t rootfs)
-{
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$deduplicate_tmpfiles_entries (rootfs);
-  if (error$.ptr)
-    {
-      throw ::rust::impl< ::rust::Error>::error (error$);
-    }
 }
 } // namespace rpmostreecxx
 
@@ -6818,6 +6821,5 @@ Vec< ::rpmostreecxx::LockedPackage>::truncate (::std::size_t len)
 {
   return cxxbridge1$rust_vec$rpmostreecxx$LockedPackage$truncate (this, len);
 }
-
 } // namespace cxxbridge1
 } // namespace rust
