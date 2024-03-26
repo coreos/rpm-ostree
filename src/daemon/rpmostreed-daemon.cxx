@@ -76,6 +76,7 @@ struct _RpmostreedDaemon
   guint idle_exit_timeout;
   RpmostreedAutomaticUpdatePolicy auto_update_policy;
   gboolean lock_layering;
+  gboolean filelists;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
@@ -401,6 +402,12 @@ rpmostreed_get_lock_layering (RpmostreedDaemon *self)
   return self->lock_layering;
 }
 
+gboolean
+rpmostreed_get_filelists (RpmostreedDaemon *self)
+{
+  return self->filelists;
+}
+
 /* in-place version of g_ascii_strdown */
 static inline void
 ascii_strdown_inplace (char *str)
@@ -435,6 +442,7 @@ rpmostreed_daemon_reload_config (RpmostreedDaemon *self, gboolean *out_changed, 
    * need to be reloaded if it changes */
   self->idle_exit_timeout = idle_exit_timeout;
   self->lock_layering = get_config_bool (config, "LockLayering", FALSE);
+  self->filelists = get_config_bool (config, "Filelists", FALSE);
 
   gboolean changed = FALSE;
 

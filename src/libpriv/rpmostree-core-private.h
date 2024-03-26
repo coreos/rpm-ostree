@@ -72,6 +72,8 @@ struct _RpmOstreeContext
   GHashTable *pkgs_to_replace; /* source -> (new gv_nevra --> old gv_nevra) */
 
   GHashTable *fileoverride_pkgs; /* set of nevras */
+  
+  gboolean filelists_exist;
 
   std::optional<rust::Box<rpmostreecxx::LockfileConfig> > lockfile;
   gboolean lockfile_strict;

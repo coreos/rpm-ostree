@@ -41,6 +41,7 @@
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-scripts.h"
+#include "rpmostreed-daemon.h"
 
 #include "libdnf/nevra.hpp"
 #include "rpmostree-util.h"
@@ -119,6 +120,7 @@ rpmostree_context_init (RpmOstreeContext *self)
   self->dnf_cache_policy = RPMOSTREE_CONTEXT_DNF_CACHE_DEFAULT;
   self->enable_rofiles = TRUE;
   self->unprivileged = getuid () != 0;
+  self->filelists_exist = FALSE;
 }
 
 static void
@@ -432,6 +434,18 @@ DnfContext *
 rpmostree_context_get_dnf (RpmOstreeContext *self)
 {
   return self->dnfctx;
+}
+
+gboolean
+rpmostree_context_get_filelists_exist (RpmOstreeContext *self)
+{
+  return self->filelists_exist;
+}
+
+void
+rpmostree_context_set_filelists_exist (RpmOstreeContext *self, gboolean filelists_exist)
+{
+  self->filelists_exist = filelists_exist;
 }
 
 /* Add rpmmd repo information, since it's very useful for determining
@@ -1061,7 +1075,6 @@ rpmostree_context_download_metadata (RpmOstreeContext *self, DnfContextSetupSack
                                 dnf_repo_get_id (repo), !updated ? " (cached)" : "", repo_ts_str,
                                 dnf_repo_get_n_solvables (repo));
     }
-
   return TRUE;
 }
 
@@ -1765,9 +1778,30 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
   /* setup sack if not yet set up */
   if (dnf_context_get_sack (dnfctx) == NULL)
     {
+      auto flags = (DnfContextSetupSackFlags) (DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO | DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS);
+
+      /* check if filelist optimization is disabled */
+      if (rpmostreed_get_filelists (rpmostreed_daemon_get ())) 
+        {
+          flags = (DnfContextSetupSackFlags) (DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO);
+        }
+      else 
+        {
+          for (auto &pkg_str : packages)
+            {
+              auto pkg = std::string (pkg_str).c_str ();
+              char *query = strchr((char*) pkg, '/');
+              if (query) {
+                flags = (DnfContextSetupSackFlags) (DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO);
+                rpmostree_context_set_filelists_exist(self, TRUE);
+                break;
+              }     
+            }
+        }
+
       /* default to loading updateinfo in this path; this allows the sack to be used later
        * on for advisories -- it's always downloaded anyway */
-      if (!rpmostree_context_download_metadata (self, DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO,
+      if (!rpmostree_context_download_metadata (self, flags,
                                                 cancellable, error))
         return FALSE;
       journal_rpmmd_info (self);
@@ -2335,8 +2369,14 @@ rpmostree_find_and_download_packages (const char *const *packages, const char *s
   g_autofree char *reposdir = g_build_filename (repo_root ?: source_root, "etc/yum.repos.d", NULL);
   dnf_context_set_repo_dir (ctx->dnfctx, reposdir);
 
-  if (!rpmostree_context_download_metadata (ctx, DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB,
-                                            cancellable, error))
+  auto flags = (DnfContextSetupSackFlags) (DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB | DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS);
+
+  /* check if filelist optimization is disabled */
+  if (rpmostreed_get_filelists (rpmostreed_daemon_get ())) {
+    flags = (DnfContextSetupSackFlags) (DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB);
+  }
+
+  if (!rpmostree_context_download_metadata (ctx, flags, cancellable, error))
     return glnx_prefix_error (error, "Downloading metadata");
 
   g_autoptr (GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_object_unref);

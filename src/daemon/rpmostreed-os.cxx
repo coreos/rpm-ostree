@@ -947,11 +947,19 @@ os_create_dnf_context_simple (RPMOSTreeOS *interface, gboolean with_sack, GCance
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, ot_sysroot, cfg_merge_deployment);
 
+  auto flags = (DnfContextSetupSackFlags) (DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB
+                                            | DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS
+                                            | DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO);
+
+  /* check if filelist optimization is disabled */
+  if (rpmostreed_get_filelists (rpmostreed_daemon_get ())) {
+    flags = (DnfContextSetupSackFlags) (DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB | DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO);
+  }
+
   if (with_sack
       && !rpmostree_context_download_metadata (
           ctx,
-          static_cast<DnfContextSetupSackFlags> (DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB
-                                                 | DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO),
+          flags,
           cancellable, error))
     return NULL;
 

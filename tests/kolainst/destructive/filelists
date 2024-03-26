@@ -1,0 +1,194 @@
+#!/bin/bash
+# kola: { "tags": "needs-internet" }
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+set -x
+
+cd $(mktemp -d)
+
+# get the base filelists which exist before any package is installed
+(find / -name "*-filelists.*" > base_filelists.txt) || true
+
+# install a regular rpm, which should not install filelists
+rpm-ostree install htop
+(find / -name "*-filelists.*" > post_install_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_install_filelists.txt)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Filelists differ after installing htop"
+    exit 1
+fi
+
+# run rpm-ostree refresh-md, which should not install filelists
+rpm-ostree refresh-md
+(find / -name "*-filelists.*" > post_refresh_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_refresh_filelists.txt)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Filelists differ after running rpm-ostree refresh-md"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+# install with filename, which should install filelists
+rpm-ostree install /usr/bin/htop
+(find / -name "*-filelists.*" > post_install_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_install_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists did not change after installing /usr/bin/htop"
+    exit 1
+fi
+
+# run rpm-ostree refresh-md, which should keep the installed filelists
+rpm-ostree refresh-md
+(find / -name "*-filelists.*" > post_refresh_filelists.txt) || true
+STATUS="$(cmp post_install_filelists.txt post_refresh_filelists.txt)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Filelists differ after running rpm-ostree refresh-md"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+# check that calling the following commands do not install filelists
+rpmostree_busctl_call_os ListRepos
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Filelists differ after calling ListRepos"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os WhatProvides as 1 provided-testing-daemon
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Filelists differ after calling WhatProvides"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os GetPackages as 1 testdaemon 
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Filelists differ after calling GetPackages"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os Search as 1 testdaemon
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Filelists differ after calling Search"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+curl -s https://copr.fedorainfracloud.org/coprs/g/kernel-vanilla/mainline-wo-mergew/repo/fedora-rawhide/group_kernel-vanilla-mainline-wo-mergew-fedora-rawhide.repo | sudo tee /etc/yum.repos.d/kernel-vanilla-mainline-wo-mergew.repo
+
+rpm-ostree override replace --experimental --freeze --from repo='copr:copr.fedorainfracloud.org:group_kernel-vanilla:mainline-wo-mergew' kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
+
+(find / -name "*-filelists.*" > post_override_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_override_filelists.txt)"
+if [[ $STATUS -ne 0 ]]; then
+    echo "Filelists differ after calling override"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+# disable filelist optimization and test that filelists are installed
+echo 'Filelists=true' >> /etc/rpm-ostreed.conf
+
+rpm-ostree install htop
+(find / -name "*-filelists.*" > post_install_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_install_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists were not downloaded after installing htop"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+rpm-ostree install /usr/bin/htop
+(find / -name "*-filelists.*" > post_install_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_install_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists were not downloaded after installing htop"
+    exit 1
+fi
+
+rpm-ostree cleanup -p
+rpm-ostree cleanup -m
+
+rpm-ostree refresh-md
+(find / -name "*-filelists.*" > post_refresh_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_refresh_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists were not downloaded after running rpm-ostree refresh-md"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os ListRepos
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists were not downloaded after calling ListRepos"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os WhatProvides as 1 provided-testing-daemon
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists were not downloaded after calling WhatProvides"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os GetPackages as 1 testdaemon 
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists were not downloaded after calling GetPackages"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpmostree_busctl_call_os Search as 1 testdaemon
+(find / -name "*-filelists.*" > post_call_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_call_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists were not downloaded after calling Search"
+    exit 1
+fi
+
+rpm-ostree cleanup -m
+
+rpm-ostree override replace --experimental --freeze --from repo='copr:copr.fedorainfracloud.org:group_kernel-vanilla:mainline-wo-mergew' kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
+
+(find / -name "*-filelists.*" > post_override_filelists.txt) || true
+STATUS="$(cmp base_filelists.txt post_override_filelists.txt)"
+if [[ $STATUS -eq 0 ]]; then
+    echo "Filelists were not downloaded after calling override"
+    exit 1
+fi
