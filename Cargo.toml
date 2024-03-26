@@ -77,7 +77,7 @@ ostree-ext = "0.13"
 paste = "1.0"
 phf = { version = "0.11", features = ["macros"] }
 rand = "0.8.5"
-rayon = "1.9.0"
+rayon = "1.10.0"
 regex = "1.10"
 reqwest = { version = "0.11", features = ["native-tls", "blocking", "gzip"] }
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
