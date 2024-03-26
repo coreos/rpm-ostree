@@ -2015,6 +2015,8 @@ bool prepare_rpm_layering (::std::int32_t rootfs, ::rust::Str merge_passwd_dir);
 
 void complete_rpm_layering (::std::int32_t rootfs);
 
+void deduplicate_tmpfiles_entries (::std::int32_t rootfs);
+
 void passwd_cleanup (::std::int32_t rootfs);
 
 void migrate_group_except_root (::std::int32_t rootfs,
@@ -2057,6 +2059,4 @@ void lockfile_write (::rust::Str filename, ::rpmostreecxx::CxxGObjectArray &pack
 void origin_validate_roundtrip (::rpmostreecxx::GKeyFile const &kf) noexcept;
 
 ::rust::String cache_branch_to_nevra (::rust::Str nevra) noexcept;
-
-void deduplicate_tmpfiles_entries (::std::int32_t rootfs);
 } // namespace rpmostreecxx
