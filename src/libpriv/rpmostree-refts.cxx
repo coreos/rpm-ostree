@@ -77,29 +77,77 @@ rpmostree_refts_unref (RpmOstreeRefTs *rts)
 namespace rpmostreecxx
 {
 
+PackageMeta::PackageMeta (::Header h) { _h = headerLink (h); }
+
+PackageMeta::~PackageMeta () { headerFree (_h); }
+
+uint64_t
+PackageMeta::size () const
+{
+  return headerGetNumber (_h, RPMTAG_LONGARCHIVESIZE);
+}
+
+uint64_t
+PackageMeta::buildtime () const
+{
+  return headerGetNumber (_h, RPMTAG_BUILDTIME);
+}
+
+rust::Str
+PackageMeta::src_pkg () const
+{
+  return headerGetString (_h, RPMTAG_SOURCERPM);
+}
+
+rust::String
+PackageMeta::nevra () const
+{
+  return header_get_nevra (_h);
+}
+
+rust::Vec<uint64_t>
+PackageMeta::changelogs () const
+{
+  // Get the changelogs
+  struct rpmtd_s nchanges_date_s;
+  _cleanup_rpmtddata_ rpmtd nchanges_date = NULL;
+  nchanges_date = &nchanges_date_s;
+  headerGet (_h, RPMTAG_CHANGELOGTIME, nchanges_date, HEADERGET_MINMEM);
+  int ncnum = rpmtdCount (nchanges_date);
+  rust::Vec<uint64_t> epochs;
+  for (int i = 0; i < ncnum; i++)
+    {
+      uint64_t nchange_date = 0;
+      rpmtdNext (nchanges_date);
+      nchange_date = rpmtdGetNumber (nchanges_date);
+      epochs.push_back (nchange_date);
+    }
+  return epochs;
+}
+
+rust::Vec<rust::String>
+PackageMeta::provided_paths () const
+{
+  g_auto (rpmfi) fi = rpmfiNew (NULL, _h, 0, 0);
+  if (fi == NULL)
+    throw std::runtime_error ("Failed to allocate file iterator");
+
+  rust::Vec<rust::String> paths;
+
+  rpmfiInit (fi, 0);
+  while (rpmfiNext (fi) >= 0)
+    {
+      // Only include files that are marked as installed
+      if (RPMFILE_IS_INSTALLED (rpmfiFState (fi)))
+        paths.push_back (rust::String (rpmfiFN (fi)));
+    }
+
+  return paths;
+}
+
 RpmTs::RpmTs (RpmOstreeRefTs *ts) { _ts = ts; }
 
 RpmTs::~RpmTs () { rpmostree_refts_unref (_ts); }
-
-rust::Vec<rust::String>
-RpmTs::packages_providing_file (const rust::Str path) const
-{
-  auto path_c = std::string (path);
-  g_auto (rpmdbMatchIterator) mi
-      = rpmtsInitIterator (_ts->ts, RPMDBI_INSTFILENAMES, path_c.c_str (), 0);
-  if (mi == NULL)
-    mi = rpmtsInitIterator (_ts->ts, RPMDBI_PROVIDENAME, path_c.c_str (), 0);
-  rust::Vec<rust::String> ret;
-  if (mi != NULL)
-    {
-      Header h;
-      while ((h = rpmdbNextIterator (mi)) != NULL)
-        {
-          ret.push_back (rpmostreecxx::header_get_nevra (h));
-        }
-    }
-  return ret;
-}
 
 std::unique_ptr<PackageMeta>
 RpmTs::package_meta (const rust::Str name) const
@@ -112,48 +160,23 @@ RpmTs::package_meta (const rust::Str name) const
       throw std::runtime_error (err);
     }
   Header h;
-  std::optional<rust::String> previous;
-  auto retval = std::make_unique<PackageMeta> ();
+  std::unique_ptr<PackageMeta> retval;
   while ((h = rpmdbNextIterator (mi)) != NULL)
     {
-      auto nevra = rpmostreecxx::header_get_nevra (h);
-      if (!previous.has_value ())
+      // TODO: Somehow we get two `libgcc-8.5.0-10.el8.x86_64` in current RHCOS, I don't
+      // understand that.
+      if (retval != nullptr)
         {
-          previous = std::move (nevra);
-          retval->_size = headerGetNumber (h, RPMTAG_LONGARCHIVESIZE);
-          retval->_buildtime = headerGetNumber (h, RPMTAG_BUILDTIME);
-          retval->_src_pkg = headerGetString (h, RPMTAG_SOURCERPM);
+          auto nevra = header_get_nevra (h);
+          g_autofree char *buf
+              = g_strdup_printf ("Multiple installed '%s' (%s, %s)", name_c.c_str (),
+                                 retval->nevra ().c_str (), nevra.c_str ());
+          throw std::runtime_error (buf);
+        }
 
-          // Get the changelogs
-          struct rpmtd_s nchanges_date_s;
-          _cleanup_rpmtddata_ rpmtd nchanges_date = NULL;
-          nchanges_date = &nchanges_date_s;
-          headerGet (h, RPMTAG_CHANGELOGTIME, nchanges_date, HEADERGET_MINMEM);
-          int ncnum = rpmtdCount (nchanges_date);
-          rust::Vec<uint64_t> epochs;
-          for (int i = 0; i < ncnum; i++)
-            {
-              uint64_t nchange_date = 0;
-              rpmtdNext (nchanges_date);
-              nchange_date = rpmtdGetNumber (nchanges_date);
-              epochs.push_back (nchange_date);
-            }
-          retval->_changelogs = std::move (epochs);
-        }
-      else
-        {
-          // TODO: Somehow we get two `libgcc-8.5.0-10.el8.x86_64` in current RHCOS, I don't
-          // understand that.
-          if (previous != nevra)
-            {
-              g_autofree char *buf
-                  = g_strdup_printf ("Multiple installed '%s' (%s, %s)", name_c.c_str (),
-                                     previous.value ().c_str (), nevra.c_str ());
-              throw std::runtime_error (buf);
-            }
-        }
+      retval = std::make_unique<PackageMeta> (h);
     }
-  if (!previous)
+  if (retval == nullptr)
     g_assert_not_reached ();
   return retval;
 }

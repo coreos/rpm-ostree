@@ -48,34 +48,26 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeRefTs, rpmostree_refts_unref);
 namespace rpmostreecxx
 {
 
-struct PackageMeta
+class PackageMeta
 {
-  uint64_t _size;
-  uint64_t _buildtime;
-  rust::Vec<uint64_t> _changelogs;
-  std::string _src_pkg;
+public:
+  PackageMeta (::Header h);
+  ~PackageMeta ();
 
-  uint64_t
-  size () const
-  {
-    return _size;
-  };
-  uint64_t
-  buildtime () const
-  {
-    return _buildtime;
-  };
-  rust::Vec<uint64_t>
-  changelogs () const
-  {
-    return _changelogs;
-  };
+  uint64_t size () const;
 
-  const std::string &
-  src_pkg () const
-  {
-    return _src_pkg;
-  };
+  uint64_t buildtime () const;
+
+  rust::Vec<uint64_t> changelogs () const;
+
+  rust::Str src_pkg () const;
+
+  rust::String nevra () const;
+
+  rust::Vec<rust::String> provided_paths () const;
+
+private:
+  ::Header _h;
 };
 
 // A simple C++ wrapper for a librpm C type, so we can expose it to Rust via cxx.rs.
@@ -85,7 +77,6 @@ public:
   RpmTs (::RpmOstreeRefTs *ts);
   ~RpmTs ();
   rpmts get_ts () const;
-  rust::Vec<rust::String> packages_providing_file (const rust::Str path) const;
   std::unique_ptr<PackageMeta> package_meta (const rust::Str package) const;
 
 private:

@@ -2,7 +2,8 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
 use std::num::NonZeroU32;
@@ -27,6 +28,7 @@ use ostree_ext::prelude::*;
 use ostree_ext::{gio, oci_spec, ostree};
 
 use crate::cxxrsutil::FFIGObjectReWrap;
+use crate::fsutil::{self, FileHelpers, ResolvedOstreePaths};
 use crate::progress::progress_task;
 use crate::CxxResult;
 
@@ -90,13 +92,15 @@ struct ContainerEncapsulateOpts {
 struct MappingBuilder {
     /// Maps from package ID to metadata
     packagemeta: ObjectMetaSet,
-    /// Mapping from content object sha256 to package numeric ID
-    content: ObjectMetaMap,
-    /// Mapping from content object sha256 to package numeric ID
-    duplicates: BTreeMap<String, Vec<ContentID>>,
-    multi_provider: Vec<Utf8PathBuf>,
 
-    unpackaged_id: Rc<str>,
+    /// Maps from object checksum to absolute filesystem path
+    checksum_paths: BTreeMap<String, BTreeSet<Utf8PathBuf>>,
+
+    /// Maps from absolute filesystem path to the package IDs that
+    /// provide it
+    path_packages: HashMap<Utf8PathBuf, BTreeSet<ContentID>>,
+
+    unpackaged_id: ContentID,
 
     /// Files that were processed before the global tree walk
     skip: HashSet<Utf8PathBuf>,
@@ -110,35 +114,53 @@ impl MappingBuilder {
     /// In the future though if we support e.g. containers in /usr/share/containers or the
     /// like, this will need to change.
     const UNPACKAGED_ID: &'static str = "rpmostree-unpackaged-content";
+
+    fn duplicate_objects(&self) -> impl Iterator<Item = (&String, &BTreeSet<Utf8PathBuf>)> {
+        self.checksum_paths
+            .iter()
+            .filter(|(_, paths)| paths.len() > 1)
+    }
+
+    fn multiple_owners(&self) -> impl Iterator<Item = (&Utf8PathBuf, &BTreeSet<ContentID>)> {
+        self.path_packages.iter().filter(|(_, pkgs)| pkgs.len() > 1)
+    }
 }
 
 impl From<MappingBuilder> for ObjectMeta {
     fn from(b: MappingBuilder) -> ObjectMeta {
+        let mut content = ObjectMetaMap::default();
+        for (checksum, paths) in b.checksum_paths {
+            // Use the first package name found for one of the paths (if multiple). These
+            // are held in sorted data structures, so this should be deterministic.
+            //
+            // If not found, use the unpackaged name.
+            let pkg = paths
+                .iter()
+                .filter_map(|p| b.path_packages.get(p).map(|pkgs| pkgs.first().unwrap()))
+                .next()
+                .unwrap_or(&b.unpackaged_id);
+
+            content.insert(checksum, pkg.clone());
+        }
+
         ObjectMeta {
-            map: b.content,
+            map: content,
             set: b.packagemeta,
         }
     }
 }
 
 /// Walk over the whole filesystem, and generate mappings from content object checksums
-/// to the package that owns them.  
-///
-/// In the future, we could compute this much more efficiently by walking that
-/// instead.  But this design is currently oriented towards accepting a single ostree
-/// commit as input.
-fn build_mapping_recurse(
+/// to the path that provides them.
+fn build_fs_mapping_recurse(
     path: &mut Utf8PathBuf,
     dir: &gio::File,
-    ts: &crate::ffi::RpmTs,
     state: &mut MappingBuilder,
 ) -> Result<()> {
-    use std::collections::btree_map::Entry;
-    let cancellable = gio::Cancellable::NONE;
     let e = dir.enumerate_children(
         "standard::name,standard::type",
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-        cancellable,
+        gio::Cancellable::NONE,
     )?;
     for child in e {
         let childi = child?;
@@ -155,44 +177,19 @@ fn build_mapping_recurse(
                     continue;
                 }
 
-                let mut pkgs = ts.packages_providing_file(path.as_str())?;
-                // Let's be deterministic (but _unstable because we don't care about behavior of equal strings)
-                pkgs.sort_unstable();
-                // For now, we pick the alphabetically first package providing a file
-                let mut pkgs = pkgs.into_iter();
-                let pkgid = pkgs
-                    .next()
-                    .map(|v| -> Result<_> {
-                        // Safety: we should have the package in metadata
-                        let meta = state.packagemeta.get(v.as_str()).ok_or_else(|| {
-                            anyhow::anyhow!("Internal error: missing pkgmeta for {}", &v)
-                        })?;
-                        Ok(Rc::clone(&meta.identifier))
-                    })
-                    .transpose()?
-                    .unwrap_or_else(|| Rc::clone(&state.unpackaged_id));
-                // Track cases of duplicate owners
-                match pkgs.len() {
-                    0 => {}
-                    _ => {
-                        state.multi_provider.push(path.clone());
-                    }
-                }
-
+                // Ensure there's a checksum -> path entry. If it was previously
+                // accounted for by a package, this is essentially a no-op. If not,
+                // there'll be no corresponding path -> package entry, and the packaging
+                // operation will treat the file as being "unpackaged".
                 let checksum = child.checksum().to_string();
-                match state.content.entry(checksum) {
-                    Entry::Vacant(v) => {
-                        v.insert(pkgid);
-                    }
-                    Entry::Occupied(_) => {
-                        let checksum = child.checksum().to_string();
-                        let v = state.duplicates.entry(checksum).or_default();
-                        v.push(pkgid);
-                    }
-                }
+                state
+                    .checksum_paths
+                    .entry(checksum)
+                    .or_default()
+                    .insert(path.clone());
             }
             gio::FileType::Directory => {
-                build_mapping_recurse(path, &child, ts, state)?;
+                build_fs_mapping_recurse(path, &child, state)?;
             }
             o => anyhow::bail!("Unhandled file type: {}", o),
         }
@@ -253,9 +250,8 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     let mut state = MappingBuilder {
         unpackaged_id: Rc::from(MappingBuilder::UNPACKAGED_ID),
         packagemeta: Default::default(),
-        content: Default::default(),
-        duplicates: Default::default(),
-        multi_provider: Default::default(),
+        checksum_paths: Default::default(),
+        path_packages: Default::default(),
         skip: Default::default(),
         rpmsize: Default::default(),
     };
@@ -333,7 +329,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         state.packagemeta.insert(ObjectSourceMeta {
             identifier: Rc::clone(nevra),
             name: Rc::from(libdnf_sys::hy_split_nevra(&nevra)?.name),
-            srcid: Rc::from(pkgmeta.src_pkg().to_str().unwrap()),
+            srcid: Rc::from(pkgmeta.src_pkg()),
             change_time_offset,
             change_frequency: pruned_changelogs.len() as u32,
         });
@@ -358,9 +354,17 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
             let name = format!("initramfs");
             let identifier = format!("{} (kernel {})", name, kernel_ver).into_boxed_str();
             let identifier = Rc::from(identifier);
+
             state
-                .content
-                .insert(checksum.to_string(), Rc::clone(&identifier));
+                .checksum_paths
+                .entry(checksum.to_string())
+                .or_default()
+                .insert(path.clone());
+            state
+                .path_packages
+                .entry(path.clone())
+                .or_default()
+                .insert(Rc::clone(&identifier));
             state.packagemeta.insert(ObjectSourceMeta {
                 identifier: Rc::clone(&identifier),
                 name: Rc::from(name),
@@ -377,9 +381,42 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         // TODO add mapping for rpmdb
     }
 
-    // Walk the filesystem
     progress_task("Building package mapping", || {
-        build_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &q, &mut state)
+        // Walk each package, adding mappings for each of the files it provides
+        let mut dir_cache: HashMap<Utf8PathBuf, ResolvedOstreePaths> = HashMap::new();
+        for (nevra, pkgmeta) in package_meta.iter() {
+            for path in pkgmeta.provided_paths()? {
+                let path = Utf8PathBuf::from(path);
+
+                // Resolve the path to its ostree file
+                if let Some(ostree_paths) = fsutil::resolve_ostree_paths(
+                    &path,
+                    root.downcast_ref::<ostree::RepoFile>().unwrap(),
+                    &mut dir_cache,
+                ) {
+                    if ostree_paths.path.is_regular() || ostree_paths.path.is_symlink() {
+                        let real_path =
+                            Utf8PathBuf::from_path_buf(ostree_paths.path.peek_path().unwrap())
+                                .unwrap();
+                        let checksum = ostree_paths.path.checksum().to_string();
+
+                        state
+                            .checksum_paths
+                            .entry(checksum)
+                            .or_default()
+                            .insert(real_path.clone());
+                        state
+                            .path_packages
+                            .entry(real_path)
+                            .or_default()
+                            .insert(Rc::clone(nevra));
+                    }
+                }
+            }
+        }
+
+        // Then, walk the file system marking any remainders as unpackaged
+        build_fs_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &mut state)
     })?;
 
     let src_pkgs: HashSet<_> = state.packagemeta.iter().map(|p| &p.srcid).collect();
@@ -387,7 +424,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     // Print out information about what we found
     println!(
         "{} objects in {} packages ({} source)",
-        state.content.len(),
+        state.checksum_paths.len(),
         state.packagemeta.len(),
         src_pkgs.len(),
     );
@@ -398,17 +435,26 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         Utc.timestamp_opt(lowest_change_time.try_into().unwrap(), 0)
             .unwrap()
     );
-    println!("{} duplicates", state.duplicates.len());
-    if !state.multi_provider.is_empty() {
+    println!("{} duplicates", state.duplicate_objects().count());
+    let multiple_owners = {
+        let mut mo: Vec<&Utf8Path> = state
+            .multiple_owners()
+            .map(|(path, _)| path.as_path())
+            .collect();
+        mo.sort_unstable();
+        mo
+    };
+    if !multiple_owners.is_empty() {
         println!("Multiple owners:");
-        for v in state.multi_provider.iter() {
-            println!("  {}", v);
+        for path in multiple_owners {
+            println!("  {}", path);
         }
     }
 
     // Convert our build state into the state that ostree consumes, discarding
     // transient data such as the cases of files owned by multiple packages.
     let meta: ObjectMeta = state.into();
+
     // Now generate the sized version
     let meta = ObjectMetaSized::compute_sizes(repo, meta)?;
     if let Some(v) = opt.write_contentmeta_json {
