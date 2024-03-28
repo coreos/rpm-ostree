@@ -130,7 +130,7 @@ impl From<MappingBuilder> for ObjectMeta {
 fn build_mapping_recurse(
     path: &mut Utf8PathBuf,
     dir: &gio::File,
-    file_cache: &crate::ffi::RpmFileDb,
+    ts: &crate::ffi::RpmTs,
     state: &mut MappingBuilder,
 ) -> Result<()> {
     use std::collections::btree_map::Entry;
@@ -155,7 +155,7 @@ fn build_mapping_recurse(
                     continue;
                 }
 
-                let mut pkgs = file_cache.find_pkgs_for_file(path.as_str())?;
+                let mut pkgs = ts.packages_providing_file(path.as_str())?;
                 // Let's be deterministic (but _unstable because we don't care about behavior of equal strings)
                 pkgs.sort_unstable();
                 // For now, we pick the alphabetically first package providing a file
@@ -192,7 +192,7 @@ fn build_mapping_recurse(
                 }
             }
             gio::FileType::Directory => {
-                build_mapping_recurse(path, &child, file_cache, state)?;
+                build_mapping_recurse(path, &child, ts, state)?;
             }
             o => anyhow::bail!("Unhandled file type: {}", o),
         }
@@ -379,8 +379,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
 
     // Walk the filesystem
     progress_task("Building package mapping", || {
-        let file_cache = q.build_file_cache_from_rpmdb(root.reborrow_cxx())?;
-        build_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &file_cache, &mut state)
+        build_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &q, &mut state)
     })?;
 
     let src_pkgs: HashSet<_> = state.packagemeta.iter().map(|p| &p.srcid).collect();

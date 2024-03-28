@@ -63,7 +63,6 @@ pub mod ffi {
         type GObject = crate::FFIGObject;
         type GCancellable = crate::FFIGCancellable;
         type GDBusConnection = crate::FFIGDBusConnection;
-        type GFile = crate::FFIGFile;
         type GFileInfo = crate::FFIGFileInfo;
         type GVariant = crate::FFIGVariant;
         type GVariantDict = crate::FFIGVariantDict;
@@ -895,8 +894,6 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("rpmostree-rpm-util.h");
         #[allow(missing_debug_implementations)]
-        type RpmFileDb;
-        #[allow(missing_debug_implementations)]
         type RpmTs;
         #[allow(missing_debug_implementations)]
         type PackageMeta;
@@ -908,12 +905,9 @@ pub mod ffi {
         fn rpmts_for_commit(repo: &OstreeRepo, rev: &str) -> Result<UniquePtr<RpmTs>>;
         fn rpmdb_package_name_list(dfd: i32, path: String) -> Result<Vec<String>>;
 
-        // Methods on RpmFileDb
-        fn find_pkgs_for_file(self: &RpmFileDb, path: &str) -> Result<Vec<String>>;
-
         // Methods on RpmTs
+        fn packages_providing_file(self: &RpmTs, path: &str) -> Result<Vec<String>>;
         fn package_meta(self: &RpmTs, name: &str) -> Result<UniquePtr<PackageMeta>>;
-        fn build_file_cache_from_rpmdb(self: &RpmTs, fs_root: &GFile) -> Result<UniquePtr<RpmFileDb>>;
 
         // Methods on PackageMeta
         fn size(self: &PackageMeta) -> u64;

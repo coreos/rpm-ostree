@@ -34,7 +34,6 @@ typedef ::OstreeSePolicy OstreeSePolicy;
 typedef ::GObject GObject;
 typedef ::GCancellable GCancellable;
 typedef ::GDBusConnection GDBusConnection;
-typedef ::GFile GFile;
 typedef ::GFileInfo GFileInfo;
 typedef ::GVariant GVariant;
 typedef ::GVariantDict GVariantDict;
