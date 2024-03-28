@@ -47,70 +47,73 @@ pub fn resolve_ostree_paths<'a>(
         return Some(cache_hit.clone());
     }
 
-    // Resolve our parent, then resolve ourselves as a direct child
-    if let Some(parent) = resolve_ostree_paths(path.parent().unwrap(), fsroot, cache) {
-        let child_file = parent
-            .real_file()
-            .child(path.file_name().unwrap())
-            .downcast::<ostree::RepoFile>()
-            .unwrap();
+    // Resolve our parent
+    let parent = if let Some(parent) = resolve_ostree_paths(path.parent().unwrap(), fsroot, cache) {
+        parent
+    } else {
+        return None;
+    };
 
-        if !child_file.query_exists(gio::Cancellable::NONE) {
-            return None;
-        }
+    // Resolve ourselves from our parent
+    let child_file = parent
+        .real_file()
+        .child(path.file_name().unwrap())
+        .downcast::<ostree::RepoFile>()
+        .unwrap();
 
-        let child_info = child_file
-            .query_info("*", gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
-            .expect("failed to get fs info");
-
-        // If this path is a symlink, figure out what it points to
-        let remapped_target =
-            if child_info.has_attribute("standard::is-symlink") && child_info.is_symlink() {
-                let link_target = child_info.symlink_target().unwrap();
-
-                // Due to a bug in OSTree's Gio.File implementation, we cannot
-                // just do `parent.resolve_relative_path` here as it doesn't correctly
-                // resolve to an absolute path.
-                // So instead we'll handle '.' and '..' chunks ourselves and normalize the
-                // resulting path.
-                if !link_target.is_absolute() {
-                    let mut target_path = path.parent().unwrap().to_owned();
-
-                    for item in link_target.components() {
-                        match item {
-                            Component::ParentDir => {
-                                target_path.pop();
-                            }
-                            Component::Normal(name) => {
-                                target_path.push(Utf8Path::new(&name.to_string_lossy()));
-                            }
-                            Component::CurDir => {}
-                            _ => panic!("unhandled component type"),
-                        };
-                    }
-
-                    resolve_ostree_paths(&target_path, fsroot, cache)
-                } else {
-                    resolve_ostree_paths(Utf8Path::from_path(&link_target).unwrap(), fsroot, cache)
-                }
-            } else {
-                None
-            };
-
-        let result = ResolvedOstreePaths {
-            path: child_file.clone(),
-            symlink_target: remapped_target.map(|f| f.real_file().clone()),
-        };
-
-        // If this path is or points to a directory, add it to the cache to speed up future lookups
-        if result.real_file().is_dir() {
-            cache.insert(path.to_owned(), result.clone());
-        }
-
-        return Some(result);
+    if !child_file.query_exists(gio::Cancellable::NONE) {
+        return None;
     }
 
-    None
+    let child_info = child_file
+        .query_info("*", gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
+        .expect("failed to get fs info");
+
+    // If this path is a symlink, figure out what it points to
+    let remapped_target =
+        if child_info.has_attribute("standard::is-symlink") && child_info.is_symlink() {
+            let link_target = child_info.symlink_target().unwrap();
+
+            // Due to a bug in OSTree's Gio.File implementation, we cannot
+            // just do `parent.resolve_relative_path` here as it doesn't correctly
+            // resolve to an absolute path.
+            // So instead we'll handle '.' and '..' chunks ourselves and normalize the
+            // resulting path.
+            if !link_target.is_absolute() {
+                let mut target_path = path.parent().unwrap().to_owned();
+
+                for item in link_target.components() {
+                    match item {
+                        Component::ParentDir => {
+                            target_path.pop();
+                        }
+                        Component::Normal(name) => {
+                            target_path.push(Utf8Path::new(&name.to_string_lossy()));
+                        }
+                        Component::CurDir => {}
+                        _ => panic!("unhandled component type"),
+                    };
+                }
+
+                resolve_ostree_paths(&target_path, fsroot, cache)
+            } else {
+                resolve_ostree_paths(Utf8Path::from_path(&link_target).unwrap(), fsroot, cache)
+            }
+        } else {
+            None
+        };
+
+    let result = ResolvedOstreePaths {
+        path: child_file.clone(),
+        symlink_target: remapped_target.map(|f| f.real_file().clone()),
+    };
+
+    // If this path is or points to a directory, add it to the cache to speed up future lookups
+    if result.real_file().is_dir() {
+        cache.insert(path.to_owned(), result.clone());
+    }
+
+    return Some(result);
 }
 
 pub trait FileHelpers {
