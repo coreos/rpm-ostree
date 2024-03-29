@@ -921,14 +921,14 @@ pub mod ffi {
         fn rpmdb_package_name_list(dfd: i32, path: String) -> Result<Vec<String>>;
 
         // Methods on RpmTs
-        fn packages_providing_file(self: &RpmTs, path: &str) -> Result<Vec<String>>;
         fn package_meta(self: &RpmTs, name: &str) -> Result<UniquePtr<PackageMeta>>;
 
         // Methods on PackageMeta
         fn size(self: &PackageMeta) -> u64;
         fn buildtime(self: &PackageMeta) -> u64;
         fn changelogs(self: &PackageMeta) -> Vec<u64>;
-        fn src_pkg(self: &PackageMeta) -> &CxxString;
+        fn src_pkg(self: &PackageMeta) -> &str;
+        fn provided_paths(self: &PackageMeta) -> Result<Vec<String>>;
     }
 
     // rpmostree-package-variants.h
@@ -987,6 +987,7 @@ mod extensions;
 pub(crate) use extensions::*;
 #[cfg(feature = "fedora-integration")]
 mod fedora_integration;
+mod fsutil;
 mod history;
 pub use self::history::*;
 mod importer;

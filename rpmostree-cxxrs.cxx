@@ -1216,6 +1216,11 @@ public:
     str.repr = repr;
     return str;
   }
+  static repr::Fat
+  repr (Str str) noexcept
+  {
+    return str.repr;
+  }
 };
 
 template <typename T> class impl<Slice<T> > final
@@ -3258,24 +3263,6 @@ extern "C"
   }
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$RpmTs$packages_providing_file (
-      ::rpmostreecxx::RpmTs const &self, ::rust::Str path,
-      ::rust::Vec< ::rust::String> *return$) noexcept
-  {
-    ::rust::Vec< ::rust::String> (::rpmostreecxx::RpmTs::*packages_providing_file$) (::rust::Str)
-        const
-        = &::rpmostreecxx::RpmTs::packages_providing_file;
-    ::rust::repr::PtrLen throw$;
-    ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rust::Vec< ::rust::String> ((self.*packages_providing_file$) (path));
-          throw$.ptr = nullptr;
-        },
-        ::rust::detail::Fail (throw$));
-    return throw$;
-  }
-
-  ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$RpmTs$package_meta (::rpmostreecxx::RpmTs const &self, ::rust::Str name,
                                               ::rpmostreecxx::PackageMeta **return$) noexcept
   {
@@ -3317,12 +3304,28 @@ extern "C"
     new (return$)::rust::Vec< ::std::uint64_t> ((self.*changelogs$) ());
   }
 
-  ::std::string const *
+  ::rust::repr::Fat
   rpmostreecxx$cxxbridge1$PackageMeta$src_pkg (::rpmostreecxx::PackageMeta const &self) noexcept
   {
-    ::std::string const &(::rpmostreecxx::PackageMeta::*src_pkg$) () const
+    ::rust::Str (::rpmostreecxx::PackageMeta::*src_pkg$) () const
         = &::rpmostreecxx::PackageMeta::src_pkg;
-    return &(self.*src_pkg$) ();
+    return ::rust::impl< ::rust::Str>::repr ((self.*src_pkg$) ());
+  }
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$PackageMeta$provided_paths (
+      ::rpmostreecxx::PackageMeta const &self, ::rust::Vec< ::rust::String> *return$) noexcept
+  {
+    ::rust::Vec< ::rust::String> (::rpmostreecxx::PackageMeta::*provided_paths$) () const
+        = &::rpmostreecxx::PackageMeta::provided_paths;
+    ::rust::repr::PtrLen throw$;
+    ::rust::behavior::trycatch (
+        [&] {
+          new (return$)::rust::Vec< ::rust::String> ((self.*provided_paths$) ());
+          throw$.ptr = nullptr;
+        },
+        ::rust::detail::Fail (throw$));
+    return throw$;
   }
 
   ::rust::repr::PtrLen
