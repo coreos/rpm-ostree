@@ -268,6 +268,9 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     let mut lowest_change_time = None;
     let mut highest_change_time = None;
     let mut package_meta = HashMap::new();
+    if pkglist.n_children() == 0 {
+        return Err("Failed to find any packages".to_owned().into());
+    }
     for pkg in pkglist.iter() {
         let name = pkg.child_value(0);
         let name = name.str().unwrap();
@@ -293,7 +296,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         package_meta.insert(nevra, pkgmeta);
     }
 
-    // SAFETY: There must be at least one package.
+    // SAFETY: There must be at least one package; checked above.
     let (lowest_change_name, lowest_change_time) =
         lowest_change_time.expect("Failed to find any packages");
     let highest_change_time = highest_change_time.expect("Failed to find any packages");
