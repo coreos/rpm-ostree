@@ -232,7 +232,7 @@ fn dir_contains_uid_gid(dir: &Dir, uid: &Option<Uid>, gid: &Option<Gid>) -> Resu
             let subdir = dir.open_dir(dir_entry.file_name())?;
             dir_contains_uid_gid(&subdir, uid, gid)?
         } else {
-            let metadata = dir.metadata(dir_entry.file_name())?;
+            let metadata = dir_entry.metadata()?;
             compare_uid_gid(metadata, uid, gid)
         };
 
