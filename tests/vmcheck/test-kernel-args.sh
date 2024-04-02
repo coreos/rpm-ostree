@@ -30,8 +30,6 @@ set -x
 # vm_cmd ostree config --repo /sysroot/ostree/repo set sysroot.readonly true
 # vm_cmd systemctl restart rpm-ostreed
 
-osname=$(vm_get_booted_deployment_info osname)
-
 vm_kargs_now() {
     vm_rpmostree kargs "$@"
     vm_reboot
@@ -44,7 +42,7 @@ echo "ok kargs display matches options"
 
 vm_kargs_now --append=FOO=BAR --append=APPENDARG=VALAPPEND --append=APPENDARG=2NDAPPEND
 # read the conf file into a txt for future comparison
-vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2.conf > tmp_conf.txt
 assert_file_has_content_literal tmp_conf.txt 'FOO=BAR'
 assert_file_has_content_literal tmp_conf.txt 'APPENDARG=VALAPPEND APPENDARG=2NDAPPEND'
 
@@ -65,7 +63,7 @@ echo "ok kargs append and delete"
 
 # Test for rpm-ostree kargs delete
 vm_kargs_now kargs --delete FOO
-vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2.conf > tmp_conf.txt
 assert_not_file_has_content tmp_conf.txt 'FOO=BAR'
 echo "ok delete a single key/value pair"
 
@@ -76,7 +74,7 @@ assert_file_has_content err.txt "Multiple values for key 'APPENDARG' found"
 echo "ok failed to delete key with multiple values"
 
 vm_kargs_now --delete APPENDARG=VALAPPEND
-vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2.conf > tmp_conf.txt
 assert_not_file_has_content tmp_conf.txt 'APPENDARG=VALAPPEND'
 assert_file_has_content tmp_conf.txt 'APPENDARG=2NDAPPEND'
 echo "ok delete a single key/value pair from multi valued key pairs"
@@ -91,7 +89,7 @@ vm_rpmostree kargs --replace=REPLACE_TEST=HELLO
 if vm_pending_is_staged; then
     vm_reboot
 fi
-vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2.conf > tmp_conf.txt
 assert_file_has_content_literal tmp_conf.txt 'REPLACE_TEST=HELLO'
 echo "ok replacing one key/value pair"
 
@@ -104,7 +102,7 @@ echo "ok failed to replace key with multiple values"
 
 # Test for replacing  one of the values for multi value keys
 vm_kargs_now --replace=REPLACE_MULTI_TEST=TEST=NEWTEST
-vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2.conf > tmp_conf.txt
 assert_file_has_content tmp_conf.txt "REPLACE_MULTI_TEST=NEWTEST"
 assert_not_file_has_content tmp_conf.txt "REPLACE_MULTI_TEST=TEST"
 assert_file_has_content tmp_conf.txt "REPLACE_MULTI_TEST=NUMBERTWO"
@@ -142,7 +140,7 @@ assert_not_file_has_content out.txt 'Enabled rpm-md'
 echo "ok kargs work offline"
 vm_reboot
 
-vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > kargs.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2.conf > kargs.txt
 assert_file_has_content_literal kargs.txt 'PACKAGE=TEST'
 assert_file_has_content_literal kargs.txt 'PACKAGE2=TEST2'
 echo "ok kargs with multiple operations"
