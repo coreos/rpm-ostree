@@ -237,6 +237,11 @@ $PYTHON autofiles.py > files.devel \
 # Setup rpm-ostree-countme.timer according to presets
 %post
 %systemd_post rpm-ostree-countme.timer
+# Only enable on rpm-ostree based systems and manually force unit enablement to
+# explicitly ignore presets for this security fix
+if [ -e /run/ostree-booted ]; then
+    ln -snf /usr/lib/systemd/system/rpm-ostree-fix-shadow-mode.service  /usr/lib/systemd/system/multi-user.target.wants/
+fi
 
 %preun
 %systemd_preun rpm-ostree-countme.timer

@@ -1,0 +1,19 @@
+[Unit]
+# rpm-ostree v2023.6 introduced a permission issue on `/etc/[g]shadow[-]`.
+# This makes sure to fix permissions on systems that were deployed with the wrong permissions.
+Description=Update permissions for /etc/shadow
+Documentation=https://github.com/coreos/rpm-ostree-ghsa-2m76-cwhg-7wv6
+ConditionPathExists=!/etc/.rpm-ostree-shadow-mode-fixed.stamp
+ConditionPathExists=/run/ostree-booted
+# Make sure this is started before any unprivileged (interactive) user has access to the system.
+Before=systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=chmod --verbose 0000 /etc/shadow /etc/gshadow
+ExecStart=-chmod --verbose 0000 /etc/shadow- /etc/gshadow-
+ExecStart=touch /etc/.rpm-ostree-shadow-mode-fixed.stamp
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

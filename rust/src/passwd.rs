@@ -418,6 +418,12 @@ fn write_data_from_treefile(
     let db = rootfs.open(target_passwd_path).map(BufReader::new)?;
     let shadow_name = target.shadow_file();
     let target_shadow_path = format!("{}{}", dest_path, shadow_name);
+    // Ideally these permissions come from `setup`, which is the package
+    // that owns these files:
+    // https://src.fedoraproject.org/rpms/setup/blob/c6f58b338bd3/f/setup.spec#_96
+    // But at this point of the compose, the rootfs is completely empty; we
+    // haven't started unpacking things yet. So we need to hardcode it here.
+    let shadow_perms = cap_std::fs::Permissions::from_mode(0);
 
     match target {
         PasswdKind::User => {
@@ -427,6 +433,10 @@ fn write_data_from_treefile(
                     for user in entries {
                         writeln!(target_shadow, "{}:*::0:99999:7:::", user.name)?;
                     }
+                    target_shadow
+                        .get_mut()
+                        .as_file_mut()
+                        .set_permissions(shadow_perms)?;
                     Ok(())
                 })
                 .with_context(|| format!("Writing {target_shadow_path}"))?;
@@ -438,6 +448,10 @@ fn write_data_from_treefile(
                     for group in entries {
                         writeln!(target_shadow, "{}:::", group.name)?;
                     }
+                    target_shadow
+                        .get_mut()
+                        .as_file_mut()
+                        .set_permissions(shadow_perms)?;
                     Ok(())
                 })
                 .with_context(|| format!("Writing {target_shadow_path}"))?;
