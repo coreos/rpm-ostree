@@ -3,17 +3,21 @@
 # This makes sure to fix permissions on systems that were deployed with the wrong permissions.
 Description=Update permissions for /etc/shadow
 Documentation=https://github.com/coreos/rpm-ostree-ghsa-2m76-cwhg-7wv6
-ConditionPathExists=!/etc/.rpm-ostree-shadow-mode-fixed.stamp
+# This new stamp file is written by the Rust code, and obsoletes
+# the old /etc/.rpm-ostree-shadow-mode-fixed.stamp
+ConditionPathExists=!/etc/.rpm-ostree-shadow-mode-fixed2.stamp
 ConditionPathExists=/run/ostree-booted
+# Because we read the sysroot
+RequiresMountsFor=/boot
 # Make sure this is started before any unprivileged (interactive) user has access to the system.
 Before=systemd-user-sessions.service
 
 [Service]
 Type=oneshot
-ExecStart=chmod --verbose 0000 /etc/shadow /etc/gshadow
-ExecStart=-chmod --verbose 0000 /etc/shadow- /etc/gshadow-
-ExecStart=touch /etc/.rpm-ostree-shadow-mode-fixed.stamp
+ExecStart=rpm-ostree fix-shadow-perms
 RemainAfterExit=yes
+# So we can remount /sysroot writable in our own namespace
+MountFlags=slave
 
 [Install]
 WantedBy=multi-user.target

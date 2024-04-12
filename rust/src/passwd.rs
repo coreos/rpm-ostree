@@ -30,6 +30,10 @@ const DEFAULT_MODE: u32 = 0o644;
 static DEFAULT_PERMS: Lazy<Permissions> = Lazy::new(|| Permissions::from_mode(DEFAULT_MODE));
 static PWGRP_SHADOW_FILES: &[&str] = &["shadow", "gshadow", "subuid", "subgid"];
 static USRLIB_PWGRP_FILES: &[&str] = &["passwd", "group"];
+// This stamp file signals the original fix which only changed the booted deployment
+const SHADOW_MODE_FIXED_STAMP_OLD: &str = "etc/.rpm-ostree-shadow-mode-fixed.stamp";
+// And this one is written by the newer logic that changes all deployments
+const SHADOW_MODE_FIXED_STAMP: &str = "etc/.rpm-ostree-shadow-mode-fixed2.stamp";
 
 // Lock/backup files that should not be in the base commit (TODO fix).
 static PWGRP_LOCK_AND_BACKUP_FILES: &[&str] = &[
@@ -361,6 +365,86 @@ impl PasswdKind {
             PasswdKind::Group => "gshadow",
         };
     }
+}
+
+/// Due to a prior bug, the build system had some deployments with a world-readable
+/// shadow file.  This fixes a given deployment.
+#[context("Fixing shadow permissions")]
+pub(crate) fn fix_shadow_perms_in_root(root: &Dir) -> Result<bool> {
+    let zero_perms = Permissions::from_mode(0);
+    let mut changed = false;
+    for path in ["etc/shadow", "etc/shadow-", "etc/gshadow", "etc/gshadow-"] {
+        let metadata = if let Some(meta) = root
+            .symlink_metadata_optional(path)
+            .context("Querying metadata")?
+        {
+            meta
+        } else {
+            tracing::debug!("No path {path}");
+            continue;
+        };
+        let mode = metadata.mode() & !libc::S_IFMT;
+        // Don't touch the file if it's already correct
+        if mode == 0 {
+            continue;
+        }
+        let f = root.open(path).with_context(|| format!("Opening {path}"))?;
+        f.set_permissions(zero_perms.clone())
+            .with_context(|| format!("chmod: {path}"))?;
+        println!("Adjusted mode for {path}");
+        changed = true;
+    }
+    // Write our stamp file
+    root.write(SHADOW_MODE_FIXED_STAMP, "")
+        .context(SHADOW_MODE_FIXED_STAMP)?;
+    // And clean up the old one
+    root.remove_file_optional(SHADOW_MODE_FIXED_STAMP_OLD)
+        .with_context(|| format!("Removing old {SHADOW_MODE_FIXED_STAMP_OLD}"))?;
+    Ok(changed)
+}
+
+/// Due to a prior bug, the build system had some deployments with a world-readable
+/// shadow file.  This fixes all deployments.
+pub(crate) fn fix_shadow_perms_in_sysroot(sysroot: &ostree::Sysroot) -> Result<bool> {
+    let deployments = sysroot.deployments();
+    // TODO add a nicer api for this to ostree-rs
+    let sysroot_fd =
+        Dir::reopen_dir(unsafe { &std::os::fd::BorrowedFd::borrow_raw(sysroot.fd()) })?;
+    let mut changed = false;
+    for deployment in deployments {
+        let path = sysroot.deployment_dirpath(&deployment);
+        let dir = sysroot_fd.open_dir(&path)?;
+        if fix_shadow_perms_in_root(&dir)
+            .with_context(|| format!("Deployment index={}", deployment.index()))?
+        {
+            println!(
+                "Adjusted shadow files in deployment index={} {}.{}",
+                deployment.index(),
+                deployment.csum(),
+                deployment.bootserial()
+            );
+            changed = true;
+        }
+    }
+    Ok(changed)
+}
+
+/// The main entrypoint for updating /etc/{,g}shadow permissions across
+/// all deployments.
+pub fn fix_shadow_perms_entrypoint(_args: &[&str]) -> Result<()> {
+    let cancellable = gio::Cancellable::NONE;
+    let sysroot = ostree::Sysroot::new_default();
+    sysroot.set_mount_namespace_in_use();
+    sysroot.lock()?;
+    sysroot.load(cancellable)?;
+    let changed = fix_shadow_perms_in_sysroot(&sysroot)?;
+    if changed {
+        // We already printed per deployment, so this one is just
+        // a debug-level log.
+        tracing::debug!("Updated shadow/gshadow permissions");
+    }
+    sysroot.unlock();
+    Ok(())
 }
 
 // This function writes the static passwd/group data from the treefile to the
@@ -1069,4 +1153,44 @@ impl PasswdEntries {
 
         Ok(())
     }
+}
+
+#[test]
+fn test_shadow_perms() -> Result<()> {
+    let root = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+    root.create_dir("etc")?;
+    root.write("etc/shadow", "some shadow")?;
+    root.write("etc/gshadow", "some gshadow")?;
+    root.set_permissions("etc/gshadow", Permissions::from_mode(0))?;
+
+    assert!(fix_shadow_perms_in_root(root)?);
+    assert!(!root.try_exists(SHADOW_MODE_FIXED_STAMP_OLD)?);
+    assert!(root.try_exists(SHADOW_MODE_FIXED_STAMP)?);
+    // Verify idempotence
+    assert!(!fix_shadow_perms_in_root(root)?);
+    assert!(!root.try_exists(SHADOW_MODE_FIXED_STAMP_OLD)?);
+    assert!(root.try_exists(SHADOW_MODE_FIXED_STAMP)?);
+
+    Ok(())
+}
+
+#[test]
+/// Verify the scenario of updating from a previously fixed root
+fn test_shadow_perms_from_orig_fix() -> Result<()> {
+    let root = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+    root.create_dir("etc")?;
+    root.write("etc/shadow", "some shadow")?;
+    root.set_permissions("etc/shadow", Permissions::from_mode(0))?;
+    root.write("etc/gshadow", "some gshadow")?;
+    root.set_permissions("etc/gshadow", Permissions::from_mode(0))?;
+    // Write the original stamp file
+    root.write(SHADOW_MODE_FIXED_STAMP_OLD, "")?;
+
+    // No changes
+    assert!(!fix_shadow_perms_in_root(root)?);
+    // Except we should have updated to the new stamp file
+    assert!(!root.try_exists(SHADOW_MODE_FIXED_STAMP_OLD)?);
+    assert!(root.try_exists(SHADOW_MODE_FIXED_STAMP)?);
+
+    Ok(())
 }
