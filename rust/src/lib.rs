@@ -1008,7 +1008,7 @@ mod normalization;
 mod origin;
 mod ostree_prepareroot;
 pub(crate) use self::origin::*;
-mod passwd;
+pub mod passwd;
 use passwd::*;
 mod console_progress;
 pub(crate) use self::console_progress::*;
