@@ -178,6 +178,11 @@ export RUSTFLAGS="%{build_rustflags}"
   %{?with_rhsm:--enable-featuresrs=rhsm}
 
 %make_build
+%if 0%{?fedora} || 0%{?rhel} >= 10
+%cargo_license_summary
+%{cargo_license} > LICENSE.dependencies
+%cargo_vendor_manifest
+%endif
 
 %install
 %make_install INSTALL="install -p -c"
@@ -253,6 +258,10 @@ fi
 %doc COPYING.GPL COPYING.LGPL LICENSE README.md
 
 %files libs -f files.lib
+%if 0%{?fedora} || 0%{?rhel} >= 10
+%license LICENSE.dependencies
+%license cargo-vendor.txt
+%endif
 
 %files devel -f files.devel
 
