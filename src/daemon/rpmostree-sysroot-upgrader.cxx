@@ -1366,7 +1366,11 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       OstreeBootconfigParser *bootconfig
           = ostree_deployment_get_bootconfig (self->origin_merge_deployment);
       const char *options = ostree_bootconfig_parser_get (bootconfig, "options");
-      self->kargs_strv = g_strsplit (options, " ", -1);
+      /* Fix for https://github.com/ostreedev/ostree/issues/3228,
+       * should keep spaces in quotes as single parameter, related
+       * change in ostree is https://github.com/ostreedev/ostree/pull/3208.
+       */
+      self->kargs_strv = ostree_kernel_args_to_strv (ostree_kernel_args_from_string (options));
     }
 
   // Note that most of the code here operates on ->computed_origin except this.

@@ -33,6 +33,10 @@ image=quay.io/fedora/fedora-coreos:stable
 image_pull=ostree-remote-registry:fedora:$image
 
 systemctl mask --now zincati
+# Test for https://github.com/ostreedev/ostree/issues/3228
+rpm-ostree kargs --append "foo=\"a b c\""
+rpm-ostree kargs > kargs.txt
+assert_file_has_content_literal kargs.txt "foo=\"a b c\""
 rpm-ostree rebase --experimental ${image_pull}
 rpm-ostree upgrade
 # This provokes
