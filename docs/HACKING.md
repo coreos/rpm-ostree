@@ -194,6 +194,20 @@ $ make vmoverlay SKIP_INSTALL=1
 Of course, you can use this pattern for not just ostree but whatever else you'd
 like to install into the VM (e.g. bubblewrap, libsolv, etc...).
 
+## Testing with a custom Rust crate (example: ostree-rs-ext)
+
+A common case is testing changes in the `ostree-rs-ext` crate. Once you have
+your changes ready in a clone of the `ostree-rs-ext` repository, you can edit
+rpm-ostree's `Cargo.toml` to point to it. For example:
+
+```
+$ sed -i "s/ostree-ext = \".*\"/ostree-ext = { path = '..\/ostree-rs-ext\/lib\/' }/" Cargo.toml
+```
+
+Then build rpm-ostree with the normal commands.
+
+See: <https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html>.
+
 ## Using GDB with the rpm-ostree daemon
 
 If you're new to rpm-ostree, before using GDB, it may be helpful to review the
