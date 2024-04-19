@@ -198,15 +198,16 @@ like to install into the VM (e.g. bubblewrap, libsolv, etc...).
 
 A common case is testing changes in the `ostree-rs-ext` crate. Once you have
 your changes ready in a clone of the `ostree-rs-ext` repository, you can edit
-rpm-ostree's `Cargo.toml` to point to it. For example:
+rpm-ostree's `Cargo.toml` to point to it.
 
 ```
-$ sed -i "s/ostree-ext = \".*\"/ostree-ext = { path = '..\/ostree-rs-ext\/lib\/' }/" Cargo.toml
+...
+[patch.crates-io]
+ostree-ext = { path = "../ostree-rs-ext/lib/" }
 ```
 
-Then build rpm-ostree with the normal commands.
-
-See: <https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html>.
+See the example from the
+[Overriding Dependencies section of the Cargo Book](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html).
 
 ## Using GDB with the rpm-ostree daemon
 
