@@ -112,4 +112,14 @@ EOF
   assert_file_has_content_literal out.txt 'Removed layers:'
   assert_file_has_content_literal out.txt 'Added layers:'
 
+  rpm-ostree status --json | jq '."cached-update"' > out.txt
+  assert_file_has_content_literal out.txt '"n-added":'
+  assert_file_has_content_literal out.txt '"n-removed":'
+  assert_file_has_content_literal out.txt '"removed-size":'
+  assert_file_has_content_literal out.txt '"total-size":'
+  assert_file_has_content_literal out.txt '"total":'
+  assert_file_has_content_literal out.txt '"added-size":'
+  assert_file_has_content_literal out.txt '"version":'
+  assert_file_has_content_literal out.txt '"origin":'
+
 esac

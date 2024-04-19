@@ -76,11 +76,11 @@ echo "ok disabled"
 assert_check_preview_rc() {
   local expected_rc=$1; shift
   local rc=0
-  vm_rpmostree upgrade --check > out.txt || rc=$?
+  vm_rpmostree upgrade --check > out.txt 2> err.txt || rc=$?
   assert_streq $rc $expected_rc
-  assert_file_has_content out.txt "Note:.*may be unreliable"
-  vm_rpmostree upgrade --preview > out-verbose.txt || rc=$?
-  assert_file_has_content out-verbose.txt "Note:.*may be unreliable"
+  assert_file_has_content err.txt "Note:.*may be unreliable"
+  vm_rpmostree upgrade --preview > out-verbose.txt 2> err-verbose.txt || rc=$?
+  assert_file_has_content err-verbose.txt "Note:.*may be unreliable"
   assert_streq $rc $expected_rc
 }
 
