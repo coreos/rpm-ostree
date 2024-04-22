@@ -307,6 +307,39 @@ It supports the following parameters:
    are provided, then `postprocess-script` will be executed after all
    other `postprocess`.
 
+   When combined with includes, the order in which these scripts are executed
+   are dictated by the following two rules:
+     * `postprocess` scripts in a manifest are executed *after* `postprocess`
+       scripts contained in any `include`d manifests
+     * if multiple manifests are `include`d, `postprocess` scripts in the latter
+       manifests are executed *before* earlier ones
+
+   For example, given the following manifests:
+
+   ```
+   # manifest.yaml
+   include:
+     - manifests/kernel.yaml
+     - manifests/bootupd.yaml
+   postprocess:
+     - echo foo
+
+   # manifests/kernel.yaml
+   postprocess:
+     - echo bar
+
+   # manifests/bootupd.yaml
+   postprocess:
+     - echo baz
+   ```
+
+   Postprocess scripts will be executed in the following order:
+   * manifests/bootupd.yaml
+   * manifests/kernel.yaml
+   * manifest.yaml
+
+   (I.e. it will echo in this order: `baz`, `bar`, then `foo`.)
+
  * `include`: string or array of string, optional: Path(s) to treefiles which will be
    used as an inheritance base.  The semantics for inheritance are:
    Non-array values in child values override parent values.  Array
