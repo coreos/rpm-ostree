@@ -25,7 +25,10 @@ impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::Conta
             .cached_update
             .map(|c| {
                 let diff = ManifestDiff::new(&s.manifest, &c.manifest);
-                export_diff(&diff)
+                let version = ostree_container::version_for_config(&c.config)
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_default();
+                export_diff(&diff, version)
             })
             .unwrap_or_default();
         crate::ffi::ContainerImageState {
@@ -226,7 +229,7 @@ pub(crate) fn check_container_update(
 
 /// Unfortunately we can't export external types into our C++ bridge, so manually copy things
 /// to another copy of the struct.
-fn export_diff(diff: &ManifestDiff) -> ExportedManifestDiff {
+fn export_diff(diff: &ManifestDiff, version: String) -> ExportedManifestDiff {
     ExportedManifestDiff {
         initialized: true,
         total: diff.total,
@@ -235,6 +238,7 @@ fn export_diff(diff: &ManifestDiff) -> ExportedManifestDiff {
         removed_size: diff.removed_size,
         n_added: diff.n_added,
         added_size: diff.added_size,
+        version,
     }
 }
 
