@@ -1422,6 +1422,8 @@ struct ExportedManifestDiff final
   ::std::uint64_t n_added;
   // The size of total number of added packages in the next upgrade
   ::std::uint64_t added_size;
+  // The version of the next upgrade
+  ::rust::String version;
 
   using IsRelocatable = ::std::true_type;
 };

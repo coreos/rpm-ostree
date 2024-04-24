@@ -786,7 +786,9 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
               auto state = rpmostreecxx::query_container_image_commit (*repo, current_checksum);
               container_changed
                   = rpmostreecxx::deployment_add_manifest_diff (*dict, state->cached_update_diff);
-              g_variant_dict_insert (dict, "version", "s", state->version.c_str ());
+              if (state->cached_update_diff.version.size () > 0)
+                g_variant_dict_insert (dict, "version", "s",
+                                       state->cached_update_diff.version.c_str ());
               g_debug ("container changed: %d", container_changed);
             }
           catch (std::exception &e)

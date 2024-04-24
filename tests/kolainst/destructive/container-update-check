@@ -53,7 +53,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     cd ${td}
 cat > Containerfile << EOF
 FROM localhost/fcos
-# RUN rpm-ostree install man
+LABEL org.opencontainers.image.version 1
 EOF
 
     touched_resolv_conf=0
@@ -91,6 +91,7 @@ EOF
 cat > Containerfile << EOF
 FROM localhost/fcos
 RUN rpm-ostree install man
+LABEL org.opencontainers.image.version 2
 EOF
 
   touched_resolv_conf=0
@@ -119,7 +120,7 @@ EOF
   assert_file_has_content_literal out.txt '"total-size":'
   assert_file_has_content_literal out.txt '"total":'
   assert_file_has_content_literal out.txt '"added-size":'
-  assert_file_has_content_literal out.txt '"version":'
-  assert_file_has_content_literal out.txt '"origin":'
+  assert_file_has_content_literal out.txt '"version": "2"'
+  assert_file_has_content_literal out.txt '"origin": "ostree-unverified-image:containers-storage:localhost/fcos-derived"'
 
 esac

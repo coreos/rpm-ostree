@@ -208,6 +208,8 @@ pub mod ffi {
         pub n_added: u64,
         /// The size of total number of added packages in the next upgrade
         pub added_size: u64,
+        /// The version of the next upgrade
+        pub version: String,
     }
 
     #[derive(Debug, PartialEq, Eq)]
