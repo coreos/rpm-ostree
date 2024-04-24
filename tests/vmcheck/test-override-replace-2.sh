@@ -159,16 +159,15 @@ case $versionid in
   # XXX: this isn't actually the gold selinux; that one is too old for
   # container-selinux and moby-engine. rather than trying to change multiple
   # packages, we use one that's in coreos-pool since that also prevents GC
-  38)
-    evr=38.25-1.fc38
-    koji_url='https://koji.fedoraproject.org/koji/buildinfo?buildID=2274128'
-    # XXX: we need to replace container-selinux too for dep reasons
-    hack='https://koji.fedoraproject.org/koji/buildinfo?buildID=2281229'
-    ;;
-  39)
+  40)
     evr=38.28-1.fc39
     koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2291271
     hack=https://koji.fedoraproject.org/koji/buildinfo?buildID=2291519
+    ;;
+  39)
+    evr=38.28-1.fc39
+    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2291271"
+    hack="https://koji.fedoraproject.org/koji/buildinfo?buildID=2291519"
     ;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
