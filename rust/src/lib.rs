@@ -501,11 +501,6 @@ pub mod ffi {
         fn history_prune() -> Result<()>;
     }
 
-    // modularity.rs
-    extern "Rust" {
-        fn modularity_entrypoint(args: &Vec<String>) -> Result<()>;
-    }
-
     // tokio_ffi.rs
     extern "Rust" {
         type TokioHandle;
@@ -609,11 +604,6 @@ pub mod ffi {
         fn remove_package_override_remove(&mut self, package: &str) -> bool;
         fn has_packages_override_remove_name(&self, name: &str) -> bool;
         fn remove_all_overrides(&mut self) -> bool;
-        fn get_modules_enable(&self) -> Vec<String>;
-        fn has_modules_enable(&self) -> bool;
-        fn get_modules_install(&self) -> Vec<String>;
-        fn add_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool;
-        fn remove_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool;
         fn remove_all_packages(&mut self) -> bool;
         fn get_exclude_packages(&self) -> Vec<String>;
         fn get_platform_module(&self) -> String;
@@ -1003,8 +993,6 @@ mod lockfile;
 pub(crate) use self::lockfile::*;
 mod live;
 pub(crate) use self::live::*;
-pub mod modularity;
-pub(crate) use self::modularity::*;
 mod nameservice;
 mod normalization;
 mod origin;

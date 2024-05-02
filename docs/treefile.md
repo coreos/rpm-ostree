@@ -500,14 +500,6 @@ version of `rpm-ostree`.
    via lockfiles. This is useful when locked packages are kept
    separately from the primary repos and one wants to ensure that
    rpm-ostree will otherwise not select unlocked packages from them.
- * `modules`: Object, optional: Describes RPM modules to enable or install. Two
-   keys are supported:
-   * `enable`: Array of strings, required: Set of RPM module specs to enable
-     (the same formats as dnf are supported, e.g. `NAME[:STREAM]`).
-     One can then cherry-pick specific packages from the enabled modules via
-     `packages`.
-   * `install`: Array of strings, required: Set of RPM module specs to install
-     (the same formats as dnf are supported, e.g. `NAME[:STREAM][/PROFILE]`).
  * `repovars`: object (`Map<String, String>`), optional: yum repository variable
    names to use when substituting variables in yum repo files. The `releasever`
    variable name is invalid. Use the `releasever` key instead. The `basearch`

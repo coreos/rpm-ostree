@@ -963,13 +963,6 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
     }
   else
     {
-      /* We still want to prepare() even if there's only enabled modules to validate.
-       * See comment in rpmostree_origin_may_require_local_assembly(). */
-      if (rpmostree_origin_has_modules_enable (self->computed_origin))
-        {
-          if (!rpmostree_context_prepare (self->ctx, FALSE, cancellable, error))
-            return FALSE;
-        }
       rpmostree_context_set_is_empty (self->ctx);
       self->layering_type = RPMOSTREE_SYSROOT_UPGRADER_LAYERING_LOCAL;
     }

@@ -1212,12 +1212,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
                                              util::rust_stringvec_from_strv (uninstall_pkgs),
                                              idempotent_layering, &changed, error))
         return FALSE;
-      if (rpmostree_origin_remove_modules (origin, util::rust_stringvec_from_strv (disable_modules),
-                                           TRUE))
-        changed = TRUE;
-      if (rpmostree_origin_remove_modules (
-              origin, util::rust_stringvec_from_strv (uninstall_modules), FALSE))
-        changed = TRUE;
     }
 
   /* lazily loaded cache that's used in a few conditional blocks */
@@ -1260,12 +1254,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
       if (!rpmostree_origin_add_packages (origin, pkgsv, idempotent_layering, &changed, error))
         return FALSE;
     }
-
-  if (rpmostree_origin_add_modules (origin, util::rust_stringvec_from_strv (enable_modules), TRUE))
-    changed = TRUE;
-  if (rpmostree_origin_add_modules (origin, util::rust_stringvec_from_strv (install_modules),
-                                    FALSE))
-    changed = TRUE;
 
   if (install_local_pkgs != NULL)
     {

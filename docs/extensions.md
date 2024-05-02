@@ -38,13 +38,6 @@ The format of the `extensions.yaml` file is as follow:
 repos:
   - myrepo
 
-# Any modules to enable/install
-modules:
-  enable:
-    - foo:bar
-  install:
-    - baz:boo/default
-
 # The top-level object is a dict. The only supported key
 # right now is `extensions`, which is a dict of extension
 # names to extension objects.
@@ -67,10 +60,6 @@ extensions:
     # on a particular architecture.
     repos:
       - sooper-repo
-    # Optional additional modules (this also affects global state)
-    modules:
-      enable:
-        - sooper:latest
     # Optional list of architectures on which this extension
     # is valid. These are RPM basearches. If omitted,
     # defaults to all architectures.

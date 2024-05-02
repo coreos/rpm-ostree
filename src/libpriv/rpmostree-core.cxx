@@ -682,24 +682,13 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
   if (!dnf_context_setup (self->dnfctx, cancellable, error))
     return FALSE;
 
-  /* XXX: If we have modules to install, then we need libdnf to handle it, and
-   * we can't avoid not parsing repodata because modules are entirely a repodata
-   * concept. So for now, force off pkgcache-only. This means that e.g. client
-   * side operations that are normally cache-only like `rpm-ostree uninstall`
-   * will still try to fetch metadata, and might install newer versions of other
-   * packages... we can probably hack that in the future.
-   * And similarly for remote overrides; we need to reach the remote every time.
+  /* For remote overrides; we need to reach the remote every time.
    * We can probably do something fancier in the future where we know which pkg
    * from our cache to use based on which repo it was downloaded from.
    * */
   if (self->pkgcache_only)
     {
-      gboolean disable_cacheonly = FALSE;
-      auto modules_enable = self->treefile_rs->get_modules_enable ();
-      disable_cacheonly = disable_cacheonly || !modules_enable.empty ();
-      auto modules_install = self->treefile_rs->get_modules_install ();
-      disable_cacheonly = disable_cacheonly || !modules_install.empty ();
-      disable_cacheonly = disable_cacheonly || self->treefile_rs->has_packages_override_replace ();
+      gboolean disable_cacheonly = self->treefile_rs->has_packages_override_replace ();
       if (disable_cacheonly)
         {
           self->pkgcache_only = FALSE;
@@ -1750,8 +1739,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, gboolean enable_filelists,
   auto packages_override_replace_local = self->treefile_rs->get_packages_override_replace_local ();
   auto packages_override_remove = self->treefile_rs->get_packages_override_remove ();
   auto exclude_packages = self->treefile_rs->get_exclude_packages ();
-  auto modules_enable = self->treefile_rs->get_modules_enable ();
-  auto modules_install = self->treefile_rs->get_modules_install ();
 
   /* we only support pure installs for now (compose case) */
   if (self->lockfile)
@@ -2072,9 +2059,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, gboolean enable_filelists,
           g_assert_not_reached ();
         }
     }
-
-  if (!modules_enable.empty ())
-    return glnx_throw (error, "Modularity is no longer supported");
 
   /* And finally, handle packages to install from all enabled repos */
   g_autoptr (GPtrArray) missing_pkgs = NULL;
@@ -4667,14 +4651,6 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
           }
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.packages",
                                g_variant_builder_end (pkgs_v));
-
-        /* embed modules layered */
-        auto modules = self->treefile_rs->get_modules_install ();
-        auto modules_v = g_variant_builder_new (G_VARIANT_TYPE ("as"));
-        for (auto &mod : modules)
-          g_variant_builder_add (modules_v, "s", mod.c_str ());
-        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.modules",
-                               g_variant_builder_end (modules_v));
 
         /* embed packages removed */
         /* we have to embed both the pkgname and the full nevra to make it easier to match

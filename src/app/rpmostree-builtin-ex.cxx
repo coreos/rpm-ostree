@@ -59,17 +59,6 @@ rpmostree_builtin_ex (int argc, char **argv, RpmOstreeCommandInvocation *invocat
 /* Commands that are pure Rust are proxied here. */
 
 gboolean
-rpmostree_ex_builtin_module (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
-                             GCancellable *cancellable, GError **error)
-{
-  rust::Vec<rust::String> rustargv;
-  for (int i = 0; i < argc; i++)
-    rustargv.push_back (std::string (argv[i]));
-  ROSCXX_TRY (modularity_entrypoint (rustargv), error);
-  return TRUE;
-}
-
-gboolean
 rpmostree_ex_builtin_deploy_from_self (int argc, char **argv,
                                        RpmOstreeCommandInvocation *invocation,
                                        GCancellable *cancellable, GError **error)

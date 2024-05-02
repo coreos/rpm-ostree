@@ -126,13 +126,6 @@ rpmostree_origin_has_packages (RpmOstreeOrigin *origin)
 }
 
 /* Mutability: getter */
-bool
-rpmostree_origin_has_modules_enable (RpmOstreeOrigin *origin)
-{
-  return (*origin->treefile)->has_modules_enable ();
-}
-
-/* Mutability: getter */
 rust::Vec<rust::String>
 rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin)
 {
@@ -354,24 +347,6 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin *origin, rust::Vec<rust::Strin
   CXX_TRY_VAR (changed, (*origin->treefile)->remove_packages (packages, allow_noent), error);
   set_changed (out_changed, changed);
   return TRUE;
-}
-
-/* Mutability: setter */
-gboolean
-rpmostree_origin_add_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
-                              gboolean enable_only)
-{
-  auto changed = (*origin->treefile)->add_modules (modules, enable_only);
-  return changed;
-}
-
-/* Mutability: setter */
-gboolean
-rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
-                                 gboolean enable_only)
-{
-  auto changed = (*origin->treefile)->remove_modules (modules, enable_only);
-  return changed;
 }
 
 /* Mutability: setter */

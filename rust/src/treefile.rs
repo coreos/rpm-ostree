@@ -177,17 +177,6 @@ fn treefile_parse_stream<R: io::Read>(
         pkgs
     };
 
-    // to be consistent, we also support whitespace-separated modules
-    if let Some(mut modules) = treefile.modules.take() {
-        if let Some(enable) = modules.enable.take() {
-            modules.enable = Some(whitespace_split_packages(&enable)?);
-        }
-        if let Some(install) = modules.install.take() {
-            modules.install = Some(whitespace_split_packages(&install)?);
-        }
-        treefile.modules = Some(modules);
-    }
-
     // Whitespace split repo packages
     if let Some(repo_packages) = treefile.repo_packages.as_mut() {
         for rp in repo_packages {
@@ -376,18 +365,6 @@ fn merge_hashset_field<T: Eq + std::hash::Hash + std::cmp::Ord>(
     }
 }
 
-/// Merge modules fields.
-pub(crate) fn merge_modules(dest: &mut Option<ModulesConfig>, src: &mut Option<ModulesConfig>) {
-    if let Some(mut srcv) = src.take() {
-        if let Some(mut destv) = dest.take() {
-            merge_hashset_field(&mut destv.enable, &mut srcv.enable);
-            merge_hashset_field(&mut destv.install, &mut srcv.install);
-            srcv = destv;
-        }
-        *dest = Some(srcv);
-    }
-}
-
 /// Given two configs, merge them.
 fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     macro_rules! merge_basics {
@@ -465,7 +442,6 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     dest.handle_repo_packages_overrides();
     merge_basic_field(&mut dest.cliwrap, &mut src.cliwrap);
     merge_vec_field(&mut dest.cliwrap_binaries, &mut src.cliwrap_binaries);
-    merge_modules(&mut dest.modules, &mut src.modules);
 
     merge_basic_field(&mut dest.derive.base_refspec, &mut src.derive.base_refspec);
     merge_basic_field(
@@ -969,61 +945,6 @@ impl Treefile {
         Ok(changed)
     }
 
-    pub(crate) fn get_modules_enable(&self) -> Vec<String> {
-        self.parsed
-            .modules
-            .as_ref()
-            .and_then(|m| m.enable.as_ref())
-            .cloned()
-            .into_iter()
-            .flatten()
-            .collect()
-    }
-
-    pub(crate) fn has_modules_enable(&self) -> bool {
-        self.parsed
-            .modules
-            .as_ref()
-            .map(|m| m.enable.as_ref().map(|e| !e.is_empty()).unwrap_or_default())
-            .unwrap_or_default()
-    }
-
-    pub(crate) fn get_modules_install(&self) -> Vec<String> {
-        self.parsed
-            .modules
-            .as_ref()
-            .and_then(|m| m.install.as_ref())
-            .cloned()
-            .into_iter()
-            .flatten()
-            .collect()
-    }
-
-    pub(crate) fn add_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool {
-        let modules_cfg = self.parsed.modules.ext_get_or_insert_default();
-        let map = if enable_only {
-            modules_cfg.enable.ext_get_or_insert_default()
-        } else {
-            modules_cfg.install.ext_get_or_insert_default()
-        };
-        let n = map.len();
-        map.extend(modules);
-        n != map.len()
-    }
-
-    pub(crate) fn remove_modules(&mut self, modules: Vec<String>, enable_only: bool) -> bool {
-        let modules_to_remove: BTreeSet<String> = modules.into_iter().collect();
-        let modules_cfg = self.parsed.modules.ext_get_or_insert_default();
-        let map = if enable_only {
-            modules_cfg.enable.ext_get_or_insert_default()
-        } else {
-            modules_cfg.install.ext_get_or_insert_default()
-        };
-        let n = map.len();
-        map.retain(|module| !modules_to_remove.contains(module));
-        n != map.len()
-    }
-
     pub(crate) fn get_packages_override_remove(&self) -> Vec<String> {
         self.parsed
             .derive
@@ -1224,16 +1145,6 @@ impl Treefile {
             .packages_local_fileoverride
             .take()
             .map(|x| !x.is_empty())
-            .unwrap_or_default()
-            || changed;
-        changed = self
-            .parsed
-            .modules
-            .take()
-            .map(|mut x| {
-                x.enable.take().map(|y| !y.is_empty()).unwrap_or_default()
-                    || x.install.take().map(|y| !y.is_empty()).unwrap_or_default()
-            })
             .unwrap_or_default()
             || changed;
         changed
@@ -1551,7 +1462,6 @@ impl Treefile {
 
     /// Given a treefile, print notices about items which are experimental.
     pub(crate) fn print_experimental_notices(&self) {
-        print_experimental_notice(self.parsed.modules.is_some(), "modules");
         print_experimental_notice(self.parsed.base.lockfile_repos.is_some(), "lockfile-repos");
     }
 
@@ -1852,15 +1762,10 @@ impl Treefile {
     ///    false --> definitely does not require local assembly
     ///    true  --> maybe requires assembly, need to investigate further by doing work
     pub(crate) fn may_require_local_assembly(&self) -> bool {
-        self.parsed.cliwrap.unwrap_or_default() ||
-            self.get_initramfs_regenerate() ||
-            self.has_initramfs_etc_files() ||
-            self.has_any_packages() ||
-            // Technically, alone it doesn't require require assembly, but it still
-            // requires fetching repo metadata to validate (remember: modules are a
-            // pure rpmmd concept). This means we may pay the cost of an unneeded
-            // tree checkout, but it's not worth trying to optimize for it.
-            self.has_modules_enable()
+        self.parsed.cliwrap.unwrap_or_default()
+            || self.get_initramfs_regenerate()
+            || self.has_initramfs_etc_files()
+            || self.has_any_packages()
     }
 
     /// Returns true if this origin contains overlay or override packages.
@@ -1901,12 +1806,6 @@ impl Treefile {
                 .override_remove
                 .as_ref()
                 .map(|m| !m.is_empty())
-                .unwrap_or_default()
-            || self
-                .parsed
-                .modules
-                .as_ref()
-                .and_then(|m| m.install.as_ref().map(|i| !i.is_empty()))
                 .unwrap_or_default()
     }
 
@@ -2458,8 +2357,6 @@ pub(crate) struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) repo_packages: Option<Vec<RepoPackage>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) modules: Option<ModulesConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) cliwrap: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) cliwrap_binaries: Option<Vec<String>>,
@@ -2640,14 +2537,6 @@ pub(crate) struct BaseComposeConfigFields {
 pub(crate) struct RepoPackage {
     pub(crate) repo: String,
     pub(crate) packages: BTreeSet<String>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
-pub(crate) struct ModulesConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) enable: Option<BTreeSet<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) install: Option<BTreeSet<String>>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
@@ -3001,12 +2890,6 @@ pub(crate) mod tests {
             - repo: baserepo
               packages:
                 - blah bloo
-        modules:
-           enable:
-             - foobar:2.0
-           install:
-             - nodejs:15
-             - swig:3.0/complete sway:rolling
     "#};
 
     // This one has "comments" (hence unknown keys)
@@ -3439,11 +3322,6 @@ pub(crate) mod tests {
                     - repo: foo2
                       packages:
                         - qwert
-                modules:
-                    enable:
-                      - dodo
-                    install:
-                      - bazboo
             "},
         )?;
         let mut buf = VALID_PRELUDE.to_string();
@@ -3464,18 +3342,6 @@ pub(crate) mod tests {
                     packages: maplit::btreeset!("blah".into(), "bloo".into()),
                 }
             ])
-        );
-        assert_eq!(
-            tf.parsed.modules,
-            Some(ModulesConfig {
-                enable: Some(maplit::btreeset!("dodo".into(), "foobar:2.0".into())),
-                install: Some(maplit::btreeset!(
-                    "bazboo".into(),
-                    "nodejs:15".into(),
-                    "swig:3.0/complete".into(),
-                    "sway:rolling".into(),
-                ))
-            },)
         );
         Ok(())
     }
@@ -4038,9 +3904,6 @@ conditional-include:
               - foobar
             override-remove:
               - glibc
-            modules:
-              enable:
-                - nodejs:latest
             custom:
               url: https://example.com
               description: Managed by Example, Inc.
@@ -4066,20 +3929,6 @@ conditional-include:
         let mut treefile = Treefile::new_from_string(utils::InputFormat::YAML, buf).unwrap();
         assert!(treefile.has_packages());
         assert_eq!(treefile.get_packages(), &["foobar"]);
-        assert!(treefile.has_modules_enable());
-        assert_eq!(treefile.get_modules_enable(), &["nodejs:latest"]);
-        assert!(treefile.add_modules(vec!["foo:bar".into()], true));
-        assert!(!treefile.add_modules(vec!["foo:bar".into()], true));
-        assert!(treefile.add_modules(vec!["baz:boo/minimal".into()], false));
-        assert!(!treefile.add_modules(vec!["baz:boo/minimal".into()], false));
-        assert_eq!(treefile.get_modules_enable(), &["foo:bar", "nodejs:latest"]);
-        assert_eq!(treefile.get_modules_install(), &["baz:boo/minimal"]);
-        assert!(treefile.remove_modules(vec!["foo:bar".into()], true));
-        assert!(!treefile.remove_modules(vec!["foo:bar".into()], true));
-        assert!(treefile.remove_modules(vec!["baz:boo/minimal".into()], false));
-        assert!(!treefile.remove_modules(vec!["baz:boo/minimal".into()], false));
-        assert_eq!(treefile.get_modules_enable(), &["nodejs:latest"]);
-        assert!(treefile.get_modules_install().is_empty());
         assert!(treefile.remove_all_packages());
         assert!(treefile.has_packages_override_remove_name("glibc"));
         assert!(!treefile.has_packages_override_remove_name("enoent"));
@@ -4134,8 +3983,6 @@ conditional-include:
         assert!(treefile.get_packages().is_empty());
         assert!(treefile.get_local_packages().is_empty());
         assert!(treefile.get_local_fileoverride_packages().is_empty());
-        assert!(treefile.get_modules_enable().is_empty());
-        assert!(treefile.get_modules_install().is_empty());
         assert!(!treefile.remove_all_packages());
         assert_eq!(
             treefile.get_base_refspec(),
@@ -4283,8 +4130,6 @@ conditional-include:
         let treefile = treefile_new_empty().unwrap();
         assert!(!treefile.has_packages());
         assert!(treefile.get_packages().is_empty());
-        assert!(!treefile.has_modules_enable());
-        assert!(treefile.get_modules_enable().is_empty());
         assert_eq!(treefile.get_origin_custom_url(), "");
         assert_eq!(treefile.get_origin_custom_description(), "");
         assert_eq!(treefile.get_override_commit(), "");
