@@ -7,6 +7,8 @@ Documentation=https://github.com/coreos/rpm-ostree-ghsa-2m76-cwhg-7wv6
 # the old /etc/.rpm-ostree-shadow-mode-fixed.stamp
 ConditionPathExists=!/etc/.rpm-ostree-shadow-mode-fixed2.stamp
 ConditionPathExists=/run/ostree-booted
+# Filter out non-traditional ostree setups (e.g. live boots)
+ConditionKernelCommandLine=ostree
 # Because we read the sysroot
 RequiresMountsFor=/boot
 # Make sure this is started before any unprivileged (interactive) user has access to the system.
