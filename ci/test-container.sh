@@ -56,19 +56,19 @@ versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 
 # Test overrides
 case $versionid in
-  38)
+  40)
     url_suffix=2.16.2/2.fc39/x86_64/ignition-2.16.2-2.fc39.x86_64.rpm
     # 2.15.0-3
     koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2174317"
-    kver=6.2.8
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2435097"
+    kver=6.8.5
     krev=300
     ;;
   39)
     url_suffix=2.16.2/1.fc39/x86_64/ignition-2.16.2-1.fc39.x86_64.rpm
     # 2.15.0-3
     koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
-    koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2294111
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2294111"
     kver=6.5.5
     krev=300
     ;;

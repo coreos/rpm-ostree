@@ -149,11 +149,11 @@ vm_rpmostree cleanup -pr
 # File triggers are Fedora+
 if ! vm_cmd grep -q 'ID=.*centos' /etc/os-release; then
 # We use /usr/share/licenses since it's small predictable content
-license_combos="zlib-rpm systemd-tar-rpm sed-tzdata"
-license_un_combos="zlib systemd-rpm"
+license_combos="which-rpm systemd-tar-rpm sed-tzdata"
+license_un_combos="which systemd-rpm"
 vm_build_rpm scriptpkg4 \
-             transfiletriggerin "/usr/share/licenses/zlib /usr/share/licenses/rpm" 'sort >/usr/share/transfiletriggerin-license-zlib-rpm.txt' \
-             transfiletriggerun "/usr/share/licenses/zlib" 'sort >/usr/share/transfiletriggerun-license-zlib.txt' \
+             transfiletriggerin "/usr/share/licenses/which /usr/share/licenses/rpm" 'sort >/usr/share/transfiletriggerin-license-which-rpm.txt' \
+             transfiletriggerun "/usr/share/licenses/which" 'sort >/usr/share/transfiletriggerun-license-which.txt' \
              transfiletriggerin2 "/usr/share/licenses/xz/COPYING" 'cat > /usr/share/transfiletriggerin-license-file-xz.txt'
 vm_build_rpm scriptpkg5 \
              transfiletriggerin "/usr/share/licenses/systemd /usr/share/licenses/rpm /usr/share/licenses/tar" 'sort >/usr/share/transfiletriggerin-license-systemd-tar-rpm.txt' \

@@ -40,10 +40,6 @@ static RpmOstreeCommand ex_subcommands[]
           (RpmOstreeBuiltinFlags)(RPM_OSTREE_BUILTIN_FLAG_HIDDEN
                                   | RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE),
           "Rebuild system based on configuration", rpmostree_ex_builtin_rebuild },
-        /* To graduate out of experimental, simply revert:
-         * https://github.com/coreos/rpm-ostree/pull/3078 */
-        { "module", static_cast<RpmOstreeBuiltinFlags> (0), "Commands to install/uninstall modules",
-          rpmostree_ex_builtin_module },
         { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL } };
 
 /*

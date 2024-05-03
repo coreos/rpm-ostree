@@ -336,7 +336,7 @@ pub(crate) fn confirm_or_abort() -> CxxResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+    use std::{env, path::Path};
 
     #[test]
     fn test_is_src_rpm() {
@@ -358,6 +358,10 @@ mod tests {
 
     #[test]
     fn test_running_in_container() {
-        assert_eq!(env::var("container").is_ok(), running_in_container());
+        // See also https://bugzilla.redhat.com/show_bug.cgi?id=2278652
+        let container = env::var_os("container").is_some()
+            || Path::new("/run/.containerenv").exists()
+            || Path::new("/.dockerenv").exists();
+        assert_eq!(container, running_in_container());
     }
 }

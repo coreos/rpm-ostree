@@ -277,12 +277,6 @@ rpmostree_context_new_compose (int userroot_dfd, OstreeRepo *repo,
 
   rpmostree_context_set_cache_root (ret, userroot_dfd);
 
-  auto platform_module = treefile_rs.get_platform_module ();
-  if (!platform_module.empty ())
-    {
-      dnf_context_set_platform_module (ret->dnfctx, platform_module.c_str ());
-    }
-
   // The ref needs special handling as it gets variable-substituted.
   auto ref = ret->treefile_rs->get_ref ();
   if (ref.length () > 0)
@@ -1856,12 +1850,6 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
         return FALSE;
     }
 
-  /* All modules are opt-in, so start off with everything disabled. We'll enable/install
-   * user-provided ones down below. We need to do this before `find_locked_packages` so that it can
-   * find non-modular versions of a package. */
-  if (!dnf_context_module_disable_all (dnfctx, error))
-    return FALSE;
-
   /* Now that we're done adding stuff to the sack, we can actually mark pkgs for install and
    * uninstall. We don't want to mix those two steps, otherwise we might confuse libdnf,
    * see: https://github.com/rpm-software-management/libdnf/issues/700 */
@@ -2039,36 +2027,8 @@ rpmostree_context_prepare (RpmOstreeContext *self, GCancellable *cancellable, GE
         }
     }
 
-  gboolean we_got_modules = FALSE;
   if (!modules_enable.empty ())
-    {
-      g_auto (GStrv) modules = rpmostree_cxx_string_vec_to_strv (modules_enable);
-      if (!dnf_context_module_enable (dnfctx, (const char **)modules, error))
-        return FALSE;
-      we_got_modules = TRUE;
-    }
-
-  if (!modules_install.empty ())
-    {
-      g_auto (GStrv) modules = rpmostree_cxx_string_vec_to_strv (modules_install);
-      if (!dnf_context_module_install (dnfctx, (const char **)modules, error))
-        return glnx_prefix_error (error, "Installing modules");
-      we_got_modules = TRUE;
-    }
-
-  /* By default, when enabling a module, trying to install a package "foo" will
-   * always prioritize the "foo" in the module. This is what we want, but in the
-   * case of pinned repo packages, we want to be able to override that. So we
-   * need to fiddle with the modular excludes. */
-  if (we_got_modules && pinned_pkgs && dnf_packageset_count (pinned_pkgs) > 0)
-    {
-      g_autoptr (DnfPackageSet) excludes = dnf_sack_get_module_excludes (sack);
-      g_autoptr (DnfPackageSet) cloned_pkgs = dnf_packageset_clone (pinned_pkgs);
-      Map *m = dnf_packageset_get_map (cloned_pkgs);
-      map_invertall (m);
-      map_and (dnf_packageset_get_map (excludes), m);
-      dnf_sack_set_module_excludes (sack, excludes);
-    }
+    return glnx_throw (error, "Modularity is no longer supported");
 
   /* And finally, handle packages to install from all enabled repos */
   g_autoptr (GPtrArray) missing_pkgs = NULL;
