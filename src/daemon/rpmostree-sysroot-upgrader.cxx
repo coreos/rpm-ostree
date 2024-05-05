@@ -953,7 +953,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
 
   if (rpmostree_origin_has_any_packages (self->computed_origin))
     {
-      if (!rpmostree_context_prepare (self->ctx, cancellable, error))
+      if (!rpmostree_context_prepare (self->ctx, FALSE, cancellable, error))
         return FALSE;
       self->layering_type = RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS;
 
@@ -967,7 +967,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
        * See comment in rpmostree_origin_may_require_local_assembly(). */
       if (rpmostree_origin_has_modules_enable (self->computed_origin))
         {
-          if (!rpmostree_context_prepare (self->ctx, cancellable, error))
+          if (!rpmostree_context_prepare (self->ctx, FALSE, cancellable, error))
             return FALSE;
         }
       rpmostree_context_set_is_empty (self->ctx);

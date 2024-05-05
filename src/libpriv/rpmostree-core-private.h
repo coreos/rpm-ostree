@@ -73,6 +73,8 @@ struct _RpmOstreeContext
 
   GHashTable *fileoverride_pkgs; /* set of nevras */
 
+  gboolean filelists_exist;
+
   std::optional<rust::Box<rpmostreecxx::LockfileConfig> > lockfile;
   gboolean lockfile_strict;
 

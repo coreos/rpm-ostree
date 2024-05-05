@@ -28,3 +28,5 @@ TimeoutStartSec=5m
 # with the rpm-ostree user.
 ExecStart=+rpm-ostree start-daemon
 ExecReload=rpm-ostree reload
+# disable/enable downloading filelists
+Environment="DOWNLOAD_FILELISTS=false"

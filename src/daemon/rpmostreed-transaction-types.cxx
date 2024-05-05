@@ -2279,8 +2279,30 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction, GCancellable
   rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
 
   /* don't even bother loading the rpmdb */
-  if (!rpmostree_context_download_metadata (ctx, DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB,
-                                            cancellable, error))
+
+  /* skip filelists if filelists have not been previously downloaded */
+  auto flags = (DnfContextSetupSackFlags)(DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB
+                                          | DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS);
+
+  /* update filelists if filelists were previously downloaded or filelist optimization is disabled
+   */
+
+  char *download_filelists = (char *)"false";
+  if (g_getenv ("DOWNLOAD_FILELISTS"))
+    {
+      download_filelists = (char *)(g_getenv ("DOWNLOAD_FILELISTS"));
+      for (int i = 0; i < strlen (download_filelists); i++)
+        {
+          download_filelists[i] = tolower (download_filelists[i]);
+        }
+    }
+
+  if (rpmostree_context_get_filelists_exist (ctx) || strcmp (download_filelists, "true") == 0)
+    {
+      flags = (DnfContextSetupSackFlags)(DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB);
+    }
+
+  if (!rpmostree_context_download_metadata (ctx, flags, cancellable, error))
     return FALSE;
 
   return TRUE;

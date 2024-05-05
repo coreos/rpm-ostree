@@ -59,7 +59,7 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
   if (!rpmostree_context_setup (ctx, "/", "/", cancellable, error))
     return FALSE;
 
-  if (!rpmostree_context_prepare (ctx, cancellable, error))
+  if (!rpmostree_context_prepare (ctx, FALSE, cancellable, error))
     return FALSE;
 
   if (!rpmostree_context_download (ctx, cancellable, error))
