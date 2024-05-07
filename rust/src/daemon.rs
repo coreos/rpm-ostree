@@ -166,6 +166,8 @@ pub(crate) fn deployment_populate_variant(
     /* Staging status */
     dict.insert("staged", &deployment.is_staged());
     if deployment.is_staged()
+        // XXX: this should check deployment.is_finalization_locked() too now
+        // but the libostree Rust bindings need to be updated
         && std::path::Path::new("/run/ostree/staged-deployment-locked").exists()
     {
         dict.insert("finalization-locked", &true);

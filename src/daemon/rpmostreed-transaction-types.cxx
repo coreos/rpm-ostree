@@ -2546,13 +2546,15 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   if (!check_sd_inhibitor_locks (cancellable, error))
     return FALSE;
 
-  if (unlink (_OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED) < 0)
+  if (!ostree_deployment_is_finalization_locked (default_deployment))
     {
-      if (errno != ENOENT)
-        return glnx_throw_errno_prefix (error, "unlink(%s)",
-                                        _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED);
       if (!vardict_lookup_bool (self->options, "allow-unlocked", FALSE))
         return glnx_throw (error, "Staged deployment already unlocked");
+    }
+  else
+    {
+      if (!ostree_sysroot_change_finalization (sysroot, default_deployment, error))
+        return glnx_prefix_error (error, "Failed to unlock finalization of staged deployment");
     }
 
   /* And bump sysroot mtime so we reload... a bit awkward, though this is similar to

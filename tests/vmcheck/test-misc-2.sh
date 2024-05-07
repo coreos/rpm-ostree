@@ -34,14 +34,12 @@ assert_file_has_content status.txt 'Commit:'
 booted_csum=$(vm_get_booted_csum)
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --bootable)
 vm_rpmostree deploy revision="${commit}" --lock-finalization
-vm_cmd test -f /run/ostree/staged-deployment-locked
 cursor=$(vm_get_journal_cursor)
 vm_reboot
 assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
 vm_assert_journal_has_content $cursor 'Not finalizing; deployment is locked for finalization'
 echo "ok locked deploy staging"
 vm_rpmostree rebase :"${commit}" --lock-finalization --skip-purge
-vm_cmd test -f /run/ostree/staged-deployment-locked
 cursor=$(vm_get_journal_cursor)
 vm_reboot
 assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
@@ -56,7 +54,6 @@ cursor=$(vm_get_journal_cursor)
 vm_cmd env RPMOSTREE_CLIENT_ID=testing-agent-id \
        rpm-ostree deploy revision="${commit}" \
        --lock-finalization
-vm_cmd test -f /run/ostree/staged-deployment-locked
 if vm_rpmostree finalize-deployment; then
   assert_not_reached "finalized without expected checksum"
 elif vm_rpmostree finalize-deployment WRONG_CHECKSUM; then
@@ -71,7 +68,6 @@ if vm_rpmostree finalize-deployment "${commit}" 2>err.txt; then
   assert_not_reached "finalized with inhibitor lock in block mode present"
 fi
 assert_file_has_content err.txt 'Reboot blocked'
-vm_cmd test -f /run/ostree/staged-deployment-locked # Make sure that staged deployment is still locked.
 vm_cmd touch /run/wakeup
 sleep 1 # Wait one second for the process holding the lock to exit.
 vm_reboot_cmd rpm-ostree finalize-deployment "${commit}"

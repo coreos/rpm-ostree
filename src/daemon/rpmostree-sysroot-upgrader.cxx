@@ -1396,27 +1396,13 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
     }
 
   OstreeSysrootDeployTreeOpts opts = {
+    .locked = (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION),
     .override_kernel_argv = self->kargs_strv,
     .overlay_initrds = (char **)overlay_v,
   };
 
   if (use_staging)
     {
-      /* touch file *before* we stage to avoid races */
-      if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION)
-        {
-          if (!glnx_shutil_mkdir_p_at (AT_FDCWD,
-                                       dirname (strdupa (_OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED)),
-                                       0755, cancellable, error))
-            return FALSE;
-
-          glnx_autofd int fd = open (_OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED,
-                                     O_CREAT | O_WRONLY | O_NOCTTY | O_CLOEXEC, 0640);
-          if (fd == -1)
-            return glnx_throw_errno_prefix (error, "touch(%s)",
-                                            _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED);
-        }
-
       auto task = rpmostreecxx::progress_begin_task ("Staging deployment");
       if (!ostree_sysroot_stage_tree_with_options (self->sysroot, self->osname, target_revision,
                                                    origin, self->cfg_merge_deployment, &opts,
