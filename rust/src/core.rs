@@ -44,6 +44,8 @@ const USERADD_PATH: &str = "usr/sbin/useradd";
 const USERADD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/useradd-wrapper.sh");
 const USERMOD_PATH: &str = "usr/sbin/usermod";
 const USERMOD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/usermod-wrapper.sh");
+const KERNEL_INSTALL_PATH: &str = "usr/bin/kernel-install";
+const KERNEL_INSTALL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/kernel-install-wrapper.sh");
 
 const RPMOSTREE_CORE_STAGED_RPMS_DIR: &str = "rpm-ostree/staged-rpms";
 
@@ -148,6 +150,7 @@ impl FilesystemScriptPrep {
         (SYSTEMCTL_PATH, SYSTEMCTL_WRAPPER),
         (USERADD_PATH, USERADD_WRAPPER),
         (USERMOD_PATH, USERMOD_WRAPPER),
+        (KERNEL_INSTALL_PATH, KERNEL_INSTALL_WRAPPER),
     ];
 
     fn saved_name(name: &str) -> String {
@@ -441,7 +444,7 @@ mod test {
         // Replaced usermod.
         {
             let original_usermod = "original usermod";
-            d.atomic_write_with_perms(super::USERMOD_PATH, original_usermod, mode)?;
+            d.atomic_write_with_perms(super::USERMOD_PATH, original_usermod, mode.clone())?;
             let contents = d.read_to_string(super::USERMOD_PATH)?;
             assert_eq!(contents, original_usermod);
             let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
@@ -450,6 +453,19 @@ mod test {
             g.undo()?;
             let contents = d.read_to_string(super::USERMOD_PATH)?;
             assert_eq!(contents, original_usermod);
+        }
+        // Replaced kernel-install.
+        {
+            let original_kernel_install = "original kernel_install";
+            d.atomic_write_with_perms(super::KERNEL_INSTALL_PATH, original_kernel_install, mode)?;
+            let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
+            assert_eq!(contents, original_kernel_install);
+            let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+            let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
+            assert_eq!(contents.as_bytes(), super::KERNEL_INSTALL_WRAPPER);
+            g.undo()?;
+            let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
+            assert_eq!(contents, original_kernel_install);
         }
         Ok(())
     }

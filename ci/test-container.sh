@@ -66,6 +66,11 @@ fi
 rm "${origindir}/clienterror.yaml"
 rpm-ostree ex rebuild
 
+# test kernel installs *before* enabling cliwrap
+rpm-ostree override replace $koji_kernel_url
+# test that the new initramfs was generated
+test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
+
 rpm-ostree cliwrap install-to-root /
 
 # Test a critical path package
@@ -118,10 +123,6 @@ rpm -q strace
 # the continuous build's version has the git rev, prefixed with g
 rpm -q afterburn | grep g
 rpm -q afterburn-dracut | grep g
-
-rpm-ostree override replace $koji_kernel_url
-# test that the new initramfs was generated
-test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
 
 # test --enablerepo --disablerepo --releasever
 rpm-ostree --releasever=38 --disablerepo="*" \
