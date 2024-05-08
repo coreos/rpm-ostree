@@ -6,6 +6,30 @@ fatal() {
     exit 1
 }
 
+versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
+
+# Test overrides
+case $versionid in
+  40)
+    ignition_url_suffix=2.16.2/2.fc39/x86_64/ignition-2.16.2-2.fc39.x86_64.rpm
+    # 2.15.0-3
+    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2435097"
+    kver=6.8.5
+    krev=300
+    ;;
+  39)
+    ignition_url_suffix=2.16.2/1.fc39/x86_64/ignition-2.16.2-1.fc39.x86_64.rpm
+    # 2.15.0-3
+    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2294111"
+    kver=6.5.5
+    krev=300
+    ;;
+  *) fatal "Unsupported Fedora version: $versionid";;
+esac
+IGNITION_URL=https://kojipkgs.fedoraproject.org//packages/ignition/$ignition_url_suffix
+
 repodir=/usr/lib/coreos-assembler/tests/kola/rpm-ostree/destructive/data/rpm-repos/
 
 cat >/etc/yum.repos.d/libtest.repo <<EOF
@@ -42,6 +66,11 @@ fi
 rm "${origindir}/clienterror.yaml"
 rpm-ostree ex rebuild
 
+# test kernel installs *before* enabling cliwrap
+rpm-ostree override replace $koji_kernel_url
+# test that the new initramfs was generated
+test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
+
 rpm-ostree cliwrap install-to-root /
 
 # Test a critical path package
@@ -52,34 +81,11 @@ test '!' -d /var/cache/rpm-ostree
 rpm -e cowsay
 if rpm -q cowsay; then fatal "failed to remove cowsay"; fi
 
-versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
-
-# Test overrides
-case $versionid in
-  40)
-    url_suffix=2.16.2/2.fc39/x86_64/ignition-2.16.2-2.fc39.x86_64.rpm
-    # 2.15.0-3
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2435097"
-    kver=6.8.5
-    krev=300
-    ;;
-  39)
-    url_suffix=2.16.2/1.fc39/x86_64/ignition-2.16.2-1.fc39.x86_64.rpm
-    # 2.15.0-3
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2294111"
-    kver=6.5.5
-    krev=300
-    ;;
-  *) fatal "Unsupported Fedora version: $versionid";;
-esac
-URL=https://kojipkgs.fedoraproject.org//packages/ignition/$url_suffix
 # test replacement by URL
-rpm-ostree override replace $URL
+rpm-ostree override replace $IGNITION_URL
 rpm-ostree override remove ignition
 # test local RPM install
-curl -Lo ignition.rpm $URL
+curl -Lo ignition.rpm $IGNITION_URL
 rpm-ostree install ignition.rpm
 rpm -q ignition
 
@@ -88,7 +94,7 @@ dnf -y uninstall kexec-tools
 if rpm -q kexec-tools; then fatal "failed to remove kexec-tools"; fi
 
 # test replacement by Koji URL
-rpm-ostree override replace $koji_url |& tee out.txt
+rpm-ostree override replace $koji_ignition_url |& tee out.txt
 n_downloaded=$(grep Downloading out.txt | wc -l)
 if [[ $n_downloaded != 1 ]]; then
   fatal "Expected 1 'Downloading', but got $n_downloaded"
@@ -117,10 +123,6 @@ rpm -q strace
 # the continuous build's version has the git rev, prefixed with g
 rpm -q afterburn | grep g
 rpm -q afterburn-dracut | grep g
-
-rpm-ostree override replace $koji_kernel_url
-# test that the new initramfs was generated
-test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
 
 # test --enablerepo --disablerepo --releasever
 rpm-ostree --releasever=38 --disablerepo="*" \
