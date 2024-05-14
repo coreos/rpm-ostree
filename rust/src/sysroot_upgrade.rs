@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
-use crate::ffi::ExportedManifestDiff;
 use crate::ffi::{output_message, ContainerImageState};
+use crate::ffi::{progress_begin_task, ExportedManifestDiff};
 use anyhow::{Context, Result};
 use ostree::glib;
 use ostree_container::store::{
@@ -56,10 +56,32 @@ fn layer_counts<'a>(layers: impl Iterator<Item = &'a ManifestLayerState>) -> (u3
     )
 }
 
+// Output when we begin/end fetching a layer.  Ideally, we'd handle
+// byte-level progress here too, but that requires some more sophisticated
+// binding with the rpmostree-output.h via cxx.rs.
 async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
+    // This is just used to hold a reference to the task.
+    #[allow(unused_variables, unused_assignments)]
+    let mut task = None;
     while let Some(v) = r.recv().await {
         let msg = ostree_ext::cli::layer_progress_format(&v);
-        output_message(&msg);
+        tracing::debug!("layer progress: {msg}");
+        match v {
+            ImportProgress::OstreeChunkStarted(_) => {
+                assert!(task.is_none());
+                task = Some(progress_begin_task(&msg));
+            }
+            ImportProgress::OstreeChunkCompleted(_) => {
+                assert!(task.take().is_some());
+            }
+            ImportProgress::DerivedLayerStarted(_) => {
+                assert!(task.is_none());
+                task = Some(progress_begin_task(&msg));
+            }
+            ImportProgress::DerivedLayerCompleted(_) => {
+                assert!(task.take().is_some());
+            }
+        }
     }
 }
 
@@ -99,8 +121,6 @@ async fn pull_container_async(
         PrepareResult::AlreadyPresent(r) => return Ok(r.into()),
         PrepareResult::Ready(r) => r,
     };
-    let progress_printer =
-        tokio::task::spawn(async move { layer_progress_print(layer_progress).await });
     let digest = prep.manifest_digest.clone();
     output_message(&format!("Importing: {} (digest: {})", &imgref, &digest));
     let ostree_layers = prep
@@ -125,8 +145,14 @@ async fn pull_container_async(
         let size = glib::format_size(size_to_fetch);
         output_message(&format!("custom layers needed: {n_to_fetch} ({size})"));
     }
-    let import = imp.import(prep).await;
-    let _ = progress_printer.await;
+    let local = tokio::task::LocalSet::new();
+    let import = local
+        .run_until(async move {
+            let _progress_printer =
+                tokio::task::spawn_local(async move { layer_progress_print(layer_progress).await });
+            imp.import(prep).await
+        })
+        .await;
     // TODO log the discarded bits from import
     Ok(import?.into())
 }
