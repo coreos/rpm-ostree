@@ -15,7 +15,8 @@ dist-snapshot:
 	xz -T0 $(PKG_VER).tar
 
 srpm: dist-snapshot
-	 sed -e "s,^Version:.*,Version: $(GITREV_FOR_PKG)," $(PACKAGE).spec.in > $(PACKAGE).spec; \
+	 sed -e "s,^Version:.*,Version: $(GITREV_FOR_PKG)," $(PACKAGE).spec > $(PACKAGE).spec.new; \
+	 mv $(PACKAGE).spec.new $(PACKAGE).spec; \
 	 ./rpmbuild-cwd -bs $(PACKAGE).spec
 
 rpm: srpm
