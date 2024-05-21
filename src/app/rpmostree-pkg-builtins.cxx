@@ -40,6 +40,7 @@ static gboolean opt_apply_live;
 static gboolean opt_idempotent;
 static gchar **opt_install;
 static gboolean opt_assumeyes;
+static gboolean opt_remove_kernel;
 static gchar **opt_uninstall;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
@@ -95,6 +96,9 @@ static GOptionEntry install_option_entry[]
           "Just download latest ostree and RPM data, don't deploy", NULL },
         { "apply-live", 'A', 0, G_OPTION_ARG_NONE, &opt_apply_live,
           "Apply changes to both pending deployment and running filesystem tree", NULL },
+        { "remove-installed-kernel", 0, 0, G_OPTION_ARG_NONE, &opt_remove_kernel,
+          "Remove the installed kernel packages (usually helpful to install a different kernel)",
+          NULL },
         { "force-replacefiles", 0, 0, G_OPTION_ARG_NONE, &opt_force_replacefiles,
           "Allow package to replace files from other packages", NULL },
         { NULL } };
@@ -265,6 +269,8 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
           auto ver = rust::Str (*it);
           treefile->set_releasever (ver);
         }
+      if (opt_remove_kernel)
+        treefile->set_remove_kernel (true);
       return rpmostree_container_rebuild (*treefile, cancellable, error);
     }
   else

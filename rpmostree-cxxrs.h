@@ -1536,6 +1536,8 @@ struct Treefile final : public ::rust::Opaque
   bool remove_package_override_remove (::rust::Str package) noexcept;
   bool has_packages_override_remove_name (::rust::Str name) const noexcept;
   bool remove_all_overrides () noexcept;
+  bool has_remove_kernel () const noexcept;
+  bool set_remove_kernel (bool remove) noexcept;
   ::rust::Vec< ::rust::String> get_modules_enable () const noexcept;
   bool has_modules_enable () const noexcept;
   ::rust::Vec< ::rust::String> get_modules_install () const noexcept;
