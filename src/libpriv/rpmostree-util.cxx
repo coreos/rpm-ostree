@@ -505,11 +505,6 @@ rpmostree_deployment_get_layered_info (OstreeRepo *repo, OstreeDeployment *deplo
           g_assert (replaced_base_local_pkgs);
         }
 
-      if (layeredmeta.clientlayer_version >= 5)
-        {
-          g_assert (g_variant_dict_lookup (dict, "rpmostree.modules", "^as", &layered_modules));
-        }
-
       if (layeredmeta.clientlayer_version >= 6)
         {
           replaced_base_remote_pkgs = g_variant_dict_lookup_value (

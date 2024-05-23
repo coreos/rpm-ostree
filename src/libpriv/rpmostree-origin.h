@@ -44,8 +44,6 @@ rust::Vec<rust::String> rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
 
 bool rpmostree_origin_has_packages (RpmOstreeOrigin *origin);
 
-bool rpmostree_origin_has_modules_enable (RpmOstreeOrigin *origin);
-
 rust::Vec<rust::String> rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin);
 
 rust::Vec<rust::String> rpmostree_origin_get_local_fileoverride_packages (RpmOstreeOrigin *origin);
@@ -116,12 +114,6 @@ gboolean rpmostree_origin_remove_packages (RpmOstreeOrigin *origin,
                                            rust::Vec<rust::String> packages, gboolean allow_noent,
                                            gboolean *out_changed, GError **error);
 gboolean rpmostree_origin_remove_all_packages (RpmOstreeOrigin *origin);
-
-gboolean rpmostree_origin_add_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
-                                       gboolean enable_only);
-
-gboolean rpmostree_origin_remove_modules (RpmOstreeOrigin *origin, rust::Vec<rust::String> modules,
-                                          gboolean enable_only);
 
 gboolean rpmostree_origin_add_override_remove (RpmOstreeOrigin *origin,
                                                rust::Vec<rust::String> packages, GError **error);

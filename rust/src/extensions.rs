@@ -29,8 +29,6 @@ pub struct Extensions {
     extensions: HashMap<String, Extension>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repos: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    modules: Option<crate::treefile::ModulesConfig>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,8 +37,6 @@ pub struct Extension {
     packages: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repos: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    modules: Option<crate::treefile::ModulesConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     architectures: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -89,7 +85,6 @@ fn extensions_load_stream(
         } else {
             parsed.repos = ext.repos.take();
         }
-        crate::treefile::merge_modules(&mut parsed.modules, &mut ext.modules);
         if ext.kind == ExtensionKind::OsExtension {
             for pkg in &ext.packages {
                 if base_pkgs.contains_key(pkg.as_str()) {
@@ -195,7 +190,6 @@ impl Extensions {
                 ..Default::default()
             },
             packages: Some(self.get_os_extension_packages().into_iter().collect()),
-            modules: self.modules.clone(),
             ..Default::default()
         };
         Ok(Box::new(Treefile {
@@ -324,9 +318,6 @@ extensions:
         architectures:
             - s390x
     foo:
-        modules:
-            enable:
-                - foo:stable
         packages:
             - foo
         repos:
@@ -339,9 +330,6 @@ extensions:
         assert!(extensions.get_os_extension_packages() == vec!["bazboo"]);
         assert_eq!(extensions.get_repos().len(), 2);
         assert_eq!(extensions.get_repos()[1], "bazboo-repo");
-        let modules = extensions.modules.unwrap();
-        assert!(modules.enable.unwrap().contains("virt:av"));
-        assert!(modules.install.is_none());
 
         let mut input = std::io::BufReader::new(buf.as_bytes());
         let extensions = extensions_load_stream(&mut input, "s390x", &base_rpmdb()).unwrap();
@@ -354,10 +342,6 @@ extensions:
         assert_eq!(extensions.get_os_extension_packages(), vec!["foo"]);
         assert_eq!(extensions.get_repos().len(), 2);
         assert_eq!(extensions.get_repos()[1], "foo-repo");
-        let modules = extensions.modules.unwrap();
-        assert!(modules.enable.as_ref().unwrap().contains("foo:stable"));
-        assert!(modules.enable.as_ref().unwrap().contains("virt:av"));
-        assert!(modules.install.is_none());
     }
 
     #[test]

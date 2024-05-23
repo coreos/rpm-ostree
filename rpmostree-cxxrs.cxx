@@ -1759,11 +1759,6 @@ struct Treefile final : public ::rust::Opaque
   bool remove_package_override_remove (::rust::Str package) noexcept;
   bool has_packages_override_remove_name (::rust::Str name) const noexcept;
   bool remove_all_overrides () noexcept;
-  ::rust::Vec< ::rust::String> get_modules_enable () const noexcept;
-  bool has_modules_enable () const noexcept;
-  ::rust::Vec< ::rust::String> get_modules_install () const noexcept;
-  bool add_modules (::rust::Vec< ::rust::String> modules, bool enable_only) noexcept;
-  bool remove_modules (::rust::Vec< ::rust::String> modules, bool enable_only) noexcept;
   bool remove_all_packages () noexcept;
   ::rust::Vec< ::rust::String> get_exclude_packages () const noexcept;
   ::rust::String get_platform_module () const noexcept;
@@ -2422,9 +2417,6 @@ extern "C"
                                                  ::rpmostreecxx::HistoryEntry *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$history_prune () noexcept;
-
-  ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$modularity_entrypoint (::rust::Vec< ::rust::String> const &args) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TokioHandle$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TokioHandle$operator$alignof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$TokioEnterGuard$operator$sizeof () noexcept;
@@ -2570,23 +2562,6 @@ extern "C"
 
   bool
   rpmostreecxx$cxxbridge1$Treefile$remove_all_overrides (::rpmostreecxx::Treefile &self) noexcept;
-
-  void rpmostreecxx$cxxbridge1$Treefile$get_modules_enable (
-      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
-
-  bool rpmostreecxx$cxxbridge1$Treefile$has_modules_enable (
-      ::rpmostreecxx::Treefile const &self) noexcept;
-
-  void rpmostreecxx$cxxbridge1$Treefile$get_modules_install (
-      ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
-
-  bool rpmostreecxx$cxxbridge1$Treefile$add_modules (::rpmostreecxx::Treefile &self,
-                                                     ::rust::Vec< ::rust::String> *modules,
-                                                     bool enable_only) noexcept;
-
-  bool rpmostreecxx$cxxbridge1$Treefile$remove_modules (::rpmostreecxx::Treefile &self,
-                                                        ::rust::Vec< ::rust::String> *modules,
-                                                        bool enable_only) noexcept;
 
   bool
   rpmostreecxx$cxxbridge1$Treefile$remove_all_packages (::rpmostreecxx::Treefile &self) noexcept;
@@ -4617,16 +4592,6 @@ history_prune ()
     }
 }
 
-void
-modularity_entrypoint (::rust::Vec< ::rust::String> const &args)
-{
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$modularity_entrypoint (args);
-  if (error$.ptr)
-    {
-      throw ::rust::impl< ::rust::Error>::error (error$);
-    }
-}
-
 ::std::size_t
 TokioHandle::layout::size () noexcept
 {
@@ -5066,42 +5031,6 @@ bool
 Treefile::remove_all_overrides () noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$remove_all_overrides (*this);
-}
-
-::rust::Vec< ::rust::String>
-Treefile::get_modules_enable () const noexcept
-{
-  ::rust::MaybeUninit< ::rust::Vec< ::rust::String> > return$;
-  rpmostreecxx$cxxbridge1$Treefile$get_modules_enable (*this, &return$.value);
-  return ::std::move (return$.value);
-}
-
-bool
-Treefile::has_modules_enable () const noexcept
-{
-  return rpmostreecxx$cxxbridge1$Treefile$has_modules_enable (*this);
-}
-
-::rust::Vec< ::rust::String>
-Treefile::get_modules_install () const noexcept
-{
-  ::rust::MaybeUninit< ::rust::Vec< ::rust::String> > return$;
-  rpmostreecxx$cxxbridge1$Treefile$get_modules_install (*this, &return$.value);
-  return ::std::move (return$.value);
-}
-
-bool
-Treefile::add_modules (::rust::Vec< ::rust::String> modules, bool enable_only) noexcept
-{
-  ::rust::ManuallyDrop< ::rust::Vec< ::rust::String> > modules$ (::std::move (modules));
-  return rpmostreecxx$cxxbridge1$Treefile$add_modules (*this, &modules$.value, enable_only);
-}
-
-bool
-Treefile::remove_modules (::rust::Vec< ::rust::String> modules, bool enable_only) noexcept
-{
-  ::rust::ManuallyDrop< ::rust::Vec< ::rust::String> > modules$ (::std::move (modules));
-  return rpmostreecxx$cxxbridge1$Treefile$remove_modules (*this, &modules$.value, enable_only);
 }
 
 bool

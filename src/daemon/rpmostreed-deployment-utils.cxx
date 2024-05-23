@@ -270,7 +270,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     }
 
   g_variant_dict_insert (dict, "packages", "^as", layered_pkgs);
-  g_variant_dict_insert (dict, "modules", "^as", layered_modules);
   g_variant_dict_insert_value (dict, "base-removals", removed_base_pkgs);
   g_variant_dict_insert_value (dict, "base-local-replacements", replaced_base_local_pkgs);
   g_variant_dict_insert_value (dict, "base-remote-replacements", replaced_base_remote_pkgs);

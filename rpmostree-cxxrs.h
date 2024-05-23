@@ -1536,11 +1536,6 @@ struct Treefile final : public ::rust::Opaque
   bool remove_package_override_remove (::rust::Str package) noexcept;
   bool has_packages_override_remove_name (::rust::Str name) const noexcept;
   bool remove_all_overrides () noexcept;
-  ::rust::Vec< ::rust::String> get_modules_enable () const noexcept;
-  bool has_modules_enable () const noexcept;
-  ::rust::Vec< ::rust::String> get_modules_install () const noexcept;
-  bool add_modules (::rust::Vec< ::rust::String> modules, bool enable_only) noexcept;
-  bool remove_modules (::rust::Vec< ::rust::String> modules, bool enable_only) noexcept;
   bool remove_all_packages () noexcept;
   ::rust::Vec< ::rust::String> get_exclude_packages () const noexcept;
   ::rust::String get_platform_module () const noexcept;
@@ -1972,8 +1967,6 @@ void console_progress_end (::rust::Str suffix) noexcept;
 ::rust::Box< ::rpmostreecxx::HistoryCtx> history_ctx_new ();
 
 void history_prune ();
-
-void modularity_entrypoint (::rust::Vec< ::rust::String> const &args);
 
 ::rust::Box< ::rpmostreecxx::TokioHandle> tokio_handle_get () noexcept;
 
