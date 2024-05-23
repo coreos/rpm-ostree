@@ -1,5 +1,10 @@
 # rpm-ostree: A true hybrid image/package system
 
+> [!IMPORTANT]
+> Currently, development focus has shifted to [bootc](https://github.com/containers/bootc), [dnf](https://github.com/rpm-software-management/dnf5/), and the ecosystem around those tools. However, rpm-ostree is widely in use today in many upstream projects and downstream products and **we will continue to support it** for some time with an emphasis on fixing important bugs, especially security-related ones. Some minor enhancements may happen but in general new major features, especially client-side, are unlikely to be prioritized. For more information, see:
+> - https://fedoraproject.org/wiki/Changes/DNFAndBootcInImageModeFedora
+> - https://lists.fedoraproject.org/archives/list/devel@lists.fedoraproject.org/thread/X4WEBWV3JYKWVRBC6CPJMUJGQOYCORC7/
+
 rpm-ostree is a hybrid image/package system.  It combines
 [libostree](https://ostree.readthedocs.io/en/latest/) as a base image format,
 and accepts RPM on both the client and server side, sharing code with the
