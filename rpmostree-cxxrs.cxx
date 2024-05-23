@@ -1800,6 +1800,7 @@ struct Treefile final : public ::rust::Opaque
   importer_flags (::rust::Str pkg_name) const noexcept;
   ::rust::String write_repovars (::std::int32_t workdir_dfd_raw) const;
   void set_releasever (::rust::Str releasever);
+  void set_recommends (bool val);
   void enable_repo (::rust::Str repo);
   void disable_repo (::rust::Str repo);
   void validate_for_container () const;
@@ -2687,6 +2688,10 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Treefile$set_releasever (::rpmostreecxx::Treefile &self,
                                                    ::rust::Str releasever) noexcept;
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$Treefile$set_recommends (::rpmostreecxx::Treefile &self,
+                                                   bool val) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$enable_repo (::rpmostreecxx::Treefile &self,
                                                                      ::rust::Str repo) noexcept;
@@ -5318,6 +5323,16 @@ void
 Treefile::set_releasever (::rust::Str releasever)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Treefile$set_releasever (*this, releasever);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
+Treefile::set_recommends (bool val)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Treefile$set_recommends (*this, val);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);

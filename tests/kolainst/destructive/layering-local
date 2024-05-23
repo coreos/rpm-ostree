@@ -40,8 +40,27 @@ fi
 assert_file_has_content_literal out.txt "LockLayering=true"
 rm out.txt
 mv /etc/rpm-ostreed.conf{.bak,} && rpm-ostree reload
+echo "ok LockLayering"
 
-# Disable repos, no Internet access should be required
+# test recommends
+rm -rf /etc/yum.repos.d/*
+cat > /etc/yum.repos.d/vmcheck.repo << EOF
+[test-repo]
+name=test-repo
+baseurl=file:///${KOLA_EXT_DATA}/rpm-repos/0
+gpgcheck=0
+enabled=1
+EOF
+rpm-ostree install foo-with-rec --dry-run > out.txt
+assert_file_has_content_literal out.txt foo-1.2-3
+cp /etc/rpm-ostreed.conf{,.bak}
+echo 'Recommends=false' >> /etc/rpm-ostreed.conf && rpm-ostree reload
+rpm-ostree install foo-with-rec --dry-run > out.txt
+assert_not_file_has_content_literal out.txt foo-1.2-3
+mv /etc/rpm-ostreed.conf{.bak,} && rpm-ostree reload
+echo "ok Recommends"
+
+# Disable repos, no Internet access should be required for the remaining tests
 rm -rf /etc/yum.repos.d/
 # Also disable zincati since we're rebasing
 systemctl mask --now zincati

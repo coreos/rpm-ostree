@@ -60,6 +60,7 @@ gboolean rpmostreed_daemon_reload_config (RpmostreedDaemon *self, gboolean *out_
 
 RpmostreedAutomaticUpdatePolicy rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self);
 gboolean rpmostreed_get_lock_layering (RpmostreedDaemon *self);
+gboolean rpmostreed_get_disable_recommends (RpmostreedDaemon *self);
 
 G_END_DECLS
 
