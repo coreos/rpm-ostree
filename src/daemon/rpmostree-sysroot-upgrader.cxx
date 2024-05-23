@@ -943,6 +943,8 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
   {
     g_autoptr (GKeyFile) computed_origin_kf = rpmostree_origin_dup_keyfile (self->computed_origin);
     CXX_TRY_VAR (tf, rpmostreecxx::origin_to_treefile (*computed_origin_kf), error);
+    if (rpmostreed_get_disable_recommends (rpmostreed_daemon_get ()))
+      tf->set_recommends (false);
     self->treefile = std::move (tf);
   }
   rpmostree_context_set_treefile (self->ctx, **self->treefile);

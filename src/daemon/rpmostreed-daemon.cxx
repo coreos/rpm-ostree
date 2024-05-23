@@ -76,6 +76,7 @@ struct _RpmostreedDaemon
   guint idle_exit_timeout;
   RpmostreedAutomaticUpdatePolicy auto_update_policy;
   gboolean lock_layering;
+  gboolean disable_recommends;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
@@ -401,6 +402,12 @@ rpmostreed_get_lock_layering (RpmostreedDaemon *self)
   return self->lock_layering;
 }
 
+gboolean
+rpmostreed_get_disable_recommends (RpmostreedDaemon *self)
+{
+  return self->disable_recommends;
+}
+
 /* in-place version of g_ascii_strdown */
 static inline void
 ascii_strdown_inplace (char *str)
@@ -435,6 +442,8 @@ rpmostreed_daemon_reload_config (RpmostreedDaemon *self, gboolean *out_changed, 
    * need to be reloaded if it changes */
   self->idle_exit_timeout = idle_exit_timeout;
   self->lock_layering = get_config_bool (config, "LockLayering", FALSE);
+  /* flip polarity here since default FALSE is less error-prone */
+  self->disable_recommends = !get_config_bool (config, "Recommends", TRUE);
 
   gboolean changed = FALSE;
 

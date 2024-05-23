@@ -644,6 +644,7 @@ pub mod ffi {
         fn importer_flags(&self, pkg_name: &str) -> Box<RpmImporterFlags>;
         fn write_repovars(&self, workdir_dfd_raw: i32) -> Result<String>;
         fn set_releasever(&mut self, releasever: &str) -> Result<()>;
+        fn set_recommends(&mut self, val: bool) -> Result<()>;
         fn enable_repo(&mut self, repo: &str) -> Result<()>;
         fn disable_repo(&mut self, repo: &str) -> Result<()>;
         // these functions are more related to derivation

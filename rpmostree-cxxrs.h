@@ -1577,6 +1577,7 @@ struct Treefile final : public ::rust::Opaque
   importer_flags (::rust::Str pkg_name) const noexcept;
   ::rust::String write_repovars (::std::int32_t workdir_dfd_raw) const;
   void set_releasever (::rust::Str releasever);
+  void set_recommends (bool val);
   void enable_repo (::rust::Str repo);
   void disable_repo (::rust::Str repo);
   void validate_for_container () const;

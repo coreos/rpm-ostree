@@ -1293,6 +1293,11 @@ impl Treefile {
         Ok(())
     }
 
+    pub(crate) fn set_recommends(&mut self, val: bool) -> Result<()> {
+        self.parsed.base.recommends = Some(val);
+        Ok(())
+    }
+
     pub(crate) fn get_releasever(&self) -> String {
         self.parsed
             .base

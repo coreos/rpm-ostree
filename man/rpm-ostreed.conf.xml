@@ -106,6 +106,13 @@ Boston, MA 02111-1307, USA.
         overlays or regeneration). Defaults to false.</para>
         </listitem>
       </varlistentry>
+      <varlistentry>
+        <term><varname>Recommends=</varname></term>
+
+        <listitem>
+        <para>When layering, whether to install weak dependencies. Defaults to true.</para>
+        </listitem>
+      </varlistentry>
     <!--
       <varlistentry>
         <term><varname>OptionName=</varname></term>

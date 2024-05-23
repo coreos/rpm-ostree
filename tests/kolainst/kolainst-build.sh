@@ -24,6 +24,7 @@ build_rpm baz
 build_rpm baz version 2.0
 build_rpm boo
 build_rpm boo version 2.0
+build_rpm foo-with-rec recommends foo
 # And from here we lose our creativity and name things starting
 # with `testpkg` and grow more content.
 # This one has various files in /etc
