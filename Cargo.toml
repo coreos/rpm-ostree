@@ -47,7 +47,7 @@ rpm = "4"
 anyhow = "1.0.86"
 binread = "2.2.0"
 bitflags = "2.5"
-camino = "1.1.6"
+camino = "1.1.7"
 cap-std-ext = "4"
 cap-primitives = "3"
 cap-std = { version = "3", features = ["fs_utf8"] }
