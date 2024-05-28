@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # We use https://cxx.rs to generate C++ and Rust bridge code.  If you change
 # rust/src/lib.rs, you will need to install the tool.
 set -xeuo pipefail

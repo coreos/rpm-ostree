@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 set -xeuo pipefail
 
 # Attempt to keep this script in sync with https://github.com/containers/bootc/blob/main/ci/run-kola.sh

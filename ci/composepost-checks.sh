@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # This script expects a coreos-assembler working directory
 # and will validate parts of the generated ostree commit.
 

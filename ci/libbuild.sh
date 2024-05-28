@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 
 # OpenShift Prow jobs don't set $HOME, but we need
 # one for cargo right now.
