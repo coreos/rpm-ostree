@@ -43,6 +43,13 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     // Additionally ignore posttrans scripts for the Oracle Linux `kernel-uek` and `kernel-uek-core` packages
     "kernel-uek.posttrans",
     "kernel-uek-core.posttrans",
+    // Additionally ignore posttrans scripts for ELRepo's `kernel-lt` and `kernel-ml` packages
+    "kernel-lt.posttrans",
+    "kernel-lt-core.posttrans",
+    "kernel-lt-modules.posttrans",
+    "kernel-ml.posttrans",
+    "kernel-ml-core.posttrans",
+    "kernel-ml-modules.posttrans",
     // Legacy workaround
     "glibc-headers.prein",
     // workaround for old bug?
