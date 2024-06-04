@@ -104,7 +104,7 @@ fi
 (cd /etc/yum.repos.d/ && curl -LO https://raw.githubusercontent.com/coreos/fedora-coreos-config/testing-devel/ci/continuous/fcos-continuous.repo)
 
 # test repo override by NEVRA
-afterburn_version=5.4.0-1.fc38."$(arch)"
+afterburn_version=5.5.1-1.fc40."$(arch)"
 rpm-ostree override replace --experimental --from repo=fedora-coreos-pool \
   afterburn-{,dracut-}"${afterburn_version}"
 
@@ -125,9 +125,9 @@ rpm -q afterburn | grep g
 rpm -q afterburn-dracut | grep g
 
 # test --enablerepo --disablerepo --releasever
-rpm-ostree --releasever=38 --disablerepo="*" \
+rpm-ostree --releasever=40 --disablerepo="*" \
     --enablerepo=fedora install tmux
-rpm -q tmux-3.3a-3.fc38."$(arch)"
+rpm -q tmux-3.4-1.fc40."$(arch)"
 
 # test skipping cliwraps
 export RPMOSTREE_CLIWRAP_SKIP=1
