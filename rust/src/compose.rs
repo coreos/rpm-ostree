@@ -12,6 +12,7 @@ use clap::Parser;
 use oci_spec::image::ImageManifest;
 use ostree::gio;
 use ostree_ext::container as ostree_container;
+use ostree_ext::containers_image_proxy;
 use ostree_ext::keyfileext::{map_keyfile_optional, KeyFileExt};
 use ostree_ext::{oci_spec, ostree};
 
