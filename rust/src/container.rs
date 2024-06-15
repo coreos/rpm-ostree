@@ -21,6 +21,7 @@ use fn_error_context::context;
 use ostree::glib;
 use ostree_ext::chunking::ObjectMetaSized;
 use ostree_ext::container::{Config, ExportOpts, ImageReference};
+use ostree_ext::containers_image_proxy;
 use ostree_ext::objectsource::{
     ContentID, ObjectMeta, ObjectMetaMap, ObjectMetaSet, ObjectSourceMeta,
 };
