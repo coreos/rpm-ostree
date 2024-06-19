@@ -7,6 +7,8 @@ PKG_VER=$1
 shift
 GITREV=$1
 shift
+GITTIMESTAMP=$1
+shift
 
 TARFILE=${PKG_VER}.tar
 TARFILE_TMP=$(pwd)/${TARFILE}.tmp
@@ -49,7 +51,7 @@ fi
  mkdir -p .cargo
  (cd ${TOP} && ${vendor_cmd} ${tmpd}/vendor | sed -e "s,^directory *=.*,directory = './vendor',") > .cargo/config
  cp ${TOP}/Cargo.lock .
- tar --owner=0 --group=0 --transform="s,^,${PKG_VER}/," -rf ${TARFILE_TMP} * .cargo/
+ tar --owner=0 --group=0 --transform="s,^,${PKG_VER}/," --mtime="${GITTIMESTAMP}" -rf ${TARFILE_TMP} * .cargo/
  )
 
 mv ${TARFILE_TMP} ${TARFILE}
