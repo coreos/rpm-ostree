@@ -2,6 +2,7 @@
 
 GITREV = $$(git describe --always --tags)
 GITREV_FOR_PKG = $(shell echo "$(GITREV)" | sed -e 's,-,\.,g' -e 's,^v,,')
+GITTIMESTAMP = $$(git show --no-patch --format=%ci)
 
 srcdir=$(shell dirname `pwd`)
 PACKAGE=rpm-ostree
@@ -10,7 +11,7 @@ PKG_VER = $(PACKAGE)-$(GITREV_FOR_PKG)
 PKG_CLIENT_VER = $(PACKAGE)-client-$(GITREV_FOR_PKG)
 
 dist-snapshot:
-	./make-git-snapshot.sh "$(srcdir)" "$(PKG_VER)" "$(GITREV)"
+	./make-git-snapshot.sh "$(srcdir)" "$(PKG_VER)" "$(GITREV)" "$(GITTIMESTAMP)"
 	rm -f $(PKG_VER).tar.xz
 	xz -T0 $(PKG_VER).tar
 
