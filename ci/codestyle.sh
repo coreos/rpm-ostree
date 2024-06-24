@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Tests that validate structure of the source code;
 # can be run without building it.
 set -euo pipefail

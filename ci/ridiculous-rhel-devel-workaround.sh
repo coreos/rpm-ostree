@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 #
 # Builds libsmartcols-devel which libdnf depends on
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Use the clang static analyzer
 
 set -xeuo pipefail

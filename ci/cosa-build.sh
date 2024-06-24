@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Build rpm-ostree, using cosa as a buildroot and then
 # override the version inside cosa, then build FCOS
 set -xeuo pipefail

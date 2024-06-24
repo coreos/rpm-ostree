@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Verify that the cxx-generated C++ code is in sync
 set -xeuo pipefail
 dn=$(dirname $0)
