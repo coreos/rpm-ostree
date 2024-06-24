@@ -1508,7 +1508,7 @@ dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
- "system-deps 7.0.0",
+ "system-deps 7.0.1",
 ]
 
 [[package]]
@@ -2363,7 +2363,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serde_yaml",
- "system-deps 7.0.0",
+ "system-deps 7.0.1",
  "systemd",
  "tempfile",
  "termcolor",
@@ -2703,9 +2703,9 @@ dependencies = [
 
 [[package]]
 name = "system-deps"
-version = "7.0.0"
+version = "7.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "221396b853ccd1c7c6fb90c3ad84ac0bda62b8f6acd6ca72098ed9fca2152841"
+checksum = "6c81f13d9a334a6c242465140bd262fae382b752ff2011c4f7419919a9c97922"
 dependencies = [
  "cfg-expr",
  "heck 0.5.0",
