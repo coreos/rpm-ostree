@@ -394,6 +394,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         rojig,
         selinux,
         selinux_label_version,
+        sysusers,
         ima,
         gpg_key,
         include,
@@ -1247,6 +1248,10 @@ impl Treefile {
 
     pub(crate) fn get_selinux_label_version(&self) -> u32 {
         self.parsed.base.selinux_label_version.unwrap_or_default()
+    }
+
+    pub(crate) fn get_sysusers(&self) -> bool {
+        self.parsed.base.sysusers.unwrap_or(false)
     }
 
     pub(crate) fn get_gpg_key(&self) -> String {
@@ -2415,6 +2420,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) selinux: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) selinux_label_version: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) sysusers: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ima: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
