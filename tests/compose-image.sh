@@ -39,6 +39,7 @@ packages:
   - vim-minimal
   - coreutils
   - dnf dnf-yum
+  - glibc glibc.i686
   - sudo
 repos:
   - fedora  # Intentially using frozen GA repo
