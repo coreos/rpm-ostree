@@ -275,8 +275,10 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     for pkg in pkglist.iter() {
         let name = pkg.child_value(0);
         let name = name.str().unwrap();
+        let arch = pkg.child_value(4);
+        let arch = arch.str().unwrap();
         let nevra = Rc::from(gv_nevra_to_string(&pkg).into_boxed_str());
-        let pkgmeta = q.package_meta(name)?;
+        let pkgmeta = q.package_meta(name, arch)?;
         let buildtime = pkgmeta.buildtime();
         if let Some((lowid, lowtime)) = lowest_change_time.as_mut() {
             if *lowtime > buildtime {

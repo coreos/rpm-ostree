@@ -150,9 +150,10 @@ RpmTs::RpmTs (RpmOstreeRefTs *ts) { _ts = ts; }
 RpmTs::~RpmTs () { rpmostree_refts_unref (_ts); }
 
 std::unique_ptr<PackageMeta>
-RpmTs::package_meta (const rust::Str name) const
+RpmTs::package_meta (const rust::Str name, const rust::Str arch) const
 {
   auto name_c = std::string (name);
+  auto arch_c = std::string (arch);
   g_auto (rpmdbMatchIterator) mi = rpmtsInitIterator (_ts->ts, RPMDBI_NAME, name_c.c_str (), 0);
   if (mi == NULL)
     {
@@ -163,18 +164,21 @@ RpmTs::package_meta (const rust::Str name) const
   std::unique_ptr<PackageMeta> retval;
   while ((h = rpmdbNextIterator (mi)) != NULL)
     {
-      // TODO: Somehow we get two `libgcc-8.5.0-10.el8.x86_64` in current RHCOS, I don't
-      // understand that.
-      if (retval != nullptr)
+      if (strcmp (headerGetString (h, RPMTAG_ARCH), arch_c.c_str ()) == 0)
         {
-          auto nevra = header_get_nevra (h);
-          g_autofree char *buf
-              = g_strdup_printf ("Multiple installed '%s' (%s, %s)", name_c.c_str (),
-                                 retval->nevra ().c_str (), nevra.c_str ());
-          throw std::runtime_error (buf);
-        }
+          // TODO: Somehow we get two `libgcc-8.5.0-10.el8.x86_64` in current RHCOS, I don't
+          // understand that.
+          if (retval != nullptr)
+            {
+              auto nevra = header_get_nevra (h);
+              g_autofree char *buf
+                  = g_strdup_printf ("Multiple installed '%s' (%s, %s)", name_c.c_str (),
+                                     retval->nevra ().c_str (), nevra.c_str ());
+              throw std::runtime_error (buf);
+            }
 
-      retval = std::make_unique<PackageMeta> (h);
+          retval = std::make_unique<PackageMeta> (h);
+        }
     }
   if (retval == nullptr)
     g_assert_not_reached ();

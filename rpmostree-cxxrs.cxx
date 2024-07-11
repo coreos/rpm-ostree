@@ -3246,15 +3246,16 @@ extern "C"
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$RpmTs$package_meta (::rpmostreecxx::RpmTs const &self, ::rust::Str name,
+                                              ::rust::Str arch,
                                               ::rpmostreecxx::PackageMeta **return$) noexcept
   {
     ::std::unique_ptr< ::rpmostreecxx::PackageMeta> (::rpmostreecxx::RpmTs::*package_meta$) (
-        ::rust::Str) const
+        ::rust::Str, ::rust::Str) const
         = &::rpmostreecxx::RpmTs::package_meta;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
         [&] {
-          new (return$)::rpmostreecxx::PackageMeta *((self.*package_meta$) (name).release ());
+          new (return$)::rpmostreecxx::PackageMeta *((self.*package_meta$) (name, arch).release ());
           throw$.ptr = nullptr;
         },
         ::rust::detail::Fail (throw$));

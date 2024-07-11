@@ -77,7 +77,7 @@ public:
   RpmTs (::RpmOstreeRefTs *ts);
   ~RpmTs ();
   rpmts get_ts () const;
-  std::unique_ptr<PackageMeta> package_meta (const rust::Str package) const;
+  std::unique_ptr<PackageMeta> package_meta (const rust::Str name, const rust::Str arch) const;
 
 private:
   ::RpmOstreeRefTs *_ts;

@@ -914,7 +914,7 @@ pub mod ffi {
         fn rpmdb_package_name_list(dfd: i32, path: String) -> Result<Vec<String>>;
 
         // Methods on RpmTs
-        fn package_meta(self: &RpmTs, name: &str) -> Result<UniquePtr<PackageMeta>>;
+        fn package_meta(self: &RpmTs, name: &str, arch: &str) -> Result<UniquePtr<PackageMeta>>;
 
         // Methods on PackageMeta
         fn size(self: &PackageMeta) -> u64;
