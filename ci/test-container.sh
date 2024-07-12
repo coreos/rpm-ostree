@@ -91,7 +91,7 @@ rpm-ostree install ignition.rpm
 rpm -q ignition
 
 # And verify it's uninstalled
-dnf -y uninstall kexec-tools
+dnf -y uninstall kexec-tools kdump-utils makedumpfile
 if rpm -q kexec-tools; then fatal "failed to remove kexec-tools"; fi
 
 # test replacement by Koji URL
