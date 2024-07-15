@@ -228,9 +228,9 @@ checksum = "e0ec6b951b160caa93cc0c7b209e5a3bff7aae9062213451ac99493cd844c239"
 
 [[package]]
 name = "cap-primitives"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00172660727e2d7f808e7cc2bfffd093fdb3ea2ff2ef819289418a3c3ffab5ac"
+checksum = "6d00bd8d26c4270d950eaaa837387964a2089a1c3c349a690a1fa03221d29531"
 dependencies = [
  "ambient-authority",
  "fs-set-times",
@@ -245,9 +245,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cd9187bb3f7478a4c135ea10473a41a5f029d2ac800c1adf64f35ec7d4c8603"
+checksum = "19eb8e3d71996828751c1ed3908a439639752ac6bdc874e41469ef7fc15fbd7f"
 dependencies = [
  "camino",
  "cap-primitives",
@@ -258,9 +258,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std-ext"
-version = "4.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1285af420ee8cbf7ec30c02c08f9f25125fc0f7efd6d34eacad5b18e62d4e58"
+checksum = "e7f98c66b91a87715bb68b426cc36f9a5a2e0970a4c0adc631aaf06422d4185b"
 dependencies = [
  "cap-primitives",
  "cap-tempfile",
@@ -269,9 +269,9 @@ dependencies = [
 
 [[package]]
 name = "cap-tempfile"
-version = "3.0.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8748c8ae8186b7362da62c7cb8edf7aabae095c86175e988d76387a842574e16"
+checksum = "53880047c3f37cd64947775f0526795498d614182603a718c792616b762ce777"
 dependencies = [
  "cap-std",
  "rand",
