@@ -73,8 +73,18 @@ It supports the following parameters:
    however, virtual provides are also supported.
    For convenience when writing YAML/JSON, entries in this list will also be split by
    whitespace.  Finally, another syntax special case is that surrounding the entry
-   with quotes `'` will suppress this whitespace split, and that in turn makes it possible to use version query
-   syntax such as `'podman >= 4.1'`.
+   with single quotes (`'`) as part of the string will suppress this whitespace split, and that in turn makes it possible
+   to use version query syntax (`podman >= 4.1`).
+
+   Example:
+
+   ```yaml
+   packages:
+     - ca-certificates
+     - efitools pesign sbsigntools
+     - "'podman >= 4.1'"
+     - kernel-6.9.11-100.fc39
+   ```
 
  * `packages-$basearch`: Array of strings, optional: Set of installed packages, used
     only if $basearch matches the target architecture name.
