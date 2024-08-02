@@ -3,7 +3,13 @@ parent: Experimental features
 nav_order: 1
 ---
 
-# Wrapping other CLI entrypoints
+# DEPRECATED: Wrapping other CLI entrypoints
+
+**This functionality is now deprecated and slated for removal**. 
+
+The below text documents the functionality as it exists today for historical reference.
+
+---
 
 A simple way to describe the goal of rpm-ostree is to convert the default model for operating system updates to be "image based".
 

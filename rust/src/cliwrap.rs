@@ -85,6 +85,9 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
 
 /// Write wrappers to the target root filesystem.
 fn install_to_root(args: &[&str]) -> Result<()> {
+    crate::client::warn_future_incompatibility(
+        "cliwrap is deprecated; the replacement path is to get functionality into the relevant upstream projects.",
+    );
     let root = args
         .get(0)
         .map(Utf8Path::new)

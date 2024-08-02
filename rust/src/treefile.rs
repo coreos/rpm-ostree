@@ -1460,6 +1460,10 @@ impl Treefile {
             deprecated = true;
             eprintln!("warning: initramfs-args is deprecated, use /etc/dracut.conf.d")
         }
+        if self.get_cliwrap() {
+            deprecated = true;
+            eprintln!("warning: cliwrap is deprecated and slated for removal");
+        }
         if deprecated {
             std::thread::sleep(std::time::Duration::from_secs(3));
         }
