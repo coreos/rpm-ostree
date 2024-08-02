@@ -1552,6 +1552,7 @@ struct Treefile final : public ::rust::Opaque
   bool get_recommends () const noexcept;
   bool get_selinux () const noexcept;
   ::std::uint32_t get_selinux_label_version () const noexcept;
+  bool get_sysusers () const noexcept;
   ::rust::String get_gpg_key () const noexcept;
   ::rust::String get_automatic_version_suffix () const noexcept;
   bool get_container () const noexcept;
@@ -1862,7 +1863,7 @@ void configure_build_repo_from_target (::rpmostreecxx::OstreeRepo const &build_r
 void compose_prepare_rootfs (::std::int32_t src_rootfs_dfd, ::std::int32_t dest_rootfs_dfd,
                              ::rpmostreecxx::Treefile &treefile);
 
-void composepost_nsswitch_altfiles (::std::int32_t rootfs_dfd);
+void composepost_nsswitch_altfiles (::std::int32_t rootfs_dfd, bool sysusers);
 
 void compose_postprocess (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile &treefile,
                           ::rust::Str next_version, bool unified_core);
