@@ -1197,22 +1197,33 @@ fn workaround_selinux_cross_labeling_recurse(
     }
     Ok(())
 }
-
+fn run_add_determinisim(rootfs: &Dir){
+    let path = std::env::var_os("PATH");
+    let bin = "add-determinism";
+    for path in std::env::split_paths(&path){
+        let bin_path = path.join(bin);
+        if bin_path.exists() {
+            // let usr_path = rootfs.open_dir("usr");
+            // cwd_dir(usr_path);
+            cwd_dir(rootfs);
+            std::env::current_dir("usr");
+                // add-determinism --handler pyc-zero-mtime
+            let r = std::process::Command::new("add-determinism")
+            .arg("--handler")
+            .arg("pyc-zero-mtime")
+            .arg(".")
+            .status()
+            .expect("Failed to normalize .pyc files using add-determinism");
+            if !r.success() {
+                return Err(anyhow!("Failed to execute add-determinism --handler pyc-zero-mtime: {:?}", r).into());
+            }
+        }
+    }
+}
 /// This is the nearly the last code executed before we run `ostree commit`.
 pub fn compose_postprocess_final(rootfs_dfd: i32, _treefile: &Treefile) -> CxxResult<()> {
     let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
-    if std::process::Command::new("add-determinism").status().expect("Failed to find add-determinism on system.").success() {
-         // add-determinism --handler pyc-zero-mtime
-        let r = std::process::Command::new("add-determinism")
-        .arg("--handler")
-        .arg("pyc-zero-mtime")
-        .arg("/usr")
-        .status()
-        .expect("Failed to normalize .pyc files using add-determinism");
-        if !r.success() {
-            return Err(anyhow!("Failed to execute add-determinism --handler pyc-zero-mtime: {:?}", r).into());
-        }
-    }
+    run_add_determinisim(rootfs);
     hardlink_rpmdb_base_location(rootfs, None)?;
     Ok(())
 }
