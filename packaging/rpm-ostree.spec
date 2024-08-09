@@ -60,6 +60,8 @@ BuildRequires: pkgconfig(libarchive)
 BuildRequires: pkgconfig(libsystemd)
 BuildRequires: libcap-devel
 BuildRequires: libattr-devel
+# Needed by the ostree-ext crate
+BuildRequires: libzstd-devel
 
 # We currently interact directly with librepo (libdnf below also pulls it in,
 # but duplicating to be clear)
