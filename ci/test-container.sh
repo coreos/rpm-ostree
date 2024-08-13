@@ -15,9 +15,9 @@ case $versionid in
     ignition_url_suffix=2.16.2/2.fc39/x86_64/ignition-2.16.2-2.fc39.x86_64.rpm
     # 2.15.0-3
     koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2435097"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2436096"
     kver=6.8.5
-    krev=300
+    krev=301
     ;;
   39)
     ignition_url_suffix=2.16.2/1.fc39/x86_64/ignition-2.16.2-1.fc39.x86_64.rpm
