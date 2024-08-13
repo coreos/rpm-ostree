@@ -136,7 +136,7 @@ impl Drop for RoFilesMount {
             })
             .err()
             .map(|e| {
-                systemd::journal::print(4, &format!("{}", e));
+                eprintln!("{}", e);
             })
             .is_none();
         if !success {
