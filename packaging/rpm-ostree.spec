@@ -4,7 +4,7 @@
 Summary: Hybrid image/package system
 Name: rpm-ostree
 Version: 2024.7
-Release: 1%{?dist}
+Release: %autorelease
 License: LGPL-2.0-or-later
 URL: https://github.com/coreos/rpm-ostree
 # This tarball is generated via "cd packaging && make -f Makefile.dist-packaging dist-snapshot"
@@ -13,8 +13,14 @@ Source0: https://github.com/coreos/rpm-ostree/releases/download/v%{version}/rpm-
 
 ExclusiveArch: %{rust_arches}
 
+# ostree not on i686 for RHEL 10
+# https://github.com/containers/composefs/pull/229#issuecomment-1838735764
+%if 0%{?rhel} >= 10
+ExcludeArch:    %{ix86}
+%endif
+
 BuildRequires: make
-%if 0%{?rhel} && !0%{?eln}
+%if 0%{?rhel}
 BuildRequires: rust-toolset
 %else
 BuildRequires: rust-packaging
@@ -132,12 +138,20 @@ Requires:       librepo%{?_isa} >= %{librepo_version}
 # rpm-ostree wraps more of ostree (such as `ostree admin unlock` etc.)
 Requires: ostree
 Requires: bubblewrap
+# We have been building with fuse but changed to fuse3  on:
+# https://src.fedoraproject.org/rpms/rpm-ostree/c/3c602a23787fd2df873c0b18df3133c9fec4b66a
+# However our code is just calling fuse's fusermount.
+# We are updating our spec and code based on the discusion on:
+# https://github.com/coreos/rpm-ostree/pull/5047
+%if 0%{?rhel} && 0%{?el} <= 9
 Requires: fuse
+%else
+Requires: fuse3
+%endif
 
 # For container functionality
 # https://github.com/coreos/rpm-ostree/issues/3286
 Requires: skopeo
-Requires: /usr/bin/setpriv
 
 Requires: %{name}-libs%{?_isa} = %{version}-%{release}
 
@@ -163,7 +177,7 @@ Requires: %{name}-libs%{?_isa} = %{version}-%{release}
 The %{name}-devel package includes the header files for %{name}-libs.
 
 %prep
-%autosetup -Sgit -n %{name}-%{version}
+%autosetup -Sgit -n %{name}-%{version} -p1
 %if 0%{?__isa_bits} == 32
 sed -ie 's,^lto = true,lto = false,' Cargo.toml
 %endif
@@ -268,5 +282,4 @@ fi
 %files devel -f files.devel
 
 %changelog
-* Thu Nov 17 2022 Colin Walters <walters@verbum.org> - 2022.15-3
-- Dummy change to satisfy rpm timestamp clamping
+%autochangelog
