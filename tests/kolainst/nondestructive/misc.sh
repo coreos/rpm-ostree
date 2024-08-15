@@ -41,8 +41,11 @@ assert_not_file_has_content $tmpfiles 'd /var/tmp'
 assert_not_file_has_content $tmpfiles 'd /var/cache '
 assert_file_has_content_literal $tmpfiles 'd /var/lib/chrony 0750 chrony chrony - -'
 
+# https://github.com/coreos/rpm-ostree/issues/5040
+# only check logs after switchroot
+curosr=$(journalctl -u initrd-switch-root.service -o json -n 1 | jq -r '.["__CURSOR"]')
 set +x # so our grepping doesn't get a hit on itself
-if journalctl --grep 'Duplicate line'; then
+if journalctl -u systemd-tmpfiles-setup.service --after-cursor ${curosr} --grep 'Duplicate line'; then
     fatal "Should not get logs (Duplicate line)"
 fi
 set -x # restore
