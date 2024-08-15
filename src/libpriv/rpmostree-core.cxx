@@ -1782,7 +1782,8 @@ rpmostree_context_prepare (RpmOstreeContext *self, gboolean enable_filelists,
           auto pkg = "";
           for (auto &pkg_str : packages)
             {
-              pkg = std::string (pkg_str).c_str ();
+              auto pkg_buf = std::string (pkg_str);
+              pkg = pkg_buf.c_str ();
               char *query = strchr ((char *)pkg, '/');
               if (query)
                 {
