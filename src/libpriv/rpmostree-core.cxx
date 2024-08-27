@@ -4653,6 +4653,14 @@ rpmostree_context_commit (RpmOstreeContext *self, const char *parent,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.packages",
                                g_variant_builder_end (pkgs_v));
 
+        /* Older versions of rpm-ostree bail if this isn't found:
+         * https://github.com/coreos/rpm-ostree/issues/5048
+         * In practice we may as well keep this until the end of time...
+         */
+        auto modules_v = g_variant_builder_new (G_VARIANT_TYPE ("as"));
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.modules",
+                               g_variant_builder_end (modules_v));
+
         /* embed packages removed */
         /* we have to embed both the pkgname and the full nevra to make it easier to match
          * them up with origin directives. the full nevra is used for status -v */
