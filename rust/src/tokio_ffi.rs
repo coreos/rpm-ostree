@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 pub(crate) struct TokioHandle(tokio::runtime::Handle);
+#[allow(dead_code)]
 pub(crate) struct TokioEnterGuard<'a>(tokio::runtime::EnterGuard<'a>);
 
 pub(crate) fn tokio_handle_get() -> Box<TokioHandle> {
