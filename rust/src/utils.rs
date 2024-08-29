@@ -640,17 +640,6 @@ pub(crate) fn calculate_advisories_diff(
     Ok(p as *mut _)
 }
 
-pub(crate) fn print_treepkg_diff(sysroot: &str) {
-    unsafe {
-        crate::ffi::print_treepkg_diff_from_sysroot_path(
-            sysroot,
-            crate::ffi::RpmOstreeDiffPrintFormat::RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE,
-            0,
-            std::ptr::null_mut(),
-        );
-    }
-}
-
 /// Implementation of https://github.com/rust-lang/rust/issues/82901 until it's stable.
 pub(crate) trait OptionExtGetOrInsertDefault<T> {
     fn ext_get_or_insert_default(&mut self) -> &mut T;
