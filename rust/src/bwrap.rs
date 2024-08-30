@@ -6,6 +6,8 @@ use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::normalization;
 use anyhow::{Context, Result};
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use cap_std::fs::Dir;
 use cap_std_ext::prelude::{CapStdExtCommandExt, CapStdExtDirExt};
 use fn_error_context::context;
@@ -114,6 +116,20 @@ impl RoFilesMount {
     }
 }
 
+fn get_fusermount_path() -> Result<Utf8PathBuf> {
+    let path = std::env::var("PATH").expect("PATH set");
+    let fusermount_binaries = ["fusermount", "fusermount3"];
+    for elt in path.split(':').map(Utf8Path::new) {
+        for bin in fusermount_binaries {
+            let target = elt.join(bin);
+            if target.try_exists()? {
+                return Ok(target);
+            }
+        }
+    }
+    anyhow::bail!("No fusermount path found")
+}
+
 impl Drop for RoFilesMount {
     fn drop(&mut self) {
         let tempdir = if let Some(d) = self.tempdir.take() {
@@ -122,7 +138,7 @@ impl Drop for RoFilesMount {
             return;
         };
         // We need to unmount before letting the tempdir cleanup run.
-        let success = Command::new("fusermount")
+        let success = Command::new(get_fusermount_path().unwrap().to_string())
             .arg("-u")
             .arg(tempdir.path())
             .status()
