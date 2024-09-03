@@ -33,7 +33,7 @@ jobs:
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: install.tar
           path: install.tar
@@ -56,7 +56,7 @@ jobs:
       - name: Build
         run: make -C tests/kolainst && make -C tests/kolainst install DESTDIR=$(pwd)/install && tar -C install -czf tests.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tests.tar
           path: tests.tar
@@ -118,13 +118,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
       - name: Download build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
       - name: Install
         run: tar -C / -xzvf install.tar && rm -f install.tar
       - name: Download tests
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: tests.tar
       - name: Install Tests
@@ -145,7 +145,7 @@ jobs:
           repository: coreos/coreos-layering-examples
           path: coreos-layering-examples
       - name: Download
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
       - name: Integration tests
@@ -171,7 +171,7 @@ jobs:
       - name: Install test dependencies
         run: ./ci/install-test-deps.sh
       - name: Download build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
       - name: Install
@@ -191,7 +191,7 @@ jobs:
       - name: Install test dependencies
         run: ./ci/install-test-deps.sh
       - name: Download build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
       - name: Install
@@ -209,7 +209,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
       - name: Download build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
       - name: Install
@@ -237,7 +237,7 @@ jobs:
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
       - name: Upload binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: install-c9s.tar
           path: install.tar
