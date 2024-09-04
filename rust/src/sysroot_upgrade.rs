@@ -59,12 +59,14 @@ fn layer_counts<'a>(layers: impl Iterator<Item = &'a ManifestLayerState>) -> (u3
 // Output when we begin/end fetching a layer.  Ideally, we'd handle
 // byte-level progress here too, but that requires some more sophisticated
 // binding with the rpmostree-output.h via cxx.rs.
-async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
+async fn layer_progress_print(mut r: Receiver<ImportProgress>, total_to_fetch: u32) {
     // This is just used to hold a reference to the task.
     #[allow(unused_variables, unused_assignments)]
     let mut task = None;
+    let mut n_fetched = 0u64;
     while let Some(v) = r.recv().await {
-        let msg = ostree_ext::cli::layer_progress_format(&v);
+        let mut msg = ostree_ext::cli::layer_progress_format(&v);
+        msg.insert_str(0, &format!("[{n_fetched}/{total_to_fetch}] "));
         tracing::debug!("layer progress: {msg}");
         match v {
             ImportProgress::OstreeChunkStarted(_) => {
@@ -73,6 +75,7 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
             }
             ImportProgress::OstreeChunkCompleted(_) => {
                 assert!(task.take().is_some());
+                n_fetched += 1;
             }
             ImportProgress::DerivedLayerStarted(_) => {
                 assert!(task.is_none());
@@ -80,6 +83,7 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>) {
             }
             ImportProgress::DerivedLayerCompleted(_) => {
                 assert!(task.take().is_some());
+                n_fetched += 1;
             }
         }
     }
@@ -127,6 +131,7 @@ async fn pull_container_async(
         .ostree_layers
         .iter()
         .chain(std::iter::once(&prep.ostree_commit_layer));
+    let mut total_to_fetch = 0;
     let (stored, (n_to_fetch, size_to_fetch)) = layer_counts(ostree_layers);
     if stored > 0 {
         output_message(&format!("ostree chunk layers already present: {stored}"));
@@ -136,6 +141,7 @@ async fn pull_container_async(
         output_message(&format!(
             "ostree chunk layers needed: {n_to_fetch} ({size})"
         ));
+        total_to_fetch += n_to_fetch;
     }
     let (stored, (n_to_fetch, size_to_fetch)) = layer_counts(prep.layers.iter());
     if stored > 0 {
@@ -144,12 +150,13 @@ async fn pull_container_async(
     if n_to_fetch > 0 {
         let size = glib::format_size(size_to_fetch);
         output_message(&format!("custom layers needed: {n_to_fetch} ({size})"));
+        total_to_fetch += n_to_fetch;
     }
     let local = tokio::task::LocalSet::new();
     let import = local
         .run_until(async move {
             let _progress_printer =
-                tokio::task::spawn_local(async move { layer_progress_print(layer_progress).await });
+                tokio::task::spawn_local(layer_progress_print(layer_progress, total_to_fetch));
             imp.import(prep).await
         })
         .await;
