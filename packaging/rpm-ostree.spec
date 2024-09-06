@@ -143,7 +143,7 @@ Requires: bubblewrap
 # However our code is just calling fuse's fusermount.
 # We are updating our spec and code based on the discusion on:
 # https://github.com/coreos/rpm-ostree/pull/5047
-%if 0%{?rhel} && 0%{?el} <= 9
+%if %{defined rhel} && 0%{?rhel} < 10
 Requires: fuse
 %else
 Requires: fuse3
