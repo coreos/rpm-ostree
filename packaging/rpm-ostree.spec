@@ -11,8 +11,6 @@ URL: https://github.com/coreos/rpm-ostree
 # in the upstream git.  It also contains vendored Rust sources.
 Source0: https://github.com/coreos/rpm-ostree/releases/download/v%{version}/rpm-ostree-%{version}.tar.xz
 
-ExclusiveArch: %{rust_arches}
-
 # ostree not on i686 for RHEL 10
 # https://github.com/containers/composefs/pull/229#issuecomment-1838735764
 %if 0%{?rhel} >= 10
