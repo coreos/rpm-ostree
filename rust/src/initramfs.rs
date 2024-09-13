@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::cxxrsutil::*;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use camino::Utf8Path;
+use cap_std::fs_utf8::Dir as Utf8Dir;
 use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtCommandExt;
@@ -13,9 +14,11 @@ use rustix::fd::BorrowedFd;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::io::prelude::*;
+use std::os::fd::AsRawFd as _;
 use std::os::unix::io::IntoRawFd;
 use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
+use std::process::Command;
 use std::{fs, io};
 
 fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
@@ -179,6 +182,53 @@ pub(crate) fn initramfs_overlay_generate(
     let files: HashSet<String> = files.iter().cloned().collect();
     let r = generate_initramfs_overlay_etc(&files, Some(cancellable))?;
     Ok(r.into_raw_fd())
+}
+
+#[context("Running dracut")]
+pub(crate) fn run_dracut(kernel_dir: &str) -> Result<()> {
+    let root_fs = Utf8Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
+    let tmp_dir = tempfile::tempdir()?;
+    let tmp_initramfs_path = tmp_dir.path().join("initramfs.img");
+
+    let cliwrap_dracut = Utf8Path::new(crate::cliwrap::CLIWRAP_DESTDIR).join("dracut");
+    let dracut_path = cliwrap_dracut
+        .exists()
+        .then(|| cliwrap_dracut)
+        .unwrap_or_else(|| Utf8Path::new("dracut").to_owned());
+    // If changing this, also look at changing rpmostree-kernel.cxx
+    let res = Command::new(dracut_path)
+        .args(&[
+            "--no-hostonly",
+            "--kver",
+            kernel_dir,
+            "--reproducible",
+            "-v",
+            "--add",
+            "ostree",
+            "-f",
+        ])
+        .arg(&tmp_initramfs_path)
+        .status()?;
+    if !res.success() {
+        return Err(anyhow!(
+            "Failed to generate initramfs (via dracut) for kernel: {kernel_dir}: {:?}",
+            res
+        ));
+    }
+    let f = std::fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(&tmp_initramfs_path)?;
+    crate::initramfs::append_dracut_random_cpio(f.as_raw_fd())?;
+    drop(f);
+    let utf8_tmp_dir_path = Utf8Path::from_path(tmp_dir.path().strip_prefix("/")?)
+        .context("Error turning Path to Utf8Path")?;
+    root_fs.rename(
+        utf8_tmp_dir_path.join("initramfs.img"),
+        &root_fs,
+        (Utf8Path::new("lib/modules").join(kernel_dir)).join("initramfs.img"),
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]
