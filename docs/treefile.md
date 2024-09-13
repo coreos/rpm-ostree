@@ -156,7 +156,8 @@ It supports the following parameters:
     rpm-ostree will replace binaries such as `/usr/bin/rpm` with
     wrappers that intercept unsafe operations, or adjust functionality.
 
-    The default is `false` out of conservatism; you likely want to enable this.
+    This is deprecated and we now plan to land relevant functionality
+    in the upstream projects.
 
  * `cliwrap-binaries`: array of strings, optional.  An explicit list of binaries
     to enable `cliwrap`.  The current allowed set contains just one value: `kernel-install`.
