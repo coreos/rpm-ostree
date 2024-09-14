@@ -1,10 +1,10 @@
 # The canonical copy of this spec file is upstream at:
-# https://github.com/coreos/rpm-ostree/blob/main/packaging/rpm-ostree.spec.in
+# https://github.com/coreos/rpm-ostree/blob/main/packaging/rpm-ostree.spec
 
 Summary: Hybrid image/package system
 Name: rpm-ostree
 Version: 2024.7
-Release: %autorelease
+Release: 1%{?dist}
 License: LGPL-2.0-or-later
 URL: https://github.com/coreos/rpm-ostree
 # This tarball is generated via "cd packaging && make -f Makefile.dist-packaging dist-snapshot"
