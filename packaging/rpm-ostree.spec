@@ -11,9 +11,10 @@ URL: https://github.com/coreos/rpm-ostree
 # in the upstream git.  It also contains vendored Rust sources.
 Source0: https://github.com/coreos/rpm-ostree/releases/download/v%{version}/rpm-ostree-%{version}.tar.xz
 
+# See https://github.com/coreos/fedora-coreos-tracker/issues/1716
 # ostree not on i686 for RHEL 10
 # https://github.com/containers/composefs/pull/229#issuecomment-1838735764
-%if 0%{?rhel} >= 10
+%if 0%{?fedora} || 0%{?rhel} >= 10
 ExcludeArch:    %{ix86}
 %endif
 
