@@ -3,6 +3,7 @@
 use crate::cliwrap::cliutil;
 use anyhow::Result;
 use camino::Utf8Path;
+use cap_std::fs::Dir as StdDir;
 use cap_std::fs::FileType;
 use cap_std::fs_utf8::Dir as Utf8Dir;
 use cap_std_ext::cap_std;
@@ -39,7 +40,8 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
     }
     if let Some(k) = new_kernel {
         undo_systemctl_wrap()?;
-        crate::initramfs::run_dracut(&k)?;
+        let root_fs = StdDir::open_ambient_dir("/", cap_std::ambient_authority())?;
+        crate::initramfs::run_dracut(&root_fs, &k)?;
         redo_systemctl_wrap()?;
     }
     Ok(())

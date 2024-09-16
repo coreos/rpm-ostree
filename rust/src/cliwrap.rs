@@ -15,21 +15,25 @@ use std::io::prelude::*;
 mod cliutil;
 mod dracut;
 mod grubby;
-mod kernel_install;
+mod kernel_install_wrap;
 mod rpm;
 mod yumdnf;
 use crate::cxxrsutil::CxxResult;
 use crate::ffi::SystemHostType;
 use crate::ffiutil::*;
+use crate::kernel_install::is_ostree_layout;
 
 /// Location for the underlying (not wrapped) binaries.
 pub const CLIWRAP_DESTDIR: &str = "usr/libexec/rpm-ostree/wrapped";
+
+/// Kernel install binary we will wrap only if ostree layout is not specified.
+const KERNEL_INSTALL: &str = "usr/bin/kernel-install";
 
 /// Binaries that will be wrapped if they exist.
 static WRAPPED_BINARIES: &[&str] = &["usr/bin/rpm", "usr/bin/dracut", "usr/sbin/grubby"];
 
 /// Binaries we will wrap, or create if they don't exist.
-static MUSTWRAP_BINARIES: &[&str] = &["usr/bin/yum", "usr/bin/dnf", "usr/bin/kernel-install"];
+static MUSTWRAP_BINARIES: &[&str] = &["usr/bin/yum", "usr/bin/dnf"];
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum RunDisposition {
@@ -74,7 +78,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
             "yum" | "dnf" => Ok(self::yumdnf::main(host_type, args)?),
             "dracut" => Ok(self::dracut::main(args)?),
             "grubby" => Ok(self::grubby::main(args)?),
-            "kernel-install" => Ok(self::kernel_install::main(args)?),
+            "kernel-install" if !is_ostree_layout()? => Ok(self::kernel_install_wrap::main(args)?),
             _ => Err(anyhow!("Unknown wrapped binary: {}", name)),
         }
     } else {
@@ -153,11 +157,15 @@ fn write_wrappers(rootfs_dfd: &Dir, allowlist: Option<&HashSet<&str>>) -> Result
 
     let all_wrapped = WRAPPED_BINARIES.iter().map(Utf8Path::new);
     let all_mustwrap = MUSTWRAP_BINARIES.iter().map(Utf8Path::new);
-    let all_names = all_wrapped
+    let mut all_names = all_wrapped
         .clone()
         .chain(all_mustwrap.clone())
         .map(|p| p.file_name().unwrap())
         .collect::<HashSet<_>>();
+
+    if !is_ostree_layout()? {
+        all_names.insert(Utf8Path::new(KERNEL_INSTALL).file_name().unwrap());
+    }
 
     if let Some(allowlist) = allowlist.as_ref() {
         for k in allowlist.iter() {
@@ -170,7 +178,15 @@ fn write_wrappers(rootfs_dfd: &Dir, allowlist: Option<&HashSet<&str>>) -> Result
     let allowlist_contains =
         |v: &(&Utf8Path, bool)| allowlist.map_or(true, |l| l.contains(v.0.file_name().unwrap()));
 
-    WRAPPED_BINARIES
+    let final_binaries: Vec<&str> = if !is_ostree_layout()? {
+        let mut combined_bins = Vec::from(WRAPPED_BINARIES);
+        combined_bins.extend_from_slice(&[KERNEL_INSTALL]);
+        combined_bins
+    } else {
+        Vec::from(WRAPPED_BINARIES)
+    };
+
+    final_binaries
         .par_iter()
         .map(|p| (Utf8Path::new(p), true))
         .chain(
