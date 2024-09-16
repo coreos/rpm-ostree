@@ -1352,8 +1352,15 @@ impl Treefile {
     pub(crate) fn get_boot_location_is_modules(&self) -> bool {
         match self.parsed.base.boot_location.unwrap_or_default() {
             BootLocation::New => false,
-            BootLocation::Modules => true,
+            BootLocation::Modules | BootLocation::KernelInstall => true,
         }
+    }
+
+    pub(crate) fn use_kernel_install(&self) -> bool {
+        matches!(
+            self.parsed.base.boot_location.unwrap_or_default(),
+            BootLocation::KernelInstall
+        )
     }
 
     pub(crate) fn get_etc_group_members(&self) -> Vec<String> {
@@ -2077,6 +2084,7 @@ pub(crate) enum BootLocation {
     #[default]
     New,
     Modules,
+    KernelInstall,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -3362,6 +3370,14 @@ pub(crate) mod tests {
                 - 12
                 - 34
         "});
+    }
+
+    #[test]
+    fn basic_boot_kernel_install() {
+        let treefile = append_and_parse(indoc! {"
+            boot-location: kernel-install
+        "});
+        assert!(treefile.base.boot_location.unwrap() == BootLocation::KernelInstall);
     }
 
     pub(crate) fn new_test_treefile<'a, 'b>(
