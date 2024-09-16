@@ -3506,12 +3506,14 @@ rpmts_add_install (RpmOstreeContext *self, rpmts ts, DnfPackage *pkg,
   g_auto (Header) hdr = NULL;
   g_autofree char *path = get_package_relpath (pkg);
 
+  const bool use_kernel_install = self->treefile_rs->use_kernel_install ();
+
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
   if (!(flags & RPMOSTREE_TS_FLAG_NOVALIDATE_SCRIPTS))
     {
-      if (!rpmostree_script_txn_validate (pkg, hdr, cancellable, error))
+      if (!rpmostree_script_txn_validate (pkg, hdr, use_kernel_install, cancellable, error))
         return FALSE;
     }
 
@@ -3553,8 +3555,11 @@ run_script_sync (RpmOstreeContext *self, int rootfs_dfd, GLnxTmpDir *var_lib_rpm
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
+  const bool use_kernel_install = self->treefile_rs->use_kernel_install ();
+
   if (!rpmostree_script_run_sync (pkg, hdr, kind, rootfs_dfd, var_lib_rpm_statedir,
-                                  self->enable_rofiles, out_n_run, cancellable, error))
+                                  self->enable_rofiles, use_kernel_install, out_n_run, cancellable,
+                                  error))
     return FALSE;
 
   return TRUE;
@@ -3764,6 +3769,8 @@ static gboolean
 run_all_transfiletriggers (RpmOstreeContext *self, rpmts ts, int rootfs_dfd, guint *out_n_run,
                            GCancellable *cancellable, GError **error)
 {
+  const gboolean use_kernel_install = self->treefile_rs->use_kernel_install ();
+
   /* Triggers from base packages, but only if we already have an rpmdb,
    * otherwise librpm will whine on our stderr.
    */
@@ -3777,7 +3784,8 @@ run_all_transfiletriggers (RpmOstreeContext *self, rpmts ts, int rootfs_dfd, gui
       while ((hdr = rpmdbNextIterator (mi)) != NULL)
         {
           if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, self->enable_rofiles,
-                                                     out_n_run, cancellable, error))
+                                                     use_kernel_install, out_n_run, cancellable,
+                                                     error))
             return FALSE;
         }
     }
@@ -3795,8 +3803,8 @@ run_all_transfiletriggers (RpmOstreeContext *self, rpmts ts, int rootfs_dfd, gui
       if (!get_package_metainfo (self, path, &hdr, NULL, error))
         return FALSE;
 
-      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, self->enable_rofiles, out_n_run,
-                                                 cancellable, error))
+      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, self->enable_rofiles,
+                                                 use_kernel_install, out_n_run, cancellable, error))
         return FALSE;
     }
   return TRUE;

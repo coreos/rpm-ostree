@@ -41,17 +41,17 @@ typedef enum
   RPMOSTREE_SCRIPT_POSTTRANS,
 } RpmOstreeScriptKind;
 
-gboolean rpmostree_script_txn_validate (DnfPackage *package, Header hdr, GCancellable *cancellable,
-                                        GError **error);
+gboolean rpmostree_script_txn_validate (DnfPackage *package, Header hdr, bool use_kernel_install,
+                                        GCancellable *cancellable, GError **error);
 
 gboolean rpmostree_script_run_sync (DnfPackage *pkg, Header hdr, RpmOstreeScriptKind kind,
                                     int rootfs_fd, GLnxTmpDir *var_lib_rpm_statedir,
-                                    gboolean enable_rofiles, guint *out_n_run,
-                                    GCancellable *cancellable, GError **error);
+                                    gboolean enable_rofiles, gboolean use_kernel_install,
+                                    guint *out_n_run, GCancellable *cancellable, GError **error);
 
 gboolean rpmostree_transfiletriggers_run_sync (Header hdr, int rootfs_fd, gboolean enable_rofiles,
-                                               guint *out_n_run, GCancellable *cancellable,
-                                               GError **error);
+                                               gboolean use_kernel_install, guint *out_n_run,
+                                               GCancellable *cancellable, GError **error);
 
 gboolean rpmostree_deployment_sanitycheck_true (int rootfs_fd, GCancellable *cancellable,
                                                 GError **error);
