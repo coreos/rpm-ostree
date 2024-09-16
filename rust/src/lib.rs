@@ -512,7 +512,7 @@ pub mod ffi {
 
     // scripts.rs
     extern "Rust" {
-        fn script_is_ignored(pkg: &str, script: &str) -> bool;
+        fn script_is_ignored(pkg: &str, script: &str, use_kernel_install: bool) -> bool;
     }
 
     // testutils.rs
@@ -626,6 +626,7 @@ pub mod ffi {
         fn get_machineid_compat(&self) -> bool;
         fn get_etc_group_members(&self) -> Vec<String>;
         fn get_boot_location_is_modules(&self) -> bool;
+        fn use_kernel_install(&self) -> bool;
         fn get_ima(&self) -> bool;
         fn get_releasever(&self) -> String;
         fn get_repo_metadata_target(&self) -> RepoMetadataTarget;
@@ -989,6 +990,7 @@ mod initramfs;
 pub(crate) use self::initramfs::*;
 mod isolation;
 mod journal;
+pub mod kernel_install;
 pub(crate) use self::journal::*;
 mod lockfile;
 pub(crate) use self::lockfile::*;

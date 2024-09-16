@@ -9,14 +9,11 @@
 
 use phf::phf_set;
 
-/// Some RPM scripts we don't want to execute.  A notable example is the kernel ones;
-/// we want rpm-ostree to own running dracut, installing the kernel to /boot etc.
-/// Ideally more of these migrate out, e.g. in the future we should change the kernel
-/// package to do nothing if `/run/ostree-booted` exists.
+/// If we're not using boot-location: kernel-install, then we take over the
+/// kernel RPM scripts.
 ///
 /// NOTE FOR GIT history: This list used to live in src/libpriv/rpmostree-script-gperf.gperf
-static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
-    "glibc.prein",
+static IGNORED_KERNEL_SCRIPTS: phf::Set<&'static str> = phf_set! {
     // We take over depmod/dracut etc.  It's `kernel` in C7 and kernel-core in F25+
     // XXX: we should probably change this to instead ignore based on the kernel virtual Provides
     "kernel.posttrans",
@@ -50,6 +47,10 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     "kernel-ml.posttrans",
     "kernel-ml-core.posttrans",
     "kernel-ml-modules.posttrans",
+};
+
+static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
+    "glibc.prein",
     // Legacy workaround
     "glibc-headers.prein",
     // workaround for old bug?
@@ -87,8 +88,41 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
 
 /// Returns true if we should simply ignore (not execute) an RPM script.
 /// The format is <packagename>.<script>
-pub(crate) fn script_is_ignored(pkg: &str, script: &str) -> bool {
+pub(crate) fn script_is_ignored(pkg: &str, script: &str, use_kernel_install: bool) -> bool {
     let script = script.trim_start_matches('%');
     let pkgscript = format!("{}.{}", pkg, script);
-    IGNORED_PKG_SCRIPTS.contains(pkgscript.as_str())
+    if IGNORED_PKG_SCRIPTS.contains(&pkgscript) {
+        return true;
+    }
+    if !use_kernel_install {
+        return IGNORED_KERNEL_SCRIPTS.contains(&pkgscript);
+    }
+    return false;
+}
+
+#[cfg(test)]
+mod test {
+    use crate::script_is_ignored;
+
+    #[test]
+    fn test_script_is_ignored() {
+        let ignored = ["microcode_ctl.post", "vagrant.prein"];
+        let not_ignored = ["foobar.post", "systemd.posttrans"];
+        let kernel_ignored = ["kernel-automotive-core.posttrans"];
+        for v in ignored {
+            let (pkg, script) = v.split_once('.').unwrap();
+            assert!(script_is_ignored(pkg, script, false));
+            assert!(script_is_ignored(pkg, script, true));
+        }
+        for v in not_ignored {
+            let (pkg, script) = v.split_once('.').unwrap();
+            assert!(!script_is_ignored(pkg, script, false));
+            assert!(!script_is_ignored(pkg, script, true));
+        }
+        for v in kernel_ignored {
+            let (pkg, script) = v.split_once('.').unwrap();
+            assert!(script_is_ignored(pkg, script, false));
+            assert!(!script_is_ignored(pkg, script, true));
+        }
+    }
 }

@@ -48,6 +48,10 @@ It supports the following parameters:
     * "modules": Kernel data goes just in `/usr/lib/modules`.  Use
       this for new systems, and systems that don't need to be upgraded
       from very old libostree versions.
+    * "kernel-install": The system is integrated with `/sbin/kernel-install`
+      from systemd. You likely want to additionally pair this with configuring `layout=ostree`
+      in `/usr/lib/kernel/install.conf`, and adding a wrapper script to
+      `/usr/lib/kernel/install.d/05-rpmostree.install`
 
  * `etc-group-members`: Array of strings, optional: Unix groups in this
    list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use

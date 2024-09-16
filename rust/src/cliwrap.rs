@@ -15,7 +15,6 @@ use std::io::prelude::*;
 mod cliutil;
 mod dracut;
 mod grubby;
-mod kernel_install;
 mod rpm;
 mod yumdnf;
 use crate::cxxrsutil::CxxResult;
@@ -29,7 +28,7 @@ pub const CLIWRAP_DESTDIR: &str = "usr/libexec/rpm-ostree/wrapped";
 static WRAPPED_BINARIES: &[&str] = &["usr/bin/rpm", "usr/bin/dracut", "usr/sbin/grubby"];
 
 /// Binaries we will wrap, or create if they don't exist.
-static MUSTWRAP_BINARIES: &[&str] = &["usr/bin/yum", "usr/bin/dnf", "usr/bin/kernel-install"];
+static MUSTWRAP_BINARIES: &[&str] = &["usr/bin/yum", "usr/bin/dnf"];
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum RunDisposition {
@@ -74,7 +73,6 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
             "yum" | "dnf" => Ok(self::yumdnf::main(host_type, args)?),
             "dracut" => Ok(self::dracut::main(args)?),
             "grubby" => Ok(self::grubby::main(args)?),
-            "kernel-install" => Ok(self::kernel_install::main(args)?),
             _ => Err(anyhow!("Unknown wrapped binary: {}", name)),
         }
     } else {

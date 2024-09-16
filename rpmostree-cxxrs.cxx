@@ -192,6 +192,8 @@ public:
   Slice () noexcept;
   Slice (T *, std::size_t count) noexcept;
 
+  template <typename C> explicit Slice (C &c) : Slice (c.data (), c.size ()) {}
+
   Slice &operator= (const Slice<T> &) &noexcept = default;
   Slice &operator= (Slice<T> &&) &noexcept = default;
 
@@ -1781,6 +1783,7 @@ struct Treefile final : public ::rust::Opaque
   bool get_machineid_compat () const noexcept;
   ::rust::Vec< ::rust::String> get_etc_group_members () const noexcept;
   bool get_boot_location_is_modules () const noexcept;
+  bool use_kernel_install () const noexcept;
   bool get_ima () const noexcept;
   ::rust::String get_releasever () const noexcept;
   ::rpmostreecxx::RepoMetadataTarget get_repo_metadata_target () const noexcept;
@@ -2428,7 +2431,8 @@ extern "C"
   ::rpmostreecxx::TokioEnterGuard *
   rpmostreecxx$cxxbridge1$TokioHandle$enter (::rpmostreecxx::TokioHandle const &self) noexcept;
 
-  bool rpmostreecxx$cxxbridge1$script_is_ignored (::rust::Str pkg, ::rust::Str script) noexcept;
+  bool rpmostreecxx$cxxbridge1$script_is_ignored (::rust::Str pkg, ::rust::Str script,
+                                                  bool use_kernel_install) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$testutils_entrypoint (::rust::Vec< ::rust::String> *argv) noexcept;
@@ -2627,6 +2631,9 @@ extern "C"
       ::rpmostreecxx::Treefile const &self, ::rust::Vec< ::rust::String> *return$) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_boot_location_is_modules (
+      ::rpmostreecxx::Treefile const &self) noexcept;
+
+  bool rpmostreecxx$cxxbridge1$Treefile$use_kernel_install (
       ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_ima (::rpmostreecxx::Treefile const &self) noexcept;
@@ -4637,9 +4644,9 @@ TokioHandle::enter () const noexcept
 }
 
 bool
-script_is_ignored (::rust::Str pkg, ::rust::Str script) noexcept
+script_is_ignored (::rust::Str pkg, ::rust::Str script, bool use_kernel_install) noexcept
 {
-  return rpmostreecxx$cxxbridge1$script_is_ignored (pkg, script);
+  return rpmostreecxx$cxxbridge1$script_is_ignored (pkg, script, use_kernel_install);
 }
 
 void
@@ -5190,6 +5197,12 @@ bool
 Treefile::get_boot_location_is_modules () const noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$get_boot_location_is_modules (*this);
+}
+
+bool
+Treefile::use_kernel_install () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$use_kernel_install (*this);
 }
 
 bool
