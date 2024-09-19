@@ -35,7 +35,7 @@ the integrity of a container image or its content:
 
 - `ostree-unverified-image:registry:<oci image>` or
   `ostree-unverified-image:docker://<oci image>`: Fetch a container image
-  without verify either the integrity of the container itself not its content.
+  without verifing either the integrity of the container itself nor its content.
   The container image is usually fetched over HTTPS which still provides
   integrity and confidentiality but not authenticity.
 
