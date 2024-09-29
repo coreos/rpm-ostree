@@ -34,7 +34,7 @@ impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::Conta
         crate::ffi::ContainerImageState {
             base_commit: s.base_commit,
             merge_commit: s.merge_commit,
-            image_digest: s.manifest_digest,
+            image_digest: s.manifest_digest.to_string(),
             version,
             cached_update_diff,
         }
@@ -50,7 +50,7 @@ fn layer_counts<'a>(layers: impl Iterator<Item = &'a ManifestLayerState>) -> (u3
             if v.commit.is_some() {
                 (stored + 1, (n_to_fetch, size_to_fetch))
             } else {
-                (stored, (n_to_fetch + 1, size_to_fetch + v.size()))
+                (stored, (n_to_fetch + 1, size_to_fetch + v.layer().size()))
             }
         },
     )

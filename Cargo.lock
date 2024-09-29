@@ -438,11 +438,10 @@ dependencies = [
 
 [[package]]
 name = "containers-image-proxy"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "450ba7a168d28a978bed898a3303bb387aaafabea982a956689129cdb821920f"
+checksum = "c1b4ec45d60513c498a40c69d89447d8bf91bbd17f71a32aa285b39e4dc03294"
 dependencies = [
- "anyhow",
  "cap-std-ext",
  "fn-error-context",
  "futures-util",
@@ -451,6 +450,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1418,6 +1418,7 @@ checksum = "233cf39063f058ea2caae4091bf4a3ef70a653afbc026f5c4a4135d114e3c177"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.3",
+ "serde",
 ]
 
 [[package]]
@@ -1764,29 +1765,30 @@ dependencies = [
 
 [[package]]
 name = "oci-spec"
-version = "0.6.5"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e423c4f827362c0d8d8da4b1f571270f389ebde73bcd3240a3d23c6d6f61d0f0"
+checksum = "5cee185ce7cf1cce45e194e34cd87c0bad7ff0aa2e8917009a2da4f7b31fb363"
 dependencies = [
  "derive_builder",
  "getset",
+ "regex",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
  "thiserror",
 ]
 
 [[package]]
 name = "ocidir"
-version = "0.1.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c9e545ae89c695346b4581fa67d31085abd7354f93208142113f72221872391"
+checksum = "296a7c4945df5df933582eefaad6d90d16f3e7162f42e6837985bce745d3b5af"
 dependencies = [
- "anyhow",
  "camino",
  "cap-std-ext",
  "chrono",
  "flate2",
- "fn-error-context",
  "hex",
  "oci-spec",
  "olpc-cjson",
@@ -1794,6 +1796,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tar",
+ "thiserror",
 ]
 
 [[package]]
@@ -1895,9 +1898,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-ext"
-version = "0.14.4"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "502954dd77e19df256429bb830e1d2c4e8d89cf60a33368b856417e7f633e87d"
+checksum = "e64706e4ef8e52f2c1e7ec40d7ff31b0f66383b907441c88b75e5bc9bc83b7a7"
 dependencies = [
  "anyhow",
  "camino",
@@ -1910,6 +1913,7 @@ dependencies = [
  "futures-util",
  "gvariant",
  "hex",
+ "indexmap 2.2.3",
  "indicatif",
  "io-lifetimes",
  "libc",
@@ -2647,6 +2651,25 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "strum"
+version = "0.26.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
+
+[[package]]
+name = "strum_macros"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.48",
+]
 
 [[package]]
 name = "subtle"
