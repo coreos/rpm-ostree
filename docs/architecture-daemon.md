@@ -40,7 +40,7 @@ The D-Bus API is defined in
 
 The rpm-ostree daemon runs as a systemd service which owns the
 `org.projectatomic.rpmostree1` name on the system D-Bus (see
-[`src/daemon/rpm-ostreed.service.in`](https://github.com/coreos/rpm-ostree/blob/main/src/daemon/rpm-ostreed.service.in)).
+[`src/daemon/rpm-ostreed.service`](https://github.com/coreos/rpm-ostree/blob/main/src/daemon/rpm-ostreed.service)).
 
 When a client wants to talk to the daemon, the D-Bus daemon starts up the
 systemd service if it's not already running (see
