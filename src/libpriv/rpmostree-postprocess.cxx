@@ -381,7 +381,7 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
 
   auto selinux = treefile.get_selinux ();
 
-  ROSCXX_TRY (compose_postprocess_final_pre (rootfs_dfd), error);
+  ROSCXX_TRY (compose_postprocess_final_pre (rootfs_dfd, treefile), error);
 
   if (selinux)
     {

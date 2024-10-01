@@ -7,6 +7,8 @@ dn=$(cd "$(dirname "$0")" && pwd)
 
 # This is used to test postprocessing with treefile vs not
 treefile_set "boot-location" '"new"'
+# On by default now:
+# treefile_set "ignore-devices" 'True'
 
 # This test is a bit of a degenerative case of the supermin abstration. We need
 # to be able to interact with the compose output directly, feed it back to
@@ -56,6 +58,7 @@ testdate=$(date)
 runasroot sh -xec "
 # https://github.com/ostreedev/ostree/pull/2717/commits/e234b630f85b97e48ecf45d5aaba9b1aa64e6b54
 mknod -m 000 ${instroot}-directcommit/usr/share/foowhiteout c 0 0
+mknod -m 000 ${instroot}-directcommit/usr/share/devzero c 1 5
 echo \"${testdate}\" > ${instroot}-directcommit/usr/share/rpm-ostree-composetest-split.txt
 ! test -f ${instroot}-directcommit/${integrationconf}
 rpm-ostree compose commit --repo=${repo} ${treefile} ${instroot}-directcommit
@@ -68,6 +71,11 @@ fi
 ostree --repo=${repo} ls ${treeref} /usr/share
 ostree --repo=${repo} ls ${treeref} /usr/share/.ostree-wh.foowhiteout >out.txt
 grep -Ee '^-00000' out.txt
+
+# And the devzero should have been ignored
+if ostree --repo=${repo} ls ${treeref} /usr/share/devzero; then
+  echo \"found devzero\" 1>&2; exit 1
+fi
 
 ostree --repo=${repo} cat ${treeref} /usr/share/rpm-ostree-composetest-split.txt >out.txt
 grep \"${testdate}\" out.txt

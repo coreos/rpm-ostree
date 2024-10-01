@@ -191,6 +191,8 @@ public:
   Slice () noexcept;
   Slice (T *, std::size_t count) noexcept;
 
+  template <typename C> explicit Slice (C &c) : Slice (c.data (), c.size ()) {}
+
   Slice &operator= (const Slice<T> &) &noexcept = default;
   Slice &operator= (Slice<T> &&) &noexcept = default;
 
@@ -1867,7 +1869,8 @@ void composepost_nsswitch_altfiles (::std::int32_t rootfs_dfd);
 void compose_postprocess (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile &treefile,
                           ::rust::Str next_version, bool unified_core);
 
-void compose_postprocess_final_pre (::std::int32_t rootfs_dfd);
+void compose_postprocess_final_pre (::std::int32_t rootfs_dfd,
+                                    ::rpmostreecxx::Treefile const &treefile);
 
 void compose_postprocess_final (::std::int32_t rootfs_dfd,
                                 ::rpmostreecxx::Treefile const &treefile);
