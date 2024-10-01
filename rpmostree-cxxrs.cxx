@@ -192,6 +192,8 @@ public:
   Slice () noexcept;
   Slice (T *, std::size_t count) noexcept;
 
+  template <typename C> explicit Slice (C &c) : Slice (c.data (), c.size ()) {}
+
   Slice &operator= (const Slice<T> &) &noexcept = default;
   Slice &operator= (Slice<T> &&) &noexcept = default;
 
@@ -2206,8 +2208,8 @@ extern "C"
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile &treefile, ::rust::Str next_version,
       bool unified_core) noexcept;
 
-  ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$compose_postprocess_final_pre (::std::int32_t rootfs_dfd) noexcept;
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$compose_postprocess_final_pre (
+      ::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile const &treefile) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$compose_postprocess_final (
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile const &treefile) noexcept;
@@ -4011,9 +4013,10 @@ compose_postprocess (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile &treefi
 }
 
 void
-compose_postprocess_final_pre (::std::int32_t rootfs_dfd)
+compose_postprocess_final_pre (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile const &treefile)
 {
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$compose_postprocess_final_pre (rootfs_dfd);
+  ::rust::repr::PtrLen error$
+      = rpmostreecxx$cxxbridge1$compose_postprocess_final_pre (rootfs_dfd, treefile);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
