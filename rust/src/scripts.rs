@@ -77,6 +77,9 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     "systemd.transfiletriggerin",
     // https://bugzilla.redhat.com/show_bug.cgi?id=1473402
     "man-db.transfiletriggerin",
+    // See https://gitlab.com/fedora/bootc/tracker/-/issues/29 - we don't need
+    // any of this.
+    "filesystem.transfiletriggerin",
     // https://src.fedoraproject.org/rpms/nfs-utils/pull-request/1
     "nfs-utils.post",
     // There is some totally insane stuff going on here in RHEL7
