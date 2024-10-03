@@ -505,6 +505,7 @@ static void
 disable_all_repos (RpmOstreeContext *context)
 {
   GPtrArray *sources = dnf_context_get_repos (context->dnfctx);
+  g_debug ("Disabling %u known repos", sources->len);
   for (guint i = 0; i < sources->len; i++)
     {
       auto src = static_cast<DnfRepo *> (sources->pdata[i]);
@@ -659,7 +660,9 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
   else if (releasever.length () > 0)
     dnf_context_set_release_ver (self->dnfctx, releasever.c_str ());
 
+  g_debug ("install_root: %s", install_root);
   dnf_context_set_install_root (self->dnfctx, install_root);
+  g_debug ("source_root: %s", source_root);
   dnf_context_set_source_root (self->dnfctx, source_root);
 
   /* Hackaround libdnf logic, ensuring that `/etc/dnf/vars` gets sourced
@@ -723,6 +726,11 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
             }
           if (!enable_repos (self, repos, error))
             return FALSE;
+        }
+      else
+        {
+          GPtrArray *sources = dnf_context_get_repos (self->dnfctx);
+          g_debug ("global repositories known: %u", sources->len);
         }
 
       /* only enable lockfile-repos if we actually have a lockfile so we don't even waste
