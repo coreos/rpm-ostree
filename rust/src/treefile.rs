@@ -160,6 +160,12 @@ fn treefile_parse_stream<R: io::Read>(
         treefile.check_groups = Some(CheckGroups::None);
     }
 
+    // Change these defaults for 2024 edition
+    if treefile.edition.unwrap_or_default() >= Edition::Twenty24 {
+        treefile.boot_location = Some(BootLocation::Modules);
+        treefile.tmp_is_dir = Some(true);
+    }
+
     // Special handling for packages, since we allow whitespace within items.
     // We also canonicalize bootstrap_packages to packages here so it's
     // easier to append the basearch packages after.
@@ -389,6 +395,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     }
 
     merge_basics!(
+        edition,
         treeref,
         basearch,
         rojig,
@@ -2391,10 +2398,22 @@ impl std::ops::DerefMut for TreeComposeConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Edition {
+    #[serde(rename = "2014")]
+    #[default]
+    Twenty14,
+    #[serde(rename = "2024")]
+    Twenty24,
+}
+
 /// These fields are only useful when composing a new ostree commit.
 #[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct BaseComposeConfigFields {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) edition: Option<Edition>,
     // Compose controls
     #[serde(rename = "ref")]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3789,6 +3808,17 @@ conditional-include:
         "};
         let tf = new_test_treefile(workdir, tf, None).unwrap();
         assert_eq!(tf.parsed.base.container.unwrap(), true);
+        assert!(tf.parsed.base.tmp_is_dir.unwrap());
+    }
+
+    #[test]
+    fn test_edition() {
+        let workdir = tempfile::tempdir().unwrap();
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let tf = indoc! { r#"
+            edition: "2024"
+        "#};
+        let tf = new_test_treefile(workdir, tf, None).unwrap();
         assert!(tf.parsed.base.tmp_is_dir.unwrap());
     }
 
