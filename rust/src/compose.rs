@@ -182,13 +182,15 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     let tempdir = Utf8Path::from_path(tempdir.path()).unwrap();
 
     let handle = tokio::runtime::Handle::current();
-    let proxy = handle.block_on(async {
-        let config = containers_image_proxy::ImageProxyConfig {
-            authfile: opt.authfile.as_ref().map(|v| v.as_std_path().to_owned()),
-            ..Default::default()
-        };
-        containers_image_proxy::ImageProxy::new_with_config(config).await
-    })?;
+    let proxy = handle
+        .block_on(async {
+            let config = containers_image_proxy::ImageProxyConfig {
+                authfile: opt.authfile.as_ref().map(|v| v.as_std_path().to_owned()),
+                ..Default::default()
+            };
+            containers_image_proxy::ImageProxy::new_with_config(config).await
+        })
+        .expect("Create an image proxy");
 
     let (_cachetempdir, cachedir) = match opt.cachedir {
         Some(p) => (None, p),
