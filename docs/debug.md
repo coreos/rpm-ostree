@@ -31,7 +31,7 @@ Since ostree is called from rpm-ostree it will output ostree debug messages too.
 If you need output from rpm-ostreed.service, another client such as Zincati or ostree-finalize-staged.service
 you might need to override the environment variables for those services.
 
-A way to do this is using the `systemctl edit` command.
+A way to do this is using the `sudo systemctl edit` command.
 
 For example:
 
