@@ -17,6 +17,7 @@ use glib::prelude::StaticVariantType;
 use libdnf_sys::*;
 use ostree_ext::container::OstreeImageReference;
 use ostree_ext::glib;
+use ostree_ext::oci_spec::distribution::Reference as OciReference;
 use ostree_ext::ostree;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -112,6 +113,21 @@ pub(crate) fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Cxx
 pub(crate) fn is_container_image_reference(refspec: &str) -> bool {
     // this is slightly less efficient than calling just try_from(), but meh...
     refspec_classify(refspec) == crate::ffi::RefspecType::Container
+}
+
+/// Infer whether string is a container image reference.
+pub(crate) fn is_container_image_digest_reference(refspec: &str) -> bool {
+    OstreeImageReference::try_from(refspec)
+        .and_then(|ostree_imgref| {
+            ostree_imgref
+                .imgref
+                .name
+                .parse::<OciReference>()
+                .map_err(anyhow::Error::msg)
+        })
+        .map(|oci_ref| oci_ref.digest().is_some())
+        .ok()
+        .unwrap_or_default()
 }
 
 /// Given a refspec, infer its type and return it.
@@ -503,17 +519,25 @@ mod test {
             "docker://quay.io/test-repository/os:version1",
             "registry:docker.io/test-repository/os:latest",
             "registry:customhostname.com:8080/test-repository/os:latest",
-            "docker://quay.io/test-repository/os@sha256:6006dca86c2dc549c123ff4f1dcbe60105fb05886531c93a3351ebe81dbe772f",
         ];
 
         for refspec in REFSPEC_TYPE_CONTAINER {
             let refspec = format!("ostree-unverified-image:{}", refspec);
             assert!(is_container_image_reference(&refspec));
+            assert!(!is_container_image_digest_reference(&refspec));
             assert_eq!(
                 refspec_classify(&refspec),
                 crate::ffi::RefspecType::Container
             );
         }
+        let refspec_type_container_digest = "docker://quay.io/test-repository/os@sha256:6006dca86c2dc549c123ff4f1dcbe60105fb05886531c93a3351ebe81dbe772f";
+        let refspec = format!("ostree-unverified-image:{}", refspec_type_container_digest);
+        assert!(is_container_image_reference(&refspec));
+        assert!(is_container_image_digest_reference(&refspec));
+        assert_eq!(
+            refspec_classify(&refspec),
+            crate::ffi::RefspecType::Container
+        );
 
         Ok(())
     }
