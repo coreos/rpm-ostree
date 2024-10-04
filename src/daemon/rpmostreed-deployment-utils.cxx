@@ -237,11 +237,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
     case rpmostreecxx::RefspecType::Checksum:
       {
         g_variant_dict_insert (dict, "origin", "s", refspec);
-        auto custom_origin_url = rpmostree_origin_get_custom_url (origin);
-        auto custom_origin_description = rpmostree_origin_get_custom_description (origin);
-        if (!custom_origin_url.empty ())
-          g_variant_dict_insert (dict, "custom-origin", "(ss)", custom_origin_url.c_str (),
-                                 custom_origin_description.c_str ());
       }
       break;
     case rpmostreecxx::RefspecType::Ostree:
@@ -268,6 +263,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot, OstreeDeployment
       }
       break;
     }
+
+  auto custom_origin_url = rpmostree_origin_get_custom_url (origin);
+  auto custom_origin_description = rpmostree_origin_get_custom_description (origin);
+  if (!custom_origin_url.empty ())
+    g_variant_dict_insert (dict, "custom-origin", "(ss)", custom_origin_url.c_str (),
+                           custom_origin_description.c_str ());
 
   g_variant_dict_insert (dict, "packages", "^as", layered_pkgs);
   g_variant_dict_insert_value (dict, "base-removals", removed_base_pkgs);
