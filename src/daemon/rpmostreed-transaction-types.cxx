@@ -76,7 +76,15 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
     {
     case rpmostreecxx::RefspecType::Container:
       {
-        rpmostree_origin_set_rebase (origin, refspec);
+        // only pay attention to the custom origin stuff if using a pinned digest
+        if (!rpmostreecxx::is_container_image_digest_reference (refspec))
+          {
+            custom_origin_url = NULL;
+            custom_origin_description = NULL;
+          }
+
+        rpmostree_origin_set_rebase_custom (origin, refspec, custom_origin_url,
+                                            custom_origin_description);
 
         if (current_refspec.kind == rpmostreecxx::RefspecType::Container
             && strcmp (current_refspec.refspec.c_str (), refspec) == 0)
