@@ -659,6 +659,12 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
 
   const char *custom_origin_url = NULL;
   const char *custom_origin_description = NULL;
+  g_variant_dict_lookup (dict, "custom-origin", "(&s&s)", &custom_origin_url,
+                         &custom_origin_description);
+  /* Canonicalize the empty string to NULL */
+  if (custom_origin_url && !*custom_origin_url)
+    custom_origin_url = NULL;
+
   const char *container_image_reference_digest = NULL;
   if (origin_refspec)
     {
@@ -667,11 +673,6 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
         {
         case rpmostreecxx::RefspecType::Checksum:
           {
-            g_variant_dict_lookup (dict, "custom-origin", "(&s&s)", &custom_origin_url,
-                                   &custom_origin_description);
-            /* Canonicalize the empty string to NULL */
-            if (custom_origin_url && !*custom_origin_url)
-              custom_origin_url = NULL;
             if (custom_origin_url)
               {
                 g_assert (custom_origin_description && *custom_origin_description);
@@ -688,8 +689,14 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy, GVariant *child, gint ind
           break;
         case rpmostreecxx::RefspecType::Container:
           {
-            if (g_variant_dict_lookup (dict, "container-image-reference-digest", "s",
-                                       &container_image_reference_digest))
+            if (rpmostreecxx::is_container_image_digest_reference (origin_refspec)
+                && custom_origin_url)
+              {
+                g_assert (custom_origin_description && *custom_origin_description);
+                g_print ("%s", custom_origin_url);
+              }
+            else if (g_variant_dict_lookup (dict, "container-image-reference-digest", "s",
+                                            &container_image_reference_digest))
               {
                 g_print ("%s", origin_refspec);
               }
