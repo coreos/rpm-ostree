@@ -1199,10 +1199,13 @@ fn workaround_selinux_cross_labeling_recurse(
 }
 
 /// This is the nearly the last code executed before we run `ostree commit`.
-pub fn compose_postprocess_final(rootfs_dfd: i32, _treefile: &Treefile) -> CxxResult<()> {
+pub fn compose_postprocess_final(rootfs_dfd: i32, treefile: &Treefile) -> CxxResult<()> {
     let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
 
     hardlink_rpmdb_base_location(rootfs, None)?;
+
+    treefile.exec_finalize_d(rootfs)?;
+
     Ok(())
 }
 

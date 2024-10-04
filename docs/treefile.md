@@ -14,6 +14,10 @@ Jenkins to operate on them as it changes.
 
 It supports the following parameters:
 
+ * `edition`: string, optional: If not set, the default value is
+   treated as `2014`. The only other supported value is `2024`, which
+   changes some defaults.
+
  * `ref`: string, mandatory: Holds a string which will be the name of
    the branch for the content. This field supports variable substitution.
 
@@ -47,7 +51,8 @@ It supports the following parameters:
       upgrading from very old versions of libostree.
     * "modules": Kernel data goes just in `/usr/lib/modules`.  Use
       this for new systems, and systems that don't need to be upgraded
-      from very old libostree versions.
+      from very old libostree versions. This is the default for editions 2024
+      and above.
 
  * `etc-group-members`: Array of strings, optional: Unix groups in this
    list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use
@@ -441,8 +446,8 @@ It supports the following parameters:
    supported. For more details, see the OSTree manual:
    https://ostreedev.github.io/ostree/deployment/
 
- * `tmp-is-dir`: boolean, optional: Defaults to `false`.  By default,
-   rpm-ostree creates symlink `/tmp` → `sysroot/tmp`.  When set to `true`,
+ * `tmp-is-dir`: boolean, optional: Defaults to `false` in editions &lt; 2024, otherwise `true`.
+   By default, rpm-ostree creates symlink `/tmp` → `sysroot/tmp`.  When set to `true`,
    `/tmp` will be a regular directory, which allows the `systemd` unit
    `tmp.mount` to mount it as `tmpfs`. It's more flexible to leave it
    as a directory, and further, we don't want to encourage `/sysroot`
@@ -521,3 +526,15 @@ version of `rpm-ostree`.
      and are purely machine-local state.
    - `root`: These are plain directories; only use this with composefs enabled!
 
+### Associated directories
+
+In edition `2024`, "associated directories" have been introduced as an experimental feature. These
+are "drop-in" style directories which can contain inline content or
+scripts. When processing a manifest file, if these subdirectories exist
+in the same directory as the manifest, they will be automatically used:
+
+- `finalize.d`: Executed synchronously in alphanumeric order from the
+  host/ambient environment (*not* from the target); the current working directory will be
+  the target root filesystem. There is no additional sandboxing or containerization
+  applied to the execution of the binary. The builtin "change detection"
+  is not applied to the content of the scripts.

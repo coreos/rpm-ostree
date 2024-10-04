@@ -22,7 +22,9 @@
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use cap_std::fs::MetadataExt as _;
 use cap_std_ext::cap_std::fs::Dir;
+use cap_std_ext::cmdext::CapStdExtCommandExt;
 use cap_std_ext::prelude::CapStdExtDirExt;
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
@@ -36,6 +38,7 @@ use std::io::prelude::*;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::str::FromStr;
 use std::{fs, io};
 use tracing::{event, instrument, Level};
@@ -47,6 +50,9 @@ use crate::utils;
 use crate::utils::OptionExtGetOrInsertDefault;
 
 const INCLUDE_MAXDEPTH: u32 = 50;
+
+// The directory with executable scripts for image finalization
+const FINALIZE_D: &str = "finalize.d";
 
 /// Path to the flattened JSON serialization of the treefile, installed on the target (client)
 /// filesystem.  Nothing actually parses this by default client side today,
@@ -64,6 +70,7 @@ pub(crate) struct TreefileExternals {
     add_files: BTreeMap<String, fs::File>,
     passwd: Option<fs::File>,
     group: Option<fs::File>,
+    pub(crate) finalize_d: BTreeMap<String, Utf8PathBuf>,
 }
 
 // This type name is exposed through ffi.
@@ -158,6 +165,12 @@ fn treefile_parse_stream<R: io::Read>(
         treefile.preserve_passwd = Some(false);
         treefile.check_passwd = Some(CheckPasswd::None);
         treefile.check_groups = Some(CheckGroups::None);
+    }
+
+    // Change these defaults for 2024 edition
+    if treefile.edition.unwrap_or_default() >= Edition::Twenty24 {
+        treefile.boot_location = Some(BootLocation::Modules);
+        treefile.tmp_is_dir = Some(true);
     }
 
     // Special handling for packages, since we allow whitespace within items.
@@ -298,6 +311,30 @@ fn treefile_parse<P: AsRef<Path>>(
         }
     }
     let parent = utils::parent_dir(filename).unwrap();
+    let parent: &Utf8Path = parent.try_into()?;
+    let dir = Dir::open_ambient_dir(parent, cap_std::ambient_authority())?;
+    let finalize_d = if let Some(d) = dir.open_dir_optional(FINALIZE_D)? {
+        let mut r = BTreeMap::new();
+        for ent in d.entries()? {
+            let ent = ent?;
+            let meta = ent.metadata()?;
+            if !meta.is_file() {
+                continue;
+            }
+            if meta.mode() & libc::S_IXUSR == 0 {
+                continue;
+            }
+            let name = ent.file_name();
+            let name = name
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("non UTF-8 name '{name:?}'"))?;
+            let path = format!("{parent}/{FINALIZE_D}/{name}");
+            r.insert(name.to_owned(), path.into());
+        }
+        r
+    } else {
+        BTreeMap::new()
+    };
     let passwd = match tf.get_check_passwd() {
         CheckPasswd::File(ref f) => load_passwd_file(&parent, f)?,
         _ => None,
@@ -314,6 +351,7 @@ fn treefile_parse<P: AsRef<Path>>(
             add_files,
             passwd,
             group,
+            finalize_d,
         },
     })
 }
@@ -389,6 +427,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     }
 
     merge_basics!(
+        edition,
         treeref,
         basearch,
         rojig,
@@ -500,6 +539,10 @@ fn treefile_merge_externals(dest: &mut TreefileExternals, src: &mut TreefileExte
     }
     if dest.group.is_none() {
         dest.group = src.group.take();
+    }
+
+    while let Some((name, f)) = src.finalize_d.pop_first() {
+        dest.finalize_d.insert(name, f);
     }
 }
 
@@ -764,6 +807,21 @@ impl Treefile {
             rpackages.push(pkg);
         }
         Ok(rpackages)
+    }
+
+    /// Execute all finalize.d scripts
+    pub(crate) fn exec_finalize_d(&self, rootfs: &Dir) -> Result<()> {
+        for (name, path) in self.externals.finalize_d.iter() {
+            println!("Executing: {name}");
+            let st = Command::new(path)
+                .cwd_dir(rootfs.try_clone()?)
+                .status()
+                .with_context(|| format!("exec {path:?}"))?;
+            if !st.success() {
+                anyhow::bail!("finalize.d {name} failed: {st:?}");
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn add_packages(
@@ -2391,10 +2449,22 @@ impl std::ops::DerefMut for TreeComposeConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Edition {
+    #[serde(rename = "2014")]
+    #[default]
+    Twenty14,
+    #[serde(rename = "2024")]
+    Twenty24,
+}
+
 /// These fields are only useful when composing a new ostree commit.
 #[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct BaseComposeConfigFields {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) edition: Option<Edition>,
     // Compose controls
     #[serde(rename = "ref")]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3790,6 +3860,62 @@ conditional-include:
         let tf = new_test_treefile(workdir, tf, None).unwrap();
         assert_eq!(tf.parsed.base.container.unwrap(), true);
         assert!(tf.parsed.base.tmp_is_dir.unwrap());
+    }
+
+    #[test]
+    fn test_edition() {
+        let workdir = tempfile::tempdir().unwrap();
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let tf = indoc! { r#"
+            edition: "2024"
+        "#};
+        let tf = new_test_treefile(workdir, tf, None).unwrap();
+        assert!(tf.parsed.base.tmp_is_dir.unwrap());
+        assert!(tf.externals.finalize_d.is_empty());
+    }
+
+    #[test]
+    fn test_finalize() -> Result<()> {
+        let workdir = tempfile::tempdir().unwrap();
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        let tf = indoc! { r#"
+            edition: "2024"
+        "#};
+        let finalize_d = workdir.join(FINALIZE_D);
+        std::fs::create_dir(&finalize_d).unwrap();
+        std::fs::write(
+            finalize_d.join("01-foo"),
+            indoc::indoc! { r#"
+            #!/bin/bash
+            touch foo
+            sleep 1
+        "# },
+        )?;
+        std::fs::write(
+            finalize_d.join("02-bar"),
+            indoc::indoc! { r#"
+            #!/bin/bash
+            touch bar
+        "# },
+        )?;
+        for ent in std::fs::read_dir(&finalize_d).unwrap() {
+            let ent = ent?;
+            std::fs::set_permissions(ent.path(), fs::Permissions::from_mode(0o755))?;
+        }
+        let rootpath = workdir.join("rootfs");
+        std::fs::create_dir(&rootpath)?;
+        let rootpath = Dir::open_ambient_dir(&rootpath, cap_std::ambient_authority())?;
+
+        let tf = new_test_treefile(workdir, tf, None).unwrap();
+        assert_eq!(tf.externals.finalize_d.len(), 2);
+
+        tf.exec_finalize_d(&rootpath)?;
+
+        let foometa = rootpath.symlink_metadata("foo").unwrap();
+        let barmeta = rootpath.symlink_metadata("bar").unwrap();
+        assert!(foometa.modified().unwrap() < barmeta.modified().unwrap());
+
+        Ok(())
     }
 
     #[test]
