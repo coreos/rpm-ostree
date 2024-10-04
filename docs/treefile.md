@@ -526,3 +526,15 @@ version of `rpm-ostree`.
      and are purely machine-local state.
    - `root`: These are plain directories; only use this with composefs enabled!
 
+### Associated directories
+
+In edition `2024`, "associated directories" have been introduced as an experimental feature. These
+are "drop-in" style directories which can contain inline content or
+scripts. When processing a manifest file, if these subdirectories exist
+in the same directory as the manifest, they will be automatically used:
+
+- `finalize.d`: Executed synchronously in alphanumeric order from the
+  host/ambient environment (*not* from the target); the current working directory will be
+  the target root filesystem. There is no additional sandboxing or containerization
+  applied to the execution of the binary. The builtin "change detection"
+  is not applied to the content of the scripts.
