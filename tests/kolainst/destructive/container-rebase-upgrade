@@ -29,15 +29,20 @@ set -x
 libtest_prepare_offline
 cd "$(mktemp -d)"
 
-image=quay.io/fedora/fedora-coreos:stable
-image_pull=ostree-remote-registry:fedora:$image
+image=quay.io/fedora/fedora-coreos
+image_tag=testing-devel
+digest=$(skopeo inspect -n docker://$image:$image_tag | jq -r .Digest)
+image_pull=ostree-remote-registry:fedora:$image@$digest
 
 systemctl mask --now zincati
 # Test for https://github.com/ostreedev/ostree/issues/3228
 rpm-ostree kargs --append "foo=\"a b c\""
 rpm-ostree kargs > kargs.txt
 assert_file_has_content_literal kargs.txt "foo=\"a b c\""
-rpm-ostree rebase --experimental ${image_pull}
+# also test custom origin stuff
+rpm-ostree rebase "${image_pull}" --custom-origin-description "Fedora CoreOS $image_tag stream" --custom-origin-url "$image:$image_tag"
+rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt "$image:$image_tag" "Fedora CoreOS $image_tag stream"
 rpm-ostree upgrade
 # This provokes
 # https://github.com/coreos/rpm-ostree/issues/4107
