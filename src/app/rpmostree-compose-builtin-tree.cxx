@@ -321,8 +321,21 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
     rpmlogSetFile (NULL);
   }
 
-  if (!set_repos_dir (dnfctx, **self->treefile_rs, self->workdir_dfd, cancellable, error))
-    return FALSE;
+  const char *source_root;
+  auto repos = (*self->treefile_rs)->get_repos ();
+  if (!repos.empty ())
+    {
+      g_print ("Using rpm-md repositories from context directory\n");
+      if (!set_repos_dir (dnfctx, **self->treefile_rs, self->workdir_dfd, cancellable, error))
+        return FALSE;
+      source_root = NULL;
+    }
+  else
+    {
+      g_print ("Using global rpm-md repositories\n");
+      source_root = "/";
+      dnf_context_set_repo_dir (dnfctx, "/etc/yum.repos.d");
+    }
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
    * we're doing unified core, in which case the pkgcache repo is the cache.
@@ -340,7 +353,8 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
 
   {
     g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
-    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, cancellable, error))
+    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, source_root, cancellable,
+                                  error))
       return FALSE;
   }
 
