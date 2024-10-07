@@ -710,6 +710,7 @@ fn complete_pwgrp(rootfs: &Dir) -> Result<()> {
 /// This is a pre-commit validation hook which ensures that the upcoming
 /// users/groups entries are somehow sane. See treefile `check-passwd` and
 /// `check-groups` fields for a description of available validation knobs.
+#[context("Validate users/groups refer to treefile check-passwd/check-groups configuration")]
 pub fn check_passwd_group_entries(
     ffi_repo: &crate::ffi::OstreeRepo,
     rootfs_dfd: i32,
@@ -726,8 +727,12 @@ pub fn check_passwd_group_entries(
 
     // Parse entries in the upcoming commit content.
     let mut new_entities = PasswdEntries::default();
-    new_entities.add_passwd_content(rootfs.as_raw_fd(), "usr/lib/passwd")?;
-    new_entities.add_group_content(rootfs.as_raw_fd(), "usr/lib/group")?;
+    new_entities.add_passwd_content(rootfs.as_raw_fd(), "usr/etc/passwd")?;
+    new_entities.add_group_content(rootfs.as_raw_fd(), "usr/etc/group")?;
+    if has_usrlib_passwd(&rootfs)? {
+        new_entities.add_passwd_content(rootfs.as_raw_fd(), "usr/lib/passwd")?;
+        new_entities.add_group_content(rootfs.as_raw_fd(), "usr/lib/group")?;
+    }
 
     // Fetch entries from treefile and previous commit, according to config.
     // These are used as ground-truth by the validation steps below.
@@ -775,9 +780,11 @@ impl PasswdDB {
     pub(crate) fn populate_new(rootfs: &Dir) -> Result<Self> {
         let mut db = Self::default();
         db.add_passwd_content(rootfs.as_raw_fd(), "usr/etc/passwd")?;
-        db.add_passwd_content(rootfs.as_raw_fd(), "usr/lib/passwd")?;
         db.add_group_content(rootfs.as_raw_fd(), "usr/etc/group")?;
-        db.add_group_content(rootfs.as_raw_fd(), "usr/lib/group")?;
+        if has_usrlib_passwd(&rootfs)? {
+            db.add_passwd_content(rootfs.as_raw_fd(), "usr/lib/passwd")?;
+            db.add_group_content(rootfs.as_raw_fd(), "usr/lib/group")?;
+        }
         Ok(db)
     }
 
