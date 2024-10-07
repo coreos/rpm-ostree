@@ -295,39 +295,68 @@ fn is_overlay_whiteout(meta: &cap_std::fs::Metadata) -> bool {
     (meta.mode() & libc::S_IFMT) == libc::S_IFCHR && meta.rdev() == 0
 }
 
-/// Auto-synthesize embedded overlayfs whiteouts; for more information
-/// see https://github.com/ostreedev/ostree/pull/2722/commits/0085494e350c72599fc5c0e00422885d80b3c660
-#[context("Postprocessing embedded overlayfs")]
-fn postprocess_embedded_ovl_whiteouts(root: &Dir) -> Result<()> {
+/// Automatically "quote" embeded overlayfs whiteouts as regular files, and
+/// if configured error out on devices or ignore them.
+/// For more on overlayfs, see https://github.com/ostreedev/ostree/pull/2722/commits/0085494e350c72599fc5c0e00422885d80b3c660
+#[context("Postprocessing devices")]
+fn postprocess_devices(root: &Dir, treefile: &Treefile) -> Result<()> {
     const OSTREE_WHITEOUT_PREFIX: &str = ".ostree-wh.";
-    fn recurse(root: &Dir, path: &Utf8Path) -> Result<u32> {
-        let mut n = 0;
+    let mut n_overlay = 0u64;
+    let mut n_devices = 0u64;
+    fn recurse(
+        root: &Dir,
+        path: &Utf8Path,
+        ignore_devices: bool,
+        n_overlay: &mut u64,
+        n_devices: &mut u64,
+    ) -> Result<()> {
         for entry in root.read_dir(path)? {
             let entry = entry?;
             let meta = entry.metadata()?;
             let name = PathBuf::from(entry.file_name());
             let name: Utf8PathBuf = name.try_into()?;
             if meta.is_dir() {
-                n += recurse(root, &path.join(name))?;
+                recurse(root, &path.join(name), ignore_devices, n_overlay, n_devices)?;
                 continue;
             }
-            if !is_overlay_whiteout(&meta) {
+            let is_device = matches!(meta.mode() & libc::S_IFMT, libc::S_IFCHR | libc::S_IFBLK);
+            if !is_device {
                 continue;
-            };
+            }
             let srcpath = path.join(&name);
-            let targetname = format!("{OSTREE_WHITEOUT_PREFIX}{name}");
-            let destpath = path.join(&targetname);
-            root.remove_file(srcpath)?;
-            root.atomic_write_with_perms(destpath, "", meta.permissions())?;
-            n += 1;
+            if is_overlay_whiteout(&meta) {
+                let targetname = format!("{OSTREE_WHITEOUT_PREFIX}{name}");
+                let destpath = path.join(&targetname);
+                root.remove_file(srcpath)?;
+                root.atomic_write_with_perms(destpath, "", meta.permissions())?;
+                *n_overlay += 1;
+                continue;
+            }
+            if ignore_devices {
+                root.remove_file(srcpath)?;
+                *n_devices += 1;
+            } else {
+                anyhow::bail!("Unsupported device file: {srcpath}")
+            }
         }
-        Ok(n)
+        Ok(())
     }
-    let n = recurse(root, ".".into())?;
-    if n > 0 {
-        println!("Processed {n} embedded whiteouts");
+    recurse(
+        root,
+        ".".into(),
+        treefile.get_ignore_devices(),
+        &mut n_overlay,
+        &mut n_devices,
+    )?;
+    if n_overlay > 0 {
+        println!("Processed {n_overlay} embedded whiteouts");
     } else {
         println!("No embedded whiteouts found");
+    }
+    if n_devices > 0 {
+        println!("Ignored {n_devices} device files");
+    } else {
+        println!("No device files found");
     }
     Ok(())
 }
@@ -420,7 +449,7 @@ pub(crate) fn postprocess_cleanup_rpmdb(rootfs_dfd: i32) -> CxxResult<()> {
 /// it as the bits of that function that we've chosen to implement in Rust.
 /// It takes care of all things that are really required to use rpm-ostree
 /// on the target host.
-pub fn compose_postprocess_final_pre(rootfs_dfd: i32) -> CxxResult<()> {
+pub fn compose_postprocess_final_pre(rootfs_dfd: i32, treefile: &Treefile) -> CxxResult<()> {
     let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     // These tasks can safely run in parallel, so just for fun we do so via rayon.
     let tasks = [
@@ -430,7 +459,7 @@ pub fn compose_postprocess_final_pre(rootfs_dfd: i32) -> CxxResult<()> {
     ];
     tasks.par_iter().try_for_each(|f| f(rootfs_dfd))?;
     // This task recursively traverses the filesystem and hence should be serial.
-    postprocess_embedded_ovl_whiteouts(rootfs_dfd)?;
+    postprocess_devices(rootfs_dfd, treefile)?;
     Ok(())
 }
 
@@ -1536,11 +1565,12 @@ OSTREE_VERSION='33.4'
         // We don't actually test creating whiteout devices here as that
         // may not work.
         let td = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        let tf = crate::treefile::tests::new_test_tf_basic("")?;
         // Verify no-op case
-        postprocess_embedded_ovl_whiteouts(&td).unwrap();
+        postprocess_devices(&td, &tf).unwrap();
         td.create("foo")?;
         td.symlink("foo", "bar")?;
-        postprocess_embedded_ovl_whiteouts(&td).unwrap();
+        postprocess_devices(&td, &tf).unwrap();
         assert!(td.try_exists("foo")?);
         assert!(td.try_exists("bar")?);
 

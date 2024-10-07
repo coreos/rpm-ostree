@@ -299,7 +299,7 @@ pub mod ffi {
             next_version: &str,
             unified_core: bool,
         ) -> Result<()>;
-        fn compose_postprocess_final_pre(rootfs_dfd: i32) -> Result<()>;
+        fn compose_postprocess_final_pre(rootfs_dfd: i32, treefile: &Treefile) -> Result<()>;
         fn compose_postprocess_final(rootfs_dfd: i32, treefile: &Treefile) -> Result<()>;
         fn convert_var_to_tmpfiles_d(rootfs_dfd: i32, cancellable: &GCancellable) -> Result<()>;
         fn rootfs_prepare_links(
