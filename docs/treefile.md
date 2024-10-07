@@ -526,6 +526,17 @@ version of `rpm-ostree`.
      and are purely machine-local state.
    - `root`: These are plain directories; only use this with composefs enabled!
 
+### Kickstarts
+
+A file ending in `.ks` will be parsed as a
+[kickstart file](https://pykickstart.readthedocs.io/en/latest/kickstart-docs.html).
+Only a small subset of kickstart configuration is honored:
+
+- `%packages` (both install and excludes via prefixing with `-`)
+  The only supported argument is `--exclude-weakdeps`, which translates
+  to `recommends: false`. Note that this has a global effect if set.
+- `%include` (Only child paths from the included file, not absolute paths)
+
 ### Associated directories
 
 In edition `2024`, "associated directories" have been introduced as an experimental feature. These

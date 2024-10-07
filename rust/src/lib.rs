@@ -990,6 +990,7 @@ pub(crate) use self::initramfs::*;
 mod isolation;
 mod journal;
 pub(crate) use self::journal::*;
+mod kickstart;
 mod lockfile;
 pub(crate) use self::lockfile::*;
 mod live;

@@ -35,6 +35,7 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::{read_dir, File};
 use std::io::prelude::*;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::path::{Path, PathBuf};
@@ -289,13 +290,29 @@ fn treefile_parse<P: AsRef<Path>>(
         }
     };
     let mut f = io::BufReader::new(f);
-    let fmt = utils::InputFormat::detect_from_filename(filename)?;
-    let tf = treefile_parse_stream(fmt, &mut f, basearch).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("Parsing {}: {e}", filename.to_string_lossy()),
-        )
-    })?;
+    let extension = filename.extension().map(|b| b.as_bytes());
+    let tf = if matches!(extension, Some(b"ks")) {
+        let parent = filename
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Expected parent for filename {filename:?}"))?;
+        let name = filename
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Expected filename in {filename:?}"))?;
+        let name = name
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid non-UTF8 filename: {filename:?}"))?;
+        let parent = Dir::open_ambient_dir(parent, cap_std::ambient_authority())?;
+        let ks = crate::kickstart::KickstartParsed::new(&parent, name)?;
+        TreeComposeConfig::from_kickstart(ks)
+    } else {
+        let fmt = utils::InputFormat::detect_from_filename(filename)?;
+        treefile_parse_stream(fmt, &mut f, basearch).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Parsing {}: {e}", filename.to_string_lossy()),
+            )
+        })?
+    };
     let postprocess_script = if let Some(ref postprocess) = tf.base.postprocess_script.as_ref() {
         Some(utils::open_file(filename.with_file_name(postprocess))?)
     } else {
@@ -2870,6 +2887,30 @@ impl TreeComposeConfig {
         Ok(())
     }
 
+    /// Convert a kickstart into a treefile.
+    fn from_kickstart(ks: crate::kickstart::KickstartParsed) -> Self {
+        let mut packages = BTreeSet::new();
+        let mut excludes = Vec::new();
+        let mut recommends = None;
+        for pkg in ks.packages {
+            packages.extend(pkg.install);
+            excludes.extend(pkg.excludes);
+            if pkg.args.exclude_weakdeps {
+                recommends = Some(false)
+            }
+        }
+        let base = BaseComposeConfigFields {
+            exclude_packages: Some(excludes),
+            recommends,
+            ..Default::default()
+        };
+        Self {
+            packages: Some(packages),
+            base,
+            ..Default::default()
+        }
+    }
+
     pub(crate) fn get_check_passwd(&self) -> &CheckPasswd {
         static DEFAULT: CheckPasswd = CheckPasswd::Previous;
         self.base.check_passwd.as_ref().unwrap_or(&DEFAULT)
@@ -3459,6 +3500,46 @@ arch-include:
         // Note foo-s390x.yaml doesn't exist
         let tf = new_test_treefile(workdir, buf.as_str(), Some(ARCH_X86_64))?;
         assert_package(&tf, "foo-x86_64-include");
+        Ok(())
+    }
+
+    const BASIC_KS: &str = indoc::indoc! { r#"
+        %packages
+        systemd
+        -bash
+        nushell
+        %end
+    "# };
+
+    #[test]
+    fn test_kickstart() -> Result<()> {
+        let workdir = tempfile::tempdir()?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        std::fs::write(workdir.join("foo.ks"), BASIC_KS)?;
+        let ks_path = &workdir.join("test.ks");
+        std::fs::write(ks_path, BASIC_KS)?;
+        let tf = Treefile::new_boxed(ks_path, None).unwrap();
+        let pkgs = tf.parsed.packages.as_ref().unwrap();
+        assert_eq!(pkgs.len(), 2);
+        assert!(pkgs.iter().any(|p| p.as_str() == "nushell"));
+        assert_eq!(tf.parsed.base.exclude_packages.unwrap().len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_treefile_with_kickstart() -> Result<()> {
+        let workdir = tempfile::tempdir()?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        std::fs::write(workdir.join("foo.ks"), BASIC_KS)?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(indoc! {"
+            include: foo.ks
+        "});
+        let tf = new_test_treefile(workdir, buf.as_str(), None)?;
+        let pkgs = tf.parsed.packages.as_ref().unwrap();
+        assert_eq!(pkgs.len(), 7);
+        assert!(pkgs.iter().any(|p| p.as_str() == "nushell"));
+        assert_eq!(tf.parsed.base.exclude_packages.unwrap().len(), 2);
         Ok(())
     }
 
