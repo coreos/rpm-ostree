@@ -262,6 +262,7 @@ pub mod ffi {
         fn log_treefile(tf: &Treefile);
 
         fn is_container_image_reference(refspec: &str) -> bool;
+        fn is_container_image_digest_reference(refspec: &str) -> bool;
         fn refspec_classify(refspec: &str) -> RefspecType;
 
         fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> Result<()>;

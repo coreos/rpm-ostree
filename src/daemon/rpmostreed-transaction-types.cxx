@@ -61,11 +61,30 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
 
   auto current_refspec = rpmostree_origin_get_refspec (origin);
 
+  const char *custom_origin_url = NULL;
+  const char *custom_origin_description = NULL;
+  g_variant_dict_lookup (options, "custom-origin", "(&s&s)", &custom_origin_url,
+                         &custom_origin_description);
+  if (custom_origin_url && *custom_origin_url)
+    {
+      g_assert (custom_origin_description);
+      if (!*custom_origin_description)
+        return glnx_throw (error, "Invalid custom-origin");
+    }
+
   switch (refspectype)
     {
     case rpmostreecxx::RefspecType::Container:
       {
-        rpmostree_origin_set_rebase (origin, refspec);
+        // only pay attention to the custom origin stuff if using a pinned digest
+        if (!rpmostreecxx::is_container_image_digest_reference (refspec))
+          {
+            custom_origin_url = NULL;
+            custom_origin_description = NULL;
+          }
+
+        rpmostree_origin_set_rebase_custom (origin, refspec, custom_origin_url,
+                                            custom_origin_description);
 
         if (current_refspec.kind == rpmostreecxx::RefspecType::Container
             && strcmp (current_refspec.refspec.c_str (), refspec) == 0)
@@ -105,16 +124,6 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
 
   if (new_refspectype == rpmostreecxx::RefspecType::Checksum)
     {
-      const char *custom_origin_url = NULL;
-      const char *custom_origin_description = NULL;
-      g_variant_dict_lookup (options, "custom-origin", "(&s&s)", &custom_origin_url,
-                             &custom_origin_description);
-      if (custom_origin_url && *custom_origin_url)
-        {
-          g_assert (custom_origin_description);
-          if (!*custom_origin_description)
-            return glnx_throw (error, "Invalid custom-origin");
-        }
       rpmostree_origin_set_rebase_custom (origin, new_refspec, custom_origin_url,
                                           custom_origin_description);
     }
