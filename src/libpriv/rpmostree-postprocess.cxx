@@ -410,16 +410,22 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
 
   auto container = treefile.get_container ();
 
-  g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
-  ROSCXX_TRY (migrate_passwd_except_root (rootfs_dfd), error);
+  bool sysusers = treefile.get_sysusers ();
 
-  rust::Vec<rust::String> preserve_groups_set = treefile.get_etc_group_members ();
+  if (!sysusers)
+    {
+      g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
+      ROSCXX_TRY (migrate_passwd_except_root (rootfs_dfd), error);
 
-  g_print ("Migrating /usr/etc/group to /usr/lib/\n");
-  ROSCXX_TRY (migrate_group_except_root (rootfs_dfd, preserve_groups_set), error);
+      rust::Vec<rust::String> preserve_groups_set = treefile.get_etc_group_members ();
 
-  /* NSS configuration to look at the new files */
-  ROSCXX_TRY (composepost_nsswitch_altfiles (rootfs_dfd), error);
+      g_print ("Migrating /usr/etc/group to /usr/lib/\n");
+      ROSCXX_TRY (migrate_group_except_root (rootfs_dfd, preserve_groups_set), error);
+    }
+
+  /* NSS configuration to look at the new files. */
+  /* Should remove altfiles if we transfer to systemd-sysusers. */
+  ROSCXX_TRY (composepost_nsswitch_altfiles (rootfs_dfd, sysusers), error);
 
   if (selinux)
     {

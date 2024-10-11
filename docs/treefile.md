@@ -40,6 +40,10 @@ It supports the following parameters:
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
 
+ * `sysusers`: boolean, optional: Defaults to `false`.
+   If `true`, this turns off `altfiles` and disables the `passwd` / `group`
+   files migration to `/usr/lib`.
+
  * `ima`: boolean, optional: Defaults to `false`.  Propagate any
    IMA signatures in input RPMs into the final OSTree commit.
 

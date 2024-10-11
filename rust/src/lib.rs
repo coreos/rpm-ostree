@@ -292,7 +292,7 @@ pub mod ffi {
             dest_rootfs_dfd: i32,
             treefile: &mut Treefile,
         ) -> Result<()>;
-        fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> Result<()>;
+        fn composepost_nsswitch_altfiles(rootfs_dfd: i32, sysusers: bool) -> Result<()>;
         fn compose_postprocess(
             rootfs_dfd: i32,
             treefile: &mut Treefile,
@@ -620,6 +620,7 @@ pub mod ffi {
         fn get_recommends(&self) -> bool;
         fn get_selinux(&self) -> bool;
         fn get_selinux_label_version(&self) -> u32;
+        fn get_sysusers(&self) -> bool;
         fn get_gpg_key(&self) -> String;
         fn get_automatic_version_suffix(&self) -> String;
         fn get_container(&self) -> bool;
