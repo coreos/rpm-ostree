@@ -40,6 +40,10 @@ It supports the following parameters:
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
 
+ * `ignore-devices`: boolean, optional: Defaults to `true`. If `true`, then
+   all character and block device files found in the target root (except overlayfs
+   whiteouts, which are automatically "quoted") will be ignored.
+
  * `ima`: boolean, optional: Defaults to `false`.  Propagate any
    IMA signatures in input RPMs into the final OSTree commit.
 

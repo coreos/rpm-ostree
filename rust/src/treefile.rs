@@ -450,6 +450,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         rojig,
         selinux,
         selinux_label_version,
+        ignore_devices,
         ima,
         gpg_key,
         include,
@@ -1318,6 +1319,10 @@ impl Treefile {
 
     pub(crate) fn get_selinux(&self) -> bool {
         self.parsed.base.selinux.unwrap_or(true)
+    }
+
+    pub(crate) fn get_ignore_devices(&self) -> bool {
+        self.parsed.base.ignore_devices.unwrap_or(true)
     }
 
     pub(crate) fn get_selinux_label_version(&self) -> u32 {
@@ -2504,6 +2509,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) lockfile_repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) selinux: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) ignore_devices: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) selinux_label_version: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
