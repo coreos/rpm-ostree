@@ -1842,6 +1842,8 @@ void log_treefile (::rpmostreecxx::Treefile const &tf) noexcept;
 
 bool is_container_image_reference (::rust::Str refspec) noexcept;
 
+bool is_container_image_digest_reference (::rust::Str refspec) noexcept;
+
 ::rpmostreecxx::RefspecType refspec_classify (::rust::Str refspec) noexcept;
 
 void verify_kernel_hmac (::std::int32_t rootfs, ::rust::Str moddir);

@@ -2167,6 +2167,8 @@ extern "C"
 
   bool rpmostreecxx$cxxbridge1$is_container_image_reference (::rust::Str refspec) noexcept;
 
+  bool rpmostreecxx$cxxbridge1$is_container_image_digest_reference (::rust::Str refspec) noexcept;
+
   ::rpmostreecxx::RefspecType
   rpmostreecxx$cxxbridge1$refspec_classify (::rust::Str refspec) noexcept;
 
@@ -3882,6 +3884,12 @@ bool
 is_container_image_reference (::rust::Str refspec) noexcept
 {
   return rpmostreecxx$cxxbridge1$is_container_image_reference (refspec);
+}
+
+bool
+is_container_image_digest_reference (::rust::Str refspec) noexcept
+{
+  return rpmostreecxx$cxxbridge1$is_container_image_digest_reference (refspec);
 }
 
 ::rpmostreecxx::RefspecType
