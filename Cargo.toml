@@ -61,7 +61,7 @@ either = "1.13.0"
 env_logger = "0.11.5"
 fail = { version = "0.5", features = ["failpoints"] }
 fn-error-context = "0.2.0"
-futures = "0.3.30"
+futures = "0.3.31"
 indoc = "2.0.5"
 indicatif = "0.17.8"
 is-terminal = "0.4"
