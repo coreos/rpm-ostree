@@ -32,6 +32,7 @@ const INITRAMFS: &str = "initramfs.img";
 
 #[context("Adding kernel")]
 fn add(root: &Dir, argv: &[&str]) -> Result<()> {
+    dbg!("ADD THE KERNEL!");
     let mut argv_it = argv.iter().copied();
     let Some(kver) = argv_it.next() else {
         anyhow::bail!("No kernel version provided");
@@ -51,6 +52,7 @@ fn add(root: &Dir, argv: &[&str]) -> Result<()> {
 
 #[context("Removing kernel")]
 fn remove(root: &Dir, kver: &str) -> Result<()> {
+    dbg!("REMOVE THE KERNEL!");
     let kdir = format!("{MODULES}/{kver}");
     let Some(kernel_dir) = root.open_dir_optional(&kdir)? else {
         return Ok(());
@@ -63,9 +65,13 @@ fn remove(root: &Dir, kver: &str) -> Result<()> {
 /// Primary entrypoint to `/usr/lib/kernel-install.d/05-rpmostree.install`.
 #[context("rpm-ostree kernel-install")]
 pub fn main(argv: &[&str]) -> Result<u8> {
+    dbg!("In rpm-ostree kernel-install ....Ohh yeah...");
     let Some(layout) = std::env::var_os(LAYOUT_VAR) else {
         return Ok(0);
     };
+    dbg!("the layout is: {:?}", layout.to_str());
+    dbg!("the LAYOUT_OSTREE is: {:?}", Some(LAYOUT_OSTREE));
+
     if !matches!(layout.to_str(), Some(LAYOUT_OSTREE)) {
         return Ok(0);
     }
@@ -76,14 +82,15 @@ pub fn main(argv: &[&str]) -> Result<u8> {
         return Ok(0);
     }
     let root = &Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
+    dbg!("Ready for the match", argv);
     match argv {
-        ["add", rest @ ..] => {
+        [_,_,"add", rest @ ..] => {
             add(root, rest)?;
             // In the case of adding a new kernel, we intercept everything else
             // today. In the future we can try to ensure we reuse what bits are there.
             Ok(SKIP)
         }
-        ["remove", kver] => {
+        [_,_,"remove", kver,..] => {
             remove(root, kver)?;
             Ok(0)
         }
