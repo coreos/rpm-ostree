@@ -45,8 +45,8 @@ const USERADD_PATH: &str = "usr/sbin/useradd";
 const USERADD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/useradd-wrapper.sh");
 const USERMOD_PATH: &str = "usr/sbin/usermod";
 const USERMOD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/usermod-wrapper.sh");
-//const KERNEL_INSTALL_PATH: &str = "usr/bin/kernel-install";
-//const KERNEL_INSTALL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/kernel-install-wrapper.sh");
+const KERNEL_INSTALL_PATH: &str = "usr/bin/kernel-install";
+const KERNEL_INSTALL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/kernel-install-wrapper.sh");
 
 // ## Check for layout and wrap if =ostree
 
@@ -168,7 +168,10 @@ impl FilesystemScriptPrep {
         (SYSTEMCTL_PATH, SYSTEMCTL_WRAPPER),
         (USERADD_PATH, USERADD_WRAPPER),
         (USERMOD_PATH, USERMOD_WRAPPER),
-//        (KERNEL_INSTALL_PATH, KERNEL_INSTALL_WRAPPER),
+    ];
+
+    const REPLACE_KERNEL_PATHS: &'static [(&'static str, &'static [u8])] = &[
+        (KERNEL_INSTALL_PATH, KERNEL_INSTALL_WRAPPER),
     ];
 
     fn saved_name(name: &str) -> String {
@@ -188,6 +191,16 @@ impl FilesystemScriptPrep {
             if rootfs.try_exists(path)? {
                 rootfs.rename(path, &rootfs, saved)?;
                 rootfs.atomic_write_with_perms(path, contents, mode)?;
+            }
+        }
+        if std::path::Path::new(OSTREE_BOOTED).exists() {
+            for &(path, contents) in Self::REPLACE_KERNEL_PATHS {
+                let mode = Permissions::from_mode(0o755);
+                let saved = &Self::saved_name(path);
+                if rootfs.try_exists(path)? {
+                    rootfs.rename(path, &rootfs, saved)?;
+                    rootfs.atomic_write_with_perms(path, contents, mode)?;
+                }
             }
         }
         Ok(Box::new(Self {
