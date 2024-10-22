@@ -88,6 +88,17 @@ called the "pending deployment".  Operations can be chained; for example,
 if you invoke `rpm-ostree upgrade` after installing a package, your new root
 will upgraded with the package also installed.
 
+#### Inactive layered packages
+
+It's possible to `install` a package that is already in the base. In this
+case, the semantics is that rpm-ostree will remember that you always want this package
+present and if the base commit ever removes it, it will be overlaid back. These packages
+are called *inactive*. You can see the list of inactive packages using
+`status -v` (printed as `InactiveRequests`) and you can remove these
+inactive requests using `uninstall` as usual.
+
+#### Live-applying package additions
+
 As a special case, it is supported to live-apply just package additions, assuming
 that there are not other pending changes:
 
@@ -231,6 +242,27 @@ it will not be visible in the generated derived commit.
 
 Similar to the `override replace` case, using `rpm-ostree override reset` will undo
 the change.
+
+## Using `rpm-ostree status --json`
+
+The `rpm-ostree status` command supports a `--json` flag which can be useful to
+inspect the state of the system from a script or higher level language. Most of the
+keys there are self-explanatory, but here are a few that may require additional
+explanation.
+
+- requested-packages: list of yum repo packages that the user requested for overlay; not all
+  packages may have been overlaid (i.e. they may be inactive; see above)
+- requested-local-packages: list of local packages (i.e. by passing a path to an RPM
+  file on the command line) requested for overlay
+- requested-local-fileoverride-packages: list of local packages requested for overlay
+  with the `install --force-replacefiles` flag
+- packages: list of packages that were _actually_ overlaid (i.e. non-inactive ones)
+- requested-base-removals: list of base packages the user requested to remove
+- base-removals: list of base packages that were _actually_ removed (i.e. non-inactive ones)
+- requested-base-local-replacements: list of base packages the user requested to replace using local RPMs
+- base-local-replacements: list of base local packages that were _actually_ replaced
+- requested-base-remote-replacements: list of base packages the user requested to replace from yum repos
+- base-remote-replacements: list of base packages that were _actually_ replaced from yum repos
 
 ## Filesystem layout
 
