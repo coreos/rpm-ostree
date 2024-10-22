@@ -5,6 +5,7 @@
 
 use crate::cxxrsutil::*;
 use crate::ffiutil;
+use crate::kernel_install::is_ostree_layout;
 use anyhow::Context;
 use anyhow::{anyhow, Result};
 use camino::Utf8Path;
@@ -47,6 +48,8 @@ const USERMOD_PATH: &str = "usr/sbin/usermod";
 const USERMOD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/usermod-wrapper.sh");
 const KERNEL_INSTALL_PATH: &str = "usr/bin/kernel-install";
 const KERNEL_INSTALL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/kernel-install-wrapper.sh");
+
+// ## Check for layout and wrap if =ostree
 
 const RPMOSTREE_CORE_STAGED_RPMS_DIR: &str = "rpm-ostree/staged-rpms";
 
@@ -166,8 +169,10 @@ impl FilesystemScriptPrep {
         (SYSTEMCTL_PATH, SYSTEMCTL_WRAPPER),
         (USERADD_PATH, USERADD_WRAPPER),
         (USERMOD_PATH, USERMOD_WRAPPER),
-        (KERNEL_INSTALL_PATH, KERNEL_INSTALL_WRAPPER),
     ];
+
+    const REPLACE_KERNEL_PATHS: &'static [(&'static str, &'static [u8])] =
+        &[(KERNEL_INSTALL_PATH, KERNEL_INSTALL_WRAPPER)];
 
     fn saved_name(name: &str) -> String {
         format!("{}.rpmostreesave", name)
@@ -186,6 +191,16 @@ impl FilesystemScriptPrep {
             if rootfs.try_exists(path)? {
                 rootfs.rename(path, &rootfs, saved)?;
                 rootfs.atomic_write_with_perms(path, contents, mode)?;
+            }
+        }
+        if std::path::Path::new(OSTREE_BOOTED).exists() && !is_ostree_layout()? {
+            for &(path, contents) in Self::REPLACE_KERNEL_PATHS {
+                let mode = Permissions::from_mode(0o755);
+                let saved = &Self::saved_name(path);
+                if rootfs.try_exists(path)? {
+                    rootfs.rename(path, &rootfs, saved)?;
+                    rootfs.atomic_write_with_perms(path, contents, mode)?;
+                }
             }
         }
         Ok(Box::new(Self {
@@ -472,16 +487,22 @@ mod test {
         }
         // Replaced kernel-install.
         {
-            let original_kernel_install = "original kernel_install";
-            d.atomic_write_with_perms(super::KERNEL_INSTALL_PATH, original_kernel_install, mode)?;
-            let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
-            assert_eq!(contents, original_kernel_install);
-            let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
-            let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
-            assert_eq!(contents.as_bytes(), super::KERNEL_INSTALL_WRAPPER);
-            g.undo()?;
-            let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
-            assert_eq!(contents, original_kernel_install);
+            if std::path::Path::new(OSTREE_BOOTED).exists() && !is_ostree_layout()? {
+                let original_kernel_install = "original kernel_install";
+                d.atomic_write_with_perms(
+                    super::KERNEL_INSTALL_PATH,
+                    original_kernel_install,
+                    mode,
+                )?;
+                let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
+                assert_eq!(contents, original_kernel_install);
+                let mut g = super::prepare_filesystem_script_prep(d.as_raw_fd())?;
+                let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
+                assert_eq!(contents.as_bytes(), super::KERNEL_INSTALL_WRAPPER);
+                g.undo()?;
+                let contents = d.read_to_string(super::KERNEL_INSTALL_PATH)?;
+                assert_eq!(contents, original_kernel_install);
+            }
         }
         Ok(())
     }
