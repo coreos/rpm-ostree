@@ -57,7 +57,8 @@ It supports the following parameters:
       upgrading from very old versions of libostree.
     * "modules": Kernel data goes just in `/usr/lib/modules`.  Use
       this for new systems, and systems that don't need to be upgraded
-      from very old libostree versions.
+      from very old libostree versions. This is the default for editions 2024
+      and above.
     * "kernel-install": The system is integrated with `/sbin/kernel-install`
       from systemd. You likely want to additionally pair this with configuring `layout=ostree`
       in `/usr/lib/kernel/install.conf`, and adding a wrapper script to
