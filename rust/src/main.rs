@@ -24,7 +24,6 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
         let args_orig = args;
         let args_borrowed: Vec<_> = args_orig.iter().map(|s| s.as_str()).collect();
         let args = &args_borrowed[..];
-        dbg!("In inner_async");
         if let Some(arg) = args.get(1) {
             match *arg {
                 // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.

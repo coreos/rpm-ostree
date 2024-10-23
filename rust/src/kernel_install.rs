@@ -32,11 +32,11 @@ const INITRAMFS: &str = "initramfs.img";
 
 #[context("Adding kernel")]
 fn add(root: &Dir, argv: &[&str]) -> Result<()> {
-    dbg!("ADD THE KERNEL!");
     let mut argv_it = argv.iter().copied();
     let Some(kver) = argv_it.next() else {
         anyhow::bail!("No kernel version provided");
     };
+    tracing::debug!("Installing kernel kver={kver}");
     println!("Generating initramfs");
     crate::initramfs::run_dracut(root, &kver)?;
     println!("Running depmod");
@@ -52,7 +52,7 @@ fn add(root: &Dir, argv: &[&str]) -> Result<()> {
 
 #[context("Removing kernel")]
 fn remove(root: &Dir, kver: &str) -> Result<()> {
-    dbg!("REMOVE THE KERNEL!");
+    tracing::debug!("Removing kernel kver={kver}");
     let kdir = format!("{MODULES}/{kver}");
     let Some(kernel_dir) = root.open_dir_optional(&kdir)? else {
         return Ok(());
@@ -65,13 +65,10 @@ fn remove(root: &Dir, kver: &str) -> Result<()> {
 /// Primary entrypoint to `/usr/lib/kernel-install.d/05-rpmostree.install`.
 #[context("rpm-ostree kernel-install")]
 pub fn main(argv: &[&str]) -> Result<u8> {
-    dbg!("In rpm-ostree kernel-install ....Ohh yeah...");
     let Some(layout) = std::env::var_os(LAYOUT_VAR) else {
         return Ok(0);
     };
-    dbg!("the layout is: {:?}", layout.to_str());
-    dbg!("the LAYOUT_OSTREE is: {:?}", Some(LAYOUT_OSTREE));
-
+    tracing::debug!("The LAYOUT_OSTREE is: {:?}", layout.to_str());
     if !matches!(layout.to_str(), Some(LAYOUT_OSTREE)) {
         return Ok(0);
     }
@@ -82,7 +79,7 @@ pub fn main(argv: &[&str]) -> Result<u8> {
         return Ok(0);
     }
     let root = &Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
-    dbg!("Ready for the match", argv);
+    tracing::debug!("argv={argv:?}");
     match argv {
         [_,_,"add", rest @ ..] => {
             add(root, rest)?;
