@@ -55,6 +55,7 @@ static gboolean pull_local_into_target_repo (OstreeRepo *src_repo, OstreeRepo *d
 static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
+static char *opt_source_root;
 static gboolean opt_download_only;
 static gboolean opt_download_only_rpms;
 static gboolean opt_force_nocache;
@@ -104,6 +105,8 @@ static GOptionEntry install_option_entries[]
         { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only,
           "Assume cache is present, do not attempt to update it", NULL },
         { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+        { "source-root", 0, 0, G_OPTION_ARG_STRING, &opt_source_root,
+          "Rootfs to use for resolving releasever if unset", "PATH" },
         { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only,
           "Like --dry-run, but download and import RPMs as well; requires --cachedir", NULL },
         { "download-only-rpms", 0, 0, G_OPTION_ARG_NONE, &opt_download_only_rpms,
@@ -340,7 +343,8 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
 
   {
     g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
-    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, cancellable, error))
+    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, opt_source_root, cancellable,
+                                  error))
       return FALSE;
   }
 
