@@ -31,9 +31,10 @@ It supports the following parameters:
    secret key must be in the home directory of the building user.  Defaults to
    none.
 
- * `repos`: array of strings, mandatory: Names of yum repositories to
+ * `repos`: array of strings, optional: Names of yum repositories to
    use, from any files that end in `.repo`, in the same directory as
-   the treefile.  `rpm-ostree compose tree` does not use the system
+   the treefile. If missing, all yum repos enabled by default are used.
+   `rpm-ostree compose tree` does not use the system
    `/etc/yum.repos.d`, because it's common to want to compose a target
    system distinct from the one the host sytem is running.
 

@@ -710,8 +710,9 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
        * the server-side we always require `repos` anyway. */
       bool disabled_all_repos = false;
 
-      /* NB: missing "repos" --> let libdnf figure it out for itself (we're likely doing a
-       * client-side compose where we want to use /etc/yum.repos.d/) */
+      /* NB: if we're missing "repos" then default to all enabled repos. Note
+       * this is independent of what reposdir is, which is different between the
+       * compose side (e.g. git repo) and the client-side (/etc/yum.repos.d) */
       auto repos = self->treefile_rs->get_repos ();
       g_debug ("Found %u repos", (guint)repos.size ());
       if (!repos.empty ())

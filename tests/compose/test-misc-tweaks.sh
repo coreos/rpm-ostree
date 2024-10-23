@@ -6,7 +6,6 @@ dn=$(cd "$(dirname "$0")" && pwd)
 . "${dn}/libcomposetest.sh"
 
 # Add a local rpm-md repo so we can mutate local test packages
-treefile_append "repos" '["test-repo"]'
 # test `recommends: true` (test-basic[-unified] test the false path)
 build_rpm foobar recommends foobar-rec
 build_rpm foobar-rec
@@ -30,7 +29,16 @@ build_rpm barbaz \
           install "mkdir -p %{buildroot}/etc && echo shared file data > %{buildroot}/etc/sharedfile"
 
 echo gpgcheck=0 >> yumrepo.repo
+# Notice here we _don't_ add test-repo to the treefile in this test. Instead we
+# set it to enabled in the repo file. This verifies that found yum repos enabled
+# in their config are used by default when `repos:` is missing.
+echo "enabled=1" >> yumrepo.repo
+mv config/cache.repo .
+echo "enabled=1" >> cache.repo
+rm config/*.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
+ln "$PWD/cache.repo" config/cache.repo
+treefile_del "repos"
 # the top-level manifest doesn't have any packages, so just set it
 treefile_append "packages" $'["\'foobar >= 0.5\' quuz \'corge < 2.0\' barbar barbaz thirdpartymodules"]'
 

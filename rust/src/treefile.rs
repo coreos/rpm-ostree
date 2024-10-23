@@ -1463,11 +1463,6 @@ impl Treefile {
 
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
     fn validate_base_config(config: &TreeComposeConfig) -> Result<()> {
-        if config.base.repos.is_none() && config.base.lockfile_repos.is_none() {
-            return Err(anyhow!(
-                r#"Treefile has neither "repos" nor "lockfile-repos""#
-            ));
-        }
         if config
             .base
             .repovars
