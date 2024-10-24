@@ -78,6 +78,11 @@ struct Opt {
     /// Directory to use for caching downloaded packages and other data
     cachedir: Option<Utf8PathBuf>,
 
+    #[clap(long)]
+    #[clap(value_parser)]
+    /// Rootfs to use for resolving releasever if unset
+    source_root: Option<Utf8PathBuf>,
+
     /// Container authentication file
     #[clap(long)]
     #[clap(value_parser)]
@@ -268,6 +273,10 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
 
     let commitid_path = tempdir.join("commitid");
     let changed_path = tempdir.join("changed");
+
+    if let Some(ref path) = opt.source_root {
+        compose_args_extra.extend(["--source-root", path.as_str()]);
+    }
 
     let s = self_command()
         .args(&[
