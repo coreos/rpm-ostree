@@ -1686,6 +1686,8 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
   if (!rpmostree_context_prepare (ctx, FALSE, cancellable, error))
     return FALSE;
 
+  rpmostree_print_transaction (rpmostree_context_get_dnf (ctx));
+
   if (!glnx_shutil_mkdir_p_at (AT_FDCWD, opt_extensions_output_dir, 0755, cancellable, error))
     return FALSE;
 
