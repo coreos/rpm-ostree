@@ -29,6 +29,14 @@ pkg_install() {
     echo "Done running dnf -y install! $(date)"
 }
 
+pkg_builddep_spec() {
+    if test -x /usr/bin/dnf5; then
+        dnf builddep -y "$@"
+    else
+        dnf builddep -y --spec "$@"
+    fi
+}
+
 pkg_builddep() {
     # This is sadly the only case where it's a different command
     if test -x /usr/bin/dnf; then
