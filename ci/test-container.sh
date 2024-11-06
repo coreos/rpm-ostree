@@ -11,6 +11,13 @@ versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 
 # Test overrides
 case $versionid in
+  41)
+    ignition_url_suffix=2.18.0/1.fc41/x86_64/ignition-2.18.0-1.fc41.x86_64.rpm
+    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2416078"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2571615"
+    kver=6.11.4
+    krev=301
+    ;;
   40)
     ignition_url_suffix=2.16.2/2.fc39/x86_64/ignition-2.16.2-2.fc39.x86_64.rpm
     # 2.15.0-3
@@ -18,14 +25,6 @@ case $versionid in
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2436096"
     kver=6.8.5
     krev=301
-    ;;
-  39)
-    ignition_url_suffix=2.16.2/1.fc39/x86_64/ignition-2.16.2-1.fc39.x86_64.rpm
-    # 2.15.0-3
-    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2294111"
-    kver=6.5.5
-    krev=300
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
 esac
