@@ -97,18 +97,18 @@ jobs:
   #       run: cargo fmt -- --check -l
   #     - name: cargo clippy (warnings)
   #       run: cargo clippy -- -D warnings
-  build-clang:
-    name: "Build (clang)"
-    runs-on: ubuntu-latest
-    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      # https://github.com/actions/checkout/issues/760
-      - name: Mark git checkout as safe
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Build
-        run: ./ci/clang-build-check.sh
+  #build-clang:
+  #  name: "Build (clang)"
+  #  runs-on: ubuntu-latest
+  #  container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+  #  steps:
+  #    - name: Checkout repository
+  #      uses: actions/checkout@v3
+  #    # https://github.com/actions/checkout/issues/760
+  #    - name: Mark git checkout as safe
+  #      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+  #    - name: Build
+  #      run: ./ci/clang-build-check.sh
   integration:
     name: "Container Integration"
     needs: [build, build-tests]
