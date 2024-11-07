@@ -497,8 +497,15 @@ enable_one_repo (GPtrArray *sources, const char *reponame, GError **error)
       return TRUE;
     }
 
-  return glnx_throw (error, "Unknown rpm-md repository: %s (discovered %u)", reponame,
-                     (guint)sources->len);
+  // Print out all repositories so it's more debugabble what may have happened
+  g_printerr ("Discovered rpm-md repositories:\n");
+  for (guint i = 0; i < sources->len; i++)
+    {
+      auto src = static_cast<DnfRepo *> (sources->pdata[i]);
+      const char *id = dnf_repo_get_id (src);
+      g_printerr ("- %s\n", id);
+    }
+  return glnx_throw (error, "Unknown rpm-md repository: %s", reponame);
 }
 
 static void
