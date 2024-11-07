@@ -137,6 +137,8 @@ Requires:       librepo%{?_isa} >= %{librepo_version}
 # rpm-ostree wraps more of ostree (such as `ostree admin unlock` etc.)
 Requires: ostree
 Requires: bubblewrap
+# https://github.com/coreos/rpm-ostree/issues/4994
+Requires: bootc
 # We have been building with fuse but changed to fuse3  on:
 # https://src.fedoraproject.org/rpms/rpm-ostree/c/3c602a23787fd2df873c0b18df3133c9fec4b66a
 # However our code is just calling fuse's fusermount.
