@@ -41,10 +41,10 @@ versionid=${versionid:11} # trim off VERSION_ID=
 current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 case $versionid in
-  40) kernel_release=6.5.6-300.fc39.x86_64
-      koji_kernel_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2302642
+  41) kernel_release=6.11.1-300.fc41.x86_64
+      koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2558200"
   ;;
-  39) kernel_release=6.5.6-300.fc39.x86_64
+  40) kernel_release=6.5.6-300.fc39.x86_64
       koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2302642"
   ;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
