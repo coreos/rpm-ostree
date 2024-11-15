@@ -19,13 +19,9 @@ ExcludeArch:    %{ix86}
 %endif
 
 BuildRequires: make
-%if 0%{?rhel}
-BuildRequires: rust-toolset
-%else
 BuildRequires: rust-packaging
 BuildRequires: cargo
 BuildRequires: rust
-%endif
 
 # Enable ASAN + UBSAN
 %bcond_with sanitizers
