@@ -2855,6 +2855,13 @@ impl TreeComposeConfig {
             substitute_string(&substvars, &mut rojig.summary)?;
             substitute_string_option(&substvars, &mut rojig.description)?;
         }
+        if let Some(ref mut metadata) = self.base.metadata {
+            for val in metadata.values_mut() {
+                if let serde_json::Value::String(ref mut s) = val {
+                    substitute_string(&substvars, s)?;
+                }
+            }
+        }
         if let Some(ref mut add_commit_metadata) = self.base.add_commit_metadata {
             for val in add_commit_metadata.values_mut() {
                 if let serde_json::Value::String(ref mut s) = val {
@@ -3794,6 +3801,7 @@ conditional-include:
                 nested: table
             metadata:
                 foo: baz
+                bar: substituted ${mystr_override}
                 deeper:
                   answer: 9001
             etc-group-members:
@@ -3836,6 +3844,10 @@ conditional-include:
         );
         let data = tf.base.metadata.as_ref().unwrap();
         assert_eq!(data.get("foo").unwrap().as_str().unwrap(), "baz");
+        assert_eq!(
+            data.get("bar").unwrap().as_str().unwrap(),
+            "substituted overridden"
+        );
         assert_eq!(data.get("name").unwrap().as_str().unwrap(), "fedora-coreos");
         let deeper = data.get("deeper").unwrap().as_object().unwrap();
         assert_eq!(deeper.get("answer").unwrap().as_i64().unwrap(), 9001);
