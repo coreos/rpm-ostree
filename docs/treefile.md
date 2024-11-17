@@ -26,6 +26,7 @@ It supports the following parameters:
  * `metadata`: Mapping of strings to values, optional.  This can be used
    for other tools to insert arbitrary metadata into the treefile which
    they parse later, for example via `rpm-ostree compose tree --print-metadata-json`.
+   All (top-level) objects of type string support variable substitution.
 
  * `gpg-key` (or `gpg_key`): string, optional: Key ID for GPG signing; the
    secret key must be in the home directory of the building user.  Defaults to
