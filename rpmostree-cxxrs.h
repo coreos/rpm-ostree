@@ -1560,6 +1560,7 @@ struct Treefile final : public ::rust::Opaque
   bool get_machineid_compat () const noexcept;
   ::rust::Vec< ::rust::String> get_etc_group_members () const noexcept;
   bool get_boot_location_is_modules () const noexcept;
+  bool use_kernel_install () const noexcept;
   bool get_ima () const noexcept;
   ::rust::String get_releasever () const noexcept;
   ::rpmostreecxx::RepoMetadataTarget get_repo_metadata_target () const noexcept;
@@ -1976,7 +1977,7 @@ void history_prune ();
 
 ::rust::Box< ::rpmostreecxx::TokioHandle> tokio_handle_get () noexcept;
 
-bool script_is_ignored (::rust::Str pkg, ::rust::Str script) noexcept;
+bool script_is_ignored (::rust::Str pkg, ::rust::Str script, bool use_kernel_install) noexcept;
 
 void testutils_entrypoint (::rust::Vec< ::rust::String> argv);
 

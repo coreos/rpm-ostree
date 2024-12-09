@@ -226,8 +226,8 @@ fail_if_interp_is_lua (const char *interp, const char *pkg_name, const char *scr
 }
 
 gboolean
-rpmostree_script_txn_validate (DnfPackage *package, Header hdr, GCancellable *cancellable,
-                               GError **error)
+rpmostree_script_txn_validate (DnfPackage *package, Header hdr, bool use_kernel_install,
+                               GCancellable *cancellable, GError **error)
 {
   for (guint i = 0; i < G_N_ELEMENTS (unsupported_scripts); i++)
     {
@@ -238,7 +238,8 @@ rpmostree_script_txn_validate (DnfPackage *package, Header hdr, GCancellable *ca
       if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
         continue;
 
-      if (!rpmostreecxx::script_is_ignored (dnf_package_get_name (package), desc))
+      if (!rpmostreecxx::script_is_ignored (dnf_package_get_name (package), desc,
+                                            use_kernel_install))
         {
           return glnx_throw (error,
                              "Package '%s' has (currently) unsupported script of type '%s'; see "
@@ -584,8 +585,8 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript, DnfPackage *pkg, Heade
  */
 static gboolean
 run_script (const KnownRpmScriptKind *rpmscript, DnfPackage *pkg, Header hdr, int rootfs_fd,
-            GLnxTmpDir *var_lib_rpm_statedir, gboolean enable_fuse, gboolean *out_did_run,
-            GCancellable *cancellable, GError **error)
+            GLnxTmpDir *var_lib_rpm_statedir, gboolean enable_fuse, gboolean use_kernel_install,
+            gboolean *out_did_run, GCancellable *cancellable, GError **error)
 {
   rpmTagVal tagval = rpmscript->tag;
   rpmTagVal progtagval = rpmscript->progtag;
@@ -600,7 +601,7 @@ run_script (const KnownRpmScriptKind *rpmscript, DnfPackage *pkg, Header hdr, in
     return TRUE;
 
   const char *desc = rpmscript->desc;
-  if (rpmostreecxx::script_is_ignored (dnf_package_get_name (pkg), desc))
+  if (rpmostreecxx::script_is_ignored (dnf_package_get_name (pkg), desc, use_kernel_install))
     return TRUE; /* Note early return */
 
   *out_did_run = TRUE;
@@ -716,8 +717,9 @@ find_and_write_matching_files (int rootfs_fd, const char *pattern, FILE *f, guin
  */
 gboolean
 rpmostree_script_run_sync (DnfPackage *pkg, Header hdr, RpmOstreeScriptKind kind, int rootfs_fd,
-                           GLnxTmpDir *var_lib_rpm_statedir, gboolean enable_fuse, guint *out_n_run,
-                           GCancellable *cancellable, GError **error)
+                           GLnxTmpDir *var_lib_rpm_statedir, gboolean enable_fuse,
+                           gboolean use_kernel_install, guint *out_n_run, GCancellable *cancellable,
+                           GError **error)
 {
   const KnownRpmScriptKind *scriptkind;
   switch (kind)
@@ -736,8 +738,8 @@ rpmostree_script_run_sync (DnfPackage *pkg, Header hdr, RpmOstreeScriptKind kind
     }
 
   gboolean did_run = FALSE;
-  if (!run_script (scriptkind, pkg, hdr, rootfs_fd, var_lib_rpm_statedir, enable_fuse, &did_run,
-                   cancellable, error))
+  if (!run_script (scriptkind, pkg, hdr, rootfs_fd, var_lib_rpm_statedir, enable_fuse,
+                   use_kernel_install, &did_run, cancellable, error))
     return FALSE;
 
   if (did_run)
@@ -750,7 +752,8 @@ rpmostree_script_run_sync (DnfPackage *pkg, Header hdr, RpmOstreeScriptKind kind
  */
 gboolean
 rpmostree_transfiletriggers_run_sync (Header hdr, int rootfs_fd, gboolean enable_fuse,
-                                      guint *out_n_run, GCancellable *cancellable, GError **error)
+                                      gboolean use_kernel_install, guint *out_n_run,
+                                      GCancellable *cancellable, GError **error)
 {
   const char *pkg_name = headerGetString (hdr, RPMTAG_NAME);
   g_assert (pkg_name);
@@ -760,7 +763,7 @@ rpmostree_transfiletriggers_run_sync (Header hdr, int rootfs_fd, gboolean enable
       = g_strconcat ("Executing %transfiletriggerin for ", pkg_name, NULL);
   GLNX_AUTO_PREFIX_ERROR (error_prefix, error);
 
-  if (rpmostreecxx::script_is_ignored (pkg_name, "%transfiletriggerin"))
+  if (rpmostreecxx::script_is_ignored (pkg_name, "%transfiletriggerin", use_kernel_install))
     return TRUE; /* Note early return */
 
   headerGetFlags hgflags = HEADERGET_MINMEM;
