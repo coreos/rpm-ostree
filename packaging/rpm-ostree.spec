@@ -27,6 +27,8 @@ BuildRequires: rust
 %bcond_with sanitizers
 # Embedded unit tests
 %bcond_with bin_unit_tests
+# Don't add the ostree-container binaries
+%bcond_without ostree_ext
 
 # This is copied from the libdnf spec
 %if 0%{?rhel} && ! 0%{?centos}
@@ -147,6 +149,10 @@ Requires: fuse3
 # For container functionality
 # https://github.com/coreos/rpm-ostree/issues/3286
 Requires: skopeo
+Requires: bootc
+%if %{without ostree_ext}
+Requires: ostree-cli(ostree-container)
+%endif
 
 Requires: %{name}-libs%{?_isa} = %{version}-%{release}
 
@@ -197,6 +203,9 @@ export RUSTFLAGS="%{build_rustflags}"
 
 %install
 %make_install INSTALL="install -p -c"
+%if %{without ostree_ext}
+rm -vrf $RPM_BUILD_ROOT/usr/libexec/libostree/ext
+%endif
 find $RPM_BUILD_ROOT -name '*.la' -delete
 
 # I try to do continuous delivery via rpmdistro-gitoverlay while
@@ -233,7 +242,9 @@ $PYTHON autofiles.py > files \
   '%{_sysconfdir}/rpm-ostreed.conf' \
   '%{_prefix}/lib/systemd/system/*' \
   '%{_libexecdir}/rpm-ostree*' \
+%if %{with ostree_ext}
   '%{_libexecdir}/libostree/ext/*' \
+%endif
   '%{_datadir}/polkit-1/actions/*.policy' \
   '%{_datadir}/dbus-1/system-services/*' \
   '%{_datadir}/bash-completion/completions/*'
