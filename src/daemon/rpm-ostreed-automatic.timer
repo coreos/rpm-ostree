@@ -2,10 +2,13 @@
 Description=rpm-ostree Automatic Update Trigger
 Documentation=man:rpm-ostree(1) man:rpm-ostreed.conf(5)
 ConditionPathExists=/run/ostree-booted
+After=network-online.target
+Wants=network-online.target
 
 [Timer]
 OnBootSec=1h
 OnUnitInactiveSec=1d
+Persistent=true
 
 [Install]
 WantedBy=timers.target
