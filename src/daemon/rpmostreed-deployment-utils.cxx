@@ -740,6 +740,25 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
   g_autoptr (GPtrArray) rpmmd_modified_new = NULL;
 
   bool container_changed = false;
+  if (refspectype == rpmostreecxx::RefspecType::Container)
+    {
+      // Make this an operation we allow to fail, see the other call
+      try
+        {
+          auto state = rpmostreecxx::query_container_image_commit (*repo, current_checksum);
+          container_changed
+              = rpmostreecxx::deployment_add_manifest_diff (*dict, state->cached_update_diff);
+          if (state->cached_update_diff.version.size () > 0)
+            g_variant_dict_insert (dict, "version", "s",
+                                   state->cached_update_diff.version.c_str ());
+          g_debug ("container changed: %d", container_changed);
+        }
+      catch (std::exception &e)
+        {
+          sd_journal_print (LOG_ERR, "failed to query container image base metadata: %s",
+                            e.what ());
+        }
+    }
 
   if (staged_deployment)
     {
@@ -777,25 +796,6 @@ rpmostreed_update_generate_variant (OstreeDeployment *booted_deployment,
         {
           if (!ostree_parse_refspec (r.refspec.c_str (), &origin_remote, &origin_ref, error))
             return FALSE;
-        }
-      else
-        {
-          // Make this an operation we allow to fail, see the other call
-          try
-            {
-              auto state = rpmostreecxx::query_container_image_commit (*repo, current_checksum);
-              container_changed
-                  = rpmostreecxx::deployment_add_manifest_diff (*dict, state->cached_update_diff);
-              if (state->cached_update_diff.version.size () > 0)
-                g_variant_dict_insert (dict, "version", "s",
-                                       state->cached_update_diff.version.c_str ());
-              g_debug ("container changed: %d", container_changed);
-            }
-          catch (std::exception &e)
-            {
-              sd_journal_print (LOG_ERR, "failed to query container image base metadata: %s",
-                                e.what ());
-            }
         }
 
       /* check that it's actually layered (i.e. the requests are not all just dormant) */
