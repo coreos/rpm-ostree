@@ -157,7 +157,7 @@ impl RebaseCmd {
 }
 
 fn run_clean(argv: &Vec<String>) -> Result<RunDisposition> {
-    let arg = if let Some(subarg) = argv.get(0) {
+    let arg = if let Some(subarg) = argv.first() {
         subarg
     } else {
         anyhow::bail!("Missing required argument");

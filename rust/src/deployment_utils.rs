@@ -115,5 +115,5 @@ pub fn deployment_add_manifest_diff(
     diffv.insert("n-added", diff.n_added);
     diffv.insert("added-size", diff.added_size);
     dict.insert("manifest-diff", diffv);
-    return true;
+    true
 }

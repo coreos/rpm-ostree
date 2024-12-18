@@ -177,7 +177,7 @@ pub(crate) fn client_start_daemon() -> CxxResult<()> {
     // invocations against the restart limit, so query the status
     // first.
     let activeres = Command::new("systemctl")
-        .args(&["is-active", "rpm-ostreed"])
+        .args(["is-active", "rpm-ostreed"])
         .output()?;
     // Explicitly don't check the error return value, we don't want to
     // hard fail on it.
@@ -188,11 +188,11 @@ pub(crate) fn client_start_daemon() -> CxxResult<()> {
         return Ok(());
     }
     let res = Command::new("systemctl")
-        .args(&["--no-ask-password", "start", service])
+        .args(["--no-ask-password", "start", service])
         .status()?;
     if !res.success() {
         let _ = Command::new("systemctl")
-            .args(&["--no-pager", "status", service])
+            .args(["--no-pager", "status", service])
             .status();
         return Err(anyhow!("{}", res).into());
     }

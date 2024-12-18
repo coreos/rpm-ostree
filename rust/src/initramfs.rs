@@ -100,7 +100,7 @@ fn generate_initramfs_overlay<P: glib::IsA<gio::Cancellable>>(
     // Yeah, we need an initramfs-making crate.  See also
     // https://github.com/dracutdevs/dracut/commit/a9c6704
     let mut cmd = std::process::Command::new("/bin/bash");
-    cmd.args(&[
+    cmd.args([
         "-c",
         "set -euo pipefail; cpio --create --format newc --quiet --reproducible --null | gzip -1",
     ]);
@@ -193,11 +193,11 @@ pub(crate) fn run_dracut(kernel_dir: &str) -> Result<()> {
     let cliwrap_dracut = Utf8Path::new(crate::cliwrap::CLIWRAP_DESTDIR).join("dracut");
     let dracut_path = cliwrap_dracut
         .exists()
-        .then(|| cliwrap_dracut)
+        .then_some(cliwrap_dracut)
         .unwrap_or_else(|| Utf8Path::new("dracut").to_owned());
     // If changing this, also look at changing rpmostree-kernel.cxx
     let res = Command::new(dracut_path)
-        .args(&[
+        .args([
             "--no-hostonly",
             "--kver",
             kernel_dir,
@@ -216,7 +216,6 @@ pub(crate) fn run_dracut(kernel_dir: &str) -> Result<()> {
         ));
     }
     let f = std::fs::OpenOptions::new()
-        .write(true)
         .append(true)
         .open(&tmp_initramfs_path)?;
     crate::initramfs::append_dracut_random_cpio(f.as_raw_fd())?;

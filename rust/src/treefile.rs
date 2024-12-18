@@ -238,7 +238,7 @@ fn take_archful_pkgs(
 
         if let Some(basearch) = basearch {
             if basearch == &key["packages-".len()..] {
-                assert!(archful_pkgs == None);
+                assert!(archful_pkgs.is_none());
                 archful_pkgs = Some(
                     treefile.base.extra[key]
                         .as_array()
@@ -353,11 +353,11 @@ fn treefile_parse<P: AsRef<Path>>(
         BTreeMap::new()
     };
     let passwd = match tf.get_check_passwd() {
-        CheckPasswd::File(ref f) => load_passwd_file(&parent, f)?,
+        CheckPasswd::File(ref f) => load_passwd_file(parent, f)?,
         _ => None,
     };
     let group = match tf.get_check_groups() {
-        CheckGroups::File(ref f) => load_passwd_file(&parent, f)?,
+        CheckGroups::File(ref f) => load_passwd_file(parent, f)?,
         _ => None,
     };
 
@@ -850,12 +850,12 @@ impl Treefile {
         let packages = self.filter_package_requests(packages, false, allow_existing)?;
         let set = self.parsed.packages.ext_get_or_insert_default();
         let n = set.len();
-        set.extend(packages.into_iter());
+        set.extend(packages);
         Ok(set.len() != n)
     }
 
     pub(crate) fn enable_repo(&mut self, repo: &str) -> Result<()> {
-        let repos = self.parsed.base.repos.get_or_insert_with(|| Vec::new());
+        let repos = self.parsed.base.repos.get_or_insert_with(Vec::new);
         repos.extend(repo.split(',').map(ToOwned::to_owned));
         Ok(())
     }
@@ -1384,7 +1384,7 @@ impl Treefile {
             .releasever
             .as_ref()
             .map(|rv| rv.to_string())
-            .unwrap_or_else(|| "".to_string())
+            .unwrap_or_default()
     }
 
     pub(crate) fn get_container_cmd(&self) -> Vec<String> {
@@ -2054,7 +2054,7 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
                 ret.push(&element[start_index..i]);
                 looping_over_quoted_pkg = false;
             } else {
-                ret.extend((&element[start_index..i]).split_whitespace());
+                ret.extend(element[start_index..i].split_whitespace());
                 looping_over_quoted_pkg = true;
             }
             start_index = i + 1;
@@ -2063,7 +2063,7 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
             if looping_over_quoted_pkg {
                 bail!("Missing terminating quote: {}", element);
             }
-            ret.extend((&element[start_index..]).split_whitespace());
+            ret.extend(element[start_index..].split_whitespace());
         }
     }
 
@@ -2072,15 +2072,11 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Copy, Clone)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub(crate) enum BootLocation {
+    #[default]
     New,
     Modules,
-}
-
-impl Default for BootLocation {
-    fn default() -> Self {
-        BootLocation::New
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]

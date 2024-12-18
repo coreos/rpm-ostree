@@ -95,8 +95,8 @@ fn default_container_pull_config(imgref: &OstreeImageReference) -> Result<ImageP
         // Fetching from containers-storage, may require privileges to read files
         ostree_container::merge_default_container_proxy_opts_with_isolation(&mut cfg, None)?;
     } else {
-        let isolation_systemd = crate::utils::running_in_systemd().then(|| "rpm-ostree");
-        let isolation_default = rustix::process::getuid().is_root().then(|| "nobody");
+        let isolation_systemd = crate::utils::running_in_systemd().then_some("rpm-ostree");
+        let isolation_default = rustix::process::getuid().is_root().then_some("nobody");
         let isolation_user = isolation_systemd.or(isolation_default);
         ostree_container::merge_default_container_proxy_opts_with_isolation(
             &mut cfg,

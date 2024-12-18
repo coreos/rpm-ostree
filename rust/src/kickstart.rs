@@ -58,14 +58,14 @@ fn filtermap_line(line: &str) -> Option<&str> {
 impl Packages {
     fn parse<'a, 'b>(
         args: impl Iterator<Item = &'b str>,
-        mut lines: impl Iterator<Item = &'a str>,
+        lines: impl Iterator<Item = &'a str>,
     ) -> Result<Self> {
         // Ensure there's an argv0
         let args = [PACKAGES].into_iter().chain(args);
         let args = PackageArgs::try_parse_from(args)?;
         let mut install = Vec::new();
         let mut excludes = Vec::new();
-        while let Some(line) = lines.next() {
+        for line in lines {
             let line = line.trim();
             if line == END {
                 return Ok(Self {

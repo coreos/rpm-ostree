@@ -32,16 +32,16 @@ fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Vari
         if opts.reset {
             return Err(anyhow!("Cannot specify both --target and --reset"));
         }
-        r.insert(live::OPT_TARGET, &target.as_str());
+        r.insert(live::OPT_TARGET, target.as_str());
     } else if opts.reset {
         let booted = sysroot.require_booted_deployment()?;
         // Unwrap safety: This can't return NULL
         let csum = booted.csum();
-        r.insert(live::OPT_TARGET, &csum.as_str());
+        r.insert(live::OPT_TARGET, csum.as_str());
     }
 
     if opts.allow_replacement {
-        r.insert(live::OPT_REPLACE, &true);
+        r.insert(live::OPT_REPLACE, true);
     }
 
     Ok(r.end())
@@ -97,15 +97,15 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
     } else {
         let lib_diff = ostree_ext::diff::diff(
             repo,
-            &booted_commit,
-            &live_state.commit.as_str(),
+            booted_commit,
+            live_state.commit.as_str(),
             Some("/usr/lib/systemd/system"),
         )?;
 
         let etc_diff = ostree_ext::diff::diff(
             repo,
-            &booted_commit,
-            &live_state.commit.as_str(),
+            booted_commit,
+            live_state.commit.as_str(),
             Some("/usr/etc/systemd/system"),
         )?;
 
@@ -129,7 +129,7 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
         crate::ffi::output_message(
             "Successfully updated running filesystem tree; Following services may need to be restarted:");
         for service in changed {
-            crate::ffi::output_message(&format!("{}", service.strip_prefix('/').unwrap()));
+            crate::ffi::output_message(service.strip_prefix('/').unwrap());
         }
     }
     Ok(())

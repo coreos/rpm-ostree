@@ -6,7 +6,7 @@ fn detect_fedora_feature() -> Result<()> {
         return Ok(());
     }
     let p = std::process::Command::new("sh")
-        .args(&["-c", ". /usr/lib/os-release && echo ${ID}"])
+        .args(["-c", ". /usr/lib/os-release && echo ${ID}"])
         .stdout(std::process::Stdio::piped())
         .output()?;
     let out = std::str::from_utf8(&p.stdout).ok().map(|s| s.trim());

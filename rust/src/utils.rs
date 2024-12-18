@@ -183,7 +183,7 @@ where
 /// a mapping.
 pub fn decompose_sha256_nevra(v: &str) -> Result<(&str, &str)> {
     let parts: Vec<&str> = v.splitn(2, ':').collect();
-    match (parts.get(0), parts.get(1)) {
+    match (parts.first(), parts.get(1)) {
         (Some(_), None) => bail!("Missing : in {}", v),
         (Some(sha256), Some(nevra)) => {
             ostree::validate_checksum_string(sha256)?;
@@ -557,7 +557,7 @@ pub(crate) fn impl_sealed_memfd(description: &str, content: &[u8]) -> Result<Own
 
     {
         let mfd_file = mfd.as_filelike_view::<std::fs::File>();
-        (&*mfd_file).set_len(content.len() as u64)?;
+        mfd_file.set_len(content.len() as u64)?;
         (&*mfd_file).write_all(content)?;
         (&*mfd_file).seek(std::io::SeekFrom::Start(0))?;
     }

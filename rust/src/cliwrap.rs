@@ -45,7 +45,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
     let args = &args[2..];
     // The outer code should always pass us at least one arg.
     let name = args
-        .get(0)
+        .first()
         .copied()
         .ok_or_else(|| anyhow!("Missing required argument"))?;
     // Handle this case early, it's not like the other cliwrap bits.
@@ -89,7 +89,7 @@ fn install_to_root(args: &[&str]) -> Result<()> {
         "cliwrap is deprecated; the replacement path is to get functionality into the relevant upstream projects.",
     );
     let root = args
-        .get(0)
+        .first()
         .map(Utf8Path::new)
         .ok_or_else(|| anyhow!("Missing required argument: ROOTDIR"))?;
     let rootdir = &Dir::open_ambient_dir(root, cap_std::ambient_authority())?;

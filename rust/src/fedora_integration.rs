@@ -230,7 +230,7 @@ fn get_base_package_list() -> Result<HashSet<String>> {
         sysroot.load(gio::Cancellable::NONE)?;
         let deployments = sysroot.deployments();
         let default = deployments
-            .get(0)
+            .first()
             .ok_or_else(|| anyhow::anyhow!("No deployments found"))?;
         let checksum = default.csum();
         let repo = sysroot.repo();

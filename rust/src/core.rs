@@ -177,7 +177,7 @@ impl FilesystemScriptPrep {
     pub(crate) fn new(rootfs: Dir) -> Result<Box<Self>> {
         for &path in Self::OPTIONAL_PATHS {
             if rootfs.try_exists(path)? {
-                rootfs.rename(path, &rootfs, &Self::saved_name(path))?;
+                rootfs.rename(path, &rootfs, Self::saved_name(path))?;
             }
         }
         for &(path, contents) in Self::REPLACE_OPTIONAL_PATHS {

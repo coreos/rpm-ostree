@@ -31,9 +31,9 @@ impl Default for OutputFormat {
     }
 }
 
-impl Into<ostree_container::Transport> for OutputFormat {
-    fn into(self) -> ostree_container::Transport {
-        match self {
+impl From<OutputFormat> for ostree_container::Transport {
+    fn from(val: OutputFormat) -> Self {
+        match val {
             OutputFormat::Ociarchive => ostree_container::Transport::OciArchive,
             OutputFormat::Oci => ostree_container::Transport::OciDir,
             OutputFormat::Registry => ostree_container::Transport::Registry,
@@ -279,7 +279,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     }
 
     let s = self_command()
-        .args(&[
+        .args([
             "compose",
             "tree",
             "--unified-core",
@@ -292,8 +292,8 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
             "--cachedir",
             treecachedir.as_str(),
         ])
-        .args(opt.force_nocache.then(|| "--force-nocache"))
-        .args(opt.offline.then(|| "--cache-only"))
+        .args(opt.force_nocache.then_some("--force-nocache"))
+        .args(opt.offline.then_some("--cache-only"))
         .args(compose_args_extra)
         .arg(opt.manifest.as_str())
         .status()?;
@@ -336,18 +336,15 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         .transpose()?;
 
     let s = self_command()
-        .args(&["compose", "container-encapsulate"])
+        .args(["compose", "container-encapsulate"])
         .args(label_args)
         .args(previous_arg)
         .args(opt.image_config.map(|v| format!("--image-config={v}")))
-        .args(&[
+        .args([
             "--repo",
             repo.as_str(),
             commitid.as_str(),
-            tempdest
-                .as_ref()
-                .map(|s| s.as_str())
-                .unwrap_or_else(|| target_imgref.as_str()),
+            tempdest.as_deref().unwrap_or(target_imgref.as_str()),
         ])
         .status()?;
     if !s.success() {

@@ -27,15 +27,15 @@ impl ResolvedOstreePaths {
 /// Returns a pair of the resolved path and in the case where
 /// the path points to a symlink, it also includes the resolved
 /// symlink target.
-pub fn resolve_ostree_paths<'a>(
+pub fn resolve_ostree_paths(
     path: &Utf8Path,
     fsroot: &ostree::RepoFile,
-    cache: &'a mut HashMap<Utf8PathBuf, ResolvedOstreePaths>,
+    cache: &mut HashMap<Utf8PathBuf, ResolvedOstreePaths>,
 ) -> Option<ResolvedOstreePaths> {
     assert!(path.is_absolute());
 
     // Recurse until root
-    if path.parent() == None {
+    if path.parent().is_none() {
         return Some(ResolvedOstreePaths {
             path: fsroot.clone(),
             symlink_target: None,
@@ -48,11 +48,7 @@ pub fn resolve_ostree_paths<'a>(
     }
 
     // Resolve our parent
-    let parent = if let Some(parent) = resolve_ostree_paths(path.parent().unwrap(), fsroot, cache) {
-        parent
-    } else {
-        return None;
-    };
+    let parent = resolve_ostree_paths(path.parent().unwrap(), fsroot, cache)?;
 
     // Resolve ourselves from our parent
     let child_file = parent
@@ -113,7 +109,7 @@ pub fn resolve_ostree_paths<'a>(
         cache.insert(path.to_owned(), result.clone());
     }
 
-    return Some(result);
+    Some(result)
 }
 
 pub trait FileHelpers {

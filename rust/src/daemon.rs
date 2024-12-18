@@ -103,17 +103,17 @@ fn deployment_populate_variant_origin(
 
     // Initramfs data.
     if let Some(initramfs) = tf.derive.initramfs.as_ref() {
-        dict.insert("regenerate-initramfs", &initramfs.regenerate);
+        dict.insert("regenerate-initramfs", initramfs.regenerate);
         vdict_insert_optvec(dict, "initramfs-args", initramfs.args.as_ref());
         vdict_insert_optset(dict, "initramfs-etc", initramfs.etc.as_ref());
     } else {
         // This key is also always injected.
-        dict.insert("regenerate-initramfs", &false);
+        dict.insert("regenerate-initramfs", false);
     }
 
     // Other bits.
     if tf.cliwrap.unwrap_or_default() {
-        dict.insert("cliwrap", &true);
+        dict.insert("cliwrap", true);
     }
 
     Ok(())
@@ -134,41 +134,41 @@ pub(crate) fn deployment_populate_variant(
     // First, basic values from ostree
     dict.insert("id", &id);
 
-    dict.insert("osname", &deployment.osname().as_str());
-    dict.insert("checksum", &deployment.csum().as_str());
-    dict.insert_value("serial", &(deployment.deployserial() as i32).to_variant());
+    dict.insert("osname", deployment.osname().as_str());
+    dict.insert("checksum", deployment.csum().as_str());
+    dict.insert_value("serial", &deployment.deployserial().to_variant());
 
     let booted: bool = sysroot
         .booted_deployment()
         .map(|b| b.equal(deployment))
         .unwrap_or_default();
-    dict.insert("booted", &booted);
+    dict.insert("booted", booted);
 
     let live_state =
         crate::live::get_live_apply_state(sysroot.reborrow_cxx(), deployment.reborrow_cxx())?;
     if !live_state.inprogress.is_empty() {
-        dict.insert("live-inprogress", &live_state.inprogress.as_str());
+        dict.insert("live-inprogress", live_state.inprogress.as_str());
     }
     if !live_state.commit.is_empty() {
-        dict.insert("live-replaced", &live_state.commit.as_str());
+        dict.insert("live-replaced", live_state.commit.as_str());
     }
 
     /* Staging status */
-    dict.insert("staged", &deployment.is_staged());
+    dict.insert("staged", deployment.is_staged());
     if deployment.is_staged()
         // XXX: this should check deployment.is_finalization_locked() too now
         // but the libostree Rust bindings need to be updated
         && std::path::Path::new("/run/ostree/staged-deployment-locked").exists()
     {
-        dict.insert("finalization-locked", &true);
+        dict.insert("finalization-locked", true);
     }
 
-    dict.insert("pinned", &deployment.is_pinned());
+    dict.insert("pinned", deployment.is_pinned());
     let unlocked = deployment.unlocked();
     // Unwrap safety: This always returns a value
     dict.insert(
         "unlocked",
-        &ostree::Deployment::unlocked_state_to_string(unlocked).as_str(),
+        ostree::Deployment::unlocked_state_to_string(unlocked).as_str(),
     );
 
     // Some of the origin-based state.  But not all yet; see the rest of the
@@ -282,7 +282,7 @@ pub(crate) fn variant_add_remote_status(
         false
     };
 
-    dict.insert("gpg-enabled", &gpg_verify);
+    dict.insert("gpg-enabled", gpg_verify);
     if !gpg_verify {
         return Ok(()); // note early return; no need to verify signatures!
     }
@@ -344,9 +344,9 @@ fn get_cached_signatures_variant(
         sigs.push(glib::Variant::from_variant(&verify_result.all(i))); // we know index is in range
     }
 
-    let v = glib::Variant::array_from_iter_with_type(&*glib::Variant::static_variant_type(), sigs);
+    let v = glib::Variant::array_from_iter_with_type(&glib::Variant::static_variant_type(), sigs);
     let perms = cap_std::fs::Permissions::from_mode(0o600);
-    cachedir.atomic_write_with_perms(&cached_relpath, &v.data_as_bytes(), perms)?;
+    cachedir.atomic_write_with_perms(&cached_relpath, v.data_as_bytes(), perms)?;
     Ok(v)
 }
 
@@ -450,7 +450,7 @@ pub fn generate_baselayer_refs(
     // Regenerate the refs from the base commits.
     let bases = sysroot.deployments().into_iter().filter_map(|deployment| {
         deployment_layeredmeta_load_commit(&repo, &deployment)
-            .map(|meta| meta.is_layered.then(|| meta.base_commit))
+            .map(|meta| meta.is_layered.then_some(meta.base_commit))
             .transpose()
     });
     for (index, base_rev) in bases.enumerate() {

@@ -138,7 +138,7 @@ impl Drop for RoFilesMount {
             return;
         };
         // We need to unmount before letting the tempdir cleanup run.
-        let success = Command::new(get_fusermount_path().unwrap().to_string())
+        let success = Command::new(get_fusermount_path().unwrap())
             .arg("-u")
             .arg(tempdir.path())
             .status()

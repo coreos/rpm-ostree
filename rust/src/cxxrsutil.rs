@@ -39,7 +39,7 @@ pub trait FFIGObjectReWrap<'a> {
     type ReWrapped;
 
     /// Convert a glib-rs wrapper object borrowed cxx-rs type.
-    fn reborrow_cxx(&'a self) -> &Self::ReWrapped;
+    fn reborrow_cxx(&'a self) -> &'a Self::ReWrapped;
 }
 
 /// Implement FFIGObjectWrapper given a pair of wrapper type
@@ -59,7 +59,7 @@ macro_rules! impl_wrap {
         impl<'a> FFIGObjectReWrap<'a> for $bound {
             type ReWrapped = $w;
 
-            fn reborrow_cxx(&'a self) -> &Self::ReWrapped {
+            fn reborrow_cxx(&'a self) -> &'a Self::ReWrapped {
                 let p: *const $sys = self.to_glib_none().0;
                 let p = p as *const Self::ReWrapped;
                 unsafe { &*p }

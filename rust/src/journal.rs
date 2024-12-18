@@ -81,7 +81,7 @@ fn impl_journal_print_staging_failure() -> Result<()> {
     j.match_add("_PID", ostree_pid.as_str())?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
 
-    if j.next_entry()? != None {
+    if (j.next_entry()?).is_some() {
         return Ok(()); // finished successfully!
     }
 
