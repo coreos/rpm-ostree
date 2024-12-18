@@ -47,15 +47,11 @@ pub struct Extension {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 enum ExtensionKind {
+    #[default]
     OsExtension,
     Development,
-}
-
-impl Default for ExtensionKind {
-    fn default() -> Self {
-        ExtensionKind::OsExtension
-    }
 }
 
 fn extensions_load_stream(

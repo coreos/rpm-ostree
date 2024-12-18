@@ -229,12 +229,7 @@ pub fn compose_prepare_rootfs(
     compose_init_rootfs_strict(
         target_rootfs_dfd,
         tmp_is_dir,
-        treefile
-            .parsed
-            .base
-            .opt_usrlocal
-            .clone()
-            .unwrap_or_default(),
+        treefile.parsed.base.opt_usrlocal.unwrap_or_default(),
     )?;
 
     println!("Moving /usr to target");
@@ -272,7 +267,7 @@ fn postprocess_useradd(rootfs_dfd: &cap_std::fs::Dir) -> Result<()> {
     let perms = cap_std::fs::Permissions::from_mode(0o644);
     if let Some(f) = rootfs_dfd.open_optional(path).context("opening")? {
         rootfs_dfd
-            .atomic_replace_with(&path, |bufw| -> Result<_> {
+            .atomic_replace_with(path, |bufw| -> Result<_> {
                 bufw.get_mut().as_file_mut().set_permissions(perms)?;
                 let f = BufReader::new(&f);
                 for line in f.lines() {
@@ -379,7 +374,7 @@ fn postprocess_rpm_macro(rootfs_dfd: &Dir) -> Result<()> {
     rootfs_dfd.create_dir_with(RPM_MACROS_DIR, &db)?;
     let rpm_macros_dfd = rootfs_dfd.open_dir(RPM_MACROS_DIR)?;
     let perms = cap_std::fs::Permissions::from_mode(0o644);
-    rpm_macros_dfd.atomic_replace_with(&MACRO_FILENAME, |w| -> Result<()> {
+    rpm_macros_dfd.atomic_replace_with(MACRO_FILENAME, |w| -> Result<()> {
         w.get_mut().as_file_mut().set_permissions(perms)?;
         w.write_all(b"%_dbpath /")?;
         w.write_all(RPMOSTREE_RPMDB_LOCATION.as_bytes())?;
@@ -398,7 +393,7 @@ fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
     let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
     if let Some(f) = rootfs_dfd.open_optional(path)? {
         let perms = cap_std::fs::Permissions::from_mode(0o644);
-        rootfs_dfd.atomic_replace_with(&path, |w| -> Result<()> {
+        rootfs_dfd.atomic_replace_with(path, |w| -> Result<()> {
             w.get_mut().as_file_mut().set_permissions(perms)?;
             let f = BufReader::new(&f);
             for line in f.lines() {
@@ -753,7 +748,7 @@ fn compose_postprocess_mutate_os_release(
     // of resolving a symlink relative to a rootfs (see discussions in
     // https://github.com/projectatomic/rpm-ostree/pull/410/)
     let mut bwrap = crate::bwrap::Bubblewrap::new_with_mutability(
-        &rootfs,
+        rootfs,
         crate::ffi::BubblewrapMutability::Immutable,
     )?;
     bwrap.append_child_argv(["realpath", "/etc/os-release"]);
@@ -1113,7 +1108,7 @@ pub fn rootfs_prepare_links(
             .with_context(|| format!("Moving /{} to /{}", &varlib_path, &usrlib_path))?;
 
         let target = format!("../../{}", &usrlib_path);
-        ensure_symlink(&rootfs, &target, &varlib_path)
+        ensure_symlink(rootfs, &target, &varlib_path)
             .with_context(|| format!("Creating /{} symlink", &varlib_path))?;
     }
 
@@ -1255,12 +1250,12 @@ pub fn directory_size(dfd: i32, cancellable: &crate::FFIGCancellable) -> CxxResu
                 let child = d.open_dir(ent.file_name())?;
                 r += directory_size_recurse(&child, cancellable)?;
             } else if meta.is_file() {
-                r += meta.size() as u64;
+                r += meta.size();
             }
         }
         Ok(r)
     }
-    Ok(directory_size_recurse(&dfd, &cancellable)?)
+    Ok(directory_size_recurse(dfd, &cancellable)?)
 }
 
 #[context("Hardlinking rpmdb to base location")]
@@ -1308,7 +1303,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &Dir, normalize: bool) -> Result<(
     let dbpath_arg = format!("--dbpath=/proc/self/cwd/{}", RPMOSTREE_RPMDB_LOCATION);
     // Fork rpmdb from the *host* rootfs to read the rpmdb back into memory
     let r = std::process::Command::new("rpmdb")
-        .args(&[dbpath_arg.as_str(), "--exportdb"])
+        .args([dbpath_arg.as_str(), "--exportdb"])
         .current_dir(format!("/proc/self/fd/{}", rootfs_dfd.as_raw_fd()))
         .stdout(Stdio::from(dbfd.try_clone()?))
         .status()?;
@@ -1331,7 +1326,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &Dir, normalize: bool) -> Result<(
     }
 
     // Fork the target rpmdb to write the content from memory to disk
-    let mut bwrap = Bubblewrap::new_with_mutability(&rootfs_dfd, BubblewrapMutability::RoFiles)?;
+    let mut bwrap = Bubblewrap::new_with_mutability(rootfs_dfd, BubblewrapMutability::RoFiles)?;
     bwrap.append_child_argv(["rpmdb", dbpath_arg.as_str(), "--importdb"]);
     bwrap.take_stdin_fd(dbfd.into_raw_fd());
     let cancellable = gio::Cancellable::new();
@@ -1342,7 +1337,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &Dir, normalize: bool) -> Result<(
     // Sometimes we can end up with build-to-build variance in the underlying rpmdb
     // files. Attempt to sort that out, if requested.
     if normalize {
-        normalization::normalize_rpmdb(&rootfs_dfd, RPMOSTREE_RPMDB_LOCATION)?;
+        normalization::normalize_rpmdb(rootfs_dfd, RPMOSTREE_RPMDB_LOCATION)?;
     }
 
     tempetc.undo()?;

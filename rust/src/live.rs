@@ -61,7 +61,7 @@ pub(crate) fn get_live_state(
     deploy: &ostree::Deployment,
 ) -> Result<Option<LiveApplyState>> {
     let run = Dir::open_ambient_dir("/run", cap_std::ambient_authority())?;
-    if !run.try_exists(&get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
+    if !run.try_exists(get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
         return Ok(None);
     }
     let live_commit = repo.resolve_rev(LIVE_REF, true)?;
@@ -79,7 +79,7 @@ fn write_live_state(
     state: &LiveApplyState,
 ) -> Result<()> {
     let run = Dir::open_ambient_dir("/run", cap_std::ambient_authority())?;
-    let rundir = if let Some(d) = run.open_dir_optional(&get_runstate_dir(deploy))? {
+    let rundir = if let Some(d) = run.open_dir_optional(get_runstate_dir(deploy))? {
         d
     } else {
         return Ok(());

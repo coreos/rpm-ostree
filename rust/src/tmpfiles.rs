@@ -67,7 +67,7 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
         }
 
         let perms = Permissions::from_mode(0o644);
-        tmpfiles_dir.atomic_write_with_perms(&AUTOVAR_PATH, entries.as_bytes(), perms)?;
+        tmpfiles_dir.atomic_write_with_perms(AUTOVAR_PATH, entries.as_bytes(), perms)?;
     }
     Ok(())
 }

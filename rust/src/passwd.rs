@@ -353,17 +353,17 @@ enum PasswdKind {
 impl PasswdKind {
     // Get user/group passwd file
     fn passwd_file(&self) -> &'static str {
-        return match *self {
+        match *self {
             PasswdKind::User => "passwd",
             PasswdKind::Group => "group",
-        };
+        }
     }
     // Get user/group shadow file
     fn shadow_file(&self) -> &'static str {
-        return match *self {
+        match *self {
             PasswdKind::User => "shadow",
             PasswdKind::Group => "gshadow",
-        };
+        }
     }
 }
 

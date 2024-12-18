@@ -61,7 +61,7 @@ fn legacy_prepare_dev(rootfs: &Dir) -> Result<()> {
         // file so it can use `fchmod()` which may fail for special things like `/dev/tty`.
         // We have no concerns about following symlinks because we know we just created
         // the device and there are no concurrent writers.
-        rustix::fs::chmodat(&dest_dir.as_fd(), nodename, mode, AtFlags::empty())
+        rustix::fs::chmodat(dest_dir.as_fd(), nodename, mode, AtFlags::empty())
             .with_context(|| format!("Setting permissions of target {}", nodename))?;
     }
     smoketest_dev_null(dest_dir)?;
