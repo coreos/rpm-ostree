@@ -14,7 +14,7 @@ pub(crate) fn main(argv: &[&str]) -> Result<()> {
     if !ostree_ext::container_utils::is_ostree_container()? {
         return cliutil::exec_real_binary("kernel-install", argv);
     }
-    let is_install = matches!(argv.get(0), Some(&"add"));
+    let is_install = matches!(argv.first(), Some(&"add"));
 
     let modules_path = Utf8Dir::open_ambient_dir("lib/modules", cap_std::ambient_authority())?;
     //kernel-install is called by kernel-core and kernel-modules cleanup let's make sure we just call dracut once.

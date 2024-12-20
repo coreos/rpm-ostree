@@ -154,7 +154,7 @@ pub(crate) fn mutate_executables_to(
 fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     // A new mount namespace should have been created for us
     let r = Command::new("mount")
-        .args(&["-o", "remount,rw", "/sysroot"])
+        .args(["-o", "remount,rw", "/sysroot"])
         .status()?;
     if !r.success() {
         anyhow::bail!("Failed to remount /sysroot");
@@ -196,13 +196,13 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     let src_ref = opts.src_ref.as_deref().unwrap_or(opts.ostref.as_str());
     let mut cmd = Command::new("ostree");
     cmd.arg(format!("--repo={}", repo_path.to_str().unwrap()))
-        .args(&["commit", "--consume", "-b"])
+        .args(["commit", "--consume", "-b"])
         .arg(opts.ostref.as_str())
         .args(&[
             format!("--base={}", src_ref),
             format!("--tree=dir={}", tmp_rootfs.to_str().unwrap()),
         ])
-        .args(&[
+        .args([
             "--owner-uid=0",
             "--owner-gid=0",
             "--selinux-policy-from-base",

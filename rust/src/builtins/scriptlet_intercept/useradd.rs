@@ -53,7 +53,7 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     if let Some(groups) = supplementary_groups {
         for group in groups {
             crate::builtins::scriptlet_intercept::usermod::generate_sysusers_fragment(
-                &rootdir, username, &group,
+                &rootdir, username, group,
             )?;
         }
     }

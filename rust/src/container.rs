@@ -334,7 +334,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
             .collect();
         state.packagemeta.insert(ObjectSourceMeta {
             identifier: Rc::clone(nevra),
-            name: Rc::from(libdnf_sys::hy_split_nevra(&nevra)?.name),
+            name: Rc::from(libdnf_sys::hy_split_nevra(nevra)?.name),
             srcid: Rc::from(pkgmeta.src_pkg()),
             change_time_offset,
             change_frequency: pruned_changelogs.len() as u32,
@@ -357,7 +357,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
                 .map_err(anyhow::Error::msg)?;
             let initramfs = initramfs.downcast_ref::<ostree::RepoFile>().unwrap();
             let checksum = initramfs.checksum();
-            let name = format!("initramfs");
+            let name = "initramfs".to_string();
             let identifier = format!("{} (kernel {})", name, kernel_ver).into_boxed_str();
             let identifier = Rc::from(identifier);
 
@@ -486,7 +486,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         .previous_build_manifest
         .as_ref()
         .map(|p| {
-            oci_spec::image::ImageManifest::from_file(&p)
+            oci_spec::image::ImageManifest::from_file(p)
                 .map_err(|e| anyhow::anyhow!("Failed to read previous manifest {p}: {e}"))
         })
         .transpose()?;
@@ -524,7 +524,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     if let Some(compare_with_build) = opt.compare_with_build.as_ref() {
         progress_task("Comparing Builds", || {
             handle.block_on(async {
-                compare_builds(&compare_with_build, &format!("{}", &opt.imgref)).await
+                compare_builds(compare_with_build, &format!("{}", &opt.imgref)).await
             })
         })?;
     };
@@ -547,7 +547,7 @@ struct UpdateFromRunningOpts {
 // This reimplements https://github.com/ostreedev/ostree/pull/2691 basically
 #[context("Finding encapsulated commits")]
 fn find_encapsulated_commits(repo: &Utf8Path) -> Result<Vec<String>> {
-    let objects = Dir::open_ambient_dir(&repo.join("objects"), cap_std::ambient_authority())?;
+    let objects = Dir::open_ambient_dir(repo.join("objects"), cap_std::ambient_authority())?;
     let mut r = Vec::new();
     for entry in objects.entries()? {
         let entry = entry?;
@@ -612,9 +612,13 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
 
     let encapsulated_commits = find_encapsulated_commits(src_repo_path)?;
     let commit = match encapsulated_commits.as_slice() {
-        [] => return Err(format!("No encapsulated commit found in container").into()),
+        [] => {
+            return Err("No encapsulated commit found in container"
+                .to_string()
+                .into())
+        }
         [c] => {
-            ostree::validate_checksum_string(&c)?;
+            ostree::validate_checksum_string(c)?;
             c.as_str()
         }
         o => return Err(format!("Found {} commit objects, expected just one", o.len()).into()),
@@ -627,8 +631,8 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
         let flags = ostree::RepoPullFlags::MIRROR;
         let opts = glib::VariantDict::new(None);
         let refs = [commit];
-        opts.insert("refs", &&refs[..]);
-        opts.insert("flags", &(flags.bits() as i32));
+        opts.insert("refs", &refs[..]);
+        opts.insert("flags", flags.bits() as i32);
         let options = opts.to_variant();
         target_repo
             .pull_with_options(
@@ -643,8 +647,8 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     println!("Imported: {commit}");
 
     let status = Command::new("chroot")
-        .args(&[opts.target_root.as_str(), "rpm-ostree", "rebase", commit])
-        .args(opts.reboot.then(|| "--reboot"))
+        .args([opts.target_root.as_str(), "rpm-ostree", "rebase", commit])
+        .args(opts.reboot.then_some("--reboot"))
         .status()?;
     if !status.success() {
         return Err(format!("Failed to deploy commit: {:?}", status).into());

@@ -197,7 +197,7 @@ pub(crate) fn console_progress_begin_task(msg: &str) {
 pub(crate) fn console_progress_begin_n_items(msg: &str, n: u64) {
     let mut lock = PROGRESS.lock().unwrap();
     assert_empty(&lock, msg);
-    *lock = Some(ProgressState::new(msg, ProgressType::NItems(n as u64)));
+    *lock = Some(ProgressState::new(msg, ProgressType::NItems(n)));
 }
 
 pub(crate) fn console_progress_begin_percent(msg: &str) {

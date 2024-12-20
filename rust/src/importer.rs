@@ -338,7 +338,7 @@ fn tweak_imported_file_info(file_info: &FileInfo, ro_executables: bool) {
             // https://github.com/fedora-sysv/chkconfig/pull/67 propagates everywhere
             // and/or https://github.com/ostreedev/ostree-rs-ext/pull/182 merges.
             if target.ends_with("//sbin/chkconfig") {
-                let canonicalized = &canonicalize_path(&target);
+                let canonicalized = &canonicalize_path(target);
                 file_info.set_symlink_target(canonicalized);
             }
         }
