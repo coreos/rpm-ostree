@@ -49,8 +49,6 @@ const USERMOD_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/usermod-wrapper
 const KERNEL_INSTALL_PATH: &str = "usr/bin/kernel-install";
 const KERNEL_INSTALL_WRAPPER: &[u8] = include_bytes!("../../src/libpriv/kernel-install-wrapper.sh");
 
-// ## Check for layout and wrap if =ostree
-
 const RPMOSTREE_CORE_STAGED_RPMS_DIR: &str = "rpm-ostree/staged-rpms";
 
 pub(crate) const OSTREE_BOOTED: &str = "/run/ostree-booted";
@@ -171,6 +169,7 @@ impl FilesystemScriptPrep {
         (USERMOD_PATH, USERMOD_WRAPPER),
     ];
 
+    // Separate const as is used only to wrap kernel-install if !is_ostree_layout()
     const REPLACE_KERNEL_PATHS: &'static [(&'static str, &'static [u8])] =
         &[(KERNEL_INSTALL_PATH, KERNEL_INSTALL_WRAPPER)];
 
