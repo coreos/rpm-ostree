@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::Context;
-use serde_derive::Deserialize;
+use serde::{Deserialize, Deserializer};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::process::Command;
 
@@ -49,6 +50,7 @@ pub struct Deployment {
     pub pinned: bool,
     pub checksum: String,
     pub base_checksum: Option<String>,
+    #[serde(deserialize_with = "deserialize_base_commit_meta")]
     pub base_commit_meta: HashMap<String, serde_json::Value>,
     pub staged: Option<bool>,
     pub booted: bool,
@@ -57,6 +59,43 @@ pub struct Deployment {
     pub container_image_reference: Option<String>,
     pub version: Option<String>,
 }
+
+/// When the deployment is an OCI image, the base_commit_meta field contains serialized JSON.
+/// So the values in this map can either be:
+///   - Regular OSTree case: a JSON object
+///   - OCI case : a string containing a serialized JSON object
+///
+/// In the OCI case, simply deserialize the strings before passing them to serde,
+/// when necessary.
+/// See https://github.com/coreos/rpm-ostree/issues/5196
+fn deserialize_base_commit_meta<'de, D>(deserializer: D) -> Result<HashMap<String, Value>>
+where
+    D: serde::Deserializer<'de>,
+{
+    let buf: HashMap<String, Value> = HashMap::deserialize(deserializer)
+       .unwrap();
+       // .map_err(|_| Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "Cannot deserialize base_commit_meta")) as Box<dyn std::error::Error + Send + Sync>)?;
+
+    //.map_err(|_|  D::Error::custom("Cannot deserialize base_commit_meta"))?;
+
+    let mut result = HashMap::new();
+
+    for (key, value) in buf {
+        // If the value is a string, attempt to parse it as a nested JSON object
+        let deserialized_value = if let Value::String(s) = value {
+            serde_json::from_str(&s)//.map_err(|_| Err(format!("Cannot deserialize base_commit_meta").into()))??
+                .unwrap()
+                //.map_err(|_| Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, "Cannot deserialize base_commit_meta")) as Box<dyn std::error::Error + Send + Sync>)?
+            } else {
+                value
+            };
+
+        result.insert(key, deserialized_value);
+    }
+
+    Ok(result)
+}
+
 
 impl Status {
     /// Find the booted deployment, if any.
