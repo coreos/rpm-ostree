@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use anyhow::Context;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Command;
 
@@ -96,6 +96,22 @@ impl Deployment {
         } else {
             Err(format!("No {} metadata key", k).into())
         }
+    }
+
+    pub fn get_base_manifest(&self) -> Result<Option<oci_spec::image::ImageManifest>> {
+        if self.container_image_reference.is_none() {
+            return Ok(None);
+        }
+
+        let manifest = self.base_commit_meta.get("ostree.manifest");
+        if let Some(inner) = manifest {
+            let deser = String::deserialize(inner)?;
+            let manifest: oci_spec::image::ImageManifest = serde_json::from_str(deser.as_str())?;
+
+            return Ok(Some(manifest));
+        };
+
+        Ok(None)
     }
 }
 
