@@ -31,6 +31,8 @@ pkg_install() {
 
 pkg_builddep_spec() {
     if test -x /usr/bin/dnf5; then
+        # copr build dnf5 environment deps
+        dnf install -y 'dnf5-command(builddep)'
         dnf builddep -y "$@"
     else
         dnf builddep -y --spec "$@"
