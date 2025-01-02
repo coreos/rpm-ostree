@@ -13,4 +13,12 @@ cosa init https://github.com/coreos/fedora-coreos-config/
 cp /cosa/component-rpms/*.rpm overrides/rpm
 cosa fetch
 cosa build
+
+# vmcheck tests
+export COSA_DIR=$(pwd)
+cd /cosa/component-source-tests
+env JOBS=2 ./tests/vmcheck.sh
+cd ${COSA_DIR}
+
+# kola tests, just ours for now
 cosa kola run 'ext.rpm-ostree.*'
