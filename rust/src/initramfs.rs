@@ -4,7 +4,7 @@
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, Context, Result};
 use camino::Utf8Path;
-use cap_std::fs_utf8::Dir as Utf8Dir;
+use cap_std::fs::Dir;
 use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtCommandExt;
@@ -185,8 +185,7 @@ pub(crate) fn initramfs_overlay_generate(
 }
 
 #[context("Running dracut")]
-pub(crate) fn run_dracut(kernel_dir: &str) -> Result<()> {
-    let root_fs = Utf8Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
+pub(crate) fn run_dracut(root_fs: &Dir, kernel_dir: &str) -> Result<()> {
     let tmp_dir = tempfile::tempdir()?;
     let tmp_initramfs_path = tmp_dir.path().join("initramfs.img");
 
