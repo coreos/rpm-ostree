@@ -28,6 +28,7 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
             match *arg {
                 // Add custom Rust commands here, and also in `libmain.cxx` if user-visible.
                 "countme" => rpmostree_rust::countme::entrypoint(args).map(|_| 0),
+                "kernel-install" => rpmostree_rust::kernel_install::main(args).map(Into::into),
                 "fix-shadow-perms" => rpmostree_rust::passwd::fix_shadow_perms_entrypoint(args).map(|_| 0),
                 "cliwrap" => rpmostree_rust::cliwrap::entrypoint(args).map(|_| 0),
                 // A hidden wrapper to intercept some binaries in RPM scriptlets.
