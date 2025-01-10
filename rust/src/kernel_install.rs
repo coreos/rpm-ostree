@@ -22,6 +22,8 @@ use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 
+use crate::cmdutils::CommandRunExt;
+
 /// Parsed by kernel-install and set in the environment
 const LAYOUT_VAR: &str = "KERNEL_INSTALL_LAYOUT";
 /// The value we expect to find for layout
@@ -65,13 +67,10 @@ fn add(root: &Dir, argv: &[&str]) -> Result<()> {
     println!("Generating initramfs");
     crate::initramfs::run_dracut(root, &kver)?;
     println!("Running depmod");
-    let st = Command::new("depmod")
+    Command::new("depmod")
         .args(["-a", kver])
-        .status()
+        .run()
         .context("Invoking depmod")?;
-    if !st.success() {
-        anyhow::bail!("Failed to run depmod: {st:?}");
-    }
     Ok(())
 }
 

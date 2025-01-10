@@ -19,6 +19,7 @@
  * - Add a test case in tests/compose
  */
 
+use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::*;
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -831,13 +832,7 @@ impl Treefile {
     pub(crate) fn exec_finalize_d(&self, rootfs: &Dir) -> Result<()> {
         for (name, path) in self.externals.finalize_d.iter() {
             println!("Executing: {name}");
-            let st = Command::new(path)
-                .cwd_dir(rootfs.try_clone()?)
-                .status()
-                .with_context(|| format!("exec {path:?}"))?;
-            if !st.success() {
-                anyhow::bail!("finalize.d {name} failed: {st:?}");
-            }
+            Command::new(path).cwd_dir(rootfs.try_clone()?).run()?;
         }
         Ok(())
     }

@@ -9,6 +9,7 @@
 //! This backs the hidden `rpm-ostree testutils` CLI.  Subject
 //! to change.
 
+use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use cap_std::fs::FileType;
@@ -82,12 +83,9 @@ pub(crate) fn mutate_one_executable_to(
     std::io::copy(f, &mut destf).context("Failed to copy")?;
     if have_objcopy {
         std::mem::drop(destf);
-        let r = Command::new("objcopy")
+        Command::new("objcopy")
             .arg(format!("--add-section=.note.coreos-synthetic={}", notepath))
-            .status()?;
-        if !r.success() {
-            anyhow::bail!("objcopy failed: {:?}", r)
-        }
+            .run()?;
     } else {
         // ELF is OK with us just appending some junk
         let extra = rand::thread_rng()
@@ -153,12 +151,9 @@ pub(crate) fn mutate_executables_to(
 #[context("Generating synthetic ostree update")]
 fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     // A new mount namespace should have been created for us
-    let r = Command::new("mount")
+    Command::new("mount")
         .args(["-o", "remount,rw", "/sysroot"])
-        .status()?;
-    if !r.success() {
-        anyhow::bail!("Failed to remount /sysroot");
-    }
+        .run()?;
     assert!(opts.percentage > 0 && opts.percentage <= 100);
     let repo_path = Path::new(opts.repo.as_str());
     let tempdir = tempfile::tempdir_in(repo_path.join("tmp"))?;
@@ -213,10 +208,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     if let Some(v) = opts.commit_version.as_ref() {
         cmd.arg(format!("--add-metadata-string=version={}", v));
     }
-    let r = cmd.status()?;
-    if !r.success() {
-        anyhow::bail!("Failed to commit updated content: {:?}", r)
-    }
+    cmd.run()?;
     Ok(())
 }
 

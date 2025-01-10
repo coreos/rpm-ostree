@@ -7,6 +7,7 @@
 
 use crate::bwrap::Bubblewrap;
 use crate::capstdext::dirbuilder_from_mode;
+use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::ffiutil::ffi_dirfd;
@@ -1302,14 +1303,11 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &Dir, normalize: bool) -> Result<(
 
     let dbpath_arg = format!("--dbpath=/proc/self/cwd/{}", RPMOSTREE_RPMDB_LOCATION);
     // Fork rpmdb from the *host* rootfs to read the rpmdb back into memory
-    let r = std::process::Command::new("rpmdb")
+    std::process::Command::new("rpmdb")
         .args([dbpath_arg.as_str(), "--exportdb"])
         .current_dir(format!("/proc/self/fd/{}", rootfs_dfd.as_raw_fd()))
         .stdout(Stdio::from(dbfd.try_clone()?))
-        .status()?;
-    if !r.success() {
-        return Err(anyhow!("Failed to execute rpmdb --exportdb: {:?}", r));
-    }
+        .run()?;
 
     // Clear out the db on disk
     rootfs_dfd.remove_all_optional(RPMOSTREE_RPMDB_LOCATION)?;

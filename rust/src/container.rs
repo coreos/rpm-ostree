@@ -28,6 +28,7 @@ use ostree_ext::objectsource::{
 use ostree_ext::prelude::*;
 use ostree_ext::{gio, oci_spec, ostree};
 
+use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::FFIGObjectReWrap;
 use crate::fsutil::{self, FileHelpers, ResolvedOstreePaths};
 use crate::progress::progress_task;
@@ -597,12 +598,9 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
         .flags()
         .contains(statvfs::FsFlags::ST_RDONLY)
     {
-        let status = Command::new("mount")
+        Command::new("mount")
             .args(["-o", "remount,rw", sysroot.as_str()])
-            .status()?;
-        if !status.success() {
-            return Err(format!("Failed to remount /sysroot writable: {:?}", status).into());
-        }
+            .run()?;
     }
 
     let src_repo_path = Utf8Path::new("/ostree/repo");
@@ -646,13 +644,10 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
 
     println!("Imported: {commit}");
 
-    let status = Command::new("chroot")
+    Command::new("chroot")
         .args([opts.target_root.as_str(), "rpm-ostree", "rebase", commit])
         .args(opts.reboot.then_some("--reboot"))
-        .status()?;
-    if !status.success() {
-        return Err(format!("Failed to deploy commit: {:?}", status).into());
-    }
+        .run()?;
 
     Ok(())
 }
