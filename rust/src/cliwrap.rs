@@ -30,10 +30,10 @@ pub const CLIWRAP_DESTDIR: &str = "usr/libexec/rpm-ostree/wrapped";
 const KERNEL_INSTALL: &str = "usr/bin/kernel-install";
 
 /// Binaries that will be wrapped if they exist.
-static WRAPPED_BINARIES: &[&str] = &["usr/bin/rpm", "usr/bin/dracut", "usr/sbin/grubby"];
+const WRAPPED_BINARIES: &[&str] = &["usr/bin/rpm", "usr/bin/dracut", "usr/sbin/grubby"];
 
 /// Binaries we will wrap, or create if they don't exist.
-static MUSTWRAP_BINARIES: &[&str] = &["usr/bin/yum", "usr/bin/dnf"];
+const MUSTWRAP_BINARIES: &[&str] = &["usr/bin/yum", "usr/bin/dnf"];
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum RunDisposition {
