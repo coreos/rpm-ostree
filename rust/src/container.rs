@@ -519,6 +519,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         handle.block_on(async {
             ostree_ext::container::encapsulate(repo, rev.as_str(), &config, Some(opts), &opt.imgref)
                 .await
+                .context("Encapsulating")
         })
     })?;
 

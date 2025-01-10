@@ -18,14 +18,38 @@ enum Cmd {
     /// This command does nothing, it's a placeholder for future expansion.
     #[clap(hide = true)]
     Stub,
+    /// Options for building.
+    Compose {
+        #[clap(subcommand)]
+        cmd: ComposeCmd,
+    },
+}
+
+#[derive(Debug, clap::Subcommand)]
+enum ComposeCmd {
+    BuildChunkedOCI {
+        #[clap(flatten)]
+        opts: crate::compose::BuildChunkedOCI,
+    },
+}
+
+impl ComposeCmd {
+    fn run(self) -> Result<()> {
+        match self {
+            ComposeCmd::BuildChunkedOCI { opts } => opts.run(),
+        }
+    }
 }
 
 impl Cmd {
     fn run(self) -> Result<()> {
         match self {
-            Cmd::Stub => println!("Did nothing successfully."),
+            Cmd::Stub => {
+                println!("Did nothing successfully.");
+                Ok(())
+            }
+            Cmd::Compose { cmd } => cmd.run(),
         }
-        Ok(())
     }
 }
 
@@ -45,6 +69,9 @@ mod tests {
         let opt = Experimental::try_parse_from(["experimental", "stub"]).unwrap();
         match opt.cmd {
             Cmd::Stub => {}
+            o => {
+                panic!("Unexpected {o:?}")
+            }
         }
         Ok(())
     }
