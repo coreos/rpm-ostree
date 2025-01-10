@@ -324,7 +324,12 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
     rpmlogSetFile (NULL);
   }
 
-  if (!opt_source_root)
+  if (opt_source_root)
+    {
+      CXX_TRY((*self->treefile_rs)->assert_no_repovars(), error);
+      g_debug ("source root set, validated no repovars");
+    }
+  else
     {
       if (!set_repos_dir (dnfctx, **self->treefile_rs, self->workdir_dfd, cancellable, error))
         return FALSE;

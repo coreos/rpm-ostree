@@ -668,6 +668,11 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
 
   dnf_context_set_install_root (self->dnfctx, install_root);
   dnf_context_set_source_root (self->dnfctx, source_root);
+  if (source_root)
+    {
+      g_autofree char *reposdir = g_build_filename (source_root, "etc/yum.repos.d", NULL);
+      dnf_context_set_repo_dir (self->dnfctx, reposdir);
+    }
 
   /* Hackaround libdnf logic, ensuring that `/etc/dnf/vars` gets sourced
    * from the host environment instead of the install_root:

@@ -51,6 +51,9 @@ const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
 pub(crate) const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
 const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
 pub(crate) const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
+/// Name of the sqlite rpmdb file.
+#[cfg(test)]
+const RPMDB_NAME: &str = "rpmdb.sqlite";
 
 const SD_LOCAL_FS_TARGET_REQUIRES: &str = "usr/lib/systemd/system/local-fs.target.requires";
 
@@ -656,6 +659,70 @@ fn compose_postprocess_rpmdb(rootfs_dfd: &Dir) -> Result<()> {
         format!("../../{}", RPMOSTREE_RPMDB_LOCATION),
         TRADITIONAL_RPMDB_LOCATION,
     )?;
+    Ok(())
+}
+
+/// Ensure that /usr/lib/sysimage/rpm is the canonical rpmdb location,
+/// and make backcompat symlinks from our legacy locations to it.
+/// This isn't yet used in the main rpm-ostree compose paths, but only by
+/// the new experimental builder path.
+#[context("Canonicalizing rpmdb")]
+pub(crate) fn rpmdb_sysimage_canonical(rootfs_dfd: &Dir) -> Result<()> {
+    // This should only be a symlink, if it exists.
+    rootfs_dfd.remove_file_optional(TRADITIONAL_RPMDB_LOCATION)?;
+    let new_meta = rootfs_dfd.symlink_metadata_optional(RPMOSTREE_SYSIMAGE_RPMDB)?;
+    let legacy_meta = rootfs_dfd.symlink_metadata_optional(RPMOSTREE_RPMDB_LOCATION)?;
+    // Always ensure the parent directory of both paths exists
+    if new_meta.is_none() {
+        rootfs_dfd.create_dir_all(Utf8Path::new(RPMOSTREE_SYSIMAGE_RPMDB).parent().unwrap())?;
+    }
+    if legacy_meta.is_none() {
+        rootfs_dfd.create_dir_all(Utf8Path::new(RPMOSTREE_RPMDB_LOCATION).parent().unwrap())?;
+    }
+    let uplink_from_old_to_new = format!("../../{RPMOSTREE_SYSIMAGE_RPMDB}");
+    if let Some(legacy_meta) = legacy_meta {
+        if legacy_meta.is_dir() {
+            match new_meta {
+                // OK, we found the expected state from an initial rpm-ostree install.
+                // Move the legacy to the sysimage location, then make a symlink (inverting the previous state).
+                Some(o) if o.is_symlink() => {
+                    rootfs_dfd.remove_file(RPMOSTREE_SYSIMAGE_RPMDB)?;
+                    rootfs_dfd.rename(
+                        RPMOSTREE_RPMDB_LOCATION,
+                        rootfs_dfd,
+                        RPMOSTREE_SYSIMAGE_RPMDB,
+                    )?;
+                }
+                None => {
+                    rootfs_dfd.rename(
+                        RPMOSTREE_RPMDB_LOCATION,
+                        rootfs_dfd,
+                        RPMOSTREE_SYSIMAGE_RPMDB,
+                    )?;
+                }
+                Some(o) => anyhow::bail!(
+                    "Unexpected {RPMOSTREE_SYSIMAGE_RPMDB} state (legacy is dir, new type is {:?})",
+                    o.file_type()
+                ),
+            }
+            rootfs_dfd
+                .symlink_contents(&uplink_from_old_to_new, RPMOSTREE_RPMDB_LOCATION)
+                .context("Writing symlink")?;
+        } else if !legacy_meta.is_symlink() {
+            anyhow::bail!("Unexpected state for {RPMOSTREE_RPMDB_LOCATION}");
+        }
+    } else if let Some(new_meta) = new_meta {
+        anyhow::ensure!(new_meta.is_dir());
+        // We only found the sysimage location, so just make the symlink from the legacy one.
+        if legacy_meta.is_none() {
+            rootfs_dfd
+                .symlink_contents(&uplink_from_old_to_new, RPMOSTREE_RPMDB_LOCATION)
+                .context("Writing symlink")?;
+        }
+    } else {
+        anyhow::bail!("Failed to find rpm")
+    }
+
     Ok(())
 }
 
@@ -1781,6 +1848,58 @@ OSTREE_VERSION='33.4'
         assert_eq!(rpmdb.is_file(), true);
         let sysimage_link = rootfs.read_link(RPMOSTREE_SYSIMAGE_RPMDB).unwrap();
         assert_eq!(&sysimage_link, Path::new("../../share/rpm"));
+    }
+
+    #[test]
+    fn rpmdb_new_canonical_fromnew() -> Result<()> {
+        fn case_only_legacy(rootfs: &Dir) -> Result<()> {
+            let rpmdb_path = &Utf8Path::new(RPMOSTREE_RPMDB_LOCATION).join(RPMDB_NAME);
+            rootfs.create_dir_all(RPMOSTREE_RPMDB_LOCATION)?;
+            rootfs.write(rpmdb_path, "dummy rpmdb")?;
+            Ok(())
+        }
+        fn case_symlinked_new_to_old(rootfs: &Dir) -> Result<()> {
+            case_only_legacy(rootfs)?;
+            rootfs.create_dir_all(Utf8Path::new(RPMOSTREE_SYSIMAGE_RPMDB).parent().unwrap())?;
+            rootfs.symlink_contents(
+                format!("../../{RPMOSTREE_RPMDB_LOCATION}"),
+                RPMOSTREE_SYSIMAGE_RPMDB,
+            )?;
+            Ok(())
+        }
+        fn case_only_new(rootfs: &Dir) -> Result<()> {
+            let rpmdb_path = &Utf8Path::new(RPMOSTREE_SYSIMAGE_RPMDB).join(RPMDB_NAME);
+            rootfs.create_dir_all(RPMOSTREE_SYSIMAGE_RPMDB)?;
+            rootfs.write(rpmdb_path, "dummy rpmdb")?;
+            Ok(())
+        }
+        fn verify(rootfs: &Dir) -> Result<()> {
+            let rpmdb_path = &Utf8Path::new(RPMOSTREE_RPMDB_LOCATION).join(RPMDB_NAME);
+            // And verify it
+            assert!(rootfs
+                .symlink_metadata(RPMOSTREE_RPMDB_LOCATION)
+                .unwrap()
+                .is_symlink());
+            assert!(rootfs
+                .symlink_metadata(RPMOSTREE_SYSIMAGE_RPMDB)
+                .unwrap()
+                .is_dir());
+            assert!(rootfs.symlink_metadata(rpmdb_path).unwrap().is_file());
+            Ok(())
+        }
+        for case in [case_only_legacy, case_symlinked_new_to_old, case_only_new] {
+            // Create a tempdir
+            let rootfs = &cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
+            // Initialize the root
+            case(&rootfs)?;
+            // Canonicalize
+            rpmdb_sysimage_canonical(rootfs).unwrap();
+            verify(&rootfs).unwrap();
+            // And we should be idempotent
+            rpmdb_sysimage_canonical(rootfs).unwrap();
+            verify(&rootfs).unwrap();
+        }
+        Ok(())
     }
 
     #[test]

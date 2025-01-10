@@ -1345,6 +1345,16 @@ impl Treefile {
         self.parsed.base.container.unwrap_or(false)
     }
 
+    // --source-root and repovars conflict
+    pub(crate) fn assert_no_repovars(&self) -> Result<()> {
+        if let Some(v) = self.parsed.repovars.as_ref() {
+            if !v.is_empty() {
+                anyhow::bail!("Cannot use repovars with source root")
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn get_machineid_compat(&self) -> bool {
         self.parsed.base.machineid_compat.unwrap_or(true)
     }
