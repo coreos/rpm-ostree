@@ -50,6 +50,10 @@ if ! grep -qe "error.*This system was not booted via libostree" err.txt; then
     fatal "did not find expected error"
 fi
 
+# This does nothing, just verifies the experimental CLI works.
+rpm-ostree experimental stub >out.txt
+grep 'Did nothing successfully' out.txt && rm out.txt
+
 rpm-ostree install testdaemon
 grep -qF 'u testdaemon-user' /usr/lib/sysusers.d/35-rpmostree-pkg-user-testdaemon-user.conf
 grep -qF 'g testdaemon-group' /usr/lib/sysusers.d/30-rpmostree-pkg-group-testdaemon-group.conf
