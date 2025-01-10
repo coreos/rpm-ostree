@@ -241,6 +241,7 @@ $PYTHON autofiles.py > files \
   '%{_datadir}/dbus-1/system.d/*' \
   '%{_sysconfdir}/rpm-ostreed.conf' \
   '%{_prefix}/lib/systemd/system/*' \
+  '%{_prefix}/lib/kernel/install.d/*' \
   '%{_libexecdir}/rpm-ostree*' \
 %if %{with ostree_ext}
   '%{_libexecdir}/libostree/ext/*' \
