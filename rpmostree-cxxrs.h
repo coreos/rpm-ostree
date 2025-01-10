@@ -1557,6 +1557,7 @@ struct Treefile final : public ::rust::Opaque
   ::rust::String get_gpg_key () const noexcept;
   ::rust::String get_automatic_version_suffix () const noexcept;
   bool get_container () const noexcept;
+  void assert_no_repovars () const;
   bool get_machineid_compat () const noexcept;
   ::rust::Vec< ::rust::String> get_etc_group_members () const noexcept;
   bool get_boot_location_is_modules () const noexcept;

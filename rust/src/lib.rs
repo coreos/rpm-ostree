@@ -16,6 +16,7 @@
 #![allow(clippy::ptr_arg)]
 
 // pub(crate) utilities
+mod cmdutils;
 mod cxxrsutil;
 mod ffiutil;
 pub(crate) mod ffiwrappers;
@@ -624,6 +625,7 @@ pub mod ffi {
         fn get_gpg_key(&self) -> String;
         fn get_automatic_version_suffix(&self) -> String;
         fn get_container(&self) -> bool;
+        fn assert_no_repovars(&self) -> Result<()>;
         fn get_machineid_compat(&self) -> bool;
         fn get_etc_group_members(&self) -> Vec<String>;
         fn get_boot_location_is_modules(&self) -> bool;
@@ -971,6 +973,7 @@ pub(crate) use composepost::*;
 mod core;
 use crate::core::*;
 mod capstdext;
+pub mod cli_experimental;
 mod daemon;
 pub(crate) use daemon::*;
 mod deployment_utils;

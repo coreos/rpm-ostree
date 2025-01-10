@@ -1780,6 +1780,7 @@ struct Treefile final : public ::rust::Opaque
   ::rust::String get_gpg_key () const noexcept;
   ::rust::String get_automatic_version_suffix () const noexcept;
   bool get_container () const noexcept;
+  void assert_no_repovars () const;
   bool get_machineid_compat () const noexcept;
   ::rust::Vec< ::rust::String> get_etc_group_members () const noexcept;
   bool get_boot_location_is_modules () const noexcept;
@@ -2625,6 +2626,9 @@ extern "C"
 
   bool
   rpmostreecxx$cxxbridge1$Treefile$get_container (::rpmostreecxx::Treefile const &self) noexcept;
+
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$Treefile$assert_no_repovars (
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_machineid_compat (
       ::rpmostreecxx::Treefile const &self) noexcept;
@@ -5186,6 +5190,16 @@ bool
 Treefile::get_container () const noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$get_container (*this);
+}
+
+void
+Treefile::assert_no_repovars () const
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$Treefile$assert_no_repovars (*this);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
 }
 
 bool

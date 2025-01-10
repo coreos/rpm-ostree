@@ -6,8 +6,9 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::process::Command;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use cap_std::fs::Dir;
 use clap::Parser;
 use oci_spec::image::ImageManifest;
 use ostree::gio;
@@ -16,6 +17,7 @@ use ostree_ext::containers_image_proxy;
 use ostree_ext::keyfileext::{map_keyfile_optional, KeyFileExt};
 use ostree_ext::{oci_spec, ostree};
 
+use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -425,5 +427,49 @@ pub(crate) fn configure_build_repo_from_target(
         build_repo.write_config(&build_config)?;
     }
 
+    Ok(())
+}
+
+pub(crate) fn build_rootfs_from_manifest(
+    source_root: &Utf8Path,
+    manifest: &Utf8Path,
+    target: &Utf8Path,
+) -> Result<()> {
+    if target.try_exists()? {
+        anyhow::bail!("Refusing to operate on extant {target}")
+    }
+    let target_parent = target
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("No parent for {target}"))?;
+    if !target_parent.try_exists()? {
+        anyhow::bail!("Expected parent directory of target to exist: {target_parent}");
+    }
+    let tmpdir = tempfile::tempdir_in(target_parent)?;
+    let tmp_inst: Utf8PathBuf = tmpdir.path().join("inst").try_into()?;
+    std::fs::create_dir(&tmp_inst)?;
+    let repo_path: Utf8PathBuf = tmpdir.path().join("repo").try_into()?;
+    ostree_ext::ostree::Repo::create_at(
+        libc::AT_FDCWD,
+        repo_path.as_str(),
+        ostree_ext::ostree::RepoMode::BareUser,
+        None,
+        ostree_ext::gio::Cancellable::NONE,
+    )?;
+    Command::new("/proc/self/exe")
+        .args(["compose", "install"])
+        .arg(format!("--source-root={source_root}"))
+        .arg(format!("--repo={repo_path}"))
+        .arg(manifest)
+        .arg(&tmp_inst)
+        .run()?;
+    let tmp_rootfs = &&tmp_inst.join("rootfs");
+    {
+        let rootfs = &Dir::open_ambient_dir(tmp_rootfs, cap_std::ambient_authority())
+            .context("Opening target root")?;
+        // In this new path we always use the new Fedora rpmdb location.
+        // TODO: Handle C9S too
+        crate::composepost::rpmdb_sysimage_canonical(rootfs)?;
+    }
+    std::fs::rename(&tmp_inst, target).with_context(|| format!("Renaming to {target}"))?;
     Ok(())
 }
