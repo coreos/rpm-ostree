@@ -20,4 +20,4 @@ if [ -z "${SKIP_INSTALLDEPS:-}" ] && test $(id -u) -eq 0; then
 fi
 
 mkdir -p target
-time cargo install --root=target/cargo-vendor-filterer cargo-vendor-filterer --version ^0.5
+time cargo install --locked --root=target/cargo-vendor-filterer cargo-vendor-filterer --version ^0.5
