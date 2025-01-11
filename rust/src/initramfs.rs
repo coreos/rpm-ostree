@@ -1,8 +1,9 @@
 //! Generate an "overlay" initramfs image
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::*;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use camino::Utf8Path;
 use cap_std::fs::Dir;
 use cap_std::io_lifetimes::AsFilelike;
@@ -195,7 +196,7 @@ pub(crate) fn run_dracut(root_fs: &Dir, kernel_dir: &str) -> Result<()> {
         .then_some(cliwrap_dracut)
         .unwrap_or_else(|| Utf8Path::new("dracut").to_owned());
     // If changing this, also look at changing rpmostree-kernel.cxx
-    let res = Command::new(dracut_path)
+    Command::new(dracut_path)
         .args([
             "--no-hostonly",
             "--kver",
@@ -207,13 +208,7 @@ pub(crate) fn run_dracut(root_fs: &Dir, kernel_dir: &str) -> Result<()> {
             "-f",
         ])
         .arg(&tmp_initramfs_path)
-        .status()?;
-    if !res.success() {
-        return Err(anyhow!(
-            "Failed to generate initramfs (via dracut) for kernel: {kernel_dir}: {:?}",
-            res
-        ));
-    }
+        .run()?;
     let f = std::fs::OpenOptions::new()
         .append(true)
         .open(&tmp_initramfs_path)?;

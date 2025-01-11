@@ -16,6 +16,7 @@ use ostree_ext::containers_image_proxy;
 use ostree_ext::keyfileext::{map_keyfile_optional, KeyFileExt};
 use ostree_ext::{oci_spec, ostree};
 
+use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -278,7 +279,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         compose_args_extra.extend(["--source-root", path.as_str()]);
     }
 
-    let s = self_command()
+    self_command()
         .args([
             "compose",
             "tree",
@@ -296,10 +297,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         .args(opt.offline.then_some("--cache-only"))
         .args(compose_args_extra)
         .arg(opt.manifest.as_str())
-        .status()?;
-    if !s.success() {
-        return Err(anyhow::anyhow!("compose tree failed: {:?}", s).into());
-    }
+        .run()?;
 
     if !changed_path.exists() {
         return Ok(());
@@ -335,7 +333,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         })
         .transpose()?;
 
-    let s = self_command()
+    self_command()
         .args(["compose", "container-encapsulate"])
         .args(label_args)
         .args(previous_arg)
@@ -346,10 +344,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
             commitid.as_str(),
             tempdest.as_deref().unwrap_or(target_imgref.as_str()),
         ])
-        .status()?;
-    if !s.success() {
-        return Err(anyhow::anyhow!("container-encapsulate failed: {:?}", s).into());
-    }
+        .run()?;
 
     if let Some(tempdest) = tempdest {
         let mut c = Command::new("skopeo");

@@ -16,6 +16,7 @@
 #![allow(clippy::ptr_arg)]
 
 // pub(crate) utilities
+mod cmdutils;
 mod cxxrsutil;
 mod ffiutil;
 pub(crate) mod ffiwrappers;
