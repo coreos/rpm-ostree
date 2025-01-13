@@ -134,6 +134,7 @@ install-rpmostree-hook:
 	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(ostreeextdir)/ostree-ima-sign 
 	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(ostreeextdir)/ostree-provisional-repair 
 	ln -Tsr -f $(DESTDIR)$(bindir)/rpm-ostree $(ostreeextdir)/ostree-container
+	install -D -m 0755 -t $(DESTDIR)/usr/lib/kernel/install.d $(srcdir)/src/libpriv/05-rpmostree.install
 INSTALL_EXEC_HOOKS += install-rpmostree-hook
 
 # Wraps `cargo test`.  This is always a debug non-release build;
