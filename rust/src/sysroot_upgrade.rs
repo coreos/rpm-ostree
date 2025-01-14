@@ -37,6 +37,7 @@ impl From<Box<ostree_container::store::LayeredImageState>> for crate::ffi::Conta
             image_digest: s.manifest_digest.to_string(),
             version,
             cached_update_diff,
+            verify_text: s.verify_text.unwrap_or_default(),
         }
     }
 }

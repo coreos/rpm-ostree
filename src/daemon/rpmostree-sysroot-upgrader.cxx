@@ -449,6 +449,8 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
                 rpmostreecxx::pull_container (*self->repo, *cancellable, r.refspec.c_str ()),
                 error);
 
+            if (!import->verify_text.empty ())
+              rpmostree_output_message ("%s", import->verify_text.c_str ());
             new_base_rev = g_strdup (import->merge_commit.c_str ());
           }
         break;
