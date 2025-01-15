@@ -199,6 +199,8 @@ export RUSTFLAGS="%{build_rustflags}"
 %cargo_license_summary
 %{cargo_license} > LICENSE.dependencies
 %cargo_vendor_manifest
+# https://pagure.io/fedora-rust/rust-packaging/issue/33
+sed -i -e '/https:\/\//d' cargo-vendor.txt
 %endif
 
 %install
