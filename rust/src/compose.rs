@@ -408,7 +408,7 @@ pub(crate) fn configure_build_repo_from_target(
             .iter()
             .flatten()
         {
-            let key = key.to_str();
+            let key = key.as_str();
             changed = true;
             let value = target_config.value(group, key)?;
             tracing::debug!("Propagating {group}.{key} with value {value}");
