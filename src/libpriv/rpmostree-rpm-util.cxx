@@ -814,6 +814,11 @@ checkout_only_rpmdb (OstreeRepo *repo, const char *ref, const char *rpmdb, GLnxT
     (OstreeRepoCheckoutMode)0,
   };
   checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
+  /* If the input repo is bare-user, then we'll just get hardlinks, which means
+   * that rpm interacting with it may end up *writing* to it (e.g. the sqlite shm files).
+   * Force a copy so that even if we're operating on bare-user we won't corrupt the repo.
+   */
+  checkout_options.force_copy = TRUE;
   const char *subpath = glnx_strjoina ("/", rpmdb);
   checkout_options.subpath = subpath;
   if (!ostree_repo_checkout_at (repo, &checkout_options, tmpdir->fd, RPMOSTREE_RPMDB_LOCATION,
