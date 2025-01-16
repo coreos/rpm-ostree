@@ -127,10 +127,7 @@ async fn pull_container_async(
     };
     let digest = prep.manifest_digest.clone();
     output_message(&format!("Importing: {} (digest: {})", &imgref, &digest));
-    let ostree_layers = prep
-        .ostree_layers
-        .iter()
-        .chain(std::iter::once(&prep.ostree_commit_layer));
+    let ostree_layers = prep.ostree_layers.iter().chain(&prep.ostree_commit_layer);
     let mut total_to_fetch = 0;
     let (stored, (n_to_fetch, size_to_fetch)) = layer_counts(ostree_layers);
     if stored > 0 {
