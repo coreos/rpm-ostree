@@ -4263,6 +4263,24 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
               self, filesystem_package, tmprootfs_dfd, ".", self->devino_cache, c, NULL,
               OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL, cancellable, error))
         return FALSE;
+      auto provides = dnf_package_get_provides (filesystem_package);
+      for (int i = 0; i < dnf_reldep_list_count (provides); i++)
+        {
+          auto dep = dnf_reldep_list_index (provides, i);
+          if (strcmp (dnf_reldep_get_name (dep), "filesystem(merged-sbin)") == 0)
+            {
+              struct stat stbuf;
+              const char *usr_sbin = "usr/sbin";
+              if (!glnx_fstatat_allow_noent (tmprootfs_dfd, usr_sbin, &stbuf, AT_SYMLINK_NOFOLLOW,
+                                             error))
+                return glnx_prefix_error (error, "querying sbin for filesystem checkout");
+              if (errno == ENOENT)
+                {
+                  if (symlinkat ("bin", tmprootfs_dfd, usr_sbin) < 0)
+                    return glnx_throw_errno_prefix (error, "symlinking sbin -> bin for filesystem");
+                }
+            }
+        }
       n_rpmts_done++;
       progress->nitems_update (n_rpmts_done);
     }
