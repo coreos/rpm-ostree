@@ -260,8 +260,8 @@ fn kf_diff_value(group: &str, key: &str, a: &str, b: &str) -> bool {
 /// Diff two key files.
 fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
     let mut errs = Vec::new();
-    for grp in kf.groups().iter().map(|g| g.to_str()) {
-        for k in kf.keys(grp)?.iter().map(|g| g.to_str()) {
+    for grp in kf.groups().iter().map(|g| g.as_str()) {
+        for k in kf.keys(grp)?.iter().map(|g| g.as_str()) {
             let origv = kf.value(grp, k)?;
             match newkf.value(grp, k) {
                 Ok(newv) => {
@@ -276,8 +276,8 @@ fn kf_diff(kf: &glib::KeyFile, newkf: &glib::KeyFile) -> Result<()> {
             }
         }
     }
-    for grp in newkf.groups().iter().map(|g| g.to_str()) {
-        for k in newkf.keys(grp)?.iter().map(|g| g.to_str()) {
+    for grp in newkf.groups().iter().map(|g| g.as_str()) {
+        for k in newkf.keys(grp)?.iter().map(|g| g.as_str()) {
             if !kf.has_key(grp, k)? {
                 errs.push(format!("Unexpected new key: {}/{}", grp, k));
             }
@@ -356,7 +356,7 @@ fn parse_localpkglist(
     if let Some(v) = map_keyfile_optional(kf.string_list(group, key))? {
         let mut r = BTreeMap::new();
         for s in v {
-            let (nevra, sha256) = crate::utils::decompose_sha256_nevra(s.to_str())?;
+            let (nevra, sha256) = crate::utils::decompose_sha256_nevra(s.as_str())?;
             r.insert(nevra.to_string(), sha256.to_string());
         }
         Ok(Some(r))
