@@ -55,7 +55,7 @@ cap-std = { version = "3", features = ["fs_utf8"] }
 rustix = { version = "0.38", features = ["use-libc", "process", "fs"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
-cxx = "1.0.130"
+cxx = "1.0.136"
 envsubst = "0.2.1"
 either = "1.13.0"
 env_logger = "0.11.5"
