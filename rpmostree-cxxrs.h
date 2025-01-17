@@ -1220,6 +1220,7 @@ struct ContainerImageState final
   ::rust::String image_digest;
   ::rust::String version;
   ::rpmostreecxx::ExportedManifestDiff cached_update_diff;
+  ::rust::String verify_text;
 
   using IsRelocatable = ::std::true_type;
 };

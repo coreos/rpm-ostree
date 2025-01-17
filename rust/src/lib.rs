@@ -191,6 +191,7 @@ pub mod ffi {
         pub image_digest: String,
         pub version: String,
         pub cached_update_diff: ExportedManifestDiff,
+        pub verify_text: String,
     }
 
     #[derive(Debug, Default)]
