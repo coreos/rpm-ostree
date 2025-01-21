@@ -216,6 +216,29 @@ jobs:
         run: tar -C / -xzvf install.tar
       - name: Integration tests
         run: env TMPDIR=/var/tmp ./tests/encapsulate.sh
+  test-build-chunked-oci:
+    name: "experimental build-chunked-oci tests"
+    needs: build-c9s
+    runs-on: ubuntu-24.04
+    steps:
+      # https://github.com/containers/podman/discussions/17362
+      - name: Get a newer podman for heredoc support (from debian testing)
+        run: |
+          set -eux
+          echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
+          sudo apt update
+          sudo apt install -y crun/testing podman/testing skopeo/testing
+          crun --version
+          podman --version
+          skopeo --version
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Download build
+        uses: actions/download-artifact@v4.1.7
+        with:
+          name: install-c9s.tar
+      - name: Integration tests
+        run: cd tests/build-chunked-oci && tar -xzvf ../../install.tar && podman build -v $(pwd)/usr/bin:/ci -t localhost/test .
   build-c9s:
     name: "Build (c9s)"
     runs-on: ubuntu-latest
