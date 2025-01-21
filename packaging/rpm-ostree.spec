@@ -31,8 +31,14 @@ BuildRequires: rust
 %bcond_with sanitizers
 # Embedded unit tests
 %bcond_with bin_unit_tests
-# Don't add the ostree-container binaries
-%bcond_without ostree_ext
+
+# Don't add the ostree-container binaries; this version
+# conditional needs to be kept in sync with the bootc one.
+%if 0%{?rhel} >= 10 || 0%{?fedora} > 41
+    %bcond_with ostree_ext
+%else
+    %bcond_without ostree_ext
+%endif
 
 # This is copied from the libdnf spec
 %if 0%{?rhel} && ! 0%{?centos}
