@@ -664,7 +664,8 @@ pub(crate) fn configure_build_repo_from_target(
 
 #[cfg(test)]
 mod tests {
-    use cap_std_ext::cap_tempfile;
+    use cap_std::fs::PermissionsExt;
+    use cap_std_ext::{cap_tempfile, cmdext::CapStdExtCommandExt};
     use gio::prelude::FileExt;
 
     use super::*;
@@ -685,7 +686,11 @@ mod tests {
         let repo_td = cap_tempfile::tempdir(cap_std::ambient_authority())?;
         let repo =
             ostree::Repo::create_at_dir(repo_td.as_fd(), ".", ostree::RepoMode::BareUser, None)?;
-        let td = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        let base_td = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        base_td.create_dir("root")?;
+        // Ensure the base permissions are predictable
+        let td = base_td.open_dir("root")?;
+        td.set_permissions(".", cap_std::fs::Permissions::from_mode(0o755))?;
 
         let modifier = ostree::RepoCommitModifier::new(
             ostree::RepoCommitModifierFlags::SKIP_XATTRS
@@ -694,6 +699,24 @@ mod tests {
         );
 
         let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone()).unwrap();
+        // Verify there are zero children
+        let commit_root = repo.read_commit(&commit, cancellable)?.0;
+        {
+            let e = commit_root.enumerate_children(
+                "standard::*",
+                gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+                cancellable,
+            )?;
+            assert_eq!(e.into_iter().count(), 0);
+        }
+        // Verify the contents checksum
+        let commit_obj = repo.load_commit(&commit)?.0;
+        let contents_checksum = ostree::commit_get_content_checksum(&commit_obj).unwrap();
+        assert_eq!(
+            contents_checksum,
+            "978b7746df27a18398d9099592a905091a496bf53f9158c1f350d1d410424f66"
+        );
+        // And because we use a predictable timestamp, the commit should be predictable
         assert_eq!(
             commit,
             "6109d33e99f48e9b90cdf8ad037b8e5d20ef899697cfd3eb492cf78800aed498"
