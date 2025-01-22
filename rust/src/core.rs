@@ -192,7 +192,7 @@ impl FilesystemScriptPrep {
                 rootfs.atomic_write_with_perms(path, contents, mode)?;
             }
         }
-        if !is_ostree_layout()? {
+        if !is_ostree_layout(&rootfs)? {
             for &(path, contents) in Self::REPLACE_KERNEL_PATHS {
                 let mode = Permissions::from_mode(0o755);
                 let saved = &Self::saved_name(path);
@@ -217,6 +217,7 @@ impl FilesystemScriptPrep {
         for &path in Self::OPTIONAL_PATHS
             .iter()
             .chain(Self::REPLACE_OPTIONAL_PATHS.iter().map(|x| &x.0))
+            .chain(Self::REPLACE_KERNEL_PATHS.iter().map(|x| &x.0))
         {
             let saved = &Self::saved_name(path);
             if self.rootfs.try_exists(saved)? {
@@ -486,7 +487,7 @@ mod test {
         }
         // Replaced kernel-install.
         {
-            if !is_ostree_layout()? {
+            if !is_ostree_layout(&d)? {
                 let original_kernel_install = "original kernel_install";
                 d.atomic_write_with_perms(
                     super::KERNEL_INSTALL_PATH,

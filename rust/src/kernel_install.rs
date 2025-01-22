@@ -11,9 +11,7 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result};
@@ -35,21 +33,17 @@ const MODULES: &str = "usr/lib/modules";
 /// The default name for the initramfs.
 const INITRAMFS: &str = "initramfs.img";
 /// The path to the instal.conf that sets layout.
-const KERNEL_INSTALL_CONF: &str = "/usr/lib/kernel/install.conf";
+const KERNEL_INSTALL_CONF: &str = "usr/lib/kernel/install.conf";
 
 #[context("Verifying kernel-install layout file")]
-pub fn is_ostree_layout() -> Result<bool> {
-    let install_conf = Path::new(KERNEL_INSTALL_CONF);
-    if !install_conf.is_file() {
-        tracing::debug!("can not read /usr/lib/kernel/install.conf");
+pub fn is_ostree_layout(rootfs: &Dir) -> Result<bool> {
+    let Some(conf) = rootfs.open_optional(KERNEL_INSTALL_CONF)? else {
         return Ok(false);
-    }
-    let buff = BufReader::new(
-        File::open(install_conf).context("Failed to open /usr/lib/kernel/install.conf")?,
-    );
+    };
+    let buf = BufReader::new(conf);
     // Check for "layout=ostree" in the file
-    for line in buff.lines() {
-        let line = line.context("Failed to read line")?;
+    for line in buf.lines() {
+        let line = line?;
         if line.trim() == "layout=ostree" {
             return Ok(true);
         }
@@ -116,5 +110,44 @@ pub fn main(argv: &[&str]) -> Result<u8> {
             Ok(0)
         }
         _ => Ok(0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use cap_std_ext::cap_tempfile;
+
+    use super::*;
+
+    #[test]
+    fn test_ostree_layout_parse() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        assert!(!is_ostree_layout(&td).unwrap());
+        td.create_dir_all(Path::new(KERNEL_INSTALL_CONF).parent().unwrap())?;
+        td.write(KERNEL_INSTALL_CONF, "")?;
+        assert!(!is_ostree_layout(&td).unwrap());
+        td.write(
+            KERNEL_INSTALL_CONF,
+            indoc::indoc! { r#"
+            # some comments
+
+            layout=bacon
+        "# },
+        )?;
+        assert!(!is_ostree_layout(&td).unwrap());
+        td.write(
+            KERNEL_INSTALL_CONF,
+            indoc::indoc! { r#"
+            # this is an ostree layout
+            layout=ostree
+            # another comment
+        "# },
+        )?;
+
+        assert!(is_ostree_layout(&td).unwrap());
+
+        Ok(())
     }
 }
