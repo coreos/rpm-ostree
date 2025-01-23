@@ -43,6 +43,8 @@ echo "ok etc/default/useradd"
 for path in /usr/share/rpm /usr/lib/sysimage/rpm-ostree-base-db; do
     ostree --repo=${repo} ls -R ${treeref} ${path} > db.txt
     assert_file_has_content_literal db.txt rpmdb.sqlite
+    # Verify we *aren't* normalizing yet
+    assert_file_has_content_literal db.txt rpmdb.sqlite-shm
 done
 ostree --repo=${repo} ls ${treeref} /usr/lib/sysimage/rpm >/dev/null
 echo "ok db"

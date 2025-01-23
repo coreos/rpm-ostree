@@ -50,6 +50,7 @@ cat > config/other.yaml <<'EOF'
 recommends: true
 selinux-label-version: 1
 readonly-executables: true
+rpmdb-normalize: true
 container-cmd:
   - /usr/bin/bash
 opt-usrlocal: "root"
@@ -187,6 +188,12 @@ assert_not_file_has_content out.txt 'bin/barbarextra'
 ostree --repo=${repo} ls ${treeref} /usr/etc > out.txt
 assert_file_has_content out.txt 'etc/sharedfile'
 echo "ok remove-from-packages"
+
+# Verify rpmdb-normalize
+ostree --repo=${repo} ls -R ${treeref} /usr/share/rpm > db.txt
+assert_file_has_content_literal db.txt rpmdb.sqlite
+assert_not_file_has_content_literal db.txt rpmdb.sqlite-shm
+echo "ok db"
 
 ostree --repo=${repo} ls ${treeref} /opt > ls.txt
 assert_file_has_content ls.txt '^d0'

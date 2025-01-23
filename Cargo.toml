@@ -79,6 +79,7 @@ phf = { version = "0.11", features = ["macros"] }
 rand = "0.8.5"
 rayon = "1.10.0"
 regex = "1.10"
+rusqlite = "0.32.1"
 reqwest = { version = "0.12", features = ["native-tls", "blocking", "gzip"] }
 rpmostree-client = { path = "rust/rpmostree-client", version = "0.1.0" }
 rust-ini = "0.21.1"
