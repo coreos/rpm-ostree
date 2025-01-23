@@ -7,16 +7,183 @@ use crate::cxxrsutil::*;
 use crate::ffiutil;
 
 use anyhow::{Context, Result};
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
+use cap_std::fs::DirBuilderExt;
+use cap_std::fs::MetadataExt;
 use cap_std::fs::{Dir, Permissions, PermissionsExt};
+use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
+use ostree_ext::gio;
+use ostree_ext::gio::FileType;
+use ostree_ext::prelude::CancellableExtManual;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt::Write;
+use std::io::Write as StdWrite;
 use std::path::Path;
+use std::path::PathBuf;
 
 const TMPFILESD: &str = "usr/lib/tmpfiles.d";
 const RPMOSTREE_TMPFILESD: &str = "usr/lib/rpm-ostree/tmpfiles.d";
 const AUTOVAR_PATH: &str = "rpm-ostree-autovar.conf";
+
+#[context("Converting /var to tmpfiles.d")]
+pub(crate) fn var_to_tmpfiles(rootfs: &Dir, cancellable: Option<&gio::Cancellable>) -> Result<()> {
+    /* List of files that are known to possibly exist, but in practice
+     * things work fine if we simply ignore them.  Don't add something
+     * to this list unless you've verified it's handled correctly at
+     * runtime.  (And really both in CentOS and Fedora)
+     */
+    static KNOWN_STATE_FILES: &[&str] = &[
+        // https://bugzilla.redhat.com/show_bug.cgi?id=789407
+        "var/lib/systemd/random-seed",
+        "var/lib/systemd/catalog/database",
+        "var/lib/plymouth/boot-duration",
+        // These two are part of systemd's var.tmp
+        "var/log/wtmp",
+        "var/log/btmp",
+    ];
+
+    let pwdb = crate::PasswdDB::populate_new(rootfs)?;
+
+    // We never want to traverse into /run when making tmpfiles since it's a tmpfs
+    // Note that in a Fedora root, /var/run is a symlink, though on el7, it can be a dir.
+    // See: https://github.com/projectatomic/rpm-ostree/pull/831
+    if rootfs.try_exists("var/run")? {
+        rootfs
+            .remove_dir_all("var/run")
+            .context("Failed to remove /var/run")?;
+    }
+
+    // Here, delete some files ahead of time to avoid emitting warnings
+    // for things that are known to be harmless.
+    for path in KNOWN_STATE_FILES {
+        rootfs
+            .remove_file_optional(*path)
+            .with_context(|| format!("unlinkat({})", path))?;
+    }
+
+    // Convert /var wholesale to tmpfiles.d. Note that with unified core, this
+    // code should no longer be necessary as we convert packages on import.
+    // Make output file world-readable, no reason why not to
+    // https://bugzilla.redhat.com/show_bug.cgi?id=1631794
+    let mut db = cap_std::fs::DirBuilder::new();
+    db.recursive(true);
+    db.mode(0o755);
+    rootfs.create_dir_with("usr/lib/tmpfiles.d", &db)?;
+    let mode = Permissions::from_mode(0o644);
+    rootfs.atomic_replace_with(
+        "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
+        |bufwr| -> Result<()> {
+            bufwr.get_mut().as_file_mut().set_permissions(mode)?;
+            let mut prefix = Utf8PathBuf::from("var");
+            let mut entries = BTreeSet::new();
+            convert_path_to_tmpfiles_d_recurse(
+                &mut entries,
+                &pwdb,
+                rootfs,
+                &mut prefix,
+                &cancellable,
+            )
+            .with_context(|| format!("Processing var content /{}", prefix))?;
+            for line in entries {
+                bufwr.write_all(line.as_bytes())?;
+                writeln!(bufwr)?;
+            }
+            Ok(())
+        },
+    )?;
+
+    Ok(())
+}
+
+/// Recursively explore target directory and translate content to tmpfiles.d entries. See
+/// `convert_var_to_tmpfiles_d` for more background.
+///
+/// This proceeds depth-first and progressively deletes translated subpaths as it goes.
+/// `prefix` is updated at each recursive step, so that in case of errors it can be
+/// used to pinpoint the faulty path.
+#[allow(clippy::nonminimal_bool)]
+fn convert_path_to_tmpfiles_d_recurse(
+    out_entries: &mut BTreeSet<String>,
+    pwdb: &crate::PasswdDB,
+    rootfs: &Dir,
+    prefix: &mut Utf8PathBuf,
+    cancellable: &Option<&gio::Cancellable>,
+) -> Result<()> {
+    let current_prefix = prefix.clone();
+    for subpath in rootfs.read_dir(&current_prefix).context("Reading dir")? {
+        if let Some(c) = cancellable {
+            c.set_error_if_cancelled()?;
+        }
+
+        let subpath = subpath?;
+        let meta = subpath.metadata()?;
+        let fname: Utf8PathBuf = PathBuf::from(subpath.file_name()).try_into()?;
+        let full_path = Utf8Path::new(&current_prefix).join(&fname);
+
+        // Workaround for nfs-utils in RHEL7:
+        // https://bugzilla.redhat.com/show_bug.cgi?id=1427537
+        let retain_entry = meta.is_file() && full_path.starts_with("var/lib/nfs");
+        if !retain_entry && !(meta.is_dir() || meta.is_symlink()) {
+            rootfs
+                .remove_file_optional(&full_path)
+                .with_context(|| format!("Removing {:?}", &full_path))?;
+            println!("Ignoring non-directory/non-symlink '{:?}'", &full_path);
+            continue;
+        }
+
+        // Translate this file entry.
+        let entry = {
+            let mode = meta.mode() & !libc::S_IFMT;
+
+            let file_info = gio::FileInfo::new();
+            file_info.set_attribute_uint32("unix::mode", mode);
+
+            if meta.is_dir() {
+                file_info.set_file_type(FileType::Directory);
+            } else if meta.is_symlink() {
+                file_info.set_file_type(FileType::SymbolicLink);
+                let link_target = cap_primitives::fs::read_link_contents(
+                    &rootfs.as_filelike_view(),
+                    full_path.as_std_path(),
+                )
+                .context("Reading symlink")?;
+                let link_target = link_target.to_str().ok_or_else(|| {
+                    anyhow::anyhow!("non UTF-8 symlink target '{:?}'", link_target)
+                })?;
+                file_info.set_symlink_target(link_target);
+            } else if meta.is_file() {
+                file_info.set_file_type(FileType::Regular);
+            } else {
+                unreachable!("invalid path type: {:?}", full_path);
+            }
+
+            let abs_path = Utf8Path::new("/").join(&full_path);
+            let username = pwdb.lookup_user(meta.uid())?;
+            let groupname = pwdb.lookup_group(meta.gid())?;
+            crate::importer::translate_to_tmpfiles_d(
+                abs_path.as_str(),
+                &file_info,
+                &username,
+                &groupname,
+            )?
+        };
+        out_entries.insert(entry);
+
+        if meta.is_dir() {
+            // New subdirectory discovered, recurse into it.
+            *prefix = full_path.clone();
+            convert_path_to_tmpfiles_d_recurse(out_entries, pwdb, rootfs, prefix, cancellable)?;
+            rootfs.remove_dir_all(&full_path)?;
+        } else {
+            rootfs.remove_file(&full_path)?;
+        }
+    }
+    Ok(())
+}
 
 #[context("Deduplicate tmpfiles entries")]
 pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
@@ -114,6 +281,8 @@ fn tmpfiles_entry_get_path(line: &str) -> Result<&str> {
 
 #[cfg(test)]
 mod tests {
+    use cap_std::fs::DirBuilder;
+    use cap_std_ext::cap_tempfile;
     use rustix::fd::AsRawFd;
 
     use super::*;
@@ -187,5 +356,102 @@ q /var/tmp 1777 root root 30d
         let root = &cap_std_ext::cap_tempfile::tempdir(cap_std::ambient_authority())?;
         deduplicate_tmpfiles_entries(root.as_raw_fd())?;
         Ok(())
+    }
+
+    #[test]
+    fn test_tmpfiles_d_translation() {
+        use nix::sys::stat::{umask, Mode};
+        use rustix::process::{getegid, geteuid};
+
+        // Create an empty file with the given mode
+        fn touch(d: &Dir, p: impl AsRef<Utf8Path>, mode: u32) -> Result<()> {
+            d.atomic_replace_with(p.as_ref(), |w| {
+                w.get_mut()
+                    .as_file_mut()
+                    .set_permissions(Permissions::from_mode(mode))
+                    .map_err(Into::into)
+            })
+        }
+
+        let mut db = DirBuilder::new();
+        db.recursive(true);
+        db.mode(0o755);
+
+        // Prepare a minimal rootfs as playground.
+        umask(Mode::empty());
+        let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
+        let uid = geteuid().as_raw();
+        let gid = getegid().as_raw();
+        let uid_str = format!("{uid}");
+        let gid_str = format!("{gid}");
+        let mut expected_disk_size = 30u64;
+        {
+            for dirpath in &["usr/lib", "usr/etc", "var"] {
+                rootfs.ensure_dir_with(*dirpath, &db).unwrap();
+            }
+            for filepath in &["usr/lib/passwd", "usr/lib/group"] {
+                touch(&rootfs, *filepath, 0o755).unwrap()
+            }
+            rootfs
+                .atomic_write(
+                    "usr/etc/passwd",
+                    format!("test-user:x:{uid_str}:{gid_str}:::",),
+                )
+                .unwrap();
+            expected_disk_size += uid_str.len() as u64;
+            expected_disk_size += gid_str.len() as u64;
+            rootfs
+                .atomic_write("usr/etc/group", format!("test-group:x:{gid_str}:"))
+                .unwrap();
+            expected_disk_size += gid_str.len() as u64;
+        }
+
+        // Add test content.
+        rootfs.ensure_dir_with("var/lib/systemd", &db).unwrap();
+        touch(&rootfs, "var/lib/systemd/random-seed", 0o770).unwrap();
+        rootfs.ensure_dir_with("var/lib/nfs", &db).unwrap();
+        touch(&rootfs, "var/lib/nfs/etab", 0o770).unwrap();
+        db.mode(0o777);
+        rootfs.ensure_dir_with("var/lib/test/nested", &db).unwrap();
+        touch(&rootfs, "var/lib/test/nested/file", 0o770).unwrap();
+        rootfs
+            .symlink("../", "var/lib/test/nested/symlink")
+            .unwrap();
+        cap_primitives::fs::symlink_contents(
+            "/var/lib/foo",
+            &rootfs.as_filelike_view(),
+            "var/lib/test/absolute-symlink",
+        )
+        .unwrap();
+
+        // Also make this a sanity test for our directory size API
+        let cancellable = gio::Cancellable::new();
+        assert_eq!(
+            crate::directory_size(rootfs.as_raw_fd(), cancellable.reborrow_cxx()).unwrap(),
+            expected_disk_size
+        );
+
+        crate::var_to_tmpfiles(&rootfs, gio::Cancellable::NONE).unwrap();
+
+        let autovar_path = "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf";
+        assert!(!rootfs.try_exists("var/lib").unwrap());
+        assert!(rootfs.try_exists(autovar_path).unwrap());
+        let entries: Vec<String> = rootfs
+            .read_to_string(autovar_path)
+            .unwrap()
+            .lines()
+            .map(|s| s.to_owned())
+            .collect();
+        let expected = &[
+            "L /var/lib/test/absolute-symlink - - - - /var/lib/foo",
+            "L /var/lib/test/nested/symlink - - - - ../",
+            "d /var/lib 0755 test-user test-group - -",
+            "d /var/lib/nfs 0755 test-user test-group - -",
+            "d /var/lib/systemd 0755 test-user test-group - -",
+            "d /var/lib/test 0777 test-user test-group - -",
+            "d /var/lib/test/nested 0777 test-user test-group - -",
+            "f /var/lib/nfs/etab 0770 test-user test-group - -",
+        ];
+        assert_eq!(entries, expected, "{:#?}", entries);
     }
 }
