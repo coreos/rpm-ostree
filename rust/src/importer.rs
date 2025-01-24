@@ -8,16 +8,14 @@
 
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::utils;
-use anyhow::{anyhow, bail, format_err, Result};
+use anyhow::{bail, Result};
 use bitflags::bitflags;
 use camino::{Utf8Path, Utf8PathBuf};
 use fn_error_context::context;
 use gio::{FileInfo, FileType};
 use ostree::RepoCommitFilterResult;
 use ostree_ext::{gio, ostree};
-use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::fmt::Write;
 
 bitflags! {
     /// Flags to control the behavior of an RPM importer.
@@ -262,8 +260,12 @@ impl RpmImporter {
         username: &str,
         groupname: &str,
     ) -> CxxResult<()> {
-        let entry =
-            translate_to_tmpfiles_d(abs_path, &file_info.glib_reborrow(), username, groupname)?;
+        let entry = crate::tmpfiles::translate_to_tmpfiles_d(
+            abs_path,
+            &file_info.glib_reborrow(),
+            username,
+            groupname,
+        )?;
         self.tmpfiles_entries.push(entry);
         Ok(())
     }
@@ -399,67 +401,6 @@ fn path_is_ostree_compliant(path: &str) -> bool {
     false
 }
 
-pub fn tmpfiles_translate(
-    abs_path: &str,
-    file_info: &crate::FFIGFileInfo,
-    username: &str,
-    groupname: &str,
-) -> CxxResult<String> {
-    let entry = translate_to_tmpfiles_d(abs_path, &file_info.glib_reborrow(), username, groupname)?;
-    Ok(entry)
-}
-
-/// Translate a filepath entry to an equivalent tmpfiles.d line.
-#[context("Translating {}", abs_path)]
-pub(crate) fn translate_to_tmpfiles_d(
-    abs_path: &str,
-    file_info: &FileInfo,
-    username: &str,
-    groupname: &str,
-) -> Result<String> {
-    let mut bufwr = String::new();
-
-    let path_type = file_info.file_type();
-    let filetype_char = match path_type {
-        FileType::Directory => 'd',
-        FileType::Regular => 'f',
-        FileType::SymbolicLink => 'L',
-        x => bail!("path '{}' has invalid type: {:?}", abs_path, x),
-    };
-    let fixed_path = fix_tmpfiles_path(Cow::Borrowed(abs_path));
-    write!(&mut bufwr, "{} {}", filetype_char, fixed_path)?;
-
-    if path_type == FileType::SymbolicLink {
-        let link_target = file_info
-            .symlink_target()
-            .ok_or_else(|| format_err!("missing symlink target"))?;
-        let link_target = link_target
-            .to_str()
-            .ok_or_else(|| anyhow!("Invalid non-UTF8 symlink: {link_target:?}"))?;
-        write!(&mut bufwr, " - - - - {}", link_target)?;
-    } else {
-        let mode = file_info.attribute_uint32("unix::mode") & !libc::S_IFMT;
-        write!(&mut bufwr, " {:04o} {} {} - -", mode, username, groupname)?;
-    };
-
-    Ok(bufwr)
-}
-
-fn fix_tmpfiles_path(abs_path: Cow<str>) -> Cow<str> {
-    let mut tweaked_path = abs_path;
-
-    // systemd-tmpfiles complains loudly about writing to /var/run;
-    // ideally, all of the packages get fixed for this but...eh.
-    if tweaked_path.starts_with("/var/run/") {
-        let trimmed = tweaked_path.trim_start_matches("/var");
-        tweaked_path = Cow::Owned(trimmed.to_string());
-    }
-
-    // Handle file paths with spaces and other chars;
-    // see https://github.com/coreos/rpm-ostree/issues/2029 */
-    utils::shellsafe_quote(tweaked_path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,65 +435,6 @@ mod tests {
         let denied_cases = &["/var", "/etc", "/var/run", "", "./", "usr/"];
         for entry in denied_cases {
             assert_eq!(path_is_ostree_compliant(entry), false, "{}", entry);
-        }
-    }
-
-    #[test]
-    fn test_fix_tmpfiles_path() {
-        let intact_cases = vec!["/", "/var", "/var/foo", "/run/foo"];
-        for entry in intact_cases {
-            let output = fix_tmpfiles_path(Cow::Borrowed(entry));
-            assert_eq!(output, entry);
-        }
-
-        let quoting_cases = maplit::btreemap! {
-            "/var/foo bar" => r#"'/var/foo bar'"#,
-            "/var/run/" => "/run/",
-            "/var/run/foo bar" => r#"'/run/foo bar'"#,
-        };
-        for (input, expected) in quoting_cases {
-            let output = fix_tmpfiles_path(Cow::Borrowed(input));
-            assert_eq!(output, expected);
-        }
-    }
-
-    #[test]
-    fn test_translate_to_tmpfiles_d() {
-        let path = r#"/var/foo bar"#;
-        let username = "testuser";
-        let groupname = "testgroup";
-        {
-            // Directory
-            let file_info = FileInfo::new();
-            file_info.set_file_type(FileType::Directory);
-            file_info.set_attribute_uint32("unix::mode", 0o721);
-            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
-            let expected = r#"d '/var/foo bar' 0721 testuser testgroup - -"#;
-            assert_eq!(out, expected);
-        }
-        {
-            // Symlink
-            let file_info = FileInfo::new();
-            file_info.set_file_type(FileType::SymbolicLink);
-            file_info.set_symlink_target("/mytarget");
-            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
-            let expected = r#"L '/var/foo bar' - - - - /mytarget"#;
-            assert_eq!(out, expected);
-        }
-        {
-            // File
-            let file_info = FileInfo::new();
-            file_info.set_file_type(FileType::Regular);
-            file_info.set_attribute_uint32("unix::mode", 0o123);
-            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
-            let expected = r#"f '/var/foo bar' 0123 testuser testgroup - -"#;
-            assert_eq!(out, expected);
-        }
-        {
-            // Other unsupported
-            let file_info = FileInfo::new();
-            file_info.set_file_type(FileType::Unknown);
-            translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap_err();
         }
     }
 

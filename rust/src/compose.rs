@@ -665,7 +665,7 @@ pub(crate) fn configure_build_repo_from_target(
 #[cfg(test)]
 mod tests {
     use cap_std::fs::PermissionsExt;
-    use cap_std_ext::{cap_tempfile, cmdext::CapStdExtCommandExt};
+    use cap_std_ext::cap_tempfile;
     use gio::prelude::FileExt;
 
     use super::*;
