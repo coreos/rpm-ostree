@@ -32,6 +32,8 @@ jobs:
         run: ./ci/codestyle.sh
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
+      - name: Unit tests
+        run: cargo test
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
@@ -259,6 +261,8 @@ jobs:
         run: ./ci/installdeps.sh
       - name: Build
         run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
+      - name: Unit tests
+        run: cargo test
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
