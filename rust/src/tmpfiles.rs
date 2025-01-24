@@ -417,7 +417,6 @@ q /var/tmp 1777 root root 30d
 
     #[test]
     fn test_tmpfiles_d_translation() {
-        use nix::sys::stat::{umask, Mode};
         use rustix::process::{getegid, geteuid};
 
         // Create an empty file with the given mode
@@ -435,7 +434,6 @@ q /var/tmp 1777 root root 30d
         db.mode(0o755);
 
         // Prepare a minimal rootfs as playground.
-        umask(Mode::empty());
         let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
         let uid = geteuid().as_raw();
         let gid = getegid().as_raw();
@@ -468,8 +466,14 @@ q /var/tmp 1777 root root 30d
         touch(&rootfs, "var/lib/systemd/random-seed", 0o770).unwrap();
         rootfs.ensure_dir_with("var/lib/nfs", &db).unwrap();
         touch(&rootfs, "var/lib/nfs/etab", 0o770).unwrap();
-        db.mode(0o777);
+        let global_rwx = Permissions::from_mode(0o777);
         rootfs.ensure_dir_with("var/lib/test/nested", &db).unwrap();
+        rootfs
+            .set_permissions("var/lib/test", global_rwx.clone())
+            .unwrap();
+        rootfs
+            .set_permissions("var/lib/test/nested", global_rwx)
+            .unwrap();
         touch(&rootfs, "var/lib/test/nested/file", 0o770).unwrap();
         rootfs
             .symlink("../", "var/lib/test/nested/symlink")
