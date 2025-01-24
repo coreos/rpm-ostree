@@ -3,30 +3,28 @@
  *
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
-use crate::cxxrsutil::*;
-use crate::ffiutil;
+
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write;
+use std::io::Write as StdWrite;
+use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use cap_std::fs::DirBuilderExt;
-use cap_std::fs::MetadataExt;
 use cap_std::fs::{Dir, Permissions, PermissionsExt};
+use cap_std::fs::{DirBuilderExt, MetadataExt};
 use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use ostree_ext::gio;
-use ostree_ext::gio::FileInfo;
-use ostree_ext::gio::FileType;
+use ostree_ext::gio::{FileInfo, FileType};
 use ostree_ext::prelude::CancellableExtManual;
-use std::borrow::Cow;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::fmt::Write;
-use std::io::Write as StdWrite;
-use std::path::Path;
-use std::path::PathBuf;
+
+use crate::cxxrsutil::*;
+use crate::ffiutil;
 
 const TMPFILESD: &str = "usr/lib/tmpfiles.d";
 /// A "staging" tmpfiles.d location generated when importing packages
