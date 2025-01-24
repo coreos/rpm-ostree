@@ -7,7 +7,7 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
-use std::io::Write as StdWrite;
+use std::io::{BufRead, BufReader, Write as StdWrite};
 use std::path::{Path, PathBuf};
 
 use anyhow::bail;
@@ -306,33 +306,27 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
 /// from (file path) => (single tmpfiles.d entry line)
 #[context("Read systemd tmpfiles.d")]
 fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<BTreeMap<String, String>> {
-    tmpfiles_dir
-        .entries()?
-        .filter_map(|name| {
-            let name = name.unwrap().file_name();
-            if let Some(extension) = Path::new(&name).extension() {
-                if extension != "conf" {
-                    return None;
-                }
-            } else {
-                return None;
+    let mut result = BTreeMap::new();
+    for entry in tmpfiles_dir.entries()? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Some(extension) = Path::new(&name).extension() else {
+            continue;
+        };
+        if extension != "conf" {
+            continue;
+        }
+        let r = BufReader::new(entry.open()?);
+        for line in r.lines() {
+            let line = line?;
+            if line.is_empty() || line.starts_with("#") {
+                continue;
             }
-            Some(
-                tmpfiles_dir
-                    .read_to_string(name)
-                    .ok()?
-                    .lines()
-                    .filter(|s| !s.is_empty() && !s.starts_with('#'))
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .flatten()
-        .map(|s| {
-            let entry = tmpfiles_entry_get_path(s.as_str())?;
-            anyhow::Ok((entry.to_string(), s))
-        })
-        .collect()
+            let path = tmpfiles_entry_get_path(&line)?;
+            result.insert(path.to_owned(), line);
+        }
+    }
+    Ok(result)
 }
 
 #[context("Scan tmpfiles entries and get path")]
