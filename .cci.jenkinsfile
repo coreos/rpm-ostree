@@ -45,7 +45,9 @@ cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
     """)
   }
   stage("Build FCOS") {
+    unstash 'rpms'
     shwrap("""
+      dnf install -y *.rpm
       chown -R -h builder: .
       runuser -u builder -- coreos-assembler init --force https://github.com/coreos/fedora-coreos-config
       # include our built rpm-ostree in the image
