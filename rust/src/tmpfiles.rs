@@ -509,7 +509,7 @@ q /var/tmp 1777 root root 30d
             "d /var/lib/test/nested 0777 test-user test-group - -",
             "f /var/lib/nfs/etab 0770 test-user test-group - -",
         ];
-        assert_eq!(entries, expected, "{:#?}", entries);
+        similar_asserts::assert_eq!(entries, expected);
     }
 
     #[test]
@@ -517,7 +517,7 @@ q /var/tmp 1777 root root 30d
         let intact_cases = vec!["/", "/var", "/var/foo", "/run/foo"];
         for entry in intact_cases {
             let output = canonicalize_escape_path(Cow::Borrowed(entry));
-            assert_eq!(output, entry);
+            similar_asserts::assert_eq!(output, entry);
         }
 
         let quoting_cases = maplit::btreemap! {
@@ -527,7 +527,7 @@ q /var/tmp 1777 root root 30d
         };
         for (input, expected) in quoting_cases {
             let output = canonicalize_escape_path(Cow::Borrowed(input));
-            assert_eq!(output, expected);
+            similar_asserts::assert_eq!(output, expected);
         }
     }
 
@@ -543,7 +543,7 @@ q /var/tmp 1777 root root 30d
             file_info.set_attribute_uint32("unix::mode", 0o721);
             let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
             let expected = r#"d '/var/foo bar' 0721 testuser testgroup - -"#;
-            assert_eq!(out, expected);
+            similar_asserts::assert_eq!(out, expected);
         }
         {
             // Symlink
@@ -552,7 +552,7 @@ q /var/tmp 1777 root root 30d
             file_info.set_symlink_target("/mytarget");
             let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
             let expected = r#"L '/var/foo bar' - - - - /mytarget"#;
-            assert_eq!(out, expected);
+            similar_asserts::assert_eq!(out, expected);
         }
         {
             // File
@@ -561,7 +561,7 @@ q /var/tmp 1777 root root 30d
             file_info.set_attribute_uint32("unix::mode", 0o123);
             let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
             let expected = r#"f '/var/foo bar' 0123 testuser testgroup - -"#;
-            assert_eq!(out, expected);
+            similar_asserts::assert_eq!(out, expected);
         }
         {
             // Other unsupported
