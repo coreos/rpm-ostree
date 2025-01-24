@@ -34,7 +34,9 @@ const RPMOSTREE_TMPFILESD: &str = "usr/lib/rpm-ostree/tmpfiles.d";
 /// "staged" versions stored above.
 const AUTOVAR_PATH: &str = "rpm-ostree-autovar.conf";
 
-fn fix_tmpfiles_path(abs_path: std::borrow::Cow<str>) -> Cow<str> {
+/// Canonicalize and escape a path value for tmpfiles.d
+/// At the current time the only canonicalization we do is remap /var/run -> /run.
+fn canonicalize_escape_path(abs_path: Cow<str>) -> Cow<str> {
     let mut tweaked_path = abs_path;
 
     // systemd-tmpfiles complains loudly about writing to /var/run;
@@ -66,7 +68,7 @@ pub(crate) fn translate_to_tmpfiles_d(
         FileType::SymbolicLink => 'L',
         x => bail!("path '{}' has invalid type: {:?}", abs_path, x),
     };
-    let fixed_path = fix_tmpfiles_path(Cow::Borrowed(abs_path));
+    let fixed_path = canonicalize_escape_path(Cow::Borrowed(abs_path));
     write!(&mut bufwr, "{} {}", filetype_char, fixed_path)?;
 
     if path_type == FileType::SymbolicLink {
@@ -517,10 +519,10 @@ q /var/tmp 1777 root root 30d
     }
 
     #[test]
-    fn test_fix_tmpfiles_path() {
+    fn test_canonicalize_escape_path() {
         let intact_cases = vec!["/", "/var", "/var/foo", "/run/foo"];
         for entry in intact_cases {
-            let output = fix_tmpfiles_path(Cow::Borrowed(entry));
+            let output = canonicalize_escape_path(Cow::Borrowed(entry));
             assert_eq!(output, entry);
         }
 
@@ -530,7 +532,7 @@ q /var/tmp 1777 root root 30d
             "/var/run/foo bar" => r#"'/run/foo bar'"#,
         };
         for (input, expected) in quoting_cases {
-            let output = fix_tmpfiles_path(Cow::Borrowed(input));
+            let output = canonicalize_escape_path(Cow::Borrowed(input));
             assert_eq!(output, expected);
         }
     }
