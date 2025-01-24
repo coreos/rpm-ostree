@@ -631,6 +631,7 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
 
       if (!glnx_mkdtemp ("rpm-ostree-import.XXXXXX", 0700, &tmpdir, error))
         return FALSE;
+      // See the corresponding read side of this in tmpfiles.rs.
       if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "usr/lib/rpm-ostree/tmpfiles.d", 0755, cancellable,
                                    error))
         return FALSE;

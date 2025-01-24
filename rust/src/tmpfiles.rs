@@ -29,7 +29,11 @@ use std::path::Path;
 use std::path::PathBuf;
 
 const TMPFILESD: &str = "usr/lib/tmpfiles.d";
+/// A "staging" tmpfiles.d location generated when importing packages
+/// in rpmostree-importer.cxx.
 const RPMOSTREE_TMPFILESD: &str = "usr/lib/rpm-ostree/tmpfiles.d";
+/// The final merged tmpfiles.d entry we generate from the per-package
+/// "staged" versions stored above.
 const AUTOVAR_PATH: &str = "rpm-ostree-autovar.conf";
 
 fn fix_tmpfiles_path(abs_path: std::borrow::Cow<str>) -> Cow<str> {
