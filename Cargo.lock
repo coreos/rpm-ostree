@@ -225,7 +225,7 @@ dependencies = [
 [[package]]
 name = "bootc-utils"
 version = "0.0.0"
-source = "git+https://github.com/containers/bootc?rev=dc7d4cf320ec6d8b2470d1d5f76da66ec60b6810#dc7d4cf320ec6d8b2470d1d5f76da66ec60b6810"
+source = "git+https://github.com/containers/bootc?rev=210f58b4a48b9627040e4df76f24530ee89e6bb5#210f58b4a48b9627040e4df76f24530ee89e6bb5"
 dependencies = [
  "anyhow",
  "rustix",
@@ -2188,7 +2188,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.15.3"
-source = "git+https://github.com/containers/bootc?rev=dc7d4cf320ec6d8b2470d1d5f76da66ec60b6810#dc7d4cf320ec6d8b2470d1d5f76da66ec60b6810"
+source = "git+https://github.com/containers/bootc?rev=210f58b4a48b9627040e4df76f24530ee89e6bb5#210f58b4a48b9627040e4df76f24530ee89e6bb5"
 dependencies = [
  "anyhow",
  "bootc-utils",
