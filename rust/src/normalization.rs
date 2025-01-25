@@ -7,13 +7,14 @@
 
 use crate::bwrap::Bubblewrap;
 use crate::nameservice::shadow::parse_shadow_content;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use cap_std::fs::OpenOptionsExt;
 use cap_std::fs::{Dir, OpenOptions};
 use cap_std_ext::cap_std;
 use fn_error_context::context;
 use ostree_ext::gio;
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
+use std::os::fd::{AsFd, AsRawFd};
 use std::path::Path;
 
 pub(crate) fn source_date_epoch() -> Option<i64> {
@@ -129,6 +130,27 @@ pub(crate) fn rewrite_rpmdb_timestamps<F: Read + Write + Seek>(rpmdb: &mut F) ->
 
 #[context("Rewriting rpmdb database files for build stability")]
 pub(crate) fn normalize_rpmdb(rootfs: &Dir, rpmdb_path: impl AsRef<Path>) -> Result<()> {
+    let rpmdb_path = rpmdb_path.as_ref();
+    {
+        // Unconditionally clean up the sqlite SHM file if it exists.
+        // https://github.com/rpm-software-management/rpm/issues/2219
+        const RPMDB_SQLITE: &str = "rpmdb.sqlite";
+        const RPMDB_SQLITE_SHM: &str = "rpmdb.sqlite-shm";
+        let subdir = rootfs.open_dir(rpmdb_path)?;
+        if subdir.try_exists(RPMDB_SQLITE_SHM)? {
+            tracing::debug!("Cleaning up {RPMDB_SQLITE_SHM}");
+            let procpath = format!(
+                "/proc/self/fd/{}/{RPMDB_SQLITE}",
+                subdir.as_fd().as_raw_fd()
+            );
+            let conn = rusqlite::Connection::open(&procpath)
+                .with_context(|| format!("Opening {RPMDB_SQLITE}"))?;
+            conn.pragma_update(None, "journal_mode", "DELETE")?;
+            conn.close().map_err(|r| r.1)?;
+        }
+    }
+
+    // If SOURCE_DATE_EPOCH isn't set then we don't attempt to rewrite the database.
     let source_date = if let Some(source_date) = source_date_epoch() {
         source_date as u32
     } else {
