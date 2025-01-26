@@ -3,31 +3,99 @@
  *
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
-use crate::cxxrsutil::*;
-use crate::ffiutil;
 
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write;
+use std::io::{BufRead, BufReader, Write as StdWrite};
+use std::path::{Path, PathBuf};
+
+use anyhow::bail;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use cap_std::fs::DirBuilderExt;
-use cap_std::fs::MetadataExt;
 use cap_std::fs::{Dir, Permissions, PermissionsExt};
+use cap_std::fs::{DirBuilderExt, MetadataExt};
 use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use ostree_ext::gio;
-use ostree_ext::gio::FileType;
+use ostree_ext::gio::{FileInfo, FileType};
 use ostree_ext::prelude::CancellableExtManual;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::fmt::Write;
-use std::io::Write as StdWrite;
-use std::path::Path;
-use std::path::PathBuf;
+
+use crate::cxxrsutil::*;
+use crate::ffiutil;
 
 const TMPFILESD: &str = "usr/lib/tmpfiles.d";
+/// A "staging" tmpfiles.d location generated when importing packages
+/// in rpmostree-importer.cxx.
 const RPMOSTREE_TMPFILESD: &str = "usr/lib/rpm-ostree/tmpfiles.d";
+/// The final merged tmpfiles.d entry we generate from the per-package
+/// "staged" versions stored above.
 const AUTOVAR_PATH: &str = "rpm-ostree-autovar.conf";
+
+/// Canonicalize and escape a path value for tmpfiles.d
+/// At the current time the only canonicalization we do is remap /var/run -> /run.
+fn canonicalize_escape_path(abs_path: Cow<str>) -> Cow<str> {
+    let mut tweaked_path = abs_path;
+
+    // systemd-tmpfiles complains loudly about writing to /var/run;
+    // ideally, all of the packages get fixed for this but...eh.
+    if tweaked_path.starts_with("/var/run/") {
+        let trimmed = tweaked_path.trim_start_matches("/var");
+        tweaked_path = Cow::Owned(trimmed.to_string());
+    }
+
+    // Handle file paths with spaces and other chars;
+    // see https://github.com/coreos/rpm-ostree/issues/2029 */
+    crate::utils::shellsafe_quote(tweaked_path)
+}
+
+/// Translate a filepath entry to an equivalent tmpfiles.d line.
+#[context("Translating {}", abs_path)]
+pub(crate) fn translate_to_tmpfiles_d(
+    abs_path: &str,
+    file_info: &FileInfo,
+    username: &str,
+    groupname: &str,
+) -> Result<String> {
+    let mut bufwr = String::new();
+
+    let path_type = file_info.file_type();
+    let filetype_char = match path_type {
+        FileType::Directory => 'd',
+        FileType::Regular => 'f',
+        FileType::SymbolicLink => 'L',
+        x => bail!("path '{}' has invalid type: {:?}", abs_path, x),
+    };
+    let fixed_path = canonicalize_escape_path(Cow::Borrowed(abs_path));
+    write!(&mut bufwr, "{} {}", filetype_char, fixed_path)?;
+
+    if path_type == FileType::SymbolicLink {
+        let link_target = file_info
+            .symlink_target()
+            .ok_or_else(|| anyhow::anyhow!("missing symlink target"))?;
+        let link_target = link_target
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid non-UTF8 symlink: {link_target:?}"))?;
+        write!(&mut bufwr, " - - - - {}", link_target)?;
+    } else {
+        let mode = file_info.attribute_uint32("unix::mode") & !libc::S_IFMT;
+        write!(&mut bufwr, " {:04o} {} {} - -", mode, username, groupname)?;
+    };
+
+    Ok(bufwr)
+}
+
+pub fn tmpfiles_translate(
+    abs_path: &str,
+    file_info: &crate::FFIGFileInfo,
+    username: &str,
+    groupname: &str,
+) -> CxxResult<String> {
+    let entry = translate_to_tmpfiles_d(abs_path, &file_info.glib_reborrow(), username, groupname)?;
+    Ok(entry)
+}
 
 #[context("Converting /var to tmpfiles.d")]
 pub(crate) fn var_to_tmpfiles(rootfs: &Dir, cancellable: Option<&gio::Cancellable>) -> Result<()> {
@@ -164,12 +232,7 @@ fn convert_path_to_tmpfiles_d_recurse(
             let abs_path = Utf8Path::new("/").join(&full_path);
             let username = pwdb.lookup_user(meta.uid())?;
             let groupname = pwdb.lookup_group(meta.gid())?;
-            crate::importer::translate_to_tmpfiles_d(
-                abs_path.as_str(),
-                &file_info,
-                &username,
-                &groupname,
-            )?
+            translate_to_tmpfiles_d(abs_path.as_str(), &file_info, &username, &groupname)?
         };
         out_entries.insert(entry);
 
@@ -243,33 +306,27 @@ pub fn deduplicate_tmpfiles_entries(tmprootfs_dfd: i32) -> CxxResult<()> {
 /// from (file path) => (single tmpfiles.d entry line)
 #[context("Read systemd tmpfiles.d")]
 fn read_tmpfiles(tmpfiles_dir: &Dir) -> Result<BTreeMap<String, String>> {
-    tmpfiles_dir
-        .entries()?
-        .filter_map(|name| {
-            let name = name.unwrap().file_name();
-            if let Some(extension) = Path::new(&name).extension() {
-                if extension != "conf" {
-                    return None;
-                }
-            } else {
-                return None;
+    let mut result = BTreeMap::new();
+    for entry in tmpfiles_dir.entries()? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Some(extension) = Path::new(&name).extension() else {
+            continue;
+        };
+        if extension != "conf" {
+            continue;
+        }
+        let r = BufReader::new(entry.open()?);
+        for line in r.lines() {
+            let line = line?;
+            if line.is_empty() || line.starts_with("#") {
+                continue;
             }
-            Some(
-                tmpfiles_dir
-                    .read_to_string(name)
-                    .ok()?
-                    .lines()
-                    .filter(|s| !s.is_empty() && !s.starts_with('#'))
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .flatten()
-        .map(|s| {
-            let entry = tmpfiles_entry_get_path(s.as_str())?;
-            anyhow::Ok((entry.to_string(), s))
-        })
-        .collect()
+            let path = tmpfiles_entry_get_path(&line)?;
+            result.insert(path.to_owned(), line);
+        }
+    }
+    Ok(result)
 }
 
 #[context("Scan tmpfiles entries and get path")]
@@ -360,7 +417,6 @@ q /var/tmp 1777 root root 30d
 
     #[test]
     fn test_tmpfiles_d_translation() {
-        use nix::sys::stat::{umask, Mode};
         use rustix::process::{getegid, geteuid};
 
         // Create an empty file with the given mode
@@ -378,7 +434,6 @@ q /var/tmp 1777 root root 30d
         db.mode(0o755);
 
         // Prepare a minimal rootfs as playground.
-        umask(Mode::empty());
         let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
         let uid = geteuid().as_raw();
         let gid = getegid().as_raw();
@@ -411,8 +466,14 @@ q /var/tmp 1777 root root 30d
         touch(&rootfs, "var/lib/systemd/random-seed", 0o770).unwrap();
         rootfs.ensure_dir_with("var/lib/nfs", &db).unwrap();
         touch(&rootfs, "var/lib/nfs/etab", 0o770).unwrap();
-        db.mode(0o777);
+        let global_rwx = Permissions::from_mode(0o777);
         rootfs.ensure_dir_with("var/lib/test/nested", &db).unwrap();
+        rootfs
+            .set_permissions("var/lib/test", global_rwx.clone())
+            .unwrap();
+        rootfs
+            .set_permissions("var/lib/test/nested", global_rwx)
+            .unwrap();
         touch(&rootfs, "var/lib/test/nested/file", 0o770).unwrap();
         rootfs
             .symlink("../", "var/lib/test/nested/symlink")
@@ -452,6 +513,65 @@ q /var/tmp 1777 root root 30d
             "d /var/lib/test/nested 0777 test-user test-group - -",
             "f /var/lib/nfs/etab 0770 test-user test-group - -",
         ];
-        assert_eq!(entries, expected, "{:#?}", entries);
+        similar_asserts::assert_eq!(entries, expected);
+    }
+
+    #[test]
+    fn test_canonicalize_escape_path() {
+        let intact_cases = vec!["/", "/var", "/var/foo", "/run/foo"];
+        for entry in intact_cases {
+            let output = canonicalize_escape_path(Cow::Borrowed(entry));
+            similar_asserts::assert_eq!(output, entry);
+        }
+
+        let quoting_cases = maplit::btreemap! {
+            "/var/foo bar" => r#"'/var/foo bar'"#,
+            "/var/run/" => "/run/",
+            "/var/run/foo bar" => r#"'/run/foo bar'"#,
+        };
+        for (input, expected) in quoting_cases {
+            let output = canonicalize_escape_path(Cow::Borrowed(input));
+            similar_asserts::assert_eq!(output, expected);
+        }
+    }
+
+    #[test]
+    fn test_translate_to_tmpfiles_d() {
+        let path = r#"/var/foo bar"#;
+        let username = "testuser";
+        let groupname = "testgroup";
+        {
+            // Directory
+            let file_info = FileInfo::new();
+            file_info.set_file_type(FileType::Directory);
+            file_info.set_attribute_uint32("unix::mode", 0o721);
+            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
+            let expected = r#"d '/var/foo bar' 0721 testuser testgroup - -"#;
+            similar_asserts::assert_eq!(out, expected);
+        }
+        {
+            // Symlink
+            let file_info = FileInfo::new();
+            file_info.set_file_type(FileType::SymbolicLink);
+            file_info.set_symlink_target("/mytarget");
+            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
+            let expected = r#"L '/var/foo bar' - - - - /mytarget"#;
+            similar_asserts::assert_eq!(out, expected);
+        }
+        {
+            // File
+            let file_info = FileInfo::new();
+            file_info.set_file_type(FileType::Regular);
+            file_info.set_attribute_uint32("unix::mode", 0o123);
+            let out = translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap();
+            let expected = r#"f '/var/foo bar' 0123 testuser testgroup - -"#;
+            similar_asserts::assert_eq!(out, expected);
+        }
+        {
+            // Other unsupported
+            let file_info = FileInfo::new();
+            file_info.set_file_type(FileType::Unknown);
+            translate_to_tmpfiles_d(path, &file_info, username, groupname).unwrap_err();
+        }
     }
 }
