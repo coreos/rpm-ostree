@@ -21,7 +21,7 @@ jobs:
   build:
     name: "Build"
     runs-on: ubuntu-latest
-    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+    container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -43,7 +43,7 @@ jobs:
     name: "Build Integration Test Data"
     runs-on: ubuntu-latest
     container:
-      image: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+      image: quay.io/coreos-assembler/fcos-buildroot:testing-devel
       # Run privileged to hack around createrepo_c hitting the classic seccomp
       # broken behaviour of returning EPERM instead of ENOSYS. We should be able
       # to drop this once `ubuntu-latest` is bumped to include the fix for
@@ -65,7 +65,7 @@ jobs:
   cxx-verify:
     name: "Verify CXX generation"
     runs-on: ubuntu-latest
-    container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+    container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -102,7 +102,7 @@ jobs:
   #build-clang:
   #  name: "Build (clang)"
   #  runs-on: ubuntu-latest
-  #  container: registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel
+  #  container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
   #  steps:
   #    - name: Checkout repository
   #      uses: actions/checkout@v3

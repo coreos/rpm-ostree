@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/coreos/fcos-buildroot:testing-devel as builder
+FROM quay.io/coreos-assembler/fcos-buildroot:testing-devel as builder
 WORKDIR /src
 COPY . .
 RUN ./ci/coreosci-rpmbuild.sh  && mkdir -p /cosa/component-rpms && mv rpm-ostree{,-libs}-20*.rpm /cosa/component-rpms
