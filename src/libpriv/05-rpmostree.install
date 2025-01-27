@@ -1,3 +1,5 @@
 #!/usr/bin/bash
 # This is the hook that has kernel-install call into rpm-ostree kernel-install
-exec /usr/bin/rpm-ostree kernel-install "$@"
+if test -x /usr/bin/rpm-ostree; then
+    exec /usr/bin/rpm-ostree kernel-install "$@"
+fi
