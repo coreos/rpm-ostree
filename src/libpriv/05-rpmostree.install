@@ -1,4 +1,8 @@
 #!/usr/bin/bash
+# Check if install.conf is missing or does not include layout=ostree
+if [ ! -f /usr/lib/kernel/install.conf ] || ! grep -q layout=ostree /usr/lib/kernel/install.conf; then
+    exit 0
+fi
 # This is the hook that has kernel-install call into rpm-ostree kernel-install
 if test -x /usr/bin/rpm-ostree; then
     exec /usr/bin/rpm-ostree kernel-install "$@"
