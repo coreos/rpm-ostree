@@ -32,18 +32,14 @@
 
 #include <libglnx.h>
 
-gboolean
-rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *cancellable,
-                             GError **error)
+static gboolean
+container_rebuild_inner (int rootfs_fd, rpmostreecxx::Treefile &treefile, GCancellable *cancellable,
+                         GError **error)
 {
   CXX_TRY (treefile.validate_for_container (), error);
 
   g_autoptr (RpmOstreeContext) ctx = rpmostree_context_new_container ();
   rpmostree_context_set_treefile (ctx, treefile);
-
-  glnx_autofd int rootfs_fd = -1;
-  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_fd, error))
-    return FALSE;
 
   // Forcibly turn this on for the container flow because it's the only sane
   // way for installing RPM packages that invoke useradd/groupadd to work.
@@ -77,6 +73,22 @@ rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *can
     return FALSE;
 
   CXX_TRY (fs_prep->undo (), error);
+
+  return TRUE;
+}
+
+gboolean
+rpmostree_container_rebuild (rpmostreecxx::Treefile &treefile, GCancellable *cancellable,
+                             GError **error)
+{
+
+  glnx_autofd int rootfs_fd = -1;
+  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_fd, error))
+    return FALSE;
+
+  // Do this in a new scope to ensure we teardown our connection to the rpmdb
+  if (!container_rebuild_inner (rootfs_fd, treefile, cancellable, error))
+    return FALSE;
 
   CXX_TRY (rpmostreecxx::postprocess_cleanup_rpmdb (rootfs_fd), error);
 
