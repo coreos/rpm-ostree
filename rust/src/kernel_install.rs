@@ -58,9 +58,11 @@ fn add(root: &Dir, argv: &[&str]) -> Result<()> {
         anyhow::bail!("No kernel version provided");
     };
     tracing::debug!("Installing kernel kver={kver}");
+    undo_systemctl_wrap()?;
     println!("Generating initramfs");
     crate::initramfs::run_dracut(root, &kver)?;
     println!("Running depmod");
+    redo_systemctl_wrap()?;
     Command::new("depmod")
         .args(["-a", kver])
         .run()
@@ -111,6 +113,30 @@ pub fn main(argv: &[&str]) -> Result<u8> {
         }
         _ => Ok(0),
     }
+}
+
+#[context("Unwrapping systemctl")]
+fn undo_systemctl_wrap() -> Result<()> {
+    let bin_path = &Dir::open_ambient_dir("usr/bin", cap_std::ambient_authority())?;
+    if !bin_path.exists("systemctl.rpmostreesave") {
+        // Not wrapped, just return.
+        return Ok(());
+    }
+    bin_path.rename("systemctl", &bin_path, "systemctl.backup")?;
+    bin_path.rename("systemctl.rpmostreesave", &bin_path, "systemctl")?;
+    Ok(())
+}
+
+#[context("Wrapping systemctl")]
+fn redo_systemctl_wrap() -> Result<()> {
+    let bin_path = &Dir::open_ambient_dir("usr/bin", cap_std::ambient_authority())?;
+    if !bin_path.exists("systemctl.backup") {
+        // We did not unwrap, just return.
+        return Ok(());
+    }
+    bin_path.rename("systemctl", &bin_path, "systemctl.rpmostreesave")?;
+    bin_path.rename("systemctl.backup", &bin_path, "systemctl")?;
+    Ok(())
 }
 
 #[cfg(test)]
