@@ -235,19 +235,20 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     let opt = ContainerEncapsulateOpts::parse_from(args);
     let repo = &ostree_ext::cli::parse_repo(&opt.repo)?;
     let (root, rev) = repo.read_commit(opt.ostree_ref.as_str(), gio::Cancellable::NONE)?;
-    let pkglist = progress_task("Reading packages", || -> Result<_> {
-        let cancellable = gio::Cancellable::new();
+    let cancellable = gio::Cancellable::new();
+    let pkglist: glib::Variant = {
         let r = crate::ffi::package_variant_list_for_commit(
             repo.reborrow_cxx(),
             rev.as_str(),
             cancellable.reborrow_cxx(),
-        )?;
-        let r: glib::Variant = unsafe { glib::translate::from_glib_full(r as *mut _) };
-        Ok(r)
-    })?;
+        )
+        .context("Reading package variant list")?;
+        unsafe { glib::translate::from_glib_full(r as *mut _) }
+    };
 
     // Open the RPM database for this commit.
-    let q = crate::ffi::rpmts_for_commit(repo.reborrow_cxx(), rev.as_str())?;
+    let q =
+        crate::ffi::rpmts_for_commit(repo.reborrow_cxx(), rev.as_str()).context("Getting refts")?;
 
     let mut state = MappingBuilder {
         unpackaged_id: Rc::from(MappingBuilder::UNPACKAGED_ID),
@@ -279,7 +280,9 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         let arch = pkg.child_value(4);
         let arch = arch.str().unwrap();
         let nevra = Rc::from(gv_nevra_to_string(&pkg).into_boxed_str());
-        let pkgmeta = q.package_meta(name, arch)?;
+        let pkgmeta = q
+            .package_meta(name, arch)
+            .context("Querying package meta")?;
         let buildtime = pkgmeta.buildtime();
         if let Some((lowid, lowtime)) = lowest_change_time.as_mut() {
             if *lowtime > buildtime {

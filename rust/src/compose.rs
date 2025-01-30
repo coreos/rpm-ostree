@@ -222,7 +222,8 @@ impl BuildChunkedOCI {
             ])
             .args(label_arg)
             .args([commitid.as_str(), imgref.as_str()])
-            .run()?;
+            .run()
+            .context("Invoking compose container-encapsulate")?;
 
         Ok(())
     }
