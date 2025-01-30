@@ -84,7 +84,7 @@ impl Default for InitializeMode {
 }
 
 #[derive(Debug, Parser)]
-struct Opt {
+struct ComposeImageOpts {
     #[clap(long)]
     #[clap(value_parser)]
     /// Directory to use for caching downloaded packages and other data
@@ -546,7 +546,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     use crate::isolation::self_command;
     let cancellable = gio::Cancellable::NONE;
 
-    let opt = Opt::parse_from(args.iter().skip(1));
+    let opt = ComposeImageOpts::parse_from(args.iter().skip(1));
 
     let tempdir = tempfile::tempdir()?;
     let tempdir = Utf8Path::from_path(tempdir.path()).unwrap();
