@@ -156,7 +156,7 @@ struct ComposeImageOpts {
 
 /// Generate a "chunked" OCI archive from an input rootfs.
 #[derive(Debug, Parser)]
-pub(crate) struct BuildChunkedOCI {
+pub(crate) struct BuildChunkedOCIOpts {
     /// Path to the source root filesystem tree.
     #[clap(long, required_unless_present = "from")]
     rootfs: Option<Utf8PathBuf>,
@@ -269,7 +269,7 @@ impl Drop for PodmanMount {
     }
 }
 
-impl BuildChunkedOCI {
+impl BuildChunkedOCIOpts {
     pub(crate) fn run(self) -> Result<()> {
         enum FileSource {
             Rootfs(Utf8PathBuf),
