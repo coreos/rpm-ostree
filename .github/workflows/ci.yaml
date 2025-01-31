@@ -240,7 +240,19 @@ jobs:
         with:
           name: install-c9s.tar
       - name: Integration tests
-        run: cd tests/build-chunked-oci && tar -xzvf ../../install.tar && podman build -v $(pwd)/usr/bin:/ci -t localhost/test .
+        run: |
+          set -xeuo pipefail
+          cd tests/build-chunked-oci
+          # Something is confused in latest GHA here, I was getting: Error: database graph driver "" does not match our graph driver "overlay": database configuration mismatch
+          sudo rm /var/lib/containers -rf
+          sudo podman build -t localhost/base -f Containerfile.test
+          sudo tar -xzvf ../../install.tar
+          sudo podman build -v $(pwd)/usr/bin:/ci -t localhost/builder -f Containerfile.builder
+          sudo podman run --rm --privileged --security-opt=label=disable \
+            -v /var/lib/containers:/var/lib/containers \
+            -v /var/tmp:/var/tmp \
+            localhost/builder rpm-ostree experimental compose build-chunked-oci --bootc --format-version=1 --from localhost/base --output containers-storage:localhost/base-chunked
+          sudo podman inspect localhost/base-chunked
   build-c9s:
     name: "Build (c9s)"
     runs-on: ubuntu-latest

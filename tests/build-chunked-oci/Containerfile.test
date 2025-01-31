@@ -1,0 +1,12 @@
+FROM quay.io/fedora/fedora-bootc:41
+RUN <<EORUN
+set -xeuo pipefail
+mkdir -p /var/lib/rpm-state
+# Remove some high level superfulous stuff
+dnf -y remove sos NetworkManager-tui vim nano
+# We don't want any python, and we don't need rpm-ostree either.
+dnf -y remove python3 rpm-ostree{,-libs}
+dnf clean all
+rm /var/lib/rpm -rf
+bootc container lint
+EORUN
