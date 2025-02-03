@@ -31,12 +31,22 @@ enum ComposeCmd {
         #[clap(flatten)]
         opts: crate::compose::BuildChunkedOCIOpts,
     },
+    Rootfs {
+        #[clap(flatten)]
+        opts: crate::compose::RootfsOpts,
+    },
+    CommitToContainerRootfs {
+        #[clap(flatten)]
+        opts: crate::compose::CommitToContainerRootfsOpts,
+    },
 }
 
 impl ComposeCmd {
     fn run(self) -> Result<()> {
         match self {
             ComposeCmd::BuildChunkedOCI { opts } => opts.run(),
+            ComposeCmd::Rootfs { opts } => opts.run(),
+            ComposeCmd::CommitToContainerRootfs { opts } => opts.run(),
         }
     }
 }

@@ -24,6 +24,7 @@ use ostree_ext::{oci_spec, ostree};
 
 use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
+use crate::isolation::self_command;
 
 const SYSROOT: &str = "sysroot";
 const USR: &str = "usr";
@@ -269,6 +270,44 @@ impl Drop for PodmanMount {
     }
 }
 
+/// Generate a filesystem tree in ostree-container format from an input manifest.
+/// This can then be copied into e.g. a `FROM scratch` container image build.
+#[derive(Debug, Parser)]
+pub(crate) struct RootfsOpts {
+    #[clap(long)]
+    #[clap(value_parser)]
+    /// Directory to use for caching downloaded packages and other data
+    cachedir: Option<Utf8PathBuf>,
+
+    /// Use this repository instead of a temporary one for debugging.
+    #[clap(long, hide = true)]
+    ostree_repo: Option<Utf8PathBuf>,
+
+    /// Source root for package system configuration.
+    #[clap(long, value_parser)]
+    source_root: Option<Utf8PathBuf>,
+
+    /// Path to the input manifest
+    manifest: Utf8PathBuf,
+
+    /// Path to the target root filesystem tree.
+    dest: Utf8PathBuf,
+}
+
+/// Unpack an OSTree commit to a target root in ostree-container layout (`bare-split-xattrs` format).
+#[derive(Debug, Parser)]
+pub(crate) struct CommitToContainerRootfsOpts {
+    /// Path to OSTree repository
+    #[clap(long, required = true)]
+    repo: Utf8PathBuf,
+
+    /// OSTree commit
+    commit: String,
+
+    /// Path to the target root filesystem tree.
+    dest: Utf8PathBuf,
+}
+
 impl BuildChunkedOCIOpts {
     pub(crate) fn run(self) -> Result<()> {
         enum FileSource {
@@ -351,6 +390,145 @@ impl BuildChunkedOCIOpts {
 
         Ok(())
     }
+}
+
+impl RootfsOpts {
+    pub(crate) fn run(self) -> Result<()> {
+        let manifest = self.manifest.as_path();
+
+        if self.dest.try_exists()? {
+            anyhow::bail!("Refusing to operate on extant target {}", self.dest);
+        }
+
+        // Create a temporary directory for things
+        let td = tempfile::tempdir_in("/var/tmp")?;
+        let td_path: Utf8PathBuf = td.path().to_owned().try_into()?;
+
+        // If we're passed an ostree repo, open it.
+        let (repo_path, repo) = if let Some(ostree_repo) = self.ostree_repo {
+            let repo = ostree::Repo::open_at(
+                libc::AT_FDCWD,
+                ostree_repo.as_str(),
+                gio::Cancellable::NONE,
+            )?;
+            (ostree_repo, repo)
+        } else {
+            // Otherwise make a temporary ostree repo
+            let repo_path = td_path.join("repo");
+            let repo = ostree::Repo::create_at(
+                libc::AT_FDCWD,
+                repo_path.as_str(),
+                ostree::RepoMode::BareUser,
+                None,
+                gio::Cancellable::NONE,
+            )?;
+            (repo_path, repo)
+        };
+        // Run a compose, generating an ostree commit.
+        let commitid_path = td_path.join("commitid.txt");
+        self_command()
+            .args([
+                "compose",
+                "tree",
+                "--unified-core",
+                "--repo",
+                repo_path.as_str(),
+                "--write-commitid-to",
+                commitid_path.as_str(),
+            ])
+            .args(
+                self.cachedir
+                    .iter()
+                    .flat_map(|v| ["--cachedir", v.as_str()]),
+            )
+            .args(
+                self.source_root
+                    .iter()
+                    .flat_map(|v| ["--source-root", v.as_str()]),
+            )
+            .arg(manifest.as_str())
+            .run()?;
+        // Read the ostree commit digest
+        let commit = std::fs::read_to_string(commitid_path)?;
+        let commit = commit.trim();
+
+        // Finally, unpack that commit to the target root.
+        println!("Constructing rootfs from commit...");
+        unpack_commit_to_dir_as_bare_split_xattrs(&repo, commit, &self.dest)
+        // At this point we'll drop our temporary directory, including the ostree repo etc.
+    }
+}
+
+impl CommitToContainerRootfsOpts {
+    /// Execute `compose commit-to-container-rootfs`. This just:
+    /// - Opens up the target ostree repo
+    /// - Creates a copy of it to the target root (note: no hardlinks from repo).
+    pub(crate) fn run(self) -> Result<()> {
+        let cancellable = gio::Cancellable::NONE;
+        let repo = ostree::Repo::open_at(libc::AT_FDCWD, self.repo.as_str(), cancellable)?;
+        unpack_commit_to_dir_as_bare_split_xattrs(&repo, &self.commit, &self.dest)
+    }
+}
+
+/// For the ostree-container format, we added a new repo mode `bare-split-xattrs`.
+/// While the ostree (C) code base has some support for reading this, it does
+/// not support writing it. The only code that does "writes" is when we generate
+/// a tar stream in the ostree-ext codebase. Hence, we synthesize the flattened
+/// rootfs here by converting to a tar stream internally, and unpacking it via
+/// forking `tar -x`.
+fn unpack_commit_to_dir_as_bare_split_xattrs(
+    repo: &ostree::Repo,
+    rev: &str,
+    path: &Utf8Path,
+) -> Result<()> {
+    std::fs::create_dir(path)?;
+    let repo = repo.clone();
+
+    // I hit some bugs in the Rust tar-rs trying to use it for this,
+    // would probably be good to fix, but in the end there's no
+    // issues with relying on /bin/tar here.
+    let mut untar_cmd = Command::new("tar");
+    untar_cmd.stdin(std::process::Stdio::piped());
+    untar_cmd.current_dir(path).args(["-x", "-f", "-"]);
+    let mut untar_child = untar_cmd.spawn()?;
+    // To ensure any reference to the inner pipes are closed
+    drop(untar_cmd);
+    let stdin = untar_child.stdin.take().unwrap();
+    // We use a thread scope so our spawned helper thread to synthesize
+    // the tar can safely borrow from this outer scope. Which doesn't
+    // *really* matter since we're just borrowing repo and rev, but hey might
+    // as well avoid copies.
+    std::thread::scope(move |scope| {
+        tracing::debug!("spawning untar");
+        let mktar = scope.spawn(move || {
+            tracing::debug!("spawning mktar");
+            ostree_ext::tar::export_commit(&repo, &rev, stdin, None)?;
+            anyhow::Ok(())
+        });
+        // Wait for both of our tasks.
+        tracing::debug!("joining mktar");
+        let mktar_result = mktar.join().unwrap();
+        tracing::debug!("completed mktar");
+        let untar_result = untar_child.wait()?;
+        tracing::debug!("completed untar");
+        let untar_result = if !untar_result.success() {
+            Err(anyhow::anyhow!("failed to untar: {untar_result:?}"))
+        } else {
+            Ok(())
+        };
+        // Handle errors from either end, or both. Almost always it will be
+        // "both" - if one side fails, the other will get EPIPE usually.
+        match (mktar_result, untar_result) {
+            (Ok(()), Ok(())) => anyhow::Ok(()),
+            (Ok(()), Err(e)) => return Err(e.into()),
+            (Err(e), Ok(())) => return Err(e.into()),
+            (Err(mktar_err), Err(untar_err)) => {
+                anyhow::bail!(
+                    "Multiple errors:\n Generating tar: {mktar_err}\n Unpacking: {untar_err}"
+                );
+            }
+        }
+    })
 }
 
 fn label_to_xattrs(label: Option<&str>) -> Option<glib::Variant> {
@@ -543,7 +721,6 @@ async fn fetch_previous_metadata(
 }
 
 pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
-    use crate::isolation::self_command;
     let cancellable = gio::Cancellable::NONE;
 
     let opt = ComposeImageOpts::parse_from(args.iter().skip(1));
@@ -897,6 +1074,37 @@ mod tests {
             cancellable,
         )?;
         assert_eq!(bashmeta.size(), 11);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_unpack() -> Result<()> {
+        // Skip without the ostree binary since ostree-devel doesn't pull it in
+        if !Utf8Path::new("/usr/bin/ostree").try_exists()? {
+            return Ok(());
+        }
+        let td = tempfile::tempdir()?;
+        let td_path: Utf8PathBuf = td.path().to_owned().try_into()?;
+        let repo_path = td_path.join("repo");
+        let repo = ostree::Repo::create_at(
+            libc::AT_FDCWD,
+            repo_path.as_str(),
+            ostree::RepoMode::BareUser,
+            None,
+            gio::Cancellable::NONE,
+        )?;
+        let rootfs = td_path.join("rootfs");
+        std::fs::create_dir(&rootfs)?;
+        std::fs::write(rootfs.join("test.txt"), b"Test")?;
+        Command::new("ostree")
+            .args(["--repo=repo", "commit", "-b", "test", "--tree=dir=rootfs"])
+            .current_dir(&td_path)
+            .run()?;
+        let rev = repo.require_rev("test")?;
+        let unpack_path = td_path.join("rootfs2");
+        unpack_commit_to_dir_as_bare_split_xattrs(&repo, &rev, &unpack_path)?;
+        assert!(unpack_path.join("test.txt").try_exists()?);
 
         Ok(())
     }
