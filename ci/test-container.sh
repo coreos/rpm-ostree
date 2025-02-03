@@ -144,4 +144,18 @@ if ! grep -qe "error: No such file or directory" err.txt; then
     fatal "did not find expected error when skipping CLI wraps."
 fi
 
+# test treefile-apply
+if rpm -q ltrace vim-enhanced; then
+  fatal "ltrace and/or vim-enhanced exist"
+fi
+vim_vr=$(rpm -q vim-minimal --qf '%{version}-%{release}')
+cat > /tmp/treefile.yaml << EOF
+packages:
+  - ltrace
+  # a split base/layered version-locked package
+  - vim-enhanced
+EOF
+rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml
+rpm -q ltrace vim-enhanced-"$vim_vr"
+
 echo ok
