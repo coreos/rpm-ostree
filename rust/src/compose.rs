@@ -2,10 +2,11 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::os::fd::{AsFd, AsRawFd};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -157,8 +158,12 @@ struct Opt {
 #[derive(Debug, Parser)]
 pub(crate) struct BuildChunkedOCI {
     /// Path to the source root filesystem tree.
-    #[clap(long, required = true)]
-    rootfs: Utf8PathBuf,
+    #[clap(long, required_unless_present = "from")]
+    rootfs: Option<Utf8PathBuf>,
+
+    /// Use the provided image (in containers-storage).
+    #[clap(long, required_unless_present = "rootfs")]
+    from: Option<String>,
 
     /// If set, configure the output OCI image to be a bootc container.
     /// At the current time this option is required.
@@ -175,16 +180,113 @@ pub(crate) struct BuildChunkedOCI {
     #[clap(long, default_value = "latest")]
     reference: String,
 
-    /// Path to an OCI directory. Will be created if nonexistent.
+    /// Output image reference, in TRANSPORT:TARGET syntax.
+    /// For example, `containers-storage:localhost/exampleos` or `oci:/path/to/ocidir`.
     #[clap(long, required = true)]
-    output: Utf8PathBuf,
+    output: String,
+}
+
+struct PodmanMount {
+    path: Utf8PathBuf,
+    temp_cid: Option<String>,
+    mounted: bool,
+}
+
+impl PodmanMount {
+    #[context("Unmounting container")]
+    fn _impl_unmount(&mut self) -> Result<()> {
+        if self.mounted {
+            tracing::debug!("unmounting {}", self.path.as_str());
+            self.mounted = false;
+            Command::new("umount")
+                .args(["-l", self.path.as_str()])
+                .stdout(Stdio::null())
+                .run()
+                .context("umount")?;
+            tracing::trace!("umount ok");
+        }
+        if let Some(cid) = self.temp_cid.take() {
+            tracing::debug!("rm container {cid}");
+            Command::new("podman")
+                .args(["rm", cid.as_str()])
+                .stdout(Stdio::null())
+                .run()
+                .context("podman rm")?;
+            tracing::trace!("rm ok");
+        }
+        Ok(())
+    }
+
+    #[context("Mounting continer {container}")]
+    fn _impl_mount(container: &str) -> Result<Utf8PathBuf> {
+        let mut o = Command::new("podman")
+            .args(["mount", container])
+            .run_get_output()?;
+        let mut s = String::new();
+        o.read_to_string(&mut s)?;
+        while s.ends_with('\n') {
+            s.pop();
+        }
+        tracing::debug!("mounted container {container} at {s}");
+        Ok(s.into())
+    }
+
+    #[allow(dead_code)]
+    fn new_for_container(container: &str) -> Result<Self> {
+        let path = Self::_impl_mount(container)?;
+        Ok(Self {
+            path,
+            temp_cid: None,
+            mounted: true,
+        })
+    }
+
+    fn new_for_image(image: &str) -> Result<Self> {
+        let mut o = Command::new("podman")
+            .args(["create", image])
+            .run_get_output()?;
+        let mut s = String::new();
+        o.read_to_string(&mut s)?;
+        let cid = s.trim();
+        let path = Self::_impl_mount(cid)?;
+        tracing::debug!("created container {cid} from {image}");
+        Ok(Self {
+            path,
+            temp_cid: Some(cid.to_owned()),
+            mounted: true,
+        })
+    }
+
+    fn unmount(mut self) -> Result<()> {
+        self._impl_unmount()
+    }
+}
+
+impl Drop for PodmanMount {
+    fn drop(&mut self) {
+        tracing::trace!("In drop, mounted={}", self.mounted);
+        let _ = self._impl_unmount();
+    }
 }
 
 impl BuildChunkedOCI {
     pub(crate) fn run(self) -> Result<()> {
-        anyhow::ensure!(self.rootfs.as_path() != "/");
-        let rootfs = &Dir::open_ambient_dir(self.rootfs.as_path(), cap_std::ambient_authority())
-            .with_context(|| format!("Opening {}", self.rootfs))?;
+        enum FileSource {
+            Rootfs(Utf8PathBuf),
+            Podman(PodmanMount),
+        }
+        let rootfs_source = if let Some(rootfs) = self.rootfs {
+            FileSource::Rootfs(rootfs)
+        } else {
+            let image = self.from.as_deref().unwrap();
+            FileSource::Podman(PodmanMount::new_for_image(image)?)
+        };
+        let rootfs = match &rootfs_source {
+            FileSource::Rootfs(p) => p.as_path(),
+            FileSource::Podman(mnt) => mnt.path.as_path(),
+        };
+        let rootfs = Dir::open_ambient_dir(rootfs, cap_std::ambient_authority())
+            .with_context(|| format!("Opening {}", rootfs))?;
         // These must be set to exactly this; the CLI parser requires it.
         assert!(self.bootc);
         assert_eq!(self.format_version, 1);
@@ -205,14 +307,23 @@ impl BuildChunkedOCI {
         // It's only the tests that override
         let modifier =
             ostree::RepoCommitModifier::new(ostree::RepoCommitModifierFlags::empty(), None);
-        let commitid = generate_commit_from_rootfs(&repo, rootfs, modifier)?;
-
-        let imgref = format!("oci:{}:{}", self.output.as_str(), self.reference.as_str());
+        let commitid = generate_commit_from_rootfs(&repo, &rootfs, modifier)?;
 
         let label_arg = self
             .bootc
             .then_some(["--label", "containers.bootc=1"].as_slice())
             .unwrap_or_default();
+        let config_data = if let Some(image) = self.from.as_deref() {
+            let img_transport = format!("containers-storage:{image}");
+            let tmpf = tempfile::NamedTempFile::new()?;
+            Command::new("skopeo")
+                .args(["inspect", "--config", img_transport.as_str()])
+                .stdout(tmpf.as_file().try_clone()?)
+                .run()?;
+            Some(tmpf.into_temp_path())
+        } else {
+            None
+        };
         crate::isolation::self_command()
             .args([
                 "compose",
@@ -221,9 +332,22 @@ impl BuildChunkedOCI {
                 repo_path.as_str(),
             ])
             .args(label_arg)
-            .args([commitid.as_str(), imgref.as_str()])
+            .args(
+                config_data
+                    .iter()
+                    .flat_map(|c| [OsStr::new("--image-config"), c.as_os_str()]),
+            )
+            .args([commitid.as_str(), self.output.as_str()])
             .run()
             .context("Invoking compose container-encapsulate")?;
+
+        drop(rootfs);
+        match rootfs_source {
+            FileSource::Rootfs(_) => {}
+            FileSource::Podman(mnt) => {
+                mnt.unmount().context("Final mount cleanup")?;
+            }
+        }
 
         Ok(())
     }
