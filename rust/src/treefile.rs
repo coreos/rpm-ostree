@@ -27,6 +27,7 @@ use cap_std::fs::MetadataExt as _;
 use cap_std_ext::cap_std::fs::Dir;
 use cap_std_ext::cmdext::CapStdExtCommandExt;
 use cap_std_ext::prelude::CapStdExtDirExt;
+use fn_error_context::context;
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
 use ostree_ext::{glib, ostree};
@@ -829,10 +830,14 @@ impl Treefile {
     }
 
     /// Execute all finalize.d scripts
+    #[context("Running finalize.d")]
     pub(crate) fn exec_finalize_d(&self, rootfs: &Dir) -> Result<()> {
         for (name, path) in self.externals.finalize_d.iter() {
             println!("Executing: {name}");
-            Command::new(path).cwd_dir(rootfs.try_clone()?).run()?;
+            Command::new(path)
+                .cwd_dir(rootfs.try_clone()?)
+                .run()
+                .with_context(|| format!("Failed to execute {name}"))?;
         }
         Ok(())
     }
