@@ -3677,7 +3677,11 @@ apply_rpmfi_overrides (RpmOstreeContext *self, int tmprootfs_dfd, DnfPackage *pk
 
       if (!S_ISDIR (stbuf.st_mode))
         {
-          if (!ostree_break_hardlink (tmprootfs_dfd, fn, FALSE, cancellable, error))
+          // Break the hardlink into the object store, making a copy.
+          // Ignore any underlying xattrs here; we'll always relabel security.selinux
+          // at the end, and otherwise the RPM is canonical for things like
+          // security.capability.
+          if (!ostree_break_hardlink (tmprootfs_dfd, fn, TRUE, cancellable, error))
             return glnx_prefix_error (error, "Copyup %s", fn);
         }
 
