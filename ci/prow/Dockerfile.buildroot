@@ -1,0 +1,3 @@
+# We don't preinstall anything additional yet, that
+# will be done by injected code.
+FROM quay.io/coreos-assembler/fcos-buildroot:testing-devel
