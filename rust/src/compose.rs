@@ -15,7 +15,7 @@ use fn_error_context::context;
 use oci_spec::image::ImageManifest;
 use ostree::gio;
 use ostree_ext::containers_image_proxy;
-use ostree_ext::glib::{Cast, ToVariant};
+use ostree_ext::glib::prelude::*;
 use ostree_ext::keyfileext::{map_keyfile_optional, KeyFileExt};
 use ostree_ext::ostree::MutableTree;
 use ostree_ext::{container as ostree_container, glib};

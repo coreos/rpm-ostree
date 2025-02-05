@@ -73,7 +73,7 @@ openssl = "0.10.68"
 once_cell = "1.20.2"
 os-release = "0.1.0"
 # We pull this one from git, as the project is no longer published as an external crate.
-ostree-ext = { git = "https://github.com/containers/bootc", rev = "210f58b4a48b9627040e4df76f24530ee89e6bb5" }
+ostree-ext = { git = "https://github.com/containers/bootc", rev = "5e0df36305cfda93eab0ca70678b618d1f2844f0" }
 paste = "1.0"
 phf = { version = "0.11", features = ["macros"] }
 rand = "0.8.5"

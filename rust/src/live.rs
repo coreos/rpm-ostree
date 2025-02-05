@@ -233,7 +233,7 @@ fn update_etc(
     // The labels for /etc and /usr/etc may differ; ensure that we label
     // the files with the /etc target, even though we're checking out
     // from /usr/etc.  This is the same as what libostree does.
-    if sepolicy.name().len() > 0 {
+    if sepolicy.name().is_some() {
         opts.sepolicy = Some(sepolicy.clone());
     }
     // Added directories and files
@@ -374,14 +374,14 @@ pub(crate) fn transaction_apply_live(
             }
             DeploymentUnlockedState::Transient | DeploymentUnlockedState::Development => {}
             s => {
-                return Err(anyhow!("apply-live is incompatible with unlock state: {}", s).into());
+                return Err(anyhow!("apply-live is incompatible with unlock state: {s:?}").into());
             }
         };
     } else {
         match booted.unlocked() {
             DeploymentUnlockedState::Transient | DeploymentUnlockedState::Development => {}
             s => {
-                return Err(anyhow!("deployment not unlocked, is in state: {}", s).into());
+                return Err(anyhow!("deployment not unlocked, is in state: {s:?}").into());
             }
         };
     }

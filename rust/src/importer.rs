@@ -248,7 +248,7 @@ impl RpmImporter {
         match import_filter(path, &file_info.glib_reborrow(), skip_extraneous)? {
             RepoCommitFilterResult::Allow => Ok(false),
             RepoCommitFilterResult::Skip => Ok(true),
-            x => unreachable!("unknown commit result '{}' for path '{}'", x, path),
+            x => unreachable!("unknown commit result '{}' for path '{x:?}'", path),
         }
     }
 
