@@ -10,7 +10,7 @@ use cap_std::io_lifetimes::AsFilelike;
 use cap_std_ext::cap_std;
 use cap_std_ext::prelude::CapStdExtCommandExt;
 use fn_error_context::context;
-use ostree_ext::{gio, glib, prelude::*};
+use ostree_ext::{gio, prelude::*};
 use rustix::fd::BorrowedFd;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
@@ -22,7 +22,7 @@ use std::pin::Pin;
 use std::process::Command;
 use std::{fs, io};
 
-fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
+fn list_files_recurse<P: IsA<gio::Cancellable>>(
     d: &cap_std::fs::Dir,
     path: &str,
     filelist: &mut BTreeSet<String>,
@@ -51,7 +51,7 @@ fn list_files_recurse<P: glib::IsA<gio::Cancellable>>(
     Ok(())
 }
 
-fn gather_filelist<P: glib::IsA<gio::Cancellable>>(
+fn gather_filelist<P: IsA<gio::Cancellable>>(
     d: &cap_std::fs::Dir,
     input: &HashSet<String>,
     cancellable: Option<&P>,
@@ -87,7 +87,7 @@ fn gather_filelist<P: glib::IsA<gio::Cancellable>>(
     Ok(filelist)
 }
 
-fn generate_initramfs_overlay<P: glib::IsA<gio::Cancellable>>(
+fn generate_initramfs_overlay<P: IsA<gio::Cancellable>>(
     root: &cap_std::fs::Dir,
     files: &HashSet<String>,
     cancellable: Option<&P>,
@@ -132,7 +132,7 @@ fn generate_initramfs_overlay<P: glib::IsA<gio::Cancellable>>(
     Ok(out_tmpf)
 }
 
-fn generate_initramfs_overlay_etc<P: glib::IsA<gio::Cancellable>>(
+fn generate_initramfs_overlay_etc<P: IsA<gio::Cancellable>>(
     files: &HashSet<String>,
     cancellable: Option<&P>,
 ) -> Result<fs::File> {

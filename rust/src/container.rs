@@ -193,7 +193,7 @@ fn build_fs_mapping_recurse(
             gio::FileType::Directory => {
                 build_fs_mapping_recurse(path, &child, state)?;
             }
-            o => anyhow::bail!("Unhandled file type: {}", o),
+            o => anyhow::bail!("Unhandled file type: {o:?}"),
         }
         path.pop();
     }
