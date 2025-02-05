@@ -125,6 +125,12 @@ process_kernel_and_initramfs (int rootfs_dfd, rpmostreecxx::Treefile &treefile,
       }
   }
 
+  /* For some reason, grub2-ppc64le ships this as an empty directory. Remove it as ostree
+   * owns writing the bootloader entries.
+   */
+  if (!glnx_shutil_rm_rf_at (rootfs_dfd, "boot/loader", cancellable, error))
+    return FALSE;
+
   /* We need to move non-kernel data (bootloader bits usually) into
    * /usr/lib/ostree-boot; this will also take care of moving the kernel in legacy
    * paths (CentOS, Fedora <= 24), etc.
