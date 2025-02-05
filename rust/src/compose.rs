@@ -84,7 +84,7 @@ impl Default for InitializeMode {
 }
 
 #[derive(Debug, Parser)]
-struct Opt {
+struct ComposeImageOpts {
     #[clap(long)]
     #[clap(value_parser)]
     /// Directory to use for caching downloaded packages and other data
@@ -156,7 +156,7 @@ struct Opt {
 
 /// Generate a "chunked" OCI archive from an input rootfs.
 #[derive(Debug, Parser)]
-pub(crate) struct BuildChunkedOCI {
+pub(crate) struct BuildChunkedOCIOpts {
     /// Path to the source root filesystem tree.
     #[clap(long, required_unless_present = "from")]
     rootfs: Option<Utf8PathBuf>,
@@ -269,7 +269,7 @@ impl Drop for PodmanMount {
     }
 }
 
-impl BuildChunkedOCI {
+impl BuildChunkedOCIOpts {
     pub(crate) fn run(self) -> Result<()> {
         enum FileSource {
             Rootfs(Utf8PathBuf),
@@ -546,7 +546,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     use crate::isolation::self_command;
     let cancellable = gio::Cancellable::NONE;
 
-    let opt = Opt::parse_from(args.iter().skip(1));
+    let opt = ComposeImageOpts::parse_from(args.iter().skip(1));
 
     let tempdir = tempfile::tempdir()?;
     let tempdir = Utf8Path::from_path(tempdir.path()).unwrap();

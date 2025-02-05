@@ -29,7 +29,7 @@ enum Cmd {
 enum ComposeCmd {
     BuildChunkedOCI {
         #[clap(flatten)]
-        opts: crate::compose::BuildChunkedOCI,
+        opts: crate::compose::BuildChunkedOCIOpts,
     },
 }
 
