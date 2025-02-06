@@ -277,7 +277,8 @@ impl BuildChunkedOCIOpts {
             Command::new("skopeo")
                 .args(["inspect", "--config", img_transport.as_str()])
                 .stdout(tmpf.as_file().try_clone()?)
-                .run()?;
+                .run()
+                .context("Invoking skopeo to inspect config")?;
             Some(tmpf.into_temp_path())
         } else {
             None
@@ -535,6 +536,7 @@ fn postprocess_mtree(repo: &ostree::Repo, rootfs: &ostree::MutableTree) -> Resul
     Ok(())
 }
 
+#[context("Generating commit from rootfs")]
 fn generate_commit_from_rootfs(
     repo: &ostree::Repo,
     rootfs: &Dir,
