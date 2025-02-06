@@ -23,7 +23,7 @@ use ostree_ext::{container as ostree_container, glib};
 use ostree_ext::{oci_spec, ostree};
 
 use crate::cmdutils::CommandRunExt;
-use crate::containers_storage::PodmanMount;
+use crate::containers_storage::Mount;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::isolation::self_command;
 
@@ -230,13 +230,14 @@ impl BuildChunkedOCIOpts {
     pub(crate) fn run(self) -> Result<()> {
         enum FileSource {
             Rootfs(Utf8PathBuf),
-            Podman(PodmanMount),
+            Podman(Mount),
         }
         let rootfs_source = if let Some(rootfs) = self.rootfs {
             FileSource::Rootfs(rootfs)
         } else {
             let image = self.from.as_deref().unwrap();
-            FileSource::Podman(PodmanMount::new_for_image(image)?)
+            crate::containers_storage::reexec_if_needed()?;
+            FileSource::Podman(Mount::new_for_image(image)?)
         };
         let rootfs = match &rootfs_source {
             FileSource::Rootfs(p) => p.as_path(),

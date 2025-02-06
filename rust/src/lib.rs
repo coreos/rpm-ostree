@@ -20,6 +20,7 @@ mod cmdutils;
 mod cxxrsutil;
 mod ffiutil;
 pub(crate) mod ffiwrappers;
+mod reexec;
 pub(crate) use cxxrsutil::*;
 use ffi::BubblewrapMutability;
 
