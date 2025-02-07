@@ -1,0 +1,8 @@
+edition: "2024"
+packages:
+  - bash
+  - rpm
+  - coreutils
+  - selinux-policy-targeted
+  - kernel
+  - rpm-ostree

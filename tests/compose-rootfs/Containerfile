@@ -1,0 +1,39 @@
+# In theory this can skew from the builder
+FROM quay.io/fedora/fedora:41 as repos
+
+# You must run this build with `-v /path/to/rpm-ostree:/run/build/rpm-ostree:ro`
+FROM quay.io/fedora/fedora:41 as builder
+RUN <<EORUN
+set -xeuo pipefail
+# Install our dependencies
+dnf -y install rpm-ostree selinux-policy-targeted sqlite
+# Our goal here though is to test the updated rpm-ostree binary.
+# Right now there are a very few things that live outside the binary
+# like rpm-ostree-0-integration.conf, but we should probably move those in.
+install /run/build/rpm-ostree /usr/bin
+EORUN
+# Copy in our source code.
+COPY . /src
+WORKDIR /src
+RUN --mount=type=bind,from=repos,src=/,dst=/repos <<EORUN
+set -xeuo pipefail
+# Synchronize the dnf/rpm configs from the repos container.
+for x in etc/dnf etc/yum.repos.d etc/pki/rpm-gpg; do
+  rm -rf /"$x" && cp -a /repos/${x} /$x
+done
+# And copy to the workdir; TODO fix this in rpm-ostree
+cp /etc/yum.repos.d/*.repo .
+exec rpm-ostree experimental compose rootfs --source-root=/repos manifest.yaml /target-rootfs
+EORUN
+
+# This pulls in the rootfs generated in the previous step
+FROM scratch
+COPY --from=builder /target-rootfs/ /
+LABEL containers.bootc 1
+# https://pagure.io/fedora-kiwi-descriptions/pull-request/52
+ENV container=oci
+# Make systemd the default
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
+
+

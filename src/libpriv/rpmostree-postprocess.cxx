@@ -469,7 +469,7 @@ postprocess_final (int rootfs_dfd, rpmostreecxx::Treefile &treefile, gboolean un
                           tmpfiles_integration_path,
                           GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
                           cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Failed to copy rpm-ostree-0-integration.conf");
 
   if (treefile.get_opt_usrlocal () == rpmostreecxx::OptUsrLocal::StateOverlay)
     {
