@@ -34,6 +34,7 @@ use std::os::unix::prelude::IntoRawFd;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::Stdio;
+use cap_std_ext::cmdext::CapStdExtCommandExt;
 
 /// Directories that are moved out and symlinked from their `/var/lib/<entry>`
 /// location to `/usr/lib/<entry>`.
@@ -1069,10 +1070,42 @@ fn workaround_selinux_cross_labeling_recurse(
     Ok(())
 }
 
+fn run_add_determinisim(rootfs: &Dir) -> CxxResult<()> {
+    let path = std::env::var_os("PATH").unwrap();
+    let bin = "add-determinism";
+    if let Some(path) = std::env::var_os("PATH") {
+        for path in std::env::split_paths(&path){
+            let bin_path = path.join(bin);
+            if bin_path.exists() {
+                // let usr_path = rootfs.open_dir("usr");
+                // cwd_dir(usr_path);
+                let mut cmd = std::process::Command::new("/bin/bash");
+                cmd.cwd_dir(rootfs.try_clone()?);
+                let usr_path = Path::new("usr");
+                std::env::set_current_dir(&usr_path)?;
+                // add-determinism --handler pyc-zero-mtime
+                let r = std::process::Command::new("add-determinism")
+                .arg("--handler")
+                .arg("pyc-zero-mtime")
+                .arg(".")
+                .status()?;
+                // .expect("Failed to normalize .pyc files using add-determinism");
+                // if !r.success() {
+                //     return Err(anyhow!("Failed to execute add-determinism --handler pyc-zero-mtime: {:?}", r).into());
+                // }
+            }
+        }
+    }
+    else {
+        return Err(anyhow!("Failed to find PATH var").into());
+    }
+    Ok(())
+}
+
 /// This is the nearly the last code executed before we run `ostree commit`.
 pub fn compose_postprocess_final(rootfs_dfd: i32, treefile: &Treefile) -> CxxResult<()> {
     let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
-
+    run_add_determinisim(rootfs)?;
     hardlink_rpmdb_base_location(rootfs, None)?;
 
     treefile.exec_finalize_d(rootfs)?;
