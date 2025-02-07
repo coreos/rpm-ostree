@@ -20,6 +20,7 @@ mod cmdutils;
 mod cxxrsutil;
 mod ffiutil;
 pub(crate) mod ffiwrappers;
+mod reexec;
 pub(crate) use cxxrsutil::*;
 use ffi::BubblewrapMutability;
 
@@ -963,6 +964,7 @@ pub mod client;
 pub(crate) use client::*;
 pub mod cliwrap;
 pub mod container;
+mod containers_storage;
 pub use cliwrap::*;
 pub(crate) use container::*;
 mod compose;

@@ -212,18 +212,19 @@ jobs:
           echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
           sudo apt update
           sudo apt install -y crun/testing podman/testing skopeo/testing
+          # Something is confused in latest GHA here
+          sudo rm /var/lib/containers -rf
       - name: Checkout repository
         uses: actions/checkout@v3
       - name: Download build
         uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar
       - name: Test compose-rootfs
         run: |
-          cd tests/compose
-          sudo podman build -v ./usr/bin/rpm-ostree:/run/build/rpm-ostree:ro --security-opt=label=disable --cap-add=all --device /dev/fuse -t localhost/test -f Containerfile .
+          cd tests/compose-rootfs
+          tar -xzvf ../../install.tar
+          sudo podman build -v $(pwd)/usr/bin/rpm-ostree:/run/build/rpm-ostree:ro --security-opt=label=disable --cap-add=all --device /dev/fuse -t localhost/test -f Containerfile .
   container-encapsulate:
     name: "Encapsulate tests"
     needs: build
@@ -254,9 +255,8 @@ jobs:
           echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
           sudo apt update
           sudo apt install -y crun/testing podman/testing skopeo/testing
-          crun --version
-          podman --version
-          skopeo --version
+          # Something is confused in latest GHA here
+          sudo rm /var/lib/containers -rf
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Download build
@@ -267,16 +267,15 @@ jobs:
         run: |
           set -xeuo pipefail
           cd tests/build-chunked-oci
-          # Something is confused in latest GHA here, I was getting: Error: database graph driver "" does not match our graph driver "overlay": database configuration mismatch
-          sudo rm /var/lib/containers -rf
           sudo podman build -t localhost/base -f Containerfile.test
           sudo tar -xzvf ../../install.tar
           sudo podman build -v $(pwd)/usr/bin:/ci -t localhost/builder -f Containerfile.builder
           sudo podman run --rm --privileged --security-opt=label=disable \
             -v /var/lib/containers:/var/lib/containers \
             -v /var/tmp:/var/tmp \
-            localhost/builder rpm-ostree experimental compose build-chunked-oci --bootc --format-version=1 --from localhost/base --output containers-storage:localhost/base-chunked
-          sudo podman inspect localhost/base-chunked
+            -v $(pwd):/output \
+            localhost/builder rpm-ostree experimental compose build-chunked-oci --bootc --format-version=1 --from localhost/base --output oci:/output/base-chunked
+          sudo skopeo inspect oci:base-chunked
   build-c9s:
     name: "Build (c9s)"
     runs-on: ubuntu-latest
