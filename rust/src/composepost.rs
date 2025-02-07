@@ -33,7 +33,7 @@ use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::IntoRawFd;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 
 /// Directories that are moved out and symlinked from their `/var/lib/<entry>`
 /// location to `/usr/lib/<entry>`.
@@ -504,13 +504,18 @@ fn compose_postprocess_default_target(rootfs: &Dir, target: &str) -> Result<()> 
     Ok(())
 }
 
+pub(crate) enum PostprocessBwrap {
+    None,
+    Wrap { unified_core: bool },
+}
+
 /// The treefile format has two kinds of postprocessing scripts;
 /// there's a single `postprocess-script` as well as inline (anonymous)
 /// scripts.  This function executes both kinds in bwrap containers.
-fn compose_postprocess_scripts(
+pub(crate) fn compose_postprocess_scripts(
     rootfs_dfd: &Dir,
     treefile: &mut Treefile,
-    unified_core: bool,
+    bwrap: PostprocessBwrap,
 ) -> Result<()> {
     // Execute the anonymous (inline) scripts.
     for (i, script) in treefile
@@ -531,12 +536,19 @@ fn compose_postprocess_scripts(
         )?;
         println!("Executing `postprocess` inline script '{}'", i);
         let child_argv = vec![binpath.to_string()];
-        let _ = bwrap::bubblewrap_run_sync(
-            rootfs_dfd.as_raw_fd(),
-            &child_argv,
-            false,
-            BubblewrapMutability::for_unified_core(unified_core),
-        )?;
+        if let PostprocessBwrap::Wrap { unified_core } = bwrap {
+            let _ = bwrap::bubblewrap_run_sync(
+                rootfs_dfd.as_raw_fd(),
+                &child_argv,
+                false,
+                BubblewrapMutability::for_unified_core(unified_core),
+            )
+            .context("Executing inline postprocessing script")?;
+        } else {
+            Command::new(&binpath)
+                .run()
+                .context("Executing inline postprocessing script")?;
+        }
         rootfs_dfd.remove_file(target_binpath)?;
     }
 
@@ -556,13 +568,19 @@ fn compose_postprocess_scripts(
         println!("Executing postprocessing script");
 
         let child_argv = &vec![binpath.to_string()];
-        let _ = crate::bwrap::bubblewrap_run_sync(
-            rootfs_dfd.as_raw_fd(),
-            child_argv,
-            false,
-            BubblewrapMutability::for_unified_core(unified_core),
-        )
-        .context("Executing postprocessing script")?;
+        if let PostprocessBwrap::Wrap { unified_core } = bwrap {
+            let _ = crate::bwrap::bubblewrap_run_sync(
+                rootfs_dfd.as_raw_fd(),
+                child_argv,
+                false,
+                BubblewrapMutability::for_unified_core(unified_core),
+            )
+            .context("Executing postprocessing script")?;
+        } else {
+            Command::new(&binpath)
+                .run()
+                .context("Executing postprocessing script")?;
+        }
 
         rootfs_dfd.remove_file(target_binpath)?;
         println!("Finished postprocessing script");
@@ -720,7 +738,7 @@ pub fn compose_postprocess(
     compose_postprocess_add_files(rootfs, treefile)?;
     etc_guard.undo()?;
 
-    compose_postprocess_scripts(rootfs, treefile, unified_core)?;
+    compose_postprocess_scripts(rootfs, treefile, PostprocessBwrap::Wrap { unified_core })?;
 
     Ok(())
 }

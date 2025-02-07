@@ -20,13 +20,14 @@
  */
 
 use crate::cmdutils::CommandRunExt;
-use crate::cxxrsutil::*;
+use crate::{compose_postprocess_scripts, cxxrsutil::*};
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::MetadataExt as _;
 use cap_std_ext::cap_std::fs::Dir;
 use cap_std_ext::cmdext::CapStdExtCommandExt;
 use cap_std_ext::prelude::CapStdExtDirExt;
+use clap::Parser;
 use fn_error_context::context;
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
@@ -4672,4 +4673,68 @@ pub(crate) fn treefile_delete_client_etc() -> CxxResult<u32> {
         n = n.saturating_add(1);
     }
     Ok(n)
+}
+
+/// Apply a treefile to the running environment (usually during an image build)
+#[derive(Debug, Parser)]
+pub(crate) struct TreefileApplyOpts {
+    /// Path to the treefile.
+    #[clap(value_parser)]
+    treefile: Utf8PathBuf,
+}
+
+impl TreefileApplyOpts {
+    pub(crate) fn run(self) -> Result<()> {
+        let mut tf = Treefile::new_boxed(&self.treefile, Some(&utils::get_rpm_basearch()))
+            .context("parsing treefile")?;
+
+        // we only handle a subset of fields here
+        if let Some(packages) = &tf.parsed.packages {
+            let mut install_args: Vec<_> = packages.iter().map(|s| s.as_str()).collect();
+
+            if tf.parsed.documentation.is_some() {
+                bail!("cannot apply documentation directive when deriving");
+            }
+
+            // map `recommends` to dnf's `install_weak_deps`
+            match tf.parsed.recommends {
+                Some(true) => {
+                    install_args.push("--setopt=install_weak_deps=true");
+                }
+                Some(false) => {
+                    install_args.push("--setopt=install_weak_deps=false");
+                }
+                None => {} // implicitly leave environment default if unset
+            }
+
+            // lock all base packages during installation
+            // https://gitlab.com/fedora/bootc/tracker/-/issues/59
+            run_dnf("versionlock", &["add", "*", "--disablerepo", "*"])
+                .context("locking base packages with dnf")?;
+            run_dnf("install", &install_args).context("installing packages with dnf")?;
+            run_dnf("versionlock", &["clear"]).context("clearing base packages lock with dnf")?;
+        };
+
+        // handle postprocess scripts
+        let rootfs_dfd =
+            Dir::open_ambient_dir("/", cap_std::ambient_authority()).context("opening /")?;
+        compose_postprocess_scripts(&rootfs_dfd, &mut tf, crate::PostprocessBwrap::None)
+            .context("running postprocess scripts")?;
+
+        Ok(())
+    }
+}
+
+fn run_dnf(command: &str, args: &[&str]) -> Result<()> {
+    let mut cmd = Command::new("dnf");
+    cmd.arg(command).args(args);
+    cmd.arg("--noplugins");
+    cmd.arg("-y");
+
+    let status = cmd.status().context("collecting dnf status")?;
+    if !status.success() {
+        bail!("Failed to run dnf {command}: {status:?}");
+    }
+
+    Ok(())
 }

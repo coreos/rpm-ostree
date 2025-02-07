@@ -39,6 +39,10 @@ enum ComposeCmd {
         #[clap(flatten)]
         opts: crate::compose::CommitToContainerRootfsOpts,
     },
+    TreefileApply {
+        #[clap(flatten)]
+        opts: crate::treefile::TreefileApplyOpts,
+    },
 }
 
 impl ComposeCmd {
@@ -47,6 +51,7 @@ impl ComposeCmd {
             ComposeCmd::BuildChunkedOCI { opts } => opts.run(),
             ComposeCmd::Rootfs { opts } => opts.run(),
             ComposeCmd::CommitToContainerRootfs { opts } => opts.run(),
+            ComposeCmd::TreefileApply { opts } => opts.run(),
         }
     }
 }
