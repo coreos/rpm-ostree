@@ -51,6 +51,7 @@ struct _RpmOstreeContext
   gboolean enable_rofiles;
   OstreeRepoDevInoCache *devino_cache;
   gboolean unprivileged;
+  gboolean repos_dir_configured;
   OstreeSePolicy *sepolicy;
   char *passwd_dir;
 

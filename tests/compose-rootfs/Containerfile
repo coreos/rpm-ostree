@@ -1,5 +1,5 @@
-# In theory this can skew from the builder
-FROM quay.io/fedora/fedora:41 as repos
+# Demonstrate skew from the builder
+FROM quay.io/centos/centos:stream10 as repos
 
 # You must run this build with `-v /path/to/rpm-ostree:/run/build/rpm-ostree:ro`
 FROM quay.io/fedora/fedora:41 as builder
@@ -17,12 +17,8 @@ COPY . /src
 WORKDIR /src
 RUN --mount=type=bind,from=repos,src=/,dst=/repos <<EORUN
 set -xeuo pipefail
-# Synchronize the dnf/rpm configs from the repos container.
-for x in etc/dnf etc/yum.repos.d etc/pki/rpm-gpg; do
-  rm -rf /"$x" && cp -a /repos/${x} /$x
-done
-# And copy to the workdir; TODO fix this in rpm-ostree
-cp /etc/yum.repos.d/*.repo .
+# Workaround for https://github.com/coreos/rpm-ostree/issues/5285
+cp -a /repos/etc/pki/rpm-gpg/* /etc/pki/rpm-gpg
 exec rpm-ostree experimental compose rootfs --source-root=/repos manifest.yaml /target-rootfs
 EORUN
 
