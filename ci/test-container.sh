@@ -9,6 +9,17 @@ fatal() {
 
 versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 
+# This allows running this test in a podman container locally by running
+# `SELF_BOOTSTRAP=1 ci/test-container.sh`.
+if [ -n "${SELF_BOOTSTRAP:-}" ]; then
+  rm -rf "$PWD/installtree"
+  make install DESTDIR="$PWD/installtree"
+  make -C tests/kolainst install DESTDIR="$PWD/installtree"
+  exec podman run -ti --rm --security-opt=label=disable -v "$PWD":/var/srv -w /var/srv \
+    quay.io/fedora/fedora-coreos:testing-devel sh -c \
+      'rsync -rlv installtree/ / && /var/srv/ci/test-container.sh'
+fi
+
 # Test overrides
 case $versionid in
   41)
@@ -75,6 +86,21 @@ rpm-ostree ex rebuild
 rpm-ostree override replace $koji_kernel_url
 # test that the new initramfs was generated
 test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
+
+# test treefile-apply
+# do it before cliwrap because we want real dnf
+if rpm -q ltrace vim-enhanced; then
+  fatal "ltrace and/or vim-enhanced exist"
+fi
+vim_vr=$(rpm -q vim-minimal --qf '%{version}-%{release}')
+cat > /tmp/treefile.yaml << EOF
+packages:
+  - ltrace
+  # a split base/layered version-locked package
+  - vim-enhanced
+EOF
+rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml
+rpm -q ltrace vim-enhanced-"$vim_vr"
 
 rpm-ostree cliwrap install-to-root /
 
@@ -143,19 +169,5 @@ if ! grep -qe "error: No such file or directory" err.txt; then
     cat err.txt
     fatal "did not find expected error when skipping CLI wraps."
 fi
-
-# test treefile-apply
-if rpm -q ltrace vim-enhanced; then
-  fatal "ltrace and/or vim-enhanced exist"
-fi
-vim_vr=$(rpm -q vim-minimal --qf '%{version}-%{release}')
-cat > /tmp/treefile.yaml << EOF
-packages:
-  - ltrace
-  # a split base/layered version-locked package
-  - vim-enhanced
-EOF
-rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml
-rpm -q ltrace vim-enhanced-"$vim_vr"
 
 echo ok
