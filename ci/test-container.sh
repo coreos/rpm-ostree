@@ -87,6 +87,21 @@ rpm-ostree override replace $koji_kernel_url
 # test that the new initramfs was generated
 test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
 
+# test treefile-apply
+# do it before cliwrap because we want real dnf
+if rpm -q ltrace vim-enhanced; then
+  fatal "ltrace and/or vim-enhanced exist"
+fi
+vim_vr=$(rpm -q vim-minimal --qf '%{version}-%{release}')
+cat > /tmp/treefile.yaml << EOF
+packages:
+  - ltrace
+  # a split base/layered version-locked package
+  - vim-enhanced
+EOF
+rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml
+rpm -q ltrace vim-enhanced-"$vim_vr"
+
 rpm-ostree cliwrap install-to-root /
 
 # Test a critical path package
@@ -154,19 +169,5 @@ if ! grep -qe "error: No such file or directory" err.txt; then
     cat err.txt
     fatal "did not find expected error when skipping CLI wraps."
 fi
-
-# test treefile-apply
-if rpm -q ltrace vim-enhanced; then
-  fatal "ltrace and/or vim-enhanced exist"
-fi
-vim_vr=$(rpm -q vim-minimal --qf '%{version}-%{release}')
-cat > /tmp/treefile.yaml << EOF
-packages:
-  - ltrace
-  # a split base/layered version-locked package
-  - vim-enhanced
-EOF
-rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml
-rpm -q ltrace vim-enhanced-"$vim_vr"
 
 echo ok
