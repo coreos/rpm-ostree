@@ -47,7 +47,7 @@ const OSTREE_HOME_SYMLINKS: &[(&str, &str)] = &[("var/roothome", "root"), ("var/
 /* See rpmostree-core.h */
 const RPMOSTREE_BASE_RPMDB: &str = "usr/lib/sysimage/rpm-ostree-base-db";
 pub(crate) const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
-const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
+pub(crate) const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
 pub(crate) const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
 
 const SD_LOCAL_FS_TARGET_REQUIRES: &str = "usr/lib/systemd/system/local-fs.target.requires";

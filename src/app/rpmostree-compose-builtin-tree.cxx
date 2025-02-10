@@ -106,7 +106,9 @@ static GOptionEntry install_option_entries[]
           "Assume cache is present, do not attempt to update it", NULL },
         { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
         { "source-root", 0, 0, G_OPTION_ARG_STRING, &opt_source_root,
-          "Rootfs to use for resolving releasever if unset", "PATH" },
+          "Rootfs to use for configuring libdnf, such as releasever, dnf variables, and input "
+          "rpm-md repositories.",
+          "PATH" },
         { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only,
           "Like --dry-run, but download and import RPMs as well; requires --cachedir", NULL },
         { "download-only-rpms", 0, 0, G_OPTION_ARG_NONE, &opt_download_only_rpms,
@@ -285,12 +287,23 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self, GCancellable *can
 }
 
 static gboolean
-set_repos_dir (DnfContext *dnfctx, rpmostreecxx::Treefile &treefile, int workdir_dfd,
+set_repos_dir (RpmOstreeContext *ctx, rpmostreecxx::Treefile &treefile, int workdir_dfd,
                GCancellable *cancellable, GError **error)
 {
-  auto treefile_dir = std::string (treefile.get_workdir ());
-  dnf_context_set_repo_dir (dnfctx, treefile_dir.c_str ());
+  DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+  if (!opt_source_root)
+    {
+      auto treefile_dir = std::string (treefile.get_workdir ());
+      rpmostree_context_set_repos_dir (ctx, treefile_dir.c_str ());
+    }
   g_autoptr (GPtrArray) var_dirs = g_ptr_array_new ();
+
+  g_autofree char *source_vars = NULL;
+  if (opt_source_root)
+    {
+      source_vars = g_build_filename (opt_source_root, "etc/dnf/vars", NULL);
+      g_ptr_array_add (var_dirs, (char *)source_vars);
+    }
 
   /* And add our own vars if defined. */
   CXX_TRY_VAR (repovars, treefile.write_repovars (workdir_dfd), error);
@@ -324,7 +337,7 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
     rpmlogSetFile (NULL);
   }
 
-  if (!set_repos_dir (dnfctx, **self->treefile_rs, self->workdir_dfd, cancellable, error))
+  if (!set_repos_dir (self->corectx, **self->treefile_rs, self->workdir_dfd, cancellable, error))
     return FALSE;
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
@@ -1651,8 +1664,7 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
       = rpmostree_context_new_compose (cachedir_dfd, repo, *extension_tf);
 
   // we're abusing the cachedir as a workdir here, like we do below too
-  if (!set_repos_dir (rpmostree_context_get_dnf (ctx), *extension_tf, cachedir_dfd, cancellable,
-                      error))
+  if (!set_repos_dir (ctx, *extension_tf, cachedir_dfd, cancellable, error))
     return FALSE;
 
 #define TMP_EXTENSIONS_ROOTFS "rpmostree-extensions.tmp"

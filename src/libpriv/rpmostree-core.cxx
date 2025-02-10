@@ -346,6 +346,16 @@ rpmostree_context_set_dnf_caching (RpmOstreeContext *self, RpmOstreeContextDnfCa
   self->dnf_cache_policy = policy;
 }
 
+// Override the location of the yum.repos.d, and also record that we did
+// an override so we know not to auto-set it later.
+void
+rpmostree_context_set_repos_dir (RpmOstreeContext *self, const char *reposdir)
+{
+  dnf_context_set_repo_dir (self->dnfctx, reposdir);
+  self->repos_dir_configured = TRUE;
+  g_debug ("set override for repos dir");
+}
+
 /* Pick up repos dir and passwd from @cfg_deployment. */
 void
 rpmostree_context_configure_from_deployment (RpmOstreeContext *self, OstreeSysroot *sysroot,
@@ -355,7 +365,7 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self, OstreeSysro
   g_autofree char *reposdir = g_build_filename (cfg_deployment_root, "etc/yum.repos.d", NULL);
 
   /* point libhif to the yum.repos.d and os-release of the merge deployment */
-  dnf_context_set_repo_dir (self->dnfctx, reposdir);
+  rpmostree_context_set_repos_dir (self, reposdir);
 
   /* point the core to the passwd & group of the merge deployment */
   g_assert (!self->passwd_dir);
@@ -663,8 +673,25 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
         releasever = "rpmostree-unset-releasever";
       dnf_context_set_release_ver (self->dnfctx, releasever.c_str ());
     }
-  else if (releasever.length () > 0)
-    dnf_context_set_release_ver (self->dnfctx, releasever.c_str ());
+  else
+    {
+      // Source root is set. But check if we have a releasever from the treefile,
+      // if so that overrides the one from the source root.
+      if (releasever.length () > 0)
+        dnf_context_set_release_ver (self->dnfctx, releasever.c_str ());
+
+      // Override what rpmostree_context_set_cache_root() did.
+      // TODO disentangle these things so that we only call set_repo_dir if
+      // we didn't have a source root.
+      // Note we also need to skip this in cases where the caller explicitly
+      // overrode the repos dir.
+      if (!self->repos_dir_configured)
+        {
+          g_autofree char *source_repos = g_build_filename (source_root, "etc/yum.repos.d", NULL);
+          dnf_context_set_repo_dir (self->dnfctx, source_repos);
+          g_debug ("Set repos dir from source root");
+        }
+    }
 
   dnf_context_set_install_root (self->dnfctx, install_root);
   dnf_context_set_source_root (self->dnfctx, source_root);

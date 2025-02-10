@@ -4,13 +4,14 @@
 
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::fd::{AsFd, AsRawFd};
 use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::{Dir, MetadataExt};
+use cap_std_ext::dirext::CapStdExtDirExt;
 use clap::Parser;
 use fn_error_context::context;
 use oci_spec::image::ImageManifest;
@@ -26,6 +27,7 @@ use crate::cmdutils::CommandRunExt;
 use crate::containers_storage::Mount;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::isolation::self_command;
+use crate::{RPMOSTREE_RPMDB_LOCATION, RPMOSTREE_SYSIMAGE_RPMDB};
 
 const SYSROOT: &str = "sysroot";
 const USR: &str = "usr";
@@ -94,7 +96,8 @@ struct ComposeImageOpts {
 
     #[clap(long)]
     #[clap(value_parser)]
-    /// Rootfs to use for resolving releasever if unset
+    /// Rootfs to use for resolving package system configuration, such
+    /// as the yum repository configuration, releasever, etc.
     source_root: Option<Utf8PathBuf>,
 
     /// Container authentication file
@@ -202,8 +205,15 @@ pub(crate) struct RootfsOpts {
     ostree_repo: Option<Utf8PathBuf>,
 
     /// Source root for package system configuration.
-    #[clap(long, value_parser)]
+    #[clap(long, value_parser, conflicts_with = "source_root_rw")]
     source_root: Option<Utf8PathBuf>,
+
+    #[clap(long, value_parser, conflicts_with = "source_root")]
+    /// Rootfs to use for resolving package system configuration, such
+    /// as the yum repository configuration, releasever, etc.
+    ///
+    /// The source root may be mutated to work around bugs.
+    source_root_rw: Option<Utf8PathBuf>,
 
     /// Path to the input manifest
     manifest: Utf8PathBuf,
@@ -312,12 +322,116 @@ impl BuildChunkedOCIOpts {
     }
 }
 
+/// Given a .repo file, rewrite all references to gpgkey=file:// inside
+/// it to point into the source_root (if the key can be found there).
+/// This is a workaround for https://github.com/coreos/rpm-ostree/issues/5285
+fn mutate_one_dnf_repo(
+    exec_root: &Dir,
+    source_root: &Utf8Path,
+    reposdir: &Dir,
+    name: &Utf8Path,
+) -> Result<()> {
+    let r = reposdir.open(name).map(BufReader::new)?;
+    let mut w = Vec::new();
+    let mut modified = false;
+    for line in r.lines() {
+        let line = line?;
+        // Extract the value of gpgkey=, if it doesn't match then
+        // pass through the line.
+        let Some(value) = line
+            .split_once('=')
+            .filter(|kv| kv.0 == "gpgkey")
+            .map(|kv| kv.1)
+        else {
+            writeln!(w, "{line}")?;
+            continue;
+        };
+        // If the gpg key isn't a local file, pass through the line.
+        let Some(relpath) = value
+            .strip_prefix("file://")
+            .and_then(|path| path.strip_prefix('/'))
+        else {
+            writeln!(w, "{line}")?;
+            continue;
+        };
+        // If it doesn't exist in the source root, then assume the absolute
+        // reference is intentional.
+        let target_repo_file = source_root.join(relpath);
+        if !exec_root.try_exists(&target_repo_file)? {
+            writeln!(w, "{line}")?;
+            continue;
+        }
+        modified = true;
+        writeln!(w, "gpgkey=file:///{target_repo_file}")?;
+    }
+    if modified {
+        reposdir.write(name, w)?;
+    }
+    Ok(())
+}
+
+#[context("Preparing source root")]
+fn mutate_source_root(exec_root: &Dir, source_root: &Utf8Path) -> Result<()> {
+    let source_root_dir = exec_root
+        .open_dir(source_root)
+        .with_context(|| format!("Opening {source_root}"))?;
+    if source_root_dir
+        .symlink_metadata_optional(RPMOSTREE_RPMDB_LOCATION)?
+        .is_none()
+        && source_root_dir
+            .symlink_metadata_optional(RPMOSTREE_SYSIMAGE_RPMDB)?
+            .is_some()
+    {
+        source_root_dir
+            .symlink_contents("../lib/sysimage/rpm", RPMOSTREE_RPMDB_LOCATION)
+            .context("Symlinking rpmdb")?;
+        println!("Symlinked {RPMOSTREE_RPMDB_LOCATION} in source root");
+    }
+
+    if !source_root_dir.try_exists("etc")? {
+        return Ok(());
+    }
+    if let Some(repos) = source_root_dir
+        .open_dir_optional("etc/yum.repos.d")
+        .context("Opening yum.repos.d")?
+    {
+        for ent in repos.entries_utf8()? {
+            let ent = ent?;
+            if !ent.file_type()?.is_file() {
+                continue;
+            }
+            let name: Utf8PathBuf = ent.file_name()?.into();
+            let Some("repo") = name.extension() else {
+                continue;
+            };
+            mutate_one_dnf_repo(exec_root, source_root, &repos, &name)?;
+        }
+    }
+
+    Ok(())
+}
+
 impl RootfsOpts {
-    pub(crate) fn run(self) -> Result<()> {
+    pub(crate) fn run(mut self) -> Result<()> {
         let manifest = self.manifest.as_path();
 
         if self.dest.try_exists()? {
             anyhow::bail!("Refusing to operate on extant target {}", self.dest);
+        }
+
+        // If we were passed a mutable source root, then let's work around some bugs
+        if let Some(rw) = self.source_root_rw.take() {
+            // Clap ensures this
+            assert!(self.source_root.is_none());
+            let exec_root = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
+            // We could handle relative paths, but it's easier to require absolute.
+            // The mutation work below all happens via cap-std because it's way easier
+            // to unit test with that.
+            let Some(rw_relpath) = rw.strip_prefix("/").ok() else {
+                anyhow::bail!("Expected absolute path for source-root: {rw}");
+            };
+            mutate_source_root(&exec_root, rw_relpath)?;
+            self.source_root = Some(rw);
         }
 
         // Create a temporary directory for things
@@ -1026,6 +1140,48 @@ mod tests {
         let unpack_path = td_path.join("rootfs2");
         unpack_commit_to_dir_as_bare_split_xattrs(&repo, &rev, &unpack_path)?;
         assert!(unpack_path.join("test.txt").try_exists()?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mutate_source_root() -> Result<()> {
+        let rootfs = &cap_tempfile::TempDir::new(cap_std::ambient_authority())?;
+        // Should be a no-op in an empty root
+        rootfs.create_dir("repos")?;
+        mutate_source_root(rootfs, "repos".into()).unwrap();
+        rootfs.create_dir_all("repos/usr/share")?;
+        rootfs.create_dir_all("repos/usr/lib/sysimage/rpm")?;
+        mutate_source_root(rootfs, "repos".into()).unwrap();
+        assert!(rootfs
+            .symlink_metadata("repos/usr/share/rpm")
+            .unwrap()
+            .is_symlink());
+
+        rootfs.create_dir_all("repos/etc/yum.repos.d")?;
+        rootfs.create_dir_all("repos/etc/pki/rpm-gpg")?;
+        rootfs.write("repos/etc/pki/rpm-gpg/repo2.key", "repo2 gpg key")?;
+        let orig_repo_content = indoc::indoc! { r#"
+        [repo]
+        baseurl=blah
+        gpgkey=https://example.com
+
+        [repo2]
+        baseurl=other
+        gpgkey=file:///etc/pki/rpm-gpg/repo2.key
+
+        [repo3]
+        baseurl=blah
+        gpgkey=file:///absolute/path/not-in-source-root
+    "#};
+        rootfs.write("repos/etc/yum.repos.d/test.repo", orig_repo_content)?;
+        mutate_source_root(rootfs, "repos".into()).unwrap();
+        let found_repos = rootfs.read_to_string("repos/etc/yum.repos.d/test.repo")?;
+        let expected = orig_repo_content.replace(
+            "gpgkey=file:///etc/pki/rpm-gpg/repo2.key",
+            "gpgkey=file:///repos/etc/pki/rpm-gpg/repo2.key",
+        );
+        similar_asserts::assert_eq!(expected, found_repos);
 
         Ok(())
     }

@@ -112,6 +112,8 @@ void rpmostree_context_set_is_empty (RpmOstreeContext *self);
 void rpmostree_context_disable_selinux (RpmOstreeContext *self);
 const char *rpmostree_context_get_ref (RpmOstreeContext *self);
 
+void rpmostree_context_set_repos_dir (RpmOstreeContext *self, const char *reposdir);
+
 void rpmostree_context_set_repos (RpmOstreeContext *self, OstreeRepo *base_repo,
                                   OstreeRepo *pkgcache_repo);
 void rpmostree_context_set_devino_cache (RpmOstreeContext *self,
