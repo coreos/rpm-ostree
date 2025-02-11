@@ -2,6 +2,7 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
@@ -346,26 +347,50 @@ fn mutate_one_dnf_repo(
             writeln!(w, "{line}")?;
             continue;
         };
-        // If the gpg key isn't a local file, pass through the line.
-        let Some(relpath) = value
-            .strip_prefix("file://")
-            .and_then(|path| path.strip_prefix('/'))
-        else {
-            writeln!(w, "{line}")?;
-            continue;
-        };
-        // If it doesn't exist in the source root, then assume the absolute
-        // reference is intentional.
-        let target_repo_file = source_root.join(relpath);
-        if !exec_root.try_exists(&target_repo_file)? {
-            writeln!(w, "{line}")?;
-            continue;
+        let mut gpg_modified = false;
+        let mut updated_gpgkeys: Vec<Cow<str>> = Vec::new();
+        for key in value.split_ascii_whitespace() {
+            // If the gpg key isn't a local file, pass through the line.
+            let Some(relpath) = key
+                .strip_prefix("file://")
+                .and_then(|path| path.strip_prefix('/'))
+            else {
+                updated_gpgkeys.push(key.into());
+                continue;
+            };
+            // Handling variable substitutions here is painful, so we punt
+            // if we find them and assume they should always be under the source root.
+            let contains_varsubst = relpath.contains('$');
+            // If it doesn't exist in the source root, then assume the absolute
+            // reference is intentional.
+            let target_repo_file = source_root.join(relpath);
+            if !contains_varsubst && !exec_root.try_exists(&target_repo_file)? {
+                tracing::debug!("Not present under source root: {target_repo_file}");
+                updated_gpgkeys.push(key.into());
+                continue;
+            }
+            gpg_modified = true;
+            updated_gpgkeys.push(Cow::Owned(format!("file:///{target_repo_file}")));
         }
-        modified = true;
-        writeln!(w, "gpgkey=file:///{target_repo_file}")?;
+        if gpg_modified {
+            modified = true;
+            write!(w, "gpgkey=")?;
+            for (i, key) in updated_gpgkeys.iter().enumerate() {
+                if i != 0 {
+                    write!(w, " ")?;
+                }
+                write!(w, "{key}")?;
+            }
+            writeln!(w)?;
+        } else {
+            writeln!(w, "{line}")?;
+        }
     }
     if modified {
+        tracing::debug!("Updated {name}");
         reposdir.write(name, w)?;
+    } else {
+        tracing::debug!("Unchanged repo file: {name}");
     }
     Ok(())
 }
@@ -1170,6 +1195,11 @@ mod tests {
         baseurl=other
         gpgkey=file:///etc/pki/rpm-gpg/repo2.key
 
+        [repo4]
+        baseurl=other
+        # These keys don't exist in the source root, but we rewrite anyways
+        gpgkey=file:///etc/pki/rpm-gpg/some-key-with-$releasever-and-$basearch file:///etc/pki/rpm-gpg/another-key-with-$releasever-and-$basearch
+
         [repo3]
         baseurl=blah
         gpgkey=file:///absolute/path/not-in-source-root
@@ -1177,10 +1207,24 @@ mod tests {
         rootfs.write("repos/etc/yum.repos.d/test.repo", orig_repo_content)?;
         mutate_source_root(rootfs, "repos".into()).unwrap();
         let found_repos = rootfs.read_to_string("repos/etc/yum.repos.d/test.repo")?;
-        let expected = orig_repo_content.replace(
-            "gpgkey=file:///etc/pki/rpm-gpg/repo2.key",
-            "gpgkey=file:///repos/etc/pki/rpm-gpg/repo2.key",
-        );
+        let expected = indoc::indoc! { r#"
+        [repo]
+        baseurl=blah
+        gpgkey=https://example.com
+
+        [repo2]
+        baseurl=other
+        gpgkey=file:///repos/etc/pki/rpm-gpg/repo2.key
+
+        [repo4]
+        baseurl=other
+        # These keys don't exist in the source root, but we rewrite anyways
+        gpgkey=file:///repos/etc/pki/rpm-gpg/some-key-with-$releasever-and-$basearch file:///repos/etc/pki/rpm-gpg/another-key-with-$releasever-and-$basearch
+
+        [repo3]
+        baseurl=blah
+        gpgkey=file:///absolute/path/not-in-source-root
+    "#};
         similar_asserts::assert_eq!(expected, found_repos);
 
         Ok(())
