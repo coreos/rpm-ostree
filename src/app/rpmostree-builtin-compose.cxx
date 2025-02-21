@@ -70,9 +70,7 @@ rpmostree_compose_builtin_image (int argc, char **argv, RpmOstreeCommandInvocati
 {
   rust::Vec<rust::String> rustargv;
   g_assert_cmpint (argc, >, 0);
-  rustargv.push_back (std::string (argv[0]));
-  rustargv.push_back (std::string ("baseimage"));
-  for (int i = 1; i < argc; i++)
+  for (int i = 0; i < argc; i++)
     rustargv.push_back (std::string (argv[i]));
   CXX_TRY (rpmostreecxx::compose_image (rustargv), error);
   return TRUE;
