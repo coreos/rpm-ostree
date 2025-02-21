@@ -53,6 +53,8 @@ static RpmOstreeCommand compose_subcommands[] = {
   { "image", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Generate a reproducible \"chunked\" container image (using RPM data) from a treefile",
     rpmostree_compose_builtin_image },
+  { "rootfs", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD, "Generate a root filesystem tree from a treefile",
+    rpmostree_compose_builtin_rootfs },
   { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
@@ -75,5 +77,17 @@ rpmostree_compose_builtin_image (int argc, char **argv, RpmOstreeCommandInvocati
   for (int i = 1; i < argc; i++)
     rustargv.push_back (std::string (argv[i]));
   CXX_TRY (rpmostreecxx::compose_image (rustargv), error);
+  return TRUE;
+}
+
+gboolean
+rpmostree_compose_builtin_rootfs (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
+                                  GCancellable *cancellable, GError **error)
+{
+  rust::Vec<rust::String> rustargv;
+  g_assert_cmpint (argc, >, 0);
+  for (int i = 0; i < argc; i++)
+    rustargv.push_back (std::string (argv[i]));
+  CXX_TRY (rpmostreecxx::compose_rootfs_entrypoint (rustargv), error);
   return TRUE;
 }

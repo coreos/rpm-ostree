@@ -17,7 +17,7 @@ COPY . /src
 WORKDIR /src
 RUN --mount=type=bind,from=repos,src=/,dst=/repos,rw <<EORUN
 set -xeuo pipefail
-exec rpm-ostree experimental compose rootfs --source-root-rw=/repos manifest.yaml /target-rootfs
+exec rpm-ostree compose rootfs --source-root-rw=/repos manifest.yaml /target-rootfs
 EORUN
 
 # This pulls in the rootfs generated in the previous step
