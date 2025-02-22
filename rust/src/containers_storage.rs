@@ -13,10 +13,14 @@ use crate::cmdutils::CommandRunExt;
 /// will work reliably.
 /// https://github.com/containers/buildah/issues/5976
 pub(crate) fn reexec_if_needed() -> Result<()> {
-    crate::reexec::reexec_with_guardenv(
-        "_RPMOSTREE_REEXEC_USERNS",
-        &["unshare", "-U", "-m", "--map-root-user", "--keep-caps"],
-    )
+    if ostree_ext::container_utils::running_in_container() {
+        crate::reexec::reexec_with_guardenv(
+            "_RPMOSTREE_REEXEC_USERNS",
+            &["unshare", "-U", "-m", "--map-root-user", "--keep-caps"],
+        )
+    } else {
+        Ok(())
+    }
 }
 
 /// We need to handle containers that only have podman, not buildah (like the -bootc ones)
