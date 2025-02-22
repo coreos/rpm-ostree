@@ -274,7 +274,7 @@ jobs:
             -v /var/lib/containers:/var/lib/containers \
             -v /var/tmp:/var/tmp \
             -v $(pwd):/output \
-            localhost/builder rpm-ostree experimental compose build-chunked-oci --bootc --format-version=1 --from localhost/base --output oci:/output/base-chunked
+            localhost/builder rpm-ostree experimental compose build-chunked-oci --bootc --format-version=1 --max-layers 99 --from localhost/base --output oci:/output/base-chunked
           sudo skopeo inspect oci:base-chunked
   build-c9s:
     name: "Build (c9s)"
