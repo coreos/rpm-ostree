@@ -20,6 +20,7 @@ use ostree::gio;
 use ostree_ext::containers_image_proxy;
 use ostree_ext::glib::prelude::*;
 use ostree_ext::keyfileext::{map_keyfile_optional, KeyFileExt};
+use ostree_ext::oci_spec::image::ImageConfiguration;
 use ostree_ext::ostree::MutableTree;
 use ostree_ext::{container as ostree_container, glib};
 use ostree_ext::{oci_spec, ostree};
@@ -260,6 +261,32 @@ impl BuildChunkedOCIOpts {
         assert!(self.bootc);
         assert_eq!(self.format_version, 1);
 
+        // If we're deriving from an existing image, be sure to preserve its metadata (labels, creation time, etc.)
+        // by default.
+        let image_config: oci_spec::image::ImageConfiguration =
+            if let Some(image) = self.from.as_deref() {
+                let img_transport = format!("containers-storage:{image}");
+                Command::new("skopeo")
+                    .args(["inspect", "--config", img_transport.as_str()])
+                    .run_and_parse_json()
+                    .context("Invoking skopeo to inspect config")?
+            } else {
+                // If we're not deriving, then we take the timestamp of the root
+                // directory as a creation timestamp.
+                let toplevel_ts = rootfs.dir_metadata()?.modified()?.into_std();
+                let toplevel_ts = chrono::DateTime::<chrono::Utc>::from(toplevel_ts)
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+                let mut config = ImageConfiguration::default();
+                config.set_created(Some(toplevel_ts));
+                config
+            };
+        let creation_timestamp = image_config
+            .created()
+            .as_deref()
+            .map(chrono::DateTime::parse_from_rfc3339)
+            .transpose()?;
+
+        // Allocate a working temporary directory
         let td = tempfile::tempdir_in("/var/tmp")?;
 
         // Note: In a format v2, we'd likely not use ostree.
@@ -276,20 +303,17 @@ impl BuildChunkedOCIOpts {
         // It's only the tests that override
         let modifier =
             ostree::RepoCommitModifier::new(ostree::RepoCommitModifierFlags::empty(), None);
-        let commitid = generate_commit_from_rootfs(&repo, &rootfs, modifier)?;
+        // Process the filesystem, generating an ostree commit
+        let commitid =
+            generate_commit_from_rootfs(&repo, &rootfs, modifier, creation_timestamp.as_ref())?;
 
         let label_arg = self
             .bootc
             .then_some(["--label", "containers.bootc=1"].as_slice())
             .unwrap_or_default();
-        let config_data = if let Some(image) = self.from.as_deref() {
-            let img_transport = format!("containers-storage:{image}");
-            let tmpf = tempfile::NamedTempFile::new()?;
-            Command::new("skopeo")
-                .args(["inspect", "--config", img_transport.as_str()])
-                .stdout(tmpf.as_file().try_clone()?)
-                .run()
-                .context("Invoking skopeo to inspect config")?;
+        let config_data = if self.from.is_some() {
+            let mut tmpf = tempfile::NamedTempFile::new()?;
+            serde_json::to_writer(&mut tmpf, &image_config)?;
             Some(tmpf.into_temp_path())
         } else {
             None
@@ -680,6 +704,7 @@ fn generate_commit_from_rootfs(
     repo: &ostree::Repo,
     rootfs: &Dir,
     modifier: ostree::RepoCommitModifier,
+    creation_time: Option<&chrono::DateTime<chrono::FixedOffset>>,
 ) -> Result<String> {
     let root_mtree = ostree::MutableTree::new();
     let cancellable = gio::Cancellable::NONE;
@@ -738,8 +763,21 @@ fn generate_commit_from_rootfs(
 
     let ostree_root = repo.write_mtree(&root_mtree, cancellable)?;
     let ostree_root = ostree_root.downcast_ref::<ostree::RepoFile>().unwrap();
-    let commit =
-        repo.write_commit_with_time(None, None, None, None, ostree_root, 0, cancellable)?;
+    let creation_time: u64 = creation_time
+        .as_ref()
+        .map(|t| t.timestamp())
+        .unwrap_or_default()
+        .try_into()
+        .context("Parsing creation time")?;
+    let commit = repo.write_commit_with_time(
+        None,
+        None,
+        None,
+        None,
+        ostree_root,
+        creation_time,
+        cancellable,
+    )?;
 
     tx.commit(cancellable)?;
     Ok(commit.into())
@@ -1060,7 +1098,7 @@ mod tests {
             Some(Box::new(commit_filter)),
         );
 
-        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone()).unwrap();
+        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone(), None).unwrap();
         // Verify there are zero children
         let commit_root = repo.read_commit(&commit, cancellable)?.0;
         {
@@ -1094,10 +1132,11 @@ mod tests {
             "commit to ignore",
         )?;
 
-        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone()).unwrap();
+        let ts = chrono::DateTime::parse_from_rfc2822("Fri, 29 Aug 1997 10:30:42 PST").unwrap();
+        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone(), Some(&ts)).unwrap();
         assert_eq!(
             commit,
-            "192642d885cd1f0a743455466bb918415f004c2af6b69e87e00768623ad7fa04"
+            "1423c43d7b76207dc86b357a4834fcea444fcb2ee3a81541fbfbd52a85e05bc3"
         );
 
         let ostree_root = repo.read_commit(&commit, cancellable)?.0;
