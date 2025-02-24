@@ -542,6 +542,11 @@ impl RootfsOpts {
     }
 }
 
+pub(crate) fn compose_rootfs_entrypoint(args: Vec<String>) -> CxxResult<()> {
+    RootfsOpts::parse_from(args).run()?;
+    Ok(())
+}
+
 impl CommitToContainerRootfsOpts {
     /// Execute `compose commit-to-container-rootfs`. This just:
     /// - Opens up the target ostree repo

@@ -1862,6 +1862,8 @@ bool commit_has_matching_sepolicy (::rpmostreecxx::GVariant const &commit,
 
 void compose_image (::rust::Vec< ::rust::String> args);
 
+void compose_rootfs_entrypoint (::rust::Vec< ::rust::String> args);
+
 void configure_build_repo_from_target (::rpmostreecxx::OstreeRepo const &build_repo,
                                        ::rpmostreecxx::OstreeRepo const &target_repo);
 
