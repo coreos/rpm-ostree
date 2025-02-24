@@ -445,21 +445,8 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         Utc.timestamp_opt(lowest_change_time.try_into().unwrap(), 0)
             .unwrap()
     );
-    println!("{} duplicates", state.duplicate_objects().count());
-    let multiple_owners = {
-        let mut mo: Vec<&Utf8Path> = state
-            .multiple_owners()
-            .map(|(path, _)| path.as_path())
-            .collect();
-        mo.sort_unstable();
-        mo
-    };
-    if !multiple_owners.is_empty() {
-        println!("Multiple owners:");
-        for path in multiple_owners {
-            println!("  {}", path);
-        }
-    }
+    println!("Duplicates: {}", state.duplicate_objects().count());
+    println!("Multiple owners: {}", state.multiple_owners().count());
 
     // Convert our build state into the state that ostree consumes, discarding
     // transient data such as the cases of files owned by multiple packages.

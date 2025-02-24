@@ -183,6 +183,11 @@ pub(crate) struct BuildChunkedOCIOpts {
     #[clap(long, required = true)]
     format_version: u32,
 
+    #[clap(long)]
+    /// Maximum number of layers to use. The default is currently 64, although
+    /// this may change.
+    max_layers: Option<u32>,
+
     /// Tag to use for output image, or `latest` if unset.
     #[clap(long, default_value = "latest")]
     reference: String,
@@ -326,6 +331,7 @@ impl BuildChunkedOCIOpts {
                 repo_path.as_str(),
             ])
             .args(label_arg)
+            .args(self.max_layers.map(|l| format!("--max-layers={l}")))
             .args(
                 config_data
                     .iter()
