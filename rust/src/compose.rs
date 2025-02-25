@@ -253,7 +253,13 @@ impl BuildChunkedOCIOpts {
             FileSource::Rootfs(rootfs)
         } else {
             let image = self.from.as_deref().unwrap();
-            crate::containers_storage::reexec_if_needed()?;
+            // TODO: Fix running this inside unprivileged podman too. We'll likely need
+            // to refactor things into a two-step process where we do the mount+ostree repo commit
+            // in a subprocess that has the "unshare", and then the secondary main process
+            // just reads/operates on that.
+            // Note that this would all be a lot saner with a composefs-native container storage
+            // as we could cleanly operate on that, asking c/storage to synthesize one for us.
+            // crate::containers_storage::reexec_if_needed()?;
             FileSource::Podman(Mount::new_for_image(image)?)
         };
         let rootfs = match &rootfs_source {
