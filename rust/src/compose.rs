@@ -725,12 +725,14 @@ fn generate_commit_from_rootfs(
     modifier.set_sepolicy(Some(&policy));
 
     let root_dirmeta = create_root_dirmeta(rootfs, &policy)?;
-    let root_metachecksum = repo.write_metadata(
-        ostree::ObjectType::DirMeta,
-        None,
-        &root_dirmeta,
-        cancellable,
-    )?;
+    let root_metachecksum = repo
+        .write_metadata(
+            ostree::ObjectType::DirMeta,
+            None,
+            &root_dirmeta,
+            cancellable,
+        )
+        .context("Writing root dirmeta")?;
     root_mtree.set_metadata_checksum(&root_metachecksum.to_hex());
 
     for ent in rootfs.entries_utf8()? {
@@ -751,7 +753,8 @@ fn generate_commit_from_rootfs(
                 &child_mtree,
                 Some(&modifier),
                 cancellable,
-            )?;
+            )
+            .with_context(|| format!("Processing dir {name}"))?;
         } else if ftype.is_symlink() {
             let contents: Utf8PathBuf = rootfs
                 .read_link_contents(&name)
@@ -761,8 +764,9 @@ fn generate_commit_from_rootfs(
             let selabel_path = format!("/{name}");
             let label = policy.label(selabel_path.as_str(), 0o777 | libc::S_IFLNK, cancellable)?;
             let xattrs = label_to_xattrs(label.as_deref());
-            let link_checksum =
-                repo.write_symlink(None, 0, 0, xattrs.as_ref(), contents.as_str(), cancellable)?;
+            let link_checksum = repo
+                .write_symlink(None, 0, 0, xattrs.as_ref(), contents.as_str(), cancellable)
+                .with_context(|| format!("Processing symlink {selabel_path}"))?;
             root_mtree.replace_file(&name, &link_checksum)?;
         } else {
             // Yes we could support this but it's a surprising amount of typing
