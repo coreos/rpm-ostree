@@ -12,6 +12,7 @@ use crate::cmdutils::CommandRunExt;
 /// Ensure that we're in a new user+mountns, so that "buildah mount"
 /// will work reliably.
 /// https://github.com/containers/buildah/issues/5976
+#[allow(dead_code)]
 pub(crate) fn reexec_if_needed() -> Result<()> {
     if ostree_ext::container_utils::running_in_container() {
         crate::reexec::reexec_with_guardenv(
