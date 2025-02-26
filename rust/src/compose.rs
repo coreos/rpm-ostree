@@ -589,7 +589,16 @@ fn unpack_commit_to_dir_as_bare_split_xattrs(
     // issues with relying on /bin/tar here.
     let mut untar_cmd = Command::new("tar");
     untar_cmd.stdin(std::process::Stdio::piped());
-    untar_cmd.current_dir(path).args(["-x", "-f", "-"]);
+    // We default to all xattrs *except* selinux (because we can't set it
+    // at container build time).
+    untar_cmd.current_dir(path).args([
+        "-x",
+        "--xattrs",
+        "--xattrs-include=*",
+        "--no-selinux",
+        "-f",
+        "-",
+    ]);
     let mut untar_child = untar_cmd.spawn()?;
     // To ensure any reference to the inner pipes are closed
     drop(untar_cmd);
@@ -1216,7 +1225,15 @@ mod tests {
         )?;
         let rootfs = td_path.join("rootfs");
         std::fs::create_dir(&rootfs)?;
-        std::fs::write(rootfs.join("test.txt"), b"Test")?;
+        let testpath = rootfs.join("test.txt");
+        std::fs::write(&testpath, b"Test")?;
+        rustix::fs::setxattr(
+            testpath.as_std_path(),
+            "user.test".as_bytes(),
+            b"somevalue",
+            rustix::fs::XattrFlags::empty(),
+        )
+        .context("setxattr")?;
         Command::new("ostree")
             .args(["--repo=repo", "commit", "-b", "test", "--tree=dir=rootfs"])
             .current_dir(&td_path)
@@ -1224,7 +1241,13 @@ mod tests {
         let rev = repo.require_rev("test")?;
         let unpack_path = td_path.join("rootfs2");
         unpack_commit_to_dir_as_bare_split_xattrs(&repo, &rev, &unpack_path)?;
-        assert!(unpack_path.join("test.txt").try_exists()?);
+        let testpath = unpack_path.join("test.txt");
+        assert!(testpath.try_exists()?);
+        let mut buf = [0u8; 1024];
+        let n = rustix::fs::getxattr(testpath.as_std_path(), "user.test".as_bytes(), &mut buf)
+            .context("getxattr")?;
+        let buf = std::str::from_utf8(&buf[0..n]).unwrap();
+        assert_eq!(buf, "somevalue");
 
         Ok(())
     }
