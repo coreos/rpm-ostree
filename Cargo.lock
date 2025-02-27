@@ -225,15 +225,17 @@ dependencies = [
 [[package]]
 name = "bootc-utils"
 version = "0.0.0"
-source = "git+https://github.com/containers/bootc?rev=6663e6fe5e4615e99a8e95028f1cb975474ce8ec#6663e6fe5e4615e99a8e95028f1cb975474ce8ec"
+source = "git+https://github.com/containers/bootc?rev=73de2a8ef0a312243b686c6bd2c91413ee725c05#73de2a8ef0a312243b686c6bd2c91413ee725c05"
 dependencies = [
  "anyhow",
  "rustix",
  "serde",
  "serde_json",
+ "shlex",
  "tempfile",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2179,7 +2181,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.15.3"
-source = "git+https://github.com/containers/bootc?rev=6663e6fe5e4615e99a8e95028f1cb975474ce8ec#6663e6fe5e4615e99a8e95028f1cb975474ce8ec"
+source = "git+https://github.com/containers/bootc?rev=73de2a8ef0a312243b686c6bd2c91413ee725c05#73de2a8ef0a312243b686c6bd2c91413ee725c05"
 dependencies = [
  "anyhow",
  "bootc-utils",
