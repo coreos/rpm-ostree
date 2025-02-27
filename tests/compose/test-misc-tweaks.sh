@@ -115,6 +115,17 @@ postprocess:
    test -f /usr/share/included-postprocess-test
 EOF
 
+# Also test finalize.d
+mkdir config/finalize.d
+cat >config/finalize.d/01-test.sh <<'EOF'
+#!/bin/bash
+set -xeuo pipefail
+[[ "${RPMOSTREE_WORKDIR}" =~ config ]]
+# Verify we can read our sourcedir
+test -f "${RPMOSTREE_WORKDIR}/manifest.json"
+touch usr/share/finalize-dot-d-test
+EOF
+
 mkdir -p tmp/rootfs
 for x in $(seq 3); do
   rm tmp/rootfs/usr -rf

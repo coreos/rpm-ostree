@@ -835,8 +835,11 @@ impl Treefile {
     pub(crate) fn exec_finalize_d(&self, rootfs: &Dir) -> Result<()> {
         for (name, path) in self.externals.finalize_d.iter() {
             println!("Executing: {name}");
-            Command::new(path)
-                .cwd_dir(rootfs.try_clone()?)
+            let mut cmd = Command::new(path);
+            if let Some(d) = self.directory.as_deref() {
+                cmd.env("RPMOSTREE_WORKDIR", d);
+            }
+            cmd.cwd_dir(rootfs.try_clone()?)
                 .run()
                 .with_context(|| format!("Failed to execute {name}"))?;
         }
