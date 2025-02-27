@@ -178,9 +178,7 @@ pub(crate) struct BuildChunkedOCIOpts {
     bootc: bool,
 
     /// The format version. At the current time there is only version `1`.
-    /// It is required to pass this option in order to enable future
-    /// format evolution.
-    #[clap(long, required = true)]
+    #[clap(long, default_value_t = 1)]
     format_version: u32,
 
     #[clap(long)]
