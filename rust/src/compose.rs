@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::num::NonZeroU32;
 use std::os::fd::{AsFd, AsRawFd};
 use std::process::Command;
 
@@ -178,15 +179,18 @@ pub(crate) struct BuildChunkedOCIOpts {
     bootc: bool,
 
     /// The format version. At the current time there is only version `1`.
-    /// It is required to pass this option in order to enable future
-    /// format evolution.
-    #[clap(long, required = true)]
+    #[clap(long, default_value_t = 1)]
     format_version: u32,
 
     #[clap(long)]
-    /// Maximum number of layers to use. The default is currently 64, although
-    /// this may change.
-    max_layers: Option<u32>,
+    /// Maximum number of layers to use. The default value of 64 is chosen to
+    /// balance splitting up an image into sufficient chunks versus
+    /// compatibility with older OCI runtimes that may have problems
+    /// with larger number of layers.
+    ///
+    /// However, with recent podman 5 for example with newer overlayfs,
+    /// it works to use over 200 layers.
+    max_layers: Option<NonZeroU32>,
 
     /// Tag to use for output image, or `latest` if unset.
     #[clap(long, default_value = "latest")]
