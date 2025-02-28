@@ -72,6 +72,7 @@ static char *opt_previous_inputhash;
 static char *opt_previous_version;
 static gboolean opt_dry_run;
 static gboolean opt_print_only;
+static gboolean opt_install_postprocess;
 static char *opt_write_commitid_to;
 static char *opt_write_composejson_to;
 static gboolean opt_no_parent;
@@ -129,6 +130,8 @@ static GOptionEntry install_option_entries[]
         { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
         { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs,
           "Use tmpfs for working state", NULL },
+        { "postprocess", 0, 0, G_OPTION_ARG_NONE, &opt_install_postprocess,
+          "Also run default postprocessing", NULL },
         { "ex-write-lockfile-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_lockfile_to,
           "Write lockfile to FILE", "FILE" },
         { "ex-lockfile", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_lockfiles, "Read lockfile from FILE",
@@ -1350,6 +1353,14 @@ rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvoca
     {
       self->failed = TRUE;
       return FALSE;
+    }
+  if (opt_install_postprocess)
+    {
+      if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
+        return FALSE;
+      if (!rpmostreecxx::postprocess_final (self->rootfs_dfd, **self->treefile_rs, opt_unified_core,
+                                            cancellable, error))
+        return FALSE;
     }
   if (opt_unified_core)
     {
