@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::num::NonZeroU32;
 use std::os::fd::{AsFd, AsRawFd};
+use std::path::Path;
 use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
@@ -202,7 +203,7 @@ pub(crate) struct BuildChunkedOCIOpts {
     output: String,
 }
 
-/// Generate a filesystem tree in ostree-container format from an input manifest.
+/// Generate a filesystem tree from an input manifest.
 /// This can then be copied into e.g. a `FROM scratch` container image build.
 #[derive(Debug, Parser)]
 pub(crate) struct RootfsOpts {
@@ -477,6 +478,33 @@ fn mutate_source_root(exec_root: &Dir, source_root: &Utf8Path) -> Result<()> {
 }
 
 impl RootfsOpts {
+    // For bad legacy reasons "compose install" actually writes to a subdirectory named rootfs.
+    // Clean that up by deleting everything except rootfs/ and moving the contents of rootfs/
+    // to the toplevel.
+    //
+    // Further, we change usr/etc back to etc
+    fn fixup_installroot(d: &Dir) -> Result<()> {
+        let rootfs_name = "rootfs";
+        for ent in d.entries()? {
+            let ent = ent?;
+            let name = ent.file_name();
+            if let Some("rootfs") = name.to_str() {
+                continue;
+            }
+            d.remove_all_optional(&name)?;
+        }
+        for ent in d.read_dir(rootfs_name).context("Reading rootfs")? {
+            let ent = ent?;
+            let name = ent.file_name();
+            let origpath = Path::new(rootfs_name).join(&name);
+            d.rename(origpath, d, &name)
+                .with_context(|| format!("Renaming rootfs/{name:?}"))?;
+        }
+        // Clean up the now empty dir
+        d.remove_dir(rootfs_name).context("Removing rootfs")?;
+        Ok(())
+    }
+
     pub(crate) fn run(mut self) -> Result<()> {
         let manifest = self.manifest.as_path();
 
@@ -504,13 +532,8 @@ impl RootfsOpts {
         let td_path: Utf8PathBuf = td.path().to_owned().try_into()?;
 
         // If we're passed an ostree repo, open it.
-        let (repo_path, repo) = if let Some(ostree_repo) = self.ostree_repo {
-            let repo = ostree::Repo::open_at(
-                libc::AT_FDCWD,
-                ostree_repo.as_str(),
-                gio::Cancellable::NONE,
-            )?;
-            (ostree_repo, repo)
+        let repo_path = if let Some(ostree_repo) = self.ostree_repo {
+            ostree_repo
         } else {
             // Otherwise make a temporary ostree repo
             let repo_path = td_path.join("repo");
@@ -521,19 +544,18 @@ impl RootfsOpts {
                 None,
                 gio::Cancellable::NONE,
             )?;
-            (repo_path, repo)
+            drop(repo);
+            repo_path
         };
-        // Run a compose, generating an ostree commit.
-        let commitid_path = td_path.join("commitid.txt");
+
+        // Just build the root filesystem tree
         self_command()
             .args([
                 "compose",
-                "tree",
+                "install",
                 "--unified-core",
                 "--repo",
                 repo_path.as_str(),
-                "--write-commitid-to",
-                commitid_path.as_str(),
             ])
             .args(
                 self.cachedir
@@ -545,16 +567,36 @@ impl RootfsOpts {
                     .iter()
                     .flat_map(|v| ["--source-root", v.as_str()]),
             )
-            .arg(manifest.as_str())
-            .run()?;
-        // Read the ostree commit digest
-        let commit = std::fs::read_to_string(commitid_path)?;
-        let commit = commit.trim();
+            .args([manifest.as_str(), self.dest.as_str()])
+            .run()
+            .context("Executing compose install")?;
+        {
+            let target = Dir::open_ambient_dir(&self.dest, cap_std::ambient_authority())?;
+            Self::fixup_installroot(&target)?;
+        }
+        self_command()
+            .args([
+                "compose",
+                "postprocess",
+                self.dest.as_str(),
+                manifest.as_str(),
+            ])
+            .run()
+            .context("Executing compose postprocess")?;
 
-        // Finally, unpack that commit to the target root.
-        println!("Constructing rootfs from commit...");
-        unpack_commit_to_dir_as_bare_split_xattrs(&repo, commit, &self.dest)
-        // At this point we'll drop our temporary directory, including the ostree repo etc.
+        // After compose install/postprocess we still have usr/etc, not etc.
+        // Since we're generating a plain root and not an ostree commit, let's
+        // move it.
+        let target = Dir::open_ambient_dir(&self.dest, cap_std::ambient_authority())?;
+        let etc = "etc";
+        let usretc = "usr/etc";
+        if target.try_exists(usretc)? {
+            tracing::debug!("Renaming {usretc} to {etc}");
+            target
+                .rename(usretc, &target, etc)
+                .context("Renaming usr/etc to etc")?;
+        }
+        Ok(())
     }
 }
 
