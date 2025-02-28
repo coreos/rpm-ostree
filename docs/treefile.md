@@ -558,4 +558,6 @@ in the same directory as the manifest, they will be automatically used:
   host/ambient environment (*not* from the target); the current working directory will be
   the target root filesystem. There is no additional sandboxing or containerization
   applied to the execution of the binary. The builtin "change detection"
-  is not applied to the content of the scripts.
+  is not applied to the content of the scripts. The environment variable
+  `RPMOSTREE_WORKDIR` will be set to the path of the associated treefile,
+  which can be used to copy in additional content from that directory.
