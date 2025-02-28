@@ -2,14 +2,13 @@
 FROM quay.io/centos/centos:stream10 as repos
 
 # You must run this build with `-v /path/to/rpm-ostree:/run/build/rpm-ostree:ro`
-FROM quay.io/fedora/fedora:41 as builder
+FROM quay.io/fedora/fedora-bootc:41 as builder
 RUN <<EORUN
 set -xeuo pipefail
-# Install our dependencies
-dnf -y install rpm-ostree selinux-policy-targeted sqlite
 # Our goal here though is to test the updated rpm-ostree binary.
 # Right now there are a very few things that live outside the binary
 # like rpm-ostree-0-integration.conf, but we should probably move those in.
+# nocache 0228
 install /run/build/rpm-ostree /usr/bin
 EORUN
 # Copy in our source code.
@@ -17,12 +16,20 @@ COPY . /src
 WORKDIR /src
 RUN --mount=type=bind,from=repos,src=/,dst=/repos,rw <<EORUN
 set -xeuo pipefail
-exec rpm-ostree compose rootfs --source-root-rw=/repos manifest.yaml /target-rootfs
+exec env RUST_LOG=debug rpm-ostree compose rootfs --source-root-rw=/repos manifest.yaml /target-rootfs
 EORUN
 
 # This pulls in the rootfs generated in the previous step
 FROM scratch
 COPY --from=builder /target-rootfs/ /
+RUN <<EORUN
+set -xeuo pipefail
+# Validate we aren't using ostree-container format
+test '!' -f /ostree/repo/config
+# Validate we have file caps
+getfattr -d -m security.capability /usr/bin/newuidmap
+bootc container lint
+EORUN
 LABEL containers.bootc 1
 # https://pagure.io/fedora-kiwi-descriptions/pull-request/52
 ENV container=oci
