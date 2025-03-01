@@ -554,6 +554,7 @@ impl RootfsOpts {
                 "compose",
                 "install",
                 "--unified-core",
+                "--postprocess",
                 "--repo",
                 repo_path.as_str(),
             ])
@@ -570,19 +571,11 @@ impl RootfsOpts {
             .args([manifest.as_str(), self.dest.as_str()])
             .run()
             .context("Executing compose install")?;
+        // Undo the subdirectory "rootfs"
         {
             let target = Dir::open_ambient_dir(&self.dest, cap_std::ambient_authority())?;
             Self::fixup_installroot(&target)?;
         }
-        self_command()
-            .args([
-                "compose",
-                "postprocess",
-                self.dest.as_str(),
-                manifest.as_str(),
-            ])
-            .run()
-            .context("Executing compose postprocess")?;
 
         // After compose install/postprocess we still have usr/etc, not etc.
         // Since we're generating a plain root and not an ostree commit, let's
