@@ -44,7 +44,7 @@ polkitgobject = { name = "polkit-gobject-1", version = "0" }
 rpm = "4"
 
 [dependencies]
-anyhow = "1.0.94"
+anyhow = "1.0.97"
 binread = "2.2.0"
 bitflags = "2.6"
 camino = "1.1.9"
