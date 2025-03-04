@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::num::NonZeroU32;
 use std::os::fd::{AsFd, AsRawFd};
-use std::path::Path;
 use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
@@ -493,15 +492,25 @@ impl RootfsOpts {
             }
             d.remove_all_optional(&name)?;
         }
-        for ent in d.read_dir(rootfs_name).context("Reading rootfs")? {
+        let rootfs = d.open_dir(rootfs_name)?;
+        for ent in rootfs.entries().context("Reading rootfs")? {
             let ent = ent?;
             let name = ent.file_name();
-            let origpath = Path::new(rootfs_name).join(&name);
-            d.rename(origpath, d, &name)
+            rootfs
+                .rename(&name, d, &name)
                 .with_context(|| format!("Renaming rootfs/{name:?}"))?;
         }
         // Clean up the now empty dir
         d.remove_dir(rootfs_name).context("Removing rootfs")?;
+
+        // Propagate mode bits from source to target
+        {
+            let perms = rootfs.dir_metadata()?.permissions();
+            d.set_permissions(".", perms)
+                .context("Setting target permissions")?;
+            tracing::debug!("rootfs fixup complete");
+        }
+
         Ok(())
     }
 

@@ -26,6 +26,8 @@ RUN <<EORUN
 set -xeuo pipefail
 # Validate we aren't using ostree-container format
 test '!' -f /ostree/repo/config
+# Validate executable bit for others on /
+test $(($(stat -c '0%a' /) % 2)) = 1
 # Validate we have file caps
 getfattr -d -m security.capability /usr/bin/newuidmap
 bootc container lint
