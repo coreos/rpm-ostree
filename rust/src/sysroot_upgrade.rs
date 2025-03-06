@@ -12,6 +12,7 @@ use ostree_container::store::{
 };
 use ostree_container::OstreeImageReference;
 use ostree_ext::container::{self as ostree_container, ManifestDiff};
+use ostree_ext::oci_spec::distribution::Reference as OciReference;
 use ostree_ext::ostree;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::Receiver;
@@ -167,16 +168,33 @@ pub(crate) fn pull_container(
     repo: &crate::FFIOstreeRepo,
     cancellable: &crate::FFIGCancellable,
     imgref: &str,
+    digest_override: &str,
 ) -> CxxResult<Box<ContainerImageState>> {
     let repo = &repo.glib_reborrow();
     let cancellable = cancellable.glib_reborrow();
-    let imgref = &OstreeImageReference::try_from(imgref)?;
+    let mut imgref = OstreeImageReference::try_from(imgref)?;
+
+    if !digest_override.is_empty() {
+        let ociref = imgref
+            .imgref
+            .name
+            .parse::<OciReference>()
+            .map_err(anyhow::Error::msg)?;
+        let ociref = ociref.clone_with_digest(digest_override.to_string());
+        imgref = OstreeImageReference {
+            sigverify: imgref.sigverify,
+            imgref: ostree_ext::container::ImageReference {
+                transport: imgref.imgref.transport,
+                name: ociref.whole(),
+            },
+        };
+    }
 
     crate::try_fail_point!("sysroot-upgrade::container-pull");
 
     let r = Handle::current().block_on(async {
         crate::utils::run_with_cancellable(
-            async { pull_container_async(repo, imgref).await },
+            async { pull_container_async(repo, &imgref).await },
             &cancellable,
         )
         .await

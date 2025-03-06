@@ -72,12 +72,6 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   1)
     # Some tests of other things
 
-    if rpm-ostree deploy 42 2>err.txt; then
-        fatal "unexpectedly deployed version from container image reference"
-    fi
-    assert_file_has_content err.txt 'Cannot look up version while tracking a container image reference'
-    echo "ok cannot deploy when tracking container image"
-
     # Test layering
     if rpm -q foo 2>/dev/null; then
       fatal "found foo"

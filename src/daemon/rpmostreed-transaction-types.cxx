@@ -183,9 +183,12 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
     return glnx_throw (error, "Cannot look up version while pinned to commit");
 
   if (r.kind == rpmostreecxx::RefspecType::Container)
-    /* NB: Not supported for now, but We can perhaps support this if we allow `revision` to
-     * possibly be a tag or digest */
-    return glnx_throw (error, "Cannot look up version while tracking a container image reference");
+    {
+      /* There's no "lookup" to do here; there's no concept of branch history in
+       * the OCI case. So just set the digest override and move on. */
+      rpmostree_origin_set_override_commit (origin, revision);
+      return TRUE;
+    }
 
   if (r.kind != rpmostreecxx::RefspecType::Ostree)
     return glnx_throw (error, "Invalid refspec type");
@@ -2529,6 +2532,20 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   CXX_TRY_VAR (layeredmeta, rpmostreecxx::deployment_layeredmeta_load (*repo, *default_deployment),
                error);
   const char *checksum = layeredmeta.base_commit.c_str ();
+
+  // if we're following a container image, then we expect the container digest,
+  // not the checksum of the ostree "merge commit"
+  g_autofree gchar *checksum_owned = NULL;
+  try
+    {
+      auto state = rpmostreecxx::query_container_image_commit (*repo, checksum);
+      checksum = checksum_owned = g_strdup (state->image_digest.c_str ());
+    }
+  catch (std::exception &e)
+    {
+      // it's not a container ref but also to match try/catch like in other
+      // callsites of query_container_image_commit
+    }
 
   auto expected_checksum = (char *)vardict_lookup_ptr (self->options, "checksum", "&s");
   const gboolean allow_missing_checksum

@@ -430,9 +430,6 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
     {
     case rpmostreecxx::RefspecType::Container:
       {
-        if (override_commit)
-          return glnx_throw (error, "Specifying commit overrides for container-image-reference "
-                                    "type refspecs is not supported");
         if (check)
           {
             CXX_TRY_VAR (changed,
@@ -444,10 +441,10 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self, const char
           }
         else
           {
-            CXX_TRY_VAR (
-                import,
-                rpmostreecxx::pull_container (*self->repo, *cancellable, r.refspec.c_str ()),
-                error);
+            CXX_TRY_VAR (import,
+                         rpmostreecxx::pull_container (*self->repo, *cancellable,
+                                                       r.refspec.c_str (), override_commit_s),
+                         error);
 
             if (!import->verify_text.empty ())
               rpmostree_output_message ("%s", import->verify_text.c_str ());

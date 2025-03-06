@@ -227,6 +227,7 @@ pub mod ffi {
             repo: &OstreeRepo,
             cancellable: &GCancellable,
             imgref: &str,
+            digest_override: &str,
         ) -> Result<Box<ContainerImageState>>;
         fn container_prune(sysroot: &OstreeSysroot) -> Result<PrunedContainerInfo>;
         fn query_container_image_commit(
