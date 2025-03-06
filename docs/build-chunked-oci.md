@@ -2,7 +2,7 @@
 nav_order: 5
 ---
 
-# experimental compose build-chunked-oci
+# compose build-chunked-oci
 
 Currently this project supports `rpm-ostree compose image` which is a highly
 opinionated tool which consumes treefiles and outputs an OCI archive.
@@ -10,7 +10,7 @@ opinionated tool which consumes treefiles and outputs an OCI archive.
 However, it does not support common container-native workflows such
 as copying content from a distinct container image.
 
-The `rpm-ostree experimental compose build-chunked-oci` command
+The `rpm-ostree compose build-chunked-oci` command
 accepts an arbitrary input container image, and synthesizes a
 bootc (ostree container) ready image from it.
 
@@ -28,7 +28,7 @@ instance, and can output to `containers-storage:` or `oci`.
 ```
 podman build -t quay.io/exampleos/exampleos:build ...
 ...
-rpm-ostree experimental compose build-chunked-oci --bootc --format-version=1 \
+rpm-ostree compose build-chunked-oci --bootc --format-version=1 \
            --from=quay.io/exampleos/exampleos:build --output containers-storage:quay.io/exampleos/exampleos:latest
 podman push quay.io/exampleos/exampleos:latest
 ```

@@ -363,6 +363,11 @@ impl BuildChunkedOCIOpts {
     }
 }
 
+pub(crate) fn compose_build_chunked_oci_entrypoint(args: Vec<String>) -> CxxResult<()> {
+    BuildChunkedOCIOpts::parse_from(args).run()?;
+    Ok(())
+}
+
 /// Given a .repo file, rewrite all references to gpgkey=file:// inside
 /// it to point into the source_root (if the key can be found there).
 /// This is a workaround for https://github.com/coreos/rpm-ostree/issues/5285
