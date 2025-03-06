@@ -43,9 +43,15 @@ systemctl mask --now zincati
 rpm-ostree kargs --append "foo=\"a b c\""
 rpm-ostree kargs > kargs.txt
 assert_file_has_content_literal kargs.txt "foo=\"a b c\""
-# also test custom origin stuff
-rpm-ostree rebase "${image_pull}" --custom-origin-description "Fedora CoreOS $image_tag stream" --custom-origin-url "$image:$image_tag"
+# also test custom origin stuff and finalization locking
+rpm-ostree rebase "${image_pull_digest}" --custom-origin-description "Fedora CoreOS $image_tag stream" --custom-origin-url "$image:$image_tag" --lock-finalization
 rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt "$image:$image_tag" "Fedora CoreOS $image_tag stream"
+if rpm-ostree finalize-deployment "${prev_digest}" &> out.txt; then
+  cat out.txt
+  assert_not_reached "finalize-deployment with the wrong checksum succeeded!"
+fi
+assert_file_has_content_literal out.txt "Expected staged base checksum $prev_digest, but found $latest_digest"
 
 # test pinned rebase
 ostree admin undeploy 0

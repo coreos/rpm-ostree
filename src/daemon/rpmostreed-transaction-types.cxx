@@ -2533,6 +2533,20 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
                error);
   const char *checksum = layeredmeta.base_commit.c_str ();
 
+  // if we're following a container image, then we expect the container digest,
+  // not the checksum of the ostree "merge commit"
+  g_autofree gchar *checksum_owned = NULL;
+  try
+    {
+      auto state = rpmostreecxx::query_container_image_commit (*repo, checksum);
+      checksum = checksum_owned = g_strdup (state->image_digest.c_str ());
+    }
+  catch (std::exception &e)
+    {
+      // it's not a container ref but also to match try/catch like in other
+      // callsites of query_container_image_commit
+    }
+
   auto expected_checksum = (char *)vardict_lookup_ptr (self->options, "checksum", "&s");
   const gboolean allow_missing_checksum
       = vardict_lookup_bool (self->options, "allow-missing-checksum", FALSE);
