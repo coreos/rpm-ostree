@@ -1821,7 +1821,8 @@ void deploy_from_self_entrypoint (::rust::Vec< ::rust::String> args);
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 pull_container (::rpmostreecxx::OstreeRepo const &repo,
-                ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref);
+                ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref,
+                ::rust::Str digest_override);
 
 ::rpmostreecxx::PrunedContainerInfo container_prune (::rpmostreecxx::OstreeSysroot const &sysroot);
 

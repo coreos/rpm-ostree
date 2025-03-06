@@ -29,10 +29,14 @@ set -x
 libtest_prepare_offline
 cd "$(mktemp -d)"
 
+curl -L https://builds.coreos.fedoraproject.org/prod/streams/testing/releases.json > testing.json
+latest_digest=$(jq -r '.releases[-1]["oci-images"][] | select(.architecture == "x86_64") | ."digest-ref"' testing.json | cut -f2 -d@)
+prev_digest=$(jq -r '.releases[-2]["oci-images"][] | select(.architecture == "x86_64") | ."digest-ref"' testing.json | cut -f2 -d@)
+
 image=quay.io/fedora/fedora-coreos
-image_tag=testing-devel
-digest=$(skopeo inspect -n docker://$image:$image_tag | jq -r .Digest)
-image_pull=ostree-remote-registry:fedora:$image@$digest
+image_tag=testing
+image_pull_digest=ostree-remote-registry:fedora:$image@$latest_digest
+image_pull_tag=ostree-remote-registry:fedora:$image:$image_tag
 
 systemctl mask --now zincati
 # Test for https://github.com/ostreedev/ostree/issues/3228
@@ -42,7 +46,20 @@ assert_file_has_content_literal kargs.txt "foo=\"a b c\""
 # also test custom origin stuff
 rpm-ostree rebase "${image_pull}" --custom-origin-description "Fedora CoreOS $image_tag stream" --custom-origin-url "$image:$image_tag"
 rpm-ostree status > status.txt
-assert_file_has_content_literal status.txt "$image:$image_tag" "Fedora CoreOS $image_tag stream"
+
+# test pinned rebase
+ostree admin undeploy 0
+rpm-ostree rebase "${image_pull_tag}" "${prev_digest}"
+rpm-ostree status --json > status.json
+assert_jq status.json \
+          ".deployments[0].\"container-image-reference\" == \"${image_pull_tag}\"" \
+          ".deployments[0].\"container-image-reference-digest\" == \"$prev_digest\""
+rpm-ostree deploy "${latest_digest}"
+rpm-ostree status --json > status.json
+assert_jq status.json \
+          ".deployments[0].\"container-image-reference\" == \"${image_pull_tag}\"" \
+          ".deployments[0].\"container-image-reference-digest\" == \"$latest_digest\""
+
 rpm-ostree upgrade
 # This provokes
 # https://github.com/coreos/rpm-ostree/issues/4107

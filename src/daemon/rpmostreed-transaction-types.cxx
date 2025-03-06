@@ -183,9 +183,12 @@ apply_revision_override (RpmostreedTransaction *transaction, OstreeRepo *repo,
     return glnx_throw (error, "Cannot look up version while pinned to commit");
 
   if (r.kind == rpmostreecxx::RefspecType::Container)
-    /* NB: Not supported for now, but We can perhaps support this if we allow `revision` to
-     * possibly be a tag or digest */
-    return glnx_throw (error, "Cannot look up version while tracking a container image reference");
+    {
+      /* There's no "lookup" to do here; there's no concept of branch history in
+       * the OCI case. So just set the digest override and move on. */
+      rpmostree_origin_set_override_commit (origin, revision);
+      return TRUE;
+    }
 
   if (r.kind != rpmostreecxx::RefspecType::Ostree)
     return glnx_throw (error, "Invalid refspec type");

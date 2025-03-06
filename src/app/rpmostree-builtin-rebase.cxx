@@ -142,14 +142,6 @@ rpmostree_builtin_rebase (int argc, char **argv, RpmOstreeCommandInvocation *inv
   if (strlen (new_provided_refspec) == 0)
     return glnx_throw (error, "Refspec is empty");
 
-  if (refspectype == rpmostreecxx::RefspecType::Container)
-    {
-      /* When using the container refspec type, if rebasing to a specific commit, we expect a
-       * specific digest tag in the refspec, not in a separate argument */
-      if (revision)
-        return glnx_throw (error, "Unexpected ostree revision alongside container refspec type");
-    }
-
   /* Check if remote refers to a local repo */
   g_autofree char *local_repo_remote = NULL;
   if (refspectype == rpmostreecxx::RefspecType::Ostree

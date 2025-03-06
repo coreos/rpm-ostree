@@ -2126,7 +2126,8 @@ extern "C"
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$pull_container (
       ::rpmostreecxx::OstreeRepo const &repo, ::rpmostreecxx::GCancellable const &cancellable,
-      ::rust::Str imgref, ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
+      ::rust::Str imgref, ::rust::Str digest_override,
+      ::rust::Box< ::rpmostreecxx::ContainerImageState> *return$) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$container_prune (::rpmostreecxx::OstreeSysroot const &sysroot,
@@ -3742,11 +3743,12 @@ PrunedContainerInfo::operator!= (PrunedContainerInfo const &rhs) const noexcept
 
 ::rust::Box< ::rpmostreecxx::ContainerImageState>
 pull_container (::rpmostreecxx::OstreeRepo const &repo,
-                ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref)
+                ::rpmostreecxx::GCancellable const &cancellable, ::rust::Str imgref,
+                ::rust::Str digest_override)
 {
   ::rust::MaybeUninit< ::rust::Box< ::rpmostreecxx::ContainerImageState> > return$;
-  ::rust::repr::PtrLen error$
-      = rpmostreecxx$cxxbridge1$pull_container (repo, cancellable, imgref, &return$.value);
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$pull_container (
+      repo, cancellable, imgref, digest_override, &return$.value);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);
