@@ -122,8 +122,9 @@ change_origin_refspec (GVariantDict *options, OstreeSysroot *sysroot, RpmOstreeO
   /* Classify to ensure we handle TYPE_CHECKSUM */
   auto new_refspectype = rpmostreecxx::refspec_classify (new_refspec);
 
-  if (new_refspectype == rpmostreecxx::RefspecType::Checksum)
-    {
+  if (new_refspectype == rpmostreecxx::RefspecType::Checksum
+      || rpmostree_origin_get_override_commit(origin) != NULL)
+     {
       rpmostree_origin_set_rebase_custom (origin, new_refspec, custom_origin_url,
                                           custom_origin_description);
     }

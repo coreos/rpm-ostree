@@ -66,6 +66,12 @@ assert_jq status.json \
           ".deployments[0].\"container-image-reference\" == \"${image_pull_tag}\"" \
           ".deployments[0].\"container-image-reference-digest\" == \"$latest_digest\""
 
+# test rebase to another pinned digest on the same refspec
+prev_prev_digest=$(jq -r '.releases[-3]["oci-images"][] | select(.architecture == "x86_64") | ."digest-ref"' testing.json | cut -f2 -d@)
+# Not sure how to test that since I'd have to reboot or undeploy which would break the test.
+# Basically we need `rebase  "${image_pull_tag}" "${prev_digest}"`
+# then `rebase  "${image_pull_tag}" "${latest_digest}"`
+
 rpm-ostree upgrade
 # This provokes
 # https://github.com/coreos/rpm-ostree/issues/4107
