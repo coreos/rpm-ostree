@@ -24,6 +24,9 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#if __cplusplus >= 202002L
+#include <ranges>
+#endif
 
 namespace rust
 {
@@ -61,6 +64,10 @@ public:
   String (const char *, std::size_t);
   String (const char16_t *);
   String (const char16_t *, std::size_t);
+#if __cplusplus >= 202002L
+  String (const char8_t *s);
+  String (const char8_t *s, std::size_t len);
+#endif
 
   static String lossy (const std::string &) noexcept;
   static String lossy (const char *) noexcept;
@@ -230,7 +237,11 @@ private:
 template <typename T> class Slice<T>::iterator final
 {
 public:
+#if __cplusplus >= 202002L
+  using iterator_category = std::contiguous_iterator_tag;
+#else
   using iterator_category = std::random_access_iterator_tag;
+#endif
   using value_type = T;
   using difference_type = std::ptrdiff_t;
   using pointer = typename std::add_pointer<T>::type;
@@ -248,6 +259,11 @@ public:
   iterator &operator+= (difference_type) noexcept;
   iterator &operator-= (difference_type) noexcept;
   iterator operator+ (difference_type) const noexcept;
+  friend inline iterator
+  operator+ (difference_type lhs, iterator rhs) noexcept
+  {
+    return rhs + lhs;
+  }
   iterator operator- (difference_type) const noexcept;
   difference_type operator- (const iterator &) const noexcept;
 
@@ -263,6 +279,11 @@ private:
   void *pos;
   std::size_t stride;
 };
+
+#if __cplusplus >= 202002L
+static_assert (std::ranges::contiguous_range<rust::Slice<const uint8_t> >);
+static_assert (std::contiguous_iterator<rust::Slice<const uint8_t>::iterator>);
+#endif
 
 template <typename T> Slice<T>::Slice () noexcept
 {
@@ -2194,6 +2215,9 @@ extern "C"
                                               ::rust::Str cachebranch,
                                               ::rpmostreecxx::GVariant **return$) noexcept;
 
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$compose_build_chunked_oci_entrypoint (
+      ::rust::Vec< ::rust::String> *args) noexcept;
+
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$compose_image (::rust::Vec< ::rust::String> *args) noexcept;
 
@@ -3972,6 +3996,18 @@ get_header_variant (::rpmostreecxx::OstreeRepo const &repo, ::rust::Str cachebra
       throw ::rust::impl< ::rust::Error>::error (error$);
     }
   return ::std::move (return$.value);
+}
+
+void
+compose_build_chunked_oci_entrypoint (::rust::Vec< ::rust::String> args)
+{
+  ::rust::ManuallyDrop< ::rust::Vec< ::rust::String> > args$ (::std::move (args));
+  ::rust::repr::PtrLen error$
+      = rpmostreecxx$cxxbridge1$compose_build_chunked_oci_entrypoint (&args$.value);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
 }
 
 void

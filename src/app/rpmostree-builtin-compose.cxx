@@ -55,6 +55,9 @@ static RpmOstreeCommand compose_subcommands[] = {
     rpmostree_compose_builtin_image },
   { "rootfs", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD, "Generate a root filesystem tree from a treefile",
     rpmostree_compose_builtin_rootfs },
+  { "build-chunked-oci", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Generate a \"chunked\" OCI archive from an input rootfs",
+    rpmostree_compose_builtin_build_chunked_oci },
   { NULL, (RpmOstreeBuiltinFlags)0, NULL, NULL }
 };
 
@@ -89,5 +92,18 @@ rpmostree_compose_builtin_rootfs (int argc, char **argv, RpmOstreeCommandInvocat
   for (int i = 0; i < argc; i++)
     rustargv.push_back (std::string (argv[i]));
   CXX_TRY (rpmostreecxx::compose_rootfs_entrypoint (rustargv), error);
+  return TRUE;
+}
+
+gboolean
+rpmostree_compose_builtin_build_chunked_oci (int argc, char **argv,
+                                             RpmOstreeCommandInvocation *invocation,
+                                             GCancellable *cancellable, GError **error)
+{
+  rust::Vec<rust::String> rustargv;
+  g_assert_cmpint (argc, >, 0);
+  for (int i = 0; i < argc; i++)
+    rustargv.push_back (std::string (argv[i]));
+  CXX_TRY (rpmostreecxx::compose_build_chunked_oci_entrypoint (rustargv), error);
   return TRUE;
 }

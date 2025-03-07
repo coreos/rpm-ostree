@@ -282,6 +282,7 @@ pub mod ffi {
 
     // compose.rs
     extern "Rust" {
+        fn compose_build_chunked_oci_entrypoint(args: Vec<String>) -> Result<()>;
         fn compose_image(args: Vec<String>) -> Result<()>;
         fn compose_rootfs_entrypoint(args: Vec<String>) -> Result<()>;
 
