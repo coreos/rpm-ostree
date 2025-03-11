@@ -146,7 +146,8 @@ In the future, this command may perform more operations.
 There is now an `rpm-ostree compose image` command which generates a new base image using a treefile:
 
 ```
-$ rpm-ostree compose image --initialize-mode=if-not-exists --format=ociarchive workstation-ostree-config/fedora-silverblue.yaml fedora-silverblue.ociarchive
+$ rpm-ostree compose image --initialize-mode=if-not-exists --format=ociarchive \
+             workstation-ostree-config/fedora-silverblue.yaml fedora-silverblue.ociarchive
 ```
 
 The `--initialize-mode=if-not-exists` command here is what you almost always want: to create
@@ -154,7 +155,8 @@ the image if it doesn't exist, but to otherwise check for changes.  It isn't the
 for historical reasons.
 
 ```
-$ rpm-ostree compose image  --initialize-mode=if-not-exists --format=registry workstation-ostree-config/fedora-silverblue.yaml quay.io/example/exampleos:latest
+$ rpm-ostree compose image  --initialize-mode=if-not-exists --format=registry \
+             workstation-ostree-config/fedora-silverblue.yaml quay.io/example/exampleos:latest
 ```
 
 ## Adding container image configuration
@@ -201,25 +203,39 @@ In ostree upstream, there is a simplistic CLI (and API) that "encapsulates"
 a commit into a container image with a *single layer*:
 
 ```
-$ ostree container encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue docker://quay.io/myuser/fedora-silverblue:35
+$ ostree container encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue \
+         docker://quay.io/myuser/fedora-silverblue:35
 ```
 
 The `encapsulate` command accepts all the same "transport prefixes" as the `skopeo`
 CLI.  For more information, see `man skopeo`.
 
-However, this "single layer" is not an efficient way to deliver content.  It means
-that any time anything in the ostree commit changes, clients need to download
-a full new tarball.
+## Creating chunked images
 
-The ostree shared library has low level APIs that support creating reproducible
-"chunked" images.  A key adavantage of this is that if e.g. just the kernel
-changes, one only downloads the layer containing the kernel/initramfs
-(plus a metadata layer) instead of everything.
+The "single layer" image produced by `ostree container encapsulate`
+above is not an efficient way to deliver content.  It means that any
+time anything in the ostree commit changes, clients need to download a
+full new tarball.
+
+The ostree shared library has low level APIs that support creating
+reproducible "chunked" images.  A key adavantage of this is that if
+e.g. just the kernel changes, one only downloads the layer containing
+the kernel/initramfs (plus a metadata layer) instead of everything.
+The algorithm uses generalized heuristics to pack the image content
+together (primarily consulting RPM metadata) into a number of layers
+in order to minimize the amount of data/layers modified when producing
+updated images in the future.  The `--max-layers` option may be
+supplied to specify the number of layers; if not specified this
+defaults to a maximum of 64 layers.
 
 Use a command like this to generate chunked images:
 
 ```
-$ rpm-ostree compose container-encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue docker://quay.io/myuser/fedora-silverblue:35
+$ rpm-ostree compose container-encapsulate --repo=/path/to/repo fedora/35/x86_64/silverblue \
+             docker://quay.io/myuser/fedora-silverblue:35
 ```
 
 This "chunked" format is used by default by `rpm-ostree compose image`.
+
+You can also create chunked images from pre-existing (typically
+single-layer) images using [`rpm-ostree compose build-chunked-oci`](https://coreos.github.io/rpm-ostree/build-chunked-oci/).
