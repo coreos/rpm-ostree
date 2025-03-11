@@ -1,10 +1,5 @@
 # rpm-ostree: A true hybrid image/package system
 
-> [!IMPORTANT]
-> Currently, development focus has shifted to [bootc](https://github.com/containers/bootc), [dnf](https://github.com/rpm-software-management/dnf5/), and the ecosystem around those tools. However, rpm-ostree is widely in use today in many upstream projects and downstream products and **we will continue to support it** for some time with an emphasis on fixing important bugs, especially security-related ones. Some minor enhancements may happen but in general new major features, especially client-side, are unlikely to be prioritized. For more information, see:
-> - https://fedoraproject.org/wiki/Changes/DNFAndBootcInImageModeFedora
-> - https://lists.fedoraproject.org/archives/list/devel@lists.fedoraproject.org/thread/X4WEBWV3JYKWVRBC6CPJMUJGQOYCORC7/
-
 rpm-ostree is a hybrid image/package system.  It combines
 [libostree](https://ostree.readthedocs.io/en/latest/) as a base image format,
 and accepts RPM on both the client and server side, sharing code with the
@@ -12,28 +7,29 @@ and accepts RPM on both the client and server side, sharing code with the
 [libdnf](https://github.com/rpm-software-management/libdnf). and thus bringing
 many of the benefits of both together.
 
-🆕 as of [release 2022.16](https://github.com/coreos/rpm-ostree/releases/tag/v2022.16) rpm-ostree now also supports [ostree native containers](docs/container.md).
+NOTE: Currently, development focus has shifted to [bootc](https://github.com/containers/bootc), [dnf](https://github.com/rpm-software-management/dnf5/), and the ecosystem around those tools. However, rpm-ostree is widely in use today in many upstream projects and downstream products and continues to be supported. In general, new major features related to bootable containers should land in those projects instead.
 
-```
-                         ┌─────────────────────────────────────────┐
-                         │                                         │
-                         │       rpm-ostree (daemon + CLI)         │
-                  ┌──────┤                                         ├─────────┐
-                  │      │     status, upgrade, rollback,          │         │
-                  │      │     pkg layering, initramfs --enable    │         │
-                  │      │                                         │         │
-                  │      └─────────────────────────────────────────┘         │
-                  │                                                          │
-                  │                                                          │
-                  │                                                          │
-┌─────────────────┴─────────────────────────┐        ┌───────────────────────┴─────────────────┐
-│                                           │        │                                         │
-│         ostree (image system)             │        │            libdnf (pkg system)          │
-│                                           │        │                                         │
-│  fetch ostree repos and container images, │        │    ties together libsolv (SAT solver)   │
-│  atomic filesystem trees, rollbacks       │        │    with librepo (RPM repo downloads)    │
-│                                           │        │                                         │
-└───────────────────────────────────────────┘        └─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    rpmostree["rpm-ostree (daemon + CLI)
+        status, upgrade, rollback
+        package layering
+        initramfs --enable"] 
+    bootc["bootc (image system)
+        fetch bootable container images
+        transactional upgrades and rollbacks"]
+    ostree["ostree (image system)
+        fetch ostree repositories
+        transactional upgrades and rollbacks"]
+    libdnf["libdnf (pkg system) ties together
+        libsolv (SAT solver)
+        librepo (RPM repo downloads)
+        librpm (RPM installation)
+        "]
+
+    rpmostree --> ostree
+    rpmostree --> bootc
+    rpmostree --> libdnf
 ```
 
 **Features:**
