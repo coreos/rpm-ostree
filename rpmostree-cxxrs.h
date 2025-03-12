@@ -1862,6 +1862,8 @@ prepare_filesystem_script_prep (::std::int32_t rootfs);
 
 void run_depmod (::std::int32_t rootfs_dfd, ::rust::Str kver, bool unified_core);
 
+void run_sysusers (::std::int32_t rootfs_dfd);
+
 void log_treefile (::rpmostreecxx::Treefile const &tf) noexcept;
 
 bool is_container_image_reference (::rust::Str refspec) noexcept;

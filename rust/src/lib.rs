@@ -263,6 +263,8 @@ pub mod ffi {
 
         fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Result<()>;
 
+        fn run_sysusers(rootfs_dfd: i32) -> Result<()>;
+
         fn log_treefile(tf: &Treefile);
 
         fn is_container_image_reference(refspec: &str) -> bool;
