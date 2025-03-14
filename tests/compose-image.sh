@@ -40,6 +40,7 @@ packages:
   - dnf5
   - glibc glibc.i686
   - sudo
+  - systemd-standalone-sysusers
 repos:
   - fedora  # Intentially using frozen GA repo
 EOF
