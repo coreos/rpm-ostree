@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Pin to branch for some reproducibility
-BRANCH=f41
+BRANCH=f42
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
@@ -32,7 +32,7 @@ cd minimal-test
 cat > minimal.yaml << 'EOF'
 container: true
 recommends: false
-releasever: 41
+releasever: 42
 packages:
   - rootfiles
   - vim-minimal
@@ -63,7 +63,7 @@ mkdir minimal-test
 cd minimal-test
 cat > minimal.yaml << 'EOF'
 boot-location: modules
-releasever: 41
+releasever: 42
 packages:
   - bash
   - rpm
