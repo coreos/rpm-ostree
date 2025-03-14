@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Pin to branch for some reproducibility
-BRANCH=f38
+BRANCH=f41
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
@@ -32,7 +32,7 @@ cd minimal-test
 cat > minimal.yaml << 'EOF'
 container: true
 recommends: false
-releasever: 38
+releasever: 41
 packages:
   - rootfiles
   - fedora-repos-modular
@@ -64,7 +64,7 @@ mkdir minimal-test
 cd minimal-test
 cat > minimal.yaml << 'EOF'
 boot-location: modules
-releasever: 38
+releasever: 41
 packages:
   - bash
   - rpm
@@ -98,11 +98,11 @@ rm "${destocidir}" -rf
 mkdir_oci "${destocidir}"
 destimg="${destocidir}:silverblue"
 # Sadly --if-not-exists is broken for oci: too
-rpm-ostree compose image --cachedir=cache --touch-if-changed=changed.stamp --initialize-mode=always --format=oci workstation-ostree-config/fedora-silverblue.yaml "${destimg}"
+rpm-ostree compose image --cachedir=cache --touch-if-changed=changed.stamp --initialize-mode=always --format=oci workstation-ostree-config/silverblue.yaml "${destimg}"
 skopeo inspect "oci:${destimg}"
 test -f changed.stamp
 rm -f changed.stamp
-rpm-ostree compose image --cachedir=cache --offline --touch-if-changed=changed.stamp --initialize-mode=if-not-exists --format=oci workstation-ostree-config/fedora-silverblue.yaml "${destimg}"| tee out.txt
+rpm-ostree compose image --cachedir=cache --offline --touch-if-changed=changed.stamp --initialize-mode=if-not-exists --format=oci workstation-ostree-config/silverblue.yaml "${destimg}"| tee out.txt
 test '!' -f changed.stamp
 assert_file_has_content_literal out.txt 'No apparent changes since previous commit'
 
