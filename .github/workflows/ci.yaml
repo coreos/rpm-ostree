@@ -184,6 +184,10 @@ jobs:
     name: "compose-image tests"
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        RELEASE: ['40', '41', '42']
     container:
       image: registry.ci.openshift.org/coreos/coreos-assembler:latest
       options: "--user root --privileged -v /var/tmp:/var/tmp"
@@ -199,7 +203,9 @@ jobs:
       - name: Install
         run: tar -C / -xzvf install.tar
       - name: Integration tests
-        run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose-image.sh
+        run: env TMPDIR=/var/tmp JOBS=3 RELEASE=${RELEASE} ./tests/compose-image.sh
+        env:
+          RELEASE: ${{ matrix.RELEASE }}
   compose-rootfs:
     name: "compose-rootfs tests"
     needs: build
