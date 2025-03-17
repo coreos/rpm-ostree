@@ -38,7 +38,7 @@ packages:
   - fedora-repos-modular
   - vim-minimal
   - coreutils
-  - dnf dnf-yum
+  - dnf5
   - glibc glibc.i686
   - sudo
 repos:
