@@ -1,9 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# Pin to branch for some reproducibility
-BRANCH=f38
-
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
 commondir=$(cd "$dn/common" && pwd)
@@ -22,6 +19,16 @@ if test -z "${COMPOSE_KEEP_CACHE:-}"; then
     mkdir compose-baseimage-test
 fi
 cd compose-baseimage-test
+
+# RELEASE is set in CI for all current Fedora releases
+if [[ -z ${RELEASE+x} ]]; then
+    # Set RELEASE to latest Fedora stable by default
+    RELEASE=41
+else
+    echo "Testing using Fedora ${RELEASE}"
+fi
+
+rm -rf cache cache-container
 mkdir -p cache cache-container
 
 # A container image using stock dnf, similar to
@@ -29,18 +36,26 @@ mkdir -p cache cache-container
 rm minimal-test -rf
 mkdir minimal-test
 cd minimal-test
-cat > minimal.yaml << 'EOF'
+dnf="dnf dnf-yum"
+if [[ "${RELEASE}" -ge 41 ]]; then
+    dnf="dnf5"
+fi
+systemd_sysusers=""
+if [[ "${RELEASE}" -ge 42 ]]; then
+    systemd_sysusers="  - systemd-standalone-sysusers"
+fi
+cat > minimal.yaml << EOF
 container: true
 recommends: false
-releasever: 38
+releasever: ${RELEASE}
 packages:
   - rootfiles
-  - fedora-repos-modular
   - vim-minimal
   - coreutils
-  - dnf dnf-yum
+  - ${dnf}
   - glibc glibc.i686
   - sudo
+${systemd_sysusers}
 repos:
   - fedora  # Intentially using frozen GA repo
 EOF
@@ -56,15 +71,15 @@ test $(jq -r '.Labels["baz"]' < inspect.json) = blah
 rpm-ostree compose image --cachedir=../cache-container --touch-if-changed changed.stamp minimal.yaml minimal.ociarchive
 test '!' -f changed.stamp
 cd ..
-echo "ok minimal"
+echo "ok minimal ${RELEASE}"
 
 # A minimal bootable manifest, using repos from the host
 rm minimal-test -rf
 mkdir minimal-test
 cd minimal-test
-cat > minimal.yaml << 'EOF'
+cat > minimal.yaml << EOF
 boot-location: modules
-releasever: 38
+releasever: ${RELEASE}
 packages:
   - bash
   - rpm
@@ -80,10 +95,10 @@ cp /etc/yum.repos.d/*.repo .
 rpm-ostree compose image --cachedir=../cache --touch-if-changed=changed.stamp --initialize-mode=always minimal.yaml minimal.ociarchive
 # TODO actually test this container image
 cd ..
-echo "ok minimal"
+echo "ok minimal ${RELEASE}"
 
 # Next, test the full Fedora Silverblue config, and also using an OCI directory
-test -d workstation-ostree-config || git clone --depth=1 https://pagure.io/workstation-ostree-config --branch "${BRANCH}"
+test -d workstation-ostree-config.${RELEASE} || git clone --depth=1 https://pagure.io/workstation-ostree-config --branch "f${RELEASE}" workstation-ostree-config.${RELEASE}
 mkdir_oci() {
   local d
   d=$1
@@ -97,13 +112,16 @@ destocidir=fedora-silverblue.oci
 rm "${destocidir}" -rf
 mkdir_oci "${destocidir}"
 destimg="${destocidir}:silverblue"
+manifest="workstation-ostree-config.${RELEASE}/silverblue.yaml"
+if [[ "${RELEASE}" -lt 41 ]]; then
+    manifest="workstation-ostree-config.${RELEASE}/fedora-silverblue.yaml"
+fi
 # Sadly --if-not-exists is broken for oci: too
-rpm-ostree compose image --cachedir=cache --touch-if-changed=changed.stamp --initialize-mode=always --format=oci workstation-ostree-config/fedora-silverblue.yaml "${destimg}"
+rpm-ostree compose image --cachedir=cache --touch-if-changed=changed.stamp --initialize-mode=always --format=oci "${manifest}" "${destimg}"
 skopeo inspect "oci:${destimg}"
 test -f changed.stamp
 rm -f changed.stamp
-rpm-ostree compose image --cachedir=cache --offline --touch-if-changed=changed.stamp --initialize-mode=if-not-exists --format=oci workstation-ostree-config/fedora-silverblue.yaml "${destimg}"| tee out.txt
+rpm-ostree compose image --cachedir=cache --offline --touch-if-changed=changed.stamp --initialize-mode=if-not-exists --format=oci "${manifest}" "${destimg}"| tee out.txt
 test '!' -f changed.stamp
 assert_file_has_content_literal out.txt 'No apparent changes since previous commit'
-
-echo "ok compose baseimage"
+echo "ok compose Silverblue ${RELEASE}"

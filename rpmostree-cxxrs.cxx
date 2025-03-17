@@ -2187,6 +2187,8 @@ extern "C"
                                                            ::rust::Str kver,
                                                            bool unified_core) noexcept;
 
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$run_sysusers (::std::int32_t rootfs_dfd) noexcept;
+
   void rpmostreecxx$cxxbridge1$log_treefile (::rpmostreecxx::Treefile const &tf) noexcept;
 
   bool rpmostreecxx$cxxbridge1$is_container_image_reference (::rust::Str refspec) noexcept;
@@ -3903,6 +3905,16 @@ void
 run_depmod (::std::int32_t rootfs_dfd, ::rust::Str kver, bool unified_core)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$run_depmod (rootfs_dfd, kver, unified_core);
+  if (error$.ptr)
+    {
+      throw ::rust::impl< ::rust::Error>::error (error$);
+    }
+}
+
+void
+run_sysusers (::std::int32_t rootfs_dfd)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$run_sysusers (rootfs_dfd);
   if (error$.ptr)
     {
       throw ::rust::impl< ::rust::Error>::error (error$);

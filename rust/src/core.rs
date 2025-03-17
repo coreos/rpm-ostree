@@ -6,6 +6,7 @@
 use crate::cxxrsutil::*;
 use crate::ffiutil;
 use crate::kernel_install::is_ostree_layout;
+use crate::progress::progress_task;
 use anyhow::Context;
 use anyhow::{anyhow, Result};
 use camino::Utf8Path;
@@ -141,6 +142,35 @@ pub(crate) fn refspec_classify(refspec: &str) -> crate::ffi::RefspecType {
         // fall back to Ostree if we cannot infer type
         crate::ffi::RefspecType::Ostree
     }
+}
+
+/// Run systemd-sysusers in the rootfs if the %__systemd_sysusers RPM macro is set.
+pub(crate) fn run_sysusers(rootfs_dfd: i32) -> CxxResult<()> {
+    let args: Vec<_> = vec!["rpm", "--eval=%{?__systemd_sysusers}"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
+    let path = crate::bwrap::bubblewrap_run_sync(
+        rootfs_dfd,
+        &args,
+        true,
+        crate::ffi::BubblewrapMutability::Immutable,
+    )?;
+    let tmp = String::from_utf8(path).context("Could not read %__systemd_sysusers as UTF8")?;
+    let cmd = tmp.trim();
+    if !cmd.is_empty() {
+        progress_task("Running systemd-sysusers", || -> CxxResult<()> {
+            let args: Vec<_> = vec![cmd.into()];
+            let _ = crate::bwrap::bubblewrap_run_sync(
+                rootfs_dfd,
+                &args,
+                false,
+                crate::ffi::BubblewrapMutability::MutateFreely,
+            )?;
+            Ok(())
+        })?;
+    }
+    Ok(())
 }
 
 /// Perform reversible filesystem transformations necessary before we execute scripts.
