@@ -35,7 +35,6 @@ recommends: false
 releasever: 41
 packages:
   - rootfiles
-  - fedora-repos-modular
   - vim-minimal
   - coreutils
   - dnf5
