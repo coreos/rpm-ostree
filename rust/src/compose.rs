@@ -352,6 +352,8 @@ impl BuildChunkedOCIOpts {
             .context("Invoking compose container-encapsulate")?;
 
         drop(rootfs);
+        // Ensure our tempdir is only dropped now
+        drop(td);
         match rootfs_source {
             FileSource::Rootfs(_) => {}
             FileSource::Podman(mnt) => {
