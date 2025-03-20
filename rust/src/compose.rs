@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::borrow::Cow;
-use std::ffi::OsStr;
+use std::collections::BTreeSet;
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::num::NonZeroU32;
 use std::os::fd::{AsFd, AsRawFd};
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
@@ -483,6 +486,79 @@ fn mutate_source_root(exec_root: &Dir, source_root: &Utf8Path) -> Result<()> {
     Ok(())
 }
 
+fn fdpath_for(fd: impl AsFd, path: impl AsRef<Path>) -> PathBuf {
+    let fd = fd.as_fd();
+    let path = path.as_ref();
+    let mut fdpath = PathBuf::from(format!("/proc/self/fd/{}", fd.as_raw_fd()));
+    fdpath.push(path);
+    fdpath
+}
+
+/// Get an optional extended attribute from the path; does not follow symlinks on the end target.
+fn lgetxattr_optional_at(
+    fd: impl AsFd,
+    path: impl AsRef<Path>,
+    key: impl AsRef<OsStr>,
+) -> std::io::Result<Option<Vec<u8>>> {
+    let fd = fd.as_fd();
+    let path = path.as_ref();
+    let key = key.as_ref();
+
+    // Arbitrary hardcoded value, but we should have a better xattr API somewhere
+    let mut value = [0u8; 8196];
+    let fdpath = fdpath_for(fd, path);
+    match rustix::fs::lgetxattr(&fdpath, key, &mut value) {
+        Ok(r) => Ok(Some(Vec::from(&value[0..r]))),
+        Err(e) if e == rustix::io::Errno::NODATA => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+#[derive(Debug, Default)]
+struct XattrRemovalInfo {
+    /// Set of unhandled xattrs we found
+    names: BTreeSet<OsString>,
+    /// Number of files with unhandled xattrsi
+    count: u64,
+}
+
+fn strip_usermeta(d: &Dir, info: &mut XattrRemovalInfo) -> Result<()> {
+    let usermeta_key = "user.ostreemeta";
+
+    for ent in d.entries()? {
+        let ent = ent?;
+        let ty = ent.file_type()?;
+
+        if ty.is_dir() {
+            let subdir = ent.open_dir()?;
+            strip_usermeta(&subdir, info)?;
+        } else {
+            let name = ent.file_name();
+            let Some(usermeta) = lgetxattr_optional_at(d.as_fd(), &name, usermeta_key)? else {
+                continue;
+            };
+            let usermeta =
+                glib::Variant::from_data::<(u32, u32, u32, Vec<(Vec<u8>, Vec<u8>)>), _>(usermeta);
+            let xattrs = usermeta.child_value(3);
+            let n = xattrs.n_children();
+            for i in 0..n {
+                let v = xattrs.child_value(i);
+                let key = v.child_value(0);
+                let key = key.fixed_array::<u8>().unwrap();
+                let key = OsStr::from_bytes(key);
+                if !info.names.contains(key) {
+                    info.names.insert(key.to_owned());
+                }
+                info.count += 1;
+            }
+            let fdpath = fdpath_for(d.as_fd(), &name);
+            let _ = rustix::fs::lremovexattr(&fdpath, usermeta_key).context("lremovexattr")?;
+        }
+    }
+
+    Ok(())
+}
+
 impl RootfsOpts {
     // For bad legacy reasons "compose install" actually writes to a subdirectory named rootfs.
     // Clean that up by deleting everything except rootfs/ and moving the contents of rootfs/
@@ -516,6 +592,16 @@ impl RootfsOpts {
             d.set_permissions(".", perms)
                 .context("Setting target permissions")?;
             tracing::debug!("rootfs fixup complete");
+        }
+
+        // And finally, clean up the ostree.usermeta xattr
+        let mut info = XattrRemovalInfo::default();
+        strip_usermeta(d, &mut info)?;
+        if info.count > 0 {
+            eprintln!("Found unhandled xattrs in files: {}", info.count);
+            for attr in info.names {
+                eprintln!("  {attr:?}");
+            }
         }
 
         Ok(())
@@ -556,7 +642,7 @@ impl RootfsOpts {
             let repo = ostree::Repo::create_at(
                 libc::AT_FDCWD,
                 repo_path.as_str(),
-                ostree::RepoMode::BareUser,
+                ostree::RepoMode::Bare,
                 None,
                 gio::Cancellable::NONE,
             )?;
@@ -569,6 +655,9 @@ impl RootfsOpts {
             .args([
                 "compose",
                 "install",
+                // We can't rely on being able to do labels in a container build
+                // and instead assume that bootc will do client side labeling.
+                "--disable-selinux",
                 "--unified-core",
                 "--postprocess",
                 "--repo",
@@ -587,6 +676,12 @@ impl RootfsOpts {
             .args([manifest.as_str(), self.dest.as_str()])
             .run()
             .context("Executing compose install")?;
+
+        // Clear everything in the tempdir; at this point we may have hardlinks into
+        // the pkgcache repo, which we don't need because we're producing a flat
+        // tree, not a repo.
+        td.close()?;
+
         // Undo the subdirectory "rootfs"
         {
             let target = Dir::open_ambient_dir(&self.dest, cap_std::ambient_authority())?;
@@ -1152,8 +1247,33 @@ mod tests {
     use cap_std::fs::PermissionsExt;
     use cap_std_ext::cap_tempfile;
     use gio::prelude::FileExt;
+    use rustix::{fs::XattrFlags, io::Errno};
 
     use super::*;
+
+    #[test]
+    fn test_fixup_install_root() -> Result<()> {
+        let td = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        let bashpath = Utf8Path::new("rootfs/usr/bin/bash");
+
+        td.create_dir_all(bashpath.parent().unwrap())?;
+        td.write(bashpath, b"bash")?;
+        let f = td.open(bashpath)?;
+        let xattrs = Vec::<(Vec<u8>, Vec<u8>)>::new();
+        let v = glib::Variant::from((0u32, 0u32, 0u32, xattrs));
+        let v = v.data_as_bytes();
+        rustix::fs::fsetxattr(f.as_fd(), "user.ostreemeta", &v, XattrFlags::empty())
+            .context("fsetxattr")?;
+
+        RootfsOpts::fixup_installroot(&td).unwrap();
+
+        let f = td.open("usr/bin/bash").unwrap();
+        let mut buf = [0u8; 1024];
+        let e = rustix::fs::fgetxattr(f.as_fd(), "user.ostreemeta", &mut buf).err();
+        assert_eq!(e, Some(Errno::NODATA));
+
+        Ok(())
+    }
 
     fn commit_filter(
         _repo: &ostree::Repo,
