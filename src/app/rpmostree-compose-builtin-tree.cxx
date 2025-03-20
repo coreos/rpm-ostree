@@ -72,6 +72,7 @@ static char *opt_previous_inputhash;
 static char *opt_previous_version;
 static gboolean opt_dry_run;
 static gboolean opt_print_only;
+static gboolean opt_disable_selinux;
 static gboolean opt_install_postprocess;
 static char *opt_write_commitid_to;
 static char *opt_write_composejson_to;
@@ -119,6 +120,8 @@ static GOptionEntry install_option_entries[]
           NULL },
         { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only,
           "Just expand any includes and print treefile", NULL },
+        { "disable-selinux", 0, 0, G_OPTION_ARG_NONE, &opt_disable_selinux,
+          "Disable SELinux labeling, even if manifest enables it", NULL },
         { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed,
           "Update the modification time on FILE if a new commit was created", "FILE" },
         { "previous-commit", 0, 0, G_OPTION_ARG_STRING, &opt_previous_commit,
@@ -248,6 +251,9 @@ static gboolean
 try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self, GCancellable *cancellable,
                             GError **error)
 {
+  if (opt_disable_selinux)
+    return TRUE; /* nothing to do */
+
   auto selinux = (*self->treefile_rs)->get_selinux ();
 
   if (!selinux || !self->previous_checksum)
@@ -508,14 +514,17 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
       /* Now reload the policy from the tmproot, and relabel the pkgcache - this
        * is the same thing done in rpmostree_context_commit().
        */
-      g_autoptr (OstreeSePolicy) sepolicy = NULL;
-      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, &sepolicy, cancellable, error))
-        return FALSE;
+      if (!opt_disable_selinux)
+        {
+          g_autoptr (OstreeSePolicy) sepolicy = NULL;
+          if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, &sepolicy, cancellable, error))
+            return FALSE;
 
-      rpmostree_context_set_sepolicy (self->corectx, sepolicy);
+          rpmostree_context_set_sepolicy (self->corectx, sepolicy);
 
-      if (!rpmostree_context_force_relabel (self->corectx, cancellable, error))
-        return FALSE;
+          if (!rpmostree_context_force_relabel (self->corectx, cancellable, error))
+            return FALSE;
+        }
     }
   else
     {
@@ -765,7 +774,7 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
    * e.g. importing, relabeling, etc... so just disable it. We do still set the policy
    * to the final one right before commit as usual. */
-  if (!opt_unified_core)
+  if (!opt_unified_core || opt_disable_selinux)
     rpmostree_context_disable_selinux (self->corectx);
 
   g_autoptr (OstreeRepo) layer_repo = NULL;

@@ -30,6 +30,10 @@ test '!' -f /ostree/repo/config
 test $(($(stat -c '0%a' /) % 2)) = 1
 # Validate we have file caps
 getfattr -d -m security.capability /usr/bin/newuidmap
+# Validate we don't have user.ostreemeta
+if getfattr -n user.ostreemeta /usr/bin/bash >/dev/null; then
+    echo "found user.ostreemeta"; exit 1
+fi
 bootc container lint
 EORUN
 LABEL containers.bootc 1
