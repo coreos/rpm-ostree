@@ -298,6 +298,7 @@ impl BuildChunkedOCIOpts {
                 config.set_created(Some(toplevel_ts));
                 config
             };
+        let arch = image_config.architecture();
         let creation_timestamp = image_config
             .created()
             .as_deref()
@@ -329,9 +330,13 @@ impl BuildChunkedOCIOpts {
             .bootc
             .then_some(["--label", "containers.bootc=1"].as_slice())
             .unwrap_or_default();
-        let config_data = if self.from.is_some() {
+        let base_config = image_config
+            .config()
+            .as_ref()
+            .filter(|_| self.from.is_some());
+        let config_data = if let Some(config) = base_config {
             let mut tmpf = tempfile::NamedTempFile::new()?;
-            serde_json::to_writer(&mut tmpf, &image_config)?;
+            serde_json::to_writer(&mut tmpf, &config)?;
             Some(tmpf.into_temp_path())
         } else {
             None
@@ -345,6 +350,7 @@ impl BuildChunkedOCIOpts {
             ])
             .args(label_arg)
             .args(self.max_layers.map(|l| format!("--max-layers={l}")))
+            .arg(format!("--arch={arch}"))
             .args(
                 config_data
                     .iter()
