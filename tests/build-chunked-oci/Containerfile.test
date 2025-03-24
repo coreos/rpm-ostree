@@ -10,3 +10,4 @@ dnf clean all
 rm /var/lib/rpm -rf
 bootc container lint
 EORUN
+LABEL testlabel=1

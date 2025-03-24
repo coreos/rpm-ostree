@@ -25,6 +25,7 @@ use ostree_ext::containers_image_proxy;
 use ostree_ext::objectsource::{
     ContentID, ObjectMeta, ObjectMetaMap, ObjectMetaSet, ObjectSourceMeta,
 };
+use ostree_ext::oci_spec::image::{Arch, Os, PlatformBuilder};
 use ostree_ext::prelude::*;
 use ostree_ext::{gio, oci_spec, ostree};
 
@@ -55,6 +56,10 @@ struct ContainerEncapsulateOpts {
     /// field of https://github.com/opencontainers/image-spec/blob/main/config.md
     #[clap(long)]
     image_config: Option<Utf8PathBuf>,
+
+    /// Override the architecture.
+    #[clap(long)]
+    arch: Option<Arch>,
 
     /// Propagate an OSTree commit metadata key to container label
     #[clap(name = "copymeta", long)]
@@ -504,13 +509,22 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
             .map_err(anyhow::Error::msg)?;
         opts.container_config = Some(config);
     }
+    // If an architecture was provided, then generate a new Platform (using the host OS type)
+    // but override with that architecture.
+    if let Some(arch) = opt.arch.as_ref() {
+        let platform = PlatformBuilder::default()
+            .architecture(arch.clone())
+            .os(Os::default())
+            .build()
+            .unwrap();
+        opts.platform = Some(platform);
+    }
     let handle = tokio::runtime::Handle::current();
-    let digest = progress_task("Generating container image", || {
-        handle.block_on(async {
-            ostree_ext::container::encapsulate(repo, rev.as_str(), &config, Some(opts), &opt.imgref)
-                .await
-                .context("Encapsulating")
-        })
+    println!("Generating container image");
+    let digest = handle.block_on(async {
+        ostree_ext::container::encapsulate(repo, rev.as_str(), &config, Some(opts), &opt.imgref)
+            .await
+            .context("Encapsulating")
     })?;
 
     if let Some(compare_with_build) = opt.compare_with_build.as_ref() {
