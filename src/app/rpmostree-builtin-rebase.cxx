@@ -46,7 +46,10 @@ static gboolean opt_lock_finalization;
 static gboolean opt_bypass_driver;
 
 static GOptionEntry option_entries[]
-    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+    = { { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname,
+          "Operate on provided OSNAME", "OSNAME" },
+        { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
+          "STATEROOT" },
         { "branch", 'b', 0, G_OPTION_ARG_STRING, &opt_branch,
           "Rebase to branch BRANCH; use --remote to change remote as well", "BRANCH" },
         { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote,

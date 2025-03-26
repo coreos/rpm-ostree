@@ -41,7 +41,10 @@ static gboolean opt_skip_branch_check;
 static char *opt_ex_cliwrap;
 
 static GOptionEntry option_entries[]
-    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+    = { { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname,
+          "Operate on provided OSNAME", "OSNAME" },
+        { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
+          "STATEROOT" },
         { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
           "Initiate a reboot after operation is complete", NULL },
         /* XXX As much as I dislike the inconsistency with "rpm-ostree upgrade",

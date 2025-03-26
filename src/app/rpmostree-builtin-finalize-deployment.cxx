@@ -30,7 +30,10 @@ static gboolean opt_allow_missing;
 static GOptionEntry option_entries[] = {
   /* though there can only be one staged deployment at a time, this could still
    * be useful to assert a specific osname */
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+  { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME",
+    "OSNAME" },
+  { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
+    "STATEROOT" },
   { "allow-missing-checksum", 0, 0, G_OPTION_ARG_NONE, &opt_allow_missing,
     "Don't error out if no expected checksum is provided", NULL },
   { "allow-unlocked", 0, 0, G_OPTION_ARG_NONE, &opt_allow_unlocked,

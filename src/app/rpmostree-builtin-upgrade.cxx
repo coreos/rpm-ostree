@@ -46,7 +46,10 @@ static gboolean opt_bypass_driver;
 
 /* "check-diff" is deprecated, replaced by "preview" */
 static GOptionEntry option_entries[]
-    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+    = { { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname,
+          "Operate on provided OSNAME", "OSNAME" },
+        { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
+          "STATEROOT" },
         { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
           "Initiate a reboot after operation is complete", NULL },
         { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade,

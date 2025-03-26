@@ -39,7 +39,10 @@ static gboolean opt_lock_finalization;
 static gboolean opt_unchanged_exit_77;
 
 static GOptionEntry option_entries[] = {
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+  { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME",
+    "OSNAME" },
+  { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
+    "STATEROOT" },
   { "force-sync", 0, 0, G_OPTION_ARG_NONE, &opt_force_sync,
     "Deploy a new tree with the latest tracked /etc files", NULL },
   { "track", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_track, "Track root /etc file", "FILE" },
