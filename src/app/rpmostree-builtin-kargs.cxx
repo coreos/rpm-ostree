@@ -41,7 +41,10 @@ static gboolean opt_lock_finalization;
 static gboolean opt_unchanged_exit_77;
 
 static GOptionEntry option_entries[] = {
-  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operation on provided OSNAME", "OSNAME" },
+  { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME",
+    "OSNAME" },
+  { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
+    "STATEROOT" },
   { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index,
     "Modify the kernel args from a specific deployment based on index. Index is in the form of a "
     "number (e.g. 0 means the first deployment in the list)",

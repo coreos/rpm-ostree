@@ -32,7 +32,10 @@ static char *opt_osname;
 static char *opt_force;
 
 static GOptionEntry option_entries[]
-    = { { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+    = { { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname,
+          "Operate on provided OSNAME", "OSNAME" },
+        { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
+          "STATEROOT" },
         { "force", 'f', 0, G_OPTION_ARG_NONE, &opt_force, "Expire current cache", NULL },
         { NULL } };
 
