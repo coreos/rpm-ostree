@@ -1301,8 +1301,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
             return FALSE;
         }
     }
-
-  if (no_overrides)
+  const gboolean ex_reset_overrides = vardict_lookup_bool (self->options, "ex-reset-overrides", FALSE);
+  if (no_overrides || (is_upgrade && ex_reset_overrides))
     {
       if (rpmostree_origin_remove_all_overrides (origin))
         changed = TRUE;
