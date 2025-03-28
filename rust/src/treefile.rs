@@ -614,8 +614,11 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
             };
             if matches {
                 match conditional_include.include {
-                    Include::Single(v) => includes.push(v),
-                    Include::Multiple(v) => includes.extend(v),
+                    IncludeFilesOrInlined::Files(Include::Single(v)) => includes.push(v),
+                    IncludeFilesOrInlined::Files(Include::Multiple(v)) => includes.extend(v),
+                    IncludeFilesOrInlined::Inlined(mut t) => {
+                        treefile_merge(&mut parsed.config, &mut t);
+                    }
                 }
             }
         }
@@ -2180,10 +2183,17 @@ pub(crate) enum Include {
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+#[serde(untagged)]
+pub(crate) enum IncludeFilesOrInlined {
+    Files(Include),
+    Inlined(TreeComposeConfig),
+}
+
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct ConditionalInclude {
     #[serde(rename = "if")]
     pub(crate) condition: IncludeConditions,
-    pub(crate) include: Include,
+    pub(crate) include: IncludeFilesOrInlined,
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
@@ -3693,6 +3703,27 @@ conditional-include:
         );
         let tf = new_test_treefile(workdir, buf.as_str(), None)?;
         assert_package(&tf, "foo");
+        Ok(())
+    }
+
+    #[test]
+    fn test_treefile_conditional_inline() -> Result<()> {
+        let workdir = tempfile::tempdir()?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        std::fs::write(workdir.join("foo.yaml"), "packages: [foo]")?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+releasever: "35"
+conditional-include:
+    - if: releasever == "35"
+      include:
+        packages:
+          - inlinedpkg
+"#,
+        );
+        let tf = new_test_treefile(workdir, buf.as_str(), None)?;
+        assert_package(&tf, "inlinedpkg");
         Ok(())
     }
 

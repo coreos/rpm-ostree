@@ -437,6 +437,19 @@ It supports the following parameters:
        include: f35-selinux-workaround.yaml
     ```
 
+    Specifying a treefile spec inlined is also supported:
+
+    ```yaml
+    conditional-include:
+      - if: releasever >= 35
+        include:
+          packages:
+            - foobar
+    ```
+
+    Inlined treefiles do not support any options referring to external files
+    (e.g. `postprocess-script`, `add-files`, and `passwd`/`group`).
+
  * `container`: boolean, optional: Defaults to `false`.  If `true`, then
    rpm-ostree will not do any special handling of kernel, initrd or the
    /boot directory. This is useful if the target for the tree is some kind
