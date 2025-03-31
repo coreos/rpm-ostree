@@ -4817,7 +4817,8 @@ impl TreefileApplyOpts {
             run_dnf("versionlock", &["add", "*", "--disablerepo", "*"])
                 .context("locking base packages with dnf")?;
             run_dnf("install", &install_args).context("installing packages with dnf")?;
-            run_dnf("versionlock", &["clear"]).context("clearing base packages lock with dnf")?;
+            run_dnf("versionlock", &["clear", "--disablerepo", "*"])
+                .context("clearing base packages lock with dnf")?;
         };
 
         // handle postprocess scripts
