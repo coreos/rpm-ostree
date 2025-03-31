@@ -4804,6 +4804,14 @@ impl TreefileApplyOpts {
                 None => {} // implicitly leave environment default if unset
             }
 
+            if let Some(repos) = &tf.parsed.repos {
+                install_args.push("--disablerepo=*");
+                for repo in repos {
+                    install_args.push("--enablerepo");
+                    install_args.push(repo);
+                }
+            }
+
             // lock all base packages during installation
             // https://gitlab.com/fedora/bootc/tracker/-/issues/59
             run_dnf("versionlock", &["add", "*", "--disablerepo", "*"])

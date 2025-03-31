@@ -98,9 +98,29 @@ packages:
   - ltrace
   # a split base/layered version-locked package
   - vim-enhanced
+# also test repo enablement but using variables so we don't have to rewrite a
+# new treefile each time
+conditional-include:
+  - if: addrepos == "disable"
+    include:
+      repos: []
+  - if: addrepos == "enable"
+    include:
+      repos: [fedora-cisco-openh264]
+      packages: [openh264-devel]
 EOF
-rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml
+# setting `repos` to empty list; should fail
+if rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml --var addrepos=disable; then
+  fatal "installed packages without enabled repos?"
+fi
+if rpm -q ltrace; then fatal "ltrace installed"; fi
+if rpm -q vim-enhanced-"$vim_vr"; then fatal "vim-enhanced installed"; fi
+# not setting repos; default enablement
+rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml --var addrepos=
 rpm -q ltrace vim-enhanced-"$vim_vr"
+# setting repos; only those repos enabled
+rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml --var addrepos=enable
+rpm -q openh264-devel
 
 rpm-ostree cliwrap install-to-root /
 
