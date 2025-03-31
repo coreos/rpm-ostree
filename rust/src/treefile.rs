@@ -4833,7 +4833,8 @@ impl TreefileApplyOpts {
 fn run_dnf(command: &str, args: &[&str]) -> Result<()> {
     let mut cmd = Command::new("dnf");
     cmd.arg(command).args(args);
-    cmd.arg("--noplugins");
+    cmd.arg("--disableplugin=*");
+    cmd.arg("--enableplugin=versionlock");
     cmd.arg("-y");
 
     let status = cmd.status().context("collecting dnf status")?;
