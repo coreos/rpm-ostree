@@ -614,8 +614,11 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
             };
             if matches {
                 match conditional_include.include {
-                    Include::Single(v) => includes.push(v),
-                    Include::Multiple(v) => includes.extend(v),
+                    IncludeFilesOrInlined::Files(Include::Single(v)) => includes.push(v),
+                    IncludeFilesOrInlined::Files(Include::Multiple(v)) => includes.extend(v),
+                    IncludeFilesOrInlined::Inlined(mut t) => {
+                        treefile_merge(&mut parsed.config, &mut t);
+                    }
                 }
             }
         }
@@ -643,9 +646,10 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
 fn treefile_parse_and_process<P: AsRef<Path>>(
     filename: P,
     basearch: Option<&str>,
+    variables: Option<BTreeMap<String, VarValue>>,
 ) -> Result<ConfigAndExternals> {
     let mut seen_includes = BTreeMap::new();
-    let mut variables = BTreeMap::new();
+    let mut variables = variables.unwrap_or_default();
     let mut parsed =
         treefile_parse_recurse(filename, basearch, 0, &mut seen_includes, &mut variables)?;
     event!(Level::DEBUG, "parsed successfully");
@@ -672,11 +676,15 @@ fn add_files_path_is_valid(path: &str) -> bool {
 impl Treefile {
     /// The main treefile creation entrypoint.
     #[instrument]
-    fn new_boxed(filename: &Utf8Path, basearch: Option<&str>) -> Result<Box<Treefile>> {
+    fn new_boxed(
+        filename: &Utf8Path,
+        basearch: Option<&str>,
+        variables: Option<BTreeMap<String, VarValue>>,
+    ) -> Result<Box<Treefile>> {
         let directory = utils::parent_dir_utf8(filename)
             .ok_or_else(|| anyhow!("{} is not a file path", filename))
             .map(|v| Some(v.to_owned()))?;
-        let parsed = treefile_parse_and_process(filename, basearch)?;
+        let parsed = treefile_parse_and_process(filename, basearch, variables)?;
         Ok(Box::new(Treefile {
             directory,
             parsed: parsed.config,
@@ -2180,10 +2188,17 @@ pub(crate) enum Include {
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
+#[serde(untagged)]
+pub(crate) enum IncludeFilesOrInlined {
+    Files(Include),
+    Inlined(TreeComposeConfig),
+}
+
+#[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
 pub(crate) struct ConditionalInclude {
     #[serde(rename = "if")]
     pub(crate) condition: IncludeConditions,
-    pub(crate) include: Include,
+    pub(crate) include: IncludeFilesOrInlined,
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq, Eq)]
@@ -3391,7 +3406,7 @@ pub(crate) mod tests {
     ) -> Result<Box<Treefile>> {
         let tf_path = &workdir.join("treefile.yaml");
         std::fs::write(tf_path, contents)?;
-        Treefile::new_boxed(tf_path, basearch)
+        Treefile::new_boxed(tf_path, basearch, None)
     }
 
     pub(crate) fn new_test_tf_basic(contents: impl AsRef<str>) -> Result<Box<Treefile>> {
@@ -3501,6 +3516,16 @@ pub(crate) mod tests {
             .any(|p| p == pkg));
     }
 
+    fn assert_not_package(tf: &Treefile, pkg: &str) {
+        assert!(tf
+            .parsed
+            .packages
+            .as_ref()
+            .unwrap()
+            .iter()
+            .all(|p| p != pkg));
+    }
+
     #[test]
     fn test_treefile_arch_includes() -> Result<()> {
         let workdir = tempfile::tempdir()?;
@@ -3543,7 +3568,7 @@ arch-include:
         std::fs::write(workdir.join("foo.ks"), BASIC_KS)?;
         let ks_path = &workdir.join("test.ks");
         std::fs::write(ks_path, BASIC_KS)?;
-        let tf = Treefile::new_boxed(ks_path, None).unwrap();
+        let tf = Treefile::new_boxed(ks_path, None, None).unwrap();
         let pkgs = tf.parsed.packages.as_ref().unwrap();
         assert_eq!(pkgs.len(), 2);
         assert!(pkgs.iter().any(|p| p.as_str() == "nushell"));
@@ -3693,6 +3718,63 @@ conditional-include:
         );
         let tf = new_test_treefile(workdir, buf.as_str(), None)?;
         assert_package(&tf, "foo");
+        Ok(())
+    }
+
+    #[test]
+    fn test_treefile_conditional_inline() -> Result<()> {
+        let workdir = tempfile::tempdir()?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        std::fs::write(workdir.join("foo.yaml"), "packages: [foo]")?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+releasever: "35"
+conditional-include:
+    - if: releasever == "35"
+      include:
+        packages:
+          - inlinedpkg
+"#,
+        );
+        let tf = new_test_treefile(workdir, buf.as_str(), None)?;
+        assert_package(&tf, "inlinedpkg");
+        Ok(())
+    }
+
+    #[test]
+    fn test_treefile_initial_variables() -> Result<()> {
+        let workdir = tempfile::tempdir()?;
+        let workdir: &Utf8Path = workdir.path().try_into().unwrap();
+        std::fs::write(workdir.join("foo.yaml"), "packages: [foo]")?;
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r#"
+conditional-include:
+    - if: foobar == "bazboo"
+      include:
+        packages:
+          - inlinedpkg
+"#,
+        );
+        let tf_path = &workdir.join("treefile.yaml");
+        std::fs::write(tf_path, buf)?;
+        let tf = Treefile::new_boxed(
+            tf_path,
+            None,
+            Some(maplit::btreemap!(
+                "foobar".into() => VarValue::String("nope".into()),
+            )),
+        )?;
+        assert_not_package(&tf, "inlinedpkg");
+        let tf = Treefile::new_boxed(
+            tf_path,
+            None,
+            Some(maplit::btreemap!(
+                "foobar".into() => VarValue::String("bazboo".into()),
+            )),
+        )?;
+        assert_package(&tf, "inlinedpkg");
         Ok(())
     }
 
@@ -4592,7 +4674,7 @@ fn raw_seeked_fd(fd: &mut std::fs::File) -> RawFd {
 
 pub(crate) fn treefile_new(filename: &str, basearch: &str) -> CxxResult<Box<Treefile>> {
     let basearch = opt_string(basearch);
-    Ok(Treefile::new_boxed(filename.as_ref(), basearch)?)
+    Ok(Treefile::new_boxed(filename.as_ref(), basearch, None)?)
 }
 
 /// Create a new treefile from a string.
@@ -4656,7 +4738,7 @@ pub(crate) fn treefile_new_client_from_etc(basearch: &str) -> CxxResult<Box<Tree
     let mut tfs = iter_etc_treefiles()?.collect::<Result<Vec<PathBuf>>>()?;
     tfs.sort(); // sort because order matters; later treefiles override earlier ones
     for tf in tfs {
-        let new_cfg = treefile_parse_and_process(tf, basearch)?;
+        let new_cfg = treefile_parse_and_process(tf, basearch, None)?;
         new_cfg.config.base.error_if_nonempty()?;
         new_cfg.externals.assert_empty();
         let mut new_cfg = new_cfg.config;
@@ -4684,12 +4766,24 @@ pub(crate) struct TreefileApplyOpts {
     /// Path to the treefile.
     #[clap(value_parser)]
     treefile: Utf8PathBuf,
+    #[arg(long)]
+    var: Vec<String>,
 }
 
 impl TreefileApplyOpts {
     pub(crate) fn run(self) -> Result<()> {
-        let mut tf = Treefile::new_boxed(&self.treefile, Some(&utils::get_rpm_basearch()))
-            .context("parsing treefile")?;
+        let vars = self
+            .var
+            .iter()
+            .map(|v| {
+                v.split_once('=')
+                    .ok_or_else(|| anyhow!("invalid variable: {}", v))
+                    .map(|(k, v)| (k.to_string(), VarValue::String(v.to_string())))
+            })
+            .collect::<Result<BTreeMap<String, VarValue>>>()?;
+        let mut tf =
+            Treefile::new_boxed(&self.treefile, Some(&utils::get_rpm_basearch()), Some(vars))
+                .context("parsing treefile")?;
 
         // we only handle a subset of fields here
         if let Some(packages) = &tf.parsed.packages {
@@ -4710,12 +4804,21 @@ impl TreefileApplyOpts {
                 None => {} // implicitly leave environment default if unset
             }
 
+            if let Some(repos) = &tf.parsed.repos {
+                install_args.push("--disablerepo=*");
+                for repo in repos {
+                    install_args.push("--enablerepo");
+                    install_args.push(repo);
+                }
+            }
+
             // lock all base packages during installation
             // https://gitlab.com/fedora/bootc/tracker/-/issues/59
             run_dnf("versionlock", &["add", "*", "--disablerepo", "*"])
                 .context("locking base packages with dnf")?;
             run_dnf("install", &install_args).context("installing packages with dnf")?;
-            run_dnf("versionlock", &["clear"]).context("clearing base packages lock with dnf")?;
+            run_dnf("versionlock", &["clear", "--disablerepo", "*"])
+                .context("clearing base packages lock with dnf")?;
         };
 
         // handle postprocess scripts
@@ -4731,7 +4834,8 @@ impl TreefileApplyOpts {
 fn run_dnf(command: &str, args: &[&str]) -> Result<()> {
     let mut cmd = Command::new("dnf");
     cmd.arg(command).args(args);
-    cmd.arg("--noplugins");
+    cmd.arg("--disableplugin=*");
+    cmd.arg("--enableplugin=versionlock");
     cmd.arg("-y");
 
     let status = cmd.status().context("collecting dnf status")?;
