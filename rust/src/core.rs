@@ -153,7 +153,7 @@ pub(crate) fn refspec_classify(refspec: &str) -> crate::ffi::RefspecType {
 /// call sysusers _just_ for that package. Here we do it for all of them. See
 /// also: https://github.com/coreos/rpm-ostree/issues/5333.
 pub(crate) fn run_sysusers(rootfs_dfd: i32) -> CxxResult<()> {
-    let args: Vec<_> = vec!["rpm", "--eval=%{?__systemd_sysusers}"]
+    let args: Vec<_> = ["rpm", "--eval=%{?__systemd_sysusers}"]
         .into_iter()
         .map(|s| s.to_string())
         .collect();
