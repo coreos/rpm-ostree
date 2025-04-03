@@ -4435,14 +4435,10 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 
   CXX_TRY_VAR (etc_guard, rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd), error);
 
-  /* if the %__systemd_sysusers macro is defined, that _very likely_ means that
-   * we're using an rpm with built-in sysusers support:
-   * https://fedoraproject.org/wiki/Changes/RPMSuportForSystemdSysusers
-   * Ideally, librpm would expose that part as a public API but it's currently
-   * just done during the transaction. So here we just do it ourselves, though
-   * a bit differently: librpm checks for the user/group provides before
-   * proceeding to call sysusers _just_ for that package. Here we do it for all
-   * of them. See also: https://github.com/coreos/rpm-ostree/issues/5333 */
+  /* Any ostree refs to overlay */
+  if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
+    return FALSE;
+
   if (!ROSCXX (run_sysusers (tmprootfs_dfd), error))
     return glnx_prefix_error (error, "Running systemd-sysusers");
 
@@ -4450,10 +4446,6 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
    * replacements */
   if (overlays->len > 0 || overrides_replace->len > 0)
     {
-      /* Any ostree refs to overlay */
-      if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
-        return FALSE;
-
       CXX_TRY_VAR (fs_prep, rpmostreecxx::prepare_filesystem_script_prep (tmprootfs_dfd), error);
 
       auto passwd_entries = rpmostreecxx::new_passwd_entries ();
