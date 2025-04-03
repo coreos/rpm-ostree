@@ -4435,6 +4435,10 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 
   CXX_TRY_VAR (etc_guard, rpmostreecxx::prepare_tempetc_guard (tmprootfs_dfd), error);
 
+  /* Any ostree refs to overlay */
+  if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
+    return FALSE;
+
   if (!ROSCXX (run_sysusers (tmprootfs_dfd), error))
     return glnx_prefix_error (error, "Running systemd-sysusers");
 
@@ -4442,10 +4446,6 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
    * replacements */
   if (overlays->len > 0 || overrides_replace->len > 0)
     {
-      /* Any ostree refs to overlay */
-      if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
-        return FALSE;
-
       CXX_TRY_VAR (fs_prep, rpmostreecxx::prepare_filesystem_script_prep (tmprootfs_dfd), error);
 
       auto passwd_entries = rpmostreecxx::new_passwd_entries ();
