@@ -144,7 +144,14 @@ pub(crate) fn refspec_classify(refspec: &str) -> crate::ffi::RefspecType {
     }
 }
 
-/// Run systemd-sysusers in the rootfs if the %__systemd_sysusers RPM macro is set.
+/// If the %__systemd_sysusers macro is defined, that _very likely_
+/// means that we're using an rpm with built-in sysusers support:
+/// https://fedoraproject.org/wiki/Changes/RPMSuportForSystemdSysusers Ideally,
+/// librpm would expose that part as a public API but it's currently just
+/// done during the transaction. So here we just do it ourselves, though a bit
+/// differently: librpm checks for the user/group provides before proceeding to
+/// call sysusers _just_ for that package. Here we do it for all of them. See
+/// also: https://github.com/coreos/rpm-ostree/issues/5333.
 pub(crate) fn run_sysusers(rootfs_dfd: i32) -> CxxResult<()> {
     let args: Vec<_> = vec!["rpm", "--eval=%{?__systemd_sysusers}"]
         .into_iter()
