@@ -276,6 +276,7 @@ jobs:
           tar -xzvf ../../install.tar
           sudo podman build -v $(pwd)/usr/bin:/ci -t localhost/builder -f Containerfile.builder
           sudo ./test.sh
+          sudo ./test-oci.sh
   build-c9s:
     name: "Build (c9s)"
     runs-on: ubuntu-latest

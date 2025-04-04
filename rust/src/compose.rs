@@ -176,6 +176,14 @@ pub(crate) struct BuildChunkedOCIOpts {
     #[clap(long, required_unless_present = "rootfs")]
     from: Option<String>,
 
+    /// Change the transport for the `--from` argument; typically this is either
+    /// `oci` or `registry`. A key use case for this is when you need
+    /// to avoid requiring privileges to perform mounts when
+    /// invoking this command. Operating on `registry` or `oci`
+    /// can be done inside a default podman/docker container image.
+    #[clap(long, value_parser = crate::parse_transport, default_value = "containers-storage")]
+    from_transport: ostree_container::Transport,
+
     /// If set, configure the output OCI image to be a bootc container.
     /// At the current time this option is required.
     #[clap(long, required = true)]
@@ -250,12 +258,27 @@ pub(crate) struct CommitToContainerRootfsOpts {
     dest: Utf8PathBuf,
 }
 
+enum FileSource {
+    Rootfs(Utf8PathBuf),
+    Podman(Mount),
+    OciOrRegistry,
+}
+
+impl FileSource {
+    fn open_dir(&self) -> Result<Option<Dir>> {
+        let rootfs = match &self {
+            FileSource::Rootfs(p) => p.as_path(),
+            FileSource::Podman(mnt) => mnt.path(),
+            FileSource::OciOrRegistry => return Ok(None),
+        };
+        Dir::open_ambient_dir(rootfs, cap_std::ambient_authority())
+            .with_context(|| format!("Opening {}", rootfs))
+            .map(Some)
+    }
+}
+
 impl BuildChunkedOCIOpts {
     pub(crate) fn run(self) -> Result<()> {
-        enum FileSource {
-            Rootfs(Utf8PathBuf),
-            Podman(Mount),
-        }
         let rootfs_source = if let Some(rootfs) = self.rootfs {
             FileSource::Rootfs(rootfs)
         } else {
@@ -267,43 +290,20 @@ impl BuildChunkedOCIOpts {
             // Note that this would all be a lot saner with a composefs-native container storage
             // as we could cleanly operate on that, asking c/storage to synthesize one for us.
             // crate::containers_storage::reexec_if_needed()?;
-            FileSource::Podman(Mount::new_for_image(image)?)
+            if matches!(
+                self.from_transport,
+                ostree_container::Transport::ContainerStorage
+            ) {
+                FileSource::Podman(Mount::new_for_image(image)?)
+            } else {
+                FileSource::OciOrRegistry
+            }
         };
-        let rootfs = match &rootfs_source {
-            FileSource::Rootfs(p) => p.as_path(),
-            FileSource::Podman(mnt) => mnt.path(),
-        };
-        let rootfs = Dir::open_ambient_dir(rootfs, cap_std::ambient_authority())
-            .with_context(|| format!("Opening {}", rootfs))?;
+        let rootfs = rootfs_source.open_dir()?;
+
         // These must be set to exactly this; the CLI parser requires it.
         assert!(self.bootc);
         assert_eq!(self.format_version, 1);
-
-        // If we're deriving from an existing image, be sure to preserve its metadata (labels, creation time, etc.)
-        // by default.
-        let image_config: oci_spec::image::ImageConfiguration =
-            if let Some(image) = self.from.as_deref() {
-                let img_transport = format!("containers-storage:{image}");
-                Command::new("skopeo")
-                    .args(["inspect", "--config", img_transport.as_str()])
-                    .run_and_parse_json()
-                    .context("Invoking skopeo to inspect config")?
-            } else {
-                // If we're not deriving, then we take the timestamp of the root
-                // directory as a creation timestamp.
-                let toplevel_ts = rootfs.dir_metadata()?.modified()?.into_std();
-                let toplevel_ts = chrono::DateTime::<chrono::Utc>::from(toplevel_ts)
-                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-                let mut config = ImageConfiguration::default();
-                config.set_created(Some(toplevel_ts));
-                config
-            };
-        let arch = image_config.architecture();
-        let creation_timestamp = image_config
-            .created()
-            .as_deref()
-            .map(chrono::DateTime::parse_from_rfc3339)
-            .transpose()?;
 
         // Allocate a working temporary directory
         let td = tempfile::tempdir_in("/var/tmp")?;
@@ -317,14 +317,81 @@ impl BuildChunkedOCIOpts {
             None,
             gio::Cancellable::NONE,
         )?;
+        // This repo is temporary
+        repo.set_disable_fsync(true);
 
-        println!("Generating commit...");
-        // It's only the tests that override
-        let modifier =
-            ostree::RepoCommitModifier::new(ostree::RepoCommitModifierFlags::empty(), None);
+        // In the case that we're dealing with a remote image, we directly import it into ostree
+        let mut imported_commit = None;
+        // If we're deriving from an existing image, be sure to preserve its metadata (labels, creation time, etc.)
+        // by default.
+        let image_config: oci_spec::image::ImageConfiguration =
+            if let Some(image) = self.from.as_deref() {
+                if matches!(rootfs_source, FileSource::OciOrRegistry) {
+                    let imgref = ostree_container::ImageReference {
+                        transport: self.from_transport,
+                        name: image.into(),
+                    };
+                    println!("Fetching {imgref}");
+                    let imgref = ostree_container::OstreeImageReference {
+                        sigverify: ostree_container::SignatureSource::ContainerPolicyAllowInsecure,
+                        imgref,
+                    };
+                    let handle = tokio::runtime::Handle::current();
+                    handle.block_on(async {
+                        use ostree_container::store::PrepareResult;
+                        let mut imp = ostree_container::store::ImageImporter::new(
+                            &repo,
+                            &imgref,
+                            Default::default(),
+                        )
+                        .await?;
+                        let (commit, config) = match imp.prepare().await? {
+                            PrepareResult::AlreadyPresent(r) => (r.merge_commit, r.configuration),
+                            PrepareResult::Ready(r) => {
+                                let r = imp.import(r).await?;
+                                (r.merge_commit, r.configuration)
+                            }
+                        };
+                        tracing::debug!("Wrote {commit}");
+                        imported_commit = Some(commit);
+                        anyhow::Ok(config)
+                    })?
+                } else {
+                    let img_transport = format!("containers-storage:{image}");
+                    Command::new("skopeo")
+                        .args(["inspect", "--config", img_transport.as_str()])
+                        .run_and_parse_json()
+                        .context("Invoking skopeo to inspect config")?
+                }
+            } else if let Some(rootfs) = rootfs.as_ref() {
+                // If we're not deriving, then we take the timestamp of the root
+                // directory as a creation timestamp.
+                let toplevel_ts = rootfs.dir_metadata()?.modified()?.into_std();
+                let toplevel_ts = chrono::DateTime::<chrono::Utc>::from(toplevel_ts)
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+                let mut config = ImageConfiguration::default();
+                config.set_created(Some(toplevel_ts));
+                config
+            } else {
+                unreachable!()
+            };
+        let arch = image_config.architecture();
+        let creation_timestamp = image_config
+            .created()
+            .as_deref()
+            .map(chrono::DateTime::parse_from_rfc3339)
+            .transpose()?;
+
         // Process the filesystem, generating an ostree commit
-        let commitid =
-            generate_commit_from_rootfs(&repo, &rootfs, modifier, creation_timestamp.as_ref())?;
+        let commitid = if let Some(rootfs) = rootfs.as_ref() {
+            println!("Generating commit...");
+            // It's only the tests that override
+            let modifier =
+                ostree::RepoCommitModifier::new(ostree::RepoCommitModifierFlags::empty(), None);
+            generate_commit_from_rootfs(&repo, &rootfs, modifier, creation_timestamp.as_ref())?
+        } else {
+            imported_commit.expect("Should have imported a commit")
+        };
 
         let label_arg = self
             .bootc
@@ -368,6 +435,7 @@ impl BuildChunkedOCIOpts {
             FileSource::Podman(mnt) => {
                 mnt.unmount().context("Final mount cleanup")?;
             }
+            FileSource::OciOrRegistry => {}
         }
 
         Ok(())
