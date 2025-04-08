@@ -70,7 +70,7 @@ libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 nix = { version = "0.29.0", features = ["fs", "mount", "signal", "user"] }
 openssl = "0.10.72"
-once_cell = "1.20.2"
+once_cell = "1.21.3"
 os-release = "0.1.0"
 # We pull this one from git, as the project is no longer published as an external crate.
 ostree-ext = { git = "https://github.com/containers/bootc", rev = "d9b18c8883ad24e7b0faf596758e3c12b26656e5" }
