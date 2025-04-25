@@ -37,7 +37,7 @@ struct _RpmOstreeContext
   gboolean is_system;
   /* Whether we were created with new_container() */
   gboolean is_container;
-  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile_owned;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_owned;
   rpmostreecxx::Treefile *treefile_rs; /* For composes for now */
   gboolean empty;
   gboolean disable_selinux;
@@ -76,7 +76,7 @@ struct _RpmOstreeContext
 
   gboolean filelists_exist;
 
-  std::optional<rust::Box<rpmostreecxx::LockfileConfig> > lockfile;
+  std::optional<rust::Box<rpmostreecxx::LockfileConfig>> lockfile;
   gboolean lockfile_strict;
 
   GLnxTmpDir tmpdir;

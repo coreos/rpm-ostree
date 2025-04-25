@@ -29,7 +29,7 @@
 #include "rpmostree-cxxrs.h"
 
 // C++ APIs
-std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping> >
+std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping>>
 rpmostree_dnfcontext_get_varsubsts (DnfContext *context);
 
 // Begin C APIs

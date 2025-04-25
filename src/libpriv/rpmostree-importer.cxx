@@ -63,7 +63,7 @@ struct RpmOstreeImporter
   off_t cpio_offset;
   DnfPackage *pkg;
 
-  std::optional<rust::Box<rpmostreecxx::RpmImporter> > importer_rs;
+  std::optional<rust::Box<rpmostreecxx::RpmImporter>> importer_rs;
 };
 
 G_DEFINE_TYPE (RpmOstreeImporter, rpmostree_importer, G_TYPE_OBJECT)

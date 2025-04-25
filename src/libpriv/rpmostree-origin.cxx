@@ -34,7 +34,7 @@ struct RpmOstreeOrigin
   guint refcount;
 
   /* this is the single source of truth */
-  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile;
 };
 
 RpmOstreeOrigin *

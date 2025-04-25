@@ -481,10 +481,10 @@ rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext *self)
   return g_variant_ref_sink (g_variant_builder_end (&repo_list_builder));
 }
 
-std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping> >
+std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping>>
 rpmostree_dnfcontext_get_varsubsts (DnfContext *context)
 {
-  auto r = std::make_unique<rust::Vec<rpmostreecxx::StringMapping> > ();
+  auto r = std::make_unique<rust::Vec<rpmostreecxx::StringMapping>> ();
   r->push_back (rpmostreecxx::StringMapping{ "basearch", dnf_context_get_base_arch (context) });
   return r;
 }
