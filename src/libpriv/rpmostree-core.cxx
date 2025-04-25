@@ -481,10 +481,10 @@ rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext *self)
   return g_variant_ref_sink (g_variant_builder_end (&repo_list_builder));
 }
 
-std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping> >
+std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping>>
 rpmostree_dnfcontext_get_varsubsts (DnfContext *context)
 {
-  auto r = std::make_unique<rust::Vec<rpmostreecxx::StringMapping> > ();
+  auto r = std::make_unique<rust::Vec<rpmostreecxx::StringMapping>> ();
   r->push_back (rpmostreecxx::StringMapping{ "basearch", dnf_context_get_base_arch (context) });
   return r;
 }
@@ -3958,8 +3958,8 @@ process_ostree_layers (RpmOstreeContext *self, int rootfs_dfd, GCancellable *can
 
 static gboolean
 write_rpmdb (RpmOstreeContext *self, int tmprootfs_dfd, GPtrArray *overlays,
-             GPtrArray *overrides_replace, GPtrArray *overrides_remove,
-             GCancellable *cancellable, GError **error)
+             GPtrArray *overrides_replace, GPtrArray *overrides_remove, GCancellable *cancellable,
+             GError **error)
 {
   auto task = rpmostreecxx::progress_begin_task ("Writing rpmdb");
 
@@ -4627,8 +4627,8 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
-  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove,
-                    cancellable, error))
+  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove, cancellable,
+                    error))
     return glnx_prefix_error (error, "Writing rpmdb");
 
   return rpmostree_context_assemble_end (self, cancellable, error);
