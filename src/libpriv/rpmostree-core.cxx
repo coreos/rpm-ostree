@@ -4051,10 +4051,13 @@ write_rpmdb (RpmOstreeContext *self, int tmprootfs_dfd, GPtrArray *overlays,
   /* Enable OLDPACKAGE to allow replacement overrides to older version. */
   flags |= RPMPROB_FILTER_OLDPACKAGE;
 
-  /* If there are fileoverrides, then allow replacing files. We don't unconditionally set
-   * this because it's nice as an extra check on top of what ostree already does. */
-  if (have_fileoverride)
-    flags |= RPMPROB_FILTER_REPLACEOLDFILES;
+  /* Allow replacing files. If there are fileoverrides, we need
+   * this. But even if not, in some obscure cases, librpm may think
+   * that files are being replaced even though they're not. See
+   * https://github.com/coreos/coreos-assembler/issues/4083. Note that file
+   * conflicts are in fact already checked by libostree when we checkout the
+   * packages. */
+  flags |= RPMPROB_FILTER_REPLACENEWFILES | RPMPROB_FILTER_REPLACEOLDFILES;
 
   int r = rpmtsRun (rpmdb_ts, NULL, flags);
   if (r < 0)
