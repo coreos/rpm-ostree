@@ -3,7 +3,7 @@ set -euo pipefail
 
 # freeze on a specific commit for tests for reproducibility and since it should
 # always work to target older treefiles
-FEDORA_COREOS_CONFIG_COMMIT=83f419c54bad614d70149830cc3b25fe4b93433e
+FEDORA_COREOS_CONFIG_COMMIT=0661e4edc55d4f5293ba463c9dec0471b84d05d4
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
@@ -35,7 +35,7 @@ if [ ! -d compose-cache ]; then
   # Though for now we still need to support non-unified mode. Once we don't, we
   # can clean this up.
   pushd compose-cache
-  git clone https://github.com/coreos/fedora-coreos-config config
+  git clone https://github.com/coreos/fedora-coreos-config config --recurse-submodules --shallow-submodules
 
   pushd config
   git checkout "${FEDORA_COREOS_CONFIG_COMMIT}"
