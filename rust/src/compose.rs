@@ -156,6 +156,15 @@ struct ComposeImageOpts {
     /// Number of times to retry copying an image to remote destination (e.g. registry)
     copy_retry_times: Option<u32>,
 
+    #[clap(long)]
+    /// Maximum number of layers to use. The default value of 64 is chosen to
+    /// balance splitting up an image into sufficient chunks versus
+    /// compatibility with older OCI runtimes that may have problems
+    /// with larger number of layers.
+    /// However, with recent podman 5 for example with newer overlayfs,
+    /// it works to use over 200 layers.
+    max_layers: Option<NonZeroU32>,
+
     #[clap(value_parser)]
     /// Path to the manifest file
     manifest: Utf8PathBuf,
@@ -1162,6 +1171,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         .args(label_args)
         .args(previous_arg)
         .args(opt.image_config.map(|v| format!("--image-config={v}")))
+        .args(opt.max_layers.map(|l| format!("--max-layers={l}")))
         .args([
             "--repo",
             repo.as_str(),
