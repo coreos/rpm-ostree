@@ -190,7 +190,6 @@ pub(crate) struct BuildChunkedOCIOpts {
     /// balance splitting up an image into sufficient chunks versus
     /// compatibility with older OCI runtimes that may have problems
     /// with larger number of layers.
-    ///
     /// However, with recent podman 5 for example with newer overlayfs,
     /// it works to use over 200 layers.
     max_layers: Option<NonZeroU32>,
