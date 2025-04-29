@@ -168,7 +168,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     let have_objcopy = Path::new("/usr/bin/objcopy").exists();
     {
         let tempdir = Dir::open_ambient_dir(&tmp_rootfs, cap_std::ambient_authority())?;
-        let binary_dirs = &["usr/bin", "usr/sbin", "usr/lib", "usr/lib64"];
+        let binary_dirs = &["usr/bin", "usr/lib", "usr/lib64"];
         let rootfs = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
         for v in binary_dirs {
             let v = *v;
