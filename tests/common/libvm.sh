@@ -108,6 +108,7 @@ EOF
   vm_shell_inline_sysroot_rw <<EOF
   sed -ie '/^refspec=/ s/=.*/=vmcheck/' ${deployment_root}.origin
   sed -ie '/^baserefspec=/ s/=.*/=vmcheck/' ${deployment_root}.origin
+  sed -ie '/^container-image-reference=/ s/.*/refspec=vmcheck/' ${deployment_root}.origin
 EOF
   vm_cmd systemctl try-restart rpm-ostreed
 
