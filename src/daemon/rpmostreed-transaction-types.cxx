@@ -323,8 +323,9 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction, GCancellab
 
   if (self->refspec != NULL)
     {
-      if (!change_origin_refspec (NULL, sysroot, origin, self->refspec, cancellable, NULL, NULL,
-                                  error))
+      g_autoptr (GVariantDict) options_dict = g_variant_dict_new (NULL);
+      if (!change_origin_refspec (options_dict, sysroot, origin, self->refspec, cancellable, NULL,
+                                  NULL, error))
         return FALSE;
     }
 
