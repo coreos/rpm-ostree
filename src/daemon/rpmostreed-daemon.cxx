@@ -81,7 +81,7 @@ struct _RpmostreedDaemon
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
 
-  std::optional<rust::Box<rpmostreecxx::TokioHandle> > tokio_handle;
+  std::optional<rust::Box<rpmostreecxx::TokioHandle>> tokio_handle;
 };
 
 struct _RpmostreedDaemonClass

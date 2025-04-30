@@ -21,21 +21,23 @@ if [ -n "${SELF_BOOTSTRAP:-}" ]; then
 fi
 
 # Test overrides
+# These hardcoded versions can be kept until Fedora GC's them
+ignition_url_suffix=2.17.0/4.fc40/x86_64/ignition-2.17.0-4.fc40."$(arch)".rpm
+afterburn_version=5.7.0-4.fc41."$(arch)"
 case $versionid in
+  42)
+    # 2.21.0-1 (this koji url must be different than above version, and different from
+    # what's in the current image)
+    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2681489"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2685011"
+    kver=6.14.0
+    krev=63
+    ;;
   41)
-    ignition_url_suffix=2.17.0/4.fc40/x86_64/ignition-2.17.0-4.fc40.x86_64.rpm
     # 2.19.0-2 (this koji url must be different than above version)
     koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2495227"
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2571615"
     kver=6.11.4
-    krev=301
-    ;;
-  40)
-    ignition_url_suffix=2.16.2/2.fc39/x86_64/ignition-2.16.2-2.fc39.x86_64.rpm
-    # 2.15.0-3
-    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2158585"
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2436096"
-    kver=6.8.5
     krev=301
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
@@ -155,7 +157,6 @@ fi
 (cd /etc/yum.repos.d/ && curl -LO https://raw.githubusercontent.com/coreos/fedora-coreos-config/testing-devel/ci/continuous/fcos-continuous.repo)
 
 # test repo override by NEVRA
-afterburn_version=5.5.1-1.fc40."$(arch)"
 rpm-ostree override replace --experimental --from repo=fedora-coreos-pool \
   afterburn-{,dracut-}"${afterburn_version}"
 

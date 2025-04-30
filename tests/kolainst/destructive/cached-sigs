@@ -17,12 +17,13 @@ if ! jq -e '.deployments[0].signatures' < status.json > /dev/null; then
   cp "${KOLA_EXT_DATA}/gpghome/key1.asc" /etc/pki/rpm-gpg/
 fi
 
-# cosa build-fast will not use a refspec; let's synthesize one since it's required for this test
-origin="$(jq -r '.deployments[0].origin' < status.json)"
-if test "${origin}" = "${booted_commit}"; then
-  ostree refs --create dummy:synthetic-ref-for-test "${booted_commit}"
-  ostree admin set-origin dummy https://localhost synthetic-ref-for-test
-fi
+# Ensure we're always using an ostree refspec where GPG signatures are checked
+ostree refs --create synthetic-ref-for-test "${booted_commit}"
+ostree remote add dummy https://localhost
+# ostree admin set-origin crashes today if there's not a refspec, which there
+# won't be when we're booted into a container by default
+origin=$(ls /ostree/deploy/*/deploy/*.origin)
+unshare -m /bin/sh -c 'mount -o remount,rw /sysroot && echo -e "[origin]\nrefspec=dummy:synthetic-ref-for-test" > '"$origin"
 
 systemctl stop rpm-ostreed
 

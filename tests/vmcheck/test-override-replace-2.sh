@@ -156,27 +156,13 @@ versionid=$(vm_cmd grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
 vm_cmd rpm-ostree db list "$(vm_get_deployment_info 0 checksum)" > current-dblist.txt
 case $versionid in
-  # XXX: this isn't actually the gold selinux; that one is too old for
-  # container-selinux and moby-engine. rather than trying to change multiple
-  # packages, we use one that's in coreos-pool since that also prevents GC
-  41)
-    evr=41.15-1.fc41
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2538477"
-    hack="https://koji.fedoraproject.org/koji/buildinfo?buildID=2415333"
-    ;;
-  40)
-    evr=38.28-1.fc39
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2291271"
-    hack="https://koji.fedoraproject.org/koji/buildinfo?buildID=2291519"
-    ;;
-  39)
-    evr=38.28-1.fc39
-    koji_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2291271"
-    hack="https://koji.fedoraproject.org/koji/buildinfo?buildID=2291519"
-    ;;
+  42)
+    evr=41.34-1.fc42
+    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2674245
+    ;;  
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt selinux-policy-$evr
-vm_rpmostree override replace "${koji_url}" "${hack}"
+vm_rpmostree override replace "${koji_url}"
 vm_rpmostree cleanup -p
 echo "ok override replace selinux-policy-targeted"

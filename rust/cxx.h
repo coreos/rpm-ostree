@@ -121,7 +121,7 @@ public:
   Str (const char *);
   Str (const char *, std::size_t);
 
-  Str &operator= (const Str &) &noexcept = default;
+  Str &operator= (const Str &) & noexcept = default;
 
   explicit operator std::string () const;
 
@@ -171,8 +171,8 @@ template <> struct copy_assignable_if<false>
 {
   copy_assignable_if () noexcept = default;
   copy_assignable_if (const copy_assignable_if &) noexcept = default;
-  copy_assignable_if &operator= (const copy_assignable_if &) &noexcept = delete;
-  copy_assignable_if &operator= (copy_assignable_if &&) &noexcept = default;
+  copy_assignable_if &operator= (const copy_assignable_if &) & noexcept = delete;
+  copy_assignable_if &operator= (copy_assignable_if &&) & noexcept = default;
 };
 } // namespace detail
 
@@ -186,8 +186,8 @@ public:
   Slice () noexcept;
   Slice (T *, std::size_t count) noexcept;
 
-  Slice &operator= (const Slice<T> &) &noexcept = default;
-  Slice &operator= (Slice<T> &&) &noexcept = default;
+  Slice &operator= (const Slice<T> &) & noexcept = default;
+  Slice &operator= (Slice<T> &&) & noexcept = default;
 
   T *data () const noexcept;
   std::size_t size () const noexcept;
@@ -822,9 +822,8 @@ template <typename T> Box<T>::~Box () noexcept
 }
 
 template <typename T>
-    Box<T> &
-    Box<T>::operator= (Box &&other)
-    & noexcept
+Box<T> &
+Box<T>::operator= (Box &&other) & noexcept
 {
   if (this->ptr)
     {
@@ -926,9 +925,8 @@ template <typename T> Vec<T>::Vec (Vec &&other) noexcept : repr (other.repr)
 template <typename T> Vec<T>::~Vec () noexcept { this->drop (); }
 
 template <typename T>
-    Vec<T> &
-    Vec<T>::operator= (Vec &&other)
-    & noexcept
+Vec<T> &
+Vec<T>::operator= (Vec &&other) & noexcept
 {
   this->drop ();
   this->repr = other.repr;
@@ -1218,7 +1216,7 @@ template <typename Void, template <typename...> class, typename...> struct detec
 {
 };
 template <template <typename...> class T, typename... A>
-struct detect<void_t<T<A...> >, T, A...> : std::true_type
+struct detect<void_t<T<A...>>, T, A...> : std::true_type
 {
 };
 
@@ -1237,7 +1235,7 @@ struct IsRelocatable
     : std::conditional<
           detail::is_detected<detail::detect_IsRelocatable, T>::value, detail::get_IsRelocatable<T>,
           std::integral_constant<bool, std::is_trivially_move_constructible<T>::value
-                                           && std::is_trivially_destructible<T>::value> >::type
+                                           && std::is_trivially_destructible<T>::value>>::type
 {
 };
 #endif // CXXBRIDGE1_RELOCATABLE

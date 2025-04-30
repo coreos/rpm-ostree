@@ -99,7 +99,7 @@ struct RpmOstreeSysrootUpgrader
   // to e.g. avoid fetching rpm-md if all we have is "inactive requests".
   // Longer term, this functionality should be moved down into the core.
   RpmOstreeOrigin *computed_origin;
-  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile;
 
   /* Used during tree construction */
   OstreeRepoDevInoCache *devino_cache;

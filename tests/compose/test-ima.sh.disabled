@@ -1,6 +1,9 @@
 #!/bin/bash
 set -xeuo pipefail
 
+# April 2025: test disabled due to:
+# https://github.com/coreos/rpm-ostree/pull/5368#issuecomment-2837285125
+
 dn=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=libcomposetest.sh
 . "${dn}/libcomposetest.sh"

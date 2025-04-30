@@ -56,7 +56,7 @@ container-cmd:
 opt-usrlocal: "root"
 EOF
 treefile_append "include" '["documentation.yaml", "other.yaml"]'
-for x in 'recommends' 'documentation' 'readonly-executables'; do
+for x in 'recommends' 'documentation' 'readonly-executables' 'opt-usrlocal'; do
   treefile_del "$x"
 done
 

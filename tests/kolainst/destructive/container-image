@@ -37,23 +37,13 @@ arch=$(arch)
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   "")
-    # Take the existing ostree commit, and export it to a container image, then rebase to it.
-
+    # This test now hard requires starting from an existing container
     checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
     v0=$(rpm-ostree status --json | jq -r '.deployments[0].version')
     rm ${image_dir} -rf
     
     # Since we're switching OS update stream, turn off zincati
     systemctl mask --now zincati
-
-    ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}"
-    # This one keeps --experimental, but we also test without it below
-    rpm-ostree rebase --experimental "$image_pull" | tee out.txt
-    assert_file_has_content out.txt 'Importing.*'"$image_pull"
-    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:$image\""
-    # Verify we use the merge commit now
-    rpmostree_assert_status ".deployments[0][\"checksum\"] != \"${checksum}\""
-    echo "ok rebase to container image reference"
 
     rpm-ostree status | tee out.txt
     assert_file_has_content_literal out.txt 'Digest: sha256:'
@@ -62,10 +52,6 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
 
     v1=$(rpm-ostree status --json | jq -r '.deployments[0].version')
     assert_streq "${v0}" "${v1}"
-
-    # Test rebasing back to ostree https://github.com/coreos/rpm-ostree/issues/3677
-    rpm-ostree rebase "$checksum"
-    rpm-ostree rebase "$image_pull"
 
     /tmp/autopkgtest-reboot 1
     ;;
@@ -79,14 +65,7 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     rpm-ostree install ${KOLA_EXT_DATA}/rpm-repos/0/packages/x86_64/foo-1.2-3.x86_64.rpm
     echo "ok layering package"
 
-    # Test no-op upgrade
-    rpm-ostree upgrade | tee out.txt
-    assert_file_has_content_literal out.txt "Pulling manifest: ${image_pull}"
-    assert_file_has_content out.txt "No upgrade available."
-    echo "ok no upgrade available"
-
-    # Now, copy the OCI dir to containers-storage for a local build
-    skopeo copy $image containers-storage:localhost/fcos
+    bootc image copy-to-storage
     rm "${image_dir}" -rf
     td=$(mktemp -d)
     cd ${td}
@@ -127,7 +106,7 @@ ex-override-replace:
       - boo
 EOF
 cat > Dockerfile << EOF
-FROM localhost/fcos
+FROM localhost/bootc
 RUN rm -rf /etc/yum.repos.d/*  # Ensure we work offline
 ADD local.repo /etc/yum.repos.d/
 RUN rpm-ostree install bar
@@ -189,7 +168,7 @@ EOF
 
     # Now revert back to the base image, but keep our layered package foo
     echo $(ostree refs ostree/container/blob | wc -l) > /etc/previous-layers
-    rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos
+    rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/bootc
     /tmp/autopkgtest-reboot 4
     ;;
   4) 
@@ -201,7 +180,7 @@ EOF
         fatal "found $p"
       fi
     done
-    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/fcos\""
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/bootc\""
     rpm-ostree cleanup -r
     previous_layers=$(cat /etc/previous-layers)
     new_layers=$(ostree refs ostree/container/blob | wc -l)

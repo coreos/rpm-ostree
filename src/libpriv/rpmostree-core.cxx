@@ -481,10 +481,10 @@ rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext *self)
   return g_variant_ref_sink (g_variant_builder_end (&repo_list_builder));
 }
 
-std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping> >
+std::unique_ptr<rust::Vec<rpmostreecxx::StringMapping>>
 rpmostree_dnfcontext_get_varsubsts (DnfContext *context)
 {
-  auto r = std::make_unique<rust::Vec<rpmostreecxx::StringMapping> > ();
+  auto r = std::make_unique<rust::Vec<rpmostreecxx::StringMapping>> ();
   r->push_back (rpmostreecxx::StringMapping{ "basearch", dnf_context_get_base_arch (context) });
   return r;
 }
@@ -3958,8 +3958,8 @@ process_ostree_layers (RpmOstreeContext *self, int rootfs_dfd, GCancellable *can
 
 static gboolean
 write_rpmdb (RpmOstreeContext *self, int tmprootfs_dfd, GPtrArray *overlays,
-             GPtrArray *overrides_replace, GPtrArray *overrides_remove, gboolean have_fileoverride,
-             GCancellable *cancellable, GError **error)
+             GPtrArray *overrides_replace, GPtrArray *overrides_remove, GCancellable *cancellable,
+             GError **error)
 {
   auto task = rpmostreecxx::progress_begin_task ("Writing rpmdb");
 
@@ -4051,10 +4051,13 @@ write_rpmdb (RpmOstreeContext *self, int tmprootfs_dfd, GPtrArray *overlays,
   /* Enable OLDPACKAGE to allow replacement overrides to older version. */
   flags |= RPMPROB_FILTER_OLDPACKAGE;
 
-  /* If there are fileoverrides, then allow replacing files. We don't unconditionally set
-   * this because it's nice as an extra check on top of what ostree already does. */
-  if (have_fileoverride)
-    flags |= RPMPROB_FILTER_REPLACEOLDFILES;
+  /* Allow replacing files. If there are fileoverrides, we need
+   * this. But even if not, in some obscure cases, librpm may think
+   * that files are being replaced even though they're not. See
+   * https://github.com/coreos/coreos-assembler/issues/4083. Note that file
+   * conflicts are in fact already checked by libostree when we checkout the
+   * packages. */
+  flags |= RPMPROB_FILTER_REPLACENEWFILES | RPMPROB_FILTER_REPLACEOLDFILES;
 
   int r = rpmtsRun (rpmdb_ts, NULL, flags);
   if (r < 0)
@@ -4395,7 +4398,6 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
   g_clear_pointer (&files_skip_add, g_hash_table_unref);
 
   /* And last, any fileoverride RPMs. These *must* be done last. */
-  gboolean have_fileoverrides = FALSE;
   for (guint i = 0; i < n_rpmts_elements; i++)
     {
       rpmte te = rpmtsElement (ordering_ts, i);
@@ -4416,8 +4418,6 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
         return FALSE;
       n_rpmts_done++;
       progress->nitems_update (n_rpmts_done);
-
-      have_fileoverrides = TRUE;
     }
 
   progress->end ("");
@@ -4627,8 +4627,8 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
-  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove,
-                    have_fileoverrides, cancellable, error))
+  if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove, cancellable,
+                    error))
     return glnx_prefix_error (error, "Writing rpmdb");
 
   return rpmostree_context_assemble_end (self, cancellable, error);

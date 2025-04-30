@@ -190,7 +190,7 @@ typedef struct
   const char *ref;
   char *previous_checksum;
 
-  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile_rs;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_rs;
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile;       /* Unowned */
@@ -1409,7 +1409,7 @@ rpmostree_compose_builtin_postprocess (int argc, char **argv,
    * to avoid at least some of the use cases requiring a treefile.
    */
   const char *treefile_path = argc > 2 ? argv[2] : NULL;
-  std::optional<rust::Box<rpmostreecxx::Treefile> > treefile_rs;
+  std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_rs;
   g_auto (GLnxTmpDir) workdir_tmp = {
     0,
   };
@@ -1629,7 +1629,7 @@ rpmostree_compose_builtin_extensions (int argc, char **argv, RpmOstreeCommandInv
         return glnx_throw_errno_prefix (error, "fcntl");
     }
 
-  auto packages_mapping = std::make_unique<rust::Vec<rpmostreecxx::StringMapping> > ();
+  auto packages_mapping = std::make_unique<rust::Vec<rpmostreecxx::StringMapping>> ();
   g_autofree char *base_rev = NULL;
 
   if (opt_extensions_rootfs)

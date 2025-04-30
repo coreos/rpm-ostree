@@ -131,8 +131,6 @@ assert_file_has_content parent.txt 01ba4719c80b6fe911b091a7c05124b64eeece964e09c
 echo "ok --parent"
 
 # Check symlinks injected into the rootfs.
-ostree --repo="${repo}" ls "${treeref}" /usr/lib/alternatives | grep '^d00755'> dirs.txt
-assert_file_has_content_literal dirs.txt '/usr/lib/alternatives'
 ostree --repo="${repo}" ls "${treeref}" /usr/local | grep '^l00777' > symlinks.txt
 assert_file_has_content_literal symlinks.txt '/usr/local -> ../var/usrlocal'
 ostree --repo="${repo}" ls "${treeref}" /opt > symlinks.txt
@@ -140,8 +138,8 @@ assert_file_has_content_literal symlinks.txt '/opt -> var/opt'
 echo "ok symlinks"
 
 # Check iptables setup through alternatives.
-ostree --repo="${repo}" ls "${treeref}" '/usr/lib/alternatives/iptables' | grep '^-' > alternatives.txt
-assert_file_has_content_literal alternatives.txt '/usr/lib/alternatives/iptables'
+ostree --repo="${repo}" ls "${treeref}" '/usr/etc/alternatives-admindir/iptables' | grep '^-' > alternatives.txt
+assert_file_has_content_literal alternatives.txt '/usr/etc/alternatives-admindir/iptables'
 ostree --repo="${repo}" ls "${treeref}" '/usr/etc/alternatives/iptables' | grep '^l00777' > symlinks.txt
 # NOTE: this does not check the whole symlink target, but only a reasonably-stable leading portion of it.
 assert_file_has_content_literal symlinks.txt '/usr/etc/alternatives/iptables -> /usr/sbin/ip'

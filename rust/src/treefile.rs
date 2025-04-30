@@ -173,8 +173,12 @@ fn treefile_parse_stream<R: io::Read>(
 
     // Change these defaults for 2024 edition
     if treefile.edition.unwrap_or_default() >= Edition::Twenty24 {
-        treefile.boot_location = Some(BootLocation::Modules);
-        treefile.tmp_is_dir = Some(true);
+        if treefile.boot_location.is_none() {
+            treefile.boot_location = Some(BootLocation::Modules);
+        }
+        if treefile.tmp_is_dir.is_none() {
+            treefile.tmp_is_dir = Some(true);
+        }
     }
 
     // Special handling for packages, since we allow whitespace within items.

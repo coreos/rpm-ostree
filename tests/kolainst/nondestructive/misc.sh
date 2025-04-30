@@ -12,20 +12,6 @@ if ostree admin config-diff | grep 'selinux/targeted/policy'; then
     assert_not_reached "selinux policy is marked as modified"
 fi
 
-# Ensure multicall is correctly set up and working.
-R_O_DIGEST=$(sha512sum $(which rpm-ostree) | cut -d' ' -f1)
-O_C_DIGEST=$(sha512sum $(which /usr/libexec/libostree/ext/ostree-container) | cut -d' ' -f1)
-if test "${R_O_DIGEST}" != "${O_C_DIGEST}" ; then
-    assert_not_reached "rpm-ostree and ostree-container are not the same binary"
-fi
-for verb in container ima-sign; do
-    ostree "$verb" --help > cli_help.txt
-    assert_file_has_content_literal cli_help.txt "Usage:"
-    assert_file_has_content_literal cli_help.txt "ostree-$verb $verb"
-    rm cli_help.txt
-done
-echo "ok multicall corectly set up and working"
-
 # Verify that we process arguments correctly
 rpm-ostree usroverlay --help >out.txt
 assert_file_has_content out.txt "ostree admin unlock"
