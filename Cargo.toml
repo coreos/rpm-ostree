@@ -46,7 +46,7 @@ rpm = "4"
 [dependencies]
 anyhow = "1.0.98"
 binread = "2.2.0"
-bitflags = "2.6"
+bitflags = "2.9"
 camino = "1.1.9"
 cap-std-ext = "4"
 cap-primitives = "3"
