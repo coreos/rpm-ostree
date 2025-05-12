@@ -228,7 +228,7 @@ version = "0.0.0"
 source = "git+https://github.com/containers/bootc?rev=d9b18c8883ad24e7b0faf596758e3c12b26656e5#d9b18c8883ad24e7b0faf596758e3c12b26656e5"
 dependencies = [
  "anyhow",
- "rustix",
+ "rustix 0.38.44",
  "serde",
  "serde_json",
  "shlex",
@@ -294,7 +294,7 @@ dependencies = [
  "io-lifetimes",
  "ipnet",
  "maybe-owned",
- "rustix",
+ "rustix 0.38.44",
  "windows-sys 0.59.0",
  "winx",
 ]
@@ -309,19 +309,19 @@ dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes",
- "rustix",
+ "rustix 0.38.44",
 ]
 
 [[package]]
 name = "cap-std-ext"
-version = "4.0.4"
+version = "4.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5cd561bc80e52c4ed4121c7bae16c585388487243f317817d509e882e8c0512"
+checksum = "7770022cf9ca0e804cdc7725fa6be84a3721e5733ba889b3300689dcdb407fa1"
 dependencies = [
  "cap-primitives",
  "cap-tempfile",
  "libc",
- "rustix",
+ "rustix 1.0.7",
 ]
 
 [[package]]
@@ -333,7 +333,7 @@ dependencies = [
  "camino",
  "cap-std",
  "rand",
- "rustix",
+ "rustix 0.38.44",
  "uuid",
 ]
 
@@ -475,7 +475,7 @@ dependencies = [
  "indicatif",
  "oci-spec",
  "regex-automata 0.4.9",
- "rustix",
+ "rustix 0.38.44",
  "sha2",
  "tar",
  "tempfile",
@@ -528,7 +528,7 @@ dependencies = [
  "fn-error-context",
  "futures-util",
  "oci-spec",
- "rustix",
+ "rustix 0.38.44",
  "semver",
  "serde",
  "serde_json",
@@ -605,7 +605,7 @@ dependencies = [
  "bitflags 2.9.0",
  "crossterm_winapi",
  "parking_lot",
- "rustix",
+ "rustix 0.38.44",
  "winapi",
 ]
 
@@ -1002,7 +1002,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e2e6123af26f0f2c51cc66869137080199406754903cc926a7690401ce09cb4"
 dependencies = [
  "io-lifetimes",
- "rustix",
+ "rustix 0.38.44",
  "windows-sys 0.59.0",
 ]
 
@@ -1895,6 +1895,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
 
 [[package]]
+name = "linux-raw-sys"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
+
+[[package]]
 name = "litemap"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2233,7 +2239,7 @@ dependencies = [
  "ostree",
  "pin-project",
  "regex",
- "rustix",
+ "rustix 0.38.44",
  "serde",
  "serde_json",
  "tar",
@@ -2718,7 +2724,7 @@ dependencies = [
  "rpmostree-client",
  "rusqlite",
  "rust-ini",
- "rustix",
+ "rustix 0.38.44",
  "serde",
  "serde_derive",
  "serde_json",
@@ -2776,8 +2782,21 @@ dependencies = [
  "errno",
  "itoa",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.4.15",
  "once_cell",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "rustix"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c71e83d6afe7ff64890ec6b71d6a69bb8a610ab78ce364b3352876bb4c801266"
+dependencies = [
+ "bitflags 2.9.0",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.9.4",
  "windows-sys 0.59.0",
 ]
 
@@ -3231,7 +3250,7 @@ dependencies = [
  "fastrand",
  "getrandom 0.3.1",
  "once_cell",
- "rustix",
+ "rustix 0.38.44",
  "windows-sys 0.59.0",
 ]
 
@@ -4065,8 +4084,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e105d177a3871454f754b33bb0ee637ecaaac997446375fd3e5d43a2ed00c909"
 dependencies = [
  "libc",
- "linux-raw-sys",
- "rustix",
+ "linux-raw-sys 0.4.15",
+ "rustix 0.38.44",
 ]
 
 [[package]]
