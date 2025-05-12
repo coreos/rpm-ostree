@@ -24,7 +24,7 @@ use cap_std_ext::cap_std::fs::{DirBuilderExt, MetadataExt, Permissions, Permissi
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 use gio::prelude::*;
-use ostree_ext::{gio, glib};
+use ostree_ext::{gio, glib, ostree};
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::fmt::Write as FmtWrite;
@@ -388,28 +388,31 @@ fn postprocess_rpm_macro(rootfs_dfd: &Dir) -> Result<()> {
 // https://src.fedoraproject.org/rpms/selinux-policy/pull-request/14
 #[context("Postprocessing subs_dist")]
 fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
-    let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
-    if let Some(f) = rootfs_dfd.open_optional(path)? {
-        let perms = cap_std::fs::Permissions::from_mode(0o644);
-        rootfs_dfd.atomic_replace_with(path, |w| -> Result<()> {
-            w.get_mut().as_file_mut().set_permissions(perms)?;
-            let f = BufReader::new(&f);
-            for line in f.lines() {
-                let line = line?;
-                if line.starts_with("/var/home ") {
-                    writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
-                    write!(w, "# ")?;
+    let sepolicy = ostree::SePolicy::new_at(rootfs_dfd.as_raw_fd(), gio::Cancellable::NONE)?;
+    if let Some(name) = sepolicy.name() {
+        let path = format!("usr/etc/selinux/{name}/contexts/files/file_contexts.subs_dist");
+        if let Some(f) = rootfs_dfd.open_optional(Path::new(&path))? {
+            let perms = cap_std::fs::Permissions::from_mode(0o644);
+            rootfs_dfd.atomic_replace_with(path, |w| -> Result<()> {
+                w.get_mut().as_file_mut().set_permissions(perms)?;
+                let f = BufReader::new(&f);
+                for line in f.lines() {
+                    let line = line?;
+                    if line.starts_with("/var/home ") {
+                        writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
+                        write!(w, "# ")?;
+                    }
+                    writeln!(w, "{}", line)?;
                 }
-                writeln!(w, "{}", line)?;
-            }
-            writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
-            writeln!(w, "/home /var/home")?;
-            writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/4640")?;
-            writeln!(w, "/usr/etc /etc")?;
-            writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/1795")?;
-            writeln!(w, "/usr/lib/opt /opt")?;
-            Ok(())
-        })?;
+                writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
+                writeln!(w, "/home /var/home")?;
+                writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/4640")?;
+                writeln!(w, "/usr/etc /etc")?;
+                writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/1795")?;
+                writeln!(w, "/usr/lib/opt /opt")?;
+                Ok(())
+            })?;
+        }
     }
     Ok(())
 }
