@@ -239,3 +239,95 @@ This "chunked" format is used by default by `rpm-ostree compose image`.
 
 You can also create chunked images from pre-existing (typically
 single-layer) images using [`rpm-ostree compose build-chunked-oci`](https://coreos.github.io/rpm-ostree/build-chunked-oci/).
+
+## Mapping container images back to ostree
+
+For organizations that are existing users of ostree, it is possible
+to adapt OCI containers solely on the *build* side at first, continuing
+to use ostree on the wire; this can be particularly beneficial for
+those relying on ostree's static deltas, which provide extremely
+efficient on-the-wire (and on disk) updates. Note that there
+are multiple mechanisms to improve network efficiency of container
+image updates as well (the chunked images mentioned above are one),
+but for the remainder of this section we will assume the goal is
+to continue to use ostree.
+
+On the build server, assume we have an OSTree repository named `repo`
+and want to fetch a container image and import it as a specific named
+ostree reference (e.g. `exampleos/aarch64/foo`).
+
+A key command in this is `ostree container image pull`. This is
+effectively the *exact same* functionality is used by the client system when
+fetching updates from a registry, and writing to the local OSTree repository.
+
+## On the container build server:
+
+Build a container image, however you want:
+
+```
+$ cat Dockerfile
+FROM quay.io/fedora/fedora-bootc:41
+RUN <<EORUN
+set -xeuo pipefail
+dnf -y install cowsay
+dnf clean all
+rm /var/{log,lib,cache}/* -rf
+bootc container lint
+EORUN
+$ podman build -t quay.io/exampleos/exampleos:latest && podman push quay.io/exampleos/exampleos:latest
+```
+
+## On the "ostree repo server"
+
+Here we're going to transform the container image to an ostree commit in a repo.
+
+Important: This repo must currently be a `bare-user` (uncompressed) repository. It may be most convenient
+to make a temporary one, and from there copy it to a final target repo in `archive` mode for serving
+to clients.
+
+```
+$ ostree container image pull /path/to/repo ostree-unverified-registry:quay.io/exampleos/exampleos:latest
+# Find the branch/ref for the container
+$ imgref=$(ostree --repo=/path/to/repo refs ostree/container/image)
+# Find its commit
+$ commit=$(ostree --repo=/path/to/repo rev-parse ostree/container/image/$imgref)
+```
+
+(Note, it's possible to pull from `containers-storage:` via `ostree-unverified-image:containers-storage:localhost/someimage`
+ if you want to do a "podman build" + import to repo on the same machine, but you currently must
+ invoke the pull command from a `podman unshare` shell).
+
+At this point, `$commit` refers to an ostree commit corresponding to the container image. From here,
+we can copy this commit object anywhere we like via whatever mechanism is appropriate for the
+environment. Let's say that we specifically want this container image to map to a ref
+`exampleos/x86_64/example`.
+
+```
+$ ostree --repo=/path/to/repo refs --force --create=exampleos/x86_64/example $commit
+```
+
+For the purposes here though, let's copy it to an archive repository named `repo-srv` to serve
+to clients:
+
+(Create one via `ostree --repo=repo-srv init --mode=archive` if needed for demo/test purposes)
+
+```
+$ ostree --repo=repo-srv pull-local repo exampleos/x86_64/example
+```
+
+From there, you could also e.g. create static deltas - but again in general,
+import it into your existing OSTree infrastructure however you want.
+
+## On the client
+
+That's it. From the client perspective, this will appear as any other ostree commit;
+the client does not care or know that the content originally came from a container
+image. However, at the current time container image metadata (such as the `version` label)
+is not mapped to ostree commit metadata. You will commonly want to inject such metadata,
+which can be done via creating a new derived commit that reuses content from the base
+via `ostree commit --tree=ref=$base`.
+
+## Repeating
+
+Updating things requires repeating all the steps above; however it is all
+relatively straightforward to script.
