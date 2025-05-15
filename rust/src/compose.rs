@@ -643,8 +643,14 @@ impl RootfsOpts {
             self.source_root = Some(rw);
         }
 
-        // Create a temporary directory for things
-        let td = tempfile::tempdir_in("/var/tmp")?;
+        // Create a temporary directory for things. If we were given a cachedir
+        // let's just put our tempdir under there so that we can colocate things
+        // for better reflinking.
+        let td: tempfile::TempDir = if let Some(ref cachedir) = self.cachedir {
+            tempfile::tempdir_in(cachedir.as_str())?
+        } else {
+            tempfile::tempdir_in("/var/tmp")?
+        };
         let td_path: Utf8PathBuf = td.path().to_owned().try_into()?;
 
         // If we're passed an ostree repo, open it.
@@ -662,6 +668,14 @@ impl RootfsOpts {
             )?;
             drop(repo);
             repo_path
+        };
+        // If we were given a cachedir we'll also have `compose install` place the
+        // output in our tempdir (which is under the cachedir) so the renameat will
+        // succeeed.
+        let dest_path = if self.cachedir.is_some() {
+            td_path.join("tmp_target_root")
+        } else {
+            self.dest.clone()
         };
 
         // Just build the root filesystem tree
@@ -687,9 +701,22 @@ impl RootfsOpts {
                     .iter()
                     .flat_map(|v| ["--source-root", v.as_str()]),
             )
-            .args([manifest.as_str(), self.dest.as_str()])
+            .args([manifest.as_str(), dest_path.as_str()])
             .run()
             .context("Executing compose install")?;
+
+        // If we used a cachedir then we stored the target destination rootfs
+        // under the cachedir. Let's copy it out now. In this case we copy it
+        // out but we explicitly break reflinks because if we don't the
+        // fixup_installroot below will render the cache under cachedir useless
+        // (i.e. the changes to the files that would still be reflinked to files
+        // in cachedir would cause the cache to be unusable on the next run).
+        if self.cachedir.is_some() {
+            Command::new("cp")
+                .args(["-a", "--reflink=never"])
+                .args([dest_path.as_str(), self.dest.as_str()])
+                .run()?;
+        };
 
         // Clear everything in the tempdir; at this point we may have hardlinks into
         // the pkgcache repo, which we don't need because we're producing a flat
