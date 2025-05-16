@@ -537,7 +537,7 @@ pub(crate) fn compose_postprocess_scripts(
             script,
             Permissions::from_mode(0o755),
         )?;
-        println!("Executing `postprocess` inline script '{}'", i);
+        println!("\n>>>> Executing `postprocess` inline script '{i}' <<<<\n");
         let child_argv = vec![binpath.to_string()];
         if let PostprocessBwrap::Wrap { unified_core } = bwrap {
             let _ = bwrap::bubblewrap_run_sync(
@@ -554,6 +554,7 @@ pub(crate) fn compose_postprocess_scripts(
         }
         rootfs_dfd.remove_file(target_binpath)?;
     }
+    println!("Completed running `postprocess` inline scripts");
 
     // And the single postprocess script.
     if let Some(postprocess_script) = treefile.get_postprocess_script() {

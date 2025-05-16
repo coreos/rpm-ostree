@@ -39,6 +39,7 @@ if [ ! -d compose-cache ]; then
 
   pushd config
   git checkout "${FEDORA_COREOS_CONFIG_COMMIT}"
+  git submodule update
   # we flatten the treefile to make it easier to manipulate in tests (we have
   # lots of tests that check for include logic already)
   rpm-ostree compose tree --print-only manifest.yaml > manifest.json
