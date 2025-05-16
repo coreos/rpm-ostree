@@ -166,12 +166,8 @@ fn child_wait_check(
     child: gio::Subprocess,
     cancellable: Option<&gio::Cancellable>,
 ) -> std::result::Result<(), glib::Error> {
-    match child.wait(cancellable) {
-        Ok(_) => {
-            let estatus = child.exit_status();
-            glib::spawn_check_exit_status(estatus)?;
-            Ok(())
-        }
+    match child.wait_check(cancellable) {
+        Ok(_) => Ok(()),
         Err(e) => {
             child.force_exit();
             Err(e)
