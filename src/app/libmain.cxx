@@ -487,6 +487,8 @@ early_main (void)
    * `DnfSack` and Repo too. So just do this upfront. XXX: Clean up that API so it's always
    * attached to a context object. */
   dnf_context_set_config_file_path ("");
+
+  ostree_sepolicy_set_null_log ();
 }
 
 // The C++ `main()`, invoked from Rust only for most CLI commands currently.
