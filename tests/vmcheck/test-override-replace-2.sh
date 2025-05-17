@@ -149,8 +149,9 @@ echo "ok override replace deletes tmpfiles.d dropin"
 # https://github.com/coreos/rpm-ostree/issues/3421
 # Test that we can override selinux; we use the "gold"
 # selinux because we know it won't be GC'd.  Use e.g.
-# `koji latest-pkg f38 selinux-policy`
-# to find this.  (In contrast, koji latest-pkg f38-updates selinux-policy
+# `koji latest-pkg f42 selinux-policy container-selinux`
+# to find this.  (In contrast,
+# `koji latest-pkg f42-updates selinux-policy container-selinux`
 # will get the latest updates).
 versionid=$(vm_cmd grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
@@ -158,11 +159,15 @@ vm_cmd rpm-ostree db list "$(vm_get_deployment_info 0 checksum)" > current-dblis
 case $versionid in
   42)
     evr=41.34-1.fc42
-    koji_url=https://koji.fedoraproject.org/koji/buildinfo?buildID=2674245
+    koji_urls=(
+        https://koji.fedoraproject.org/koji/buildinfo?buildID=2674245
+        https://koji.fedoraproject.org/koji/buildinfo?buildID=2679093
+    )
     ;;  
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt selinux-policy-$evr
-vm_rpmostree override replace "${koji_url}"
+#shellcheck disable=SC2068
+vm_rpmostree override replace ${koji_urls[@]}
 vm_rpmostree cleanup -p
 echo "ok override replace selinux-policy-targeted"
