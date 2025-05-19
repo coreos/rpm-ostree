@@ -2848,9 +2848,7 @@ fn process_base_vars(
     output: &mut HashMap<String, String>,
 ) -> Result<()> {
     let mut unprocessed: HashMap<String, String> = Default::default();
-    eprintln!("Iterating over vars");
     for (key, value) in input {
-        eprintln!("Found {key}={value}");
         let var: HashMap<String, String> = [(key.clone(), value.clone())].iter().cloned().collect();
         if envsubst::validate_vars(&var).is_ok() {
             output.insert(key.clone(), value.clone());
@@ -2864,9 +2862,7 @@ fn process_base_vars(
     for (key, value) in unprocessed {
         let mut v = Some(value);
         substitute_string_option(&output, &mut v)?;
-        let value = v.unwrap();
-        eprintln!("Now {key}={value}");
-        output.insert(key.clone(), value.clone());
+        output.insert(key.clone(), v.unwrap().clone());
     }
     // Now make sure all vars have been substituted and are compliant.
     envsubst::validate_vars(&output)?;
@@ -2910,10 +2906,6 @@ impl TreeComposeConfig {
             .map(|(k, v)| (k.clone(), v.to_string()))
             .collect();
         process_base_vars(&input_base_vars, &mut substvars)?;
-
-        for (key, value) in &substvars {
-            eprintln!("postprocess: {key}={value}");
-        }
 
         substitute_string_option(&substvars, &mut self.base.treeref)?;
         if let Some(ref mut rojig) = self.base.rojig {
