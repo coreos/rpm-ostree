@@ -33,6 +33,7 @@
 #include <systemd/sd-journal.h>
 #include <utility>
 
+#include "libdnf/dnf-context.h"
 #include "rpmostree-core-private.h"
 #include "rpmostree-cxxrs.h"
 #include "rpmostree-importer.h"
@@ -2625,8 +2626,11 @@ rpmostree_context_consume_package (RpmOstreeContext *self, DnfPackage *pkg, int 
    * deleted and hence more annoying to debug, but in practice people
    * should be able to redownload, and if the error was something like
    * ENOSPC, deleting it was the right move I'd say.
+   *
+   * But respect dnf's keepcache setting, which might've been set by a higher
+   * level.
    */
-  if (!rpmostree_pkg_is_local (pkg))
+  if (!rpmostree_pkg_is_local (pkg) && !dnf_context_get_keep_cache (self->dnfctx))
     {
       if (!glnx_unlinkat (AT_FDCWD, pkg_path, 0, error))
         return FALSE;

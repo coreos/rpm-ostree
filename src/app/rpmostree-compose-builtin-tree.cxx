@@ -37,6 +37,7 @@
 #include <sys/vfs.h>
 #include <utility>
 
+#include "glnx-errors.h"
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-composeutil.h"
 #include "rpmostree-core.h"
@@ -181,7 +182,8 @@ typedef struct
   GLnxTmpDir workdir_tmp;
   int workdir_dfd;
   int rootfs_dfd;
-  int cachedir_dfd;
+  int ostree_cachedir_dfd;
+  int dnf_cachedir_dfd;
   gboolean unified_core_and_fuse;
   OstreeRepo *repo;          /* target repo provided by --repo */
   OstreeRepo *build_repo;    /* unified mode: repo we build into */
@@ -213,7 +215,8 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   else
     (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
   glnx_close_fd (&ctx->rootfs_dfd);
-  glnx_close_fd (&ctx->cachedir_dfd);
+  glnx_close_fd (&ctx->ostree_cachedir_dfd);
+  glnx_close_fd (&ctx->dnf_cachedir_dfd);
   g_clear_object (&ctx->repo);
   g_clear_object (&ctx->build_repo);
   g_clear_object (&ctx->pkgcache_repo);
@@ -349,10 +352,10 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
   if (!set_repos_dir (self->corectx, **self->treefile_rs, self->workdir_dfd, cancellable, error))
     return FALSE;
 
-  /* By default, retain packages in addition to metadata with --cachedir, unless
-   * we're doing unified core, in which case the pkgcache repo is the cache.
-   */
-  if (opt_cachedir && !opt_unified_core)
+  /* In non-unified core mode, always keep packages. In unified core mode, only
+   * keep it if it's used for caching RPMs; otherwise, the pkgcache repo is
+   * the cache. */
+  if (opt_cachedir && (!opt_unified_core || self->dnf_cachedir_dfd > 0))
     dnf_context_set_keep_cache (dnfctx, TRUE);
   /* For compose, always try to refresh metadata; we're used in build servers
    * where fetching should be cheap.  We also have --cache-only which is
@@ -373,21 +376,22 @@ install_packages (RpmOstreeTreeComposeContext *self, gboolean *out_unmodified,
   if (!try_load_previous_sepolicy (self, cancellable, error))
     return glnx_prefix_error (error, "Loading previous sepolicy");
 
-  /* For unified core, we have a pkgcache repo. This is auto-created under the cachedir. */
+  /* For unified core, we have a pkgcache repo. This is normally auto-created under the cachedir. */
   if (opt_unified_core)
     {
       g_assert (self->pkgcache_repo);
 
-      if (!opt_cachedir)
+      if (!opt_cachedir || self->dnf_cachedir_dfd > 0)
         {
           /* This is part of enabling rpm-ostree inside Docker/Kubernetes/OpenShift;
            * in this case we probably don't have access to FUSE as today it uses a
            * suid binary which doesn't have the capabilities it needs.
            *
-           * So this magical bit tells the core to disable FUSE, which we only do
-           * if --cachedir isn't specified.  Another way to say this is that
-           * running inside an unprivileged container today requires turning off
-           * some of the rpm-ostree intelligence around caching.
+           * So this magical bit tells the core to disable FUSE, which we
+           * only do if --cachedir is either unspecified, or not used for
+           * the pkgcache.  Another way to say this is that running inside
+           * an unprivileged container today requires turning off some of the
+           * rpm-ostree intelligence around caching.
            *
            * We don't make this actually conditional somehow on running in a
            * container since if you're not using a persistent cache there's no
@@ -632,10 +636,12 @@ repo_is_on_netfs (OstreeRepo *repo)
 
 /* Prepare a context - this does some generic pre-compose initialization from
  * the arguments such as loading the treefile and any specified metadata.
+ * The `cache_rpms_only` dictates whether `opt_cachedir` caches just RPM content, or
+ * also the pkgcache/workdir/build repo.
  */
 static gboolean
 rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basearch,
-                                RpmOstreeTreeComposeContext **out_context,
+                                gboolean cache_rpms_only, RpmOstreeTreeComposeContext **out_context,
                                 GCancellable *cancellable, GError **error)
 {
   g_assert (basearch != NULL);
@@ -645,7 +651,7 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
   ROSCXX_TRY (core_libdnf_process_global_init (), error);
 
   /* Init fds to -1 */
-  self->workdir_dfd = self->rootfs_dfd = self->cachedir_dfd = -1;
+  self->workdir_dfd = self->rootfs_dfd = self->ostree_cachedir_dfd = self->dnf_cachedir_dfd = -1;
   /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
    * container without --privileged or userns exposed.
    */
@@ -672,13 +678,13 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
       if (opt_workdir)
         g_printerr ("note: --workdir is ignored for --unified-core\n");
 
-      if (opt_cachedir)
+      if (opt_cachedir && !cache_rpms_only)
         {
-          if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
+          if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->ostree_cachedir_dfd, error))
             return glnx_prefix_error (error, "Opening cachedir");
 
           /* Put workdir beneath cachedir, which is where the pkgcache repo also is */
-          if (!glnx_mkdtempat (self->cachedir_dfd, "rpm-ostree-compose.XXXXXX", 0700,
+          if (!glnx_mkdtempat (self->ostree_cachedir_dfd, "rpm-ostree-compose.XXXXXX", 0700,
                                &self->workdir_tmp, error))
             return FALSE;
         }
@@ -704,22 +710,23 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
                 return FALSE;
             }
 
-          self->cachedir_dfd = fcntl (self->workdir_tmp.fd, F_DUPFD_CLOEXEC, 3);
-          if (self->cachedir_dfd < 0)
+          self->ostree_cachedir_dfd = fcntl (self->workdir_tmp.fd, F_DUPFD_CLOEXEC, 3);
+          if (self->ostree_cachedir_dfd < 0)
             return glnx_throw_errno_prefix (error, "fcntl");
         }
 
       self->pkgcache_repo
-          = ostree_repo_create_at (self->cachedir_dfd, "pkgcache-repo", OSTREE_REPO_MODE_BARE_USER,
-                                   NULL, cancellable, error);
+          = ostree_repo_create_at (self->ostree_cachedir_dfd, "pkgcache-repo",
+                                   OSTREE_REPO_MODE_BARE_USER, NULL, cancellable, error);
       if (!self->pkgcache_repo)
         return FALSE;
 
       /* We use a temporary repo for building and committing on the same FS as the
        * pkgcache to guarantee links and devino caching. We then pull-local into the "real"
        * target repo. */
-      self->build_repo = ostree_repo_create_at (
-          self->cachedir_dfd, "repo-build", OSTREE_REPO_MODE_BARE_USER, NULL, cancellable, error);
+      self->build_repo
+          = ostree_repo_create_at (self->ostree_cachedir_dfd, "repo-build",
+                                   OSTREE_REPO_MODE_BARE_USER, NULL, cancellable, error);
       if (!self->build_repo)
         return glnx_prefix_error (error, "Creating repo-build");
 
@@ -749,17 +756,29 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
 
       if (opt_cachedir)
         {
-          if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
+          if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->ostree_cachedir_dfd, error))
             return glnx_prefix_error (error, "Opening cachedir");
         }
       else
         {
-          self->cachedir_dfd = fcntl (self->workdir_dfd, F_DUPFD_CLOEXEC, 3);
-          if (self->cachedir_dfd < 0)
+          self->ostree_cachedir_dfd = fcntl (self->workdir_dfd, F_DUPFD_CLOEXEC, 3);
+          if (self->ostree_cachedir_dfd < 0)
             return glnx_throw_errno_prefix (error, "fcntl");
         }
 
       self->build_repo = static_cast<OstreeRepo *> (g_object_ref (self->repo));
+    }
+
+  int dnf_cachedir_dfd;
+  if (opt_cachedir && cache_rpms_only)
+    {
+      if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->dnf_cachedir_dfd, error))
+        return glnx_prefix_error (error, "Opening cachedir");
+      dnf_cachedir_dfd = self->dnf_cachedir_dfd;
+    }
+  else
+    {
+      dnf_cachedir_dfd = self->ostree_cachedir_dfd;
     }
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
@@ -769,8 +788,10 @@ rpm_ostree_compose_context_new (const char *treefile_pathstr, const char *basear
       rpmostreecxx::treefile_new_compose (gs_file_get_path_cached (self->treefile_path), basearch),
       error);
   self->treefile_rs = std::move (tf);
+
   self->corectx
-      = rpmostree_context_new_compose (self->cachedir_dfd, self->build_repo, **self->treefile_rs);
+      = rpmostree_context_new_compose (dnf_cachedir_dfd, self->build_repo, **self->treefile_rs);
+
   /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
    * e.g. importing, relabeling, etc... so just disable it. We do still set the policy
    * to the final one right before commit as usual. */
@@ -1309,6 +1330,21 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
   return TRUE;
 }
 
+static gboolean
+dirs_on_different_filesystems (const char *dir1, const char *dir2, gboolean *out, GError **error)
+{
+  struct stat stbuf1;
+  if (stat (dir1, &stbuf1) != 0)
+    return glnx_throw_errno_prefix (error, "stat(%s)", dir1);
+
+  struct stat stbuf2;
+  if (stat (dir2, &stbuf2) != 0)
+    return glnx_throw_errno_prefix (error, "stat(%s)", dir2);
+
+  *out = stbuf1.st_dev != stbuf2.st_dev;
+  return TRUE;
+}
+
 gboolean
 rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                                    GCancellable *cancellable, GError **error)
@@ -1349,13 +1385,34 @@ rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvoca
       return FALSE;
     }
 
-  /* Destination is turned into workdir */
   const char *destdir = argv[2];
-  opt_workdir = g_strdup (destdir);
 
+  /* Destination is turned into workdir in non-unified core mode. */
+  if (!opt_unified_core)
+    opt_workdir = g_strdup (destdir);
+
+  /* If cache and destdir are on different filesystems, then we want to only
+   * cache RPMs. Note that this doesn't handle the fact that if `--cachedir`
+   * wasn't provided, our default behaviour might still not be on the same
+   * filesystem. See: https://github.com/coreos/rpm-ostree/pull/5386#issuecomment-2887226485. */
+  gboolean cache_rpms_only = FALSE;
+  if (opt_cachedir && opt_unified_core)
+    {
+      if (!dirs_on_different_filesystems (opt_cachedir, dirname (strdupa (destdir)),
+                                          &cache_rpms_only, error))
+        return glnx_prefix_error (error, "while checking filesystems of %s vs %s", opt_cachedir,
+                                  destdir);
+    }
+  if (cache_rpms_only)
+    g_print ("note: %s and %s on separate filesystems; caching RPMs only\n", destdir, opt_cachedir);
+
+  /* if they're not on the same filesystem, then only cache RPMs since we won't be able to get
+   * hardlink checkouts */
   g_autoptr (RpmOstreeTreeComposeContext) self = NULL;
-  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
+  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), cache_rpms_only, &self,
+                                       cancellable, error))
     return FALSE;
+
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
@@ -1467,7 +1524,8 @@ rpmostree_compose_builtin_commit (int argc, char **argv, RpmOstreeCommandInvocat
   auto basearch = rpmostreecxx::get_rpm_basearch ();
 
   g_autoptr (RpmOstreeTreeComposeContext) self = NULL;
-  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
+  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), FALSE, &self, cancellable,
+                                       error))
     return FALSE;
   if (!glnx_opendirat (AT_FDCWD, rootfs_path, TRUE, &self->rootfs_dfd, error))
     return FALSE;
@@ -1513,7 +1571,8 @@ rpmostree_compose_builtin_tree (int argc, char **argv, RpmOstreeCommandInvocatio
     }
 
   g_autoptr (RpmOstreeTreeComposeContext) self = NULL;
-  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), &self, cancellable, error))
+  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), FALSE, &self, cancellable,
+                                       error))
     return FALSE;
   g_assert (self); /* Pacify static analysis */
   gboolean changed;

@@ -14,9 +14,16 @@ EORUN
 # Copy in our source code.
 COPY . /src
 WORKDIR /src
-RUN --mount=type=bind,from=repos,src=/,dst=/repos,rw <<EORUN
+# also test using a cache in this flow
+RUN --mount=type=bind,from=repos,src=/,dst=/repos,rw --mount=type=cache,rw,target=/cache <<EORUN
 set -xeuo pipefail
-exec env RUST_LOG=debug rpm-ostree compose rootfs --source-root-rw=/repos manifest.yaml /target-rootfs
+env RUST_LOG=debug rpm-ostree compose rootfs --cachedir=/cache --source-root-rw=/repos manifest.yaml /target-rootfs
+# just the fact that we got here means we didn't hit EXDEV
+# but also sanity-check that there are actual RPMs in the cache
+nrpms=$(find /cache -name '*.rpm' | wc -l)
+if [ $nrpms = 0 ]; then
+  echo "No RPMs found in cache!"; exit 1
+fi
 EORUN
 
 # This pulls in the rootfs generated in the previous step
