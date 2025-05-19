@@ -2840,6 +2840,39 @@ fn substitute_string_option(
     Ok(())
 }
 
+// We allow our base variables to also be templated to allow
+// for substitution so let's process any substitutions in those
+// first.
+fn process_base_vars(
+    input: &HashMap<String, String>,
+    output: &mut HashMap<String, String>,
+) -> Result<()> {
+    let mut unprocessed: HashMap<String, String> = Default::default();
+    eprintln!("Iterating over vars");
+    for (key, value) in input {
+        eprintln!("Found {key}={value}");
+        let var: HashMap<String, String> = [(key.clone(), value.clone())].iter().cloned().collect();
+        if envsubst::validate_vars(&var).is_ok() {
+            output.insert(key.clone(), value.clone());
+        } else {
+            // Process the ones that require substitutions after
+            // all the ones that don't require substitution have
+            // been added to the list.
+            unprocessed.insert(key.clone(), value.clone());
+        }
+    }
+    for (key, value) in unprocessed {
+        let mut v = Some(value);
+        substitute_string_option(&output, &mut v)?;
+        let value = v.unwrap();
+        eprintln!("Now {key}={value}");
+        output.insert(key.clone(), value.clone());
+    }
+    // Now make sure all vars have been substituted and are compliant.
+    envsubst::validate_vars(&output)?;
+    Ok(())
+}
+
 impl TreeComposeConfig {
     /// Look for use of legacy/renamed fields and migrate them to the new field.
     fn migrate_legacy_fields(mut self) -> Result<Self> {
@@ -2866,15 +2899,21 @@ impl TreeComposeConfig {
 
     /// Look for use of ${variable} and replace it by its proper value
     fn substitute_vars(mut self) -> Result<Self> {
-        // convert to strings for envsubst
-        let substvars: HashMap<String, String> = self
+        // Create a var to hold our variables we'll use for substitutions.
+        let mut substvars: HashMap<String, String> = Default::default();
+        // Convert our self.base.variables to strings for processing
+        let input_base_vars: HashMap<String, String> = self
             .base
             .variables
             .iter()
             .flatten()
             .map(|(k, v)| (k.clone(), v.to_string()))
             .collect();
-        envsubst::validate_vars(&substvars)?;
+        process_base_vars(&input_base_vars, &mut substvars)?;
+
+        for (key, value) in &substvars {
+            eprintln!("postprocess: {key}={value}");
+        }
 
         substitute_string_option(&substvars, &mut self.base.treeref)?;
         if let Some(ref mut rojig) = self.base.rojig {
