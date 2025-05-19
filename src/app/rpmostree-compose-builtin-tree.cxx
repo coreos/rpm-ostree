@@ -1369,9 +1369,11 @@ rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvoca
       return FALSE;
     }
 
-  /* Destination is turned into workdir */
   const char *destdir = argv[2];
-  opt_workdir = g_strdup (destdir);
+
+  /* Destination is turned into workdir in non-unified core mode. */
+  if (!opt_unified_core)
+    opt_workdir = g_strdup (destdir);
 
   g_autoptr (RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), FALSE, &self, cancellable,
