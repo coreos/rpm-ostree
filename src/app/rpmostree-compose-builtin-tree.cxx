@@ -37,6 +37,7 @@
 #include <sys/vfs.h>
 #include <utility>
 
+#include "glnx-errors.h"
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-composeutil.h"
 #include "rpmostree-core.h"
@@ -1329,6 +1330,21 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self, GCancellable *cancellable, 
   return TRUE;
 }
 
+static gboolean
+dirs_on_different_filesystems (const char *dir1, const char *dir2, gboolean *out, GError **error)
+{
+  struct stat stbuf1;
+  if (stat (dir1, &stbuf1) != 0)
+    return glnx_throw_errno_prefix (error, "stat(%s)", dir1);
+
+  struct stat stbuf2;
+  if (stat (dir2, &stbuf2) != 0)
+    return glnx_throw_errno_prefix (error, "stat(%s)", dir2);
+
+  *out = stbuf1.st_dev != stbuf2.st_dev;
+  return TRUE;
+}
+
 gboolean
 rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                                    GCancellable *cancellable, GError **error)
@@ -1375,10 +1391,28 @@ rpmostree_compose_builtin_install (int argc, char **argv, RpmOstreeCommandInvoca
   if (!opt_unified_core)
     opt_workdir = g_strdup (destdir);
 
+  /* If cache and destdir are on different filesystems, then we want to only
+   * cache RPMs. Note that this doesn't handle the fact that if `--cachedir`
+   * wasn't provided, our default behaviour might still not be on the same
+   * filesystem. See: https://github.com/coreos/rpm-ostree/pull/5386#issuecomment-2887226485. */
+  gboolean cache_rpms_only = FALSE;
+  if (opt_cachedir && opt_unified_core)
+    {
+      if (!dirs_on_different_filesystems (opt_cachedir, dirname (strdupa (destdir)),
+                                          &cache_rpms_only, error))
+        return glnx_prefix_error (error, "while checking filesystems of %s vs %s", opt_cachedir,
+                                  destdir);
+    }
+  if (cache_rpms_only)
+    g_print ("note: %s and %s on separate filesystems; caching RPMs only\n", destdir, opt_cachedir);
+
+  /* if they're not on the same filesystem, then only cache RPMs since we won't be able to get
+   * hardlink checkouts */
   g_autoptr (RpmOstreeTreeComposeContext) self = NULL;
-  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), FALSE, &self, cancellable,
-                                       error))
+  if (!rpm_ostree_compose_context_new (treefile_path, basearch.c_str (), cache_rpms_only, &self,
+                                       cancellable, error))
     return FALSE;
+
   g_assert (self); /* Pacify static analysis */
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
