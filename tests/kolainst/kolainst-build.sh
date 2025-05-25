@@ -60,6 +60,19 @@ build_rpm testdaemon \
                   getent passwd testdaemon-user &>/dev/null || useradd -r testdaemon-user -g testdaemon-group -s /sbin/nologin" \
              files "/usr/bin/%{name}
                     /var/lib/%{name}"
+build_rpm rpmostree-openvpn \
+             build "" \
+             summary "like openvpn" \
+             install "mkdir -p %{buildroot}/{etc/%{name}.d,var/lib/%{name},usr/lib/sysusers.d}
+                      mkdir -p %{buildroot}/usr/lib/sysusers.d
+                      cat > %{buildroot}/usr/lib/sysusers.d/10-%{name}.conf <<'EOF'
+                      u %{name} - 'Test OpenVPN' /etc/%{name}.d -
+                      EOF
+                      " \
+             files "/usr/bin/%{name}
+                    %attr(-, %{name}, %{name}) /etc/%{name}.d
+                    /usr/lib/sysusers.d/*.conf
+                    /var/lib/%{name}"
 # Will be useful for testing cancellation
 build_rpm testpkg-post-infinite-loop \
              post "echo entering testpkg-post-infinite-loop 1>&2; while true; do sleep 1h; done"
