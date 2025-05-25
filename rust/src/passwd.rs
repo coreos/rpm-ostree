@@ -24,7 +24,7 @@ use ostree_ext::{gio, ostree};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::unix::io::AsRawFd;
-use std::path::PathBuf;
+use std::path::Path;
 
 const DEFAULT_MODE: u32 = 0o644;
 static DEFAULT_PERMS: Lazy<Permissions> = Lazy::new(|| Permissions::from_mode(DEFAULT_MODE));
@@ -58,7 +58,7 @@ static PWGRP_LOCK_AND_BACKUP_FILES: &[&str] = &[
 pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResult<bool> {
     passwd_cleanup(rootfs_dfd)?;
     let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
-    let dir: Option<PathBuf> = opt_string(merge_passwd_dir).map(|d| d.into());
+    let merge_passwd_dir: Option<&Path> = opt_string(merge_passwd_dir).map(Path::new);
 
     // Break hardlinks for the shadow files, since shadow-utils currently uses
     // O_RDWR unconditionally.
@@ -71,7 +71,7 @@ pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResul
 
     let has_usrlib_passwd = has_usrlib_passwd(&rootfs)?;
     if has_usrlib_passwd {
-        prepare_pwgrp(&rootfs, dir)?;
+        prepare_pwgrp(&rootfs, merge_passwd_dir)?;
     }
 
     Ok(has_usrlib_passwd)
@@ -651,7 +651,7 @@ fn has_usrlib_passwd(rootfs: &Dir) -> std::io::Result<bool> {
 }
 
 #[context("Preparing pwgrp")]
-fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<PathBuf>) -> Result<()> {
+fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<&Path>) -> Result<()> {
     for filename in USRLIB_PWGRP_FILES {
         let etc_file = format!("etc/{}", filename);
         let etc_backup = format!("{}.rpmostreesave", etc_file);
