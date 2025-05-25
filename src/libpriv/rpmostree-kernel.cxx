@@ -496,7 +496,7 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
    **/
   CXX_TRY_VAR (etc_guard, rpmostreecxx::prepare_tempetc_guard (rootfs_dfd), error);
 
-  CXX_TRY_VAR (have_passwd, rpmostreecxx::prepare_rpm_layering (rootfs_dfd, ""), error);
+  CXX_TRY_VAR (have_passwd, rpmostreecxx::prepare_rpm_layering (rootfs_dfd, -1), error);
 
   /* Note rebuild_from_initramfs now is only used as a fallback in the client-side regen
    * path when we can't fetch the canonical initramfs args to use. */

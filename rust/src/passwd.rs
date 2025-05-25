@@ -24,7 +24,6 @@ use ostree_ext::{gio, ostree};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::unix::io::AsRawFd;
-use std::path::Path;
 
 const DEFAULT_MODE: u32 = 0o644;
 static DEFAULT_PERMS: Lazy<Permissions> = Lazy::new(|| Permissions::from_mode(DEFAULT_MODE));
@@ -46,7 +45,7 @@ static PWGRP_LOCK_AND_BACKUP_FILES: &[&str] = &[
     "subgid-",
 ];
 
-fn prepare_rpm_layering_impl(rootfs: &Dir, merge_passwd_dir: Option<&Path>) -> Result<bool> {
+fn prepare_rpm_layering_impl(rootfs: &Dir, merge_passwd_dir: Option<&Dir>) -> Result<bool> {
     passwd_cleanup(rootfs.as_raw_fd())?;
 
     // Break hardlinks for the shadow files, since shadow-utils currently uses
@@ -75,10 +74,12 @@ fn prepare_rpm_layering_impl(rootfs: &Dir, merge_passwd_dir: Option<&Path>) -> R
 /// /usr/lib/passwd, so that %pre scripts are aware of newly added system users
 /// not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
 #[context("Preparing passwd content")]
-pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResult<bool> {
+pub fn prepare_rpm_layering(rootfs_dfd: i32, passwd_dfd: i32) -> CxxResult<bool> {
     let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
-    let merge_passwd_dir: Option<&Path> = opt_string(merge_passwd_dir).map(Path::new);
-    prepare_rpm_layering_impl(&rootfs, merge_passwd_dir).map_err(Into::into)
+    let merge_passwd_dir = (passwd_dfd != -1)
+        .then(|| unsafe { ffiutil::ffi_dirfd(passwd_dfd) })
+        .transpose()?;
+    prepare_rpm_layering_impl(&rootfs, merge_passwd_dir.as_ref()).map_err(Into::into)
 }
 
 pub fn complete_rpm_layering(rootfs_dfd: i32) -> CxxResult<()> {
@@ -655,7 +656,7 @@ fn has_usrlib_passwd(rootfs: &Dir) -> std::io::Result<bool> {
 }
 
 #[context("Preparing pwgrp")]
-fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<&Path>) -> Result<()> {
+fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<&Dir>) -> Result<()> {
     for filename in USRLIB_PWGRP_FILES {
         let etc_file = format!("etc/{}", filename);
         let etc_backup = format!("{}.rpmostreesave", etc_file);
@@ -675,9 +676,8 @@ fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<&Path>) -> Result<()> {
         }
 
         // Copy the merge's passwd/group to usr/lib (breaking hardlinks).
-        if let Some(ref merge_dir) = merge_passwd_dir {
-            let current_root = Dir::open_ambient_dir(merge_dir, cap_std::ambient_authority())?;
-            let mut src = current_root
+        if let Some(merge_dir) = merge_passwd_dir.as_ref() {
+            let mut src = merge_dir
                 .open(filename)
                 .map(BufReader::new)
                 .with_context(|| format!("Opening {filename}"))?;
@@ -1218,6 +1218,10 @@ mod tests {
         "#
     };
 
+    const ALT_PW_EXTENDED: &str = "containers:x:1002:1002::/var/home/containers:/bin/bash";
+    const ALT_GRP_EXTENDED: &str = "containers:x:1002:";
+
+    /// Set up default etc/passwd and group content in this root
     fn init_etc(rootfs: &Dir) -> Result<()> {
         rootfs.create_dir_all("etc")?;
         rootfs.write("etc/passwd", ETC_PW)?;
@@ -1232,6 +1236,7 @@ mod tests {
         Ok(())
     }
 
+    /// Set up default nss-altfiles entries in this root
     fn init_altfiles(rootfs: &Dir) -> Result<()> {
         init_etc(rootfs)?;
         rootfs.create_dir_all("usr/lib")?;
@@ -1239,6 +1244,26 @@ mod tests {
         rootfs.write("usr/lib/group", ALT_GRP)?;
         Ok(())
     }
+
+    /// Initialize a new rootfs with altfiles initialized too
+    fn new_root_altfiles() -> Result<cap_tempfile::TempDir> {
+        let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        init_altfiles(&rootfs)?;
+        Ok(rootfs)
+    }
+
+    /// Add some extra lines to altfiles
+    fn append_altfiles(rootfs: &Dir) -> Result<()> {
+        let mut append_opt = OpenOptions::new();
+        append_opt.write(true).append(true);
+        let mut w = rootfs.open_with("usr/lib/passwd", &append_opt)?;
+        w.write_all(ALT_PW_EXTENDED.as_bytes())?;
+        let mut w = rootfs.open_with("usr/lib/group", &append_opt)?;
+        w.write_all(ALT_GRP_EXTENDED.as_bytes())?;
+        Ok(())
+    }
+
+    // Tests
 
     #[test]
     fn test_prepare_rpm_layering_noop() -> Result<()> {
@@ -1266,6 +1291,19 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_prepare_rpm_layering_with_altfiles_merged() -> Result<()> {
+        let rootfs = &new_root_altfiles()?;
+        let merge_root = &new_root_altfiles()?;
+        append_altfiles(&merge_root)?;
+        let merge_etc = merge_root.open_dir("etc")?;
+        let r = prepare_rpm_layering_impl(rootfs, Some(&merge_etc)).unwrap();
+        assert_eq!(r, true);
+        assert_eq!(rootfs.read_to_string("etc/passwd")?, ALT_PW);
+        assert_eq!(rootfs.read_to_string("usr/lib/passwd")?, ETC_PW);
+        Ok(())
+    }
+
     /// Common helper to check a prepare+complete cycle
     fn postverify_cycle(rootfs: &Dir) -> Result<()> {
         if !rootfs.try_exists("etc")? {
@@ -1283,6 +1321,18 @@ mod tests {
         assert_eq!(r, true);
         assert_eq!(rootfs.read_to_string("etc/passwd")?, ALT_PW);
         assert_eq!(rootfs.read_to_string("etc/group")?, ALT_GRP);
+        complete_rpm_layering_impl(rootfs).unwrap();
+        postverify_cycle(rootfs)
+    }
+
+    #[test]
+    fn test_layering_cycle_altfiles_merged() -> Result<()> {
+        let rootfs = &new_root_altfiles()?;
+        let merge_root = &new_root_altfiles()?;
+        append_altfiles(&merge_root)?;
+        let merge_etc = &merge_root.open_dir("etc")?;
+        let r = prepare_rpm_layering_impl(rootfs, Some(merge_etc)).unwrap();
+        assert_eq!(r, true);
         complete_rpm_layering_impl(rootfs).unwrap();
         postverify_cycle(rootfs)
     }

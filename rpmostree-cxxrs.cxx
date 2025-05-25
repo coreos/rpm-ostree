@@ -2850,9 +2850,8 @@ extern "C"
   rpmostreecxx$cxxbridge1$transaction_apply_live (::rpmostreecxx::OstreeSysroot const &sysroot,
                                                   ::rpmostreecxx::GVariant const &target) noexcept;
 
-  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$prepare_rpm_layering (::std::int32_t rootfs,
-                                                                     ::rust::Str merge_passwd_dir,
-                                                                     bool *return$) noexcept;
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$prepare_rpm_layering (
+      ::std::int32_t rootfs, ::std::int32_t merge_passwd_dir, bool *return$) noexcept;
 
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$complete_rpm_layering (::std::int32_t rootfs) noexcept;
@@ -5735,7 +5734,7 @@ transaction_apply_live (::rpmostreecxx::OstreeSysroot const &sysroot,
 }
 
 bool
-prepare_rpm_layering (::std::int32_t rootfs, ::rust::Str merge_passwd_dir)
+prepare_rpm_layering (::std::int32_t rootfs, ::std::int32_t merge_passwd_dir)
 {
   ::rust::MaybeUninit<bool> return$;
   ::rust::repr::PtrLen error$
