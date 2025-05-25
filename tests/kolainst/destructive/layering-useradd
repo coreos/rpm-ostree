@@ -1,0 +1,58 @@
+#!/bin/bash
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+set -x
+cd $(mktemp -d)
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+"")
+  libtest_prepare_fully_offline
+
+  rpm-ostree install ${KOLA_EXT_DATA}/rpm-repos/0/packages/x86_64/testdaemon*.rpm
+  if grep testdaemon /etc/passwd /usr/lib/passwd; then
+    fatal "found testdaemon in current passwd"
+  fi
+
+  /tmp/autopkgtest-reboot "1"
+;;
+"1")
+  rpmostree_assert_status '.deployments[0]["requested-local-packages"]|length == 1'
+
+  # Verify testdaemon altfiles
+  rpm -q testdaemon
+  grep testdaemon /usr/lib/passwd
+  grep testdaemon /usr/lib/group
+  if grep testdaemon /etc/passwd; then
+    fatal "found testdaemon in /etc/passwd"
+  fi
+
+  # Reset this
+  rpm-ostree uninstall testdaemon
+
+  /tmp/autopkgtest-reboot "2"
+;;
+"2")
+  if grep testdaemon /etc/passwd /usr/lib/passwd; then
+    fatal "found testdaemon in current passwd"
+  fi
+;;
+*) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac
