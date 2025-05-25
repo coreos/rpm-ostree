@@ -46,19 +46,8 @@ static PWGRP_LOCK_AND_BACKUP_FILES: &[&str] = &[
     "subgid-",
 ];
 
-/// Prepare passwd content before layering RPMs.
-///
-/// We actually want RPM to inject to /usr/lib/passwd - we
-/// accomplish this by temporarily renaming /usr/lib/passwd -> /usr/etc/passwd
-/// (Which appears as /etc/passwd via our compatibility symlink in the bubblewrap
-/// script runner). We also copy the merge deployment's /etc/passwd to
-/// /usr/lib/passwd, so that %pre scripts are aware of newly added system users
-/// not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
-#[context("Preparing passwd content")]
-pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResult<bool> {
-    passwd_cleanup(rootfs_dfd)?;
-    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
-    let merge_passwd_dir: Option<&Path> = opt_string(merge_passwd_dir).map(Path::new);
+fn prepare_rpm_layering_impl(rootfs: &Dir, merge_passwd_dir: Option<&Path>) -> Result<bool> {
+    passwd_cleanup(rootfs.as_raw_fd())?;
 
     // Break hardlinks for the shadow files, since shadow-utils currently uses
     // O_RDWR unconditionally.
@@ -77,9 +66,24 @@ pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResul
     Ok(has_usrlib_passwd)
 }
 
+/// Prepare passwd content before layering RPMs.
+///
+/// We actually want RPM to inject to /usr/lib/passwd - we
+/// accomplish this by temporarily renaming /usr/lib/passwd -> /usr/etc/passwd
+/// (Which appears as /etc/passwd via our compatibility symlink in the bubblewrap
+/// script runner). We also copy the merge deployment's /etc/passwd to
+/// /usr/lib/passwd, so that %pre scripts are aware of newly added system users
+/// not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
+#[context("Preparing passwd content")]
+pub fn prepare_rpm_layering(rootfs_dfd: i32, merge_passwd_dir: &str) -> CxxResult<bool> {
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
+    let merge_passwd_dir: Option<&Path> = opt_string(merge_passwd_dir).map(Path::new);
+    prepare_rpm_layering_impl(&rootfs, merge_passwd_dir).map_err(Into::into)
+}
+
 pub fn complete_rpm_layering(rootfs_dfd: i32) -> CxxResult<()> {
     let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
-    complete_pwgrp(&rootfs)?;
+    complete_rpm_layering_impl(&rootfs)?;
 
     // /etc/shadow ends up with a timestamp in it thanks to the `lstchg`
     // field. This can be made empty safely, especially for accounts that
@@ -686,7 +690,7 @@ fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-fn complete_pwgrp(rootfs: &Dir) -> Result<()> {
+fn complete_rpm_layering_impl(rootfs: &Dir) -> Result<()> {
     for filename in USRLIB_PWGRP_FILES {
         // And now the inverse: /etc/passwd -> /usr/lib/passwd
         let etc_file = format!("etc/{}", filename);
@@ -701,7 +705,6 @@ fn complete_pwgrp(rootfs: &Dir) -> Result<()> {
     // However, we leave the (potentially modified) shadow files in place.
     // In actuality, nothing should change /etc/shadow or /etc/gshadow, so
     // we'll just have to pay the (tiny) cost of re-checksumming.
-
     Ok(())
 }
 
@@ -1193,4 +1196,94 @@ fn test_shadow_perms_from_orig_fix() -> Result<()> {
     assert!(root.try_exists(SHADOW_MODE_FIXED_STAMP)?);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use similar_asserts::assert_eq;
+
+    const ETC_PW: &str = "root:x:0:0:Super User:/root:/bin/bash";
+
+    const ALT_PW: &str = indoc::indoc! { r#"
+        adm:x:3:4:adm:/var/adm:/usr/sbin/nologin
+        bin:x:1:1:bin:/bin:/usr/sbin/nologin
+        "#
+    };
+    const ALT_GRP: &str = indoc::indoc! { r#"
+        bin:x:1:
+        daemon:x:2:
+        sys:x:3:
+        adm:x:4:
+        "#
+    };
+
+    fn init_etc(rootfs: &Dir) -> Result<()> {
+        rootfs.create_dir_all("etc")?;
+        rootfs.write("etc/passwd", ETC_PW)?;
+        rootfs.write(
+            "etc/group",
+            indoc::indoc! { r#"
+            root:x:0:
+            adm:x:4:
+            wheel:x:10:
+        "#},
+        )?;
+        Ok(())
+    }
+
+    fn init_altfiles(rootfs: &Dir) -> Result<()> {
+        init_etc(rootfs)?;
+        rootfs.create_dir_all("usr/lib")?;
+        rootfs.write("usr/lib/passwd", ALT_PW)?;
+        rootfs.write("usr/lib/group", ALT_GRP)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_prepare_rpm_layering_noop() -> Result<()> {
+        let rootfs = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        let r = prepare_rpm_layering_impl(rootfs, None).unwrap();
+        assert_eq!(r, false);
+        Ok(())
+    }
+
+    #[test]
+    fn test_prepare_rpm_layering_just_etc() -> Result<()> {
+        let rootfs = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        init_etc(rootfs)?;
+        let r = prepare_rpm_layering_impl(rootfs, None).unwrap();
+        assert_eq!(r, false);
+        Ok(())
+    }
+
+    #[test]
+    fn test_prepare_rpm_layering_with_altfiles() -> Result<()> {
+        let rootfs = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        init_altfiles(rootfs)?;
+        let r = prepare_rpm_layering_impl(rootfs, None).unwrap();
+        assert_eq!(r, true);
+        Ok(())
+    }
+
+    /// Common helper to check a prepare+complete cycle
+    fn postverify_cycle(rootfs: &Dir) -> Result<()> {
+        if !rootfs.try_exists("etc")? {
+            return Ok(());
+        }
+        assert_eq!(rootfs.read_to_string("etc/passwd")?, ETC_PW);
+        Ok(())
+    }
+
+    #[test]
+    fn test_layering_cycle_altfiles_1() -> Result<()> {
+        let rootfs = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        init_altfiles(rootfs)?;
+        let r = prepare_rpm_layering_impl(rootfs, None).unwrap();
+        assert_eq!(r, true);
+        assert_eq!(rootfs.read_to_string("etc/passwd")?, ALT_PW);
+        assert_eq!(rootfs.read_to_string("etc/group")?, ALT_GRP);
+        complete_rpm_layering_impl(rootfs).unwrap();
+        postverify_cycle(rootfs)
+    }
 }
