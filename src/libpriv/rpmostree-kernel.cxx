@@ -464,6 +464,11 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
                       GCancellable *cancellable, GError **error)
 {
   auto destdir = rpmostreecxx::cliwrap_destdir ();
+
+  /* We pass through DRACUT_NO_XATTR. */
+  const char *noxattr = g_getenv ("DRACUT_NO_XATTR") ?: "";
+  const char *noxattr_key = noxattr ? "DRACUT_NO_XATTR=" : "";
+
   /* Shell wrapper around dracut to write to the O_TMPFILE fd;
    * at some point in the future we should add --fd X instead of -f
    * to dracut.
@@ -473,13 +478,13 @@ rpmostree_run_dracut (int rootfs_dfd, const char *const *argv, const char *kver,
   g_autofree char *rpmostree_dracut_wrapper
       = g_strdup_printf ("#!/usr/bin/bash\n"
                          "set -euo pipefail\n"
-                         "export PATH=%s:${PATH}\n"
+                         "export PATH=%s:${PATH} %s%s\n"
                          "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then "
                          "extra_argv=\"--reproducible\"; fi\n"
                          "mkdir -p /tmp/dracut && dracut $extra_argv -v --add ostree "
                          "--tmpdir=/tmp/dracut -f /tmp/initramfs.img \"$@\"\n"
                          "cat /tmp/initramfs.img >/proc/self/fd/3\n",
-                         destdir.c_str ());
+                         destdir.c_str (), noxattr_key, noxattr);
   g_autoptr (GPtrArray) rebuild_argv = NULL;
   g_auto (GLnxTmpfile) tmpf = {
     0,
