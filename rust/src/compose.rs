@@ -688,6 +688,10 @@ impl RootfsOpts {
                     .flat_map(|v| ["--source-root", v.as_str()]),
             )
             .args([manifest.as_str(), self.dest.as_str()])
+            // Otherwise, dracut might try to copy user.ostreemeta xattrs which
+            // it won't be able to. We should lower the xattr stripping into
+            // rpm-ostree ideally.
+            .env("DRACUT_NO_XATTR", "1")
             .run()
             .context("Executing compose install")?;
 
