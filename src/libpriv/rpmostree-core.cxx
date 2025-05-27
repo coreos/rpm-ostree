@@ -4446,6 +4446,13 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
   if (!ROSCXX (run_sysusers (tmprootfs_dfd), error))
     return glnx_prefix_error (error, "Running systemd-sysusers");
 
+  glnx_autofd int passwd_dirfd = -1;
+  if (self->passwd_dir != NULL)
+    {
+      if (!glnx_opendirat (AT_FDCWD, self->passwd_dir, FALSE, &passwd_dirfd, error))
+        return glnx_prefix_error (error, "Opening deployment passwd dir");
+    }
+
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
   if (overlays->len > 0 || overrides_replace->len > 0)
@@ -4454,8 +4461,7 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 
       auto passwd_entries = rpmostreecxx::new_passwd_entries ();
 
-      std::string passwd_dir (self->passwd_dir ?: "");
-      CXX_TRY_VAR (have_passwd, rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dir),
+      CXX_TRY_VAR (have_passwd, rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dirfd),
                    error);
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
