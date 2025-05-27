@@ -155,7 +155,7 @@ impl Drop for RoFilesMount {
             .is_none();
         if !success {
             // If fusermount fails, then we cannot remove it; just leak it.
-            let _ = tempdir.into_path();
+            let _ = tempdir.keep();
         }
     }
 }
