@@ -4004,7 +4004,13 @@ write_rpmdb (RpmOstreeContext *self, int tmprootfs_dfd, GPtrArray *overlays,
    * SELinux plugin since rpm-ostree (and ostree) have fundamentally better
    * code.
    */
-  rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB | RPMTRANS_FLAG_NOCONTEXTS);
+  rpmtransFlags trans_flags = RPMTRANS_FLAG_JUSTDB | RPMTRANS_FLAG_NOCONTEXTS;
+  /* And if we're dealing with new enough librpm, then make sure we don't run
+   * sysusers as part of this; we already took care of sysusers during assembly. */
+#ifdef HAVE_RPMTRANS_FLAG_NOSYSUSERS
+  trans_flags |= RPMTRANS_FLAG_NOSYSUSERS;
+#endif
+  rpmtsSetFlags (rpmdb_ts, trans_flags);
 
   TransactionData tdata = { 0, NULL };
   tdata.ctx = self;
