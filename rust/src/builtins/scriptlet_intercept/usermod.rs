@@ -34,9 +34,8 @@ pub(crate) fn entrypoint(args: &[&str]) -> Result<()> {
     };
 
     let rootdir = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
-    let conf_dir = common::open_create_sysusers_dir(&rootdir)?;
     for secondary_group in groups {
-        generate_sysusers_fragment(&conf_dir, username, secondary_group)?;
+        generate_sysusers_fragment(&rootdir, username, secondary_group)?;
     }
 
     Ok(())
@@ -73,7 +72,7 @@ fn cli_cmd() -> Command {
     group
 )]
 pub(crate) fn generate_sysusers_fragment(
-    conf_dir: &Dir,
+    rootdir: &Dir,
     username: &str,
     group: &str,
 ) -> Result<bool> {
@@ -81,6 +80,7 @@ pub(crate) fn generate_sysusers_fragment(
     // API, because users may have masked it in /etc. Do not change this.
     let filename = format!("40-rpmostree-pkg-usermod-{username}-{group}.conf");
 
+    let conf_dir = common::open_create_sysusers_dir(rootdir)?;
     if conf_dir.try_exists(&filename)? {
         return Ok(false);
     }
@@ -137,7 +137,6 @@ mod test {
     #[test]
     fn test_fragment_generation() {
         let tmpdir = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).unwrap();
-        let conf_dir = common::open_create_sysusers_dir(&tmpdir).unwrap();
 
         let testcases = [
             ("testuser", "bar", true),
@@ -145,7 +144,7 @@ mod test {
             ("testuser", "other", true),
         ];
         for entry in testcases {
-            let generated = generate_sysusers_fragment(&conf_dir, entry.0, entry.1).unwrap();
+            let generated = generate_sysusers_fragment(&tmpdir, entry.0, entry.1).unwrap();
             assert_eq!(generated, entry.2, "{:?}", entry);
 
             let path = format!(
