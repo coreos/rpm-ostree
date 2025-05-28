@@ -2743,7 +2743,7 @@ dependencies = [
  "rpmostree-client",
  "rusqlite",
  "rust-ini",
- "rustix 0.38.44",
+ "rustix 1.0.7",
  "serde",
  "serde_derive",
  "serde_json",

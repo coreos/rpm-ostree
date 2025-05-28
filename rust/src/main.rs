@@ -110,7 +110,7 @@ fn inner_main() -> Result<i32> {
     if std::env::var("RPMOSTREE_GDB_HOOK").is_ok() {
         println!("RPMOSTREE_GDB_HOOK detected; stopping...");
         println!("Attach via gdb using `gdb -p {}`.", std::process::id());
-        rustix::process::kill_current_process_group(rustix::process::Signal::Stop)
+        rustix::process::kill_current_process_group(rustix::process::Signal::STOP)
             .expect("signal(SIGSTOP)");
     }
     // Initialize failpoints

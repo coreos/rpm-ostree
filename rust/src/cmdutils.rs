@@ -98,7 +98,7 @@ impl CommandRunExt for Command {
         unsafe {
             self.pre_exec(|| {
                 rustix::process::set_parent_process_death_signal(Some(
-                    rustix::process::Signal::Term,
+                    rustix::process::Signal::TERM,
                 ))
                 .map_err(Into::into)
             })
