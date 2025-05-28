@@ -23,6 +23,9 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#if __cplusplus >= 201703L
+#include <string_view>
+#endif
 #if __cplusplus >= 202002L
 #include <ranges>
 #endif
@@ -63,7 +66,7 @@ public:
   String (const char *, std::size_t);
   String (const char16_t *);
   String (const char16_t *, std::size_t);
-#if __cplusplus >= 202002L
+#ifdef __cpp_char8_t
   String (const char8_t *s);
   String (const char8_t *s, std::size_t len);
 #endif
@@ -138,6 +141,9 @@ public:
   Str &operator= (const Str &) & noexcept = default;
 
   explicit operator std::string () const;
+#if __cplusplus >= 201703L
+  explicit operator std::string_view () const;
+#endif
 
   const char *data () const noexcept;
   std::size_t size () const noexcept;
@@ -232,6 +238,11 @@ private:
 
   std::array<std::uintptr_t, 2> repr;
 };
+
+#ifdef __cpp_deduction_guides
+template <typename C>
+explicit Slice (C &c) -> Slice<std::remove_reference_t<decltype (*std::declval<C> ().data ())>>;
+#endif // __cpp_deduction_guides
 
 template <typename T> class Slice<T>::iterator final
 {
@@ -1089,6 +1100,12 @@ align_of ()
 } // namespace cxxbridge1
 } // namespace rust
 
+#if __cplusplus >= 201402L
+#define CXX_DEFAULT_VALUE(value) = value
+#else
+#define CXX_DEFAULT_VALUE(value)
+#endif
+
 namespace rpmostreecxx
 {
 struct StringMapping;
@@ -1207,19 +1224,19 @@ private:
 struct ExportedManifestDiff final
 {
   // Check if the struct is initialized
-  bool initialized;
+  bool initialized CXX_DEFAULT_VALUE (false);
   // The total number of packages in the next upgrade
-  ::std::uint64_t total;
+  ::std::uint64_t total CXX_DEFAULT_VALUE (0);
   // The size of the total number of packages in the next upgrade
-  ::std::uint64_t total_size;
+  ::std::uint64_t total_size CXX_DEFAULT_VALUE (0);
   // The total number of removed packages in the next upgrade
-  ::std::uint64_t n_removed;
+  ::std::uint64_t n_removed CXX_DEFAULT_VALUE (0);
   // The size of total number of removed packages in the next upgrade
-  ::std::uint64_t removed_size;
+  ::std::uint64_t removed_size CXX_DEFAULT_VALUE (0);
   // The total number of added packages in the next upgrade
-  ::std::uint64_t n_added;
+  ::std::uint64_t n_added CXX_DEFAULT_VALUE (0);
   // The size of total number of added packages in the next upgrade
-  ::std::uint64_t added_size;
+  ::std::uint64_t added_size CXX_DEFAULT_VALUE (0);
   // The version of the next upgrade
   ::rust::String version;
 
@@ -1249,8 +1266,8 @@ struct ContainerImageState final
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$PrunedContainerInfo
 struct PrunedContainerInfo final
 {
-  ::std::uint32_t images;
-  ::std::uint32_t layers;
+  ::std::uint32_t images CXX_DEFAULT_VALUE (0);
+  ::std::uint32_t layers CXX_DEFAULT_VALUE (0);
 
   bool operator== (PrunedContainerInfo const &) const noexcept;
   bool operator!= (PrunedContainerInfo const &) const noexcept;
@@ -1306,9 +1323,9 @@ private:
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$DeploymentLayeredMeta
 struct DeploymentLayeredMeta final
 {
-  bool is_layered;
+  bool is_layered CXX_DEFAULT_VALUE (false);
   ::rust::String base_commit;
-  ::std::uint32_t clientlayer_version;
+  ::std::uint32_t clientlayer_version CXX_DEFAULT_VALUE (0);
 
   using IsRelocatable = ::std::true_type;
 };
@@ -1402,17 +1419,17 @@ private:
 struct HistoryEntry final
 {
   // The deployment root timestamp.
-  ::std::uint64_t deploy_timestamp;
+  ::std::uint64_t deploy_timestamp CXX_DEFAULT_VALUE (0);
   // The command-line that was used to create the deployment, if any.
   ::rust::String deploy_cmdline;
   // The number of consecutive times the deployment was booted.
-  ::std::uint64_t boot_count;
+  ::std::uint64_t boot_count CXX_DEFAULT_VALUE (0);
   // The first time the deployment was booted if multiple consecutive times.
-  ::std::uint64_t first_boot_timestamp;
+  ::std::uint64_t first_boot_timestamp CXX_DEFAULT_VALUE (0);
   // The last time the deployment was booted if multiple consecutive times.
-  ::std::uint64_t last_boot_timestamp;
+  ::std::uint64_t last_boot_timestamp CXX_DEFAULT_VALUE (0);
   // `true` if there are no more entries.
-  bool eof;
+  bool eof CXX_DEFAULT_VALUE (false);
 
   bool operator== (HistoryEntry const &) const noexcept;
   bool operator!= (HistoryEntry const &) const noexcept;

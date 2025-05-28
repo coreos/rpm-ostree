@@ -21,6 +21,7 @@ use fn_error_context::context;
 use glib::Variant;
 use ostree_ext::prelude::*;
 use ostree_ext::{gio, glib, ostree};
+use rand::rngs::ThreadRng;
 use rand::Rng;
 use rustix::fs::Mode;
 use std::fs;
@@ -89,10 +90,9 @@ pub(crate) fn mutate_one_executable_to(
             .run()?;
     } else {
         // ELF is OK with us just appending some junk
-        let extra = rand::thread_rng()
-            .sample_iter(&rand::distributions::Alphanumeric)
-            .take(10)
-            .collect::<Vec<u8>>();
+        let mut rng = ThreadRng::default();
+        // Just generate 10 random bytes
+        let extra: Vec<u8> = (0..10).map(|_| rng.random()).collect();
         destf
             .write_all(&extra)
             .context("Failed to append extra data")?;
@@ -135,7 +135,7 @@ pub(crate) fn mutate_executables_to(
         if !is_elf(&mut f)? {
             continue;
         }
-        if !rand::thread_rng().gen_ratio(percentage, 100) {
+        if !ThreadRng::default().random_ratio(percentage, 100) {
             continue;
         }
         mutate_one_executable_to(&mut f, &entry.file_name(), dest, notepath, have_objcopy)
