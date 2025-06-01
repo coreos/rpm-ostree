@@ -135,9 +135,17 @@ struct ComposeImageOpts {
     /// Operate only on cached data, do not access network repositories
     offline: bool,
 
+    #[clap(long, conflicts_with_all = ["lockfiles", "lockfile_strict"])]
+    /// Path to write a JSON-formatted lockfile
+    write_lockfile_to: Option<Utf8PathBuf>,
+
     #[clap(long = "lockfile", value_parser)]
     /// JSON-formatted lockfile; can be specified multiple times.
     lockfiles: Vec<Utf8PathBuf>,
+
+    #[clap(long, requires = "lockfiles")]
+    /// With --lockfile, only allow installing locked packages
+    lockfile_strict: bool,
 
     /// Additional labels for the container image, in KEY=VALUE format
     #[clap(name = "label", long, short)]
@@ -1105,6 +1113,10 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         compose_args_extra.extend(["--layer-repo", layer_repo.as_str()]);
     }
 
+    if let Some(write_lockfile_to) = opt.write_lockfile_to.as_deref() {
+        compose_args_extra.extend(["--ex-write-lockfile-to", write_lockfile_to.as_str()]);
+    }
+
     for lockfile in opt.lockfiles.iter() {
         compose_args_extra.extend(["--ex-lockfile", lockfile.as_str()]);
     }
@@ -1132,6 +1144,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         ])
         .args(opt.force_nocache.then_some("--force-nocache"))
         .args(opt.offline.then_some("--cache-only"))
+        .args(opt.lockfile_strict.then_some("--ex-lockfile-strict"))
         .args(compose_args_extra)
         .arg(opt.manifest.as_str())
         .run()?;
