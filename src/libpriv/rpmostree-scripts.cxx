@@ -167,7 +167,12 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
    */
   { "glibc.post", "/usr/bin/bash", glibc_post_script },
   /* Code introduced in
-     https://src.fedoraproject.org/rpms/glibc/c/ca0613665ce6e1b4e92dadd3660ad39cf3dc5f3e?branch=main
+   * https://src.fedoraproject.org/rpms/glibc/c/d2ae0e3b919a3c9650cc604af23bb6e9ff97e598?branch=f42.
+   * We don't need to do anything for ostree systems.
+   */
+  { "glibc.posttrans", "/usr/bin/true", "" },
+  /* Code introduced in
+   * https://src.fedoraproject.org/rpms/glibc/c/ca0613665ce6e1b4e92dadd3660ad39cf3dc5f3e?branch=rawhide
    */
   { "glibc-gconv-extra.post", "/usr/bin/bash", glibc_post_script },
   /* See https://bugzilla.redhat.com/show_bug.cgi?id=1847454.
