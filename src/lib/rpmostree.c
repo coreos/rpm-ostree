@@ -59,7 +59,7 @@ _rpmostree_shlib_ipc_send (const char *variant_type, char **args, const char *wd
   my_sock_fd = -1;
   (void)my_sock_fd; /* Ownership was transferred */
   g_autoptr (GPtrArray) full_args = g_ptr_array_new ();
-  g_ptr_array_add (full_args, "rpm-ostree");
+  g_ptr_array_add (full_args, "/proc/self/exe");
   g_ptr_array_add (full_args, "shlib-backend");
   for (char **it = args; it && *it; it++)
     g_ptr_array_add (full_args, *it);
