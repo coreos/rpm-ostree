@@ -114,6 +114,8 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
+ "zstd",
+ "zstd-safe",
 ]
 
 [[package]]
@@ -213,10 +215,11 @@ dependencies = [
 [[package]]
 name = "bootc-utils"
 version = "0.0.0"
-source = "git+https://github.com/containers/bootc?rev=d9b18c8883ad24e7b0faf596758e3c12b26656e5#d9b18c8883ad24e7b0faf596758e3c12b26656e5"
+source = "git+https://github.com/containers/bootc?rev=v1.3.0#b06d75fed73f26a974423a9db41e19413987fca3"
 dependencies = [
  "anyhow",
- "rustix 0.38.44",
+ "chrono",
+ "rustix 1.0.7",
  "serde",
  "serde_json",
  "shlex",
@@ -284,7 +287,7 @@ dependencies = [
  "maybe-owned",
  "rustix 1.0.7",
  "rustix-linux-procfs",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
  "winx",
 ]
 
@@ -455,22 +458,27 @@ dependencies = [
 [[package]]
 name = "composefs"
 version = "0.2.0"
-source = "git+https://github.com/containers/composefs-rs?rev=55ae2e9ba72f6afda4887d746e6b98f0a1875ac4#55ae2e9ba72f6afda4887d746e6b98f0a1875ac4"
+source = "git+https://github.com/containers/composefs-rs?rev=821eeae93e48f1ee381c49b8cd4d22fda92d27a2#821eeae93e48f1ee381c49b8cd4d22fda92d27a2"
 dependencies = [
  "anyhow",
  "async-compression",
  "clap",
  "containers-image-proxy",
+ "env_logger",
  "hex",
  "indicatif",
+ "log",
  "oci-spec",
  "regex-automata 0.4.9",
- "rustix 0.38.44",
+ "rustix 1.0.7",
+ "serde",
  "sha2",
  "tar",
  "tempfile",
  "thiserror 2.0.11",
  "tokio",
+ "toml",
+ "xxhash-rust",
  "zerocopy 0.8.24",
  "zstd",
 ]
@@ -856,7 +864,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -993,7 +1001,7 @@ checksum = "5e2e6123af26f0f2c51cc66869137080199406754903cc926a7690401ce09cb4"
 dependencies = [
  "io-lifetimes",
  "rustix 0.38.44",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1163,7 +1171,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1719,7 +1727,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2285ddfe3054097ef4b2fe909ef8c3bcd1ea52a8f0d274416caebeef39f04a65"
 dependencies = [
  "io-lifetimes",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1742,7 +1750,7 @@ checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2183,9 +2191,9 @@ dependencies = [
 
 [[package]]
 name = "ostree"
-version = "0.20.0"
+version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c8ae6495e328b0ab2bf0d738f5e7df1151f9ff345cd58198d113f5e1ac4ea36"
+checksum = "2e17eb61e9ab4fc34187af48a8b45df0c57d004a963473e1c18fc1c2dbeb573f"
 dependencies = [
  "base64 0.20.0",
  "bitflags 1.3.2",
@@ -2201,7 +2209,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.15.3"
-source = "git+https://github.com/containers/bootc?rev=d9b18c8883ad24e7b0faf596758e3c12b26656e5#d9b18c8883ad24e7b0faf596758e3c12b26656e5"
+source = "git+https://github.com/containers/bootc?rev=v1.3.0#b06d75fed73f26a974423a9db41e19413987fca3"
 dependencies = [
  "anyhow",
  "bootc-utils",
@@ -2224,12 +2232,11 @@ dependencies = [
  "libsystemd",
  "ocidir",
  "olpc-cjson",
- "once_cell",
  "openssl",
  "ostree",
  "pin-project",
  "regex",
- "rustix 0.38.44",
+ "rustix 1.0.7",
  "serde",
  "serde_json",
  "tar",
@@ -2243,9 +2250,9 @@ dependencies = [
 
 [[package]]
 name = "ostree-sys"
-version = "0.15.0"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "389a71bbeb0adfda235c801c930765d585852f12d63ea30c3411a0547058ef79"
+checksum = "9e07b303a4d842e4fbd2a31496d61d1fb35fe1dac31084e2e18fc5e95ce64c76"
 dependencies = [
  "gio-sys",
  "glib-sys",
@@ -2802,7 +2809,7 @@ dependencies = [
  "libc",
  "linux-raw-sys 0.4.15",
  "once_cell",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2815,7 +2822,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3272,7 +3279,7 @@ dependencies = [
  "getrandom 0.3.1",
  "once_cell",
  "rustix 1.0.7",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3837,7 +3844,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -4137,7 +4144,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f3fd376f71958b862e7afb20cfe5a22830e1963462f3a17f49d82a6c1d1f42d"
 dependencies = [
  "bitflags 2.9.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4190,6 +4197,12 @@ dependencies = [
  "reqwest 0.11.27",
  "xml-rs",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "yoke"
