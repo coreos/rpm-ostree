@@ -8,7 +8,7 @@ podman pull --arch=ppc64le ${testimg_base}
 podman run --rm --privileged --security-opt=label=disable \
   -v /var/lib/containers:/var/lib/containers \
   -v /var/tmp:/var/tmp \
-  -v $(pwd):/output \
+  -v "$(pwd)":/output \
   localhost/builder rpm-ostree compose build-chunked-oci --bootc --from ${testimg_base} --output containers-storage:${chunked_output}
 podman rmi ${testimg_base}
 podman inspect containers-storage:${chunked_output} | jq '.[0]' > config.json
@@ -22,7 +22,7 @@ orig_created=$(podman inspect containers-storage:localhost/base | jq -r '.[0].Cr
 podman run --rm --privileged --security-opt=label=disable \
   -v /var/lib/containers:/var/lib/containers \
   -v /var/tmp:/var/tmp \
-  -v $(pwd):/output \
+  -v "$(pwd)":/output \
   localhost/builder rpm-ostree compose build-chunked-oci --bootc --format-version=1 --max-layers 99 --from localhost/base --output containers-storage:localhost/chunked
 podman inspect containers-storage:localhost/chunked | jq '.[0]' > new-config.json
 # Verify we propagated the creation date
@@ -41,7 +41,7 @@ test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt 
 podman run --rm --privileged --security-opt=label=disable \
   -v /var/lib/containers:/var/lib/containers \
   -v /var/tmp:/var/tmp \
-  -v $(pwd):/output \
+  -v "$(pwd)":/output \
   localhost/builder rpm-ostree compose build-chunked-oci --bootc --format-version=2 --max-layers 99 --from localhost/base --output containers-storage:localhost/chunked
 
 # Verify directory metadata for --format-version=2 image
