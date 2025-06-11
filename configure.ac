@@ -85,6 +85,10 @@ PKG_CHECK_MODULES(PKGDEP_LIBRPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0 ost
 dnl And these additional ones are used by for the rpmostreeinternals C/C++ library
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [polkit-gobject-1 libarchive])
 
+AC_CHECK_DECL([RPMTRANS_FLAG_NOSYSUSERS], [
+  AC_DEFINE(HAVE_RPMTRANS_FLAG_NOSYSUSERS, 1, [Define if we have RPMTRANS_FLAG_NOSYSUSERS])
+], [], [#include <rpm/rpmts.h>])
+
 AS_IF([pkg-config --atleast-version=4.18.0 rpm],
   AC_DEFINE([BUILDOPT_RPM_INTERRUPT_SAFETY_DEFAULT], 1, [Set if we do not need to turn on interrupt safety in librpm]))
 

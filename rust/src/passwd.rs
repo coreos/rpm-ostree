@@ -657,15 +657,23 @@ fn has_usrlib_passwd(rootfs: &Dir) -> std::io::Result<bool> {
 
 #[context("Preparing pwgrp")]
 fn prepare_pwgrp(rootfs: &Dir, merge_passwd_dir: Option<&Dir>) -> Result<()> {
+    // Retain the current copies in /etc as backups. Note we also move out
+    // the shadow files here since they're in sync with the passwd/group files
+    // and leaving them around would be inconsistent with the contents of the
+    // /usr/lib content we want to move in.
+    for filename in USRLIB_PWGRP_FILES.iter().chain(PWGRP_SHADOW_FILES) {
+        let etc_file = format!("etc/{}", filename);
+        if rootfs.try_exists(&etc_file)? {
+            let etc_backup = format!("{}.rpmostreesave", etc_file);
+            rootfs
+                .rename(&etc_file, rootfs, &etc_backup)
+                .with_context(|| format!("Renaming original {etc_file}"))?;
+        }
+    }
+
     for filename in USRLIB_PWGRP_FILES {
         let etc_file = format!("etc/{}", filename);
-        let etc_backup = format!("{}.rpmostreesave", etc_file);
         let usrlib_file = format!("usr/lib/{}", filename);
-
-        // Retain the current copies in /etc as backups.
-        rootfs
-            .rename(&etc_file, rootfs, &etc_backup)
-            .with_context(|| format!("Renaming original {etc_file}"))?;
 
         // Copy /usr/lib/{passwd,group} -> /etc (breaking hardlinks).
         {
@@ -696,15 +704,18 @@ fn complete_rpm_layering_impl(rootfs: &Dir) -> Result<()> {
         let etc_file = format!("etc/{}", filename);
         let usrlib_file = format!("usr/lib/{}", filename);
         rootfs.rename(&etc_file, rootfs, &usrlib_file)?;
-
-        // /etc/passwd.rpmostreesave -> /etc/passwd */
-        let etc_backup = format!("{}.rpmostreesave", etc_file);
-        rootfs.rename(&etc_backup, rootfs, &etc_file)?;
     }
 
-    // However, we leave the (potentially modified) shadow files in place.
-    // In actuality, nothing should change /etc/shadow or /etc/gshadow, so
-    // we'll just have to pay the (tiny) cost of re-checksumming.
+    for filename in USRLIB_PWGRP_FILES.iter().chain(PWGRP_SHADOW_FILES) {
+        // /etc/passwd.rpmostreesave -> /etc/passwd */
+        let etc_file = format!("etc/{}", filename);
+        let etc_backup = format!("{}.rpmostreesave", etc_file);
+        if rootfs.try_exists(&etc_backup)? {
+            let etc_file = format!("etc/{}", filename);
+            rootfs.rename(&etc_backup, rootfs, &etc_file)?;
+        }
+    }
+
     Ok(())
 }
 
