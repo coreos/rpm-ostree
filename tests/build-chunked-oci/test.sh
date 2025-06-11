@@ -32,3 +32,18 @@ test "$(date --date="${orig_created}" --rfc-3339=seconds)" = "$(date --date="${n
 # Verify we propagated labels
 test $(jq -r .Labels.testlabel < new-config.json) = "1"
 echo "ok rechunking with labels"
+
+# Verify directory metadata for --format-version=1 image
+# This will have nondeterministic mtimes creep in
+test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt @0 | wc -l)" -gt 0
+
+# Build a rechunked image with --format-version=2
+podman run --rm --privileged --security-opt=label=disable \
+  -v /var/lib/containers:/var/lib/containers \
+  -v /var/tmp:/var/tmp \
+  -v $(pwd):/output \
+  localhost/builder rpm-ostree compose build-chunked-oci --bootc --format-version=2 --max-layers 99 --from localhost/base --output containers-storage:localhost/chunked
+
+# Verify directory metadata for --format-version=2 image
+# This will have deterministic mtimes
+test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt @0 | wc -l)" -eq 0
