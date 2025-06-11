@@ -198,7 +198,11 @@ pub(crate) struct BuildChunkedOCIOpts {
     #[clap(long, required = true)]
     bootc: bool,
 
-    /// The format version. At the current time there is only version `1`.
+    /// The format version.  Version `1` creates OCI (tar) layers
+    /// sparsely, meaning parent directories may be omitted from the
+    /// tar stream.  Version `2` ensures that all parent directories
+    /// in all layers are present in the tar stream.  Default value is
+    /// `1` for backward compatibility.
     #[clap(long, default_value_t = 1)]
     format_version: u32,
 
@@ -293,7 +297,7 @@ impl BuildChunkedOCIOpts {
             .with_context(|| format!("Opening {}", rootfs))?;
         // These must be set to exactly this; the CLI parser requires it.
         assert!(self.bootc);
-        assert_eq!(self.format_version, 1);
+        assert!(self.format_version == 1 || self.format_version == 2);
 
         // If we're deriving from an existing image, be sure to preserve its metadata (labels, creation time, etc.)
         // by default.
@@ -367,6 +371,7 @@ impl BuildChunkedOCIOpts {
             .args(label_arg)
             .args(self.max_layers.map(|l| format!("--max-layers={l}")))
             .arg(format!("--arch={arch}"))
+            .arg(format!("--format-version={}", self.format_version))
             .args(
                 config_data
                     .iter()

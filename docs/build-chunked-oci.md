@@ -29,9 +29,9 @@ you are targeting bootc systems with this, please follow
 ## Running
 
 Note that the `--from` and `--rootfs` options are mutually-exclusive;
-exactly one is required.  Currently both `--bootc` and
-`--format-version=1` are required options.  Additional format versions
-may be added in the future.
+exactly one is required.  Currently the `--bootc` option is required.
+The option `--format-version` can be either `1` or `2`, and if
+omitted, defaults to `1`.
 
 ### Using `--from`
 
@@ -58,3 +58,31 @@ rpm-ostree compose build-chunked-oci --bootc --format-version=1 --rootfs=/path/t
            --output containers-storage:quay.io/exampleos/exampleos:latest
 podman push quay.io/exampleos/exampleos:latest
 ```
+
+### Using `--format-version`
+
+The value of `--format-version` must be either `1` or `2`.  Additional
+format versions may be added in the future.
+
+A value of `1` will create an image with "sparse" layers.  A sparse
+layer will contain information for a changed file `/path/to/foo` in
+the tar stream, but may not contain information for the parent
+directories `/path` and `/path/to`.  This has the advantage of
+minimally reducing the size of the image since the tar stream is
+smaller, but has the disadvantage that the directories must be
+implicitly created when unpacking the layer.  This implicit creation
+results in directories with unpredictable metadata and breaks
+reproducible builds.
+
+A value of `2` will ensure that for each layer, any parent directories
+are explicitly defined in the tar stream for that layer.  This
+increases the layer size, but removes ambiguity about the expected
+metadata for the parent directories.
+
+The default value is `--format-version=1` for backwards-compatibility
+to ensure that images previously built with `--format-version=1` can
+be updated while also reusing existing layers from the previous
+version of an image.
+
+If reproducible builds are desirable, it is recommended to use
+`--format-version=2`.
