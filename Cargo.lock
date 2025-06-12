@@ -215,7 +215,7 @@ dependencies = [
 [[package]]
 name = "bootc-utils"
 version = "0.0.0"
-source = "git+https://github.com/containers/bootc?rev=v1.3.0#b06d75fed73f26a974423a9db41e19413987fca3"
+source = "git+https://github.com/containers/bootc?rev=9b72f1ae36476cc1d290d277285456172e4c3d51#9b72f1ae36476cc1d290d277285456172e4c3d51"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2226,7 +2226,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.15.3"
-source = "git+https://github.com/containers/bootc?rev=v1.3.0#b06d75fed73f26a974423a9db41e19413987fca3"
+source = "git+https://github.com/containers/bootc?rev=9b72f1ae36476cc1d290d277285456172e4c3d51#9b72f1ae36476cc1d290d277285456172e4c3d51"
 dependencies = [
  "anyhow",
  "bootc-utils",

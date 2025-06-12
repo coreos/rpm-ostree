@@ -77,7 +77,7 @@ struct ContainerEncapsulateOpts {
     #[clap(long)]
     max_layers: Option<NonZeroU32>,
 
-    /// The encapsulated container format version; must be 0 or 1.
+    /// The encapsulated container format version; must be 1 or 2.
     #[clap(long, default_value = "1")]
     format_version: u32,
 
@@ -518,6 +518,9 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
             .build()
             .unwrap();
         opts.platform = Some(platform);
+    }
+    if opt.format_version >= 2 {
+        opts.tar_create_parent_dirs = true;
     }
     let handle = tokio::runtime::Handle::current();
     println!("Generating container image");
