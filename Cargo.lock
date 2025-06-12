@@ -215,7 +215,7 @@ dependencies = [
 [[package]]
 name = "bootc-utils"
 version = "0.0.0"
-source = "git+https://github.com/containers/bootc?rev=v1.3.0#b06d75fed73f26a974423a9db41e19413987fca3"
+source = "git+https://github.com/containers/bootc?rev=v1.4.0#58ee28cbab24cccb53cf7c2d975fe7eb5773b137"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2226,7 +2226,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.15.3"
-source = "git+https://github.com/containers/bootc?rev=v1.3.0#b06d75fed73f26a974423a9db41e19413987fca3"
+source = "git+https://github.com/containers/bootc?rev=v1.4.0#58ee28cbab24cccb53cf7c2d975fe7eb5773b137"
 dependencies = [
  "anyhow",
  "bootc-utils",
@@ -3869,7 +3869,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
