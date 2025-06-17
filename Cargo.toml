@@ -47,7 +47,7 @@ rpm = "4"
 anyhow = "1.0.98"
 binread = "2.2.0"
 bitflags = "2.9"
-camino = "1.1.9"
+camino = "1.1.10"
 cap-std-ext = "4"
 cap-primitives = "3"
 cap-std = { version = "3", features = ["fs_utf8"] }
@@ -65,7 +65,7 @@ futures = "0.3.31"
 indoc = "2.0.6"
 indicatif = "0.17.11"
 is-terminal = "0.4"
-libc = "0.2.172"
+libc = "0.2.173"
 libdnf-sys = { path = "rust/libdnf-sys", version = "0.1.0" }
 maplit = "1.0"
 nix = { version = "0.30.1", features = ["fs", "mount", "signal", "user"] }
