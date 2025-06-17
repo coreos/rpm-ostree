@@ -4004,7 +4004,13 @@ write_rpmdb (RpmOstreeContext *self, int tmprootfs_dfd, GPtrArray *overlays,
    * SELinux plugin since rpm-ostree (and ostree) have fundamentally better
    * code.
    */
-  rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB | RPMTRANS_FLAG_NOCONTEXTS);
+  rpmtransFlags trans_flags = RPMTRANS_FLAG_JUSTDB | RPMTRANS_FLAG_NOCONTEXTS;
+  /* And if we're dealing with new enough librpm, then make sure we don't run
+   * sysusers as part of this; we already took care of sysusers during assembly. */
+#ifdef HAVE_RPMTRANS_FLAG_NOSYSUSERS
+  trans_flags |= RPMTRANS_FLAG_NOSYSUSERS;
+#endif
+  rpmtsSetFlags (rpmdb_ts, trans_flags);
 
   TransactionData tdata = { 0, NULL };
   tdata.ctx = self;
@@ -4443,9 +4449,6 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
   if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
     return FALSE;
 
-  if (!ROSCXX (run_sysusers (tmprootfs_dfd), error))
-    return glnx_prefix_error (error, "Running systemd-sysusers");
-
   glnx_autofd int passwd_dirfd = -1;
   if (self->passwd_dir != NULL)
     {
@@ -4463,6 +4466,9 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
 
       CXX_TRY_VAR (have_passwd, rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dirfd),
                    error);
+
+      if (!ROSCXX (run_sysusers (tmprootfs_dfd), error))
+        return glnx_prefix_error (error, "Running systemd-sysusers");
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
       if (!rpmostree_rootfs_fixup_selinux_store_root (tmprootfs_dfd, cancellable, error))

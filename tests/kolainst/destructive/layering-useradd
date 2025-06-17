@@ -31,10 +31,13 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     fatal "found testdaemon in current passwd"
   fi
 
+  # https://github.com/coreos/rpm-ostree/issues/5365
+  rpm-ostree install ${KOLA_EXT_DATA}/rpm-repos/0/packages/x86_64/rpmostree-openvpn*.rpm
+
   /tmp/autopkgtest-reboot "1"
 ;;
 "1")
-  rpmostree_assert_status '.deployments[0]["requested-local-packages"]|length == 1'
+  rpmostree_assert_status '.deployments[0]["requested-local-packages"]|length == 2'
 
   # Verify testdaemon altfiles
   rpm -q testdaemon
@@ -44,14 +47,22 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     fatal "found testdaemon in /etc/passwd"
   fi
 
+  rpm -q rpmostree-openvpn
+  # Ensure /etc/rpmostree-openvpn.d is owned by rpmostree-openvpn
+  assert_streq $(stat -c '%U %G' /etc/rpmostree-openvpn.d) 'rpmostree-openvpn rpmostree-openvpn'
+  echo ok rpmostree-openvpn
+
   # Reset this
-  rpm-ostree uninstall testdaemon
+  rpm-ostree uninstall testdaemon rpmostree-openvpn
 
   /tmp/autopkgtest-reboot "2"
 ;;
 "2")
   if grep testdaemon /etc/passwd /usr/lib/passwd; then
     fatal "found testdaemon in current passwd"
+  fi
+  if grep rpmostree-openvpn /etc/passwd /usr/lib/passwd; then
+    fatal "found rpmostree-openvpn in current passwd"
   fi
 ;;
 *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
