@@ -71,7 +71,7 @@ static GOptionEntry option_entries[]
           "If no new deployment made, exit 77", NULL },
         { "trigger-automatic-update-policy", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE,
           &opt_automatic, "For automated use only; triggered by automatic timer", NULL },
-        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+        { "lock-finalization", 0, 0, G_OPTION_ARG_NONE, &opt_lock_finalization,
           "Prevent automatic deployment finalization on shutdown", NULL },
         { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver,
           "Force an upgrade even if an updates driver is registered", NULL },

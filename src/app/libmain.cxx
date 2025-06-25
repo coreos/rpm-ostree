@@ -140,8 +140,9 @@ static RpmOstreeCommand commands[] = {
                                         | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT
                                         | RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
     NULL, rpmostree_builtin_start_daemon },
-  { "finalize-deployment", static_cast<RpmOstreeBuiltinFlags> (RPM_OSTREE_BUILTIN_FLAG_HIDDEN),
-    NULL, rpmostree_builtin_finalize_deployment },
+  { "finalize-deployment", static_cast<RpmOstreeBuiltinFlags> (0),
+    "Unset the finalization locking state of the staged deployment and reboot",
+    rpmostree_builtin_finalize_deployment },
   { NULL }
 };
 

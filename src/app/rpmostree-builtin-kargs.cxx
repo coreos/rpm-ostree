@@ -75,7 +75,7 @@ static GOptionEntry option_entries[] = {
     NULL },
   { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Use an editor to modify the kernel arguments",
     NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+  { "lock-finalization", 0, 0, G_OPTION_ARG_NONE, &opt_lock_finalization,
     "Prevent automatic deployment finalization on shutdown", NULL },
   { NULL }
 };
