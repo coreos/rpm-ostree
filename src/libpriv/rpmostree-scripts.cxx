@@ -471,6 +471,26 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_
   return TRUE;
 }
 
+/* Check for a "magic comment" that signifies this lua script
+ * should be skipped by us. For more, see docs/architecture-core.md
+ */
+static gboolean
+lua_script_has_skip (const char *buf)
+{
+  const char skip_comment[] = "-- rpm-ostree-skip";
+  const int max_lines = 10;
+  for (int i = 0; *buf && i < max_lines; i++)
+    {
+      if (g_str_has_prefix (buf, skip_comment))
+        return TRUE;
+      const char *eol = strchr (buf, '\n');
+      if (!eol)
+        break;
+      buf = eol + 1;
+    }
+  return FALSE;
+}
+
 /* Medium level script entrypoint; we already validated it exists and isn't
  * ignored. Here we mostly compute arguments/input, then proceed into the lower
  * level bwrap execution.
@@ -486,12 +506,17 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript, DnfPackage *pkg, Heade
     args = static_cast<char **> (td.data);
 
   const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
-  const char *script;
+  const char *script = headerGetString (hdr, rpmscript->tag);
   const char *interp = (args && args[0]) ? args[0] : "/bin/sh";
   const char *pkg_scriptid = glnx_strjoina (dnf_package_get_name (pkg), ".", rpmscript->desc + 1);
   gboolean expand = (flags & RPMSCRIPT_FLAG_EXPAND) > 0;
   if (g_str_equal (interp, lua_builtin))
     {
+      if (lua_script_has_skip (script))
+        {
+          g_debug ("Skipping package %s script %%%s", dnf_package_get_name (pkg), rpmscript->desc);
+          return TRUE;
+        }
       /* This is a lua script; look for a built-in override/replacement */
       gboolean found_replacement = FALSE;
       for (guint i = 0; i < G_N_ELEMENTS (lua_replacements); i++)
@@ -518,8 +543,6 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript, DnfPackage *pkg, Heade
     }
   else
     {
-      script = headerGetString (hdr, rpmscript->tag);
-
       for (guint i = 0; i < G_N_ELEMENTS (script_replacements); i++)
         {
           const RpmOstreeScriptReplacement *repl = &script_replacements[i];

@@ -141,6 +141,22 @@ not writable.  This helps ensure offline updates are possible; a
 package script running client side cannot affect persistent system
 state.
 
+#### Lua scripts
+
+At the moment, because lua scripts aren't sandboxed they are not supported.
+For more information, see <https://github.com/coreos/rpm-ostree/issues/749>.
+
+However, in most cases these scripts are "upgrade hacks" or would mutate
+live system state, and should generally just be skipped. If you want
+these scripts to only apply to librpm systems (e.g. `dnf` but not `rpm-ostree`)
+then you can add a magic comment in the first 10 lines:
+
+```
+-- rpm-ostree-skip
+```
+
+This will cause rpm-ostree to ignore the script.
+
 ### Content in /var
 
 rpm-ostree automatically synthesizes [systemd tmpfiles.d](https://www.freedesktop.org/software/systemd/man/tmpfiles.d.html)
