@@ -50,7 +50,7 @@ static GOptionEntry option_entries[] = {
   { "untrack-all", 0, 0, G_OPTION_ARG_NONE, &opt_untrack_all, "Untrack all root /etc files", NULL },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
     "Initiate a reboot after operation is complete", NULL },
-  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+  { "lock-finalization", 0, 0, G_OPTION_ARG_NONE, &opt_lock_finalization,
     "Prevent automatic deployment finalization on shutdown", NULL },
   { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77,
     "If no new deployment made, exit 77", NULL },

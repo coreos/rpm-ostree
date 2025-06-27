@@ -50,7 +50,7 @@ static GOptionEntry option_entries[]
           "Initiate a reboot after operation is complete", NULL },
         { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction",
           NULL },
-        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+        { "lock-finalization", 0, 0, G_OPTION_ARG_NONE, &opt_lock_finalization,
           "Prevent automatic deployment finalization on shutdown", NULL },
         { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Only operate on cached data",
           NULL },
