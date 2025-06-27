@@ -78,6 +78,13 @@ build_rpm testpkg-post-infinite-loop \
              post "echo entering testpkg-post-infinite-loop 1>&2; while true; do sleep 1h; done"
 build_rpm testpkg-touch-run \
              post "touch /{run,tmp,var/tmp}/should-not-persist"
+build_rpm testpkg-lua-should-fail \
+             post_args "-p <lua>" \
+             post 'posix.stat("/")'
+build_rpm testpkg-lua-ignored \
+             post_args "-p <lua>" \
+             post '-- rpm-ostree-skip 
+                   posix.stat("/")'
 
 # Will be useful in checking difference in package version while doing apply-live 
 build_rpm pkgsystemd \

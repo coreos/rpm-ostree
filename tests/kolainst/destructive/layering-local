@@ -60,6 +60,13 @@ assert_not_file_has_content_literal out.txt foo-1.2-3
 mv /etc/rpm-ostreed.conf{.bak,} && rpm-ostree reload
 echo "ok Recommends"
 
+if rpm-ostree install testpkg-lua-should-fail 2>err.txt; then
+  fatal "Installed testpkg-lua-should-fail"
+fi
+rpm-ostree install testpkg-lua-ignored
+rpm-ostree uninstall testpkg-lua-ignored
+echo "ok lua"
+
 # Disable repos, no Internet access should be required for the remaining tests
 rm -rf /etc/yum.repos.d/
 # Also disable zincati since we're rebasing
