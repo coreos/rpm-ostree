@@ -456,6 +456,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         basearch,
         rojig,
         selinux,
+        sysusers,
         selinux_label_version,
         ignore_devices,
         ima,
@@ -1335,6 +1336,10 @@ impl Treefile {
 
     pub(crate) fn get_selinux(&self) -> bool {
         self.parsed.base.selinux.unwrap_or(true)
+    }
+
+    pub(crate) fn get_sysusers_is_forced(&self) -> bool {
+        self.parsed.base.sysusers.unwrap_or_default() == SysUsers::ComposeForced
     }
 
     pub(crate) fn get_ignore_devices(&self) -> bool {
@@ -2536,6 +2541,8 @@ pub(crate) struct BaseComposeConfigFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) selinux_label_version: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) sysusers: Option<SysUsers>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ima: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) gpg_key: Option<String>,
@@ -2662,6 +2669,14 @@ pub(crate) struct BaseComposeConfigFields {
 pub(crate) struct RepoPackage {
     pub(crate) repo: String,
     pub(crate) packages: BTreeSet<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Copy, Clone, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum SysUsers {
+    #[default]
+    ComposeAuto,
+    ComposeForced,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]

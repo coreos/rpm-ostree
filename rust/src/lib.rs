@@ -263,7 +263,7 @@ pub mod ffi {
 
         fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Result<()>;
 
-        fn run_sysusers(rootfs_dfd: i32) -> Result<()>;
+        fn run_sysusers(rootfs_dfd: i32, force: bool) -> Result<()>;
 
         fn log_treefile(tf: &Treefile);
 
@@ -628,6 +628,7 @@ pub mod ffi {
         fn get_documentation(&self) -> bool;
         fn get_recommends(&self) -> bool;
         fn get_selinux(&self) -> bool;
+        fn get_sysusers_is_forced(&self) -> bool;
         fn get_selinux_label_version(&self) -> u32;
         fn get_gpg_key(&self) -> String;
         fn get_automatic_version_suffix(&self) -> String;

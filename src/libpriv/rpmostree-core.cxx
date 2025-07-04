@@ -4467,7 +4467,8 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
       CXX_TRY_VAR (have_passwd, rpmostreecxx::prepare_rpm_layering (tmprootfs_dfd, passwd_dirfd),
                    error);
 
-      if (!ROSCXX (run_sysusers (tmprootfs_dfd), error))
+      if (!ROSCXX (run_sysusers (tmprootfs_dfd, self->treefile_rs->get_sysusers_is_forced ()),
+                   error))
         return glnx_prefix_error (error, "Running systemd-sysusers");
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */

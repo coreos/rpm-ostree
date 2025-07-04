@@ -543,6 +543,12 @@ version of `rpm-ostree`.
    names to use when substituting variables in yum repo files. The `releasever`
    variable name is invalid. Use the `releasever` key instead. The `basearch`
    name is invalid; it is filled in automatically.
+ * `sysusers`: enum, optional: Choices are:
+    - `compose-auto`: run systemd-sysusers at compose time if the
+      `%__systemd_sysusers` RPM macro is defined (this is the case in Fedora 42).
+    - `compose-forced`: run systemd-sysusers at compose time even if the
+      `%__systemd_sysusers` RPM macro is not defined (e.g. c9s and c10s).
+    The default is `compose-auto`.
  * `opt-usrlocal`: enum, optional: Defaults to `var`.  There are
    two possible behaviors:
    - `var`: `/opt` and `/usr/local` are symlinks to subdirectories in `/var`

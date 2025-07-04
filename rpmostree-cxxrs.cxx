@@ -1813,6 +1813,7 @@ struct Treefile final : public ::rust::Opaque
   bool get_documentation () const noexcept;
   bool get_recommends () const noexcept;
   bool get_selinux () const noexcept;
+  bool get_sysusers_is_forced () const noexcept;
   ::std::uint32_t get_selinux_label_version () const noexcept;
   ::rust::String get_gpg_key () const noexcept;
   ::rust::String get_automatic_version_suffix () const noexcept;
@@ -2203,7 +2204,8 @@ extern "C"
                                                            ::rust::Str kver,
                                                            bool unified_core) noexcept;
 
-  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$run_sysusers (::std::int32_t rootfs_dfd) noexcept;
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$run_sysusers (::std::int32_t rootfs_dfd,
+                                                             bool force) noexcept;
 
   void rpmostreecxx$cxxbridge1$log_treefile (::rpmostreecxx::Treefile const &tf) noexcept;
 
@@ -2660,6 +2662,9 @@ extern "C"
   rpmostreecxx$cxxbridge1$Treefile$get_recommends (::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$get_selinux (::rpmostreecxx::Treefile const &self) noexcept;
+
+  bool rpmostreecxx$cxxbridge1$Treefile$get_sysusers_is_forced (
+      ::rpmostreecxx::Treefile const &self) noexcept;
 
   ::std::uint32_t rpmostreecxx$cxxbridge1$Treefile$get_selinux_label_version (
       ::rpmostreecxx::Treefile const &self) noexcept;
@@ -3926,9 +3931,9 @@ run_depmod (::std::int32_t rootfs_dfd, ::rust::Str kver, bool unified_core)
 }
 
 void
-run_sysusers (::std::int32_t rootfs_dfd)
+run_sysusers (::std::int32_t rootfs_dfd, bool force)
 {
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$run_sysusers (rootfs_dfd);
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$run_sysusers (rootfs_dfd, force);
   if (error$.ptr)
     {
       throw ::rust::impl<::rust::Error>::error (error$);
@@ -5237,6 +5242,12 @@ bool
 Treefile::get_selinux () const noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$get_selinux (*this);
+}
+
+bool
+Treefile::get_sysusers_is_forced () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$get_sysusers_is_forced (*this);
 }
 
 ::std::uint32_t
