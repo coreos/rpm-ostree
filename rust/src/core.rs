@@ -152,7 +152,7 @@ pub(crate) fn refspec_classify(refspec: &str) -> crate::ffi::RefspecType {
 /// differently: librpm checks for the user/group provides before proceeding to
 /// call sysusers _just_ for that package. Here we do it for all of them. See
 /// also: https://github.com/coreos/rpm-ostree/issues/5333.
-pub(crate) fn run_sysusers(rootfs_dfd: i32) -> CxxResult<()> {
+pub(crate) fn run_sysusers(rootfs_dfd: i32, force: bool) -> CxxResult<()> {
     let args: Vec<_> = ["rpm", "--eval=%{?__systemd_sysusers}"]
         .into_iter()
         .map(|s| s.to_string())
@@ -164,7 +164,12 @@ pub(crate) fn run_sysusers(rootfs_dfd: i32) -> CxxResult<()> {
         crate::ffi::BubblewrapMutability::Immutable,
     )?;
     let tmp = String::from_utf8(path).context("Could not read %__systemd_sysusers as UTF8")?;
-    let cmd = tmp.trim();
+    let cmd_from_rpm = tmp.trim();
+    let cmd = if cmd_from_rpm.is_empty() && force {
+        "/usr/bin/systemd-sysusers"
+    } else {
+        cmd_from_rpm
+    };
     if !cmd.is_empty() {
         progress_task("Running systemd-sysusers", || -> CxxResult<()> {
             let args: Vec<_> = vec![cmd.into()];

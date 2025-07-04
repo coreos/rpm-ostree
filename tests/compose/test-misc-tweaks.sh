@@ -142,13 +142,26 @@ rm tmp/rootfs/usr -rf
 mkdir -p tmp/rootfs/usr/{share/info,bin}
 echo sweet new ls binary > tmp/rootfs/usr/bin/ls
 ostree --repo="${repo}" commit --consume --no-xattrs --owner-uid=0 --owner-gid=0 -b testoverride-1 --tree=dir=tmp/rootfs
+
+# We're also going to test `sysusers: compose-forced` here. But since we're
+# testing on Fedora in which it's already the default, we'll first _undo_ that
+# default so that our `sysusers` knob becomes load-bearing. To do that, we add
+# an RPM macro dropin which unsets the sysusers macro.
+rm -rf tmp/rootfs/usr
+mkdir -p tmp/rootfs/usr/lib/{rpm/macros.d,sysusers.d}
+echo '%__systemd_sysusers %nil' > tmp/rootfs/usr/lib/rpm/macros.d/macros.disable-sysusers
+echo 'g clevis 888' > tmp/rootfs/usr/lib/sysusers.d/sysusers-test.conf
+ostree --repo="${repo}" commit --consume --no-xattrs --owner-uid=0 --owner-gid=0 -b sysusers --tree=dir=tmp/rootfs
+
 cat >> ${new_treefile} <<EOF
 ostree-layers:
   - testlayer-1
   - testlayer-2
   - testlayer-3
+  - sysusers
 ostree-override-layers:
   - testoverride-1
+sysusers: compose-forced
 EOF
 
 export treefile=${new_treefile}
@@ -156,6 +169,10 @@ export treefile=${new_treefile}
 # Do the compose
 runcompose
 echo "ok compose"
+
+ostree --repo=${repo} cat ${treeref} /usr/lib/group > group.txt
+assert_file_has_content group.txt 'clevis:x:888'
+echo "ok sysusers-test"
 
 ostree --repo=${repo} ls -X ${treeref} /usr/etc/sysctl.conf > ls.txt
 assert_file_has_content ls.txt ':system_conf_t:'

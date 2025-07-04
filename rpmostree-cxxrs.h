@@ -1590,6 +1590,7 @@ struct Treefile final : public ::rust::Opaque
   bool get_documentation () const noexcept;
   bool get_recommends () const noexcept;
   bool get_selinux () const noexcept;
+  bool get_sysusers_is_forced () const noexcept;
   ::std::uint32_t get_selinux_label_version () const noexcept;
   ::rust::String get_gpg_key () const noexcept;
   ::rust::String get_automatic_version_suffix () const noexcept;
@@ -1877,7 +1878,7 @@ prepare_filesystem_script_prep (::std::int32_t rootfs);
 
 void run_depmod (::std::int32_t rootfs_dfd, ::rust::Str kver, bool unified_core);
 
-void run_sysusers (::std::int32_t rootfs_dfd);
+void run_sysusers (::std::int32_t rootfs_dfd, bool force);
 
 void log_treefile (::rpmostreecxx::Treefile const &tf) noexcept;
 
