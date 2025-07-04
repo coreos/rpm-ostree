@@ -69,7 +69,7 @@ static GOptionEntry option_entries[]
           "Do nothing if package already (un)installed", NULL },
         { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77,
           "If no overlays were changed, exit 77", NULL },
-        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+        { "lock-finalization", 0, 0, G_OPTION_ARG_NONE, &opt_lock_finalization,
           "Prevent automatic deployment finalization on shutdown", NULL },
         { "enablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_enable_repo,
           "Enable the repository based on the repo id. Is only supported in a container build.",

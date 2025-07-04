@@ -59,7 +59,7 @@ static GOptionEntry option_entries[]
           "Just download latest ostree and RPM data, don't deploy", NULL },
         { "skip-branch-check", 0, 0, G_OPTION_ARG_NONE, &opt_skip_branch_check,
           "Do not check if commit belongs on the same branch", NULL },
-        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+        { "lock-finalization", 0, 0, G_OPTION_ARG_NONE, &opt_lock_finalization,
           "Prevent automatic deployment finalization on shutdown", NULL },
         { "disallow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_disallow_downgrade,
           "Forbid deployment of chronologically older trees", NULL },
