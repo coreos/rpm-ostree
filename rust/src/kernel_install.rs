@@ -92,12 +92,6 @@ pub fn main(argv: &[&str]) -> Result<u8> {
     if !matches!(layout.to_str(), Some(LAYOUT_OSTREE)) {
         return Ok(0);
     }
-    if !ostree_ext::container_utils::is_ostree_container()? {
-        eprintln!(
-            "warning: confused state: {LAYOUT_VAR}={LAYOUT_OSTREE} but not in an ostree container"
-        );
-        return Ok(0);
-    }
     let root = &Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
     tracing::debug!("argv={argv:?}");
     match argv {
