@@ -49,7 +49,7 @@ static GOptionEntry option_entries[]
           "Disable regenerating initramfs locally", NULL },
         { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot,
           "Initiate a reboot after operation is complete", NULL },
-        { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization,
+        { "lock-finalization", 0, 0, G_OPTION_ARG_NONE, &opt_lock_finalization,
           "Prevent automatic deployment finalization on shutdown", NULL },
         { NULL } };
 
