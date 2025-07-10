@@ -30,6 +30,7 @@ codestyle: {
 }
 
 def nhosts = 4
+// nb: the 1536 matches libvm.sh here
 def mem = (nhosts * 1536) + 512
 cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
   stage("Unit Tests") {
