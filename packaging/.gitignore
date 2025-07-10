@@ -1,4 +1,3 @@
-*.spec
 rpm-ostree*/
 rpm-ostree*.rpm
 rpm-ostree*.tar.xz
