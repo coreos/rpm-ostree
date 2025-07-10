@@ -35,6 +35,11 @@ use crate::fsutil::{self, FileHelpers, ResolvedOstreePaths};
 use crate::progress::progress_task;
 use crate::CxxResult;
 
+/// Parse a transport from a CLI argument.
+pub(crate) fn parse_transport(s: &str) -> Result<ostree_ext::container::Transport> {
+    ostree_ext::container::Transport::try_from(s)
+}
+
 #[derive(Debug, Parser)]
 struct ContainerEncapsulateOpts {
     #[clap(long)]
