@@ -276,6 +276,9 @@ impl BuildChunkedOCIOpts {
             Rootfs(Utf8PathBuf),
             Podman(Mount),
         }
+
+        let existing_manifest = self.check_existing_image(&self.output)?;
+
         let rootfs_source = if let Some(rootfs) = self.rootfs {
             FileSource::Rootfs(rootfs)
         } else {
@@ -361,6 +364,16 @@ impl BuildChunkedOCIOpts {
         } else {
             None
         };
+
+        let manifest_data_tmpfile = if let Some(manifest) = existing_manifest.as_ref() {
+            let mut tmpf = tempfile::NamedTempFile::new()?;
+            serde_json::to_writer(&mut tmpf, &manifest)?;
+            Some(tmpf)
+        } else {
+            None
+        };
+        let manifest_data = manifest_data_tmpfile.as_ref().map(|t| t.path());
+
         crate::isolation::self_command()
             .args([
                 "compose",
@@ -378,6 +391,12 @@ impl BuildChunkedOCIOpts {
                     .flat_map(|c| [OsStr::new("--image-config"), c.as_os_str()]),
             )
             .args([commitid.as_str(), self.output.as_str()])
+            .args(manifest_data.as_ref().iter().flat_map(|manifest| {
+                [
+                    OsStr::new("--previous-build-manifest"),
+                    manifest.as_os_str(),
+                ]
+            }))
             .run()
             .context("Invoking compose container-encapsulate")?;
 
@@ -392,6 +411,57 @@ impl BuildChunkedOCIOpts {
         }
 
         Ok(())
+    }
+
+    /// Check if there's already an image at the target location and if it's chunked
+    fn check_existing_image(&self, output: &str) -> Result<Option<oci_spec::image::ImageManifest>> {
+        // Parse the output reference to determine transport and location
+        let (_transport, _location) = output
+            .split_once(':')
+            .ok_or_else(|| anyhow::anyhow!("Invalid output format, expected TRANSPORT:TARGET"))?;
+
+        let handle = tokio::runtime::Handle::current();
+        let result: Option<oci_spec::image::ImageManifest> = handle.block_on(async {
+            // Create image proxy without specific authfile config since BuildChunkedOCIOpts doesn't have authfile field
+            // The proxy will use default authentication sources (e.g., $XDG_RUNTIME_DIR/containers/auth.json)
+            let proxy = containers_image_proxy::ImageProxy::new().await?;
+
+            // Try to open the image
+            let img = proxy.open_image_optional(output).await?;
+
+            if let Some(opened_image) = img {
+                // Fetch the manifest
+                let (_, manifest) = proxy.fetch_manifest(&opened_image).await?;
+                anyhow::Ok(Some(manifest))
+            } else {
+                // Image doesn't exist
+                anyhow::Ok(None)
+            }
+        })?;
+
+        if let Some(manifest) = result {
+            // Check if all layers have ostree.components annotation (skip first layer)
+            let is_chunked = manifest.layers().iter().skip(1).all(|layer| {
+                layer
+                    .annotations()
+                    .as_ref()
+                    .and_then(|annotations| annotations.get("ostree.components"))
+                    .is_some()
+            });
+
+            if is_chunked {
+                println!("Found existing chunked image at target, will use as baseline");
+                Ok(Some(manifest))
+            } else {
+                println!(
+                    "Found existing image at target but it's not chunked, will create new image"
+                );
+                Ok(None)
+            }
+        } else {
+            // Image doesn't exist, return None
+            Ok(None)
+        }
     }
 }
 

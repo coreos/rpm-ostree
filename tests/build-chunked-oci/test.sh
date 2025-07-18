@@ -47,3 +47,68 @@ podman run --rm --privileged --security-opt=label=disable \
 # Verify directory metadata for --format-version=2 image
 # This will have deterministic mtimes
 test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt @0 | wc -l)" -eq 0
+
+# Test chunked image base detection and reuse
+# First create a chunked image from base
+echo "Testing rechunking existing chunked image"
+podman run --rm --privileged --security-opt=label=disable \
+  -v /var/lib/containers:/var/lib/containers \
+  -v /var/tmp:/var/tmp \
+  -v "$(pwd)":/output \
+  localhost/builder rpm-ostree compose build-chunked-oci --bootc --from localhost/base --output containers-storage:localhost/chunked
+
+# Get the layer digests from the original chunked image
+original_layers_file=$(mktemp)
+podman inspect containers-storage:localhost/chunked | jq -r '.[0].RootFS.Layers[]' | sort > "$original_layers_file"
+
+# Build a modified image from the chunked base that adds new packages
+cat > Containerfile.modified <<EOF
+FROM localhost/chunked
+RUN dnf install -y vim-enhanced git-core postgresql
+EOF
+
+podman build -t localhost/modified -f Containerfile.modified
+
+# Re-chunk the modified image - this should detect and reuse the chunked base
+echo "Re-chunking using existing chunked image"
+rechunk_output=$(mktemp)
+podman run --rm --privileged --security-opt=label=disable \
+  -v /var/lib/containers:/var/lib/containers \
+  -v /var/tmp:/var/tmp \
+  -v "$(pwd)":/output \
+  localhost/builder rpm-ostree compose build-chunked-oci --bootc --from localhost/modified --output containers-storage:localhost/chunked 2>&1 | tee "$rechunk_output"
+
+# Check that the expected output string is present
+if ! grep -q "Found existing chunked image at target, will use as baseline" "$rechunk_output"; then
+    echo "ERROR: Expected output 'Found existing chunked image at target, will use as baseline' not found"
+    exit 1
+fi
+
+# Get the layer digests from the rechunked image
+rechunked_layers_file=$(mktemp)
+podman inspect containers-storage:localhost/chunked | jq -r '.[0].RootFS.Layers[]' | sort > "$rechunked_layers_file"
+
+# Verify that some layers from the original chunked image are reused
+# The rechunked image should contain most of the original layers plus new ones
+common_layers=$(comm -12 "$original_layers_file" "$rechunked_layers_file" | wc -l)
+original_layer_count=$(wc -l < "$original_layers_file")
+rechunked_layer_count=$(wc -l < "$rechunked_layers_file")
+
+echo "original_layer_count: $original_layer_count"
+echo "rechunked_layer_count: $rechunked_layer_count"
+echo "common_layers: $common_layers"
+
+# At least 80% of original layers should be reused
+min_reused=$((original_layer_count * 8 / 10))
+test "$common_layers" -ge "$min_reused"
+
+# The rechunked image should have more layers (due to new packages)
+test "$rechunked_layer_count" -ge "$original_layer_count"
+
+# Verify the rechunked image has the expected packages
+podman run --rm containers-storage:localhost/chunked rpm -q vim-enhanced git-core postgresql
+
+# Cleanup temporary files
+rm -f "$original_layers_file" "$rechunked_layers_file" "$rechunk_output"
+
+echo "ok chunked image base detection and reuse"
