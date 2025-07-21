@@ -112,3 +112,58 @@ podman run --rm containers-storage:localhost/chunked rpm -q vim-enhanced git-cor
 rm -f "$original_layers_file" "$rechunked_layers_file" "$rechunk_output"
 
 echo "ok chunked image base detection and reuse"
+
+echo "Testing exclusive layers functionality"
+cat > Containerfile.exclusive << 'EOF'
+FROM localhost/base
+
+# Create directories for component files
+RUN mkdir -p /usr/share/webapp /usr/share/database /usr/share/regular
+
+# Create component files
+RUN echo "Web application data" > /usr/share/webapp/app.js && \
+    echo "Web configuration" > /usr/share/webapp/config.json && \
+    echo "Database schema" > /usr/share/database/schema.sql && \
+    echo "Database library" > /usr/share/database/libdb.so && \
+    echo "Regular system file" > /usr/share/regular/system.conf
+
+# Set component xattrs to identify exclusive layers
+RUN setfattr -n user.component -v "webapp" /usr/share/webapp/app.js && \
+    setfattr -n user.component -v "webapp" /usr/share/webapp/config.json && \
+    setfattr -n user.component -v "database" /usr/share/database/schema.sql && \
+    setfattr -n user.component -v "database" /usr/share/database/libdb.so
+
+LABEL exclusive-test=1
+EOF
+
+podman build -t localhost/exclusive-test -f Containerfile.exclusive
+
+podman run --rm --privileged --security-opt=label=disable \
+  -v /var/lib/containers:/var/lib/containers \
+  -v /var/tmp:/var/tmp \
+  -v "$(pwd)":/output \
+  localhost/builder rpm-ostree compose build-chunked-oci \
+  --bootc --format-version=2 --max-layers 99 \
+  --from localhost/exclusive-test \
+  --output containers-storage:localhost/exclusive-chunked
+
+skopeo inspect --raw containers-storage:localhost/exclusive-chunked > exclusive-manifest.json
+
+echo "Checking for exclusive components in annotations..."
+ostree_components=$(jq -r '.layers[] | select(.annotations."ostree.components") | .annotations."ostree.components"' exclusive-manifest.json)
+
+if echo "$ostree_components" | grep -q "webapp"; then
+    echo "✓ webapp component found in annotations.ostree.components"
+else
+    echo "✗ webapp component missing from annotations.ostree.components"
+    exit 1
+fi
+
+if echo "$ostree_components" | grep -q "database"; then
+    echo "✓ database component found in annotations.ostree.components"
+else
+    echo "✗ database component missing from annotations.ostree.components"
+    exit 1
+fi
+
+echo "ok exclusive layers functionality"
