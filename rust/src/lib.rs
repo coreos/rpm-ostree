@@ -982,6 +982,7 @@ mod core;
 use crate::core::*;
 mod capstdext;
 pub mod cli_experimental;
+pub mod cli_internals;
 mod daemon;
 pub(crate) use daemon::*;
 mod deployment_utils;
