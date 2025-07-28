@@ -89,8 +89,10 @@ else
 CARGO_RELEASE_ARGS=--release
 endif
 
+# Note omitting --workspace as this triggers a build system bug
+# .../rpm-ostree/rust/libdnf-sys/cxx/libdnf.cxx:56:(.text._ZN6dnfcxx14hy_split_nevraEN4rust10cxxbridge13StrE+0x66): undefined reference to `g_strndup'
 check-local-cargo:
-	cargo test --workspace
+	cargo test
 CHECK_LOCAL_HOOKS += check-local-cargo
 
 clean-local-cargo:

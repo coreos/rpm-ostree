@@ -46,7 +46,6 @@ BUILTINPROTO (initramfs);
 BUILTINPROTO (status);
 BUILTINPROTO (refresh_md);
 BUILTINPROTO (db);
-BUILTINPROTO (internals);
 BUILTINPROTO (container);
 BUILTINPROTO (install);
 BUILTINPROTO (uninstall);

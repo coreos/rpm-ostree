@@ -19,6 +19,7 @@ AM_TESTS_ENVIRONMENT += BUILDOPT_ASAN=yes ASAN_OPTIONS=detect_leaks=false
 endif
 
 uninstalled_test_scripts = \
+	tests/unit/bwrap-script.sh \
 	$(NULL)
 
 uninstalled_test_extra_programs = \

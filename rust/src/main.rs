@@ -41,6 +41,9 @@ async fn inner_async_main(args: Vec<String>) -> Result<i32> {
                     rpmostree_rust::container::container_encapsulate(args_orig).map(|_| 0)
                     .map_err(anyhow::Error::msg)
                 },
+                "internals" => {
+                    rpmostree_rust::cli_internals::main(args)
+                }
                 "experimental" => {
                     rpmostree_rust::cli_experimental::main(args)
                 }
