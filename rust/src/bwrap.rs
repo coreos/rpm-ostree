@@ -446,8 +446,6 @@ impl Bubblewrap {
 
     /// Execute the container.  This method uses the normal gtk-rs `Option<T>` for the cancellable.
     fn run_inner(&mut self, cancellable: Option<&gio::Cancellable>) -> Result<()> {
-        // Merge STDERR/STDOUT so we don't swallow STDERR during execution
-        self.launcher.set_flags(gio::SubprocessFlags::STDERR_MERGE);
         let (child, argv0) = self.spawn()?;
         child_wait_check(child, cancellable).context(argv0)?;
         Ok(())
