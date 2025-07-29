@@ -67,6 +67,11 @@ rpm-ostree install testpkg-lua-ignored
 rpm-ostree uninstall testpkg-lua-ignored
 echo "ok lua"
 
+rpm-ostree install testpkg-stdout-and-stderr
+assert_streq $(journalctl -u rpm-ostreed --grep='(some|more)-(stdout|stderr)-testing' | wc -l) 4
+rpm-ostree uninstall testpkg-stdout-and-stderr
+echo "ok stdout and stderr"
+
 # Disable repos, no Internet access should be required for the remaining tests
 rm -rf /etc/yum.repos.d/
 # Also disable zincati since we're rebasing

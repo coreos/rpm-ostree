@@ -15,9 +15,16 @@ uinfo_cmd add TEST-SEC-LOW security low
 build_rpm vuln-pkg uinfo TEST-SEC-LOW
 uinfo_cmd add-ref TEST-SEC-LOW 1 http://example.com/vuln1 "CVE-12-34 vuln1"
 
+build_rpm testpkg-stdout-and-stderr \
+             post "set -euo pipefail
+echo testpkg-some-stdout-testing
+echo testpkg-some-stderr-testing 1>&2
+echo testpkg-more-stdout-testing
+echo testpkg-more-stderr-testing 1>&2"
+
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
-treefile_append "packages" '["vuln-pkg"]'
+treefile_append "packages" '["vuln-pkg", "testpkg-stdout-and-stderr"]'
 
 treefile_pyedit "
 tf['repo-packages'] = [{
@@ -25,6 +32,13 @@ tf['repo-packages'] = [{
   'packages': ['foobar'],
 }]
 "
+
+treefile_set "postprocess" '["""#!/bin/bash
+set -euo pipefail
+echo postprocess-some-stdout-testing
+echo postprocess-some-stderr-testing 1>&2
+echo postprocess-more-stdout-testing
+echo postprocess-more-stderr-testing 1>&2"""]'
 
 # also test repovar substitution
 treefile_pyedit "tf['repovars'] = {
@@ -73,7 +87,11 @@ EOF
 
 # Test --parent at the same time (hash is `echo | sha256sum`)
 runcompose --add-metadata-from-json $(pwd)/metadata.json \
-  --parent 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+  --parent 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b |& tee compose.log
+
+cat compose.log
+assert_streq $(grep -cEe 'testpkg-(some|more)-(stdout|stderr)-testing' compose.log) 4
+assert_streq $(grep -cEe 'postprocess-(some|more)-(stdout|stderr)-testing' compose.log) 4
 
 # Run it again, but without RPMOSTREE_PRESERVE_TMPDIR. Should be a no-op. This
 # exercises fd handling in the tree context.

@@ -85,6 +85,12 @@ build_rpm testpkg-lua-ignored \
              post_args "-p <lua>" \
              post '-- rpm-ostree-skip 
                    posix.stat("/")'
+build_rpm testpkg-stdout-and-stderr \
+             post "set -euo pipefail
+echo some-stdout-testing
+echo some-stderr-testing 1>&2
+echo more-stdout-testing
+echo more-stderr-testing 1>&2"
 
 # Will be useful in checking difference in package version while doing apply-live 
 build_rpm pkgsystemd \
