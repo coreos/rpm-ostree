@@ -548,9 +548,10 @@ pub(crate) fn compose_postprocess_scripts(
             )
             .context("Executing inline postprocessing script")?;
         } else {
-            Command::new(&binpath)
-                .run()
-                .context("Executing inline postprocessing script")?;
+            let st = Command::new(&binpath).status()?;
+            if !st.success() {
+                anyhow::bail!("Executing inline postprocessing script: {st:?}");
+            }
         }
         rootfs_dfd.remove_file(target_binpath)?;
     }
@@ -581,9 +582,10 @@ pub(crate) fn compose_postprocess_scripts(
             )
             .context("Executing postprocessing script")?;
         } else {
-            Command::new(&binpath)
-                .run()
-                .context("Executing postprocessing script")?;
+            let st = Command::new(&binpath).status()?;
+            if !st.success() {
+                anyhow::bail!("Executing postprocessing script: {st:?}");
+            }
         }
 
         rootfs_dfd.remove_file(target_binpath)?;

@@ -374,7 +374,7 @@ impl BuildChunkedOCIOpts {
         };
         let manifest_data = manifest_data_tmpfile.as_ref().map(|t| t.path());
 
-        crate::isolation::self_command()
+        let st = crate::isolation::self_command()
             .args([
                 "compose",
                 "container-encapsulate",
@@ -397,8 +397,10 @@ impl BuildChunkedOCIOpts {
                     manifest.as_os_str(),
                 ]
             }))
-            .run()
-            .context("Invoking compose container-encapsulate")?;
+            .status()?;
+        if !st.success() {
+            anyhow::bail!("Failed to run compose container-encapsulate: {st:?}");
+        }
 
         drop(rootfs);
         // Ensure our tempdir is only dropped now
@@ -748,7 +750,7 @@ impl RootfsOpts {
         };
 
         // Just build the root filesystem tree
-        self_command()
+        let st = self_command()
             .args([
                 "compose",
                 "install",
@@ -775,8 +777,10 @@ impl RootfsOpts {
             // it won't be able to. We should lower the xattr stripping into
             // rpm-ostree ideally.
             .env("DRACUT_NO_XATTR", "1")
-            .run()
-            .context("Executing compose install")?;
+            .status()?;
+        if !st.success() {
+            anyhow::bail!("Executing compose install: {st:?}");
+        }
 
         // Clear everything in the tempdir; at this point we may have hardlinks into
         // the pkgcache repo, which we don't need because we're producing a flat
@@ -1203,7 +1207,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         compose_args_extra.extend(["--source-root", path.as_str()]);
     }
 
-    self_command()
+    let st = self_command()
         .args([
             "compose",
             "tree",
@@ -1222,7 +1226,10 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         .args(opt.lockfile_strict.then_some("--ex-lockfile-strict"))
         .args(compose_args_extra)
         .arg(opt.manifest.as_str())
-        .run()?;
+        .status()?;
+    if !st.success() {
+        return Err(format!("Failed to run compose tree: {st:?}").into());
+    }
 
     if !changed_path.exists() {
         return Ok(());
@@ -1258,7 +1265,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         })
         .transpose()?;
 
-    self_command()
+    let st = self_command()
         .args(["compose", "container-encapsulate"])
         .args(label_args)
         .args(previous_arg)
@@ -1270,7 +1277,10 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
             commitid.as_str(),
             tempdest.as_deref().unwrap_or(target_imgref.as_str()),
         ])
-        .run()?;
+        .status()?;
+    if !st.success() {
+        return Err(format!("Failed to run compose container-encapsulate: {st:?}").into());
+    }
 
     if let Some(tempdest) = tempdest {
         let mut c = Command::new("skopeo");

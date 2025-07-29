@@ -19,7 +19,6 @@
  * - Add a test case in tests/compose
  */
 
-use crate::cmdutils::CommandRunExt;
 use crate::{compose_postprocess_scripts, cxxrsutil::*};
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -852,9 +851,10 @@ impl Treefile {
             if let Some(d) = self.directory.as_deref() {
                 cmd.env("RPMOSTREE_WORKDIR", d);
             }
-            cmd.cwd_dir(rootfs.try_clone()?)
-                .run()
-                .with_context(|| format!("Failed to execute {name}"))?;
+            let st = cmd.cwd_dir(rootfs.try_clone()?).status()?;
+            if !st.success() {
+                return Err(anyhow!("Failed to execute {name}: {st}"));
+            }
         }
         Ok(())
     }
