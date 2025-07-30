@@ -219,3 +219,13 @@ else
 fi
 
 echo "ok exclusive layers functionality"
+
+echo "Testing oci-archive output"
+podman run --rm --privileged --security-opt=label=disable \
+  -v /var/lib/containers:/var/lib/containers \
+  -v /var/tmp:/var/tmp \
+  -v "$(pwd)":/output \
+  localhost/builder rpm-ostree compose build-chunked-oci --bootc --from localhost/base --output=oci-archive:/output/test-archive
+
+test -f test-archive
+echo "ok oci-archive output"
