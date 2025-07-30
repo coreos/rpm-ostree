@@ -39,6 +39,7 @@ const SYSROOT: &str = "sysroot";
 const USR: &str = "usr";
 const ETC: &str = "etc";
 const USR_ETC: &str = "usr/etc";
+const OCI_ARCHIVE_TRANSPORT: &str = "oci-archive";
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum OutputFormat {
@@ -418,7 +419,7 @@ impl BuildChunkedOCIOpts {
     /// Check if there's already an image at the target location and if it's chunked
     fn check_existing_image(&self, output: &str) -> Result<Option<oci_spec::image::ImageManifest>> {
         // Parse the output reference to determine transport and location
-        let (_transport, _location) = output
+        let (transport, _location) = output
             .split_once(':')
             .ok_or_else(|| anyhow::anyhow!("Invalid output format, expected TRANSPORT:TARGET"))?;
 
@@ -428,11 +429,13 @@ impl BuildChunkedOCIOpts {
             // The proxy will use default authentication sources (e.g., $XDG_RUNTIME_DIR/containers/auth.json)
             let proxy = containers_image_proxy::ImageProxy::new().await?;
 
-            // Try to open the image
-            let img = proxy.open_image_optional(output).await?;
+            let img = if transport == OCI_ARCHIVE_TRANSPORT {
+                (proxy.open_image(output).await).ok()
+            } else {
+                proxy.open_image_optional(output).await?
+            };
 
             if let Some(opened_image) = img {
-                // Fetch the manifest
                 let (_, manifest) = proxy.fetch_manifest(&opened_image).await?;
                 anyhow::Ok(Some(manifest))
             } else {
