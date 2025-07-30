@@ -29,7 +29,7 @@ use ostree_ext::ostree::MutableTree;
 use ostree_ext::{container as ostree_container, glib};
 use ostree_ext::{oci_spec, ostree};
 
-use crate::cmdutils::CommandRunExt;
+use bootc_internal_utils::CommandRunExt;
 use crate::containers_storage::Mount;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::isolation::self_command;
@@ -1529,7 +1529,7 @@ mod tests {
         Command::new("ostree")
             .args(["--repo=repo", "commit", "-b", "test", "--tree=dir=rootfs"])
             .current_dir(&td_path)
-            .run()?;
+            .run_capture_stderr()?;
         let rev = repo.require_rev("test")?;
         let unpack_path = td_path.join("rootfs2");
         unpack_commit_to_dir_as_bare_split_xattrs(&repo, &rev, &unpack_path)?;

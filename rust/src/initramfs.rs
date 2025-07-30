@@ -1,7 +1,7 @@
 //! Generate an "overlay" initramfs image
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::cmdutils::CommandRunExt;
+use bootc_internal_utils::CommandRunExt;
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
 use camino::Utf8Path;
@@ -208,7 +208,7 @@ pub(crate) fn run_dracut(root_fs: &Dir, kernel_dir: &str) -> Result<()> {
             "-f",
         ])
         .arg(&tmp_initramfs_path)
-        .run()?;
+        .run_capture_stderr()?;
     let f = std::fs::OpenOptions::new()
         .append(true)
         .open(&tmp_initramfs_path)?;

@@ -20,7 +20,7 @@ use cap_std_ext::cap_std;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use fn_error_context::context;
 
-use crate::cmdutils::CommandRunExt;
+use bootc_internal_utils::CommandRunExt;
 
 /// Parsed by kernel-install and set in the environment
 const LAYOUT_VAR: &str = "KERNEL_INSTALL_LAYOUT";
@@ -65,7 +65,7 @@ fn add(root: &Dir, argv: &[&str]) -> Result<()> {
     redo_systemctl_wrap()?;
     Command::new("depmod")
         .args(["-a", kver])
-        .run()
+        .run_capture_stderr()
         .context("Invoking depmod")?;
     Ok(())
 }

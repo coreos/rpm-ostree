@@ -8,7 +8,7 @@
 use crate::bwrap;
 use crate::bwrap::Bubblewrap;
 use crate::capstdext::dirbuilder_from_mode;
-use crate::cmdutils::CommandRunExt;
+use bootc_internal_utils::CommandRunExt;
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::ffiutil::ffi_dirfd;
@@ -1177,7 +1177,7 @@ fn rewrite_rpmdb_for_target_inner(rootfs_dfd: &Dir, normalize: bool) -> Result<(
         .args([dbpath_arg.as_str(), "--exportdb"])
         .current_dir(format!("/proc/self/fd/{}", rootfs_dfd.as_raw_fd()))
         .stdout(Stdio::from(dbfd.try_clone()?))
-        .run()?;
+        .run_capture_stderr()?;
 
     // Clear out the db on disk
     rootfs_dfd.remove_all_optional(RPMOSTREE_RPMDB_LOCATION)?;
