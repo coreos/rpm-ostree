@@ -1,9 +1,9 @@
 //! Generate an "overlay" initramfs image
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use bootc_internal_utils::CommandRunExt;
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
+use bootc_internal_utils::CommandRunExt;
 use camino::Utf8Path;
 use cap_std::fs::Dir;
 use cap_std::io_lifetimes::AsFilelike;

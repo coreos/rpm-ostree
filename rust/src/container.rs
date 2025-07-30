@@ -30,11 +30,11 @@ use ostree_ext::oci_spec::image::{Arch, Os, PlatformBuilder};
 use ostree_ext::prelude::*;
 use ostree_ext::{gio, oci_spec, ostree};
 
-use bootc_internal_utils::CommandRunExt;
 use crate::cxxrsutil::FFIGObjectReWrap;
 use crate::fsutil::{self, FileHelpers, ResolvedOstreePaths};
 use crate::progress::progress_task;
 use crate::CxxResult;
+use bootc_internal_utils::CommandRunExt;
 
 const COMPONENT_XATTR: &CStr = c"user.component";
 

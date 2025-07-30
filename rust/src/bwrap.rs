@@ -2,11 +2,11 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use bootc_internal_utils::CommandRunExt;
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::normalization;
 use anyhow::{Context, Result};
+use bootc_internal_utils::CommandRunExt;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use cap_std::fs::Dir;

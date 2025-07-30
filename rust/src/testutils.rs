@@ -9,9 +9,9 @@
 //! This backs the hidden `rpm-ostree testutils` CLI.  Subject
 //! to change.
 
-use bootc_internal_utils::CommandRunExt;
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
+use bootc_internal_utils::CommandRunExt;
 use cap_std::fs::FileType;
 use cap_std::fs::{Dir, MetadataExt, Permissions, PermissionsExt};
 use cap_std_ext::cap_std;
