@@ -192,7 +192,7 @@ impl Bubblewrap {
         });
 
         let path_var = Path::new(PATH_VAR);
-        launcher.set_environ(&[lang_var, path_var]);
+        launcher.set_environ(&[lang_var.into(), path_var.into()]);
 
         if let Some(source_date_epoch) = normalization::source_date_epoch_raw() {
             launcher.setenv("SOURCE_DATE_EPOCH", source_date_epoch, true);
