@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::ffi::CStr;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
@@ -34,6 +35,8 @@ use crate::cxxrsutil::FFIGObjectReWrap;
 use crate::fsutil::{self, FileHelpers, ResolvedOstreePaths};
 use crate::progress::progress_task;
 use crate::CxxResult;
+
+const COMPONENT_XATTR: &CStr = c"user.component";
 
 #[derive(Debug, Parser)]
 struct ContainerEncapsulateOpts {
@@ -100,12 +103,21 @@ struct MappingBuilder {
     /// Maps from package ID to metadata
     packagemeta: ObjectMetaSet,
 
+    /// Maps from component ID to metadata
+    componentmeta: ObjectMetaSet,
+
+    /// Component IDs encountered during filesystem walk for efficient lookup
+    component_ids: HashSet<String>,
+
     /// Maps from object checksum to absolute filesystem path
     checksum_paths: BTreeMap<String, BTreeSet<Utf8PathBuf>>,
 
     /// Maps from absolute filesystem path to the package IDs that
     /// provide it
     path_packages: HashMap<Utf8PathBuf, BTreeSet<ContentID>>,
+
+    /// Maps from absolute filesystem path to component IDs (for exclusive layers)
+    path_components: HashMap<Utf8PathBuf, BTreeSet<ContentID>>,
 
     unpackaged_id: ContentID,
 
@@ -133,27 +145,42 @@ impl MappingBuilder {
     }
 }
 
-impl From<MappingBuilder> for ObjectMeta {
-    fn from(b: MappingBuilder) -> ObjectMeta {
-        let mut content = ObjectMetaMap::default();
-        for (checksum, paths) in b.checksum_paths {
-            // Use the first package name found for one of the paths (if multiple). These
-            // are held in sorted data structures, so this should be deterministic.
-            //
-            // If not found, use the unpackaged name.
-            let pkg = paths
-                .iter()
-                .filter_map(|p| b.path_packages.get(p).map(|pkgs| pkgs.first().unwrap()))
-                .next()
-                .unwrap_or(&b.unpackaged_id);
+// loop over checksum_paths (this is the entire list of files)
+// check if there is a mapping for the file in the "explicit" mapping
+// check if there is a mapping for the file in the package mapping
+// otherwise put it in the unpackaged bucket
+impl MappingBuilder {
+    fn create_meta(&self) -> (ObjectMeta, ObjectMeta) {
+        let mut package_content = ObjectMetaMap::default();
+        let mut component_content = ObjectMetaMap::default();
 
-            content.insert(checksum, pkg.clone());
+        for (checksum, paths) in &self.checksum_paths {
+            for path in paths {
+                if let Some(component_ids) = self.path_components.get(path) {
+                    if let Some(content_id) = component_ids.first() {
+                        component_content.insert(checksum.clone(), content_id.clone());
+                    }
+                } else if let Some(package_ids) = self.path_packages.get(path) {
+                    if let Some(content_id) = package_ids.first() {
+                        package_content.insert(checksum.clone(), content_id.clone());
+                    }
+                } else {
+                    package_content.insert(checksum.clone(), self.unpackaged_id.clone());
+                }
+            }
         }
 
-        ObjectMeta {
-            map: content,
-            set: b.packagemeta,
-        }
+        let package_meta = ObjectMeta {
+            map: package_content,
+            set: self.packagemeta.clone(),
+        };
+
+        let component_meta = ObjectMeta {
+            map: component_content,
+            set: self.componentmeta.clone(),
+        };
+
+        (package_meta, component_meta)
     }
 }
 
@@ -184,8 +211,23 @@ fn build_fs_mapping_recurse(
                     continue;
                 }
 
+                // Try to read user.component xattr to identify component-based chunks
+                if let Some(component_name) = get_user_component_xattr(&child)? {
+                    let component_id = Rc::from(component_name.clone());
+
+                    // Track component ID for later processing
+                    state.component_ids.insert(component_name);
+
+                    // Associate this path with the component
+                    state
+                        .path_components
+                        .entry(path.clone())
+                        .or_default()
+                        .insert(Rc::clone(&component_id));
+                };
+
                 // Ensure there's a checksum -> path entry. If it was previously
-                // accounted for by a package, this is essentially a no-op. If not,
+                // accounted for by a package or component, this is essentially a no-op. If not,
                 // there'll be no corresponding path -> package entry, and the packaging
                 // operation will treat the file as being "unpackaged".
                 let checksum = child.checksum().to_string();
@@ -223,6 +265,30 @@ fn gv_nevra_to_string(pkg: &glib::Variant) -> String {
     }
 }
 
+/// Read the user.component xattr from a file path, returning None if not present
+fn get_user_component_xattr(file: &ostree::RepoFile) -> std::io::Result<Option<String>> {
+    let xattrs = match file.xattrs(gio::Cancellable::NONE) {
+        Ok(xattrs) => xattrs,
+        Err(_) => return Ok(None), // No xattrs available
+    };
+
+    let n = xattrs.n_children();
+    for i in 0..n {
+        let child = xattrs.child_value(i);
+        let key = child.child_value(0);
+        let key_bytes = key.data_as_bytes();
+
+        if key_bytes == COMPONENT_XATTR.to_bytes_with_nul() {
+            let value = child.child_value(1);
+            let value = value.data_as_bytes();
+            let value_str = String::from_utf8(value.to_vec())
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            return Ok(Some(value_str));
+        }
+    }
+    Ok(None)
+}
+
 async fn compare_builds(old_build: &str, new_build: &str) -> Result<()> {
     let proxy = containers_image_proxy::ImageProxy::new().await?;
     let oi_old = proxy.open_image(old_build).await?;
@@ -258,9 +324,12 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     let mut state = MappingBuilder {
         unpackaged_id: Rc::from(MappingBuilder::UNPACKAGED_ID),
         packagemeta: Default::default(),
+        componentmeta: Default::default(),
         checksum_paths: Default::default(),
         path_packages: Default::default(),
+        path_components: Default::default(),
         skip: Default::default(),
+        component_ids: Default::default(),
         rpmsize: Default::default(),
     };
     // Insert metadata for unpackaged content.
@@ -434,6 +503,21 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         build_fs_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &mut state)
     })?;
 
+    // Now that we've walked the filesystem, process component metadata
+    for component_name in state.component_ids.iter() {
+        let component_id = Rc::from(component_name.clone());
+        let component_srcid = Rc::from(format!("component:{}", component_name));
+
+        state.componentmeta.insert(ObjectSourceMeta {
+            identifier: component_id,
+            name: Rc::from(component_name.clone()),
+            srcid: component_srcid,
+            // Assume component content changes frequently
+            change_time_offset: u32::MAX,
+            change_frequency: u32::MAX,
+        });
+    }
+
     let src_pkgs: HashSet<_> = state.packagemeta.iter().map(|p| &p.srcid).collect();
 
     // Print out information about what we found
@@ -443,6 +527,21 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         state.packagemeta.len(),
         src_pkgs.len(),
     );
+
+    // Print component information
+    if !state.componentmeta.is_empty() {
+        println!("Found {} user component(s):", state.componentmeta.len());
+        for component_meta in &state.componentmeta {
+            // Count files belonging to this component
+            let component_files = state
+                .path_components
+                .values()
+                .filter(|ids| ids.contains(&component_meta.identifier))
+                .count();
+            println!("  - {} ({} files)", component_meta.name, component_files);
+        }
+    }
+
     println!("rpm size: {}", state.rpmsize);
     println!(
         "Earliest changed package: {} at {}",
@@ -453,17 +552,21 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     println!("Duplicates: {}", state.duplicate_objects().count());
     println!("Multiple owners: {}", state.multiple_owners().count());
 
-    // Convert our build state into the state that ostree consumes, discarding
-    // transient data such as the cases of files owned by multiple packages.
-    let meta: ObjectMeta = state.into();
+    // Create separate ObjectMeta for packages and exclusive components
+    let (package_meta, component_meta) = state.create_meta();
 
-    // Now generate the sized version
-    let meta = ObjectMetaSized::compute_sizes(repo, meta)?;
+    // Generate sized versions
+    let package_meta_sized = ObjectMetaSized::compute_sizes(repo, package_meta)?;
+    let component_meta_sized = if !state.componentmeta.is_empty() {
+        Some(ObjectMetaSized::compute_sizes(repo, component_meta)?)
+    } else {
+        None
+    };
     if let Some(v) = opt.write_contentmeta_json {
         let v = v.strip_prefix("/").unwrap_or(&v);
         let root = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
         root.atomic_replace_with(v, |w| {
-            serde_json::to_writer(w, &meta.sizes).map_err(anyhow::Error::msg)
+            serde_json::to_writer(w, &package_meta_sized.sizes).map_err(anyhow::Error::msg)
         })?;
     }
     // TODO: Put this in a public API in ostree-rs-ext?
@@ -503,7 +606,15 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     opts.copy_meta_opt_keys = copy_meta_opt_keys;
     opts.max_layers = opt.max_layers;
     opts.prior_build = package_structure.as_ref();
-    opts.contentmeta = Some(&meta);
+    opts.package_contentmeta = Some(&package_meta_sized);
+    // Set exclusive component metadata if any were found
+    if let Some(ref component_meta) = component_meta_sized {
+        println!(
+            "Setting exclusive component metadata with {} component(s)",
+            state.componentmeta.len()
+        );
+        opts.specific_contentmeta = Some(component_meta);
+    }
     if let Some(config_path) = opt.image_config.as_deref() {
         let config = serde_json::from_reader(File::open(config_path).map(BufReader::new)?)
             .map_err(anyhow::Error::msg)?;
@@ -658,4 +769,404 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
         .run()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{BTreeSet, HashMap, HashSet};
+
+    #[test]
+    fn test_mapping_builder_create_package_meta() {
+        let mut builder = MappingBuilder {
+            unpackaged_id: Rc::from("unpackaged"),
+            packagemeta: ObjectMetaSet::new(),
+            componentmeta: ObjectMetaSet::new(),
+            checksum_paths: BTreeMap::new(),
+            path_packages: HashMap::new(),
+            path_components: HashMap::new(),
+            skip: HashSet::new(),
+            component_ids: HashSet::new(),
+            rpmsize: 0,
+        };
+
+        // Add a package
+        let pkg_id = Rc::from("test-package");
+        builder.packagemeta.insert(ObjectSourceMeta {
+            identifier: Rc::clone(&pkg_id),
+            name: Rc::from("Test Package"),
+            srcid: Rc::from("test-package-1.0-1.fc39"),
+            change_time_offset: 100,
+            change_frequency: 50,
+        });
+
+        // Add a component
+        let comp_id = Rc::from("test-component");
+        builder.componentmeta.insert(ObjectSourceMeta {
+            identifier: Rc::clone(&comp_id),
+            name: Rc::from("Test Component"),
+            srcid: Rc::from("component:test-component"),
+            change_time_offset: 200,
+            change_frequency: 100,
+        });
+
+        // Add paths and checksums
+        let path1 = Utf8PathBuf::from("/usr/bin/test");
+        let path2 = Utf8PathBuf::from("/usr/share/component-file");
+        let checksum1 = "abc123".to_string();
+        let checksum2 = "def456".to_string();
+
+        // Associate path1 with package
+        builder.path_packages.insert(path1.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(Rc::clone(&pkg_id));
+            set
+        });
+
+        // Associate path2 with component
+        builder.path_components.insert(path2.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(Rc::clone(&comp_id));
+            set
+        });
+
+        // Add checksums
+        builder.checksum_paths.insert(checksum1.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(path1);
+            set
+        });
+        builder.checksum_paths.insert(checksum2.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(path2);
+            set
+        });
+
+        let (package_meta, _component_meta) = builder.create_meta();
+
+        assert_eq!(package_meta.map.len(), 1);
+        assert!(package_meta.map.contains_key(&checksum1));
+        assert_eq!(package_meta.map[&checksum1], pkg_id);
+
+        assert_eq!(package_meta.set.len(), 1);
+        assert_eq!(package_meta.set.iter().next().unwrap().identifier, pkg_id);
+    }
+
+    #[test]
+    fn test_mapping_builder_create_component_meta() {
+        let mut builder = MappingBuilder {
+            unpackaged_id: Rc::from("unpackaged"),
+            packagemeta: ObjectMetaSet::new(),
+            componentmeta: ObjectMetaSet::new(),
+            checksum_paths: BTreeMap::new(),
+            path_packages: HashMap::new(),
+            path_components: HashMap::new(),
+            skip: HashSet::new(),
+            component_ids: HashSet::new(),
+            rpmsize: 0,
+        };
+
+        // Add a package
+        let pkg_id = Rc::from("test-package");
+        builder.packagemeta.insert(ObjectSourceMeta {
+            identifier: Rc::clone(&pkg_id),
+            name: Rc::from("Test Package"),
+            srcid: Rc::from("test-package-1.0-1.fc39"),
+            change_time_offset: 100,
+            change_frequency: 50,
+        });
+
+        // Add a component
+        let comp_id = Rc::from("test-component");
+        builder.componentmeta.insert(ObjectSourceMeta {
+            identifier: Rc::clone(&comp_id),
+            name: Rc::from("Test Component"),
+            srcid: Rc::from("component:test-component"),
+            change_time_offset: 200,
+            change_frequency: 100,
+        });
+
+        // Add paths and checksums
+        let path1 = Utf8PathBuf::from("/usr/bin/test");
+        let path2 = Utf8PathBuf::from("/usr/share/component-file");
+        let checksum1 = "abc123".to_string();
+        let checksum2 = "def456".to_string();
+
+        // Associate path1 with package
+        builder.path_packages.insert(path1.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(Rc::clone(&pkg_id));
+            set
+        });
+
+        // Associate path2 with component
+        builder.path_components.insert(path2.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(Rc::clone(&comp_id));
+            set
+        });
+
+        // Add checksums
+        builder.checksum_paths.insert(checksum1.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(path1);
+            set
+        });
+        builder.checksum_paths.insert(checksum2.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(path2);
+            set
+        });
+
+        let (_package_meta, component_meta) = builder.create_meta();
+
+        // Component meta should contain both checksums now
+        // checksum2 maps to comp_id (via path_components)
+        // checksum1 falls back to unpackaged_id (not in path_components)
+        assert_eq!(component_meta.map.len(), 1);
+        assert!(component_meta.map.contains_key(&checksum2));
+
+        // Should have component metadata but not package metadata
+        assert_eq!(component_meta.set.len(), 1);
+        assert_eq!(
+            component_meta.set.iter().next().unwrap().identifier,
+            comp_id
+        );
+    }
+
+    #[test]
+    fn test_mapping_builder_mixed_content() {
+        let mut builder = MappingBuilder {
+            unpackaged_id: Rc::from("unpackaged"),
+            packagemeta: ObjectMetaSet::new(),
+            componentmeta: ObjectMetaSet::new(),
+            checksum_paths: BTreeMap::new(),
+            path_packages: HashMap::new(),
+            path_components: HashMap::new(),
+            skip: HashSet::new(),
+            component_ids: HashSet::new(),
+            rpmsize: 0,
+        };
+
+        // Add package and component metadata
+        let pkg_id = Rc::from("test-package");
+        builder.packagemeta.insert(ObjectSourceMeta {
+            identifier: Rc::clone(&pkg_id),
+            name: Rc::from("Test Package"),
+            srcid: Rc::from("test-package-1.0-1.fc39"),
+            change_time_offset: 100,
+            change_frequency: 50,
+        });
+
+        let comp_id = Rc::from("test-component");
+        builder.componentmeta.insert(ObjectSourceMeta {
+            identifier: Rc::clone(&comp_id),
+            name: Rc::from("Test Component"),
+            srcid: Rc::from("component:test-component"),
+            change_time_offset: 200,
+            change_frequency: 100,
+        });
+
+        // Add unpackaged content
+        let unpackaged_path = Utf8PathBuf::from("/usr/share/unpackaged");
+        let unpackaged_checksum = "unpack123".to_string();
+        builder.checksum_paths.insert(unpackaged_checksum.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(unpackaged_path);
+            set
+        });
+
+        let (package_meta, _component_meta) = builder.create_meta();
+
+        // Package meta should contain unpackaged content
+        assert_eq!(package_meta.map.len(), 1);
+        assert!(package_meta.map.contains_key(&unpackaged_checksum));
+        assert_eq!(
+            package_meta.map[&unpackaged_checksum],
+            builder.unpackaged_id
+        );
+    }
+
+    #[test]
+    fn test_multiple_components() {
+        let mut builder = MappingBuilder {
+            unpackaged_id: Rc::from("unpackaged"),
+            packagemeta: ObjectMetaSet::new(),
+            componentmeta: ObjectMetaSet::new(),
+            checksum_paths: BTreeMap::new(),
+            path_packages: HashMap::new(),
+            path_components: HashMap::new(),
+            skip: HashSet::new(),
+            component_ids: HashSet::new(),
+            rpmsize: 0,
+        };
+
+        // Add multiple components
+        let comp1_id = Rc::from("component1");
+        let comp2_id = Rc::from("component2");
+
+        builder.componentmeta.insert(ObjectSourceMeta {
+            identifier: Rc::clone(&comp1_id),
+            name: Rc::from("Component 1"),
+            srcid: Rc::from("component:component1"),
+            change_time_offset: u32::MAX,
+            change_frequency: u32::MAX,
+        });
+
+        builder.componentmeta.insert(ObjectSourceMeta {
+            identifier: Rc::clone(&comp2_id),
+            name: Rc::from("Component 2"),
+            srcid: Rc::from("component:component2"),
+            change_time_offset: u32::MAX,
+            change_frequency: u32::MAX,
+        });
+
+        // Add files for each component
+        let path1 = Utf8PathBuf::from("/usr/share/comp1/file");
+        let path2 = Utf8PathBuf::from("/usr/share/comp2/file");
+        let checksum1 = "comp1_123".to_string();
+        let checksum2 = "comp2_456".to_string();
+
+        builder.path_components.insert(path1.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(Rc::clone(&comp1_id));
+            set
+        });
+
+        builder.path_components.insert(path2.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(Rc::clone(&comp2_id));
+            set
+        });
+
+        builder.checksum_paths.insert(checksum1.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(path1);
+            set
+        });
+
+        builder.checksum_paths.insert(checksum2.clone(), {
+            let mut set = BTreeSet::new();
+            set.insert(path2);
+            set
+        });
+
+        let (_package_meta, component_meta) = builder.create_meta();
+
+        // Should contain both components
+        assert_eq!(component_meta.map.len(), 2);
+        assert!(component_meta.map.contains_key(&checksum1));
+        assert!(component_meta.map.contains_key(&checksum2));
+        assert_eq!(component_meta.map[&checksum1], comp1_id);
+        assert_eq!(component_meta.map[&checksum2], comp2_id);
+        assert_eq!(component_meta.set.len(), 2);
+    }
+
+    #[test]
+    fn test_get_user_component_xattr() -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs;
+        use std::os::fd::AsRawFd;
+        use tempfile::TempDir;
+
+        // Create temporary directory for our test repo
+        let temp_dir = TempDir::new()?;
+        let repo_path = temp_dir.path().join("repo");
+
+        // Create OSTree repository using Rust API
+        let repo = ostree::Repo::create_at(
+            libc::AT_FDCWD,
+            repo_path.to_str().unwrap(),
+            ostree::RepoMode::Archive,
+            None,
+            gio::Cancellable::NONE,
+        )?;
+
+        // Create temporary work directory with test file
+        let work_dir = temp_dir.path().join("work");
+        fs::create_dir_all(&work_dir)?;
+        let test_file_path = work_dir.join("test-file");
+        fs::write(&test_file_path, "test content")?;
+
+        // Create a mutable tree
+        let mtree = ostree::MutableTree::new();
+
+        // Create commit modifier with xattr callback
+        let modifier = ostree::RepoCommitModifier::new(
+            ostree::RepoCommitModifierFlags::NONE,
+            None, // commit filter
+        );
+
+        // Create xattr callback that adds user.component xattr to our test file
+        let xattr_callback =
+            move |_repo: &ostree::Repo, path: &str, _file_info: &gio::FileInfo| -> glib::Variant {
+                if path == "/test-file" {
+                    // Create the xattr data using byte arrays that glib can understand
+                    // OSTree expects xattrs in format: a(ayay) - array of (name, value) byte array pairs
+
+                    // Create xattr tuples as (name, value) pairs where both are byte arrays
+                    // The function expects the name to be "user.component\0" and value to be "test-component"
+                    let xattr_data = vec![(&b"user.component\0"[..], &b"test-component"[..])];
+
+                    // Convert to glib::Variant
+                    glib::Variant::from(xattr_data)
+                } else {
+                    // Return empty xattr array for other files
+                    let empty_xattrs: Vec<(&[u8], &[u8])> = vec![];
+                    glib::Variant::from(empty_xattrs)
+                }
+            };
+
+        modifier.set_xattr_callback(xattr_callback);
+
+        // Write directory to mutable tree using OSTree API
+        let work_dir_fd =
+            cap_std::fs::Dir::open_ambient_dir(&work_dir, cap_std::ambient_authority())?;
+        repo.write_dfd_to_mtree(
+            work_dir_fd.as_raw_fd(),
+            ".",
+            &mtree,
+            Some(&modifier),
+            gio::Cancellable::NONE,
+        )?;
+
+        // Write mutable tree to get root directory
+        let root = repo.write_mtree(&mtree, gio::Cancellable::NONE)?;
+
+        // Convert gio::File to ostree::RepoFile for write_commit
+        let root_repo_file = root.downcast::<ostree::RepoFile>().unwrap();
+
+        // Create metadata for the commit
+        let metadata = glib::VariantDict::new(None);
+        metadata.insert("test", "xattr-test");
+        let metadata_variant = metadata.to_variant();
+
+        // Write commit using OSTree API
+        let commit_checksum = repo.write_commit(
+            None,                           // parent
+            Some("Test commit"),            // subject
+            Some("Test commit with xattr"), // body
+            Some(&metadata_variant),        // metadata
+            &root_repo_file,                // root
+            gio::Cancellable::NONE,
+        )?;
+
+        // Read back the commit to get our RepoFile
+        let (commit_root, _) = repo.read_commit(&commit_checksum, gio::Cancellable::NONE)?;
+        let test_file = commit_root.child("test-file");
+        let repo_file = test_file.downcast::<ostree::RepoFile>().unwrap();
+
+        // Test our function with the file that should have the xattr
+        let result = get_user_component_xattr(&repo_file)?;
+
+        // Verify the function found the xattr and contains our test component
+        assert!(result.is_some());
+        let result_str = result.unwrap();
+        assert!(result_str.contains("test-component"));
+
+        // Test with a file that should have no component xattr (root directory)
+        let root_repo_file = commit_root.downcast::<ostree::RepoFile>().unwrap();
+        let no_result = get_user_component_xattr(&root_repo_file)?;
+        assert_eq!(no_result, None);
+        Ok(())
+    }
 }
