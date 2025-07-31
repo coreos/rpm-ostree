@@ -13,7 +13,7 @@ podman run --rm --privileged --security-opt=label=disable \
 podman rmi ${testimg_base}
 podman inspect containers-storage:${chunked_output} | jq '.[0]' > config.json
 podman rmi ${chunked_output}
-test $(jq -r '.Architecture' < config.json) = "ppc64le"
+test "$(jq -r '.Architecture' < config.json)" = "ppc64le"
 echo "ok cross arch rechunking"
 
 # Build a custom image, then rechunk it
@@ -30,7 +30,7 @@ new_created=$(jq -r .Created < new-config.json)
 # ostree only stores seconds, so canonialize the rfc3339 data to seconds
 test "$(date --date="${orig_created}" --rfc-3339=seconds)" = "$(date --date="${new_created}" --rfc-3339=seconds)"
 # Verify we propagated labels
-test $(jq -r .Labels.testlabel < new-config.json) = "1"
+test "$(jq -r .Labels.testlabel < new-config.json)" = "1"
 echo "ok rechunking with labels"
 
 # Verify directory metadata for --format-version=1 image
@@ -157,15 +157,18 @@ verify_layer_contents() {
     local expected_files="$2"
     local image_manifest="$3"
 
-    local layer_index=$(jq -r --arg comp "$component_name" '.layers | to_entries[] | select(.value.annotations."ostree.components" == $comp) | .key' exclusive-manifest.json)
+    local layer_index
+    layer_index=$(jq -r --arg comp "$component_name" '.layers | to_entries[] | select(.value.annotations."ostree.components" == $comp) | .key' exclusive-manifest.json)
     echo "$component_name layer index: $layer_index"
-    local layer_digest=$(echo "$image_manifest" | jq -r --argjson idx "$layer_index" '.layers[$idx].digest' | cut -d: -f2)
+    local layer_digest
+    layer_digest=$(echo "$image_manifest" | jq -r --argjson idx "$layer_index" '.layers[$idx].digest' | cut -d: -f2)
     
     if [ -n "$layer_digest" ]; then
         echo "Checking $component_name layer: sha256:$layer_digest"
         
         # List files in the tar (excluding directories and sysroot)
-        local actual_files=$(tar -tf "${oci_dir}/blobs/sha256/${layer_digest}" | grep -v '/$' | grep -v '^sysroot' | sort)
+        local actual_files
+        actual_files=$(tar -tf "${oci_dir}/blobs/sha256/${layer_digest}" | grep -v '/$' | grep -v '^sysroot' | sort)
         
         if [ "$actual_files" = "$expected_files" ]; then
             echo "✓ $component_name layer contains only expected files"
@@ -189,8 +192,8 @@ echo "Verifying exclusive layer contents..."
 skopeo inspect --raw containers-storage:localhost/exclusive-chunked > exclusive-manifest.json
 
 oci_dir=$(mktemp -d)
-skopeo copy containers-storage:localhost/exclusive-chunked oci:${oci_dir} &> /dev/null
-manifest=$(cat "${oci_dir}/index.json" | jq -r '.manifests[0].digest' | cut -d: -f2)
+skopeo copy containers-storage:localhost/exclusive-chunked "oci:${oci_dir}" &> /dev/null
+manifest=$(jq -r '.manifests[0].digest' "${oci_dir}/index.json" | cut -d: -f2)
 image_manifest=$(cat "${oci_dir}/blobs/sha256/${manifest}")
 
 # Define expected files for each component

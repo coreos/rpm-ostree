@@ -26,6 +26,9 @@ maintained base image, such as the fedora-bootc ones. Especially if
 you are targeting bootc systems with this, please follow
 <https://gitlab.com/fedora/bootc/tracker/-/issues/32>.
 
+When composing an image from an image that was previously chunked, the existing
+image's layers will automatically be re-used when specifying it as the `--output` image.
+
 ## Running
 
 Note that the `--from` and `--rootfs` options are mutually-exclusive;
@@ -36,7 +39,7 @@ omitted, defaults to `1`.
 ### Using `--from`
 
 This expects a container image already fetched into a `containers-storage:`
-instance, and can output to `containers-storage:` or `oci`. 
+instance, and can output to `containers-storage:` or `oci`.
 
 ```
 podman build -t quay.io/exampleos/exampleos:build ...
@@ -86,3 +89,24 @@ version of an image.
 
 If reproducible builds are desirable, it is recommended to use
 `--format-version=2`.
+
+### Assigning files to specific layers
+
+To assign files to a specific layer, add the `user.components` xattr
+to the file when building the bootc image. This will create a new layer for each
+unique `user.components` xattr value. For example, if you want `/usr/bin/my-app`
+to be in the `custom-apps` layer, you can set the `user.components` xattr on it.
+
+```
+FROM quay.io/exampleos/exampleos:build
+
+RUN setfattr -n user.components -v "custom-apps" /usr/bin/my-app
+```
+
+A directory can be recursively assigned to a specific layer like this:
+
+```
+FROM quay.io/exampleos/exampleos:build
+
+RUN find /usr/share/webapp \( -type f -o -type l \) -exec setfattr -n user.component -v "webapp" {} \;
+```
