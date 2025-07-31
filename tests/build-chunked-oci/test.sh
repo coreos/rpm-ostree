@@ -118,20 +118,24 @@ cat > Containerfile.exclusive << 'EOF'
 FROM localhost/base
 
 # Create directories for component files
-RUN mkdir -p /usr/share/webapp /usr/share/database /usr/share/regular
+RUN mkdir -p /usr/share/webapp /usr/share/database /usr/share/regular /usr/share/recursive
 
 # Create component files
 RUN echo "Web application data" > /usr/share/webapp/app.js && \
     echo "Web configuration" > /usr/share/webapp/config.json && \
     echo "Database schema" > /usr/share/database/schema.sql && \
     echo "Database library" > /usr/share/database/libdb.so && \
-    echo "Regular system file" > /usr/share/regular/system.conf
+    echo "Regular system file" > /usr/share/regular/system.conf && \
+    echo "Recursive file" > /usr/share/recursive/recursive.file && \
+    mkdir -p /usr/share/recursive/subdir && \
+    echo "Another recursive file" > /usr/share/recursive/subdir/another.file
 
 # Set component xattrs to identify exclusive layers
 RUN setfattr -n user.component -v "webapp" /usr/share/webapp/app.js && \
     setfattr -n user.component -v "webapp" /usr/share/webapp/config.json && \
     setfattr -n user.component -v "database" /usr/share/database/schema.sql && \
-    setfattr -n user.component -v "database" /usr/share/database/libdb.so
+    setfattr -n user.component -v "database" /usr/share/database/libdb.so && \
+    find /usr/share/recursive \( -type f -o -type l \) -exec setfattr -n user.component -v recursive {} \;
 
 LABEL exclusive-test=1
 EOF
@@ -147,76 +151,72 @@ podman run --rm --privileged --security-opt=label=disable \
   --from localhost/exclusive-test \
   --output containers-storage:localhost/exclusive-chunked
 
+# Function to verify layer contents
+verify_layer_contents() {
+    local component_name="$1"
+    local expected_files="$2"
+    local image_manifest="$3"
+
+    local layer_index=$(jq -r --arg comp "$component_name" '.layers | to_entries[] | select(.value.annotations."ostree.components" == $comp) | .key' exclusive-manifest.json)
+    echo "$component_name layer index: $layer_index"
+    local layer_digest=$(echo "$image_manifest" | jq -r --argjson idx "$layer_index" '.layers[$idx].digest' | cut -d: -f2)
+    
+    if [ -n "$layer_digest" ]; then
+        echo "Checking $component_name layer: sha256:$layer_digest"
+        
+        # List files in the tar (excluding directories and sysroot)
+        local actual_files=$(tar -tf "${oci_dir}/blobs/sha256/${layer_digest}" | grep -v '/$' | grep -v '^sysroot' | sort)
+        
+        if [ "$actual_files" = "$expected_files" ]; then
+            echo "✓ $component_name layer contains only expected files"
+        else
+            echo "✗ $component_name layer contents mismatch"
+            echo "Expected:"
+            echo "$expected_files"
+            echo "Actual:"
+            echo "$actual_files"
+            exit 1
+        fi
+    else
+        echo "✗ $component_name layer not found"
+        exit 1
+    fi
+}
+
 # Verify that exclusive layers contain only the expected files
 echo "Verifying exclusive layer contents..."
 
 skopeo inspect --raw containers-storage:localhost/exclusive-chunked > exclusive-manifest.json
 
-webapp_index=$(jq -r '.layers | to_entries[] | select(.value.annotations."ostree.components" == "webapp") | .key' exclusive-manifest.json)
-database_index=$(jq -r '.layers | to_entries[] | select(.value.annotations."ostree.components" == "database") | .key' exclusive-manifest.json)
-
-echo "webapp layer index: $webapp_index"
-echo "database layer index: $database_index"
-
 oci_dir=$(mktemp -d)
 skopeo copy containers-storage:localhost/exclusive-chunked oci:${oci_dir} &> /dev/null
 manifest=$(cat "${oci_dir}/index.json" | jq -r '.manifests[0].digest' | cut -d: -f2)
 image_manifest=$(cat "${oci_dir}/blobs/sha256/${manifest}")
-webapp_layer=$(echo "$image_manifest" | jq -r --argjson idx "$webapp_index" '.layers[$idx].digest' | cut -d: -f2)
 
-if [ -n "$webapp_layer" ]; then
-    echo "Checking webapp layer: sha256:$webapp_layer"
-    
-    # List files in the tar (excluding directories and sysroot)
-    webapp_files=$(tar -tf "${oci_dir}/blobs/sha256/${webapp_layer}" | grep -v '^sysroot' | sort)
-    expected_webapp="usr
+# Define expected files for each component
+expected_webapp="usr
 usr/share
 usr/share/webapp
 usr/share/webapp/app.js
 usr/share/webapp/config.json"
-    
-    if [ "$webapp_files" = "$expected_webapp" ]; then
-        echo "✓ Webapp layer contains only expected files"
-    else
-        echo "✗ Webapp layer contents mismatch"
-        echo "Expected:"
-        echo "$expected_webapp"
-        echo "Actual:"
-        echo "$webapp_files"
-        exit 1
-    fi
-else 
-    echo "✗ webapp layer not found"
-    exit 1
-fi
 
-database_layer=$(echo "$image_manifest" | jq -r --argjson idx "$database_index" '.layers[$idx].digest' | cut -d: -f2)
-echo "database_layer: $database_layer"
-if [ -n "$database_layer" ]; then
-    echo "Checking database layer: sha256:$database_layer"
-    
-    # List files in the tar (excluding directories and sysroot)
-    database_files=$(tar -tf "${oci_dir}/blobs/sha256/${database_layer}" | grep -v '/$' | grep -v '^sysroot' | sort)
-    expected_database="usr
+expected_database="usr
 usr/share
 usr/share/database
 usr/share/database/libdb.so
 usr/share/database/schema.sql"
-    
-    if [ "$database_files" = "$expected_database" ]; then
-        echo "✓ Database layer contains only expected files"
-    else
-        echo "✗ Database layer contents mismatch"
-        echo "Expected:"
-        echo "$expected_database"
-        echo "Actual:"
-        echo "$database_files"
-        exit 1
-    fi
-else 
-    echo "✗ database layer not found"
-    exit 1
-fi
+
+expected_recursive="usr
+usr/share
+usr/share/recursive
+usr/share/recursive/recursive.file
+usr/share/recursive/subdir
+usr/share/recursive/subdir/another.file"
+
+# Verify each layer using the shared function
+verify_layer_contents "webapp" "$expected_webapp" "$image_manifest"
+verify_layer_contents "database" "$expected_database" "$image_manifest"
+verify_layer_contents "recursive" "$expected_recursive" "$image_manifest"
 
 echo "ok exclusive layers functionality"
 
