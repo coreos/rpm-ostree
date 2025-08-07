@@ -124,7 +124,7 @@ where
 {
     fn is_dir(&self) -> bool {
         self.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
-            == gio::FileType::SymbolicLink
+            == gio::FileType::Directory
     }
 
     fn is_regular(&self) -> bool {
