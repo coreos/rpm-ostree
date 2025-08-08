@@ -194,6 +194,10 @@ pub(crate) struct BuildChunkedOCIOpts {
     #[clap(long, required_unless_present = "rootfs")]
     from: Option<String>,
 
+    /// Additional labels for the container image, in KEY=VALUE format
+    #[clap(name = "label", long, short)]
+    labels: Vec<String>,
+
     /// If set, configure the output OCI image to be a bootc container.
     /// At the current time this option is required.
     #[clap(long, required = true)]
@@ -354,10 +358,11 @@ impl BuildChunkedOCIOpts {
         let commitid =
             generate_commit_from_rootfs(&repo, &rootfs, modifier, creation_timestamp.as_ref())?;
 
-        let label_arg = self
+        let bootc_label_arg = self
             .bootc
             .then_some(["--label", "containers.bootc=1"].as_slice())
             .unwrap_or_default();
+        let label_args = self.labels.into_iter().map(|v| format!("--label={v}"));
         let base_config = image_config
             .config()
             .as_ref()
@@ -386,7 +391,8 @@ impl BuildChunkedOCIOpts {
                 "--repo",
                 repo_path.as_str(),
             ])
-            .args(label_arg)
+            .args(bootc_label_arg)
+            .args(label_args)
             .args(self.max_layers.map(|l| format!("--max-layers={l}")))
             .arg(format!("--arch={arch}"))
             .arg(format!("--format-version={}", self.format_version))
