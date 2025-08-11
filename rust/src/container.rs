@@ -158,6 +158,9 @@ impl MappingBuilder {
             for path in paths {
                 if let Some(component_ids) = self.path_components.get(path) {
                     if let Some(content_id) = component_ids.first() {
+                        // all files with duplicate contents (i.e. duplicate checksums)
+                        // will be mapped to the same content_id, regardless if they are defined
+                        // to have different components.
                         component_content.insert(checksum.clone(), content_id.clone());
                     }
                 } else if let Some(package_ids) = self.path_packages.get(path) {
@@ -190,6 +193,7 @@ fn build_fs_mapping_recurse(
     path: &mut Utf8PathBuf,
     dir: &gio::File,
     state: &mut MappingBuilder,
+    parent_component: Option<String>,
 ) -> Result<()> {
     let e = dir.enumerate_children(
         "standard::name,standard::type",
@@ -212,7 +216,10 @@ fn build_fs_mapping_recurse(
                 }
 
                 // Try to read user.component xattr to identify component-based chunks
-                if let Some(component_name) = get_user_component_xattr(&child)? {
+                let file_component = get_user_component_xattr(&child)?;
+                let effective_component = file_component.or_else(|| parent_component.clone());
+
+                if let Some(component_name) = effective_component {
                     let component_id = Rc::from(component_name.clone());
 
                     // Track component ID for later processing
@@ -231,6 +238,7 @@ fn build_fs_mapping_recurse(
                 // there'll be no corresponding path -> package entry, and the packaging
                 // operation will treat the file as being "unpackaged".
                 let checksum = child.checksum().to_string();
+
                 state
                     .checksum_paths
                     .entry(checksum)
@@ -238,7 +246,14 @@ fn build_fs_mapping_recurse(
                     .insert(path.clone());
             }
             gio::FileType::Directory => {
-                build_fs_mapping_recurse(path, &child, state)?;
+                let child_repo_file = child.clone().downcast::<ostree::RepoFile>().unwrap();
+
+                // Check if this directory has its own user.component xattr
+                let dir_component = get_user_component_xattr(&child_repo_file)?;
+                let effective_component = dir_component.or_else(|| parent_component.clone());
+
+                // Recursively process the directory with the new parent component
+                build_fs_mapping_recurse(path, &child, state, effective_component)?;
             }
             o => anyhow::bail!("Unhandled file type: {o:?}"),
         }
@@ -500,7 +515,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
         }
 
         // Then, walk the file system marking any remainders as unpackaged
-        build_fs_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &mut state)
+        build_fs_mapping_recurse(&mut Utf8PathBuf::from("/"), &root, &mut state, None)
     })?;
 
     // Now that we've walked the filesystem, process component metadata
