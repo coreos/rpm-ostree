@@ -150,18 +150,19 @@ impl MappingBuilder {
 // check if there is a mapping for the file in the package mapping
 // otherwise put it in the unpackaged bucket
 impl MappingBuilder {
-    fn create_meta(&self) -> (ObjectMeta, ObjectMeta) {
+    fn create_meta(&self) -> (ObjectMeta, BTreeMap<ContentID, Vec<(Utf8PathBuf, String)>>) {
         let mut package_content = ObjectMetaMap::default();
-        let mut component_content = ObjectMetaMap::default();
+        // Build map with content_id -> Vec<(checksum, path)> for components
+        let mut component_content_map = BTreeMap::new();
 
         for (checksum, paths) in &self.checksum_paths {
             for path in paths {
                 if let Some(component_ids) = self.path_components.get(path) {
                     if let Some(content_id) = component_ids.first() {
-                        // all files with duplicate contents (i.e. duplicate checksums)
-                        // will be mapped to the same content_id, regardless if they are defined
-                        // to have different components.
-                        component_content.insert(checksum.clone(), content_id.clone());
+                        component_content_map
+                            .entry(content_id.clone())
+                            .or_insert_with(Vec::new)
+                            .push((path.clone(), checksum.clone()));
                     }
                 } else if let Some(package_ids) = self.path_packages.get(path) {
                     if let Some(content_id) = package_ids.first() {
@@ -178,12 +179,7 @@ impl MappingBuilder {
             set: self.packagemeta.clone(),
         };
 
-        let component_meta = ObjectMeta {
-            map: component_content,
-            set: self.componentmeta.clone(),
-        };
-
-        (package_meta, component_meta)
+        (package_meta, component_content_map)
     }
 }
 
@@ -568,15 +564,10 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     println!("Multiple owners: {}", state.multiple_owners().count());
 
     // Create separate ObjectMeta for packages and exclusive components
-    let (package_meta, component_meta) = state.create_meta();
+    let (package_meta, component_content_map) = state.create_meta();
 
     // Generate sized versions
     let package_meta_sized = ObjectMetaSized::compute_sizes(repo, package_meta)?;
-    let component_meta_sized = if !state.componentmeta.is_empty() {
-        Some(ObjectMetaSized::compute_sizes(repo, component_meta)?)
-    } else {
-        None
-    };
     if let Some(v) = opt.write_contentmeta_json {
         let v = v.strip_prefix("/").unwrap_or(&v);
         let root = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
@@ -622,14 +613,7 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
     opts.max_layers = opt.max_layers;
     opts.prior_build = package_structure.as_ref();
     opts.package_contentmeta = Some(&package_meta_sized);
-    // Set exclusive component metadata if any were found
-    if let Some(ref component_meta) = component_meta_sized {
-        println!(
-            "Setting exclusive component metadata with {} component(s)",
-            state.componentmeta.len()
-        );
-        opts.specific_contentmeta = Some(component_meta);
-    }
+    opts.specific_contentmeta = Some(&component_content_map);
     if let Some(config_path) = opt.image_config.as_deref() {
         let config = serde_json::from_reader(File::open(config_path).map(BufReader::new)?)
             .map_err(anyhow::Error::msg)?;
@@ -857,7 +841,7 @@ mod tests {
             set
         });
 
-        let (package_meta, _component_meta) = builder.create_meta();
+        let (package_meta, _component_content_map) = builder.create_meta();
 
         assert_eq!(package_meta.map.len(), 1);
         assert!(package_meta.map.contains_key(&checksum1));
@@ -929,24 +913,18 @@ mod tests {
         });
         builder.checksum_paths.insert(checksum2.clone(), {
             let mut set = BTreeSet::new();
-            set.insert(path2);
+            set.insert(path2.clone());
             set
         });
 
-        let (_package_meta, component_meta) = builder.create_meta();
+        let (_package_meta, component_content_map) = builder.create_meta();
 
-        // Component meta should contain both checksums now
-        // checksum2 maps to comp_id (via path_components)
-        // checksum1 falls back to unpackaged_id (not in path_components)
-        assert_eq!(component_meta.map.len(), 1);
-        assert!(component_meta.map.contains_key(&checksum2));
-
-        // Should have component metadata but not package metadata
-        assert_eq!(component_meta.set.len(), 1);
-        assert_eq!(
-            component_meta.set.iter().next().unwrap().identifier,
-            comp_id
-        );
+        // Component content map should contain component with Vec<(checksum, path)>
+        assert_eq!(component_content_map.len(), 1);
+        assert!(component_content_map.contains_key(&comp_id));
+        let entries = &component_content_map[&comp_id];
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0], (path2.clone(), checksum2.clone()));
     }
 
     #[test]
@@ -991,7 +969,7 @@ mod tests {
             set
         });
 
-        let (package_meta, _component_meta) = builder.create_meta();
+        let (package_meta, _component_content_map) = builder.create_meta();
 
         // Package meta should contain unpackaged content
         assert_eq!(package_meta.map.len(), 1);
@@ -1056,25 +1034,30 @@ mod tests {
 
         builder.checksum_paths.insert(checksum1.clone(), {
             let mut set = BTreeSet::new();
-            set.insert(path1);
+            set.insert(path1.clone());
             set
         });
 
         builder.checksum_paths.insert(checksum2.clone(), {
             let mut set = BTreeSet::new();
-            set.insert(path2);
+            set.insert(path2.clone());
             set
         });
 
-        let (_package_meta, component_meta) = builder.create_meta();
+        let (_package_meta, component_content_map) = builder.create_meta();
 
-        // Should contain both components
-        assert_eq!(component_meta.map.len(), 2);
-        assert!(component_meta.map.contains_key(&checksum1));
-        assert!(component_meta.map.contains_key(&checksum2));
-        assert_eq!(component_meta.map[&checksum1], comp1_id);
-        assert_eq!(component_meta.map[&checksum2], comp2_id);
-        assert_eq!(component_meta.set.len(), 2);
+        // Should contain both components with content_id -> Vec<(checksum, path)> mapping
+        assert_eq!(component_content_map.len(), 2);
+        assert!(component_content_map.contains_key(&comp1_id));
+        assert!(component_content_map.contains_key(&comp2_id));
+
+        let comp1_entries = &component_content_map[&comp1_id];
+        assert_eq!(comp1_entries.len(), 1);
+        assert_eq!(comp1_entries[0], (path1.clone(), checksum1.clone()));
+
+        let comp2_entries = &component_content_map[&comp2_id];
+        assert_eq!(comp2_entries.len(), 1);
+        assert_eq!(comp2_entries[0], (path2.clone(), checksum2.clone()));
     }
 
     #[test]
