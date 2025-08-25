@@ -114,29 +114,7 @@ rm -f "$original_layers_file" "$rechunked_layers_file" "$rechunk_output"
 echo "ok chunked image base detection and reuse"
 
 echo "Testing exclusive layers functionality"
-cat > Containerfile.exclusive << 'EOF'
-FROM localhost/base
-
-# Create directories for component files
-RUN mkdir -p /usr/share/webapp /usr/share/database /usr/share/regular
-
-# Create component files
-RUN echo "Web application data" > /usr/share/webapp/app.js && \
-    echo "Web configuration" > /usr/share/webapp/config.json && \
-    echo "Database schema" > /usr/share/database/schema.sql && \
-    echo "Database library" > /usr/share/database/libdb.so && \
-    echo "Regular system file" > /usr/share/regular/system.conf
-
-# Set component xattrs to identify exclusive layers
-RUN setfattr -n user.component -v "webapp" /usr/share/webapp/app.js && \
-    setfattr -n user.component -v "webapp" /usr/share/webapp/config.json && \
-    setfattr -n user.component -v "database" /usr/share/database/schema.sql && \
-    setfattr -n user.component -v "database" /usr/share/database/libdb.so
-
-LABEL exclusive-test=1
-EOF
-
-podman build -t localhost/exclusive-test -f Containerfile.exclusive
+podman build -t localhost/exclusive-test -f Containerfile.recursive
 
 podman run --rm --privileged --security-opt=label=disable \
   -v /var/lib/containers:/var/lib/containers \
@@ -146,6 +124,40 @@ podman run --rm --privileged --security-opt=label=disable \
   --bootc --format-version=2 --max-layers 99 \
   --from localhost/exclusive-test \
   --output containers-storage:localhost/exclusive-chunked
+
+verify_layer_contents() {
+    local component_name="$1"
+    local expected_files="$2"
+    local image_manifest="$3"
+
+    local layer_index
+    layer_index=$(jq -r --arg comp "$component_name" '.layers | to_entries[] | select(.value.annotations."ostree.components" == $comp) | .key' exclusive-manifest.json)
+    echo "$component_name layer index: $layer_index"
+    local layer_digest
+    layer_digest=$(echo "$image_manifest" | jq -r --argjson idx "$layer_index" '.layers[$idx].digest' | cut -d: -f2)
+    
+    if [ -n "$layer_digest" ]; then
+        echo "Checking $component_name layer: sha256:$layer_digest"
+        
+        # List files in the tar (excluding directories and sysroot)
+        local actual_files
+        actual_files=$(tar -tf "${oci_dir}/blobs/sha256/${layer_digest}" | grep -v '/$' | grep -v '^sysroot' | sort)
+        
+        if [ "$actual_files" = "$expected_files" ]; then
+            echo "✓ $component_name layer contains only expected files"
+        else
+            echo "✗ $component_name layer contents mismatch"
+            echo "Expected:"
+            echo "$expected_files"
+            echo "Actual:"
+            echo "$actual_files"
+            exit 1
+        fi
+    else
+        echo "✗ $component_name layer not found"
+        exit 1
+    fi
+}
 
 # Verify that exclusive layers contain only the expected files
 echo "Verifying exclusive layer contents..."
@@ -159,64 +171,63 @@ echo "webapp layer index: $webapp_index"
 echo "database layer index: $database_index"
 
 oci_dir=$(mktemp -d)
-skopeo copy containers-storage:localhost/exclusive-chunked oci:${oci_dir} &> /dev/null
+skopeo copy containers-storage:localhost/exclusive-chunked "oci:${oci_dir}" &> /dev/null
 manifest=$(cat "${oci_dir}/index.json" | jq -r '.manifests[0].digest' | cut -d: -f2)
 image_manifest=$(cat "${oci_dir}/blobs/sha256/${manifest}")
-webapp_layer=$(echo "$image_manifest" | jq -r --argjson idx "$webapp_index" '.layers[$idx].digest' | cut -d: -f2)
 
-if [ -n "$webapp_layer" ]; then
-    echo "Checking webapp layer: sha256:$webapp_layer"
-    
-    # List files in the tar (excluding directories and sysroot)
-    webapp_files=$(tar -tf "${oci_dir}/blobs/sha256/${webapp_layer}" | grep -v '^sysroot' | sort)
-    expected_webapp="usr
+expected_root="usr
 usr/share
-usr/share/webapp
-usr/share/webapp/app.js
-usr/share/webapp/config.json"
-    
-    if [ "$webapp_files" = "$expected_webapp" ]; then
-        echo "✓ Webapp layer contains only expected files"
-    else
-        echo "✗ Webapp layer contents mismatch"
-        echo "Expected:"
-        echo "$expected_webapp"
-        echo "Actual:"
-        echo "$webapp_files"
-        exit 1
-    fi
-else 
-    echo "✗ webapp layer not found"
-    exit 1
-fi
+usr/share/layers
+usr/share/layers/broken-linkB
+usr/share/layers/dir2
+usr/share/layers/dir2/dirA
+usr/share/layers/dir2/dirA/fileA
+usr/share/layers/dir2/fileA
+usr/share/layers/dir2/linkA
+usr/share/layers/dir2/targetA
+usr/share/layers/dir2/targetB
+usr/share/layers/dir3
+usr/share/layers/dir3/fileA
+usr/share/layers/fileA
+usr/share/layers/linkA
+usr/share/layers/linkB
+usr/share/layers/targetA"
 
-database_layer=$(echo "$image_manifest" | jq -r --argjson idx "$database_index" '.layers[$idx].digest' | cut -d: -f2)
-echo "database_layer: $database_layer"
-if [ -n "$database_layer" ]; then
-    echo "Checking database layer: sha256:$database_layer"
-    
-    # List files in the tar (excluding directories and sysroot)
-    database_files=$(tar -tf "${oci_dir}/blobs/sha256/${database_layer}" | grep -v '/$' | grep -v '^sysroot' | sort)
-    expected_database="usr
+expected_dir1="usr
 usr/share
-usr/share/database
-usr/share/database/libdb.so
-usr/share/database/schema.sql"
-    
-    if [ "$database_files" = "$expected_database" ]; then
-        echo "✓ Database layer contains only expected files"
-    else
-        echo "✗ Database layer contents mismatch"
-        echo "Expected:"
-        echo "$expected_database"
-        echo "Actual:"
-        echo "$database_files"
-        exit 1
-    fi
-else 
-    echo "✗ database layer not found"
-    exit 1
-fi
+usr/share/layers
+usr/share/layers/dir1
+usr/share/layers/dir1/dirA
+usr/share/layers/dir1/dirA/fileA
+usr/share/layers/dir1/linkA
+usr/share/layers/dir1/linkB
+usr/share/layers/dir1/targetA
+usr/share/layers/dir1/targetB"
+
+expected_dir3fileB="usr
+usr/share
+usr/share/layers
+usr/share/layers/dir3
+usr/share/layers/dir3/fileB"
+
+expected_dir4="usr
+usr/share
+usr/share/layers
+usr/share/layers/dir4
+usr/share/layers/dir4/fileA"
+
+expected_dir4fileB="usr
+usr/share
+usr/share/layers
+usr/share/layers/dir4
+usr/share/layers/dir4/fileB"
+
+# Verify each layer using the shared function
+verify_layer_contents "root" "$expected_root" "$image_manifest"
+verify_layer_contents "dir1" "$expected_dir1" "$image_manifest"
+verify_layer_contents "dir3fileB" "$expected_dir3fileB" "$image_manifest"
+verify_layer_contents "dir4" "$expected_dir4" "$image_manifest"
+verify_layer_contents "dir4fileB" "$expected_dir4fileB" "$image_manifest"
 
 echo "ok exclusive layers functionality"
 
