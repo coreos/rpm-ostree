@@ -4228,6 +4228,13 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
   if (overlays->len == 0 && overrides_remove->len == 0 && overrides_replace->len == 0)
     return glnx_throw (error, "No packages in transaction");
 
+  /* Sort the packages as rpmtsOrder() only reorder to satisfy dependencies
+   * but doesn't impose any ordering to packages with the same dependencies.
+   */
+  g_ptr_array_sort (overlays, compare_pkgs);
+  g_ptr_array_sort (overrides_replace, compare_pkgs);
+  g_ptr_array_sort (overrides_remove, compare_pkgs);
+
   /* Tell librpm about each one so it can tsort them.  What we really
    * want is to do this from the rpm-md metadata so that we can fully
    * parallelize download + unpack.
