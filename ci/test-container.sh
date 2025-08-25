@@ -31,7 +31,7 @@ case $versionid in
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2685011"
     kver=6.14.0
     krev=63
-    afterburn_version=5.8.2-41.fc42."$(arch)"
+    afterburn_version=5.9.0-1.fc42."$(arch)"
     ;;
   41)
     # 2.19.0-2 (this koji url must be different than above version)
