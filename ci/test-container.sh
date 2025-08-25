@@ -23,7 +23,6 @@ fi
 # Test overrides
 # These hardcoded versions can be kept until Fedora GC's them
 ignition_url_suffix=2.17.0/4.fc40/x86_64/ignition-2.17.0-4.fc40."$(arch)".rpm
-afterburn_version=5.7.0-4.fc41."$(arch)"
 case $versionid in
   42)
     # 2.21.0-1 (this koji url must be different than above version, and different from
@@ -32,6 +31,7 @@ case $versionid in
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2685011"
     kver=6.14.0
     krev=63
+    afterburn_version=5.9.0-1.fc42."$(arch)"
     ;;
   41)
     # 2.19.0-2 (this koji url must be different than above version)
@@ -39,6 +39,7 @@ case $versionid in
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2571615"
     kver=6.11.4
     krev=301
+    afterburn_version=5.7.0-4.fc41."$(arch)"
     ;;
   *) fatal "Unsupported Fedora version: $versionid";;
 esac
