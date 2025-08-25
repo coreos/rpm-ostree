@@ -521,7 +521,7 @@ It supports the following parameters:
        include: dev-packages.yaml
    ```
 
- * `repo_metadata`: String, optional: Can be one of `inline` (the default),
+ * `repo-metadata`: String, optional: Can be one of `inline` (the default),
    `detached` or  `disabled`. If set to `inline`, parts of the RPM repository
    metadata are added to the OSTree commit metadata under the
    `rpmostree.rpmmd-repos` key. Setting this to `detached` also adds the
