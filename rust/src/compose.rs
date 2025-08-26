@@ -255,6 +255,10 @@ pub(crate) struct RootfsOpts {
 
     /// Path to the target root filesystem tree.
     dest: Utf8PathBuf,
+
+    /// Read lockfile from file.
+    #[clap(name = "lockfile", long)]
+    lockfiles: Vec<Utf8PathBuf>,
 }
 
 /// Unpack an OSTree commit to a target root in ostree-container layout (`bare-split-xattrs` format).
@@ -774,6 +778,11 @@ impl RootfsOpts {
                 self.source_root
                     .iter()
                     .flat_map(|v| ["--source-root", v.as_str()]),
+            )
+            .args(
+                self.lockfiles
+                    .iter()
+                    .flat_map(|v| ["--ex-lockfile", v.as_str()]),
             )
             .args([manifest.as_str(), self.dest.as_str()])
             // Otherwise, dracut might try to copy user.ostreemeta xattrs which
