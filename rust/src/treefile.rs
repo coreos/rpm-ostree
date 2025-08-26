@@ -474,6 +474,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         releasever,
         automatic_version_prefix,
         automatic_version_suffix,
+        repo_metadata,
         rpmdb,
         mutate_os_release,
         preserve_passwd,
@@ -1420,7 +1421,7 @@ impl Treefile {
     }
 
     pub(crate) fn get_repo_metadata_target(&self) -> crate::ffi::RepoMetadataTarget {
-        self.parsed.base.repo_metadata.into()
+        self.parsed.base.repo_metadata.unwrap_or_default().into()
     }
 
     /// Returns true if the database backend must be regenerated using the target system.
@@ -2396,17 +2397,9 @@ pub(crate) enum RepoMetadataTarget {
     Disabled,
 }
 
-impl RepoMetadataTarget {
-    const DEFAULT: Self = Self::Inline;
-
-    fn is_default(value: &Self) -> bool {
-        *value == Self::DEFAULT
-    }
-}
-
 impl Default for RepoMetadataTarget {
     fn default() -> Self {
-        Self::DEFAULT
+        Self::Inline
     }
 }
 
@@ -2644,8 +2637,8 @@ pub(crate) struct BaseComposeConfigFields {
     // as well).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
-    #[serde(default, skip_serializing_if = "RepoMetadataTarget::is_default")]
-    pub(crate) repo_metadata: RepoMetadataTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) repo_metadata: Option<RepoMetadataTarget>,
     // The database backend
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) rpmdb: Option<RpmdbBackend>,
