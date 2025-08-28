@@ -26,6 +26,9 @@ maintained base image, such as the fedora-bootc ones. Especially if
 you are targeting bootc systems with this, please follow
 <https://gitlab.com/fedora/bootc/tracker/-/issues/32>.
 
+When composing an image from an image that was previously chunked, the existing
+image's layers will automatically be re-used when specifying it as the `--output` image.
+
 ## Running
 
 Note that the `--from` and `--rootfs` options are mutually-exclusive;
@@ -36,7 +39,7 @@ omitted, defaults to `1`.
 ### Using `--from`
 
 This expects a container image already fetched into a `containers-storage:`
-instance, and can output to `containers-storage:` or `oci`. 
+instance, and can output to `containers-storage:` or `oci`.
 
 ```
 podman build -t quay.io/exampleos/exampleos:build ...
@@ -86,3 +89,39 @@ version of an image.
 
 If reproducible builds are desirable, it is recommended to use
 `--format-version=2`.
+
+### Assigning files to specific layers
+
+To assign files to a specific layer, add the `user.components` xattr
+to the file when building the bootc image. This will create a new layer for each
+unique `user.component` xattr value. For example, if you want `/usr/bin/my-app`
+to be in the `custom-apps` layer, you can set the `user.components` xattr on it.
+
+```
+FROM quay.io/exampleos/exampleos:build
+
+RUN setfattr -n user.components -v "custom-apps" /usr/bin/my-app
+```
+
+All files and sub-directories are recursively added when a directory has the `user.component`  xattr.
+This can be overridden for individual files and directories by explicitly setting `user.component`.
+In the following example, everything under the `/usr/share/my-lib` directory will be included in the `my-lib`
+layer, except for `/usr/share/my-lib/app` which will be in the `apps` layer.
+
+```
+FROM quay.io/exampleos/exampleos:build
+
+RUN <<EOF
+    set -euxo pipefail
+
+    mkdir -p /usr/share/my-lib
+    touch /usr/share/my-lib/app
+    mkdir -p /usr/share/my-lib/docs
+    touch /usr/share/my-lib/docs/index.md
+    mkdir -p /usr/share/my-lib/resources
+    touch /usr/share/my-lib/resources/icon.png
+
+    setfattr -n user.component -v "my-lib" /usr/share/my-lib
+    setfattr -n user.component -v "apps" /usr/share/my-lib/app
+EOF
+```
