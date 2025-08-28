@@ -29,11 +29,11 @@ use ostree_ext::ostree::MutableTree;
 use ostree_ext::{container as ostree_container, glib};
 use ostree_ext::{oci_spec, ostree};
 
-use crate::cmdutils::CommandRunExt;
 use crate::containers_storage::Mount;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::isolation::self_command;
 use crate::{RPMOSTREE_RPMDB_LOCATION, RPMOSTREE_SYSIMAGE_RPMDB};
+use bootc_internal_utils::CommandRunExt;
 
 const SYSROOT: &str = "sysroot";
 const USR: &str = "usr";
@@ -379,7 +379,7 @@ impl BuildChunkedOCIOpts {
         };
         let manifest_data = manifest_data_tmpfile.as_ref().map(|t| t.path());
 
-        let st = crate::isolation::self_command()
+        crate::isolation::self_command()
             .args([
                 "compose",
                 "container-encapsulate",
@@ -402,10 +402,8 @@ impl BuildChunkedOCIOpts {
                     manifest.as_os_str(),
                 ]
             }))
-            .status()?;
-        if !st.success() {
-            anyhow::bail!("Failed to run compose container-encapsulate: {st:?}");
-        }
+            .run_inherited()
+            .context("Invoking compose container-encapsulate")?;
 
         drop(rootfs);
         // Ensure our tempdir is only dropped now
@@ -757,7 +755,7 @@ impl RootfsOpts {
         };
 
         // Just build the root filesystem tree
-        let st = self_command()
+        self_command()
             .args([
                 "compose",
                 "install",
@@ -789,10 +787,8 @@ impl RootfsOpts {
             // it won't be able to. We should lower the xattr stripping into
             // rpm-ostree ideally.
             .env("DRACUT_NO_XATTR", "1")
-            .status()?;
-        if !st.success() {
-            anyhow::bail!("Executing compose install: {st:?}");
-        }
+            .run_inherited()
+            .context("Executing compose install")?;
 
         // Clear everything in the tempdir; at this point we may have hardlinks into
         // the pkgcache repo, which we don't need because we're producing a flat
@@ -1219,7 +1215,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         compose_args_extra.extend(["--source-root", path.as_str()]);
     }
 
-    let st = self_command()
+    self_command()
         .args([
             "compose",
             "tree",
@@ -1238,10 +1234,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         .args(opt.lockfile_strict.then_some("--ex-lockfile-strict"))
         .args(compose_args_extra)
         .arg(opt.manifest.as_str())
-        .status()?;
-    if !st.success() {
-        return Err(format!("Failed to run compose tree: {st:?}").into());
-    }
+        .run_inherited()?;
 
     if !changed_path.exists() {
         return Ok(());
@@ -1277,7 +1270,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
         })
         .transpose()?;
 
-    let st = self_command()
+    self_command()
         .args(["compose", "container-encapsulate"])
         .args(label_args)
         .args(previous_arg)
@@ -1289,10 +1282,7 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
             commitid.as_str(),
             tempdest.as_deref().unwrap_or(target_imgref.as_str()),
         ])
-        .status()?;
-    if !st.success() {
-        return Err(format!("Failed to run compose container-encapsulate: {st:?}").into());
-    }
+        .run_inherited()?;
 
     if let Some(tempdest) = tempdest {
         let mut c = Command::new("skopeo");
@@ -1541,7 +1531,7 @@ mod tests {
         Command::new("ostree")
             .args(["--repo=repo", "commit", "-b", "test", "--tree=dir=rootfs"])
             .current_dir(&td_path)
-            .run()?;
+            .run_capture_stderr()?;
         let rev = repo.require_rev("test")?;
         let unpack_path = td_path.join("rootfs2");
         unpack_commit_to_dir_as_bare_split_xattrs(&repo, &rev, &unpack_path)?;

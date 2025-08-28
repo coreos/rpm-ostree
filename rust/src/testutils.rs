@@ -9,9 +9,9 @@
 //! This backs the hidden `rpm-ostree testutils` CLI.  Subject
 //! to change.
 
-use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::*;
 use anyhow::{Context, Result};
+use bootc_internal_utils::CommandRunExt;
 use cap_std::fs::FileType;
 use cap_std::fs::{Dir, MetadataExt, Permissions, PermissionsExt};
 use cap_std_ext::cap_std;
@@ -87,7 +87,7 @@ pub(crate) fn mutate_one_executable_to(
         std::mem::drop(destf);
         Command::new("objcopy")
             .arg(format!("--add-section=.note.coreos-synthetic={}", notepath))
-            .run()?;
+            .run_capture_stderr()?;
     } else {
         // ELF is OK with us just appending some junk
         let mut rng = ThreadRng::default();
@@ -154,7 +154,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     // A new mount namespace should have been created for us
     Command::new("mount")
         .args(["-o", "remount,rw", "/sysroot"])
-        .run()?;
+        .run_capture_stderr()?;
     assert!(opts.percentage > 0 && opts.percentage <= 100);
     let repo_path = Path::new(opts.repo.as_str());
     let tempdir = tempfile::tempdir_in(repo_path.join("tmp"))?;
@@ -209,7 +209,7 @@ fn update_os_tree(opts: &SyntheticUpgradeOpts) -> Result<()> {
     if let Some(v) = opts.commit_version.as_ref() {
         cmd.arg(format!("--add-metadata-string=version={}", v));
     }
-    cmd.run()?;
+    cmd.run_capture_stderr()?;
     Ok(())
 }
 
