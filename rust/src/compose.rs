@@ -136,7 +136,7 @@ struct ComposeImageOpts {
     /// Operate only on cached data, do not access network repositories
     offline: bool,
 
-    #[clap(long, conflicts_with_all = ["lockfiles", "lockfile_strict"])]
+    #[clap(long)]
     /// Path to write a JSON-formatted lockfile
     write_lockfile_to: Option<Utf8PathBuf>,
 
