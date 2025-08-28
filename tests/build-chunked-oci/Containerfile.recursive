@@ -13,43 +13,43 @@ RUN <<END
 
     # the root layers directory
     setfattr -n user.component -v "root" /usr/share/layers
-    echo "This is a file 1" > /usr/share/layers/fileA
-    echo "This is a file 2" > /usr/share/layers/targetA
+    echo "foo" > /usr/share/layers/fileA
+    echo "foo" > /usr/share/layers/targetA
     ln -s /usr/share/layers/targetA /usr/share/layers/linkA
-    echo "This is a file 3" > /usr/share/layers/targetB
+    echo "foo" > /usr/share/layers/targetB
     ln -s /usr/share/layers/targetB /usr/share/layers/broken-linkB
     rm /usr/share/layers/targetB
     ln -s /usr/share/layers/dir1/targetB /usr/share/layers/linkB
 
     # dir1 has user.component set
     setfattr -n user.component -v "dir1" /usr/share/layers/dir1
-    echo "This is a file 4" > /usr/share/layers/dir1/targetA
+    echo "foo" > /usr/share/layers/dir1/targetA
     ln -s /usr/share/layers/dir1/targetA /usr/share/layers/dir1/linkA
     # link to a file in dir2
-    echo "This is a file 5" > /usr/share/layers/dir2/targetB
+    echo "foo" > /usr/share/layers/dir2/targetB
     ln -s /usr/share/layers/dir2/targetB /usr/share/layers/dir1/linkB
     # linked to from root
-    echo "This is a file 6" > /usr/share/layers/dir1/targetB
+    echo "foo" > /usr/share/layers/dir1/targetB
     mkdir -p /usr/share/layers/dir1/dirA
-    echo "This is a file 7" > /usr/share/layers/dir1/dirA/fileA
+    echo "foo" > /usr/share/layers/dir1/dirA/fileA
 
     # dir2 has no user.component set so it will be included in the root layer
-    echo "This is a file A" > /usr/share/layers/dir2/fileA
-    echo "This is a file B" > /usr/share/layers/dir2/targetA
+    echo "foo" > /usr/share/layers/dir2/fileA
+    echo "foo" > /usr/share/layers/dir2/targetA
     ln -s /usr/share/layers/dir2/targetA /usr/share/layers/dir2/linkA
     mkdir -p /usr/share/layers/dir2/dirA
-    echo "This is a file C" > /usr/share/layers/dir2/dirA/fileA
+    echo "foo" > /usr/share/layers/dir2/dirA/fileA
 
     # dir3 has no user.component set but some files in dir3 have a user.component
-    echo "This is a file D" > /usr/share/layers/dir3/fileA
+    echo "foo" > /usr/share/layers/dir3/fileA
     # fileB has a user.component
-    echo "This is a file E" > /usr/share/layers/dir3/fileB
+    echo "foo" > /usr/share/layers/dir3/fileB
     setfattr -n user.component -v "dir3fileB" /usr/share/layers/dir3/fileB
 
     # dir4 has a user.component set but some files have a user.component
     setfattr -n user.component -v "dir4" /usr/share/layers/dir4
-    echo "This is a file F" > /usr/share/layers/dir4/fileA
-    echo "This is a file G" > /usr/share/layers/dir4/fileB
+    echo "foo" > /usr/share/layers/dir4/fileA
+    echo "foo" > /usr/share/layers/dir4/fileB
     setfattr -n user.component -v "dir4fileB" /usr/share/layers/dir4/fileB
 
 END
