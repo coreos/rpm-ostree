@@ -1352,6 +1352,7 @@ struct HistoryCtx;
 struct TokioHandle;
 struct TokioEnterGuard;
 enum class RepoMetadataTarget : ::std::uint8_t;
+enum class AdvisoriesMetadataTarget : ::std::uint8_t;
 struct Refspec;
 enum class OverrideReplacementType : ::std::uint8_t;
 struct OverrideReplacement;
@@ -1720,6 +1721,16 @@ enum class RepoMetadataTarget : ::std::uint8_t
 };
 #endif // CXXBRIDGE1_ENUM_rpmostreecxx$RepoMetadataTarget
 
+#ifndef CXXBRIDGE1_ENUM_rpmostreecxx$AdvisoriesMetadataTarget
+#define CXXBRIDGE1_ENUM_rpmostreecxx$AdvisoriesMetadataTarget
+enum class AdvisoriesMetadataTarget : ::std::uint8_t
+{
+  Inline = 0,
+  Detached = 1,
+  Disabled = 2,
+};
+#endif // CXXBRIDGE1_ENUM_rpmostreecxx$AdvisoriesMetadataTarget
+
 #ifndef CXXBRIDGE1_STRUCT_rpmostreecxx$Refspec
 #define CXXBRIDGE1_STRUCT_rpmostreecxx$Refspec
 struct Refspec final
@@ -1825,6 +1836,7 @@ struct Treefile final : public ::rust::Opaque
   bool get_ima () const noexcept;
   ::rust::String get_releasever () const noexcept;
   ::rpmostreecxx::RepoMetadataTarget get_repo_metadata_target () const noexcept;
+  ::rpmostreecxx::AdvisoriesMetadataTarget get_advisories_metadata_target () const noexcept;
   bool rpmdb_backend_is_target () const noexcept;
   bool should_normalize_rpmdb () const noexcept;
   ::rpmostreecxx::OptUsrLocal get_opt_usrlocal () const noexcept;
@@ -2696,6 +2708,10 @@ extern "C"
                                                         ::rust::String *return$) noexcept;
 
   ::rpmostreecxx::RepoMetadataTarget rpmostreecxx$cxxbridge1$Treefile$get_repo_metadata_target (
+      ::rpmostreecxx::Treefile const &self) noexcept;
+
+  ::rpmostreecxx::AdvisoriesMetadataTarget
+  rpmostreecxx$cxxbridge1$Treefile$get_advisories_metadata_target (
       ::rpmostreecxx::Treefile const &self) noexcept;
 
   bool rpmostreecxx$cxxbridge1$Treefile$rpmdb_backend_is_target (
@@ -5322,6 +5338,12 @@ Treefile::get_releasever () const noexcept
 Treefile::get_repo_metadata_target () const noexcept
 {
   return rpmostreecxx$cxxbridge1$Treefile$get_repo_metadata_target (*this);
+}
+
+::rpmostreecxx::AdvisoriesMetadataTarget
+Treefile::get_advisories_metadata_target () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$get_advisories_metadata_target (*this);
 }
 
 bool

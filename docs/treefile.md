@@ -529,6 +529,13 @@ It supports the following parameters:
    it from affecting the commit checksum. Setting it to `disabled` will
    prevent the metadata from being added at all.
 
+ * `advisories-metadata`: String, optional: Can be one of `inline` (the default),
+   `detached` or  `disabled`. If set to `inline`, RPM advisories informations
+   are added to the OSTree commit metadata under the `rpmostree.advisories` key.
+   Setting this to `detached` also adds the information but puts it in the detached
+   metadata of the commit, preventing it from affecting the commit checksum.
+   Setting it to `disabled` will prevent the metadata from being added at all.
+
 ## Experimental options
 
 All options listed here are subject to change or removal in a future

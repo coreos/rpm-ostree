@@ -538,6 +538,13 @@ pub mod ffi {
         Disabled,
     }
 
+    #[derive(Debug)]
+    enum AdvisoriesMetadataTarget {
+        Inline,
+        Detached,
+        Disabled,
+    }
+
     #[derive(Debug, PartialEq, Eq)]
     struct Refspec {
         kind: RefspecType,
@@ -640,6 +647,7 @@ pub mod ffi {
         fn get_ima(&self) -> bool;
         fn get_releasever(&self) -> String;
         fn get_repo_metadata_target(&self) -> RepoMetadataTarget;
+        fn get_advisories_metadata_target(&self) -> AdvisoriesMetadataTarget;
         fn rpmdb_backend_is_target(&self) -> bool;
         fn should_normalize_rpmdb(&self) -> bool;
         fn get_opt_usrlocal(&self) -> OptUsrLocal;
