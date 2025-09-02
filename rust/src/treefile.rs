@@ -475,6 +475,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         automatic_version_prefix,
         automatic_version_suffix,
         repo_metadata,
+        advisories_metadata,
         rpmdb,
         mutate_os_release,
         preserve_passwd,
@@ -1422,6 +1423,14 @@ impl Treefile {
 
     pub(crate) fn get_repo_metadata_target(&self) -> crate::ffi::RepoMetadataTarget {
         self.parsed.base.repo_metadata.unwrap_or_default().into()
+    }
+
+    pub(crate) fn get_advisories_metadata_target(&self) -> crate::ffi::AdvisoriesMetadataTarget {
+        self.parsed
+            .base
+            .advisories_metadata
+            .unwrap_or_default()
+            .into()
     }
 
     /// Returns true if the database backend must be regenerated using the target system.
@@ -2415,6 +2424,30 @@ impl From<RepoMetadataTarget> for crate::ffi::RepoMetadataTarget {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
+pub(crate) enum AdvisoriesMetadataTarget {
+    Inline,
+    Detached,
+    Disabled,
+}
+
+impl Default for AdvisoriesMetadataTarget {
+    fn default() -> Self {
+        Self::Inline
+    }
+}
+
+impl From<AdvisoriesMetadataTarget> for crate::ffi::AdvisoriesMetadataTarget {
+    fn from(target: AdvisoriesMetadataTarget) -> Self {
+        match target {
+            AdvisoriesMetadataTarget::Inline => Self::Inline,
+            AdvisoriesMetadataTarget::Detached => Self::Detached,
+            AdvisoriesMetadataTarget::Disabled => Self::Disabled,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) enum OptUsrLocal {
     Var,
     Root,
@@ -2639,6 +2672,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) repo_metadata: Option<RepoMetadataTarget>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) advisories_metadata: Option<AdvisoriesMetadataTarget>,
     // The database backend
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) rpmdb: Option<RpmdbBackend>,
