@@ -30,11 +30,11 @@ use ostree_ext::oci_spec::image::{Arch, Os, PlatformBuilder};
 use ostree_ext::prelude::*;
 use ostree_ext::{gio, oci_spec, ostree};
 
-use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::FFIGObjectReWrap;
 use crate::fsutil::{self, FileHelpers, ResolvedOstreePaths};
 use crate::progress::progress_task;
 use crate::CxxResult;
+use bootc_internal_utils::CommandRunExt;
 
 const COMPONENT_XATTR: &CStr = c"user.component";
 
@@ -734,7 +734,7 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     {
         Command::new("mount")
             .args(["-o", "remount,rw", sysroot.as_str()])
-            .run()?;
+            .run_capture_stderr()?;
     }
 
     let src_repo_path = Utf8Path::new("/ostree/repo");
@@ -781,7 +781,7 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     Command::new("chroot")
         .args([opts.target_root.as_str(), "rpm-ostree", "rebase", commit])
         .args(opts.reboot.then_some("--reboot"))
-        .run()?;
+        .run_capture_stderr()?;
 
     Ok(())
 }

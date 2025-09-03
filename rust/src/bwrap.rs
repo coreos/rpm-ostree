@@ -2,11 +2,11 @@
 
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use crate::cmdutils::CommandRunExt;
 use crate::cxxrsutil::*;
 use crate::ffi::BubblewrapMutability;
 use crate::normalization;
 use anyhow::{Context, Result};
+use bootc_internal_utils::CommandRunExt;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use cap_std::fs::Dir;
@@ -100,7 +100,7 @@ impl RoFilesMount {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
             });
         }
-        c.run()?;
+        c.run_capture_stderr()?;
         Ok(Self {
             tempdir: Some(tempdir),
         })

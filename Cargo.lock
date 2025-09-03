@@ -2801,6 +2801,7 @@ dependencies = [
  "anyhow",
  "binread",
  "bitflags 2.9.1",
+ "bootc-internal-utils",
  "camino",
  "cap-primitives",
  "cap-std",

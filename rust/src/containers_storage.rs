@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use fn_error_context::context;
 
-use crate::cmdutils::CommandRunExt;
+use bootc_internal_utils::CommandRunExt;
 
 /// Ensure that we're in a new user+mountns, so that "buildah mount"
 /// will work reliably.
@@ -62,7 +62,7 @@ impl Mount {
             Command::new("umount")
                 .args(["-l", self.path.as_str()])
                 .stdout(Stdio::null())
-                .run()
+                .run_capture_stderr()
                 .context("umount")?;
             tracing::trace!("umount ok");
         }
@@ -71,7 +71,7 @@ impl Mount {
             Command::new(self.backend.as_ref())
                 .args(["rm", cid.as_str()])
                 .stdout(Stdio::null())
-                .run()
+                .run_capture_stderr()
                 .context("podman rm")?;
             tracing::trace!("rm ok");
         }

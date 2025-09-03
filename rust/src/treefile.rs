@@ -21,6 +21,7 @@
 
 use crate::{compose_postprocess_scripts, cxxrsutil::*};
 use anyhow::{anyhow, bail, Context, Result};
+use bootc_internal_utils::CommandRunExt;
 use camino::{Utf8Path, Utf8PathBuf};
 use cap_std::fs::MetadataExt as _;
 use cap_std_ext::cap_std::fs::Dir;
@@ -853,10 +854,9 @@ impl Treefile {
             if let Some(d) = self.directory.as_deref() {
                 cmd.env("RPMOSTREE_WORKDIR", d);
             }
-            let st = cmd.cwd_dir(rootfs.try_clone()?).status()?;
-            if !st.success() {
-                return Err(anyhow!("Failed to execute {name}: {st}"));
-            }
+            cmd.cwd_dir(rootfs.try_clone()?)
+                .run_inherited()
+                .with_context(|| format!("Failed to execute {name}"))?;
         }
         Ok(())
     }
