@@ -82,7 +82,7 @@ fn reload_systemd() -> Result<()> {
 
 /// Helper: diff two commits for given paths
 fn compute_diff(repo: &ostree::Repo, from: &str, to: &str, path: Option<&str>) -> Result<ostree_ext::diff::Diff> {
-    Ok(ostree_ext::diff::diff(repo, from, to, path)?)
+    ostree_ext::diff::diff(repo, from, to, path)
 }
 
 pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
