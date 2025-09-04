@@ -9,11 +9,12 @@ podman run --rm --privileged --security-opt=label=disable \
   -v /var/lib/containers:/var/lib/containers \
   -v /var/tmp:/var/tmp \
   -v "$(pwd)":/output \
-  localhost/builder rpm-ostree compose build-chunked-oci --bootc --from ${testimg_base} --output containers-storage:${chunked_output}
+  localhost/builder rpm-ostree compose build-chunked-oci --bootc --from ${testimg_base} --output containers-storage:${chunked_output} --label foo=bar
 podman rmi ${testimg_base}
 podman inspect containers-storage:${chunked_output} | jq '.[0]' > config.json
 podman rmi ${chunked_output}
 test $(jq -r '.Architecture' < config.json) = "ppc64le"
+test $(jq -r '.Labels.foo' < config.json) = "bar"
 echo "ok cross arch rechunking"
 
 # Build a custom image, then rechunk it
