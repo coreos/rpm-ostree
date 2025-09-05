@@ -1,4 +1,9 @@
+//! Apply live filesystem changes to the running system.
 //!
+//! This module implements the "apply-live" functionality that allows updating
+//! the running filesystem tree without requiring a reboot. It handles systemd
+//! service detection and reloading when necessary.
+
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::cxxrsutil::*;
@@ -86,7 +91,6 @@ fn reload_systemd() -> Result<()> {
 }
 
 /// Helper: diff two commits for given paths
-<<<<<<< HEAD
 ///
 /// Computes the difference between two OSTree commits at the specified path,
 /// returning a Diff that can be used to detect systemd service changes.
@@ -104,10 +108,6 @@ fn compute_diff(repo: &ostree::Repo, from: &str, to: &str, path: Option<&str>) -
     };
 
     Ok(diff)
-=======
-fn compute_diff(repo: &ostree::Repo, from: &str, to: &str, path: Option<&str>) -> Result<ostree_ext::diff::Diff> {
-    ostree_ext::diff::diff(repo, from, to, path)
->>>>>>> 85420dbd166becf572706bf5caaf1c91bd230f95
 }
 
 pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
@@ -160,8 +160,9 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
         }
     }
 
-    let changed_services: Vec<String> = lib_diff.changed_files.union(&lib_diff.added_files)
-        .chain(etc_diff.changed_files.union(&etc_diff.added_files))
+    let changed_services: Vec<String> = lib_diff
+        .changed_files
+        .union(&etc_diff.changed_files)
         .filter(|s| s.contains(".service"))
         .cloned()
         .collect();
