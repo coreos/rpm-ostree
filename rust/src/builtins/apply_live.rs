@@ -111,7 +111,8 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
     sysroot.load_if_changed(cancellable)?;
     let repo = &sysroot.repo();
     let booted = &sysroot.require_booted_deployment()?;
-    let booted_commit = booted.csum().as_str();
+    let booted_csum = booted.csum();
+    let booted_commit = booted_csum.as_str();
 
     let live_state = live::get_live_state(repo, booted)?
         .ok_or_else(|| anyhow!("Failed to find expected apply-live state"))?;
