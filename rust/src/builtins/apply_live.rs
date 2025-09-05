@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::cxxrsutil::*;
+use crate::dirdiff::Diff;
 use crate::live;
 use anyhow::{anyhow, Result};
 use clap::Parser;
@@ -56,9 +57,13 @@ pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
     let args_variant = get_args_variant(sysroot, opts)?;
     let params = Variant::tuple_from_iter([args_variant]);
 
-    let reply = client
-        .get_os_ex_proxy()
-        .call_sync("LiveFs", Some(&params), gio::DBusCallFlags::NONE, -1, gio::Cancellable::NONE)?;
+    let reply = client.get_os_ex_proxy().call_sync(
+        "LiveFs",
+        Some(&params),
+        gio::DBusCallFlags::NONE,
+        -1,
+        gio::Cancellable::NONE,
+    )?;
 
     let txn_address = reply
         .get::<(String,)>()
@@ -81,8 +86,23 @@ fn reload_systemd() -> Result<()> {
 }
 
 /// Helper: diff two commits for given paths
-fn compute_diff(repo: &ostree::Repo, from: &str, to: &str, path: Option<&str>) -> Result<ostree_ext::diff::Diff> {
-    Ok(ostree_ext::diff::diff(repo, from, to, path)?)
+///
+/// Computes the difference between two OSTree commits at the specified path,
+/// returning a Diff that can be used to detect systemd service changes.
+fn compute_diff(repo: &ostree::Repo, from: &str, to: &str, path: Option<&str>) -> Result<Diff> {
+    let ostree_diff = ostree_ext::diff::diff(repo, from, to, path)?;
+
+    // Convert FileTreeDiff to our local Diff type
+    let diff = Diff {
+        added_files: ostree_diff.added_files,
+        added_dirs: ostree_diff.added_dirs,
+        removed_files: ostree_diff.removed_files,
+        removed_dirs: ostree_diff.removed_dirs,
+        changed_files: ostree_diff.changed_files,
+        changed_dirs: ostree_diff.changed_dirs,
+    };
+
+    Ok(diff)
 }
 
 pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
@@ -110,8 +130,18 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
     }
 
     // Compute diffs for /usr/lib/systemd/system and /usr/etc/systemd/system
-    let lib_diff = compute_diff(repo, booted_commit, live_state.commit.as_str(), Some("/usr/lib/systemd/system"))?;
-    let etc_diff = compute_diff(repo, booted_commit, live_state.commit.as_str(), Some("/usr/etc/systemd/system"))?;
+    let lib_diff = compute_diff(
+        repo,
+        booted_commit,
+        live_state.commit.as_str(),
+        Some("/usr/lib/systemd/system"),
+    )?;
+    let etc_diff = compute_diff(
+        repo,
+        booted_commit,
+        live_state.commit.as_str(),
+        Some("/usr/etc/systemd/system"),
+    )?;
 
     // Reload systemd if there are new/changed service files
     if !lib_diff.changed_files.is_empty()
