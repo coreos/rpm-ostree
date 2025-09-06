@@ -169,7 +169,7 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
 
     if !changed_services.is_empty() {
         crate::ffi::output_message(
-            "Successfully updated running filesystem tree; following services may need to be restarted:",
+            "Successfully updated running filesystem tree; Following services may need to be restarted:",
         );
         for service in changed_services {
             crate::ffi::output_message(service.strip_prefix('/').unwrap_or(&service));
