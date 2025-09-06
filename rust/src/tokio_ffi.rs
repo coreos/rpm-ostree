@@ -11,7 +11,7 @@ pub(crate) fn tokio_handle_get() -> Box<TokioHandle> {
 }
 
 impl TokioHandle {
-    pub(crate) fn enter(&self) -> Box<TokioEnterGuard> {
+    pub(crate) fn enter(&self) -> Box<TokioEnterGuard<'_>> {
         Box::new(TokioEnterGuard(self.0.enter()))
     }
 }
