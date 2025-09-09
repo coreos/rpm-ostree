@@ -396,18 +396,34 @@ fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
             rootfs_dfd.atomic_replace_with(path, |w| -> Result<()> {
                 w.get_mut().as_file_mut().set_permissions(perms)?;
                 let f = BufReader::new(&f);
+                let mut has_usr_etc = false;
+                let mut etc_aliases = Vec::new();
                 for line in f.lines() {
                     let line = line?;
                     if line.starts_with("/var/home ") {
                         writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
                         write!(w, "# ")?;
                     }
+                    if line.starts_with("/usr/etc ") {
+                        has_usr_etc = true
+                    }
+                    if line.starts_with("/etc/") {
+                        etc_aliases.push(line.clone())
+                    }
                     writeln!(w, "{}", line)?;
                 }
                 writeln!(w, "# https://github.com/projectatomic/rpm-ostree/pull/1754")?;
                 writeln!(w, "/home /var/home")?;
-                writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/4640")?;
-                writeln!(w, "/usr/etc /etc")?;
+                if !has_usr_etc {
+                    writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/4640")?;
+                    writeln!(w, "/usr/etc /etc")?;
+                }
+                if etc_aliases.len() > 0 {
+                    writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/5485")?;
+                    for line in etc_aliases {
+                        writeln!(w, "/usr{}", line)?;
+                    }
+                }
                 writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/1795")?;
                 writeln!(w, "/usr/lib/opt /opt")?;
                 Ok(())
