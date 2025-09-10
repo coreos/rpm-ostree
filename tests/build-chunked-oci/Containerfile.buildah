@@ -1,0 +1,15 @@
+FROM quay.io/containers/buildah:latest as builder
+
+RUN <<ENDF
+set -xeuo pipefail
+dnf -y builddep rpm-ostree
+cd /src
+./autogen.sh --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc --disable-gtk-doc
+make
+cp target/release/rpm-ostree /rpm-ostree
+ENDF
+
+FROM quay.io/containers/buildah:latest
+RUN dnf -y install rpm-ostree && rpm -e rpm-ostree
+COPY --from=builder /rpm-ostree /usr/bin/rpm-ostree
+COPY tests/build-chunked-oci/test-buildah.sh /test-buildah.sh
