@@ -1113,7 +1113,7 @@ fn workaround_selinux_cross_labeling_recurse(
 pub fn compose_postprocess_final(rootfs_dfd: i32, treefile: &Treefile) -> CxxResult<()> {
     let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
 
-    hardlink_rpmdb_base_location(rootfs, None)?;
+    copy_rpmdb_base_location(rootfs, None)?;
 
     treefile.exec_finalize_d(rootfs)?;
 
@@ -1145,28 +1145,39 @@ pub fn directory_size(dfd: i32, cancellable: &crate::FFIGCancellable) -> CxxResu
     Ok(directory_size_recurse(dfd, &cancellable)?)
 }
 
-#[context("Hardlinking rpmdb to base location")]
-fn hardlink_rpmdb_base_location(
-    rootfs: &Dir,
-    cancellable: Option<&gio::Cancellable>,
-) -> Result<bool> {
-    if !rootfs.try_exists(RPMOSTREE_RPMDB_LOCATION)? {
+#[context("Copying rpmdb to base location")]
+fn copy_rpmdb_base_location(rootfs: &Dir, _cancellable: Option<&gio::Cancellable>) -> Result<bool> {
+    let Some(src_rpmdb) = rootfs.open_dir_optional(RPMOSTREE_RPMDB_LOCATION)? else {
         return Ok(false);
-    }
+    };
 
-    // Hardlink our own `/usr/lib/sysimage/rpm-ostree-base-db/` hierarchy
-    // to the well-known `/usr/share/rpm/`.
+    // Copy our own `/usr/lib/sysimage/rpm-ostree-base-db/` hierarchy
+    // to the well-known `/usr/share/rpm/`. Note that we used
+    // to hardlink, but that can cause confusing problems if anything
+    // ever writes to one copy, because the `-shm` files can get out of sync.
+    // So now we copy (which should use reflinks if available).
+    // If we end up committing to ostree (as usual) then ostree will end
+    // up hardlinking anyways, and if used natively composefs will always
+    // unify identical files.
     let mut db = dirbuilder_from_mode(0o755);
     db.recursive(true);
     rootfs.ensure_dir_with(RPMOSTREE_BASE_RPMDB, &db)?;
     let perms = Permissions::from_mode(0o755);
     rootfs.set_permissions(RPMOSTREE_BASE_RPMDB, perms)?;
-    hardlink_hierarchy(
-        rootfs,
-        RPMOSTREE_RPMDB_LOCATION,
-        RPMOSTREE_BASE_RPMDB,
-        cancellable,
-    )?;
+    let destdir = rootfs.open_dir(RPMOSTREE_BASE_RPMDB)?;
+
+    for ent in src_rpmdb.entries()? {
+        let ent = ent?;
+        let ty = ent.file_type()?;
+        let name = ent.file_name();
+        if !ty.is_file() {
+            anyhow::bail!("Found unexpected non-regfile {name:?} in rpmdb path");
+        }
+        let mut srcf = ent.open()?;
+        let mut destf = destdir.create(name)?;
+        // Note that this is specialized to use reflink if available
+        std::io::copy(&mut srcf, &mut destf)?;
+    }
 
     // And write a symlink from the proposed standard /usr/lib/sysimage/rpm
     // to our /usr/share/rpm - eventually we will invert this.
@@ -1234,86 +1245,6 @@ pub(crate) fn rewrite_rpmdb_for_target(rootfs_dfd: i32, normalize: bool) -> CxxR
         unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? },
         normalize,
     )?)
-}
-
-/// Recursively hard-link `source` hierarchy to `target` directory.
-///
-/// Both directories must exist beforehand.
-#[context("Hardlinking /{} to /{}", source, target)]
-fn hardlink_hierarchy(
-    rootfs: &Dir,
-    source: &str,
-    target: &str,
-    cancellable: Option<&gio::Cancellable>,
-) -> Result<()> {
-    let mut prefix = "".to_string();
-    hardlink_recurse(rootfs, source, target, &mut prefix, &cancellable)
-        .with_context(|| format!("Analyzing /{}/{} content", source, prefix))?;
-
-    Ok(())
-}
-
-/// Recursively hard-link `source_prefix` to `dest_prefix.`
-///
-/// `relative_path` is updated at each recursive step, so that in case of errors
-/// it can be used to pinpoint the faulty path.
-fn hardlink_recurse(
-    rootfs: &Dir,
-    source_prefix: &str,
-    dest_prefix: &str,
-    relative_path: &mut String,
-    cancellable: &Option<&gio::Cancellable>,
-) -> Result<()> {
-    let current_dir = relative_path.clone();
-    let current_source_dir = format!("{}/{}", source_prefix, relative_path);
-    for subpath in rootfs.read_dir(&current_source_dir)? {
-        if let Some(c) = cancellable {
-            c.set_error_if_cancelled()?;
-        }
-
-        let subpath = subpath?;
-        let full_path = {
-            let fname = subpath.file_name();
-            let path_name = fname
-                .to_str()
-                .ok_or_else(|| anyhow!("invalid non-UTF-8 path: {:?}", fname))?;
-            if !current_dir.is_empty() {
-                format!("{}/{}", current_dir, path_name)
-            } else {
-                path_name.to_string()
-            }
-        };
-        let source_path = format!("{}/{}", source_prefix, full_path);
-        let dest_path = format!("{}/{}", dest_prefix, full_path);
-
-        if subpath.file_type()?.is_dir() {
-            // New subdirectory discovered, create it at the target.
-            let perms = rootfs.metadata(&source_path)?.mode() & !libc::S_IFMT;
-            let db = dirbuilder_from_mode(perms);
-            rootfs.ensure_dir_with(&dest_path, &db)?;
-            let perms = Permissions::from_mode(perms);
-            rootfs.set_permissions(&dest_path, perms)?;
-
-            // Recurse into the subdirectory.
-            *relative_path = full_path.clone();
-            hardlink_recurse(
-                rootfs,
-                source_prefix,
-                dest_prefix,
-                relative_path,
-                cancellable,
-            )?;
-        } else {
-            rustix::fs::linkat(
-                rootfs,
-                source_path,
-                rootfs,
-                dest_path,
-                rustix::fs::AtFlags::empty(),
-            )?;
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -1532,40 +1463,43 @@ OSTREE_VERSION='33.4'
     }
 
     #[test]
-    fn test_hardlink_rpmdb_base_location() {
+    fn test_copy_rpmdb_base_location() {
         let rootfs = &cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
 
         {
-            let done = hardlink_rpmdb_base_location(&rootfs, gio::Cancellable::NONE).unwrap();
+            let done = copy_rpmdb_base_location(&rootfs, gio::Cancellable::NONE).unwrap();
             assert_eq!(done, false);
         }
 
-        let dirs = &[RPMOSTREE_RPMDB_LOCATION, "usr/share/rpm/foo/bar"];
         let mut db = dirbuilder_from_mode(0o755);
         db.recursive(true);
-        for entry in dirs {
-            rootfs.ensure_dir_with(*entry, &db).unwrap();
-        }
-        let files = &[
-            "usr/share/rpm/rpmdb.sqlite",
-            "usr/share/rpm/foo/bar/placeholder",
-        ];
-        for entry in files {
-            rootfs.create(*entry).unwrap();
-        }
+        rootfs
+            .ensure_dir_with(RPMOSTREE_RPMDB_LOCATION, &db)
+            .unwrap();
+        rootfs
+            .write("usr/share/rpm/rpmdb.sqlite", "example rpmdb contents")
+            .unwrap();
+        rootfs.write("usr/share/rpm/rpmdb.sqlite-shm", "").unwrap();
 
-        let done = hardlink_rpmdb_base_location(&rootfs, gio::Cancellable::NONE).unwrap();
+        let orig_sqlite_meta = rootfs
+            .symlink_metadata("usr/share/rpm/rpmdb.sqlite")
+            .unwrap();
+
+        let done = copy_rpmdb_base_location(&rootfs, gio::Cancellable::NONE).unwrap();
         assert_eq!(done, true);
 
         assert_eq!(rootfs.try_exists(RPMOSTREE_BASE_RPMDB).unwrap(), true);
         let placeholder = rootfs
-            .metadata(format!("{}/foo/bar/placeholder", RPMOSTREE_BASE_RPMDB))
+            .metadata(format!("{}/rpmdb.sqlite-shm", RPMOSTREE_BASE_RPMDB))
             .unwrap();
         assert_eq!(placeholder.is_file(), true);
         let rpmdb = rootfs
             .metadata(format!("{}/rpmdb.sqlite", RPMOSTREE_BASE_RPMDB))
             .unwrap();
         assert_eq!(rpmdb.is_file(), true);
+        // Should not be hardlinked, but should have same size
+        assert_ne!(rpmdb.ino(), orig_sqlite_meta.ino());
+        assert_eq!(rpmdb.size(), orig_sqlite_meta.size());
         let sysimage_link = rootfs.read_link(RPMOSTREE_SYSIMAGE_RPMDB).unwrap();
         assert_eq!(&sysimage_link, Path::new("../../share/rpm"));
     }
