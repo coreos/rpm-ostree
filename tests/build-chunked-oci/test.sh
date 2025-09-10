@@ -241,3 +241,13 @@ podman run --rm --privileged --security-opt=label=disable \
 
 test -f test-archive
 echo "ok oci-archive output"
+
+echo "Testing unprivileged container execution"
+
+# Test running the command in an unprivileged container (without --privileged)
+# This validates that the command works without root privileges
+podman run --rm --security-opt=label=disable --device=/dev/fuse \
+  -v /var/lib/containers:/var/lib/containers \
+  -v /var/tmp:/var/tmp \
+  -v "$(pwd)":/output \
+  localhost/buildah /test-buildah.sh

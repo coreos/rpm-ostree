@@ -9,16 +9,37 @@ use fn_error_context::context;
 
 use crate::cmdutils::CommandRunExt;
 
-/// Ensure that we're in a new user+mountns, so that "buildah mount"
-/// will work reliably.
+/// Check if the current process has CAP_SYS_ADMIN capability.
+/// This is a better indicator of privileged containers than just checking uid == 0.
+fn has_cap_sys_admin() -> bool {
+    unsafe {
+        const CAP_SYS_ADMIN: i32 = 21;
+        
+        // Use prctl with PR_CAPBSET_READ to check if CAP_SYS_ADMIN is in the bounding set
+        let result = libc::prctl(libc::PR_CAPBSET_READ, CAP_SYS_ADMIN, 0, 0, 0);
+        result == 1
+    }
+}
+
+/// Ensure that we're in a new user+mountns, so that "podman mount"
+/// and container storage operations will work reliably.
 /// https://github.com/containers/buildah/issues/5976
-#[allow(dead_code)]
 pub(crate) fn reexec_if_needed() -> Result<()> {
-    if ostree_ext::container_utils::running_in_container() {
+    if crate::client::running_in_container() && !has_cap_sys_admin() {
         crate::reexec::reexec_with_guardenv(
             "_RPMOSTREE_REEXEC_USERNS",
-            &["unshare", "-U", "-m", "--map-root-user", "--keep-caps"],
+            &[
+                "unshare",
+                "-U",
+                "-m",
+                "--map-root-user",
+                "--map-users=auto",
+                "--map-groups=auto",
+                "--keep-caps",
+            ],
         )
+    } else if !rustix::process::geteuid().is_root() {
+        crate::reexec::reexec_with_guardenv("_RPMOSTREE_REEXEC_USERNS", &["podman", "unshare"])
     } else {
         Ok(())
     }
