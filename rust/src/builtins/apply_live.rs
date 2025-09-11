@@ -1,7 +1,13 @@
+//! Apply live filesystem changes to the running system.
 //!
+//! This module implements the "apply-live" functionality that allows updating
+//! the running filesystem tree without requiring a reboot. It handles systemd
+//! service detection and reloading when necessary.
+
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 use crate::cxxrsutil::*;
+use crate::dirdiff::Diff;
 use crate::live;
 use anyhow::{anyhow, Result};
 use clap::Parser;
@@ -16,6 +22,7 @@ struct Opts {
     /// Target provided commit instead of pending deployment
     #[clap(long)]
     target: Option<String>,
+
     /// Reset back to booted commit
     #[clap(long)]
     reset: bool,
@@ -26,60 +33,91 @@ struct Opts {
 }
 
 fn get_args_variant(sysroot: &ostree::Sysroot, opts: &Opts) -> Result<glib::Variant> {
-    let r = glib::VariantDict::new(None);
+    let dict = glib::VariantDict::new(None);
 
     if let Some(target) = opts.target.as_ref() {
         if opts.reset {
             return Err(anyhow!("Cannot specify both --target and --reset"));
         }
-        r.insert(live::OPT_TARGET, target.as_str());
+        dict.insert(live::OPT_TARGET, target.as_str());
     } else if opts.reset {
         let booted = sysroot.require_booted_deployment()?;
-        // Unwrap safety: This can't return NULL
         let csum = booted.csum();
-        r.insert(live::OPT_TARGET, csum.as_str());
+        dict.insert(live::OPT_TARGET, csum.as_str());
     }
 
     if opts.allow_replacement {
-        r.insert(live::OPT_REPLACE, true);
+        dict.insert(live::OPT_REPLACE, true);
     }
 
-    Ok(r.end())
+    Ok(dict.end())
 }
 
 pub(crate) fn applylive_entrypoint(args: &Vec<String>) -> CxxResult<()> {
     let opts = &Opts::parse_from(args.iter());
-    let client = &mut crate::client::ClientConnection::new()?;
+    let mut client = crate::client::ClientConnection::new()?;
     let sysroot = &ostree::Sysroot::new_default();
     sysroot.load(gio::Cancellable::NONE)?;
 
-    let args = get_args_variant(sysroot, opts)?;
+    let args_variant = get_args_variant(sysroot, opts)?;
+    let params = Variant::tuple_from_iter([args_variant]);
 
-    let params = Variant::tuple_from_iter([args]);
-    let reply = &client.get_os_ex_proxy().call_sync(
+    let reply = client.get_os_ex_proxy().call_sync(
         "LiveFs",
         Some(&params),
         gio::DBusCallFlags::NONE,
         -1,
         gio::Cancellable::NONE,
     )?;
+
     let txn_address = reply
         .get::<(String,)>()
         .ok_or_else(|| anyhow!("Invalid reply {:?}, expected (s)", reply.type_()))?;
-    client.transaction_connect_progress_sync(txn_address.0.as_str())?;
+
+    client.transaction_connect_progress_sync(&txn_address.0)?;
     applylive_finish(sysroot.reborrow_cxx())?;
     Ok(())
 }
 
-// Postprocessing after the daemon has reported completion; print an rpmdb diff.
+/// Helper: reload systemd daemon safely
+fn reload_systemd() -> Result<()> {
+    let output = Command::new("/usr/bin/systemctl")
+        .arg("daemon-reload")
+        .status()?;
+    if !output.success() {
+        return Err(anyhow!("Failed to reload systemd manager configuration"));
+    }
+    Ok(())
+}
+
+/// Helper: diff two commits for given paths
+///
+/// Computes the difference between two OSTree commits at the specified path,
+/// returning a Diff that can be used to detect systemd service changes.
+fn compute_diff(repo: &ostree::Repo, from: &str, to: &str, path: Option<&str>) -> Result<Diff> {
+    let ostree_diff = ostree_ext::diff::diff(repo, from, to, path)?;
+
+    // Convert FileTreeDiff to our local Diff type
+    let diff = Diff {
+        added_files: ostree_diff.added_files,
+        added_dirs: ostree_diff.added_dirs,
+        removed_files: ostree_diff.removed_files,
+        removed_dirs: ostree_diff.removed_dirs,
+        changed_files: ostree_diff.changed_files,
+        changed_dirs: ostree_diff.changed_dirs,
+    };
+
+    Ok(diff)
+}
+
 pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
     let sysroot = sysroot.glib_reborrow();
     let cancellable = gio::Cancellable::NONE;
     sysroot.load_if_changed(cancellable)?;
     let repo = &sysroot.repo();
     let booted = &sysroot.require_booted_deployment()?;
-    let booted_commit = booted.csum();
-    let booted_commit = booted_commit.as_str();
+    let booted_csum = booted.csum();
+    let booted_commit = booted_csum.as_str();
 
     let live_state = live::get_live_state(repo, booted)?
         .ok_or_else(|| anyhow!("Failed to find expected apply-live state"))?;
@@ -94,43 +132,50 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
 
     if pkgdiff.n_removed() == 0 && pkgdiff.n_modified() == 0 {
         crate::ffi::output_message("Successfully updated running filesystem tree.");
-    } else {
-        let lib_diff = ostree_ext::diff::diff(
-            repo,
-            booted_commit,
-            live_state.commit.as_str(),
-            Some("/usr/lib/systemd/system"),
-        )?;
+        return Ok(());
+    }
 
-        let etc_diff = ostree_ext::diff::diff(
-            repo,
-            booted_commit,
-            live_state.commit.as_str(),
-            Some("/usr/etc/systemd/system"),
-        )?;
+    // Compute diffs for /usr/lib/systemd/system and /usr/etc/systemd/system
+    let lib_diff = compute_diff(
+        repo,
+        booted_commit,
+        live_state.commit.as_str(),
+        Some("/usr/lib/systemd/system"),
+    )?;
+    let etc_diff = compute_diff(
+        repo,
+        booted_commit,
+        live_state.commit.as_str(),
+        Some("/usr/etc/systemd/system"),
+    )?;
 
-        if !lib_diff.changed_files.is_empty()
-            || !etc_diff.changed_files.is_empty()
-            || !lib_diff.added_files.is_empty()
-            || !etc_diff.added_files.is_empty()
-        {
-            let output = Command::new("/usr/bin/systemctl")
-                .arg("daemon-reload")
-                .status()
-                .expect("Failed to reload systemd manager configuration");
-            assert!(output.success());
-        }
-        let changed: Vec<String> = lib_diff
-            .changed_files
-            .union(&etc_diff.changed_files)
-            .filter(|s| s.contains(".service"))
-            .cloned()
-            .collect();
-        crate::ffi::output_message(
-            "Successfully updated running filesystem tree; Following services may need to be restarted:");
-        for service in changed {
-            crate::ffi::output_message(service.strip_prefix('/').unwrap());
+    // Reload systemd if there are new/changed service files
+    if !lib_diff.changed_files.is_empty()
+        || !etc_diff.changed_files.is_empty()
+        || !lib_diff.added_files.is_empty()
+        || !etc_diff.added_files.is_empty()
+    {
+        if let Err(e) = reload_systemd() {
+            crate::ffi::output_message(&format!("Warning: {}", e));
         }
     }
+
+    let changed_services: Vec<String> = lib_diff
+        .changed_files
+        .union(&etc_diff.changed_files)
+        .filter(|s| s.contains(".service"))
+        .cloned()
+        .collect();
+
+    if !changed_services.is_empty() {
+        crate::ffi::output_message(
+            "Successfully updated running filesystem tree; Following services may need to be restarted:",
+        );
+        for service in changed_services {
+            crate::ffi::output_message(service.strip_prefix('/').unwrap_or(&service));
+        }
+    }
+
     Ok(())
 }
+
