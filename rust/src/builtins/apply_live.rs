@@ -160,9 +160,8 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
         }
     }
 
-    let changed_services: Vec<String> = lib_diff
-        .changed_files
-        .union(&etc_diff.changed_files)
+    let changed_services: Vec<String> = lib_diff.changed_files.union(&lib_diff.added_files)
+        .chain(etc_diff.changed_files.union(&etc_diff.added_files))
         .filter(|s| s.contains(".service"))
         .cloned()
         .collect();
@@ -178,4 +177,3 @@ pub(crate) fn applylive_finish(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult
 
     Ok(())
 }
-
