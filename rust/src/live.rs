@@ -1,551 +1,1046 @@
-//! Core implementation logic for "apply-live" which applies
-//! changes to an overlayfs on top of `/usr` in the booted
-//! deployment.
+//! rpm-ostree is a hybrid Rust and C/C++ application. This is the
+//! main library used by the executable, which also links to the
+//! C/C++ `librpmostreeinternals.a` static library.
+
 /*
- * Copyright (C) 2020 Red Hat, Inc.
+ * Copyright (C) 2018 Red Hat, Inc.
  *
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  */
+// See https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html
+#![deny(missing_debug_implementations)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![forbid(unused_must_use)]
+#![deny(clippy::dbg_macro)]
+#![deny(clippy::todo)]
+#![allow(clippy::ptr_arg)]
 
-use crate::cxxrsutil::*;
-use crate::ffi::LiveApplyState;
-use crate::isolation;
-use crate::progress::progress_task;
-use anyhow::{anyhow, Context, Result};
-use cap_std::fs::Dir;
-use cap_std_ext::cap_std;
-use cap_std_ext::dirext::CapStdExtDirExt;
-use fn_error_context::context;
-use nix::sys::statvfs;
-use ostree::DeploymentUnlockedState;
-use ostree_ext::diff::FileTreeDiff;
-use ostree_ext::{gio, glib, ostree};
-use rayon::prelude::*;
-use std::borrow::Cow;
-use std::os::unix::io::AsRawFd;
-use std::path::{Path, PathBuf};
+// pub(crate) utilities
+mod cmdutils;
+mod cxxrsutil;
+mod ffiutil;
+pub(crate) mod ffiwrappers;
+mod reexec;
+pub(crate) use cxxrsutil::*;
+use ffi::BubblewrapMutability;
 
-/// GVariant `s`: Choose a specific commit
-pub(crate) const OPT_TARGET: &str = "target";
-/// GVariant `b`: Enable changing or removing packages(+files).
-pub(crate) const OPT_REPLACE: &str = "replace";
+/// APIs defined here are automatically bridged between Rust and C++ using https://cxx.rs/
+///
+/// # Regenerating
+///
+/// After you change APIs in here, you must run `make -f Makefile.bindings`
+/// to regenerate the C++ bridge side.
+///
+/// # File layout
+///
+/// Try to keep APIs defined here roughly alphabetical.  When adding a new file,
+/// add a comment with the filename so that it shows up in searches too.
+///
+/// # Error handling
+///
+/// For fallible APIs that return a `Result<T>`:
+///
+/// - Use `Result<T>` inside `lib.rs` below
+/// - On the Rust *implementation* side, use `CxxResult<T>` which does error
+///   formatting in a more preferred way
+/// - On the C++ side, use our custom `CXX_TRY` API which converts the C++ exception
+///   into a GError.  In the future, we might try a hard switch to C++ exceptions
+///   instead, but at the moment having two is problematic, so we prefer `GError`.
+///
+#[cxx::bridge(namespace = "rpmostreecxx")]
+#[allow(clippy::needless_lifetimes)]
+#[allow(unsafe_op_in_unsafe_fn)]
+pub mod ffi {
+    // Types that are defined by gtk-rs generated bindings that
+    // we want to pass across the cxx-rs boundary.  For more
+    // information, see cxx_bridge_gobject.rs.
+    extern "C++" {
+        include!("src/libpriv/rpmostree-cxxrs-prelude.h");
 
-/// The directory where ostree stores transient per-deployment state.
-/// This is currently semi-private to ostree; we should add an API to
-/// access it.
-const OSTREE_RUNSTATE_DIR: &str = "ostree/deployment-state";
-/// Stamp file used to signal deployment was live-applied, stored in the above directory
-const LIVE_STATE_NAME: &str = "rpmostree-is-live.stamp";
-/// OSTree ref that follows the live state
-const LIVE_REF: &str = "rpmostree/live-apply";
-/// OSTree ref that will be set to the commit we are currently
-/// updating to; if the process is interrupted, we can then
-/// more reliably resynchronize.
-const LIVE_REF_INPROGRESS: &str = "rpmostree/live-apply-inprogress";
+        type OstreeDeployment = crate::FFIOstreeDeployment;
+        #[allow(dead_code)]
+        type OstreeRepo = crate::FFIOstreeRepo;
+        type OstreeRepoTransactionStats = crate::FFIOstreeRepoTransactionStats;
+        type OstreeSysroot = crate::FFIOstreeSysroot;
+        type OstreeSePolicy = crate::FFIOstreeSePolicy;
+        type GObject = crate::FFIGObject;
+        type GCancellable = crate::FFIGCancellable;
+        type GDBusConnection = crate::FFIGDBusConnection;
+        type GFileInfo = crate::FFIGFileInfo;
+        type GVariant = crate::FFIGVariant;
+        type GVariantDict = crate::FFIGVariantDict;
+        type GKeyFile = crate::FFIGKeyFile;
 
-/// Get the transient state directory for a deployment; TODO
-/// upstream this into libostree.
-fn get_runstate_dir(deploy: &ostree::Deployment) -> PathBuf {
-    format!(
-        "{}/{}.{}",
-        OSTREE_RUNSTATE_DIR,
-        deploy.csum(),
-        deploy.deployserial()
-    )
-    .into()
+        #[namespace = "dnfcxx"]
+        type FFIDnfPackage = libdnf_sys::FFIDnfPackage;
+    }
+
+    /// Currently cxx-rs doesn't support mappings; like probably most projects,
+    /// by far our most common case is a mapping from string -> string and since
+    /// our data sizes aren't large, we serialize this as a vector of strings pairs.
+    /// In the future it's also likely that cxx-rs will support a C++ string_view
+    /// so we could avoid duplicating in that direction.
+    #[derive(Clone, Debug)]
+    struct StringMapping {
+        k: String,
+        v: String,
+    }
+
+    /// Classify the running system.
+    #[derive(Clone, Debug)]
+    enum SystemHostType {
+        OstreeContainer,
+        OstreeHost,
+        Unknown,
+    }
+
+    // client.rs
+    extern "Rust" {
+        fn is_bare_split_xattrs() -> Result<bool>;
+        fn is_http_arg(arg: &str) -> bool;
+        fn is_ostree_container() -> Result<bool>;
+        fn get_system_host_type() -> Result<SystemHostType>;
+        fn require_system_host_type(t: SystemHostType) -> Result<()>;
+        fn is_rpm_arg(arg: &str) -> bool;
+        fn client_start_daemon() -> Result<()>;
+        fn client_handle_fd_argument(arg: &str, arch: &str, is_replace: bool) -> Result<Vec<i32>>;
+        fn client_render_download_progress(progress: &GVariant) -> String;
+        fn running_in_container() -> bool;
+        fn confirm() -> Result<bool>;
+        fn confirm_or_abort() -> Result<()>;
+    }
+
+    #[derive(Debug)]
+    pub(crate) enum BubblewrapMutability {
+        Immutable,
+        RoFiles,
+        MutateFreely,
+    }
+
+    // bubblewrap.rs
+    extern "Rust" {
+        type Bubblewrap;
+
+        fn bubblewrap_selftest() -> Result<()>;
+        fn bubblewrap_run_sync(
+            rootfs_dfd: i32,
+            args: &Vec<String>,
+            capture_stdout: bool,
+            mutability: BubblewrapMutability,
+        ) -> Result<Vec<u8>>;
+
+        fn bubblewrap_new(rootfs_fd: i32) -> Result<Box<Bubblewrap>>;
+        fn bubblewrap_new_with_mutability(
+            rootfs_fd: i32,
+            mutability: BubblewrapMutability,
+        ) -> Result<Box<Bubblewrap>>;
+        fn get_rootfs_fd(&self) -> i32;
+
+        fn append_bwrap_arg(&mut self, arg: &str);
+        fn append_child_arg(&mut self, arg: &str);
+        fn setenv(&mut self, k: &str, v: &str);
+        fn take_fd(&mut self, source_fd: i32, target_fd: i32);
+        fn set_inherit_stdin(&mut self);
+        fn take_stdin_fd(&mut self, source_fd: i32);
+        fn take_stdout_fd(&mut self, source_fd: i32);
+        fn take_stderr_fd(&mut self, source_fd: i32);
+        fn take_stdout_and_stderr_fd(&mut self, source_fd: i32);
+
+        fn bind_read(&mut self, src: &str, dest: &str);
+        fn bind_readwrite(&mut self, src: &str, dest: &str);
+        fn setup_compat_var(&mut self) -> Result<()>;
+
+        fn run(&mut self, cancellable: &GCancellable) -> Result<()>;
+
+        fn mutability_for_unified_core(unified_core: bool) -> BubblewrapMutability;
+    }
+
+    // builtins/apply_live.rs
+    extern "Rust" {
+        fn usroverlay_entrypoint(args: &Vec<String>) -> Result<()>;
+        fn applylive_entrypoint(args: &Vec<String>) -> Result<()>;
+        fn applylive_finish(sysroot: &OstreeSysroot) -> Result<()>;
+    }
+
+    // builtins/compose/
+    extern "Rust" {
+        fn composeutil_legacy_prep_dev_and_run(rootfs_dfd: i32) -> Result<()>;
+        fn print_ostree_txn_stats(stats: Pin<&mut OstreeRepoTransactionStats>);
+        fn write_commit_id(target_path: &str, revision: &str) -> Result<()>;
+    }
+
+    // cliwrap.rs
+    extern "Rust" {
+        fn cliwrap_write_wrappers(rootfs: i32) -> Result<()>;
+        fn cliwrap_write_some_wrappers(rootfs: i32, args: &Vec<String>) -> Result<()>;
+        fn cliwrap_destdir() -> String;
+    }
+
+    // container.rs
+    extern "Rust" {
+        fn container_encapsulate(args: Vec<String>) -> Result<()>;
+        fn deploy_from_self_entrypoint(args: Vec<String>) -> Result<()>;
+    }
+
+    /// `ContainerImageState` is currently identical to ostree-rs-ext's `LayeredImageState` struct, because
+    /// cxx.rs currently requires types used as extern Rust types to be defined by the same crate
+    /// that contains the bridge using them, so we redefine an `ContainerImport` struct here.
+    #[derive(Debug)]
+    pub(crate) struct ContainerImageState {
+        pub base_commit: String,
+        pub merge_commit: String,
+        pub image_digest: String,
+        pub version: String,
+        pub cached_update_diff: ExportedManifestDiff,
+        pub verify_text: String,
+    }
+
+    #[derive(Debug, Default)]
+    pub(crate) struct ExportedManifestDiff {
+        /// Check if the struct is initialized
+        pub initialized: bool,
+        /// The total number of packages in the next upgrade
+        pub total: u64,
+        /// The size of the total number of packages in the next upgrade
+        pub total_size: u64,
+        /// The total number of removed packages in the next upgrade
+        pub n_removed: u64,
+        /// The size of total number of removed packages in the next upgrade
+        pub removed_size: u64,
+        /// The total number of added packages in the next upgrade
+        pub n_added: u64,
+        /// The size of total number of added packages in the next upgrade
+        pub added_size: u64,
+        /// The version of the next upgrade
+        pub version: String,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct PrunedContainerInfo {
+        images: u32,
+        layers: u32,
+    }
+
+    // sysroot_upgrade.rs
+    extern "Rust" {
+        fn pull_container(
+            repo: &OstreeRepo,
+            cancellable: &GCancellable,
+            imgref: &str,
+            digest_override: &str,
+        ) -> Result<Box<ContainerImageState>>;
+        fn container_prune(sysroot: &OstreeSysroot) -> Result<PrunedContainerInfo>;
+        fn query_container_image_commit(
+            repo: &OstreeRepo,
+            c: &str,
+        ) -> Result<Box<ContainerImageState>>;
+        fn purge_refspec(repo: &OstreeRepo, refspec: &str) -> Result<()>;
+        fn check_container_update(
+            repo: &OstreeRepo,
+            cancellable: &GCancellable,
+            imgref: &str,
+        ) -> Result<bool>;
+    }
+
+    // core.rs
+    #[derive(Debug, PartialEq, Eq)]
+    enum RefspecType {
+        Ostree,
+        Checksum,
+        Container,
+    }
+
+    // core.rs
+    extern "Rust" {
+        type TempEtcGuard;
+        type FilesystemScriptPrep;
+
+        fn prepare_tempetc_guard(rootfs: i32) -> Result<Box<TempEtcGuard>>;
+        fn undo(self: &TempEtcGuard) -> Result<()>;
+
+        fn prepare_filesystem_script_prep(rootfs: i32) -> Result<Box<FilesystemScriptPrep>>;
+        fn undo(self: &mut FilesystemScriptPrep) -> Result<()>;
+
+        fn run_depmod(rootfs_dfd: i32, kver: &str, unified_core: bool) -> Result<()>;
+
+        fn run_sysusers(rootfs_dfd: i32, force: bool) -> Result<()>;
+
+        fn log_treefile(tf: &Treefile);
+
+        fn is_container_image_reference(refspec: &str) -> bool;
+        fn is_container_image_digest_reference(refspec: &str) -> bool;
+        fn refspec_classify(refspec: &str) -> RefspecType;
+
+        fn verify_kernel_hmac(rootfs: i32, moddir: &str) -> Result<()>;
+
+        fn stage_container_rpms(rpms: Vec<String>) -> Result<Vec<String>>;
+        fn stage_container_rpm_raw_fds(fds: Vec<i32>) -> Result<Vec<String>>;
+
+        fn commit_has_matching_sepolicy(commit: &GVariant, policy: &OstreeSePolicy)
+            -> Result<bool>;
+
+        fn get_header_variant(repo: &OstreeRepo, cachebranch: &str) -> Result<*mut GVariant>;
+    }
+
+    // compose.rs
+    extern "Rust" {
+        fn compose_build_chunked_oci_entrypoint(args: Vec<String>) -> Result<()>;
+        fn compose_image(args: Vec<String>) -> Result<()>;
+        fn compose_rootfs_entrypoint(args: Vec<String>) -> Result<()>;
+
+        fn configure_build_repo_from_target(
+            build_repo: &OstreeRepo,
+            target_repo: &OstreeRepo,
+        ) -> Result<()>;
+    }
+
+    // composepost.rs
+    extern "Rust" {
+        fn compose_prepare_rootfs(
+            src_rootfs_dfd: i32,
+            dest_rootfs_dfd: i32,
+            treefile: &mut Treefile,
+        ) -> Result<()>;
+        fn composepost_nsswitch_altfiles(rootfs_dfd: i32) -> Result<()>;
+        fn compose_postprocess(
+            rootfs_dfd: i32,
+            treefile: &mut Treefile,
+            next_version: &str,
+            unified_core: bool,
+        ) -> Result<()>;
+        fn compose_postprocess_final_pre(rootfs_dfd: i32, treefile: &Treefile) -> Result<()>;
+        fn compose_postprocess_final(rootfs_dfd: i32, treefile: &Treefile) -> Result<()>;
+        fn convert_var_to_tmpfiles_d(rootfs_dfd: i32, cancellable: &GCancellable) -> Result<()>;
+        fn rootfs_prepare_links(
+            rootfs_dfd: i32,
+            treefile: &Treefile,
+            skip_usrlocal: bool,
+        ) -> Result<()>;
+        fn workaround_selinux_cross_labeling(
+            rootfs_dfd: i32,
+            cancellable: Pin<&mut GCancellable>,
+        ) -> Result<()>;
+        fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> Result<()>;
+        fn postprocess_cleanup_rpmdb(rootfs_dfd: i32) -> Result<()>;
+        fn rewrite_rpmdb_for_target(rootfs_dfd: i32, normalize: bool) -> Result<()>;
+        fn directory_size(dfd: i32, cancellable: &GCancellable) -> Result<u64>;
+    }
+
+    // container.cxx
+    unsafe extern "C++" {
+        include!("rpmostree-container.hpp");
+        fn container_rebuild(treefile: &str) -> Result<()>;
+    }
+
+    // deployment_utils.rs
+    extern "Rust" {
+        fn deployment_for_id(
+            sysroot: Pin<&mut OstreeSysroot>,
+            deploy_id: &str,
+        ) -> Result<*mut OstreeDeployment>;
+        fn deployment_checksum_for_id(
+            sysroot: Pin<&mut OstreeSysroot>,
+            deploy_id: &str,
+        ) -> Result<String>;
+        fn deployment_get_base(
+            sysroot: Pin<&mut OstreeSysroot>,
+            opt_deploy_id: &str,
+            opt_os_name: &str,
+        ) -> Result<*mut OstreeDeployment>;
+        fn deployment_add_manifest_diff(dict: &GVariantDict, diff: &ExportedManifestDiff) -> bool;
+    }
+
+    // A grab-bag of metadata from the deployment's ostree commit
+    // around layering/derivation
+    #[derive(Debug, Default)]
+    struct DeploymentLayeredMeta {
+        is_layered: bool,
+        base_commit: String,
+        clientlayer_version: u32,
+    }
+
+    #[derive(Debug)]
+    struct OverrideReplacementSource {
+        kind: OverrideReplacementType,
+        name: String,
+    }
+
+    #[derive(Debug)]
+    enum ParsedRevisionKind {
+        Version,
+        Checksum,
+    }
+
+    #[derive(Debug)]
+    struct ParsedRevision {
+        kind: ParsedRevisionKind,
+        value: String,
+    }
+
+    // daemon.rs
+    extern "Rust" {
+        fn daemon_sanitycheck_environment(sysroot: &OstreeSysroot) -> Result<()>;
+        fn deployment_generate_id(deployment: &OstreeDeployment) -> String;
+        fn deployment_populate_variant(
+            sysroot: &OstreeSysroot,
+            deployment: &OstreeDeployment,
+            dict: &GVariantDict,
+        ) -> Result<()>;
+        fn generate_baselayer_refs(
+            sysroot: &OstreeSysroot,
+            repo: &OstreeRepo,
+            cancellable: &GCancellable,
+        ) -> Result<()>;
+        fn variant_add_remote_status(
+            repo: &OstreeRepo,
+            refspec: &str,
+            base_checksum: &str,
+            dict: &GVariantDict,
+        ) -> Result<()>;
+        fn deployment_layeredmeta_from_commit(
+            deployment: &OstreeDeployment,
+            commit: &GVariant,
+        ) -> Result<DeploymentLayeredMeta>;
+        fn deployment_layeredmeta_load(
+            repo: &OstreeRepo,
+            deployment: &OstreeDeployment,
+        ) -> Result<DeploymentLayeredMeta>;
+        fn parse_override_source(source: &str) -> Result<OverrideReplacementSource>;
+        fn parse_revision(source: &str) -> Result<ParsedRevision>;
+        fn generate_object_path(base: &str, next_segment: &str) -> Result<String>;
+    }
+
+    // failpoints.rs
+    extern "Rust" {
+        fn failpoint(p: &str) -> Result<()>;
+    }
+
+    // importer.rs
+    extern "Rust" {
+        type RpmImporterFlags;
+        fn rpm_importer_flags_new_empty() -> Box<RpmImporterFlags>;
+        fn is_ima_enabled(self: &RpmImporterFlags) -> bool;
+
+        type RpmImporter;
+        fn rpm_importer_new(
+            pkg_name: &str,
+            ostree_branch: &str,
+            flags: &RpmImporterFlags,
+        ) -> Result<Box<RpmImporter>>;
+        fn handle_translate_pathname(self: &mut RpmImporter, path: &str) -> String;
+        fn ostree_branch(self: &RpmImporter) -> String;
+        fn pkg_name(self: &RpmImporter) -> String;
+        fn doc_files_are_filtered(self: &RpmImporter) -> bool;
+        fn doc_files_insert(self: &mut RpmImporter, path: &str);
+        fn doc_files_contains(self: &RpmImporter, path: &str) -> bool;
+        fn rpmfi_overrides_insert(self: &mut RpmImporter, path: &str, index: u64);
+        fn rpmfi_overrides_contains(self: &RpmImporter, path: &str) -> bool;
+        fn rpmfi_overrides_get(self: &RpmImporter, path: &str) -> u64;
+        fn is_ima_enabled(self: &RpmImporter) -> bool;
+        fn tweak_imported_file_info(self: &RpmImporter, mut file_info: &GFileInfo);
+        fn is_file_filtered(self: &RpmImporter, path: &str, file_info: &GFileInfo) -> Result<bool>;
+        fn translate_to_tmpfiles_entry(
+            self: &mut RpmImporter,
+            abs_path: &str,
+            file_info: &GFileInfo,
+            username: &str,
+            groupname: &str,
+        ) -> Result<()>;
+        fn has_tmpfiles_entries(self: &RpmImporter) -> bool;
+        fn serialize_tmpfiles_content(self: &RpmImporter) -> String;
+
+        fn tmpfiles_translate(
+            abs_path: &str,
+            file_info: &GFileInfo,
+            username: &str,
+            groupname: &str,
+        ) -> Result<String>;
+    }
+
+    // initramfs.rs
+    extern "Rust" {
+        fn append_dracut_random_cpio(fd: i32) -> Result<()>;
+        fn initramfs_overlay_generate(
+            files: &Vec<String>,
+            cancellable: Pin<&mut GCancellable>,
+        ) -> Result<i32>;
+    }
+
+    // journal.rs
+    extern "Rust" {
+        fn journal_print_staging_failure();
+    }
+
+    // progress.rs
+    extern "Rust" {
+        fn console_progress_begin_task(msg: &str);
+        fn console_progress_begin_n_items(msg: &str, n: u64);
+        fn console_progress_begin_percent(msg: &str);
+        fn console_progress_set_message(msg: &str);
+        fn console_progress_set_sub_message(msg: &str);
+        fn console_progress_update(n: u64);
+        fn console_progress_end(suffix: &str);
+    }
+
+    // history.rs
+
+    /// A history entry in the journal. It may represent multiple consecutive boots
+    /// into the same deployment. This struct is exposed directly via FFI to C.
+    #[derive(PartialEq, Debug)]
+    pub struct HistoryEntry {
+        /// The deployment root timestamp.
+        deploy_timestamp: u64,
+        /// The command-line that was used to create the deployment, if any.
+        deploy_cmdline: String,
+        /// The number of consecutive times the deployment was booted.
+        boot_count: u64,
+        /// The first time the deployment was booted if multiple consecutive times.
+        first_boot_timestamp: u64,
+        /// The last time the deployment was booted if multiple consecutive times.
+        last_boot_timestamp: u64,
+        /// `true` if there are no more entries.
+        eof: bool,
+    }
+
+    extern "Rust" {
+        type HistoryCtx;
+
+        fn history_ctx_new() -> Result<Box<HistoryCtx>>;
+        fn next_entry(&mut self) -> Result<HistoryEntry>;
+        fn history_prune() -> Result<()>;
+    }
+
+    // tokio_ffi.rs
+    extern "Rust" {
+        type TokioHandle;
+        type TokioEnterGuard<'a>;
+
+        fn tokio_handle_get() -> Box<TokioHandle>;
+        fn enter(self: &TokioHandle) -> Box<TokioEnterGuard<'_>>;
+    }
+
+    // scripts.rs
+    extern "Rust" {
+        fn script_is_ignored(pkg: &str, script: &str, use_kernel_install: bool) -> bool;
+    }
+
+    // testutils.rs
+    extern "Rust" {
+        fn testutils_entrypoint(argv: Vec<String>) -> Result<()>;
+        fn maybe_shell_quote(input: &str) -> String;
+    }
+
+    // treefile.rs
+    #[derive(Debug)]
+    enum RepoMetadataTarget {
+        Inline,
+        Detached,
+        Disabled,
+    }
+
+    #[derive(Debug)]
+    enum AdvisoriesMetadataTarget {
+        Inline,
+        Detached,
+        Disabled,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Refspec {
+        kind: RefspecType,
+        refspec: String,
+    }
+
+    // This is an awkward almost duplicate of the types in treefile.rs, but cxx.rs-compatible.
+    #[derive(Debug)]
+    enum OverrideReplacementType {
+        Repo,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct OverrideReplacement {
+        from: String,
+        from_kind: OverrideReplacementType,
+        packages: Vec<String>,
+    }
+
+    // treefile.rs
+    #[derive(Debug)]
+    enum OptUsrLocal {
+        Var,
+        Root,
+        StateOverlay,
+    }
+
+    extern "Rust" {
+        type Treefile;
+
+        fn treefile_new(filename: &str, basearch: &str) -> Result<Box<Treefile>>;
+        fn treefile_new_empty() -> Result<Box<Treefile>>;
+        fn treefile_new_from_string(buf: &str, client: bool) -> Result<Box<Treefile>>;
+        fn treefile_new_compose(filename: &str, basearch: &str) -> Result<Box<Treefile>>;
+        fn treefile_new_client(filename: &str, basearch: &str) -> Result<Box<Treefile>>;
+        fn treefile_new_client_from_etc(basearch: &str) -> Result<Box<Treefile>>;
+        fn treefile_delete_client_etc() -> Result<u32>;
+
+        fn get_workdir(&self) -> &str;
+        fn get_passwd_fd(&mut self) -> i32;
+        fn get_group_fd(&mut self) -> i32;
+        fn get_json_string(&self) -> String;
+        fn get_ostree_layers(&self) -> Vec<String>;
+        fn get_ostree_override_layers(&self) -> Vec<String>;
+        fn get_all_ostree_layers(&self) -> Vec<String>;
+        fn get_repos(&self) -> Vec<String>;
+        fn get_packages(&self) -> Vec<String>;
+        fn require_automatic_version_prefix(&self) -> Result<String>;
+        fn add_packages(&mut self, packages: Vec<String>, allow_existing: bool) -> Result<bool>;
+        fn has_packages(&self) -> bool;
+        fn get_local_packages(&self) -> Vec<String>;
+        fn add_local_packages(
+            &mut self,
+            packages: Vec<String>,
+            allow_existing: bool,
+        ) -> Result<bool>;
+        fn get_local_fileoverride_packages(&self) -> Vec<String>;
+        fn add_local_fileoverride_packages(
+            &mut self,
+            packages: Vec<String>,
+            allow_existing: bool,
+        ) -> Result<bool>;
+        fn remove_packages(&mut self, packages: Vec<String>, allow_noent: bool) -> Result<bool>;
+        fn get_packages_override_replace(&self) -> Vec<OverrideReplacement>;
+        fn has_packages_override_replace(&self) -> bool;
+        fn add_packages_override_replace(&mut self, replacement: OverrideReplacement) -> bool;
+        fn remove_package_override_replace(&mut self, package: &str) -> bool;
+        fn get_packages_override_replace_local(&self) -> Vec<String>;
+        fn add_packages_override_replace_local(&mut self, packages: Vec<String>) -> Result<()>;
+        fn remove_package_override_replace_local(&mut self, package: &str) -> bool;
+        fn get_packages_override_remove(&self) -> Vec<String>;
+        fn add_packages_override_remove(&mut self, packages: Vec<String>) -> Result<()>;
+        fn remove_package_override_remove(&mut self, package: &str) -> bool;
+        fn has_packages_override_remove_name(&self, name: &str) -> bool;
+        fn remove_all_overrides(&mut self) -> bool;
+        fn remove_all_packages(&mut self) -> bool;
+        fn get_exclude_packages(&self) -> Vec<String>;
+        fn get_platform_module(&self) -> String;
+        fn get_install_langs(&self) -> Vec<String>;
+        fn format_install_langs_macro(&self) -> String;
+        fn get_lockfile_repos(&self) -> Vec<String>;
+        fn get_ref(&self) -> &str;
+        fn get_cliwrap(&self) -> bool;
+        fn get_cliwrap_binaries(&self) -> Vec<String>;
+        fn set_cliwrap(&mut self, enabled: bool);
+        fn get_container_cmd(&self) -> Vec<String>;
+        fn get_readonly_executables(&self) -> bool;
+        fn get_documentation(&self) -> bool;
+        fn get_recommends(&self) -> bool;
+        fn get_selinux(&self) -> bool;
+        fn get_sysusers_is_forced(&self) -> bool;
+        fn get_selinux_label_version(&self) -> u32;
+        fn get_gpg_key(&self) -> String;
+        fn get_automatic_version_suffix(&self) -> String;
+        fn get_container(&self) -> bool;
+        fn get_machineid_compat(&self) -> bool;
+        fn get_etc_group_members(&self) -> Vec<String>;
+        fn get_boot_location_is_modules(&self) -> bool;
+        fn use_kernel_install(&self) -> bool;
+        fn get_ima(&self) -> bool;
+        fn get_releasever(&self) -> String;
+        fn get_repo_metadata_target(&self) -> RepoMetadataTarget;
+        fn get_advisories_metadata_target(&self) -> AdvisoriesMetadataTarget;
+        fn rpmdb_backend_is_target(&self) -> bool;
+        fn should_normalize_rpmdb(&self) -> bool;
+        fn get_opt_usrlocal(&self) -> OptUsrLocal;
+        fn get_files_remove_regex(&self, package: &str) -> Vec<String>;
+        fn get_checksum(&self, repo: &OstreeRepo) -> Result<String>;
+        fn get_ostree_ref(&self) -> String;
+        fn get_repo_packages(&self) -> &[RepoPackage];
+        fn clear_repo_packages(&mut self);
+        fn prettyprint_json_stdout(&self);
+        fn print_deprecation_warnings(&self);
+        fn print_experimental_notices(&self);
+        fn sanitycheck_externals(&self) -> Result<()>;
+        fn importer_flags(&self, pkg_name: &str) -> Box<RpmImporterFlags>;
+        fn write_repovars(&self, workdir_dfd_raw: i32) -> Result<String>;
+        fn set_releasever(&mut self, releasever: &str) -> Result<()>;
+        fn set_recommends(&mut self, val: bool) -> Result<()>;
+        fn enable_repo(&mut self, repo: &str) -> Result<()>;
+        fn disable_repo(&mut self, repo: &str) -> Result<()>;
+        // these functions are more related to derivation
+        fn validate_for_container(&self) -> Result<()>;
+        fn get_base_refspec(&self) -> Refspec;
+        fn rebase(
+            &mut self,
+            new_refspec: &str,
+            custom_origin_url: &str,
+            custom_origin_description: &str,
+        );
+        fn get_origin_custom_url(&self) -> String;
+        fn get_origin_custom_description(&self) -> String;
+        fn get_override_commit(&self) -> String;
+        fn set_override_commit(&mut self, checksum: &str);
+        fn get_initramfs_etc_files(&self) -> Vec<String>;
+        fn has_initramfs_etc_files(&self) -> bool;
+        fn initramfs_etc_files_track(&mut self, files: Vec<String>) -> bool;
+        fn initramfs_etc_files_untrack(&mut self, files: Vec<String>) -> bool;
+        fn initramfs_etc_files_untrack_all(&mut self) -> bool;
+        fn get_initramfs_regenerate(&self) -> bool;
+        fn get_initramfs_args(&self) -> Vec<String>;
+        fn set_initramfs_regenerate(&mut self, enabled: bool, args: Vec<String>);
+        fn get_unconfigured_state(&self) -> String;
+        fn may_require_local_assembly(&self) -> bool;
+        fn has_any_packages(&self) -> bool;
+        fn merge_treefile(&mut self, treefile: &str) -> Result<bool>;
+    }
+
+    // treefile.rs (split out from above to make &self nice to use)
+    extern "Rust" {
+        type RepoPackage;
+
+        fn get_repo(&self) -> &str;
+        fn get_packages(&self) -> Vec<String>;
+    }
+
+    // utils.rs
+    extern "Rust" {
+        fn varsubstitute(s: &str, vars: &Vec<StringMapping>) -> Result<String>;
+        fn get_features() -> Vec<String>;
+        fn get_rpm_basearch() -> String;
+        fn sealed_memfd(description: &str, content: &[u8]) -> Result<i32>;
+        fn running_in_systemd() -> bool;
+        fn calculate_advisories_diff(
+            repo: &OstreeRepo,
+            checksum_from: &str,
+            checksum_to: &str,
+        ) -> Result<*mut GVariant>;
+        fn translate_path_for_ostree(path: &str) -> String;
+    }
+
+    #[derive(Debug, Default)]
+    /// A copy of LiveFsState that is bridged to C++; the main
+    /// change here is we can't use Option<> yet, so empty values
+    /// are represented by the empty string.
+    struct LiveApplyState {
+        inprogress: String,
+        commit: String,
+    }
+
+    // live.rs
+    extern "Rust" {
+        fn get_live_apply_state(
+            sysroot: &OstreeSysroot,
+            deployment: &OstreeDeployment,
+        ) -> Result<LiveApplyState>;
+        fn has_live_apply_state(
+            sysroot: &OstreeSysroot,
+            deployment: &OstreeDeployment,
+        ) -> Result<bool>;
+        fn applylive_sync_ref(sysroot: &OstreeSysroot) -> Result<()>;
+        fn transaction_apply_live(sysroot: &OstreeSysroot, target: &GVariant) -> Result<()>;
+    }
+
+    // passwd.rs
+    extern "Rust" {
+        fn prepare_rpm_layering(rootfs: i32, merge_passwd_dir: i32) -> Result<bool>;
+        fn complete_rpm_layering(rootfs: i32) -> Result<()>;
+        fn deduplicate_tmpfiles_entries(rootfs: i32) -> Result<()>;
+        fn passwd_cleanup(rootfs: i32) -> Result<()>;
+        fn migrate_group_except_root(rootfs: i32, preserved_groups: &Vec<String>) -> Result<()>;
+        fn migrate_passwd_except_root(rootfs: i32) -> Result<()>;
+        fn passwd_compose_prep(rootfs: i32, treefile: &mut Treefile) -> Result<()>;
+        fn passwd_compose_prep_repo(
+            rootfs: i32,
+            treefile: &mut Treefile,
+            repo: &OstreeRepo,
+            previous_checksum: &str,
+            unified_core: bool,
+        ) -> Result<()>;
+        fn dir_contains_uid(dirfd: i32, id: u32) -> Result<bool>;
+        fn dir_contains_gid(dirfd: i32, id: u32) -> Result<bool>;
+        fn check_passwd_group_entries(
+            mut ffi_repo: &OstreeRepo,
+            rootfs_dfd: i32,
+            treefile: &mut Treefile,
+            previous_rev: &str,
+        ) -> Result<()>;
+
+        fn passwddb_open(rootfs: i32) -> Result<Box<PasswdDB>>;
+        type PasswdDB;
+        fn lookup_user(self: &PasswdDB, uid: u32) -> Result<String>;
+        fn lookup_group(self: &PasswdDB, gid: u32) -> Result<String>;
+
+        fn new_passwd_entries() -> Box<PasswdEntries>;
+        type PasswdEntries;
+        fn add_group_content(self: &mut PasswdEntries, rootfs: i32, path: &str) -> Result<()>;
+        fn add_passwd_content(self: &mut PasswdEntries, rootfs: i32, path: &str) -> Result<()>;
+        fn contains_group(self: &PasswdEntries, user: &str) -> bool;
+        fn contains_user(self: &PasswdEntries, user: &str) -> bool;
+        fn lookup_user_id(self: &PasswdEntries, user: &str) -> Result<u32>;
+        fn lookup_group_id(self: &PasswdEntries, group: &str) -> Result<u32>;
+    }
+
+    // extensions.rs
+    extern "Rust" {
+        type Extensions;
+        fn extensions_load(
+            path: &str,
+            basearch: &str,
+            base_pkgs: &Vec<StringMapping>,
+        ) -> Result<Box<Extensions>>;
+        fn get_repos(&self) -> Vec<String>;
+        fn get_os_extension_packages(&self) -> Vec<String>;
+        fn get_development_packages(&self) -> Vec<String>;
+        fn state_checksum_changed(&self, chksum: &str, output_dir: &str) -> Result<bool>;
+        fn update_state_checksum(&self, chksum: &str, output_dir: &str) -> Result<()>;
+        fn serialize_to_dir(&self, output_dir: &str) -> Result<()>;
+        fn generate_treefile(&self, src: &Treefile) -> Result<Box<Treefile>>;
+    }
+
+    #[derive(Debug)]
+    struct LockedPackage {
+        name: String,
+        evr: String,
+        arch: String,
+        digest: String,
+    }
+
+    // lockfile.rs
+    extern "Rust" {
+        type LockfileConfig;
+
+        fn lockfile_read(filenames: &Vec<String>) -> Result<Box<LockfileConfig>>;
+        fn lockfile_write(
+            filename: &str,
+            packages: Pin<&mut CxxGObjectArray>,
+            rpmmd_repos: Pin<&mut CxxGObjectArray>,
+        ) -> Result<()>;
+
+        fn get_locked_packages(&self) -> Result<Vec<LockedPackage>>;
+    }
+
+    // origin.rs
+    extern "Rust" {
+        fn origin_to_treefile(kf: &GKeyFile) -> Result<Box<Treefile>>;
+        fn treefile_to_origin(tf: &Treefile) -> Result<*mut GKeyFile>;
+        fn origin_validate_roundtrip(kf: &GKeyFile);
+    }
+
+    // rpmutils.rs
+    extern "Rust" {
+        fn cache_branch_to_nevra(nevra: &str) -> String;
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-cxxrsutil.hpp");
+        #[allow(missing_debug_implementations)]
+        type CxxGObjectArray;
+        fn length(self: Pin<&mut CxxGObjectArray>) -> u32;
+        fn get(self: Pin<&mut CxxGObjectArray>, i: u32) -> &mut GObject;
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-util.h");
+        // Currently only used in unit tests
+        #[allow(dead_code)]
+        fn util_next_version(
+            auto_version_prefix: &str,
+            version_suffix: &str,
+            last_version: &str,
+        ) -> Result<String>;
+        fn testutil_validate_cxxrs_passthrough(repo: &OstreeRepo) -> i32;
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostreemain.h");
+        fn early_main();
+        fn rpmostree_main(args: &[&str]) -> Result<i32>;
+        fn rpmostree_process_global_teardown();
+        fn c_unit_tests() -> Result<()>;
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-clientlib.h");
+        fn client_require_root() -> Result<()>;
+        #[allow(missing_debug_implementations)]
+        type ClientConnection;
+        fn new_client_connection() -> Result<UniquePtr<ClientConnection>>;
+        fn get_connection<'a>(self: Pin<&'a mut ClientConnection>) -> &'a GDBusConnection;
+        fn transaction_connect_progress_sync(&self, address: &str) -> Result<()>;
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-diff.hpp");
+        #[allow(missing_debug_implementations)]
+        type RPMDiff;
+        fn n_removed(&self) -> i32;
+        fn n_added(&self) -> i32;
+        fn n_modified(&self) -> i32;
+        fn rpmdb_diff(
+            repo: &OstreeRepo,
+            src: &CxxString,
+            dest: &CxxString,
+            allow_noent: bool,
+        ) -> Result<UniquePtr<RPMDiff>>;
+
+        fn print(&self);
+    }
+
+    // https://cxx.rs/shared.html#extern-enums
+    #[derive(Debug)]
+    enum RpmOstreeDiffPrintFormat {
+        RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY,
+        RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED,
+        RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE,
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-libbuiltin.h");
+        include!("rpmostree-util.h");
+        #[allow(missing_debug_implementations)]
+        type RpmOstreeDiffPrintFormat;
+        /// # Safety: ensure @cancellable is a valid pointer
+        unsafe fn print_treepkg_diff_from_sysroot_path(
+            sysroot_path: &str,
+            format: RpmOstreeDiffPrintFormat,
+            max_key_len: u32,
+            cancellable: *mut GCancellable,
+        );
+    }
+
+    unsafe extern "C++" {
+        include!("rpmostree-output.h");
+        #[allow(missing_debug_implementations)]
+        type Progress;
+
+        fn progress_begin_task(msg: &str) -> UniquePtr<Progress>;
+        fn end(self: Pin<&mut Progress>, msg: &str);
+
+        fn output_message(msg: &str);
+    }
+    // rpmostree-rpm-util.h
+    unsafe extern "C++" {
+        include!("rpmostree-rpm-util.h");
+        #[allow(missing_debug_implementations)]
+        type RpmTs;
+        #[allow(missing_debug_implementations)]
+        type PackageMeta;
+
+        // Currently only used in unit tests
+        #[allow(dead_code)]
+        fn nevra_to_cache_branch(nevra: &CxxString) -> Result<String>;
+        fn get_repodata_chksum_repr(pkg: &mut FFIDnfPackage) -> Result<String>;
+        fn rpmts_for_commit(repo: &OstreeRepo, rev: &str) -> Result<UniquePtr<RpmTs>>;
+        fn rpmdb_package_name_list(dfd: i32, path: String) -> Result<Vec<String>>;
+
+        // Methods on RpmTs
+        fn package_meta(self: &RpmTs, name: &str, arch: &str) -> Result<UniquePtr<PackageMeta>>;
+
+        // Methods on PackageMeta
+        fn size(self: &PackageMeta) -> u64;
+        fn buildtime(self: &PackageMeta) -> u64;
+        fn changelogs(self: &PackageMeta) -> Vec<u64>;
+        fn src_pkg(self: &PackageMeta) -> &str;
+        fn provided_paths(self: &PackageMeta) -> Result<Vec<String>>;
+    }
+
+    // rpmostree-package-variants.h
+    unsafe extern "C++" {
+        include!("rpmostree-package-variants.h");
+        fn package_variant_list_for_commit(
+            repo: &OstreeRepo,
+            rev: &str,
+            cancellable: &GCancellable,
+        ) -> Result<*mut GVariant>;
+    }
 }
 
-/// Get the live state
-pub(crate) fn get_live_state(
-    repo: &ostree::Repo,
-    deploy: &ostree::Deployment,
-) -> Result<Option<LiveApplyState>> {
-    let run = Dir::open_ambient_dir("/run", cap_std::ambient_authority())?;
-    if !run.try_exists(get_runstate_dir(deploy).join(LIVE_STATE_NAME))? {
-        return Ok(None);
-    }
-    let live_commit = repo.resolve_rev(LIVE_REF, true)?;
-    let inprogress_commit = repo.resolve_rev(LIVE_REF_INPROGRESS, true)?;
-    Ok(Some(LiveApplyState {
-        commit: live_commit.map(|s| s.to_string()).unwrap_or_default(),
-        inprogress: inprogress_commit.map(|s| s.to_string()).unwrap_or_default(),
-    }))
-}
-
-/// Write new livefs state
-fn write_live_state(
-    repo: &ostree::Repo,
-    deploy: &ostree::Deployment,
-    state: &LiveApplyState,
-) -> Result<()> {
-    let run = Dir::open_ambient_dir("/run", cap_std::ambient_authority())?;
-    let rundir = if let Some(d) = run.open_dir_optional(get_runstate_dir(deploy))? {
-        d
-    } else {
-        return Ok(());
-    };
-
-    let found_live_stamp = rundir.exists(LIVE_STATE_NAME);
-
-    let commit = Some(state.commit.as_str()).filter(|s| !s.is_empty());
-    repo.set_ref_immediate(None, LIVE_REF, commit, gio::Cancellable::NONE)?;
-    let inprogress_commit = Some(state.inprogress.as_str()).filter(|s| !s.is_empty());
-    repo.set_ref_immediate(
-        None,
-        LIVE_REF_INPROGRESS,
-        inprogress_commit,
-        gio::Cancellable::NONE,
-    )?;
-
-    // Ensure the stamp file exists
-    if !found_live_stamp && commit.or(inprogress_commit).is_some() {
-        rundir.atomic_write(LIVE_STATE_NAME, b"")?;
-    }
-
-    Ok(())
-}
-
-/// Get the relative parent directory of a path
-fn relpath_dir(p: &Path) -> Result<&Path> {
-    Ok(p.strip_prefix("/")?.parent().expect("parent"))
-}
-
-/// Return a path buffer we can provide to libostree for checkout
-fn subpath(diff: &FileTreeDiff, p: &Path) -> Option<PathBuf> {
-    if let Some(ref d) = diff.subdir {
-        let p = p.strip_prefix("/").expect("prefix");
-        Some(Path::new(d).join(p))
-    } else {
-        Some(p.to_path_buf())
-    }
-}
-
-/// Given a diff, apply it to the target directory, which should be a checkout of the source commit.
-fn apply_diff(repo: &ostree::Repo, diff: &FileTreeDiff, commit: &str, destdir: &Dir) -> Result<()> {
-    if !diff.changed_dirs.is_empty() {
-        anyhow::bail!("Changed directories are not supported yet");
-    }
-    let cancellable = gio::Cancellable::NONE;
-    // This applies to all added/changed content, we just
-    // overwrite `subpath` in each run.
-    let mut opts = ostree::RepoCheckoutAtOptions {
-        overwrite_mode: ostree::RepoCheckoutOverwriteMode::UnionFiles,
-        force_copy: true,
-        ..Default::default()
-    };
-    // Check out new directories and files
-    for d in diff.added_dirs.iter().map(Path::new) {
-        opts.subpath = subpath(diff, d);
-        let t = d.strip_prefix("/")?;
-        repo.checkout_at(Some(&opts), destdir.as_raw_fd(), t, commit, cancellable)
-            .with_context(|| format!("Checking out added dir {:?}", d))?;
-    }
-    for d in diff.added_files.iter().map(Path::new) {
-        opts.subpath = subpath(diff, d);
-        repo.checkout_at(
-            Some(&opts),
-            destdir.as_raw_fd(),
-            relpath_dir(d)?,
-            commit,
-            cancellable,
-        )
-        .with_context(|| format!("Checking out added file {:?}", d))?;
-    }
-    // Changed files in existing directories
-    for d in diff.changed_files.iter().map(Path::new) {
-        opts.subpath = subpath(diff, d);
-        repo.checkout_at(
-            Some(&opts),
-            destdir.as_raw_fd(),
-            relpath_dir(d)?,
-            commit,
-            cancellable,
-        )
-        .with_context(|| format!("Checking out changed file {:?}", d))?;
-    }
-    assert!(diff.changed_dirs.is_empty());
-
-    // Finally clean up removed directories and files together.  We use
-    // rayon here just because we can.
-    diff.removed_files
-        .par_iter()
-        .chain(diff.removed_dirs.par_iter())
-        .try_for_each(|d| -> Result<()> {
-            let d = d.strip_prefix('/').expect("prefix");
-            destdir
-                .remove_all_optional(d)
-                .with_context(|| format!("Failed to remove {:?}", d))?;
-            Ok(())
-        })?;
-
-    Ok(())
-}
-
-/// Special handling for `/etc` - we currently just add new default files/directories.
-/// We don't try to delete anything yet, because doing so could mess up the actual
-/// `/etc` merge on reboot between the real deployment.  Much of the logic here
-/// is similar to what libostree core does for `/etc` on upgrades.  If we ever
-/// push apply-live down into libostree, this logic could be shared.
-fn update_etc(
-    repo: &ostree::Repo,
-    diff: &FileTreeDiff,
-    config_diff: &crate::dirdiff::Diff,
-    sepolicy: &ostree::SePolicy,
-    commit: &str,
-    destdir: &Dir,
-) -> Result<()> {
-    let expected_subpath = "/usr";
-    // We stripped both /usr and /etc, we need to readd them both
-    // for the checkout.
-    let filtermap_paths = |s: &String| -> Option<(Option<PathBuf>, PathBuf)> {
-        s.strip_prefix("/etc/")
-            .filter(|p| !config_diff.contains(p))
-            .map(|p| {
-                let p = Path::new(p);
-                (Some(Path::new("/usr/etc").join(p)), p.into())
-            })
-    };
-    // For some reason in Rust the `parent()` of `foo` is just the empty string `""`; we
-    // need it to be the self-link `.` path.
-    fn canonicalized_parent(p: &Path) -> &Path {
-        match p.parent() {
-            Some(p) if p.as_os_str().is_empty() => Path::new("."),
-            Some(p) => p,
-            None => Path::new("."),
+impl BubblewrapMutability {
+    pub(crate) fn for_unified_core(unified_core: bool) -> Self {
+        if unified_core {
+            Self::RoFiles
+        } else {
+            Self::MutateFreely
         }
     }
-
-    // The generic apply_diff() above in theory could work anywhere.
-    // But this code is only designed for /etc.
-    assert_eq!(diff.subdir.as_ref().expect("subpath"), expected_subpath);
-    if !diff.changed_dirs.is_empty() {
-        anyhow::bail!("Changed directories are not supported yet");
-    }
-
-    let cancellable = gio::Cancellable::NONE;
-    // This applies to all added/changed content, we just
-    // overwrite `subpath` in each run.
-    let mut opts = ostree::RepoCheckoutAtOptions {
-        overwrite_mode: ostree::RepoCheckoutOverwriteMode::UnionFiles,
-        force_copy: true,
-        ..Default::default()
-    };
-    // The labels for /etc and /usr/etc may differ; ensure that we label
-    // the files with the /etc target, even though we're checking out
-    // from /usr/etc.  This is the same as what libostree does.
-    if sepolicy.name().is_some() {
-        opts.sepolicy = Some(sepolicy.clone());
-    }
-    // Added directories and files
-    for (subpath, target) in diff.added_dirs.iter().filter_map(filtermap_paths) {
-        opts.subpath = subpath;
-        repo.checkout_at(
-            Some(&opts),
-            destdir.as_raw_fd(),
-            &target,
-            commit,
-            cancellable,
-        )
-        .with_context(|| format!("Checking out added /etc dir {:?}", (&opts.subpath, target)))?;
-    }
-    for (subpath, target) in diff.added_files.iter().filter_map(filtermap_paths) {
-        opts.subpath = subpath;
-        repo.checkout_at(
-            Some(&opts),
-            destdir.as_raw_fd(),
-            canonicalized_parent(&target),
-            commit,
-            cancellable,
-        )
-        .with_context(|| format!("Checking out added /etc file {:?}", (&opts.subpath, target)))?;
-    }
-    // Now changed files
-    for (subpath, target) in diff.changed_files.iter().filter_map(filtermap_paths) {
-        opts.subpath = subpath;
-        repo.checkout_at(
-            Some(&opts),
-            destdir.as_raw_fd(),
-            canonicalized_parent(&target),
-            commit,
-            cancellable,
-        )
-        .with_context(|| {
-            format!(
-                "Checking out changed /etc file {:?}",
-                (&opts.subpath, target)
-            )
-        })?;
-    }
-    assert!(diff.changed_dirs.is_empty());
-
-    // And finally clean up removed files and directories.
-    diff.removed_files
-        .par_iter()
-        .chain(diff.removed_dirs.par_iter())
-        .filter_map(filtermap_paths)
-        .try_for_each(|(_, target)| -> Result<()> {
-            destdir
-                .remove_all_optional(&target)
-                .with_context(|| format!("Failed to remove {:?}", target))?;
-            Ok(())
-        })?;
-
-    Ok(())
+}
+pub(crate) fn mutability_for_unified_core(unified_core: bool) -> BubblewrapMutability {
+    BubblewrapMutability::for_unified_core(unified_core)
 }
 
-// Our main process uses MountFlags=slave set up by systemd;
-// this is what allows us to e.g. remount /sysroot writable
-// just inside our mount namespace.  However, in this case
-// we actually need to escape our mount namespace and affect
-// the "main" mount namespace so that other processes will
-// see the overlayfs.
-#[context("Creating overlayfs")]
-fn unlock_transient(sysroot: &ostree::Sysroot) -> Result<()> {
-    // Temporarily drop the lock
-    sysroot.unlock();
-    isolation::run_systemd_worker_sync(&isolation::UnitConfig {
-        name: Some("rpm-ostree-unlock"),
-        properties: &[],
-        exec_args: &["ostree", "admin", "unlock", "--transient"],
-    })?;
-    Ok(())
-}
-
-/// Run `systemd-tmpfiles` as a separate systemd unit to escape
-/// our mount namespace.
-/// This allows our `ProtectHome=` in the unit file to work
-/// for example.  Longer term I'd like to protect even more of `/var`.
-#[context("Running tmpfiles for /run and /var")]
-fn rerun_tmpfiles() -> Result<()> {
-    isolation::run_systemd_worker_sync(&isolation::UnitConfig {
-        name: Some("rpm-ostree-tmpfiles"),
-        properties: &[],
-        exec_args: &[
-            "systemd-tmpfiles",
-            "--create",
-            "--prefix=/run",
-            "--prefix=/var",
-        ],
-    })
-}
-
-/// Implementation of `rpm-ostree apply-live`.
-pub(crate) fn transaction_apply_live(
-    sysroot: &crate::ffi::OstreeSysroot,
-    options: &crate::ffi::GVariant,
-) -> CxxResult<()> {
-    let sysroot = &sysroot.glib_reborrow();
-    let options = &options.glib_reborrow();
-    let options = &glib::VariantDict::new(Some(options));
-    let target = &options
-        .lookup::<String>(OPT_TARGET)
-        .map_err(anyhow::Error::msg)?;
-    let allow_replacement: bool = options
-        .lookup(OPT_REPLACE)
-        .map_err(anyhow::Error::msg)?
-        .unwrap_or_default();
-    let repo = &sysroot.repo();
-
-    let booted = sysroot.require_booted_deployment()?;
-    let osname = booted.osname();
-    let booted_commit = booted.csum();
-    let booted_commit = booted_commit.as_str();
-
-    let target_commit = if let Some(t) = target {
-        Cow::Borrowed(t)
-    } else {
-        match sysroot.query_deployments_for(Some(osname.as_str())) {
-            (Some(pending), _) => {
-                let pending_commit = pending.csum();
-                let pending_commit = pending_commit.as_str();
-                Cow::Owned(pending_commit.to_string())
-            }
-            (None, _) => {
-                return Err(anyhow!("No target commit specified and no pending deployment").into());
-            }
-        }
-    };
-
-    let state = get_live_state(repo, &booted)?;
-    if state.is_none() {
-        match booted.unlocked() {
-            DeploymentUnlockedState::None => {
-                unlock_transient(sysroot)?;
-            }
-            DeploymentUnlockedState::Transient | DeploymentUnlockedState::Development => {}
-            s => {
-                return Err(anyhow!("apply-live is incompatible with unlock state: {s:?}").into());
-            }
-        };
-    } else {
-        match booted.unlocked() {
-            DeploymentUnlockedState::Transient | DeploymentUnlockedState::Development => {}
-            s => {
-                return Err(anyhow!("deployment not unlocked, is in state: {s:?}").into());
-            }
-        };
-    }
-    // In the transient mode, remount writable - this affects just the rpm-ostreed
-    // mount namespace.  In the future it'd be nicer to run transactions as subprocesses
-    // so we don't lift the writable protection for the main rpm-ostree process.
-    if statvfs::statvfs("/usr")?
-        .flags()
-        .contains(statvfs::FsFlags::ST_RDONLY)
-    {
-        use nix::mount::MsFlags;
-        let none: Option<&str> = None;
-        nix::mount::mount(
-            none,
-            "/usr",
-            none,
-            MsFlags::MS_REMOUNT | MsFlags::MS_SILENT,
-            none,
-        )?;
-    }
-
-    if let Some(ref state) = state {
-        if !state.inprogress.is_empty() && state.inprogress.as_str() != target_commit.as_str() {
-            return Err(anyhow::anyhow!(
-                "Previously interrupted while targeting commit {}, cannot change target to {}",
-                state.inprogress,
-                target_commit
-            )
-            .into());
-        }
-    }
-
-    let source_commit = state
-        .as_ref()
-        .map(|s| s.commit.as_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or(booted_commit);
-    // Compute the filesystem-level diff
-    let diff = ostree_ext::diff::diff(repo, source_commit, &target_commit, Some("/usr"))?;
-    // And then the package-level diff
-    let pkgdiff = {
-        cxx::let_cxx_string!(from = source_commit);
-        cxx::let_cxx_string!(to = &*target_commit);
-        crate::ffi::rpmdb_diff(repo.reborrow_cxx(), &from, &to, false)
-            .map_err(anyhow::Error::msg)?
-    };
-    if !allow_replacement {
-        if pkgdiff.n_removed() > 0 {
-            return Err(anyhow!(
-                "packages would be removed: {}, allow replacement to override",
-                pkgdiff.n_removed()
-            )
-            .into());
-        }
-        if pkgdiff.n_modified() > 0 {
-            return Err(anyhow!(
-                "packages would be changed: {}, allow replacement to override",
-                pkgdiff.n_modified()
-            )
-            .into());
-        }
-    }
-
-    println!("Computed /usr diff: {}", &diff);
-    println!(
-        "Computed pkg diff: {} added, {} changed, {} removed",
-        pkgdiff.n_added(),
-        pkgdiff.n_modified(),
-        pkgdiff.n_removed()
-    );
-
-    let mut state = state.unwrap_or_default();
-
-    let rootfs_dfd = Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
-    let sepolicy = ostree::SePolicy::new_at(rootfs_dfd.as_raw_fd(), gio::Cancellable::NONE)?;
-
-    // Record that we're targeting this commit
-    state.inprogress = target_commit.to_string();
-    write_live_state(repo, &booted, &state)?;
-
-    // Gather the current diff of /etc - we need to avoid changing
-    // any files which are locally modified.
-    let config_diff = progress_task("Computing /etc diff to preserve", || -> Result<_> {
-        let usretc = &rootfs_dfd.open_dir("usr/etc")?;
-        let etc = &rootfs_dfd.open_dir("etc")?;
-        crate::dirdiff::diff(usretc, etc)
-    })?;
-    println!("Computed /etc diff: {}", &config_diff);
-
-    // The heart of things: updating the overlayfs on /usr
-    let usr = &Dir::open_ambient_dir("/usr", cap_std::ambient_authority())?;
-    progress_task("Updating /usr", || -> Result<_> {
-        apply_diff(repo, &diff, &target_commit, usr)
-    })?;
-
-    // The other important bits are /etc and /var
-    let etc = &Dir::open_ambient_dir("/etc", cap_std::ambient_authority())?;
-    progress_task("Updating /etc", || -> Result<_> {
-        update_etc(repo, &diff, &config_diff, &sepolicy, &target_commit, etc)
-    })?;
-    progress_task("Running systemd-tmpfiles for /run and /var", rerun_tmpfiles)?;
-
-    // Success! Update the recorded state.
-    state.commit = target_commit.to_string();
-    state.inprogress = "".to_string();
-    write_live_state(repo, &booted, &state)?;
-
-    Ok(())
-}
-
-/// Writing a ref for the live-apply state can get out of sync
-/// if we upgrade.  This prunes the ref if the booted deployment
-/// doesn't have a live apply state in /run.
-pub(crate) fn applylive_sync_ref(sysroot: &crate::ffi::OstreeSysroot) -> CxxResult<()> {
-    let sysroot = sysroot.glib_reborrow();
-    let repo = &sysroot.repo();
-    let booted = if let Some(b) = sysroot.booted_deployment() {
-        b
-    } else {
-        return Ok(());
-    };
-    if get_live_state(repo, &booted)?.is_some() {
-        return Ok(());
-    }
-
-    // Set the live state to empty
-    let state = Default::default();
-    write_live_state(repo, &booted, &state).context("apply-live: failed to write state")?;
-    Ok(())
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_subpath() {
-        let d = FileTreeDiff {
-            subdir: Some("/usr".to_string()),
-            ..Default::default()
-        };
-        let s = subpath(&d, Path::new("/foo"));
-        assert_eq!(s.as_deref(), Some(Path::new("/usr/foo")));
-    }
-}
-
-pub(crate) fn get_live_apply_state(
-    sysroot: &crate::ffi::OstreeSysroot,
-    deployment: &crate::ffi::OstreeDeployment,
-) -> CxxResult<LiveApplyState> {
-    let sysroot = sysroot.glib_reborrow();
-    let deployment = deployment.glib_reborrow();
-    let repo = &sysroot.repo();
-    if let Some(state) = get_live_state(repo, &deployment)? {
-        Ok(state)
-    } else {
-        Ok(Default::default())
-    }
-}
-
-pub(crate) fn has_live_apply_state(
-    sysroot: &crate::ffi::OstreeSysroot,
-    deployment: &crate::ffi::OstreeDeployment,
-) -> CxxResult<bool> {
-    let state = get_live_apply_state(sysroot, deployment)?;
-    Ok(!(state.commit.is_empty() && state.inprogress.is_empty()))
-}
+pub mod builtins;
+pub(crate) use crate::builtins::apply_live::*;
+pub(crate) use crate::builtins::compose::commit::*;
+pub(crate) use crate::builtins::compose::*;
+pub(crate) use crate::builtins::usroverlay::usroverlay_entrypoint;
+mod bwrap;
+pub(crate) use bwrap::*;
+pub mod client;
+pub(crate) use client::*;
+pub mod cliwrap;
+pub mod container;
+mod containers_storage;
+pub use cliwrap::*;
+pub(crate) use container::*;
+mod compose;
+pub(crate) use compose::*;
+mod composepost;
+pub mod countme;
+pub(crate) use composepost::*;
+mod core;
+use crate::core::*;
+mod capstdext;
+pub mod cli_experimental;
+mod daemon;
+pub(crate) use daemon::*;
+mod deployment_utils;
+pub(crate) use deployment_utils::*;
+mod dirdiff;
+pub mod failpoints;
+use failpoints::*;
+mod extensions;
+pub(crate) use extensions::*;
+#[cfg(feature = "fedora-integration")]
+mod fedora_integration;
+mod fsutil;
+mod history;
+pub use self::history::*;
+mod importer;
+pub(crate) use importer::*;
+mod initramfs;
+pub(crate) use self::initramfs::*;
+mod isolation;
+mod journal;
+pub mod kernel_install;
+pub(crate) use self::journal::*;
+mod kickstart;
+mod lockfile;
+pub(crate) use self::lockfile::*;
+mod live;
+pub(crate) use self::live::*;
+mod nameservice;
+mod normalization;
+mod origin;
+mod ostree_prepareroot;
+pub(crate) use self::origin::*;
+pub mod passwd;
+use passwd::*;
+mod console_progress;
+pub(crate) use self::console_progress::*;
+mod progress;
+mod tokio_ffi;
+pub(crate) use self::tokio_ffi::*;
+mod scripts;
+pub(crate) use self::scripts::*;
+mod sysroot_upgrade;
+pub(crate) use crate::sysroot_upgrade::*;
+mod rpmutils;
+pub(crate) use self::rpmutils::*;
+mod testutils;
+pub(crate) use self::testutils::*;
+mod tmpfiles;
+pub use self::tmpfiles::*;
+mod treefile;
+pub use self::treefile::*;
+pub mod utils;
+pub use self::utils::*;
+mod variant_utils;
