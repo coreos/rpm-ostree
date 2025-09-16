@@ -28,6 +28,7 @@
 #include <gio/gio.h>
 #include <systemd/sd-journal.h>
 
+#include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-scripts.h"
 
@@ -354,7 +355,8 @@ rpmostree_run_script_in_bwrap_container (int rootfs_fd, GLnxTmpDir *var_lib_rpm_
     }
 
   /* Don't let scripts see the base rpm database by default */
-  bwrap->bind_read ("usr/share/empty", "usr/share/rpm");
+  bwrap->bind_read ("usr/share/empty", RPMOSTREE_RPMDB_LOCATION);
+  bwrap->bind_read ("usr/share/empty", RPMOSTREE_SYSIMAGE_RPMDB);
 
   /* Also a tmpfs for /run.
    * Add ostree-booted API; some scriptlets may work differently on OSTree systems; e.g.

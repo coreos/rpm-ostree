@@ -91,6 +91,8 @@ static IGNORED_PKG_SCRIPTS: phf::Set<&'static str> = phf_set! {
     "microcode_ctl.post",
     // https://bugzilla.redhat.com/show_bug.cgi?id=1199582
     "microcode_ctl.posttrans",
+    // /usr/lib/sysimage/rpm is read only when we run scripts
+    "rpm.posttrans",
 };
 
 /// Returns true if we should simply ignore (not execute) an RPM script.
