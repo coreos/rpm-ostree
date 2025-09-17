@@ -2290,9 +2290,6 @@ extern "C"
       ::std::int32_t rootfs_dfd, ::rpmostreecxx::GCancellable &cancellable) noexcept;
 
   ::rust::repr::PtrLen
-  rpmostreecxx$cxxbridge1$compose_postprocess_rpm_macro (::std::int32_t rootfs_dfd) noexcept;
-
-  ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$postprocess_cleanup_rpmdb (::std::int32_t rootfs_dfd) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$rewrite_rpmdb_for_target (::std::int32_t rootfs_dfd,
@@ -4177,16 +4174,6 @@ workaround_selinux_cross_labeling (::std::int32_t rootfs_dfd,
 {
   ::rust::repr::PtrLen error$
       = rpmostreecxx$cxxbridge1$workaround_selinux_cross_labeling (rootfs_dfd, cancellable);
-  if (error$.ptr)
-    {
-      throw ::rust::impl<::rust::Error>::error (error$);
-    }
-}
-
-void
-compose_postprocess_rpm_macro (::std::int32_t rootfs_dfd)
-{
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$compose_postprocess_rpm_macro (rootfs_dfd);
   if (error$.ptr)
     {
       throw ::rust::impl<::rust::Error>::error (error$);

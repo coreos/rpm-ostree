@@ -355,15 +355,8 @@ fn postprocess_devices(root: &Dir, treefile: &Treefile) -> Result<()> {
 }
 
 /// Write an RPM macro file to ensure the rpmdb path is set on the client side.
-pub fn compose_postprocess_rpm_macro(rootfs_dfd: i32) -> CxxResult<()> {
-    let rootfs = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
-    postprocess_rpm_macro(rootfs)?;
-    Ok(())
-}
-
-/// Ensure our own `_dbpath` macro exists in the tree.
 #[context("Writing _dbpath RPM macro")]
-fn postprocess_rpm_macro(rootfs_dfd: &Dir) -> Result<()> {
+fn compose_postprocess_rpm_macro(rootfs_dfd: &Dir) -> Result<()> {
     static RPM_MACROS_DIR: &str = "usr/lib/rpm/macros.d";
     static MACRO_FILENAME: &str = "macros.rpm-ostree";
     let mut db = cap_std::fs::DirBuilder::new();
@@ -464,11 +457,7 @@ pub(crate) fn postprocess_cleanup_rpmdb(rootfs_dfd: i32) -> CxxResult<()> {
 pub fn compose_postprocess_final_pre(rootfs_dfd: i32, treefile: &Treefile) -> CxxResult<()> {
     let rootfs_dfd = unsafe { &crate::ffiutil::ffi_dirfd(rootfs_dfd)? };
     // These tasks can safely run in parallel, so just for fun we do so via rayon.
-    let tasks = [
-        postprocess_useradd,
-        postprocess_subs_dist,
-        postprocess_rpm_macro,
-    ];
+    let tasks = [postprocess_useradd, postprocess_subs_dist];
     tasks.par_iter().try_for_each(|f| f(rootfs_dfd))?;
     // This task recursively traverses the filesystem and hence should be serial.
     postprocess_devices(rootfs_dfd, treefile)?;
@@ -694,6 +683,12 @@ fn compose_postprocess_rpmdb(rootfs_dfd: &Dir) -> Result<()> {
         format!("../../{}", RPMOSTREE_RPMDB_LOCATION),
         TRADITIONAL_RPMDB_LOCATION,
     )?;
+
+    // And write a symlink from the standard /usr/lib/sysimage/rpm
+    // to our /usr/share/rpm - eventually we will invert this.
+    rootfs_dfd.remove_all_optional(RPMOSTREE_SYSIMAGE_RPMDB)?;
+    rootfs_dfd.symlink("../../share/rpm", RPMOSTREE_SYSIMAGE_RPMDB)?;
+
     Ok(())
 }
 
@@ -739,6 +734,7 @@ pub fn compose_postprocess(
     }
 
     compose_postprocess_rpmdb(rootfs)?;
+    compose_postprocess_rpm_macro(rootfs)?;
     compose_postprocess_units(rootfs, treefile)?;
     if let Some(t) = treefile.parsed.base.default_target.as_deref() {
         compose_postprocess_default_target(rootfs, t)?;
@@ -1168,16 +1164,6 @@ fn hardlink_rpmdb_base_location(
         cancellable,
     )?;
 
-    // And write a symlink from the proposed standard /usr/lib/sysimage/rpm
-    // to our /usr/share/rpm - eventually we will invert this.
-
-    // Temporarily remove the directory if it exists until then.
-    // Also, delete a stamp file created by https://src.fedoraproject.org/rpms/rpm/c/391c3aeb66e8c2a0ac684580ac82c41d7da2128b?branch=rawhide
-    let stampfile = &Path::new(RPMOSTREE_SYSIMAGE_RPMDB).join(".rpmdbdirsymlink_created");
-    rootfs.remove_file_optional(stampfile)?;
-    rootfs.remove_all_optional(RPMOSTREE_SYSIMAGE_RPMDB)?;
-    rootfs.symlink("../../share/rpm", RPMOSTREE_SYSIMAGE_RPMDB)?;
-
     Ok(true)
 }
 
@@ -1566,17 +1552,15 @@ OSTREE_VERSION='33.4'
             .metadata(format!("{}/rpmdb.sqlite", RPMOSTREE_BASE_RPMDB))
             .unwrap();
         assert_eq!(rpmdb.is_file(), true);
-        let sysimage_link = rootfs.read_link(RPMOSTREE_SYSIMAGE_RPMDB).unwrap();
-        assert_eq!(&sysimage_link, Path::new("../../share/rpm"));
     }
 
     #[test]
-    fn test_postprocess_rpm_macro() {
+    fn test_compose_postprocess_rpm_macro() {
         static MACRO_PATH: &str = "usr/lib/rpm/macros.d/macros.rpm-ostree";
         let expected_content = format!("%_dbpath /{}\n", RPMOSTREE_RPMDB_LOCATION);
         let rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
         {
-            postprocess_rpm_macro(&rootfs).unwrap();
+            compose_postprocess_rpm_macro(&rootfs).unwrap();
 
             assert_eq!(rootfs.exists(MACRO_PATH), true);
             let macrofile = rootfs.metadata(MACRO_PATH).unwrap();
@@ -1587,7 +1571,7 @@ OSTREE_VERSION='33.4'
         }
         {
             // Re-run, check basic idempotency.
-            postprocess_rpm_macro(&rootfs).unwrap();
+            compose_postprocess_rpm_macro(&rootfs).unwrap();
 
             let content = rootfs.read_to_string(MACRO_PATH).unwrap();
             assert_eq!(content, expected_content);

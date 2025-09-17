@@ -1944,8 +1944,6 @@ void rootfs_prepare_links (::std::int32_t rootfs_dfd, ::rpmostreecxx::Treefile c
 void workaround_selinux_cross_labeling (::std::int32_t rootfs_dfd,
                                         ::rpmostreecxx::GCancellable &cancellable);
 
-void compose_postprocess_rpm_macro (::std::int32_t rootfs_dfd);
-
 void postprocess_cleanup_rpmdb (::std::int32_t rootfs_dfd);
 
 void rewrite_rpmdb_for_target (::std::int32_t rootfs_dfd, bool normalize);

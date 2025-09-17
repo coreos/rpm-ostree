@@ -626,9 +626,6 @@ rpmostree_rootfs_postprocess_common (int rootfs_fd, GCancellable *cancellable, G
         }
     }
 
-  /* Make sure there is an RPM macro in place pointing to the rpmdb in /usr */
-  ROSCXX_TRY (compose_postprocess_rpm_macro (rootfs_fd), error);
-
   CXX_TRY (rpmostreecxx::postprocess_cleanup_rpmdb (rootfs_fd), error);
 
   if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
