@@ -35,6 +35,11 @@ tf['repo-packages'] = [{
 
 treefile_set "postprocess" '["""#!/bin/bash
 set -euo pipefail
+[[ $(readlink /var/lib/rpm) == "../../usr/share/rpm" ]] && echo test-rpmdb-symlink-ok
+[[ $(readlink /usr/lib/sysimage/rpm) == "../../share/rpm" ]] && echo test-rpmdb-symlink-ok
+[[ $(cat /usr/lib/rpm/macros.d/macros.rpm-ostree) == "%_dbpath /usr/share/rpm" ]] && echo test-rpm-dbpath-ok
+[[ $(rpm -E '%_dbpath') == "/usr/share/rpm" ]] && echo test-rpm-dbpath-ok
+rpm -q rpm && echo test-rpm-q-ok
 echo postprocess-some-stdout-testing
 echo postprocess-some-stderr-testing 1>&2
 echo postprocess-more-stdout-testing
@@ -92,6 +97,7 @@ runcompose --add-metadata-from-json $(pwd)/metadata.json \
 cat compose.log
 assert_streq $(grep -cEe 'testpkg-(some|more)-(stdout|stderr)-testing' compose.log) 4
 assert_streq $(grep -cEe 'postprocess-(some|more)-(stdout|stderr)-testing' compose.log) 4
+assert_streq $(grep -cEe 'test-(rpmdb-symlink|rpm-dbpath|rpm-q)-ok' compose.log) 5
 
 # Run it again, but without RPMOSTREE_PRESERVE_TMPDIR. Should be a no-op. This
 # exercises fd handling in the tree context.
