@@ -9,16 +9,28 @@ use fn_error_context::context;
 
 use crate::cmdutils::CommandRunExt;
 
-/// Ensure that we're in a new user+mountns, so that "buildah mount"
-/// will work reliably.
+/// Ensure that we're in a new user+mountns, so that "podman mount"
+/// and container storage operations will work reliably.
 /// https://github.com/containers/buildah/issues/5976
-#[allow(dead_code)]
 pub(crate) fn reexec_if_needed() -> Result<()> {
-    if ostree_ext::container_utils::running_in_container() {
+    use rustix::thread::{capability_is_in_bounding_set, Capability};
+    if crate::client::running_in_container()
+        && !capability_is_in_bounding_set(Capability::SystemAdmin)?
+    {
         crate::reexec::reexec_with_guardenv(
             "_RPMOSTREE_REEXEC_USERNS",
-            &["unshare", "-U", "-m", "--map-root-user", "--keep-caps"],
+            &[
+                "unshare",
+                "-U",
+                "-m",
+                "--map-root-user",
+                "--map-users=auto",
+                "--map-groups=auto",
+                "--keep-caps",
+            ],
         )
+    } else if !rustix::process::geteuid().is_root() {
+        crate::reexec::reexec_with_guardenv("_RPMOSTREE_REEXEC_USERNS", &["podman", "unshare"])
     } else {
         Ok(())
     }

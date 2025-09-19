@@ -286,6 +286,9 @@ impl BuildChunkedOCIOpts {
             Podman(Mount),
         }
 
+        // Ensure we're in the proper namespace for container operations
+        crate::containers_storage::reexec_if_needed()?;
+
         let existing_manifest = self.check_existing_image(&self.output)?;
 
         let rootfs_source = if let Some(rootfs) = self.rootfs {
