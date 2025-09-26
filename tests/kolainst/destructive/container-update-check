@@ -84,11 +84,12 @@ EOF
   systemctl mask --now zincati
   ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}" --label ostree.bootable=TRUE
 
+  echo "Preparing an update"
   skopeo copy $image containers-storage:localhost/fcos
-    rm "${image_dir}" -rf
-    td=$(mktemp -d)
-    cd ${td}
-cat > Containerfile << EOF
+  rm "${image_dir}" -rf
+  td=$(mktemp -d)
+  cd ${td}
+  cat > Containerfile << EOF
 FROM localhost/fcos
 RUN rpm-ostree install man
 LABEL org.opencontainers.image.version 2
@@ -106,6 +107,7 @@ EOF
     rm -vf /etc/resolv.conf
   fi
 
+  echo "Test that updates are properly found"
   rpm-ostree upgrade --check > out.txt
   assert_file_has_content_literal out.txt 'AvailableUpdate:'
   assert_file_has_content_literal out.txt 'Total layers:'
@@ -113,6 +115,7 @@ EOF
   assert_file_has_content_literal out.txt 'Removed layers:'
   assert_file_has_content_literal out.txt 'Added layers:'
 
+  echo "Test that updates are properly cached"
   rpm-ostree status --json | jq '."cached-update"' > out.txt
   assert_file_has_content_literal out.txt '"n-added":'
   assert_file_has_content_literal out.txt '"n-removed":'
@@ -121,6 +124,71 @@ EOF
   assert_file_has_content_literal out.txt '"total":'
   assert_file_has_content_literal out.txt '"added-size":'
   assert_file_has_content_literal out.txt '"version": "2"'
+  assert_file_has_content_literal out.txt '"origin": "ostree-unverified-image:containers-storage:localhost/fcos-derived"'
+
+  echo "Test that staged updates are properly reported"
+  rpm-ostree upgrade
+  rpm-ostree status --json | jq '."cached-update"' > out.txt
+  assert_file_has_content_literal out.txt '"n-added":'
+  assert_file_has_content_literal out.txt '"n-removed":'
+  assert_file_has_content_literal out.txt '"removed-size":'
+  assert_file_has_content_literal out.txt '"total-size":'
+  assert_file_has_content_literal out.txt '"total":'
+  assert_file_has_content_literal out.txt '"added-size":'
+  assert_file_has_content_literal out.txt '"version": "2"'
+  assert_file_has_content_literal out.txt '"origin": "ostree-unverified-image:containers-storage:localhost/fcos-derived"'
+
+  echo "Prepare a second update"
+  rm "${image_dir}" -rf
+  td=$(mktemp -d)
+  cd ${td}
+  cat > Containerfile << EOF
+FROM localhost/fcos
+RUN touch /usr/foo
+LABEL org.opencontainers.image.version 3
+EOF
+
+  touched_resolv_conf=0
+  if test '!' -f /etc/resolv.conf; then
+    podmanv=$(podman --version)
+    case "${podmanv#podman version }" in
+      3.*) touched_resolv_conf=1; touch /etc/resolv.conf;;
+    esac
+  fi
+  podman build --net=host -t localhost/fcos-derived --squash .
+  if test "${touched_resolv_conf}" -eq 1; then
+    rm -vf /etc/resolv.conf
+  fi
+
+  echo "Test that a further update is properly found if there is already a staged update"
+  rpm-ostree upgrade --check > out.txt
+  assert_file_has_content_literal out.txt 'AvailableUpdate:'
+  assert_file_has_content_literal out.txt 'Total layers:'
+  assert_file_has_content_literal out.txt 'Size:'
+  assert_file_has_content_literal out.txt 'Removed layers:'
+  assert_file_has_content_literal out.txt 'Added layers:'
+
+  echo "Test that a further update is properly cached if there is already a staged update"
+  rpm-ostree status --json | jq '."cached-update"' > out.txt
+  assert_file_has_content_literal out.txt '"n-added":'
+  assert_file_has_content_literal out.txt '"n-removed":'
+  assert_file_has_content_literal out.txt '"removed-size":'
+  assert_file_has_content_literal out.txt '"total-size":'
+  assert_file_has_content_literal out.txt '"total":'
+  assert_file_has_content_literal out.txt '"added-size":'
+  assert_file_has_content_literal out.txt '"version": "3"'
+  assert_file_has_content_literal out.txt '"origin": "ostree-unverified-image:containers-storage:localhost/fcos-derived"'
+
+  echo "Test that staged updates versions are properly reported accross rpm-ostreed daemon restarts"
+  sudo systemctl restart rpm-ostreed.service
+  rpm-ostree status --json | jq '."cached-update"' > out.txt
+  assert_file_has_content_literal out.txt '"n-added":'
+  assert_file_has_content_literal out.txt '"n-removed":'
+  assert_file_has_content_literal out.txt '"removed-size":'
+  assert_file_has_content_literal out.txt '"total-size":'
+  assert_file_has_content_literal out.txt '"total":'
+  assert_file_has_content_literal out.txt '"added-size":'
+  assert_file_has_content_literal out.txt '"version": "3"'
   assert_file_has_content_literal out.txt '"origin": "ostree-unverified-image:containers-storage:localhost/fcos-derived"'
 
 esac
