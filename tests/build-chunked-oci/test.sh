@@ -317,4 +317,29 @@ podman run --rm --privileged --security-opt=label=disable \
 test -f test-archive
 echo "ok oci-archive output"
 
+echo "Testing signatures"
+
+# Generate private key in PEM format
+openssl genpkey -algorithm ed25519 -outform PEM -out ed25519.pem
+PUBLIC="$(openssl pkey -outform DER -pubout -in ed25519.pem | tail -c 32 | base64)"
+SEED="$(openssl pkey -outform DER -in ed25519.pem | tail -c 32 | base64)"
+echo ${SEED}${PUBLIC} | base64 -d | base64 -w 0 > secret.key
+
+podman run --rm --privileged --security-opt=label=disable \
+  -v /var/lib/containers:/var/lib/containers \
+  -v /var/tmp:/var/tmp \
+  -v "$(pwd)":/output \
+  localhost/builder rpm-ostree compose build-chunked-oci --sign-commit=ed25519=/output/secret.key --bootc --from localhost/base --output containers-storage:localhost/signed
+
+podman run --rm -ti localhost/signed ostree show --list-detached-metadata-keys  "" > detached-metadata-keys
+if ! grep -q ostree.sign.ed25519 detached-metadata-keys; then
+    echo "ERROR: Signing was requested in the chunked image, but no signature is found"
+    exit 1
+fi
+
+podman rmi localhost/signed
+
+echo "ok signatures"
+
+
 podman rmi -f localhost/base

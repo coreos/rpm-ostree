@@ -22,10 +22,10 @@ use fn_error_context::context;
 use oci_spec::image::ImageManifest;
 use ostree::gio;
 use ostree_ext::containers_image_proxy;
-use ostree_ext::glib::prelude::*;
 use ostree_ext::keyfileext::{map_keyfile_optional, KeyFileExt};
 use ostree_ext::oci_spec::image::ImageConfiguration;
 use ostree_ext::ostree::MutableTree;
+use ostree_ext::prelude::*;
 use ostree_ext::{container as ostree_container, glib};
 use ostree_ext::{oci_spec, ostree};
 
@@ -213,6 +213,12 @@ pub(crate) struct BuildChunkedOCIOpts {
     #[clap(long, default_value_t = 1)]
     format_version: u32,
 
+    /// Sign the embedded ostree commit with the specified private
+    /// key.  The key is specified as <KEYTYPE>=/path/to/key.
+    /// Supported KEYTYPEs are ed25519 and spki.
+    #[clap(name = "sign-commit", long)]
+    sign_commits: Vec<String>,
+
     #[clap(long)]
     /// Maximum number of layers to use. The default value of 64 is chosen to
     /// balance splitting up an image into sufficient chunks versus
@@ -287,6 +293,25 @@ fn commit_has_composefs_digest(repo: &ostree::Repo, commit: &str) -> Result<bool
     let commitmeta = commitv.child_value(0);
     let commitmeta = &glib::VariantDict::new(Some(&commitmeta));
     return Ok(commitmeta.contains(OSTREE_COMPOSEFS_DIGEST_V0_KEY));
+}
+
+fn repo_sign_commit(repo: &ostree::Repo, commit: &str, sign_arg: &str) -> Result<()> {
+    let (name, path) = sign_arg
+        .split_once('=')
+        .ok_or_else(|| anyhow::anyhow!("Missing '=' --sign-commit arg {sign_arg}"))?;
+
+    let sign = ostree::Sign::by_name(name)?;
+
+    let file = gio::File::for_path(Path::new(path));
+    let input = file.read(gio::Cancellable::NONE)?;
+    let reader = sign.read_sk(&input);
+    while let Some(bytes) = reader.read_blob(gio::Cancellable::NONE)? {
+        let sk = glib::Variant::from_bytes::<&[u8]>(&bytes);
+        sign.set_sk(&sk)?;
+        sign.commit(repo, commit, gio::Cancellable::NONE)?;
+    }
+
+    Ok(())
 }
 
 impl BuildChunkedOCIOpts {
@@ -383,6 +408,9 @@ impl BuildChunkedOCIOpts {
             creation_timestamp.as_ref(),
             add_composefs_digest,
         )?;
+        for sign_arg in &self.sign_commits {
+            repo_sign_commit(&repo, &commitid, &sign_arg)?;
+        }
 
         let bootc_label_arg = self
             .bootc
