@@ -87,6 +87,18 @@ compare_image_contents localhost/base localhost/chunked
 # This will have nondeterministic mtimes creep in
 test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt @0 | wc -l)" -gt 0
 
+# Verify composefs digest propagation, if base has it
+podman run --rm -ti localhost/base ostree show --list-metadata-keys "" > base-metadata-keys
+if grep -q ostree.composefs.digest.v1 orig-metadata-keys; then
+    echo "Testing composefs digest propagation"
+    podman run --rm -ti localhost/chunked ostree show --list-metadata-keys "" > chunked-metadata-keys
+    if ! grep -q ostree.composefs.digest.v1 base-metadata-keys; then
+       echo "ERROR: Base image has composfs digest, but it is missing from chunked image"
+       exit 1
+    fi
+    echo "ok composefs digest propagation"
+fi
+
 # Build a rechunked image with --format-version=2
 podman rmi localhost/chunked
 podman run --rm --privileged --security-opt=label=disable \
