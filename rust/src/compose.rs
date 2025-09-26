@@ -35,6 +35,8 @@ use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::isolation::self_command;
 use crate::{RPMOSTREE_RPMDB_LOCATION, RPMOSTREE_SYSIMAGE_RPMDB};
 
+const OSTREE_COMPOSEFS_DIGEST_V0_KEY: &str = "ostree.composefs.digest.v0";
+
 const SYSROOT: &str = "sysroot";
 const USR: &str = "usr";
 const ETC: &str = "etc";
@@ -279,6 +281,14 @@ pub(crate) struct CommitToContainerRootfsOpts {
     dest: Utf8PathBuf,
 }
 
+#[context("Checking commit composefs digest")]
+fn commit_has_composefs_digest(repo: &ostree::Repo, commit: &str) -> Result<bool> {
+    let commitv = repo.load_commit(&commit)?.0;
+    let commitmeta = commitv.child_value(0);
+    let commitmeta = &glib::VariantDict::new(Some(&commitmeta));
+    return Ok(commitmeta.contains(OSTREE_COMPOSEFS_DIGEST_V0_KEY));
+}
+
 impl BuildChunkedOCIOpts {
     pub(crate) fn run(self) -> Result<()> {
         enum FileSource {
@@ -340,6 +350,17 @@ impl BuildChunkedOCIOpts {
             .map(chrono::DateTime::parse_from_rfc3339)
             .transpose()?;
 
+        // If the base ostree commit has compopsefs digests enables, add them in the new commit
+        let add_composefs_digest = if let Some(base_commit) = image_config
+            .labels_of_config()
+            .and_then(|m| m.get(ostree_container::OSTREE_COMMIT_LABEL))
+        {
+            let image_repo = ostree::Repo::open_at_dir(rootfs.as_fd(), "sysroot/ostree/repo")?;
+            commit_has_composefs_digest(&image_repo, base_commit)?
+        } else {
+            false
+        };
+
         // Allocate a working temporary directory
         let td = tempfile::tempdir_in("/var/tmp")?;
 
@@ -358,8 +379,13 @@ impl BuildChunkedOCIOpts {
         let modifier =
             ostree::RepoCommitModifier::new(ostree::RepoCommitModifierFlags::empty(), None);
         // Process the filesystem, generating an ostree commit
-        let commitid =
-            generate_commit_from_rootfs(&repo, &rootfs, modifier, creation_timestamp.as_ref())?;
+        let commitid = generate_commit_from_rootfs(
+            &repo,
+            &rootfs,
+            modifier,
+            creation_timestamp.as_ref(),
+            add_composefs_digest,
+        )?;
 
         let bootc_label_arg = self
             .bootc
@@ -1007,6 +1033,7 @@ fn generate_commit_from_rootfs(
     rootfs: &Dir,
     modifier: ostree::RepoCommitModifier,
     creation_time: Option<&chrono::DateTime<chrono::FixedOffset>>,
+    add_composefs_digest: bool,
 ) -> Result<String> {
     let root_mtree = ostree::MutableTree::new();
     let cancellable = gio::Cancellable::NONE;
@@ -1075,11 +1102,17 @@ fn generate_commit_from_rootfs(
         .unwrap_or_default()
         .try_into()
         .context("Parsing creation time")?;
+
+    let mut commitmeta = glib::VariantDict::new(None);
+    if add_composefs_digest {
+        repo.commit_add_composefs_metadata(0, &mut commitmeta, ostree_root, cancellable)?;
+    }
+
     let commit = repo.write_commit_with_time(
         None,
         None,
         None,
-        None,
+        Some(&commitmeta.end()),
         ostree_root,
         creation_time,
         cancellable,
@@ -1441,7 +1474,7 @@ mod tests {
             Some(Box::new(commit_filter)),
         );
 
-        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone(), None).unwrap();
+        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone(), None, false).unwrap();
         // Verify there are zero children
         let commit_root = repo.read_commit(&commit, cancellable)?.0;
         {
@@ -1476,7 +1509,7 @@ mod tests {
         )?;
 
         let ts = chrono::DateTime::parse_from_rfc2822("Fri, 29 Aug 1997 10:30:42 PST").unwrap();
-        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone(), Some(&ts)).unwrap();
+        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone(), Some(&ts), false).unwrap();
         assert_eq!(
             commit,
             "1423c43d7b76207dc86b357a4834fcea444fcb2ee3a81541fbfbd52a85e05bc3"
