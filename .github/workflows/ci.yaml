@@ -3,9 +3,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [rhel9]
   pull_request:
-    branches: [main]
+    branches: [rhel9]
 
 permissions:
   contents: read
@@ -20,14 +20,22 @@ env:
 jobs:
   build:
     name: "Build"
-    runs-on: ubuntu-latest
-    container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
+    runs-on: ubuntu-24.04
+    container: quay.io/centos-bootc/centos-bootc:stream9
     steps:
+      - name: Install git and clang-format
+        run: dnf -y install git clang-tools-extra
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          submodules: true
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Run ridiculous RHEL -devel package workaround
+        run: ./ci/ridiculous-rhel-devel-workaround.sh
+      - name: Install dependencies
+        run: ./ci/installdeps.sh
       - name: Codestyle
         run: ./ci/codestyle.sh
       - name: Build
@@ -43,18 +51,22 @@ jobs:
     name: "Build Integration Test Data"
     runs-on: ubuntu-latest
     container:
-      image: quay.io/coreos-assembler/fcos-buildroot:testing-devel
+      image: quay.io/centos-bootc/centos-bootc:stream9
       # Run privileged to hack around createrepo_c hitting the classic seccomp
       # broken behaviour of returning EPERM instead of ENOSYS. We should be able
       # to drop this once `ubuntu-latest` is bumped to include the fix for
       # https://github.com/opencontainers/runc/issues/2151.
       options: "--user root --privileged"
     steps:
+      - name: Install git
+        run: dnf -y install git
       - name: Checkout repository
         uses: actions/checkout@v3
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install test dependencies
+        run: ./ci/install-test-deps.sh
       - name: Build
         run: make -C tests/kolainst && make -C tests/kolainst install DESTDIR=$(pwd)/install && tar -C install -czf tests.tar .
       - name: Upload binary
@@ -65,57 +77,24 @@ jobs:
   cxx-verify:
     name: "Verify CXX generation"
     runs-on: ubuntu-latest
-    container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
+    container: quay.io/centos-bootc/centos-bootc:stream9
     steps:
+      - name: Install git
+        run: dnf -y install git
       - name: Checkout repository
         uses: actions/checkout@v3
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install CXX verification dependencies
+        run: dnf -y install rust cargo jq clang-tools-extra make
       - name: Codestyle
         run: ./ci/verify-cxx.sh
-  # TODO: Enable this once we've switched closer to having `cargo build`
-  # be the primary buildsystem entrypoint.  Right now the problem is
-  # in order to build the libdnf-sys dependency it relies on us having
-  # run through autoconf, but that flow wants to a "real" Rust build
-  # and not clippy.
-  # linting:
-  #   name: "Lints, pinned toolchain"
-  #   runs-on: ubuntu-latest
-  #   container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v3
-  #     - name: Install dependencies
-  #       run: ./ci/installdeps.sh
-  #     - name: Remove system Rust toolchain
-  #       run: dnf remove -y rust cargo
-  #     - name: Install toolchain
-  #       uses: dtolnay/rust-toolchain@v1
-  #       with:
-  #         toolchain: ${{ env['ACTION_LINTS_TOOLCHAIN']  }}
-  #         components: rustfmt, clippy
-  #     - name: cargo fmt (check)
-  #       run: cargo fmt -- --check -l
-  #     - name: cargo clippy (warnings)
-  #       run: cargo clippy -- -D warnings
-  #build-clang:
-  #  name: "Build (clang)"
-  #  runs-on: ubuntu-latest
-  #  container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
-  #  steps:
-  #    - name: Checkout repository
-  #      uses: actions/checkout@v3
-  #    # https://github.com/actions/checkout/issues/760
-  #    - name: Mark git checkout as safe
-  #      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-  #    - name: Build
-  #      run: ./ci/clang-build-check.sh
   integration:
     name: "Container Integration"
     needs: [build, build-tests]
     runs-on: ubuntu-latest
-    container: quay.io/fedora/fedora-coreos:testing-devel
+    container: quay.io/centos-bootc/centos-bootc:stream9
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -251,7 +230,7 @@ jobs:
         run: env TMPDIR=/var/tmp ./tests/encapsulate.sh
   test-build-chunked-oci:
     name: "build-chunked-oci tests"
-    needs: build-c9s
+    needs: build
     runs-on: ubuntu-24.04
     steps:
       # https://github.com/containers/podman/discussions/17362
@@ -268,7 +247,7 @@ jobs:
       - name: Download build
         uses: actions/download-artifact@v4.1.7
         with:
-          name: install-c9s.tar
+          name: install.tar
       - name: Integration tests
         run: |
           set -xeuo pipefail
@@ -276,33 +255,6 @@ jobs:
           tar -xzvf ../../install.tar
           sudo podman build -v $(pwd)/usr/bin:/ci -t localhost/builder -f Containerfile.builder
           sudo ./test.sh
-  build-c9s:
-    name: "Build (c9s)"
-    runs-on: ubuntu-latest
-    container: quay.io/centos/centos:stream9
-    steps:
-      - name: Install git
-        run: yum -y install git
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          submodules: true
-      # https://github.com/actions/checkout/issues/760
-      - name: Mark git checkout as safe
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Run ridiculous RHEL -devel package workaround
-        run: ./ci/ridiculous-rhel-devel-workaround.sh
-      - name: Install dependencies
-        run: ./ci/installdeps.sh
-      - name: Build
-        run: ./ci/build.sh && make install DESTDIR=$(pwd)/install && tar -C install -czf install.tar .
-      - name: Unit tests
-        run: cargo test
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: install-c9s.tar
-          path: install.tar
   # Doc: https://github.com/redhat-plumbers-in-action/differential-shellcheck#usage
   differential-shellcheck:
     name: Differential ShellCheck

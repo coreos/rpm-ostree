@@ -19,5 +19,7 @@ if [ -z "${SKIP_INSTALLDEPS:-}" ] && test $(id -u) -eq 0; then
     fi
 fi
 
+pkg_install rustfmt
+
 mkdir -p target
 time cargo install --locked --root=target/cargo-vendor-filterer cargo-vendor-filterer --version ^0.5
