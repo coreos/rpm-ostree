@@ -254,6 +254,10 @@ jobs:
     needs: build-c9s
     runs-on: ubuntu-24.04
     steps:
+      - name: Reclaim disk space
+        run: |
+          set -euxo pipefail
+          rm -rf "/run/host/usr/local/lib/android"
       # https://github.com/containers/podman/discussions/17362
       - name: Get a newer podman for heredoc support (from debian testing)
         run: |
