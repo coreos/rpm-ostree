@@ -90,28 +90,29 @@ jobs:
         run: dnf -y install rust cargo jq clang-tools-extra make
       - name: Codestyle
         run: ./ci/verify-cxx.sh
-  integration:
-    name: "Container Integration"
-    needs: [build, build-tests]
-    runs-on: ubuntu-latest
-    container: quay.io/centos-bootc/centos-bootc:stream9
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Download build
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar && rm -f install.tar
-      - name: Download tests
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: tests.tar
-      - name: Install Tests
-        run: tar -C / -xzvf tests.tar && rm -f tests.tar
-      - name: Integration tests
-        run: ./ci/test-container.sh
+  # TODO: enable for c9s
+  # integration:
+  #   name: "Container Integration"
+  #   needs: [build, build-tests]
+  #   runs-on: ubuntu-latest
+  #   container: quay.io/centos-bootc/centos-bootc:stream9
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Download build
+  #       uses: actions/download-artifact@v4.1.7
+  #       with:
+  #         name: install.tar
+  #     - name: Install
+  #       run: tar -C / -xzvf install.tar && rm -f install.tar
+  #     - name: Download tests
+  #       uses: actions/download-artifact@v4.1.7
+  #       with:
+  #         name: tests.tar
+  #     - name: Install Tests
+  #       run: tar -C / -xzvf tests.tar && rm -f tests.tar
+  #     - name: Integration tests
+  #       run: ./ci/test-container.sh
   # Try to keep this in sync with https://github.com/ostreedev/ostree-rs-ext/blob/1fc115a760eeada22599e0f57026f58b22efded4/.github/workflows/rust.yml#L163
   container-build:
     name: "Container build"
@@ -141,122 +142,127 @@ jobs:
       with:
         log-level: warn
         command: check bans sources licenses
-  compose:
-    name: "Compose tests"
-    needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
-      options: "--user root --privileged -v /var/tmp:/var/tmp"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Install test dependencies
-        run: ./ci/install-test-deps.sh
-      - name: Download build
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar
-      - name: Integration tests
-        run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh
-  compose-image:
-    name: "compose-image tests"
-    needs: build
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        RELEASE: ['42']
-    container:
-      image: quay.io/centos/centos-bootc:stream9
-      options: "--user root --privileged -v /var/tmp:/var/tmp"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Install test dependencies
-        run: ./ci/install-test-deps.sh
-      - name: Download build
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar
-      - name: Integration tests
-        run: env TMPDIR=/var/tmp JOBS=3 RELEASE=${RELEASE} ./tests/compose-image.sh
-        env:
-          RELEASE: ${{ matrix.RELEASE }}
-  compose-rootfs:
-    name: "compose-rootfs tests"
-    needs: build
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-      - name: Bootc Ubuntu Setup
-        uses: ./.github/actions/bootc-ubuntu-setup
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Download build
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: install.tar
-      - name: Test compose-rootfs
-        run: |
-          cd tests/compose-rootfs
-          tar -xzvf ../../install.tar
-          sudo podman build -v $(pwd)/usr/bin/rpm-ostree:/run/build/rpm-ostree:ro --security-opt=label=disable --cap-add=all --device /dev/fuse -t localhost/test -f Containerfile .
-  container-encapsulate:
-    name: "Encapsulate tests"
-    needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
-      options: "--user root --privileged -v /var/tmp:/var/tmp"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Download build
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: install.tar
-      - name: Install
-        run: tar -C / -xzvf install.tar
-      - name: Integration tests
-        run: env TMPDIR=/var/tmp ./tests/encapsulate.sh
-  test-build-chunked-oci:
-    name: "build-chunked-oci tests"
-    needs: build
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-      - name: Bootc Ubuntu Setup
-        uses: ./.github/actions/bootc-ubuntu-setup
-      - name: Unprivileged tests
-        run: |
-          set -xeuo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fuse-overlayfs
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          podman build -v $(pwd):/src -t localhost/buildah -f tests/build-chunked-oci/Containerfile.buildah .
-          podman run --rm --device=/dev/fuse localhost/buildah /test-buildah.sh
-      - name: Download build
-        uses: actions/download-artifact@v4.1.7
-        with:
-          name: install.tar
-      - name: Integration tests
-        run: |
-          set -xeuo pipefail
-          cd tests/build-chunked-oci
-          tar -xzvf ../../install.tar
-          sudo podman build -v $(pwd)/usr/bin:/ci -t localhost/builder -f Containerfile.builder
-          sudo ./test.sh
+  # TODO: enable for c9s
+  # compose:
+  #   name: "Compose tests"
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+  #     options: "--user root --privileged -v /var/tmp:/var/tmp"
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Install test dependencies
+  #       run: ./ci/install-test-deps.sh
+  #     - name: Download build
+  #       uses: actions/download-artifact@v4.1.7
+  #       with:
+  #         name: install.tar
+  #     - name: Install
+  #       run: tar -C / -xzvf install.tar
+  #     - name: Integration tests
+  #       run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh
+  # TODO: enable for c9s
+  # compose-image:
+  #   name: "compose-image tests"
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       RELEASE: ['42']
+  #   container:
+  #     image: quay.io/centos-bootc/centos-bootc:stream9
+  #     options: "--user root --privileged -v /var/tmp:/var/tmp"
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Install test dependencies
+  #       run: ./ci/install-test-deps.sh
+  #     - name: Download build
+  #       uses: actions/download-artifact@v4.1.7
+  #       with:
+  #         name: install.tar
+  #     - name: Install
+  #       run: tar -C / -xzvf install.tar
+  #     - name: Integration tests
+  #       run: env TMPDIR=/var/tmp JOBS=3 RELEASE=${RELEASE} ./tests/compose-image.sh
+  #       env:
+  #         RELEASE: ${{ matrix.RELEASE }}
+  # TODO: enable for c9s
+  # compose-rootfs:
+  #   name: "compose-rootfs tests"
+  #   needs: build
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         submodules: true
+  #     - name: Bootc Ubuntu Setup
+  #       uses: ./.github/actions/bootc-ubuntu-setup
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Download build
+  #       uses: actions/download-artifact@v4.1.7
+  #       with:
+  #         name: install.tar
+  #     - name: Test compose-rootfs
+  #       run: |
+  #         cd tests/compose-rootfs
+  #         tar -xzvf ../../install.tar
+  #         sudo podman build -v $(pwd)/usr/bin/rpm-ostree:/run/build/rpm-ostree:ro --security-opt=label=disable --cap-add=all --device /dev/fuse -t localhost/test -f Containerfile .
+  # TODO: enable for c9s
+  # container-encapsulate:
+  #   name: "Encapsulate tests"
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   container:
+  #     image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+  #     options: "--user root --privileged -v /var/tmp:/var/tmp"
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v3
+  #     - name: Download build
+  #       uses: actions/download-artifact@v4.1.7
+  #       with:
+  #         name: install.tar
+  #     - name: Install
+  #       run: tar -C / -xzvf install.tar
+  #     - name: Integration tests
+  #       run: env TMPDIR=/var/tmp ./tests/encapsulate.sh
+  # TODO: enable for c9s
+  # test-build-chunked-oci:
+  #   name: "build-chunked-oci tests"
+  #   needs: build
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         submodules: true
+  #     - name: Bootc Ubuntu Setup
+  #       uses: ./.github/actions/bootc-ubuntu-setup
+  #     - name: Unprivileged tests
+  #       run: |
+  #         set -xeuo pipefail
+  #         sudo apt-get update
+  #         sudo apt-get install -y fuse-overlayfs
+  #         git config --global --add safe.directory "$GITHUB_WORKSPACE"
+  #         podman build -v $(pwd):/src -t localhost/buildah -f tests/build-chunked-oci/Containerfile.buildah .
+  #         podman run --rm --device=/dev/fuse localhost/buildah /test-buildah.sh
+  #     - name: Download build
+  #       uses: actions/download-artifact@v4.1.7
+  #       with:
+  #         name: install.tar
+  #     - name: Integration tests
+  #       run: |
+  #         set -xeuo pipefail
+  #         cd tests/build-chunked-oci
+  #         tar -xzvf ../../install.tar
+  #         sudo podman build -v $(pwd)/usr/bin:/ci -t localhost/builder -f Containerfile.builder
+  #         sudo ./test.sh
   # Doc: https://github.com/redhat-plumbers-in-action/differential-shellcheck#usage
   differential-shellcheck:
     name: Differential ShellCheck

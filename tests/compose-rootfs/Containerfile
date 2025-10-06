@@ -2,7 +2,7 @@
 FROM quay.io/centos/centos:stream10 as repos
 
 # You must run this build with `-v /path/to/rpm-ostree:/run/build/rpm-ostree:ro`
-FROM quay.io/fedora/fedora-bootc:41 as builder
+FROM quay.io/centos-bootc/centos-bootc:stream9 as builder
 RUN <<EORUN
 set -xeuo pipefail
 # Our goal here though is to test the updated rpm-ostree binary.
