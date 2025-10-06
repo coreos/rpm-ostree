@@ -111,6 +111,7 @@ podman run --rm containers-storage:localhost/chunked rpm -q vim-enhanced git-cor
 
 # Cleanup temporary files
 rm -f "$original_layers_file" "$rechunked_layers_file" "$rechunk_output"
+podman rmi -f localhost/modified localhost/chunked
 
 echo "ok chunked image base detection and reuse"
 
@@ -231,6 +232,10 @@ verify_layer_contents "dir4" "$expected_dir4" "$image_manifest"
 verify_layer_contents "dir4fileB" "$expected_dir4fileB" "$image_manifest"
 
 echo "ok exclusive layers functionality"
+
+# Cleanup
+podman rmi -f localhost/chunked localhost/modified localhost/exclusive-test localhost/exclusive-chunked
+rm -rf "${oci_dir}"
 
 echo "Testing oci-archive output"
 podman run --rm --privileged --security-opt=label=disable \
