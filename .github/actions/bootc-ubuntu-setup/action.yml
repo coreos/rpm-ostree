@@ -1,0 +1,49 @@
+# Keep this in sync with the copy in bootc-dev/bootc
+name: 'Bootc Ubuntu Setup'
+description: 'Default host setup'
+runs:
+  using: 'composite'
+  steps:
+    # We really want support for heredocs
+    - name: Update podman and install just
+      shell: bash
+      run: |
+        set -eux
+        # Require the runner is ubuntu-24.04
+        IDV=$(. /usr/lib/os-release && echo ${ID}-${VERSION_ID})
+        test "${IDV}" = "ubuntu-24.04"
+        # plucky is the next release
+        echo 'deb http://azure.archive.ubuntu.com/ubuntu plucky universe main' | sudo tee /etc/apt/sources.list.d/plucky.list
+        sudo apt update
+        # skopeo is currently older in plucky for some reason hence --allow-downgrades
+        sudo apt install -y --allow-downgrades crun/plucky podman/plucky skopeo/plucky just
+    # The default runners have TONS of crud on them...
+    - name: Free up disk space on runner
+      shell: bash
+      run: |
+        sudo df -h
+        unwanted=('^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' 'php.*' '^mongodb-.*' '^mysql-.*'
+                  azure-cli google-chrome-stable firefox mono-devel)
+        for x in ${unwanted[@]}; do
+          sudo apt-get remove -y $x > /dev/null
+        done
+        # Start other removal operations in parallel
+        sudo docker image prune --all --force > /dev/null &
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android &
+        # Wait for all background processes to complete
+        wait
+        sudo df -h
+    # This is the default on e.g. Fedora derivatives, but not Debian
+    - name: Enable unprivileged /dev/kvm access
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        ls -l /dev/kvm
+    # Used by a few workflows, but generally useful
+    - name: Set architecture variable
+      id: set_arch
+      shell: bash
+      run: echo "ARCH=$(arch)" >> $GITHUB_ENV
+
