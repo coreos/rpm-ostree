@@ -166,9 +166,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        RELEASE: ['40', '41', '42']
+        RELEASE: ['42']
     container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+      image: quay.io/centos/centos-bootc:stream9
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
