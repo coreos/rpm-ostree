@@ -14,9 +14,9 @@ for example in "${examples[@]}"; do
     sed -ie 's,^\(FROM .*\),\1\nADD usr/ /usr/,' Containerfile
     git diff
 
-    # Our built binaries are using testing-devel, which might be a different
-    # Fedora major version for example
-    podman build --from quay.io/fedora/fedora-coreos:testing-devel -t localhost/fcos-$example .
+    # Our built binaries are using c9s, which might be a different
+    # version than the examples expect
+    podman build --from quay.io/centos-bootc/centos-bootc:stream9 -t localhost/fcos-$example .
     cd ${workdir}
 done
 
