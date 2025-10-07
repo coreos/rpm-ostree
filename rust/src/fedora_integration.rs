@@ -36,7 +36,7 @@ mod bodhi {
         update: BodhiUpdate,
     }
 
-    pub(crate) fn canonicalize_update_id(id: &str) -> Cow<str> {
+    pub(crate) fn canonicalize_update_id(id: &str) -> Cow<'_, str> {
         let id = match id.strip_prefix(BODHI_URL_PREFIX) {
             Some(s) => return Cow::Borrowed(s),
             None => id,
