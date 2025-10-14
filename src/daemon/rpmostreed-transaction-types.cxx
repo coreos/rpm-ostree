@@ -1243,11 +1243,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
             return FALSE;
         }
 
+      g_autoptr (GPtrArray) filtered_pkgs = g_ptr_array_new_with_free_func (g_free);
       for (char **it = install_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
           g_autoptr (GPtrArray) pkgs = rpmostree_get_matching_packages (base_rsack->sack, pkg);
-          if (pkgs->len > 0 && !allow_inactive)
+          if (pkgs->len > 0 && !allow_inactive && !idempotent_layering)
             {
               g_autoptr (GString) pkgnames = g_string_new ("");
               for (guint i = 0; i < pkgs->len; i++)
@@ -1261,11 +1262,20 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
                                  "require it.",
                                  pkg, pkgnames->str);
             }
+          /* When idempotent_layering is set, skip packages already in base */
+          if (pkgs->len > 0 && idempotent_layering)
+            continue;
+
+          g_ptr_array_add (filtered_pkgs, g_strdup (pkg));
         }
 
-      auto pkgsv = util::rust_stringvec_from_strv (install_pkgs);
-      if (!rpmostree_origin_add_packages (origin, pkgsv, idempotent_layering, &changed, error))
-        return FALSE;
+      if (filtered_pkgs->len > 0)
+        {
+          g_ptr_array_add (filtered_pkgs, NULL);
+          auto pkgsv = util::rust_stringvec_from_strv ((char **)filtered_pkgs->pdata);
+          if (!rpmostree_origin_add_packages (origin, pkgsv, idempotent_layering, &changed, error))
+            return FALSE;
+        }
     }
 
   if (install_local_pkgs != NULL)
