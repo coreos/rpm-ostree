@@ -1,6 +1,53 @@
 #!/bin/bash
 set -xeuo pipefail
 
+list_image_contents() {
+    local img="$1"
+
+    local mount
+    mount=$(podman image mount $img)
+    find $mount -printf "%P\n" | grep -v "^sysroot/" | sort
+    podman image unmount $img > /dev/null
+}
+
+# This does some hacks to rewrite to the same format as list_image_content
+list_image_ostree_contents() {
+    local img="$1"
+
+    podman run --rm -ti $img ostree ls -R "" / | tr -d '\r' | sed "s@[^/]*/@@"  | sed "s/ -> .*//" | sed "s@usr/etc@etc@" | sort
+}
+
+compare_image_contents() {
+    local base_img="$1"
+    local chunked_img="$2"
+
+    # Verify that the chunked file list matches the original image
+    list_image_contents $base_img > base-files
+    list_image_contents $chunked_img > chunked-files
+    if ! cmp -s base-files chunked-files; then
+       echo "ERROR: chunked image $chunked_img has different contents than source $base_img:"
+       diff -u base-files chunked-files
+       exit 1
+    fi
+
+    # Verify that the ostree files matches the (chunked) container files
+    list_image_ostree_contents $chunked_img > ostree-files
+    if ! cmp -s ostree-files chunked-files; then
+       echo "ERROR: chunked image $chunked_img has different ostree contents than container content:"
+       diff -u ostree-files chunked-files
+       exit 1
+    fi
+
+    # Verify that the selinux labels matches on some files, including /usr/etc which is tricky
+    podman run --rm -ti $base_img ostree ls -XR "" /usr/etc/aliases /usr/bin/bash > base-labels
+    podman run --rm -ti $chunked_img ostree ls -XR "" /usr/etc/aliases /usr/bin/bash > chunked-labels
+    if ! cmp -s base-labels chunked-labels; then
+       echo "ERROR: chunked image $chunked_img has different labeling than source $base_img:"
+       diff -u base-labels chunked-labels
+       exit 1
+    fi
+}
+
 # First: a cross-arch rechunking
 testimg_base=quay.io/centos-bootc/centos-bootc:stream9
 chunked_output=localhost/chunked-ppc64le
@@ -34,6 +81,8 @@ test "$(date --date="${orig_created}" --rfc-3339=seconds)" = "$(date --date="${n
 test $(jq -r .Labels.testlabel < new-config.json) = "1"
 echo "ok rechunking with labels"
 
+compare_image_contents localhost/base localhost/chunked
+
 # Verify directory metadata for --format-version=1 image
 # This will have nondeterministic mtimes creep in
 test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt @0 | wc -l)" -gt 0
@@ -64,6 +113,8 @@ podman run --rm --privileged --security-opt=label=disable \
 original_layers_file=$(mktemp)
 podman inspect containers-storage:localhost/chunked | jq -r '.[0].RootFS.Layers[]' | sort > "$original_layers_file"
 
+compare_image_contents localhost/base localhost/chunked
+
 # Build a modified image from the chunked base that adds new packages
 cat > Containerfile.modified <<EOF
 FROM localhost/chunked
@@ -89,6 +140,8 @@ if ! grep -q "Found existing chunked image at target, will use as baseline" "$re
     echo "ERROR: Expected output 'Found existing chunked image at target, will use as baseline' not found"
     exit 1
 fi
+
+compare_image_contents localhost/modified localhost/chunked
 
 # Get the layer digests from the rechunked image
 rechunked_layers_file=$(mktemp)
