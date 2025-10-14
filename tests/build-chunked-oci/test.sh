@@ -39,6 +39,7 @@ echo "ok rechunking with labels"
 test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt @0 | wc -l)" -gt 0
 
 # Build a rechunked image with --format-version=2
+podman rmi localhost/chunked
 podman run --rm --privileged --security-opt=label=disable \
   -v /var/lib/containers:/var/lib/containers \
   -v /var/tmp:/var/tmp \
@@ -52,6 +53,7 @@ test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt 
 # Test chunked image base detection and reuse
 # First create a chunked image from base
 echo "Testing rechunking existing chunked image"
+podman rmi localhost/chunked
 podman run --rm --privileged --security-opt=label=disable \
   -v /var/lib/containers:/var/lib/containers \
   -v /var/tmp:/var/tmp \
@@ -73,11 +75,14 @@ podman build -t localhost/modified -f Containerfile.modified
 # Re-chunk the modified image - this should detect and reuse the chunked base
 echo "Re-chunking using existing chunked image"
 rechunk_output=$(mktemp)
+podman image tag localhost/chunked localhost/old-chunked
 podman run --rm --privileged --security-opt=label=disable \
   -v /var/lib/containers:/var/lib/containers \
   -v /var/tmp:/var/tmp \
   -v "$(pwd)":/output \
   localhost/builder rpm-ostree compose build-chunked-oci --bootc --from localhost/modified --output containers-storage:localhost/chunked 2>&1 | tee "$rechunk_output"
+
+podman rmi localhost/old-chunked
 
 # Check that the expected output string is present
 if ! grep -q "Found existing chunked image at target, will use as baseline" "$rechunk_output"; then
@@ -246,3 +251,5 @@ podman run --rm --privileged --security-opt=label=disable \
 
 test -f test-archive
 echo "ok oci-archive output"
+
+podman rmi -f localhost/base
