@@ -1244,6 +1244,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
         }
 
       g_autoptr (GPtrArray) filtered_pkgs = g_ptr_array_new_with_free_func (g_free);
+
+      /* Get already layered packages from the origin */
+      auto layered_pkgs = rpmostree_origin_get_packages (origin);
+      g_autoptr (GHashTable) layered_pkgs_set = g_hash_table_new (g_str_hash, g_str_equal);
+      for (auto &pkg : layered_pkgs)
+        g_hash_table_add (layered_pkgs_set, (gpointer)pkg.c_str ());
+
       for (char **it = install_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
@@ -1262,9 +1269,14 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
                                  "require it.",
                                  pkg, pkgnames->str);
             }
-          /* When idempotent_layering is set, skip packages already in base */
-          if (pkgs->len > 0 && idempotent_layering)
-            continue;
+          /* When idempotent_layering is set, skip packages already in base or already layered */
+          if (idempotent_layering)
+            {
+              if (pkgs->len > 0)
+                continue; /* already in base */
+              if (g_hash_table_contains (layered_pkgs_set, pkg))
+                continue; /* already layered */
+            }
 
           g_ptr_array_add (filtered_pkgs, g_strdup (pkg));
         }
