@@ -147,10 +147,10 @@ EOF
     grep -qF 'some config file' /etc/someconfig.conf || (echo missing someconfig.conf; exit 1)
     grep -qF somedata /usr/share/somenewdata || (echo missing somenewdata; exit 1)
     for p in bar testdaemon; do
-      assert_streq $(rpm -q $p) $p-1.0-1.${arch}
+      assert_streq "$(rpm -q $p)" "$p-1.0-1.${arch}"
       test -f /usr/bin/$p
     done
-    assert_streq $(rpm -q baz) baz-2.0-1.${arch}
+    assert_streq "$(rpm -q baz)" "baz-2.0-1.${arch}"
     test -f /usr/bin/baz
     ! rpm -q nano
     rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/fcos-derived\""
@@ -185,6 +185,26 @@ EOF
     previous_layers=$(cat /etc/previous-layers)
     new_layers=$(ostree refs ostree/container/blob | wc -l)
     test $new_layers -lt $previous_layers
+
+    # Build a chunked-oci image and boot it
+    rpm-ostree experimental compose build-chunked-oci --bootc --format-version=1 --from=localhost/fcos-derived --output=containers-storage:localhost/fcos-derived-rechunked
+    rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos-derived-rechunked
+    /tmp/autopkgtest-reboot 5
+    ;;
+  5)
+    # Should be all same as boot 3, except the image name
+    rpm -q foo
+    grep -qF 'some config file' /etc/someconfig.conf || (echo missing someconfig.conf; exit 1)
+    grep -qF somedata /usr/share/somenewdata || (echo missing somenewdata; exit 1)
+    for p in bar testdaemon; do
+      assert_streq "$(rpm -q $p)" "$p-1.0-1.${arch}"
+      test -f /usr/bin/$p
+    done
+    assert_streq "$(rpm -q baz)" "baz-2.0-1.${arch}"
+    test -f /usr/bin/baz
+    ! rpm -q nano
+    rpmostree_assert_status ".deployments[0][\"container-image-reference\"] == \"ostree-unverified-image:containers-storage:localhost/fcos-derived-rechunked\""
+
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
 esac

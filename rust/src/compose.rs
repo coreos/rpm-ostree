@@ -35,7 +35,7 @@ use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::isolation::self_command;
 use crate::{RPMOSTREE_RPMDB_LOCATION, RPMOSTREE_SYSIMAGE_RPMDB};
 
-const SYSROOT: &str = "sysroot";
+const SYSROOT_PREFIX: &str = "/sysroot/";
 const USR: &str = "usr";
 const ETC: &str = "etc";
 const USR_ETC: &str = "usr/etc";
@@ -354,12 +354,9 @@ impl BuildChunkedOCIOpts {
         )?;
 
         println!("Generating commit...");
-        // It's only the tests that override
-        let modifier =
-            ostree::RepoCommitModifier::new(ostree::RepoCommitModifierFlags::empty(), None);
         // Process the filesystem, generating an ostree commit
         let commitid =
-            generate_commit_from_rootfs(&repo, &rootfs, modifier, creation_timestamp.as_ref())?;
+            generate_commit_from_rootfs(&repo, &rootfs, false, creation_timestamp.as_ref())?;
 
         let bootc_label_arg = self
             .bootc
@@ -1001,16 +998,54 @@ fn postprocess_mtree(repo: &ostree::Repo, rootfs: &ostree::MutableTree) -> Resul
     Ok(())
 }
 
+fn bootc_commit_filter(
+    _repo: &ostree::Repo,
+    name: &str,
+    _info: &gio::FileInfo,
+) -> ostree::RepoCommitFilterResult {
+    if name.starts_with(SYSROOT_PREFIX) {
+        // Skip contents of /sysroot
+        return ostree::RepoCommitFilterResult::Skip;
+    }
+    ostree::RepoCommitFilterResult::Allow
+}
+
+fn bootc_commit_filter_no_attrs(
+    repo: &ostree::Repo,
+    name: &str,
+    info: &gio::FileInfo,
+) -> ostree::RepoCommitFilterResult {
+    let res = bootc_commit_filter(repo, name, info);
+    if res == ostree::RepoCommitFilterResult::Allow {
+        info.set_attribute_uint32("unix::uid", 0);
+        info.set_attribute_uint32("unix::gid", 0);
+    }
+    res
+}
+
 #[context("Generating commit from rootfs")]
 fn generate_commit_from_rootfs(
     repo: &ostree::Repo,
     rootfs: &Dir,
-    modifier: ostree::RepoCommitModifier,
+    no_attrs: bool,
     creation_time: Option<&chrono::DateTime<chrono::FixedOffset>>,
 ) -> Result<String> {
     let root_mtree = ostree::MutableTree::new();
     let cancellable = gio::Cancellable::NONE;
     let tx = repo.auto_transaction(cancellable)?;
+
+    let modifier = if no_attrs {
+        ostree::RepoCommitModifier::new(
+            ostree::RepoCommitModifierFlags::SKIP_XATTRS
+                | ostree::RepoCommitModifierFlags::CANONICAL_PERMISSIONS,
+            Some(Box::new(bootc_commit_filter_no_attrs)),
+        )
+    } else {
+        ostree::RepoCommitModifier::new(
+            ostree::RepoCommitModifierFlags::empty(),
+            Some(Box::new(bootc_commit_filter)),
+        )
+    };
 
     let policy = ostree::SePolicy::new_at(rootfs.as_fd().as_raw_fd(), cancellable)?;
     modifier.set_sepolicy(Some(&policy));
@@ -1026,44 +1061,14 @@ fn generate_commit_from_rootfs(
         .context("Writing root dirmeta")?;
     root_mtree.set_metadata_checksum(&root_metachecksum.to_hex());
 
-    for ent in rootfs.entries_utf8()? {
-        let ent = ent?;
-        let name = ent.file_name()?;
-
-        let ftype = ent.file_type()?;
-        // Skip the contents of the sysroot
-        if ftype.is_dir() && name == SYSROOT {
-            let child_mtree = root_mtree.ensure_dir(&name)?;
-            child_mtree.set_metadata_checksum(&root_metachecksum.to_hex());
-        } else if ftype.is_dir() {
-            let child_mtree = root_mtree.ensure_dir(&name)?;
-            let child = ent.open_dir()?;
-            repo.write_dfd_to_mtree(
-                child.as_raw_fd(),
-                ".",
-                &child_mtree,
-                Some(&modifier),
-                cancellable,
-            )
-            .with_context(|| format!("Processing dir {name}"))?;
-        } else if ftype.is_symlink() {
-            let contents: Utf8PathBuf = rootfs
-                .read_link_contents(&name)
-                .with_context(|| format!("Reading {name}"))?
-                .try_into()?;
-            // Label lookups need to be absolute
-            let selabel_path = format!("/{name}");
-            let label = policy.label(selabel_path.as_str(), 0o777 | libc::S_IFLNK, cancellable)?;
-            let xattrs = label_to_xattrs(label.as_deref());
-            let link_checksum = repo
-                .write_symlink(None, 0, 0, xattrs.as_ref(), contents.as_str(), cancellable)
-                .with_context(|| format!("Processing symlink {selabel_path}"))?;
-            root_mtree.replace_file(&name, &link_checksum)?;
-        } else {
-            // Yes we could support this but it's a surprising amount of typing
-            anyhow::bail!("Unsupported regular file {name} at toplevel");
-        }
-    }
+    repo.write_dfd_to_mtree(
+        rootfs.as_raw_fd(),
+        ".",
+        &root_mtree,
+        Some(&modifier),
+        cancellable,
+    )
+    .with_context(|| format!("Processing rootfs"))?;
 
     postprocess_mtree(repo, &root_mtree)?;
 
@@ -1413,16 +1418,6 @@ mod tests {
         Ok(())
     }
 
-    fn commit_filter(
-        _repo: &ostree::Repo,
-        _name: &str,
-        info: &gio::FileInfo,
-    ) -> ostree::RepoCommitFilterResult {
-        info.set_attribute_uint32("unix::uid", 0);
-        info.set_attribute_uint32("unix::gid", 0);
-        ostree::RepoCommitFilterResult::Allow
-    }
-
     #[test]
     fn write_commit() -> Result<()> {
         let cancellable = gio::Cancellable::NONE;
@@ -1435,13 +1430,7 @@ mod tests {
         let td = base_td.open_dir("root")?;
         td.set_permissions(".", cap_std::fs::Permissions::from_mode(0o755))?;
 
-        let modifier = ostree::RepoCommitModifier::new(
-            ostree::RepoCommitModifierFlags::SKIP_XATTRS
-                | ostree::RepoCommitModifierFlags::CANONICAL_PERMISSIONS,
-            Some(Box::new(commit_filter)),
-        );
-
-        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone(), None).unwrap();
+        let commit = generate_commit_from_rootfs(&repo, &td, true, None).unwrap();
         // Verify there are zero children
         let commit_root = repo.read_commit(&commit, cancellable)?.0;
         {
@@ -1476,7 +1465,7 @@ mod tests {
         )?;
 
         let ts = chrono::DateTime::parse_from_rfc2822("Fri, 29 Aug 1997 10:30:42 PST").unwrap();
-        let commit = generate_commit_from_rootfs(&repo, &td, modifier.clone(), Some(&ts)).unwrap();
+        let commit = generate_commit_from_rootfs(&repo, &td, true, Some(&ts)).unwrap();
         assert_eq!(
             commit,
             "1423c43d7b76207dc86b357a4834fcea444fcb2ee3a81541fbfbd52a85e05bc3"
