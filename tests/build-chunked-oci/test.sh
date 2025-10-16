@@ -87,6 +87,18 @@ compare_image_contents localhost/base localhost/chunked
 # This will have nondeterministic mtimes creep in
 test "$(podman run --rm containers-storage:localhost/chunked find /usr -newermt @0 | wc -l)" -gt 0
 
+# Verify composefs digest propagation, if base has it
+podman run --rm -ti localhost/base ostree show --list-metadata-keys "" > base-metadata-keys
+if grep -q ostree.composefs.digest.v1 orig-metadata-keys; then
+    echo "Testing composefs digest propagation"
+    podman run --rm -ti localhost/chunked ostree show --list-metadata-keys "" > chunked-metadata-keys
+    if ! grep -q ostree.composefs.digest.v1 base-metadata-keys; then
+       echo "ERROR: Base image has composfs digest, but it is missing from chunked image"
+       exit 1
+    fi
+    echo "ok composefs digest propagation"
+fi
+
 # Build a rechunked image with --format-version=2
 podman rmi localhost/chunked
 podman run --rm --privileged --security-opt=label=disable \
@@ -304,5 +316,30 @@ podman run --rm --privileged --security-opt=label=disable \
 
 test -f test-archive
 echo "ok oci-archive output"
+
+echo "Testing signatures"
+
+# Generate private key in PEM format
+openssl genpkey -algorithm ed25519 -outform PEM -out ed25519.pem
+PUBLIC="$(openssl pkey -outform DER -pubout -in ed25519.pem | tail -c 32 | base64)"
+SEED="$(openssl pkey -outform DER -in ed25519.pem | tail -c 32 | base64)"
+echo ${SEED}${PUBLIC} | base64 -d | base64 -w 0 > secret.key
+
+podman run --rm --privileged --security-opt=label=disable \
+  -v /var/lib/containers:/var/lib/containers \
+  -v /var/tmp:/var/tmp \
+  -v "$(pwd)":/output \
+  localhost/builder rpm-ostree compose build-chunked-oci --sign-commit=ed25519=/output/secret.key --bootc --from localhost/base --output containers-storage:localhost/signed
+
+podman run --rm -ti localhost/signed ostree show --list-detached-metadata-keys  "" > detached-metadata-keys
+if ! grep -q ostree.sign.ed25519 detached-metadata-keys; then
+    echo "ERROR: Signing was requested in the chunked image, but no signature is found"
+    exit 1
+fi
+
+podman rmi localhost/signed
+
+echo "ok signatures"
+
 
 podman rmi -f localhost/base

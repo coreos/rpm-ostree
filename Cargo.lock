@@ -215,10 +215,12 @@ dependencies = [
 [[package]]
 name = "bootc-internal-utils"
 version = "0.0.0"
-source = "git+https://github.com/containers/bootc?rev=05030a3d9a069d381a0048fca537fce1b8fc8e49#05030a3d9a069d381a0048fca537fce1b8fc8e49"
+source = "git+https://github.com/containers/bootc?rev=40ebdd5829a151cadb5dbadcb1b047f8f4d038cb#40ebdd5829a151cadb5dbadcb1b047f8f4d038cb"
 dependencies = [
+ "anstream",
  "anyhow",
  "chrono",
+ "owo-colors",
  "rustix 1.0.8",
  "serde",
  "serde_json",
@@ -226,6 +228,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "tracing-journald",
  "tracing-subscriber",
 ]
 
@@ -464,7 +467,7 @@ dependencies = [
 [[package]]
 name = "composefs"
 version = "0.3.0"
-source = "git+https://github.com/containers/composefs-rs?rev=8d1e570275621531d39b8f01681584bcc85ce01c#8d1e570275621531d39b8f01681584bcc85ce01c"
+source = "git+https://github.com/containers/composefs-rs?rev=82e211ee3e5c8e2b7b3bc00b40b828133633c41b#82e211ee3e5c8e2b7b3bc00b40b828133633c41b"
 dependencies = [
  "anyhow",
  "hex",
@@ -484,7 +487,7 @@ dependencies = [
 [[package]]
 name = "composefs-boot"
 version = "0.3.0"
-source = "git+https://github.com/containers/composefs-rs?rev=8d1e570275621531d39b8f01681584bcc85ce01c#8d1e570275621531d39b8f01681584bcc85ce01c"
+source = "git+https://github.com/containers/composefs-rs?rev=82e211ee3e5c8e2b7b3bc00b40b828133633c41b#82e211ee3e5c8e2b7b3bc00b40b828133633c41b"
 dependencies = [
  "anyhow",
  "composefs",
@@ -497,7 +500,7 @@ dependencies = [
 [[package]]
 name = "composefs-oci"
 version = "0.3.0"
-source = "git+https://github.com/containers/composefs-rs?rev=8d1e570275621531d39b8f01681584bcc85ce01c#8d1e570275621531d39b8f01681584bcc85ce01c"
+source = "git+https://github.com/containers/composefs-rs?rev=82e211ee3e5c8e2b7b3bc00b40b828133633c41b#82e211ee3e5c8e2b7b3bc00b40b828133633c41b"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -580,9 +583,9 @@ dependencies = [
 
 [[package]]
 name = "containers-image-proxy"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9953374bea7d415048415d1f871ba974897209ba0c14d3c665d4a41bdc15628d"
+checksum = "08ca6531917f9b250bf6a1af43603b2e083c192565774451411f9bf4f8bf8f2b"
 dependencies = [
  "cap-std-ext",
  "futures-util",
@@ -592,7 +595,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -1578,7 +1581,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "system-configuration 0.6.1",
  "tokio",
  "tower-service",
@@ -2193,9 +2196,9 @@ dependencies = [
 
 [[package]]
 name = "oci-spec"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57e9beda9d92fac7bf4904c34c83340ef1024159faee67179a04e0277523da33"
+checksum = "2078e2f6be932a4de9aca90a375a45590809dfb5a08d93ab1ee217107aceeb67"
 dependencies = [
  "const_format",
  "derive_builder",
@@ -2210,9 +2213,9 @@ dependencies = [
 
 [[package]]
 name = "ocidir"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ca884bf1922890f5fb3c48bbe92b450781ddb4754a4efd6b2dd1667730f9dab"
+checksum = "92e746e3e6a7bb57a72ea4f0b8085f84aedaab1d537a5dc5488fd3cd5af0cd67"
 dependencies = [
  "camino",
  "canon-json",
@@ -2305,9 +2308,9 @@ dependencies = [
 
 [[package]]
 name = "ostree"
-version = "0.20.4"
+version = "0.20.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b20e1831a40fec1ac40fc0d855f52e1371ee43ce9b11af292486a89c77d69dc3"
+checksum = "fc7b42858b9c42999daefaf06f2a60a0dfbb6995a7b87deb0a873f2fb447c269"
 dependencies = [
  "base64 0.20.0",
  "bitflags 1.3.2",
@@ -2323,7 +2326,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.15.3"
-source = "git+https://github.com/containers/bootc?rev=05030a3d9a069d381a0048fca537fce1b8fc8e49#05030a3d9a069d381a0048fca537fce1b8fc8e49"
+source = "git+https://github.com/containers/bootc?rev=40ebdd5829a151cadb5dbadcb1b047f8f4d038cb#40ebdd5829a151cadb5dbadcb1b047f8f4d038cb"
 dependencies = [
  "anyhow",
  "bootc-internal-utils",
@@ -2376,6 +2379,12 @@ dependencies = [
  "libc",
  "system-deps",
 ]
+
+[[package]]
+name = "owo-colors"
+version = "4.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c6901729fa79e91a0913333229e9ca5dc725089d1c363b2f4b4760709dc4a52"
 
 [[package]]
 name = "parking_lot"
@@ -3660,6 +3669,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-journald"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc0b4143302cf1022dac868d521e36e8b27691f72c84b3311750d5188ebba657"
+dependencies = [
+ "libc",
+ "tracing-core",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-log"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3944,7 +3964,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
