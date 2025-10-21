@@ -117,6 +117,8 @@ gint rpmostree_pkg_array_compare (DnfPackage **p_pkg1, DnfPackage **p_pkg2);
 
 void rpmostree_print_transaction (DnfContext *context);
 
+gboolean rpmostree_dnf_context_has_empty_transaction (DnfContext *dnfctx);
+
 GVariant *rpmostree_fcap_to_ostree_xattr (const char *fcap, GError **error);
 GVariant *rpmostree_fcap_to_xattr_variant (const char *fcap, GError **error);
 
