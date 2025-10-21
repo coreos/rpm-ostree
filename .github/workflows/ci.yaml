@@ -250,7 +250,7 @@ jobs:
         run: env TMPDIR=/var/tmp ./tests/encapsulate.sh
   test-build-chunked-oci:
     name: "build-chunked-oci tests"
-    needs: build-c9s
+    needs: build-c10s
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -270,7 +270,7 @@ jobs:
       - name: Download build
         uses: actions/download-artifact@v4.1.7
         with:
-          name: install-c9s.tar
+          name: install-c10s.tar
       - name: Integration tests
         run: |
           set -xeuo pipefail
@@ -278,10 +278,10 @@ jobs:
           tar -xzvf ../../install.tar
           sudo podman build -v $(pwd)/usr/bin:/ci -t localhost/builder -f Containerfile.builder
           sudo ./test.sh
-  build-c9s:
-    name: "Build (c9s)"
+  build-c10s:
+    name: "Build (c10s)"
     runs-on: ubuntu-latest
-    container: quay.io/centos/centos:stream9
+    container: quay.io/centos/centos:stream10
     steps:
       - name: Install git
         run: yum -y install git
@@ -303,7 +303,7 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: install-c9s.tar
+          name: install-c10s.tar
           path: install.tar
   # Doc: https://github.com/redhat-plumbers-in-action/differential-shellcheck#usage
   differential-shellcheck:
