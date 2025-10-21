@@ -382,6 +382,12 @@ rpmostree_context_set_is_empty (RpmOstreeContext *self)
 }
 
 void
+rpmostree_context_set_allow_empty_transaction (RpmOstreeContext *self, gboolean allow)
+{
+  self->allow_empty_transaction = allow;
+}
+
+void
 rpmostree_context_disable_selinux (RpmOstreeContext *self)
 {
   self->disable_selinux = TRUE;
@@ -784,7 +790,8 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
        * we're only installing local RPMs. Missing deps will cause the regular
        * 'not found' error from libdnf. */
       auto pkgs = self->treefile_rs->get_packages ();
-      if (!pkgs.empty ())
+      auto local_pkgs = self->treefile_rs->get_local_packages ();
+      if (!pkgs.empty () && local_pkgs.empty ())
         return glnx_throw (error, "No enabled repositories");
     }
 
@@ -4229,8 +4236,11 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
   g_autoptr (GPtrArray) overrides_remove = dnf_goal_get_packages (
       dnf_context_get_goal (dnfctx), DNF_PACKAGE_INFO_REMOVE, DNF_PACKAGE_INFO_OBSOLETE, -1);
 
-  if (overlays->len == 0 && overrides_remove->len == 0 && overrides_replace->len == 0)
-    return glnx_throw (error, "No packages in transaction");
+  if (rpmostree_dnf_context_has_empty_transaction (dnfctx))
+    {
+      if (!self->allow_empty_transaction)
+        return glnx_throw (error, "No packages in transaction");
+    }
 
   /* Sort the packages as rpmtsOrder() only reorder to satisfy dependencies
    * but doesn't impose any ordering to packages with the same dependencies.

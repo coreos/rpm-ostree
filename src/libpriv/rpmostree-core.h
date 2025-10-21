@@ -109,6 +109,7 @@ void rpmostree_context_configure_from_deployment (RpmOstreeContext *self, Ostree
                                                   OstreeDeployment *cfg_deployment);
 
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
+void rpmostree_context_set_allow_empty_transaction (RpmOstreeContext *self, gboolean allow);
 void rpmostree_context_disable_selinux (RpmOstreeContext *self);
 const char *rpmostree_context_get_ref (RpmOstreeContext *self);
 

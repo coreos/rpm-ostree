@@ -98,6 +98,9 @@ const char *rpmostree_sysroot_upgrader_get_base (RpmOstreeSysrootUpgrader *self)
 
 DnfSack *rpmostree_sysroot_upgrader_get_sack (RpmOstreeSysrootUpgrader *self, GError **error);
 
+void rpmostree_sysroot_upgrader_set_allow_empty_transaction (RpmOstreeSysrootUpgrader *self,
+                                                             gboolean allow);
+
 gboolean rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader *self,
                                                const char *dir_to_pull, OstreeRepoPullFlags flags,
                                                OstreeAsyncProgress *progress, gboolean *out_changed,
