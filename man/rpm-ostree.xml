@@ -643,7 +643,7 @@ Boston, MA 02111-1307, USA.
             </command>
               to replace an existing kernel argument, it allows you to pass a
               KEY=VALUE. Also, it supports "KEY=VALUE=NEWVALUE" to replace the
-              value of an argumnet only if one value exist for that argument.
+              value of an argument only if one value exists for that argument.
               For example, <command>--replace=panic=1</command>. or
               <command>--replace=panic=1=0</command>.
           </para>
