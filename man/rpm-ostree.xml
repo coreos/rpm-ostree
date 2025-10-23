@@ -870,6 +870,16 @@ $ systemctl start postgresql  # Some setup required
           </para>
         </listitem>
       </varlistentry>
+
+      <varlistentry>
+        <term><command>update</command></term>
+
+        <listitem>
+          <para>
+            Alias for the <command>upgrade</command> command.
+          </para>
+        </listitem>
+      </varlistentry>
     </variablelist>
   </refsect1>
 
