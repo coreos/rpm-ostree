@@ -2,11 +2,11 @@
 set -euxo pipefail
 
 cat > Containerfile <<EOF
-FROM quay.io/centos-bootc/centos-bootc:stream9
+FROM quay.io/centos-bootc/centos-bootc:stream10
 RUN dnf install -y vim-enhanced
 EOF
 
-buildah pull quay.io/centos-bootc/centos-bootc:stream9
+buildah pull quay.io/centos-bootc/centos-bootc:stream10
 buildah build -t localhost/my-image .
 /usr/bin/rpm-ostree experimental compose build-chunked-oci --bootc --from=localhost/my-image --output=containers-storage:localhost/my-image-chunked --format-version=2
 
