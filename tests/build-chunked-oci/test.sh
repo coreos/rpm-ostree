@@ -49,7 +49,7 @@ compare_image_contents() {
 }
 
 # First: a cross-arch rechunking
-testimg_base=quay.io/centos-bootc/centos-bootc:stream9
+testimg_base=quay.io/centos-bootc/centos-bootc:stream10
 chunked_output=localhost/chunked-ppc64le
 podman pull --arch=ppc64le ${testimg_base}
 podman run --rm --privileged --security-opt=label=disable \
