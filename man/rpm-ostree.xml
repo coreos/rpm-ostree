@@ -298,7 +298,7 @@ Boston, MA 02111-1307, USA.
           <para>
             <option>--force-replacefiles</option> allows one package to overwrite files from another without having to rebuild the whole kernel package.
           </para>
-          
+
         </listitem>
       </varlistentry>
 
@@ -336,7 +336,7 @@ Boston, MA 02111-1307, USA.
             Takes one or more query terms as arguments. The packages are
             searched within the enabled repositories in
             <filename>/etc/yum.repos.d/</filename>. Packages can be
-            overlayed and removed using the <command>install</command> 
+            overlayed and removed using the <command>install</command>
             and <command>uninstall</command> commands.
           </para>
         </listitem>
@@ -558,9 +558,9 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            <command>replace</command> to replace base packages. 
+            <command>replace</command> to replace base packages.
             Requires explicitly specifying a set of RPMs to install via
-            HTTP or local file paths. On Fedora systems, it is also 
+            HTTP or local file paths. On Fedora systems, it is also
             supported to pull from the Fedora Koji/Bodhi systems.
             For example,
             <command>rpm-ostree override replace https://objstore.int.example.com/hotfixes/kernel.rpm</command>,
@@ -594,7 +594,7 @@ Boston, MA 02111-1307, USA.
         <listitem>
           <para>
             Without options, display current default kernel arguments. Modify
-            arguments using the following parameters which will create a new 
+            arguments using the following parameters which will create a new
             deployment with the modified kernel arguments. Previous deployments
             are never changed.
           </para>
@@ -610,7 +610,7 @@ Boston, MA 02111-1307, USA.
             <command>
               --append
             </command>
-              to append a kernel argument. For example, 
+              to append a kernel argument. For example,
               <command>--append=panic=1</command>.
           </para>
 
@@ -625,7 +625,7 @@ Boston, MA 02111-1307, USA.
             <command>
               --delete
             </command>
-              to delete a kernel argument. For example, 
+              to delete a kernel argument. For example,
               <command>--delete=panic=1</command>.
           </para>
 
@@ -633,7 +633,7 @@ Boston, MA 02111-1307, USA.
             <command>
               --delete-if-present
             </command>
-              to delete a kernel argument if it is already present. For example, 
+              to delete a kernel argument if it is already present. For example,
               <command>--delete-if-present=panic=1</command>.
           </para>
 
@@ -641,10 +641,10 @@ Boston, MA 02111-1307, USA.
             <command>
               --replace
             </command>
-              to replace an existing kernel argument, it allows you to pass a 
+              to replace an existing kernel argument, it allows you to pass a
               KEY=VALUE. Also, it supports "KEY=VALUE=NEWVALUE" to replace the
-              value of an argumnet only if one value exist for that argument. 
-              For example, <command>--replace=panic=1</command>. or 
+              value of an argument only if one value exists for that argument.
+              For example, <command>--replace=panic=1</command>. or
               <command>--replace=panic=1=0</command>.
           </para>
 
@@ -653,7 +653,7 @@ Boston, MA 02111-1307, USA.
               --unchanged-exit-77
             </command>
               to exit status 77 to indicate that the kernel arguments have
-              not changed. 
+              not changed.
           </para>
 
           <para>
@@ -853,7 +853,7 @@ $ systemctl start postgresql  # Some setup required
           <para>
             A major implicit benefit of the <literal>overlayfs</literal> approach is that
             if something goes wrong in the middle of a <literal>apply-live</literal> operation,
-            a system reboot will implicitly remove the overlay, restoring the system to 
+            a system reboot will implicitly remove the overlay, restoring the system to
             the pristine deployment state.
           </para>
         </listitem>
@@ -867,6 +867,16 @@ $ systemctl start postgresql  # Some setup required
             This command offers access to experimental features; command line
             stability is not guaranteed.  The available subcommands will be listed
             by invoking <command>rpm-ostree ex</command>.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><command>update</command></term>
+
+        <listitem>
+          <para>
+            Alias for the <command>upgrade</command> command.
           </para>
         </listitem>
       </varlistentry>
