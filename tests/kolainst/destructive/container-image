@@ -1,6 +1,6 @@
 #!/bin/bash
 # This test reboots a lot, generates container images, etc.
-# kola: { "timeoutMin": 30 }
+# kola: { "timeoutMin": 30, "minDisk": 20 }
 #
 # Copyright (C) 2021 Red Hat, Inc.
 #
