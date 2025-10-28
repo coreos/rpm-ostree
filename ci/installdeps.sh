@@ -8,7 +8,7 @@ dn=$(dirname $0)
 . ${dn}/libbuild.sh
 
 if [ -z "${SKIP_INSTALLDEPS:-}" ] && test $(id -u) -eq 0; then
-    dnf -y install dnf-plugins-core
+    dnf -y install dnf-plugins-core rpm-libs
     # we have the canonical spec file handy so just builddep from that
     # XXX: use --allowerasing as a temporary hack to ease the migration to libmodulemd2
     pkg_builddep_spec --allowerasing packaging/rpm-ostree.spec 
