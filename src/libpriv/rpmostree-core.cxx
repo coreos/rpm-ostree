@@ -223,6 +223,9 @@ rpmostree_context_new_base (OstreeRepo *repo)
   /* Force disable internal libdnf Count Me logic */
   dnf_conf_add_setopt ("*.countme", DNF_CONF_COMMANDLINE, "false", NULL);
 
+  /* Always pull file lists */
+  dnf_conf_main_set_option ("optional_metadata_types", DNF_CONF_COMMANDLINE, "filelists", NULL);
+
   /* Hack until libdnf+librepo know how to better negotaiate zchunk.
    * see also the bits in configure.ac that define HAVE_ZCHUNK
    **/
