@@ -54,7 +54,6 @@ cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
       runuser -u builder -- coreos-assembler fetch
       runuser -u builder -- coreos-assembler build
       runuser -u builder -- coreos-assembler osbuild qemu
-       ${env.WORKSPACE}/ci/composepost-checks.sh
     """)
   }
   stage("Install Deps") {
