@@ -971,9 +971,13 @@ rpmostree_context_download_metadata (RpmOstreeContext *self, DnfContextSetupSack
 
   /* https://github.com/rpm-software-management/libdnf/pull/416
    * https://github.com/projectatomic/rpm-ostree/issues/1127
+   * As of libdnf 0.73.0 (commit f1ffeed5), filelists are disabled by default.
+   * We need to explicitly enable them when not skipping.
    */
   if (flags & DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS)
     dnf_context_set_enable_filelists (self->dnfctx, FALSE);
+  else
+    dnf_context_set_enable_filelists (self->dnfctx, TRUE);
 
   g_autoptr (GPtrArray) rpmmd_repos
       = rpmostree_get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
