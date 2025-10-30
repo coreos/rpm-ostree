@@ -16,7 +16,7 @@ if [ -n "${SELF_BOOTSTRAP:-}" ]; then
   make install DESTDIR="$PWD/installtree"
   make -C tests/kolainst install DESTDIR="$PWD/installtree"
   exec podman run -ti --rm --security-opt=label=disable -v "$PWD":/var/srv -w /var/srv \
-    quay.io/fedora/fedora-coreos:testing-devel sh -c \
+    quay.io/fedora/fedora-coreos:stable sh -c \
       'rsync -rlv installtree/ / && /var/srv/ci/test-container.sh'
 fi
 

@@ -115,7 +115,7 @@ jobs:
     name: "Container Integration"
     needs: [build, build-tests]
     runs-on: ubuntu-latest
-    container: quay.io/fedora/fedora-coreos:testing-devel
+    container: quay.io/fedora/fedora-coreos:stable
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
