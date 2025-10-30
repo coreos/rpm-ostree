@@ -3,7 +3,8 @@ set -xeuo pipefail
 # Pull the latest FCOS build, unpack its container image, and verify
 # that we can re-encapsulate it as chunked.
 
-container=quay.io/fedora/fedora-coreos:testing-devel
+# TODO: Switch to using a fixture
+container=quay.io/fedora/fedora-coreos:stable
 
 # First, verify the legacy entrypoint still works for now
 rpm-ostree container-encapsulate --help >/dev/null

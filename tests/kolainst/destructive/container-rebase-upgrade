@@ -35,8 +35,8 @@ prev_digest=$(jq -r '.releases[-2]["oci-images"][] | select(.architecture == "x8
 
 image=quay.io/fedora/fedora-coreos
 image_tag=testing
-image_pull_digest=ostree-remote-registry:fedora:$image@$latest_digest
-image_pull_tag=ostree-remote-registry:fedora:$image:$image_tag
+image_pull_digest=ostree-unverified-registry:$image@$latest_digest
+image_pull_tag=ostree-unverified-registry:$image:$image_tag
 
 systemctl mask --now zincati
 # Test for https://github.com/ostreedev/ostree/issues/3228

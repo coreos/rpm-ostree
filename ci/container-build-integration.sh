@@ -16,7 +16,7 @@ for example in "${examples[@]}"; do
 
     # Our built binaries are using testing-devel, which might be a different
     # Fedora major version for example
-    podman build --from quay.io/fedora/fedora-coreos:testing-devel -t localhost/fcos-$example .
+    podman build --from quay.io/fedora/fedora-coreos:stable -t localhost/fcos-$example .
     cd ${workdir}
 done
 

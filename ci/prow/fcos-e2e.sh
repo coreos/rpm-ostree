@@ -21,7 +21,7 @@ export XDG_STATE_HOME="$PWD/.state"
 export XDG_CACHE_HOME="$PWD/.cache"
 export XDG_CONFIG_HOME="$PWD/.config"
 
-cosa init https://github.com/coreos/fedora-coreos-config/
+cosa init https://github.com/coreos/fedora-coreos-config/ --branch stable
 cp /cosa/component-rpms/*.rpm overrides/rpm
 cosa fetch
 cosa build
