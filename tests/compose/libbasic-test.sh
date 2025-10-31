@@ -133,6 +133,7 @@ echo "ok --parent"
 # Check symlinks injected into the rootfs.
 ostree --repo="${repo}" ls "${treeref}" /usr/local | grep '^l00777' > symlinks.txt
 assert_file_has_content_literal symlinks.txt '/usr/local -> ../var/usrlocal'
+assert_file_has_content_literal symlinks.txt '/usr/local/sbin -> bin'
 ostree --repo="${repo}" ls "${treeref}" /opt > symlinks.txt
 assert_file_has_content_literal symlinks.txt '/opt -> var/opt'
 echo "ok symlinks"
