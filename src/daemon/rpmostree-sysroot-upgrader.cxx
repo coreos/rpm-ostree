@@ -998,10 +998,24 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
       self->layering_changed = strcmp (previous_state_sha512, new_state_sha512) != 0;
     }
   else
-    /* Otherwise, we're transitioning from not-layered to layered, so it
-       definitely changed */
-    self->layering_changed = TRUE;
-
+    {
+      /* Otherwise, we're transitioning from not-layered to layered, so it
+         definitely changed */
+      self->layering_changed = TRUE;
+      /* Special case for containers: if the DNF transaction is empty (all packages already in
+       * base), don't consider this a change even if transitioning from unlayered to layered. This
+       * happens with idempotent layering when packages are already in the container image. */
+      if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
+        {
+          auto refspec = rpmostree_origin_get_refspec (self->computed_origin);
+          if (refspec.kind == rpmostreecxx::RefspecType::Container
+              && rpmostree_dnf_context_has_empty_transaction (
+                  rpmostree_context_get_dnf (self->ctx)))
+            {
+              self->layering_changed = FALSE;
+            }
+        }
+    }
   return TRUE;
 }
 

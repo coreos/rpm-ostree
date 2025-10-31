@@ -4229,7 +4229,7 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
   g_autoptr (GPtrArray) overrides_remove = dnf_goal_get_packages (
       dnf_context_get_goal (dnfctx), DNF_PACKAGE_INFO_REMOVE, DNF_PACKAGE_INFO_OBSOLETE, -1);
 
-  if (overlays->len == 0 && overrides_remove->len == 0 && overrides_replace->len == 0)
+  if (rpmostree_dnf_context_has_empty_transaction (dnfctx))
     return glnx_throw (error, "No packages in transaction");
 
   /* Sort the packages as rpmtsOrder() only reorder to satisfy dependencies
