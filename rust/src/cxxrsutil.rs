@@ -12,7 +12,7 @@
 use cxx::{type_id, ExternType};
 use glib::translate::ToGlibPtr;
 use ostree_ext::{gio, glib, ostree};
-use paste::paste;
+use pastey::paste;
 
 /// Map an empty string to a `None`.
 pub(crate) fn opt_string(input: &str) -> Option<&str> {
