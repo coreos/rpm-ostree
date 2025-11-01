@@ -1,0 +1,8 @@
+# Extra packages needed in the build container for Fedora derivatives
+# that aren't actually used to build the code necessarily, but
+# are used by targets in the Dockerfile.
+rustfmt
+clippy
+git-core
+jq
+rsync

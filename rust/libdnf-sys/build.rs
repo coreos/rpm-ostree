@@ -7,6 +7,10 @@ fn main() -> Result<()> {
     let with_zck: u8 = libs.get_by_name("zck").is_some().into();
     let with_rhsm = std::env::var_os("CARGO_FEATURE_RHSM").is_some();
 
+    // Query pkg-config for glib's full link flags (including transitive dependencies)
+    // We'll need this later to ensure proper linking of the C++ wrapper.
+    let glib_libs = pkg_config::Config::new().probe("glib-2.0")?;
+
     // first, the submodule proper
     let libdnf = cmake::Config::new("../../libdnf")
         // Needed for hardened builds
@@ -60,6 +64,20 @@ fn main() -> Result<()> {
         .include("../../libdnf");
     libdnfcxx.includes(libs.all_include_paths());
     libdnfcxx.compile("libdnfcxx.a");
+
+    // The C++ wrapper (libdnfcxx.a) uses both glib functions (g_strndup, g_free)
+    // and libdnf functions (hy_split_nevra). Due to static library linking order,
+    // we need to ensure these libraries come after libdnfcxx in the link order.
+    // Even though system_deps already emitted link directives earlier, cargo's
+    // link order matters - we re-emit them here to ensure symbols are available.
+
+    // First, link libdnf again (for hy_split_nevra and other libdnf symbols)
+    println!("cargo:rustc-link-lib=static=dnf");
+
+    // Then, link glib and all its transitive dependencies (for g_strndup, g_free, etc.)
+    for lib in &glib_libs.libs {
+        println!("cargo:rustc-link-lib={}", lib);
+    }
 
     Ok(())
 }

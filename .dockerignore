@@ -1,3 +1,54 @@
-.cosa
-target
-compose-cache/
+# Exclude everything by default, then include just what we need
+# Especially note this means that .git is not included, and not tests/
+# to avoid spurious rebuilds.
+*
+
+# Autotools build files
+!Makefile*.am
+!Makefile-*.am
+!Makefile*.inc
+!Makefile.bindings
+!configure.ac
+!autogen.sh
+
+# Generated C++/Rust bridge files (checked into git)
+!rpmostree-cxxrs.h
+!rpmostree-cxxrs.cxx
+!rpmostree-cxxrsutil.hpp
+
+# Build configuration
+!buildutil/
+!build-aux/
+!m4/
+
+# Source code
+!src/
+!rust/
+
+# Rust build files
+!Cargo.toml
+!Cargo.lock
+!build.rs
+!.cargo/
+
+# Git submodules (needed by autogen.sh)
+!libglnx/
+!libdnf/
+
+# Build system integration
+!packaging/
+!ci/
+!.copr/
+
+# Test data for integration tests
+!tests/
+
+# Documentation (for man pages, etc.)
+!docs/
+!man/
+
+# Shell completion
+!completion/
+
+# API documentation generation
+!api-doc/

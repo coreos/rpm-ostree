@@ -1,0 +1,58 @@
+# Container Build CI Workflow
+#
+# Builds rpm-ostree from source in a container using the Dockerfile and Justfile.
+# This workflow follows the pattern established in bootc for containerized builds.
+name: Container Build
+
+permissions:
+  actions: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Build container and run basic validation
+  build-and-validate:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        base_image:
+          - name: fedora-42
+            image: quay.io/fedora/fedora-bootc:42
+          # TODO: Enable CentOS Stream 10 once tests support it
+          # - name: centos-10
+          #   image: quay.io/centos-bootc/centos-bootc:stream10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Bootc Ubuntu Setup
+        uses: ./.github/actions/bootc-ubuntu-setup
+
+      - name: Run validation
+        run: |
+          just validate
+
+      - name: Build container
+        run: |
+          set -xeuo pipefail
+          just build --build-arg=base=${{ matrix.base_image.image }}
+
+      - name: Run container integration tests
+        run: |
+          just test-container-integration

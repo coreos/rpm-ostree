@@ -221,7 +221,7 @@ impl RpmImporter {
     }
 
     pub fn rpmfi_overrides_contains(self: &RpmImporter, path: &str) -> bool {
-        self.rpmfi_overrides.get(path).is_some()
+        self.rpmfi_overrides.contains_key(path)
     }
 
     pub fn rpmfi_overrides_get(&self, path: &str) -> u64 {
