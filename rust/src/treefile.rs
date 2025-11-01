@@ -2086,7 +2086,7 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
     let mut ret = vec![];
     let mut start_index = 0;
     let mut looping_over_quoted_pkg = false;
-    for (i, c) in element.chars().enumerate() {
+    for (i, c) in element.char_indices() {
         if c == '\'' {
             if looping_over_quoted_pkg {
                 ret.push(&element[start_index..i]);
@@ -2095,14 +2095,15 @@ fn split_whitespace_unless_quoted(element: &str) -> Result<impl Iterator<Item = 
                 ret.extend(element[start_index..i].split_whitespace());
                 looping_over_quoted_pkg = true;
             }
-            start_index = i + 1;
+            start_index = i + c.len_utf8();
         }
-        if i == element.len() - 1 {
-            if looping_over_quoted_pkg {
-                bail!("Missing terminating quote: {}", element);
-            }
-            ret.extend(element[start_index..].split_whitespace());
-        }
+    }
+    // Handle any remaining text after the loop
+    if looping_over_quoted_pkg {
+        bail!("Missing terminating quote: {}", element);
+    }
+    if start_index < element.len() {
+        ret.extend(element[start_index..].split_whitespace());
     }
 
     Ok(ret.into_iter())
