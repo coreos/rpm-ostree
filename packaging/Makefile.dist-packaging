@@ -1,8 +1,16 @@
 # -*- mode: Makefile -*-
 
+# Handle builds both with and without a git repository
+ifeq ($(shell test -d ../.git && echo yes),yes)
 GITREV = $$(git describe --always --tags)
 GITREV_FOR_PKG = $(shell echo "$(GITREV)" | sed -e 's,-,\.,g' -e 's,^v,,')
 GITTIMESTAMP = $$(git show --no-patch --format=%ci)
+else
+# Fallback when no git repo is available
+GITREV = unknown
+GITREV_FOR_PKG = 9999.0.0
+GITTIMESTAMP = $(shell date -u +"%Y-%m-%d %H:%M:%S %z")
+endif
 
 srcdir=$(shell dirname `pwd`)
 PACKAGE=rpm-ostree

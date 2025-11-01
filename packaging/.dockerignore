@@ -1,0 +1,5 @@
+# For RPM builds, we need minimal exclusions
+# since we need .git for creating source tarballs
+target/
+.cosa/
+compose-cache/

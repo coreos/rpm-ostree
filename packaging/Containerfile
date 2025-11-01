@@ -1,0 +1,61 @@
+# Build RPMs for rpm-ostree
+# This containerfile builds RPMs in a containerized environment.
+
+ARG base=quay.io/fedora/fedora-bootc:42
+
+FROM scratch as src
+# For RPM builds, we need the git repository
+COPY .git /src/.git
+COPY . /src
+
+FROM $base as build
+# Install build dependencies
+COPY packaging /tmp/packaging
+COPY ci/installdeps.sh ci/libbuild.sh /tmp/ci/
+RUN <<EORUN
+set -xeuo pipefail
+. /usr/lib/os-release
+case $ID in
+  centos|rhel) dnf config-manager --set-enabled crb;;
+  fedora) dnf -y install dnf-utils 'dnf5-command(builddep)';;
+esac
+# Handle version skew, upgrade core dependencies
+dnf -y distro-sync ostree{,-libs} libmodulemd
+# Install git for RPM source tarball creation and rpm-build for rpmbuild
+dnf -y install git-core rpm-build
+# Install build requirements
+cd /tmp && ./ci/installdeps.sh
+# Move cargo-vendor-filterer to a persistent location
+if [ -d /tmp/target/cargo-vendor-filterer ]; then
+  mkdir -p /usr/local/cargo-vendor-filterer
+  cp -r /tmp/target/cargo-vendor-filterer/* /usr/local/cargo-vendor-filterer/
+  ln -sf /usr/local/cargo-vendor-filterer/bin/cargo-vendor-filterer /usr/local/bin/
+fi
+rm /tmp/{packaging,ci} -rf
+rm -rf /tmp/target
+EORUN
+
+# Copy source and build RPM
+COPY --from=src /src /src
+WORKDIR /src
+# Initialize submodules if we have a git repo
+RUN <<EORUN
+set -xeuo pipefail
+if [ -d .git ]; then
+  # Configure git safe.directory without --global to avoid needing /root/.gitconfig
+  git config --system --add safe.directory '*' || git config --global --add safe.directory '*' || true
+  git submodule update --init --recursive
+fi
+EORUN
+WORKDIR /src/packaging
+# Set CARGO_HOME to avoid /root/.cargo issues and RPM topdir to avoid /root issues
+ENV CARGO_HOME=/tmp/cargo
+RUN mkdir -p /tmp/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+RUN echo '%_topdir /tmp/rpmbuild' > /etc/rpm/macros
+RUN make -f Makefile.dist-packaging rpm
+
+# Extract RPMs to /out for easy access
+RUN mkdir -p /out && cp -v *.rpm x86_64/*.rpm /out/
+
+FROM scratch
+COPY --from=build /out/ /

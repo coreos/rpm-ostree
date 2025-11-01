@@ -9,17 +9,6 @@ fatal() {
 
 versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 
-# This allows running this test in a podman container locally by running
-# `SELF_BOOTSTRAP=1 ci/test-container.sh`.
-if [ -n "${SELF_BOOTSTRAP:-}" ]; then
-  rm -rf "$PWD/installtree"
-  make install DESTDIR="$PWD/installtree"
-  make -C tests/kolainst install DESTDIR="$PWD/installtree"
-  exec podman run -ti --rm --security-opt=label=disable -v "$PWD":/var/srv -w /var/srv \
-    quay.io/fedora/fedora-coreos:stable sh -c \
-      'rsync -rlv installtree/ / && /var/srv/ci/test-container.sh'
-fi
-
 # Test overrides
 # These hardcoded versions can be kept until Fedora GC's them
 ignition_url_suffix=2.17.0/4.fc40/x86_64/ignition-2.17.0-4.fc40."$(arch)".rpm
