@@ -561,6 +561,8 @@ version of `rpm-ostree`.
    - `var`: `/opt` and `/usr/local` are symlinks to subdirectories in `/var`
      and are purely machine-local state.
    - `root`: These are plain directories; only use this with composefs enabled!
+ * `no-initramfs`: boolean, optional: If `true` don't run dracut to generate an
+   initramfs. Defaults to `false`.
 
 ### Kickstarts
 

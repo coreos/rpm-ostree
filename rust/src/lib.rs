@@ -690,6 +690,7 @@ pub mod ffi {
         fn may_require_local_assembly(&self) -> bool;
         fn has_any_packages(&self) -> bool;
         fn merge_treefile(&mut self, treefile: &str) -> Result<bool>;
+        fn get_no_initramfs(&self) -> bool;
     }
 
     // treefile.rs (split out from above to make &self nice to use)

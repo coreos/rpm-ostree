@@ -1653,6 +1653,7 @@ struct Treefile final : public ::rust::Opaque
   bool may_require_local_assembly () const noexcept;
   bool has_any_packages () const noexcept;
   bool merge_treefile (::rust::Str treefile);
+  bool get_no_initramfs () const noexcept;
   ~Treefile () = delete;
 
 private:

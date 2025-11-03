@@ -1876,6 +1876,7 @@ struct Treefile final : public ::rust::Opaque
   bool may_require_local_assembly () const noexcept;
   bool has_any_packages () const noexcept;
   bool merge_treefile (::rust::Str treefile);
+  bool get_no_initramfs () const noexcept;
   ~Treefile () = delete;
 
 private:
@@ -2835,6 +2836,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Treefile$merge_treefile (::rpmostreecxx::Treefile &self,
                                                    ::rust::Str treefile, bool *return$) noexcept;
+
+  bool
+  rpmostreecxx$cxxbridge1$Treefile$get_no_initramfs (::rpmostreecxx::Treefile const &self) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$RepoPackage$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$RepoPackage$operator$alignof () noexcept;
 
@@ -5623,6 +5627,12 @@ Treefile::merge_treefile (::rust::Str treefile)
       throw ::rust::impl<::rust::Error>::error (error$);
     }
   return ::std::move (return$.value);
+}
+
+bool
+Treefile::get_no_initramfs () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$get_no_initramfs (*this);
 }
 
 ::std::size_t
