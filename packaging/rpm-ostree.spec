@@ -3,7 +3,7 @@
 
 Summary: Hybrid image/package system
 Name: rpm-ostree
-Version: 2025.11
+Version: 2025.12
 Release: 1%{?dist}
 License: LGPL-2.0-or-later
 URL: https://github.com/coreos/rpm-ostree
@@ -106,9 +106,9 @@ BuildRequires: jq
 
 %global libsolv_version 0.7.21
 %global libmodulemd_version 2.13.0
-%global librepo_version 1.13.1
+%global librepo_version 1.18.0
 
-BuildRequires:  cmake
+BuildRequires:  cmake >= 3.5.0
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
 BuildRequires:  libsolv-devel >= %{libsolv_version}
@@ -129,7 +129,6 @@ BuildRequires:  pkgconfig(cppunit)
 BuildRequires:  pkgconfig(modulemd-2.0) >= %{libmodulemd_version}
 BuildRequires:  pkgconfig(smartcols)
 BuildRequires:  gettext
-BuildRequires:  gpgme-devel
 
 Requires:       libmodulemd%{?_isa} >= %{libmodulemd_version}
 Requires:       libsolv%{?_isa} >= %{libsolv_version}
