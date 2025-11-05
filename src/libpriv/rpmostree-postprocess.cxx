@@ -246,6 +246,11 @@ process_kernel_and_initramfs (int rootfs_dfd, rpmostreecxx::Treefile &treefile,
         return FALSE;
     }
 
+  /* Always normalize etc shadow. If we called run_dracut this may
+   * have already been done but it's OK since it's idempotent.
+   */
+  ROSCXX_TRY (normalize_etc_shadow (rootfs_dfd), error);
+
   /* We always tell rpmostree_finalize_kernel() to skip /boot, since we'll do a
    * full hardlink pass if needed after that for the kernel + bootloader data.
    */

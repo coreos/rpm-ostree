@@ -2084,6 +2084,8 @@ void applylive_sync_ref (::rpmostreecxx::OstreeSysroot const &sysroot);
 void transaction_apply_live (::rpmostreecxx::OstreeSysroot const &sysroot,
                              ::rpmostreecxx::GVariant const &target);
 
+void normalize_etc_shadow (::std::int32_t rootfs_dfd);
+
 bool prepare_rpm_layering (::std::int32_t rootfs, ::std::int32_t merge_passwd_dir);
 
 void complete_rpm_layering (::std::int32_t rootfs);

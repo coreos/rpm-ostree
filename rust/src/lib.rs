@@ -739,6 +739,11 @@ pub mod ffi {
         fn transaction_apply_live(sysroot: &OstreeSysroot, target: &GVariant) -> Result<()>;
     }
 
+    // normalization.rs
+    extern "Rust" {
+        fn normalize_etc_shadow(rootfs_dfd: i32) -> Result<()>;
+    }
+
     // passwd.rs
     extern "Rust" {
         fn prepare_rpm_layering(rootfs: i32, merge_passwd_dir: i32) -> Result<bool>;
@@ -1019,6 +1024,7 @@ mod live;
 pub(crate) use self::live::*;
 mod nameservice;
 mod normalization;
+use normalization::*;
 mod origin;
 mod ostree_prepareroot;
 pub(crate) use self::origin::*;
