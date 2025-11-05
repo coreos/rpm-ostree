@@ -398,10 +398,17 @@ rpmostree_finalize_kernel (int rootfs_dfd, const char *bootdir, const char *kver
     }
   else
     {
-      /* we're not replacing the initramfs; use built-in one */
-      if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd,
-                                                      initramfs_modules_path, cancellable, error))
+      /* We're not replacing the initramfs; use built-in one if it exists */
+      if (!glnx_fstatat_allow_noent (rootfs_dfd, initramfs_modules_path, NULL, AT_SYMLINK_NOFOLLOW,
+                                     error))
         return FALSE;
+      if (errno == 0)
+        {
+          /* It exists, update the checksum */
+          if (!_rpmostree_util_update_checksum_from_file (
+                  boot_checksum, rootfs_dfd, initramfs_modules_path, cancellable, error))
+            return FALSE;
+        }
     }
 
   const char *boot_checksum_str = g_checksum_get_string (boot_checksum);

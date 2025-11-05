@@ -690,6 +690,7 @@ pub mod ffi {
         fn may_require_local_assembly(&self) -> bool;
         fn has_any_packages(&self) -> bool;
         fn merge_treefile(&mut self, treefile: &str) -> Result<bool>;
+        fn get_no_initramfs(&self) -> bool;
     }
 
     // treefile.rs (split out from above to make &self nice to use)
@@ -736,6 +737,11 @@ pub mod ffi {
         ) -> Result<bool>;
         fn applylive_sync_ref(sysroot: &OstreeSysroot) -> Result<()>;
         fn transaction_apply_live(sysroot: &OstreeSysroot, target: &GVariant) -> Result<()>;
+    }
+
+    // normalization.rs
+    extern "Rust" {
+        fn normalize_etc_shadow(rootfs_dfd: i32) -> Result<()>;
     }
 
     // passwd.rs
@@ -1018,6 +1024,7 @@ mod live;
 pub(crate) use self::live::*;
 mod nameservice;
 mod normalization;
+use normalization::*;
 mod origin;
 mod ostree_prepareroot;
 pub(crate) use self::origin::*;

@@ -80,6 +80,48 @@ rename_if_exists (int src_dfd, const char *from, int dest_dfd, const char *to, G
   return TRUE;
 }
 
+static gboolean
+run_dracut (int rootfs_dfd, rpmostreecxx::Treefile &treefile, GLnxTmpfile *initramfs_tmpf,
+            const char *kver, GCancellable *cancellable, GError **error)
+{
+  /* Run dracut with our chosen arguments (commonly at least --no-hostonly) */
+  g_autoptr (GPtrArray) dracut_argv = g_ptr_array_new ();
+  rust::Vec<rust::String> initramfs_args = treefile.get_initramfs_args ();
+  if (!initramfs_args.empty ())
+    {
+      for (auto &arg : initramfs_args)
+        g_ptr_array_add (dracut_argv, (void *)arg.c_str ());
+    }
+  else
+    {
+      /* Default to this for treecomposes */
+      g_ptr_array_add (dracut_argv, (char *)"--no-hostonly");
+    }
+  g_ptr_array_add (dracut_argv, NULL);
+
+  /* We use a tmpdir under the target root since dracut currently tries to copy
+   * xattrs, including e.g. user.ostreemeta, which can't be copied to tmpfs.
+   */
+  {
+    g_auto (GLnxTmpDir) dracut_host_tmpd = {
+      0,
+    };
+    if (!glnx_mkdtempat (rootfs_dfd, "rpmostree-dracut.XXXXXX", 0700, &dracut_host_tmpd, error))
+      return FALSE;
+    if (!rpmostree_run_dracut (rootfs_dfd, (const char *const *)dracut_argv->pdata, kver, NULL,
+                               FALSE, &dracut_host_tmpd, initramfs_tmpf, cancellable, error))
+      return FALSE;
+    /* No reason to have the initramfs not be world-readable since
+     * it's server-side generated and shouldn't contain any secrets.
+     * https://github.com/coreos/coreos-assembler/pull/372#issuecomment-467620937
+     */
+    if (!glnx_fchmod (initramfs_tmpf->fd, 0644, error))
+      return FALSE;
+  }
+
+  return TRUE;
+}
+
 /* Handle the kernel/initramfs, which can be in at least 2 different places:
  *  - /boot (CentOS, Fedora treecompose before we suppressed kernel.spec's %posttrans)
  *  - /usr/lib/modules (Fedora treecompose without kernel.spec's %posttrans)
@@ -195,43 +237,19 @@ process_kernel_and_initramfs (int rootfs_dfd, rpmostreecxx::Treefile &treefile,
       (void)unlinkat (rootfs_dfd, "usr/etc/machine-id", 0);
     }
 
-  /* Run dracut with our chosen arguments (commonly at least --no-hostonly) */
-  g_autoptr (GPtrArray) dracut_argv = g_ptr_array_new ();
-  rust::Vec<rust::String> initramfs_args = treefile.get_initramfs_args ();
-  if (!initramfs_args.empty ())
-    {
-      for (auto &arg : initramfs_args)
-        g_ptr_array_add (dracut_argv, (void *)arg.c_str ());
-    }
-  else
-    {
-      /* Default to this for treecomposes */
-      g_ptr_array_add (dracut_argv, (char *)"--no-hostonly");
-    }
-  g_ptr_array_add (dracut_argv, NULL);
-
   g_auto (GLnxTmpfile) initramfs_tmpf = {
     0,
   };
-  /* We use a tmpdir under the target root since dracut currently tries to copy
-   * xattrs, including e.g. user.ostreemeta, which can't be copied to tmpfs.
+  if (!treefile.get_no_initramfs ())
+    {
+      if (!run_dracut (rootfs_dfd, treefile, &initramfs_tmpf, kver, cancellable, error))
+        return FALSE;
+    }
+
+  /* Always normalize etc shadow. If we called run_dracut this may
+   * have already been done but it's OK since it's idempotent.
    */
-  {
-    g_auto (GLnxTmpDir) dracut_host_tmpd = {
-      0,
-    };
-    if (!glnx_mkdtempat (rootfs_dfd, "rpmostree-dracut.XXXXXX", 0700, &dracut_host_tmpd, error))
-      return FALSE;
-    if (!rpmostree_run_dracut (rootfs_dfd, (const char *const *)dracut_argv->pdata, kver, NULL,
-                               FALSE, &dracut_host_tmpd, &initramfs_tmpf, cancellable, error))
-      return FALSE;
-    /* No reason to have the initramfs not be world-readable since
-     * it's server-side generated and shouldn't contain any secrets.
-     * https://github.com/coreos/coreos-assembler/pull/372#issuecomment-467620937
-     */
-    if (!glnx_fchmod (initramfs_tmpf.fd, 0644, error))
-      return FALSE;
-  }
+  ROSCXX_TRY (normalize_etc_shadow (rootfs_dfd), error);
 
   /* We always tell rpmostree_finalize_kernel() to skip /boot, since we'll do a
    * full hardlink pass if needed after that for the kernel + bootloader data.

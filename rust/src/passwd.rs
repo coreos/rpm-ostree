@@ -89,7 +89,7 @@ pub fn complete_rpm_layering(rootfs_dfd: i32) -> CxxResult<()> {
     // /etc/shadow ends up with a timestamp in it thanks to the `lstchg`
     // field. This can be made empty safely, especially for accounts that
     // are locked.
-    normalization::normalize_etc_shadow(&rootfs)?;
+    normalization::normalize_etc_shadow(rootfs_dfd)?;
 
     Ok(())
 }

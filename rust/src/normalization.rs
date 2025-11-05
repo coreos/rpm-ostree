@@ -6,6 +6,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use crate::bwrap::Bubblewrap;
+use crate::cxxrsutil::*;
+use crate::ffiutil;
 use crate::nameservice::shadow::parse_shadow_content;
 use anyhow::{anyhow, Context, Result};
 use cap_std::fs::OpenOptionsExt;
@@ -30,7 +32,8 @@ pub(crate) fn source_date_epoch_raw() -> Option<String> {
 }
 
 #[context("Rewriting /etc/shadow to remove lstchg field")]
-pub(crate) fn normalize_etc_shadow(rootfs: &Dir) -> Result<()> {
+pub(crate) fn normalize_etc_shadow(rootfs_dfd: i32) -> CxxResult<()> {
+    let rootfs = unsafe { ffiutil::ffi_dirfd(rootfs_dfd)? };
     // Read in existing entries.
     let mut openopts = OpenOptions::new();
     openopts.create(true).read(true).write(true).mode(0o400);

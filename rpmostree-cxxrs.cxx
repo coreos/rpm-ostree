@@ -1876,6 +1876,7 @@ struct Treefile final : public ::rust::Opaque
   bool may_require_local_assembly () const noexcept;
   bool has_any_packages () const noexcept;
   bool merge_treefile (::rust::Str treefile);
+  bool get_no_initramfs () const noexcept;
   ~Treefile () = delete;
 
 private:
@@ -2835,6 +2836,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$Treefile$merge_treefile (::rpmostreecxx::Treefile &self,
                                                    ::rust::Str treefile, bool *return$) noexcept;
+
+  bool
+  rpmostreecxx$cxxbridge1$Treefile$get_no_initramfs (::rpmostreecxx::Treefile const &self) noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$RepoPackage$operator$sizeof () noexcept;
   ::std::size_t rpmostreecxx$cxxbridge1$RepoPackage$operator$alignof () noexcept;
 
@@ -2884,6 +2888,9 @@ extern "C"
   ::rust::repr::PtrLen
   rpmostreecxx$cxxbridge1$transaction_apply_live (::rpmostreecxx::OstreeSysroot const &sysroot,
                                                   ::rpmostreecxx::GVariant const &target) noexcept;
+
+  ::rust::repr::PtrLen
+  rpmostreecxx$cxxbridge1$normalize_etc_shadow (::std::int32_t rootfs_dfd) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$prepare_rpm_layering (
       ::std::int32_t rootfs, ::std::int32_t merge_passwd_dir, bool *return$) noexcept;
@@ -5625,6 +5632,12 @@ Treefile::merge_treefile (::rust::Str treefile)
   return ::std::move (return$.value);
 }
 
+bool
+Treefile::get_no_initramfs () const noexcept
+{
+  return rpmostreecxx$cxxbridge1$Treefile$get_no_initramfs (*this);
+}
+
 ::std::size_t
 RepoPackage::layout::size () noexcept
 {
@@ -5764,6 +5777,16 @@ transaction_apply_live (::rpmostreecxx::OstreeSysroot const &sysroot,
                         ::rpmostreecxx::GVariant const &target)
 {
   ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$transaction_apply_live (sysroot, target);
+  if (error$.ptr)
+    {
+      throw ::rust::impl<::rust::Error>::error (error$);
+    }
+}
+
+void
+normalize_etc_shadow (::std::int32_t rootfs_dfd)
+{
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$normalize_etc_shadow (rootfs_dfd);
   if (error$.ptr)
     {
       throw ::rust::impl<::rust::Error>::error (error$);

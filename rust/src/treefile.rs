@@ -482,7 +482,8 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         check_passwd,
         check_groups,
         postprocess_script,
-        rpmdb_normalize
+        rpmdb_normalize,
+        no_initramfs
     );
     merge_hashsets!(ignore_removed_groups, ignore_removed_users);
     merge_maps!(add_commit_metadata, variables, metadata, repovars);
@@ -1856,6 +1857,10 @@ impl Treefile {
         derived
     }
 
+    pub(crate) fn get_no_initramfs(&self) -> bool {
+        self.parsed.base.no_initramfs.unwrap_or_default()
+    }
+
     pub(crate) fn set_initramfs_regenerate(&mut self, enabled: bool, args: Vec<String>) {
         if !enabled {
             // implicitly leaves empty if already empty
@@ -2608,6 +2613,8 @@ pub(crate) struct BaseComposeConfigFields {
     pub(crate) install_langs: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) initramfs_args: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) no_initramfs: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) readonly_executables: Option<bool>,
 
