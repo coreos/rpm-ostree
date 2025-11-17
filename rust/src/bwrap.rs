@@ -94,10 +94,9 @@ impl RoFilesMount {
             .cwd_dir(rootfs.try_clone()?);
         unsafe {
             c.pre_exec(|| {
-                rustix::process::set_parent_process_death_signal(Some(
+                Ok(rustix::process::set_parent_process_death_signal(Some(
                     rustix::process::Signal::TERM,
-                ))
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                ))?)
             });
         }
         c.run()?;
