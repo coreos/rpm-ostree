@@ -1,7 +1,7 @@
 # rpm-ostree: A true hybrid image/package system
 
 rpm-ostree is a hybrid image/package system.  It combines
-[libostree](https://ostree.readthedocs.io/en/latest/) as a base image format,
+[libostree](https://ostreedev.github.io/ostree/) as a base image format,
 and accepts RPM on both the client and server side, sharing code with the
 [dnf](https://en.wikipedia.org/wiki/DNF_(software)) project; specifically
 [libdnf](https://github.com/rpm-software-management/libdnf). and thus bringing

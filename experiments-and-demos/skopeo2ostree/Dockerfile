@@ -24,7 +24,7 @@ RUN echo 'Storage=persistent' >> /etc/systemd/journald.conf
 RUN systemctl unmask systemd-remount-fs.service dev-hugepages.mount sys-fs-fuse-connections.mount systemd-logind.service getty.target console-getty.service
 # FIXME - not starting for some reason
 RUN systemctl mask firewalld
-# https://ostree.readthedocs.io/en/latest/manual/adapting-existing/
+# https://ostreedev.github.io/ostree/adapting-existing/
 RUN for x in srv home media mnt opt; do mv /${x} /var/${x} && ln -sr /var/${x} /${x}; done \
     && rm /root -rf && ln -sr /var/roothome /root \
     && rm /usr/local -rf && ln -sr /var/usrlocal /usr/local \
