@@ -13,16 +13,25 @@ versionid=$(. /usr/lib/os-release && echo $VERSION_ID)
 # These hardcoded versions can be kept until Fedora GC's them
 ignition_url_suffix=2.17.0/4.fc40/x86_64/ignition-2.17.0-4.fc40."$(arch)".rpm
 case $versionid in
+  43)
+    # We use the same as f42 for 43 as they are compatible
+    koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2681489"
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2805991"
+    kver=6.17.0
+    krev=0.rc3.31
+    ;;
   42)
-    # 2.21.0-1 (this koji url must be different than above version, and different from
-    # what's in the current image)
+    # This packages need to be different from what's in the current image.
+    # 2.21.0-1
     koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2681489"
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2685011"
     kver=6.14.0
     krev=63
     ;;
   41)
-    # 2.19.0-2 (this koji url must be different than above version)
+    # This koji url must be different than above version, and different from
+    # what's in the current image.
+    # 2.19.0-2
     koji_ignition_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2495227"
     koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2571615"
     kver=6.11.4

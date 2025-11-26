@@ -1048,6 +1048,21 @@ rpmostree_print_transaction (DnfContext *dnfctx)
     rpmostree_output_message ("Empty transaction");
 }
 
+/* Helper function to check if a DNF transaction has any packages to install, remove, or update */
+gboolean
+rpmostree_dnf_context_has_empty_transaction (DnfContext *dnfctx)
+{
+  HyGoal goal = dnf_context_get_goal (dnfctx);
+
+  g_autoptr (GPtrArray) install_pkgs = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_INSTALL, -1);
+  g_autoptr (GPtrArray) remove_pkgs
+      = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_REMOVE, DNF_PACKAGE_INFO_OBSOLETE, -1);
+  g_autoptr (GPtrArray) update_pkgs
+      = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_UPDATE, DNF_PACKAGE_INFO_DOWNGRADE, -1);
+
+  return (install_pkgs->len == 0 && remove_pkgs->len == 0 && update_pkgs->len == 0);
+}
+
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC (cap_t, cap_free, NULL)
 
 GVariant *

@@ -111,10 +111,11 @@ struct RpmOstreeSysrootUpgrader
 
   gboolean layering_initialized; /* Whether layering_type is known */
   RpmOstreeSysrootUpgraderLayeringType layering_type;
-  gboolean layering_changed; /* Whether changes to layering should result in a new commit */
-  gboolean pkgs_imported;    /* Whether pkgs to be layered have been downloaded & imported */
-  char *base_revision;       /* Non-layered replicated commit */
-  char *final_revision;      /* Computed by layering; if NULL, only using base_revision */
+  gboolean layering_changed;        /* Whether changes to layering should result in a new commit */
+  gboolean allow_empty_transaction; /* Allow empty DNF transaction for idempotent layering */
+  gboolean pkgs_imported;           /* Whether pkgs to be layered have been downloaded & imported */
+  char *base_revision;              /* Non-layered replicated commit */
+  char *final_revision;             /* Computed by layering; if NULL, only using base_revision */
 
   char **kargs_strv; /* Kernel argument list to be written into deployment  */
 };
@@ -399,6 +400,13 @@ DnfSack *
 rpmostree_sysroot_upgrader_get_sack (RpmOstreeSysrootUpgrader *self, GError **error)
 {
   return self->rpmmd_sack;
+}
+
+void
+rpmostree_sysroot_upgrader_set_allow_empty_transaction (RpmOstreeSysrootUpgrader *self,
+                                                        gboolean allow)
+{
+  self->allow_empty_transaction = allow;
 }
 
 /*
@@ -998,10 +1006,24 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellable, 
       self->layering_changed = strcmp (previous_state_sha512, new_state_sha512) != 0;
     }
   else
-    /* Otherwise, we're transitioning from not-layered to layered, so it
-       definitely changed */
-    self->layering_changed = TRUE;
-
+    {
+      /* Otherwise, we're transitioning from not-layered to layered, so it
+         definitely changed */
+      self->layering_changed = TRUE;
+      /* Special case for containers: if the DNF transaction is empty (all packages already in
+       * base), don't consider this a change even if transitioning from unlayered to layered. This
+       * happens with idempotent layering when packages are already in the container image. */
+      if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
+        {
+          auto refspec = rpmostree_origin_get_refspec (self->computed_origin);
+          if (refspec.kind == rpmostreecxx::RefspecType::Container
+              && rpmostree_dnf_context_has_empty_transaction (
+                  rpmostree_context_get_dnf (self->ctx)))
+            {
+              self->layering_changed = FALSE;
+            }
+        }
+    }
   return TRUE;
 }
 
@@ -1021,6 +1043,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self, GCancellable *cancellabl
 
   rpmostree_context_set_devino_cache (self->ctx, self->devino_cache);
   rpmostree_context_set_tmprootfs_dfd (self->ctx, self->tmprootfs_dfd);
+  rpmostree_context_set_allow_empty_transaction (self->ctx, self->allow_empty_transaction);
 
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
     {

@@ -1128,6 +1128,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
   if (upgrader == NULL)
     return FALSE;
 
+  rpmostree_sysroot_upgrader_set_allow_empty_transaction (upgrader, idempotent_layering);
+
   g_autoptr (RpmOstreeOrigin) origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
   /* Handle local repo remotes immediately; the idea is that the remote is "transient"
@@ -1191,6 +1193,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
     }
 
   gboolean changed = FALSE;
+  gboolean remove_changed = FALSE;
   if (no_initramfs
       && (rpmostree_origin_get_regenerate_initramfs (origin)
           || rpmostree_origin_has_initramfs_etc_files (origin)))
@@ -1214,7 +1217,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
   if (no_layering)
     {
       if (rpmostree_origin_remove_all_packages (origin))
-        changed = TRUE;
+        {
+          changed = TRUE;
+          remove_changed = TRUE;
+        }
     }
   else
     {
@@ -1223,43 +1229,60 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
        * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
       if (!rpmostree_origin_remove_packages (origin,
                                              util::rust_stringvec_from_strv (uninstall_pkgs),
-                                             idempotent_layering, &changed, error))
+                                             idempotent_layering, &remove_changed, error))
         return FALSE;
+      if (remove_changed)
+        changed = TRUE;
     }
 
   /* lazily loaded cache that's used in a few conditional blocks */
   g_autoptr (RpmOstreeRefSack) base_rsack = NULL;
+
+  /* Check if we should skip the base-db check:
+   * When booted from a container image on an ostree host,
+   * we skip the base commit rpmdb check because container images don't have
+   * meaningful base-db separation like traditional ostree commits do. */
+  gboolean skip_base_check = FALSE;
+  CXX_TRY_VAR (host_type, rpmostreecxx::get_system_host_type (), error);
+  if (host_type == rpmostreecxx::SystemHostType::OstreeHost)
+    {
+      const auto refspec = rpmostree_origin_get_refspec (origin);
+      skip_base_check = (refspec.kind == rpmostreecxx::RefspecType::Container);
+    }
 
   if (install_pkgs)
     {
       /* we run a special check here; let's just not allow trying to install a pkg that will
        * right away become inactive because it's already installed */
 
-      if (!base_rsack)
+      if (!skip_base_check)
         {
-          const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
-          base_rsack = rpmostree_get_refsack_for_commit (repo, base, cancellable, error);
-          if (base_rsack == NULL)
-            return FALSE;
-        }
-
-      for (char **it = install_pkgs; it && *it; it++)
-        {
-          const char *pkg = *it;
-          g_autoptr (GPtrArray) pkgs = rpmostree_get_matching_packages (base_rsack->sack, pkg);
-          if (pkgs->len > 0 && !allow_inactive)
+          if (!base_rsack)
             {
-              g_autoptr (GString) pkgnames = g_string_new ("");
-              for (guint i = 0; i < pkgs->len; i++)
+              const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
+              base_rsack = rpmostree_get_refsack_for_commit (repo, base, cancellable, error);
+              if (base_rsack == NULL)
+                return FALSE;
+            }
+
+          for (char **it = install_pkgs; it && *it; it++)
+            {
+              const char *pkg = *it;
+              g_autoptr (GPtrArray) pkgs = rpmostree_get_matching_packages (base_rsack->sack, pkg);
+              if (pkgs->len > 0 && !allow_inactive)
                 {
-                  auto p = static_cast<DnfPackage *> (pkgs->pdata[i]);
-                  g_string_append_printf (pkgnames, " %s", dnf_package_get_nevra (p));
+                  g_autoptr (GString) pkgnames = g_string_new ("");
+                  for (guint i = 0; i < pkgs->len; i++)
+                    {
+                      auto p = static_cast<DnfPackage *> (pkgs->pdata[i]);
+                      g_string_append_printf (pkgnames, " %s", dnf_package_get_nevra (p));
+                    }
+                  return glnx_throw (error,
+                                     "\"%s\" is already provided by:%s. Use "
+                                     "--allow-inactive to explicitly "
+                                     "require it.",
+                                     pkg, pkgnames->str);
                 }
-              return glnx_throw (error,
-                                 "\"%s\" is already provided by:%s. Use "
-                                 "--allow-inactive to explicitly "
-                                 "require it.",
-                                 pkg, pkgnames->str);
             }
         }
 
@@ -1564,6 +1587,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
                                                  cancellable, error))
     return FALSE;
   changed = changed || layering_changed;
+
+  /* When using containers and nothing changed after prep_layering, return early.
+   * This happens when all requested packages are already present in the container image.
+   * For idempotent mode, this avoids the "No packages in transaction" error.
+   * However, if packages were removed from the origin, we need to deploy to update the origin
+   * even if no layering is needed. Similarly, if we're rebasing (refspec) or deploying a
+   * specific revision, we need to deploy. */
+  if (skip_base_check && !layering_changed && !remove_changed && !self->refspec && !self->revision)
+    return TRUE;
 
   if (dry_run)
     /* Note early return here; we printed the transaction already */

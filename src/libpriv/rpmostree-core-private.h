@@ -40,6 +40,7 @@ struct _RpmOstreeContext
   std::optional<rust::Box<rpmostreecxx::Treefile>> treefile_owned;
   rpmostreecxx::Treefile *treefile_rs; /* For composes for now */
   gboolean empty;
+  gboolean allow_empty_transaction;
   gboolean disable_selinux;
   char *ref;
 
