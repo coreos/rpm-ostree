@@ -1,0 +1,114 @@
+#!/bin/bash
+## kola:
+##   # Increase timeout since this test involves rebasing and container operations
+##   timeoutMin: 20
+##   # This test only runs on FCOS
+##   distros: fcos
+##   # Needs internet access for package installation
+##   tags: "needs-internet platform-independent"
+##   minMemory: 2048
+#
+# Copyright (C) 2025 Red Hat, Inc.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+
+set -x
+
+cd "$(mktemp -d)"
+
+# TODO: It'd be much better to test this via a registry
+image_dir=/var/tmp/fcos
+image=oci:$image_dir
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+  "")
+    checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    rm -rf "${image_dir}"
+    # Since we're switching OS update stream, turn off zincati
+    systemctl mask --now zincati
+    ostree container encapsulate --repo=/ostree/repo ${checksum} "${image}" --label ostree.bootable=TRUE
+
+    skopeo copy $image containers-storage:localhost/fcos
+    rm -rf "${image_dir}"
+    td=$(mktemp -d)
+    cd ${td}
+cat > Containerfile << EOF
+FROM localhost/fcos
+# Pre-install vim in the container image
+RUN dnf install -y vim-enhanced
+EOF
+
+    touched_resolv_conf=0
+    if test '!' -f /etc/resolv.conf; then
+      podmanv=$(podman --version)
+      case "${podmanv#podman version }" in
+        3.*) touched_resolv_conf=1; touch /etc/resolv.conf;;
+      esac
+    fi
+    podman build --net=host -t localhost/fcos-derived --squash .
+    if test "${touched_resolv_conf}" -eq 1; then
+      rm -vf /etc/resolv.conf
+    fi
+
+    rpm-ostree rebase ostree-unverified-image:containers-storage:localhost/fcos-derived
+    rm -rf "$image_dir"
+
+    /tmp/autopkgtest-reboot 1
+    ;;
+  1)
+    # Verify vim is installed from the base image
+    rpm -q vim-enhanced
+    rpm-ostree status
+
+    # Test 1: Install with --idempotent should succeed without error
+    # even though vim-enhanced is already in the base image
+    rpm-ostree install --allow-inactive --idempotent --apply-live -y vim-enhanced
+    echo "ok idempotent install of existing package"
+
+
+    # Test 2: Install with --unchanged-exit-77 should exit with 77
+    set +e
+    rpm-ostree install --allow-inactive --apply-live --unchanged-exit-77 -y vim-enhanced 2>&1 | tee out.txt
+    rc=$?
+    set -e
+    assert_streq "${rc}" "77"
+    echo "ok unchanged-exit-77 for existing package"
+
+    # Test 3: Install with both --idempotent and --unchanged-exit-77
+    set +e
+    rpm-ostree install --allow-inactive --idempotent --apply-live --unchanged-exit-77 -y vim-enhanced
+    rc=$?
+    set -e
+    assert_streq "${rc}" "77"
+    echo "ok idempotent with unchanged-exit-77 for existing package"
+
+    # Test 4: Install a new package with --idempotent (should work normally)
+    rpm-ostree install --idempotent tmux
+    /tmp/autopkgtest-reboot 2
+    ;;
+  2)
+    # Verify tmux is now installed
+    rpm -q tmux
+    rpm -q vim-enhanced
+    echo "ok idempotent install of new package"
+
+    ;;
+  *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac
