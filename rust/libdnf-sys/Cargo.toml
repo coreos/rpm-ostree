@@ -7,17 +7,17 @@ links = "dnf"
 publish = false
 
 [dependencies]
-cxx = "1.0.158"
+cxx = "1.0.180"
 
 [lib]
 name = "libdnf_sys"
 path = "lib.rs"
 
 [build-dependencies]
-cmake = "0.1.54"
+cmake = "0.1.56"
 system-deps = "7.0"
 anyhow = "1.0"
-cxx-build = "1.0.158"
+cxx-build = "1.0.191"
 pkg-config = "0.3"
 
 # This currently needs to duplicate the libraries from libdnf
