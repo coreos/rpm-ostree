@@ -106,7 +106,13 @@ BuildRequires: jq
 
 %global libsolv_version 0.7.21
 %global libmodulemd_version 2.13.0
+# librepo version differs across distros
+# Fedora / CS10 / RHEL10: librepo ≥ 1.18 is available
+%if 0%{?fedora} || 0%{?rhel} >= 10
 %global librepo_version 1.18.0
+%else
+%global librepo_version 1.14.0
+%endif
 
 BuildRequires:  cmake >= 3.5.0
 BuildRequires:  gcc
