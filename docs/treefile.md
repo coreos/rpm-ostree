@@ -61,7 +61,9 @@ It supports the following parameters:
       and above.
     * "kernel-install": The system is integrated with `/sbin/kernel-install`
       from systemd. You likely want to additionally pair this with configuring `layout=ostree`
-      in `/usr/lib/kernel/install.conf`, and adding a wrapper script to
+      in `/usr/lib/kernel/install.conf` or as a drop-in in
+      `/usr/lib/kernel/install.conf.d/` (recommended to avoid being overwritten
+      by systemd-udev updates), and adding a wrapper script to
       `/usr/lib/kernel/install.d/05-rpmostree.install`
 
  * `etc-group-members`: Array of strings, optional: Unix groups in this
