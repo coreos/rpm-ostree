@@ -214,8 +214,8 @@ dependencies = [
 
 [[package]]
 name = "bootc-internal-utils"
-version = "0.0.0"
-source = "git+https://github.com/containers/bootc?rev=40ebdd5829a151cadb5dbadcb1b047f8f4d038cb#40ebdd5829a151cadb5dbadcb1b047f8f4d038cb"
+version = "0.1.0"
+source = "git+https://github.com/containers/bootc?rev=b76d75d6024bd0aa0f270ff181807aff4209f9c9#b76d75d6024bd0aa0f270ff181807aff4209f9c9"
 dependencies = [
  "anstream",
  "anyhow",
@@ -467,7 +467,7 @@ dependencies = [
 [[package]]
 name = "composefs"
 version = "0.3.0"
-source = "git+https://github.com/containers/composefs-rs?rev=82e211ee3e5c8e2b7b3bc00b40b828133633c41b#82e211ee3e5c8e2b7b3bc00b40b828133633c41b"
+source = "git+https://github.com/containers/composefs-rs?rev=e9008489375044022e90d26656960725a76f4620#e9008489375044022e90d26656960725a76f4620"
 dependencies = [
  "anyhow",
  "hex",
@@ -487,7 +487,7 @@ dependencies = [
 [[package]]
 name = "composefs-boot"
 version = "0.3.0"
-source = "git+https://github.com/containers/composefs-rs?rev=82e211ee3e5c8e2b7b3bc00b40b828133633c41b#82e211ee3e5c8e2b7b3bc00b40b828133633c41b"
+source = "git+https://github.com/containers/composefs-rs?rev=e9008489375044022e90d26656960725a76f4620#e9008489375044022e90d26656960725a76f4620"
 dependencies = [
  "anyhow",
  "composefs",
@@ -500,7 +500,7 @@ dependencies = [
 [[package]]
 name = "composefs-oci"
 version = "0.3.0"
-source = "git+https://github.com/containers/composefs-rs?rev=82e211ee3e5c8e2b7b3bc00b40b828133633c41b#82e211ee3e5c8e2b7b3bc00b40b828133633c41b"
+source = "git+https://github.com/containers/composefs-rs?rev=e9008489375044022e90d26656960725a76f4620#e9008489375044022e90d26656960725a76f4620"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2327,7 +2327,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.15.3"
-source = "git+https://github.com/containers/bootc?rev=40ebdd5829a151cadb5dbadcb1b047f8f4d038cb#40ebdd5829a151cadb5dbadcb1b047f8f4d038cb"
+source = "git+https://github.com/containers/bootc?rev=b76d75d6024bd0aa0f270ff181807aff4209f9c9#b76d75d6024bd0aa0f270ff181807aff4209f9c9"
 dependencies = [
  "anyhow",
  "bootc-internal-utils",
