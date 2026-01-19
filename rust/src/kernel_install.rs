@@ -32,22 +32,111 @@ const SKIP: u8 = 77;
 const MODULES: &str = "usr/lib/modules";
 /// The default name for the initramfs.
 const INITRAMFS: &str = "initramfs.img";
-/// The path to the instal.conf that sets layout.
-const KERNEL_INSTALL_CONF: &str = "usr/lib/kernel/install.conf";
+/// Config paths per kernel-install(8), checked in priority order.
+/// /etc takes precedence over /usr/lib (user/distro config over vendor defaults).
+const KERNEL_INSTALL_CONF_ETC: &str = "etc/kernel/install.conf";
+const KERNEL_INSTALL_CONF_ETC_D: &str = "etc/kernel/install.conf.d";
+const KERNEL_INSTALL_CONF_USR: &str = "usr/lib/kernel/install.conf";
+const KERNEL_INSTALL_CONF_USR_D: &str = "usr/lib/kernel/install.conf.d";
 
-#[context("Verifying kernel-install layout file")]
-pub fn is_ostree_layout(rootfs: &Dir) -> Result<bool> {
-    let Some(conf) = rootfs.open_optional(KERNEL_INSTALL_CONF)? else {
-        return Ok(false);
-    };
-    let buf = BufReader::new(conf);
-    // Check for "layout=ostree" in the file
+/// Parse a config file and return the layout value if found.
+fn get_layout_from_file(file: std::fs::File) -> Result<Option<String>> {
+    let buf = BufReader::new(file);
     for line in buf.lines() {
         let line = line?;
-        if line.trim() == "layout=ostree" {
-            return Ok(true);
+        let trimmed = line.trim();
+        if let Some(value) = trimmed.strip_prefix("layout=") {
+            return Ok(Some(value.to_string()));
         }
     }
+    Ok(None)
+}
+
+/// Parse all *.conf files in a drop-in directory and return the layout value.
+/// Files are processed in lexicographic order; later files override earlier ones.
+fn get_layout_from_dropin_dir(rootfs: &Dir, dir_path: &str) -> Result<Option<String>> {
+    let Some(dir) = rootfs.open_dir_optional(dir_path)? else {
+        return Ok(None);
+    };
+
+    // Collect and sort entries lexicographically
+    let mut entries: Vec<_> = dir
+        .entries()?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let file_name = entry.file_name();
+            let path = std::path::Path::new(&file_name);
+            (path.extension() == Some(std::ffi::OsStr::new("conf"))).then_some(entry)
+        })
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    let mut layout = None;
+    for entry in entries {
+        if let Some(file) = dir.open_optional(entry.file_name())? {
+            if let Some(value) = get_layout_from_file(file.into_std())? {
+                layout = Some(value);
+            }
+        }
+    }
+    Ok(layout)
+}
+
+/// Get the layout from a config directory level (main conf + drop-ins).
+/// Per systemd drop-in semantics, drop-in files are parsed AFTER the main config
+/// and can override values from it.
+fn get_layout_from_config_dir(
+    rootfs: &Dir,
+    main_conf: &str,
+    dropin_dir: &str,
+) -> Result<Option<String>> {
+    // Start with the main config file value (if it exists)
+    let mut layout = None;
+    if let Some(conf) = rootfs.open_optional(main_conf)? {
+        layout = get_layout_from_file(conf.into_std())?;
+    }
+
+    // Drop-ins override the main config (parsed after, per systemd semantics)
+    if let Some(dropin_layout) = get_layout_from_dropin_dir(rootfs, dropin_dir)? {
+        layout = Some(dropin_layout);
+    }
+
+    Ok(layout)
+}
+
+/// Check if the kernel-install layout is configured as "ostree".
+///
+/// NOTE: We cannot simply rely on the KERNEL_INSTALL_LAYOUT environment variable
+/// because this function is called in contexts where kernel-install is not running:
+/// - At compose time (FilesystemScriptPrep, cliwrap_write_wrappers)
+/// - During cliwrap interception of direct kernel-install calls
+///
+/// The shell hook 05-rpmostree.install can rely on the env var directly since
+/// it's invoked by kernel-install itself, which parses the config and exports
+/// the variable.
+///
+/// Per kernel-install(8) and systemd drop-in semantics:
+/// - /etc/kernel/ takes precedence over /usr/lib/kernel/
+/// - Within each directory, drop-in files (install.conf.d/*.conf) are parsed
+///   AFTER the main config (install.conf) and can override its values
+/// - Drop-in files are processed in lexicographic order; later files override earlier ones
+#[context("Verifying kernel-install layout")]
+pub fn is_ostree_layout(rootfs: &Dir) -> Result<bool> {
+    // 1. Check /etc/kernel/ level (main conf + drop-ins merged)
+    // /etc takes precedence over /usr/lib
+    if let Some(layout) =
+        get_layout_from_config_dir(rootfs, KERNEL_INSTALL_CONF_ETC, KERNEL_INSTALL_CONF_ETC_D)?
+    {
+        return Ok(layout == LAYOUT_OSTREE);
+    }
+
+    // 2. Check /usr/lib/kernel/ level (main conf + drop-ins merged)
+    if let Some(layout) =
+        get_layout_from_config_dir(rootfs, KERNEL_INSTALL_CONF_USR, KERNEL_INSTALL_CONF_USR_D)?
+    {
+        return Ok(layout == LAYOUT_OSTREE);
+    }
+
     Ok(false)
 }
 
@@ -142,14 +231,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ostree_layout_parse() -> Result<()> {
+    fn test_ostree_layout_usr_conf() -> Result<()> {
         let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
         assert!(!is_ostree_layout(&td).unwrap());
-        td.create_dir_all(Path::new(KERNEL_INSTALL_CONF).parent().unwrap())?;
-        td.write(KERNEL_INSTALL_CONF, "")?;
+        td.create_dir_all(Path::new(KERNEL_INSTALL_CONF_USR).parent().unwrap())?;
+        td.write(KERNEL_INSTALL_CONF_USR, "")?;
         assert!(!is_ostree_layout(&td).unwrap());
         td.write(
-            KERNEL_INSTALL_CONF,
+            KERNEL_INSTALL_CONF_USR,
             indoc::indoc! { r#"
             # some comments
 
@@ -158,7 +247,7 @@ mod tests {
         )?;
         assert!(!is_ostree_layout(&td).unwrap());
         td.write(
-            KERNEL_INSTALL_CONF,
+            KERNEL_INSTALL_CONF_USR,
             indoc::indoc! { r#"
             # this is an ostree layout
             layout=ostree
@@ -166,6 +255,205 @@ mod tests {
         "# },
         )?;
 
+        assert!(is_ostree_layout(&td).unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ostree_layout_usr_dropin() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // No config at all
+        assert!(!is_ostree_layout(&td).unwrap());
+
+        // Create the drop-in directory
+        td.create_dir_all(KERNEL_INSTALL_CONF_USR_D)?;
+
+        // Drop-in file without layout=ostree
+        td.write(
+            format!("{}/00-layout.conf", KERNEL_INSTALL_CONF_USR_D),
+            indoc::indoc! { r#"
+            # some config
+            layout=bls
+        "# },
+        )?;
+        assert!(!is_ostree_layout(&td).unwrap());
+
+        // Drop-in file with layout=ostree
+        td.write(
+            format!("{}/00-layout.conf", KERNEL_INSTALL_CONF_USR_D),
+            indoc::indoc! { r#"
+            # kernel-install will not try to run dracut and allow rpm-ostree to
+            # take over. Rpm-ostree will use this to know that it is responsible
+            # to run dracut and ensure that there is only one kernel in the image
+            layout=ostree
+        "# },
+        )?;
+        assert!(is_ostree_layout(&td).unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ostree_layout_dropin_only() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // Only drop-in, no main install.conf
+        td.create_dir_all(KERNEL_INSTALL_CONF_USR_D)?;
+        td.write(
+            format!("{}/00-layout.conf", KERNEL_INSTALL_CONF_USR_D),
+            "layout=ostree\n",
+        )?;
+        assert!(is_ostree_layout(&td).unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ostree_layout_dropin_ordering() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // Create the drop-in directory
+        td.create_dir_all(KERNEL_INSTALL_CONF_USR_D)?;
+
+        // First file sets ostree, second file overrides to bls
+        // Later files (lexicographically) should win
+        td.write(
+            format!("{}/00-ostree.conf", KERNEL_INSTALL_CONF_USR_D),
+            "layout=ostree\n",
+        )?;
+        td.write(
+            format!("{}/99-bls.conf", KERNEL_INSTALL_CONF_USR_D),
+            "layout=bls\n",
+        )?;
+        assert!(!is_ostree_layout(&td).unwrap());
+
+        // Now reverse: bls first, ostree second - ostree should win
+        td.write(
+            format!("{}/00-bls.conf", KERNEL_INSTALL_CONF_USR_D),
+            "layout=bls\n",
+        )?;
+        td.write(
+            format!("{}/99-ostree.conf", KERNEL_INSTALL_CONF_USR_D),
+            "layout=ostree\n",
+        )?;
+        assert!(is_ostree_layout(&td).unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ostree_layout_etc_takes_precedence() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // Set up /usr/lib with ostree layout
+        td.create_dir_all(Path::new(KERNEL_INSTALL_CONF_USR).parent().unwrap())?;
+        td.write(KERNEL_INSTALL_CONF_USR, "layout=ostree\n")?;
+        assert!(is_ostree_layout(&td).unwrap());
+
+        // Now /etc overrides to bls - should take precedence
+        td.create_dir_all(Path::new(KERNEL_INSTALL_CONF_ETC).parent().unwrap())?;
+        td.write(KERNEL_INSTALL_CONF_ETC, "layout=bls\n")?;
+        assert!(!is_ostree_layout(&td).unwrap());
+
+        // /etc with ostree should also work
+        td.write(KERNEL_INSTALL_CONF_ETC, "layout=ostree\n")?;
+        assert!(is_ostree_layout(&td).unwrap());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ostree_layout_etc_dropin_precedence() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // Set up /usr/lib/kernel/install.conf.d with ostree
+        td.create_dir_all(KERNEL_INSTALL_CONF_USR_D)?;
+        td.write(
+            format!("{}/00-layout.conf", KERNEL_INSTALL_CONF_USR_D),
+            "layout=ostree\n",
+        )?;
+        assert!(is_ostree_layout(&td).unwrap());
+
+        // /etc/kernel/install.conf.d overrides - should take precedence
+        td.create_dir_all(KERNEL_INSTALL_CONF_ETC_D)?;
+        td.write(
+            format!("{}/00-layout.conf", KERNEL_INSTALL_CONF_ETC_D),
+            "layout=bls\n",
+        )?;
+        assert!(!is_ostree_layout(&td).unwrap());
+
+        Ok(())
+    }
+
+    /// Test the critical scenario this PR fixes: drop-in overrides main config
+    /// within the same directory level.
+    ///
+    /// Real-world scenario:
+    /// - systemd-udev installs /usr/lib/kernel/install.conf with layout=bls
+    /// - bootc adds /usr/lib/kernel/install.conf.d/00-kernel-layout.conf with layout=ostree
+    /// - Expected: drop-in overrides main conf → layout=ostree
+    #[test]
+    fn test_ostree_layout_dropin_overrides_main_conf() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // Main conf has layout=bls (simulating systemd-udev default)
+        td.create_dir_all(Path::new(KERNEL_INSTALL_CONF_USR).parent().unwrap())?;
+        td.write(KERNEL_INSTALL_CONF_USR, "layout=bls\n")?;
+        assert!(!is_ostree_layout(&td).unwrap());
+
+        // Drop-in overrides to layout=ostree (simulating bootc config)
+        td.create_dir_all(KERNEL_INSTALL_CONF_USR_D)?;
+        td.write(
+            format!("{}/00-kernel-layout.conf", KERNEL_INSTALL_CONF_USR_D),
+            "layout=ostree\n",
+        )?;
+        // Drop-in should override main conf per systemd semantics!
+        assert!(is_ostree_layout(&td).unwrap());
+
+        Ok(())
+    }
+
+    /// Test reverse scenario: main conf has ostree, drop-in overrides to bls
+    #[test]
+    fn test_dropin_overrides_main_conf_to_non_ostree() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // Main conf has layout=ostree
+        td.create_dir_all(Path::new(KERNEL_INSTALL_CONF_USR).parent().unwrap())?;
+        td.write(KERNEL_INSTALL_CONF_USR, "layout=ostree\n")?;
+        assert!(is_ostree_layout(&td).unwrap());
+
+        // Drop-in overrides to layout=bls
+        td.create_dir_all(KERNEL_INSTALL_CONF_USR_D)?;
+        td.write(
+            format!("{}/99-override.conf", KERNEL_INSTALL_CONF_USR_D),
+            "layout=bls\n",
+        )?;
+        // Drop-in should override main conf
+        assert!(!is_ostree_layout(&td).unwrap());
+
+        Ok(())
+    }
+
+    /// Test /etc drop-in overrides /etc main conf
+    #[test]
+    fn test_etc_dropin_overrides_etc_main_conf() -> Result<()> {
+        let td = &cap_tempfile::tempdir(cap_std::ambient_authority())?;
+
+        // /etc main conf has layout=bls
+        td.create_dir_all(Path::new(KERNEL_INSTALL_CONF_ETC).parent().unwrap())?;
+        td.write(KERNEL_INSTALL_CONF_ETC, "layout=bls\n")?;
+        assert!(!is_ostree_layout(&td).unwrap());
+
+        // /etc drop-in overrides to layout=ostree
+        td.create_dir_all(KERNEL_INSTALL_CONF_ETC_D)?;
+        td.write(
+            format!("{}/50-ostree.conf", KERNEL_INSTALL_CONF_ETC_D),
+            "layout=ostree\n",
+        )?;
+        // Drop-in should override main conf
         assert!(is_ostree_layout(&td).unwrap());
 
         Ok(())
