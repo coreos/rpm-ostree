@@ -92,15 +92,15 @@ If reproducible builds are desirable, it is recommended to use
 
 ### Assigning files to specific layers
 
-To assign files to a specific layer, add the `user.components` xattr
+To assign files to a specific layer, add the `user.component` xattr
 to the file when building the bootc image. This will create a new layer for each
 unique `user.component` xattr value. For example, if you want `/usr/bin/my-app`
-to be in the `custom-apps` layer, you can set the `user.components` xattr on it.
+to be in the `custom-apps` layer, you can set the `user.component` xattr on it.
 
 ```
 FROM quay.io/exampleos/exampleos:build
 
-RUN setfattr -n user.components -v "custom-apps" /usr/bin/my-app
+RUN setfattr -n user.component -v "custom-apps" /usr/bin/my-app
 ```
 
 All files and sub-directories are recursively added when a directory has the `user.component`  xattr.
