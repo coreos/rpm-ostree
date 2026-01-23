@@ -1204,7 +1204,8 @@ async fn fetch_previous_metadata(
 pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     let cancellable = gio::Cancellable::NONE;
 
-    let opt = ComposeImageOpts::parse_from(args.iter().skip(1));
+    let args = args.iter().map(|v| v.as_str());
+    let opt = ComposeImageOpts::parse_from(["image"].into_iter().chain(args));
 
     let tempdir = tempfile::tempdir()?;
     let tempdir = Utf8Path::from_path(tempdir.path()).unwrap();
