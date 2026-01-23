@@ -228,6 +228,13 @@ pub(crate) struct BuildChunkedOCIOpts {
     /// it works to use over 200 layers.
     max_layers: Option<NonZeroU32>,
 
+    /// Prevent a change in packing structure by taking a reference to a
+    /// previous build to base the layer plan on. For example,
+    /// `docker://quay.io/registry-name/image-name:latest` to use an image in
+    /// a remote registry (without needing to pull the remote image).
+    #[clap(long)]
+    previous_build: Option<String>,
+
     /// Tag to use for output image, or `latest` if unset.
     #[clap(long, default_value = "latest")]
     reference: String,
@@ -324,7 +331,8 @@ impl BuildChunkedOCIOpts {
         // Ensure we're in the proper namespace for container operations
         crate::containers_storage::reexec_if_needed()?;
 
-        let existing_manifest = self.check_existing_image(&self.output)?;
+        let previous_build_candidate = self.previous_build.as_ref().unwrap_or(&self.output);
+        let existing_manifest = self.check_existing_image(previous_build_candidate)?;
 
         let rootfs_source = if let Some(rootfs) = self.rootfs {
             FileSource::Rootfs(rootfs)
@@ -481,11 +489,14 @@ impl BuildChunkedOCIOpts {
     }
 
     /// Check if there's already an image at the target location and if it's chunked
-    fn check_existing_image(&self, output: &str) -> Result<Option<oci_spec::image::ImageManifest>> {
-        // Parse the output reference to determine transport and location
-        let (transport, _location) = output
-            .split_once(':')
-            .ok_or_else(|| anyhow::anyhow!("Invalid output format, expected TRANSPORT:TARGET"))?;
+    fn check_existing_image(
+        &self,
+        image_ref: &str,
+    ) -> Result<Option<oci_spec::image::ImageManifest>> {
+        // Parse the image reference to determine transport and location
+        let (transport, _location) = image_ref.split_once(':').ok_or_else(|| {
+            anyhow::anyhow!("Invalid image reference '{image_ref}', expected TRANSPORT:TARGET")
+        })?;
 
         let handle = tokio::runtime::Handle::current();
         let result: Option<oci_spec::image::ImageManifest> = handle.block_on(async {
@@ -494,9 +505,9 @@ impl BuildChunkedOCIOpts {
             let proxy = containers_image_proxy::ImageProxy::new().await?;
 
             let img = if transport == OCI_ARCHIVE_TRANSPORT {
-                (proxy.open_image(output).await).ok()
+                (proxy.open_image(image_ref).await).ok()
             } else {
-                proxy.open_image_optional(output).await?
+                proxy.open_image_optional(image_ref).await?
             };
 
             if let Some(opened_image) = img {
