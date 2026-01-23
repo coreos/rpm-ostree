@@ -43,6 +43,7 @@ static gboolean opt_download_only;
 static char *opt_automatic;
 static gboolean opt_lock_finalization;
 static gboolean opt_bypass_driver;
+static gboolean opt_ex_reset_overrides;
 
 /* "check-diff" is deprecated, replaced by "preview" */
 static GOptionEntry option_entries[]
@@ -75,6 +76,8 @@ static GOptionEntry option_entries[]
           "Prevent automatic deployment finalization on shutdown", NULL },
         { "bypass-driver", 0, 0, G_OPTION_ARG_NONE, &opt_bypass_driver,
           "Force an upgrade even if an updates driver is registered", NULL },
+        { "ex-reset-overrides", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE,
+          &opt_ex_reset_overrides, "Reset overrides before upgrade", NULL },
         { NULL } };
 
 gboolean
@@ -174,6 +177,7 @@ rpmostree_builtin_upgrade (int argc, char **argv, RpmOstreeCommandInvocation *in
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
       g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
       g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
+      g_variant_dict_insert (&dict, "ex-reset-overrides", "b", opt_ex_reset_overrides);
       g_autoptr (GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to. */
