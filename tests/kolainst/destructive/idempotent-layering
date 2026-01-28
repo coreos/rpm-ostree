@@ -1,10 +1,11 @@
 #!/bin/bash
 ## kola:
-##   # Increase timeout since this test involves rebasing and container operations
-##   timeoutMin: 20
+##   # Increase timeout since this test involves rebasing, container operations,
+##   # and kernel override/reset which requires additional reboots
+##   timeoutMin: 30
 ##   # This test only runs on FCOS
 ##   distros: fcos
-##   # Needs internet access for package installation
+##   # Needs internet access for package installation and koji access
 ##   tags: "needs-internet platform-independent"
 ##   minMemory: 2048
 #
@@ -32,6 +33,23 @@ set -euo pipefail
 set -x
 
 cd "$(mktemp -d)"
+
+# Get Fedora version and set up kernel override URLs
+. /etc/os-release
+case $VERSION_ID in
+  42)
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2693809"
+    kernel_release=6.14.1-300.fc42.x86_64
+    ;;
+  43)
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2837146"
+    kernel_release=6.17.1-300.fc43.x86_64
+    ;;
+  *)
+    echo "Unsupported Fedora version: $VERSION_ID"
+    exit 1
+    ;;
+esac
 
 # TODO: It'd be much better to test this via a registry
 image_dir=/var/tmp/fcos
@@ -108,6 +126,47 @@ EOF
     rpm -q tmux
     rpm -q vim-enhanced
     echo "ok idempotent install of new package"
+
+    # Test 5: Override kernel on container-based deployment
+    # This tests that override replace works on container-based systems
+    current_kernel=$(uname -r)
+    echo "Current kernel: ${current_kernel}"
+
+    # Skip if already on target kernel
+    if [[ "${current_kernel}" == "${kernel_release}" ]]; then
+      echo "NOTE: skipping kernel override test as target kernel is already present"
+    else
+      rpm-ostree override replace "${koji_kernel_url}"
+      rpmostree_assert_status '.deployments[0]["base-local-replacements"]|length > 0'
+      echo "ok kernel override on container-based deployment"
+    fi
+
+    /tmp/autopkgtest-reboot 3
+    ;;
+  3)
+    # Verify override was applied (if we did the override)
+    current_kernel=$(uname -r)
+    echo "Current kernel after reboot: ${current_kernel}"
+
+    # Check if we have overrides
+    has_overrides=$(rpm-ostree status --json | jq -r '.deployments[0]["base-local-replacements"]|length')
+
+    if [[ "${has_overrides}" -gt 0 ]]; then
+      # Test 6: Override reset --all on container-based deployment
+      # This is the critical test that was broken - override reset -a should
+      # actually stage a new deployment, not silently do nothing
+      echo "Testing override reset --all on container-based deployment..."
+
+      rpm-ostree override reset --all
+
+      # Verify that a new deployment was staged (not just silently returned)
+      # The pending deployment should have no overrides
+      rpmostree_assert_status '.deployments|length == 2'
+      rpmostree_assert_status '.deployments[0]["base-local-replacements"]|length == 0'
+      echo "ok override reset --all on container-based deployment"
+    else
+      echo "NOTE: no overrides present, skipping reset test"
+    fi
 
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;

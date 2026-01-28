@@ -1194,6 +1194,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
 
   gboolean changed = FALSE;
   gboolean remove_changed = FALSE;
+  gboolean override_changed = FALSE;
   if (no_initramfs
       && (rpmostree_origin_get_regenerate_initramfs (origin)
           || rpmostree_origin_has_initramfs_etc_files (origin)))
@@ -1329,7 +1330,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
   if (no_overrides)
     {
       if (rpmostree_origin_remove_all_overrides (origin))
-        changed = TRUE;
+        {
+          changed = TRUE;
+          override_changed = TRUE;
+        }
     }
   else if (override_reset_pkgs || override_replace_local_pkgs)
     {
@@ -1463,6 +1467,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
             }
         }
       changed = TRUE;
+      override_changed = TRUE;
     }
   auto treefile = (const char *)vardict_lookup_ptr (self->modifiers, "treefile", "&s");
   if (treefile && !rpmostree_origin_merge_treefile (origin, treefile, &changed, error))
@@ -1591,10 +1596,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
   /* When using containers and nothing changed after prep_layering, return early.
    * This happens when all requested packages are already present in the container image.
    * For idempotent mode, this avoids the "No packages in transaction" error.
-   * However, if packages were removed from the origin, we need to deploy to update the origin
-   * even if no layering is needed. Similarly, if we're rebasing (refspec) or deploying a
-   * specific revision, we need to deploy. */
-  if (skip_base_check && !layering_changed && !remove_changed && !self->refspec && !self->revision)
+   * However, if packages were removed from the origin, or overrides were reset, we need to
+   * deploy to update the origin even if no layering is needed. Similarly, if we're rebasing
+   * (refspec) or deploying a specific revision, we need to deploy. */
+  if (skip_base_check && !layering_changed && !remove_changed && !override_changed && !self->refspec
+      && !self->revision)
     return TRUE;
 
   if (dry_run)
