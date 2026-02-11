@@ -2307,10 +2307,11 @@ extern "C"
     void (*container_rebuild$) (::rust::Str) = ::rpmostreecxx::container_rebuild;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          container_rebuild$ (treefile);
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            container_rebuild$ (treefile);
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3055,11 +3056,12 @@ extern "C"
         = ::rpmostreecxx::util_next_version;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rust::String (
-              util_next_version$ (auto_version_prefix, version_suffix, last_version));
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rust::String (
+                util_next_version$ (auto_version_prefix, version_suffix, last_version));
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3088,10 +3090,11 @@ extern "C"
         = ::rpmostreecxx::rpmostree_main;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::std::int32_t (rpmostree_main$ (args));
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::std::int32_t (rpmostree_main$ (args));
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3110,10 +3113,11 @@ extern "C"
     void (*c_unit_tests$) () = ::rpmostreecxx::c_unit_tests;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          c_unit_tests$ ();
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            c_unit_tests$ ();
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3124,10 +3128,11 @@ extern "C"
     void (*client_require_root$) () = ::rpmostreecxx::client_require_root;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          client_require_root$ ();
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            client_require_root$ ();
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3140,10 +3145,11 @@ extern "C"
         = ::rpmostreecxx::new_client_connection;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rpmostreecxx::ClientConnection *(new_client_connection$ ().release ());
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rpmostreecxx::ClientConnection *(new_client_connection$ ().release ());
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3165,10 +3171,11 @@ extern "C"
         = &::rpmostreecxx::ClientConnection::transaction_connect_progress_sync;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          (self.*transaction_connect_progress_sync$) (address);
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            (self.*transaction_connect_progress_sync$) (address);
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3207,11 +3214,12 @@ extern "C"
         = ::rpmostreecxx::rpmdb_diff;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rpmostreecxx::RPMDiff *(
-              rpmdb_diff$ (repo, src, dest, allow_noent).release ());
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rpmostreecxx::RPMDiff *(
+                rpmdb_diff$ (repo, src, dest, allow_noent).release ());
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3265,10 +3273,11 @@ extern "C"
         = ::rpmostreecxx::nevra_to_cache_branch;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rust::String (nevra_to_cache_branch$ (nevra));
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rust::String (nevra_to_cache_branch$ (nevra));
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3281,10 +3290,11 @@ extern "C"
         = ::rpmostreecxx::get_repodata_chksum_repr;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rust::String (get_repodata_chksum_repr$ (pkg));
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rust::String (get_repodata_chksum_repr$ (pkg));
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3298,10 +3308,11 @@ extern "C"
         = ::rpmostreecxx::rpmts_for_commit;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rpmostreecxx::RpmTs *(rpmts_for_commit$ (repo, rev).release ());
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rpmostreecxx::RpmTs *(rpmts_for_commit$ (repo, rev).release ());
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3314,11 +3325,12 @@ extern "C"
         = ::rpmostreecxx::rpmdb_package_name_list;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rust::Vec<::rust::String> (
-              rpmdb_package_name_list$ (dfd, ::rust::String (::rust::unsafe_bitcopy, *path)));
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rust::Vec<::rust::String> (
+                rpmdb_package_name_list$ (dfd, ::rust::String (::rust::unsafe_bitcopy, *path)));
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3333,10 +3345,12 @@ extern "C"
         = &::rpmostreecxx::RpmTs::package_meta;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rpmostreecxx::PackageMeta *((self.*package_meta$) (name, arch).release ());
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rpmostreecxx::PackageMeta *(
+                (self.*package_meta$) (name, arch).release ());
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3382,10 +3396,11 @@ extern "C"
         = &::rpmostreecxx::PackageMeta::provided_paths;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rust::Vec<::rust::String> ((self.*provided_paths$) ());
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rust::Vec<::rust::String> ((self.*provided_paths$) ());
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }
@@ -3400,11 +3415,12 @@ extern "C"
         = ::rpmostreecxx::package_variant_list_for_commit;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
-        [&] {
-          new (return$)::rpmostreecxx::GVariant *(
-              package_variant_list_for_commit$ (repo, rev, cancellable));
-          throw$.ptr = nullptr;
-        },
+        [&]
+          {
+            new (return$)::rpmostreecxx::GVariant *(
+                package_variant_list_for_commit$ (repo, rev, cancellable));
+            throw$.ptr = nullptr;
+          },
         ::rust::detail::Fail (throw$));
     return throw$;
   }

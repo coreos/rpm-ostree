@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
 
+#include "rpmostree-clientlib.h"
 #include "rpmostree-db-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-package-variants.h"
@@ -34,6 +35,7 @@ static char *opt_format;
 static gboolean opt_changelogs;
 static char *opt_sysroot;
 static gboolean opt_base;
+static gboolean opt_avail;
 static gboolean opt_advisories;
 
 static GOptionEntry option_entries[] = {
@@ -45,6 +47,8 @@ static GOptionEntry option_entries[] = {
   { "base", 0, 0, G_OPTION_ARG_NONE, &opt_base,
     "Diff against deployments' base, not layered commits", NULL },
   { "advisories", 'a', 0, G_OPTION_ARG_NONE, &opt_advisories, "Also output new advisories", NULL },
+  { "avail", 0, 0, G_OPTION_ARG_NONE, &opt_avail, "Diff against the latest available update",
+    NULL },
   { NULL }
 };
 
@@ -142,6 +146,26 @@ print_deployment_diff (OstreeRepo *repo, const char *from_desc, OstreeDeployment
   return print_diff (repo, from_desc, from_checksum, to_desc, to_checksum, cancellable, error);
 }
 
+static gboolean
+load_booted_deployment (const char *sysroot_path, OstreeSysroot **out_sysroot,
+                        OstreeDeployment **out_booted, GCancellable *cancellable, GError **error)
+{
+  g_autoptr (GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+  g_autoptr (OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
+  if (!ostree_sysroot_load (sysroot, cancellable, error))
+    return FALSE;
+
+  OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
+  if (!booted)
+    return glnx_throw (error, "Not booted into any deployment");
+
+  if (out_sysroot)
+    *out_sysroot = (OstreeSysroot *)g_steal_pointer (&sysroot);
+  if (out_booted)
+    *out_booted = booted;
+  return TRUE;
+}
+
 gboolean
 rpmostree_db_builtin_diff (int argc, char **argv, RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
@@ -189,18 +213,66 @@ rpmostree_db_builtin_diff (int argc, char **argv, RpmOstreeCommandInvocation *in
   const char *to_desc = NULL;
   g_autofree char *to_checksum = NULL;
 
-  if (argc < 3)
+  if (opt_avail)
+    {
+      g_auto (GVariantDict) dict;
+      if (argc > 1)
+        {
+          rpmostree_usage_error (context, "--avail takes at most 1 argument (FROM_REV)", error);
+          return FALSE;
+        }
+
+      const char *sysroot_path = opt_sysroot ?: "/";
+      glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+      if (!rpmostree_load_sysroot (sysroot_path, cancellable, &sysroot_proxy, error))
+        return FALSE;
+
+      glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
+      if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, cancellable, &os_proxy, error))
+        return FALSE;
+
+      if (!rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
+        {
+          return glnx_throw (
+              error, "No available update found; try running `rpm-ostree upgrade --check` first");
+        }
+
+      g_autoptr (GVariant) cached_update = rpmostree_os_dup_cached_update (os_proxy);
+      g_variant_dict_init (&dict, cached_update);
+      const char *avail_checksum = NULL;
+      if (!g_variant_dict_lookup (&dict, "checksum", "&s", &avail_checksum))
+        {
+          return glnx_throw (error, "Available update missing checksum");
+        }
+      to_checksum = g_strdup (avail_checksum);
+      to_desc = "available update";
+
+      if (argc < 1)
+        {
+          g_autoptr (OstreeSysroot) sysroot = NULL;
+          OstreeDeployment *booted = NULL;
+          if (!load_booted_deployment (sysroot_path, &sysroot, &booted, cancellable, error))
+            return FALSE;
+
+          from_desc = "booted deployment";
+          if (!get_checksum_from_deployment (repo, booted, &from_checksum, error))
+            return FALSE;
+        }
+      else
+        {
+          from_desc = argv[0];
+          if (!ostree_repo_resolve_rev (repo, from_desc, FALSE, &from_checksum, error))
+            return FALSE;
+        }
+    }
+  else if (argc < 3)
     {
       /* find booted deployment */
       const char *sysroot_path = opt_sysroot ?: "/";
-      g_autoptr (GFile) sysroot_file = g_file_new_for_path (sysroot_path);
-      g_autoptr (OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
-      if (!ostree_sysroot_load (sysroot, cancellable, error))
+      g_autoptr (OstreeSysroot) sysroot = NULL;
+      OstreeDeployment *booted = NULL;
+      if (!load_booted_deployment (sysroot_path, &sysroot, &booted, cancellable, error))
         return FALSE;
-
-      OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
-      if (!booted)
-        return glnx_throw (error, "Not booted into any deployment");
 
       if (argc < 2)
         {
