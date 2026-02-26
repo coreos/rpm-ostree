@@ -233,6 +233,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bootc-kernel-cmdline"
+version = "0.0.0"
+source = "git+https://github.com/containers/bootc?rev=b76d75d6024bd0aa0f270ff181807aff4209f9c9#b76d75d6024bd0aa0f270ff181807aff4209f9c9"
+dependencies = [
+ "anyhow",
+ "serde",
+]
+
+[[package]]
 name = "bstr"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1581,7 +1590,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "system-configuration 0.6.1",
  "tokio",
  "tower-service",
@@ -2843,6 +2852,7 @@ dependencies = [
  "anyhow",
  "binread",
  "bitflags 2.9.1",
+ "bootc-kernel-cmdline",
  "camino",
  "cap-primitives",
  "cap-std",
@@ -3965,7 +3975,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

@@ -20,6 +20,7 @@ mod cmdutils;
 mod cxxrsutil;
 mod ffiutil;
 pub(crate) mod ffiwrappers;
+mod kargs;
 mod reexec;
 pub(crate) use cxxrsutil::*;
 use ffi::BubblewrapMutability;
@@ -833,6 +834,10 @@ pub mod ffi {
     // rpmutils.rs
     extern "Rust" {
         fn cache_branch_to_nevra(nevra: &str) -> String;
+    }
+
+    extern "Rust" {
+        fn kargs_delete(kargs: &str, to_delete: &str) -> String;
     }
 
     unsafe extern "C++" {

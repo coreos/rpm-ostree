@@ -2762,12 +2762,19 @@ kernel_arg_apply_patching (KernelArgTransaction *self, RpmOstreeSysrootUpgrader 
   g_auto (GStrv) existing_kargs_strv = ostree_kernel_args_to_strv (existing_kargs);
   gboolean changed = FALSE;
 
-  /* Delete all the entries included in the kernel args */
+  g_auto (GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);
+  g_autofree char *kargs_str = g_strjoinv (" ", kargs_strv);
+
   for (char **iter = self->kernel_args_deleted; iter && *iter; iter++)
     {
       const char *arg = *iter;
-      if (!ostree_kernel_args_delete (kargs, arg, error))
-        return FALSE;
+      auto result = rpmostreecxx::kargs_delete (kargs_str, arg);
+      if (result.empty ())
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "No karg '%s' found", arg);
+          return FALSE;
+        }
+      kargs_str = g_strdup (result.c_str ());
       changed = TRUE;
     }
 
@@ -2788,8 +2795,8 @@ kernel_arg_apply_patching (KernelArgTransaction *self, RpmOstreeSysrootUpgrader 
   for (char **iter = append_if_missing; iter && *iter; iter++)
     {
       const char *arg = *iter;
-      g_auto (GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);
-      if (!g_strv_contains (kargs_strv, arg))
+      g_auto (GStrv) current_kargs_strv = ostree_kernel_args_to_strv (kargs);
+      if (!g_strv_contains (current_kargs_strv, arg))
         {
           ostree_kernel_args_append (kargs, arg);
           changed = TRUE;
@@ -2799,12 +2806,20 @@ kernel_arg_apply_patching (KernelArgTransaction *self, RpmOstreeSysrootUpgrader 
   for (char **iter = delete_if_present; iter && *iter; iter++)
     {
       const char *arg = *iter;
-      if (g_strv_contains (existing_kargs_strv, arg))
+      auto result = rpmostreecxx::kargs_delete (kargs_str, arg);
+      if (!result.empty ())
         {
-          if (!ostree_kernel_args_delete (kargs, arg, error))
-            return FALSE;
+          kargs_str = g_strdup (result.c_str ());
           changed = TRUE;
         }
+    }
+
+  if (changed)
+    {
+      g_autoptr (OstreeKernelArgs) new_kargs = ostree_kernel_args_from_string (kargs_str);
+      g_auto (GStrv) new_strv = ostree_kernel_args_to_strv (new_kargs);
+      for (char **iter = new_strv; iter && *iter; iter++)
+        ostree_kernel_args_append (kargs, *iter);
     }
 
   if (!kernel_arg_apply (self, upgrader, kargs, changed, cancellable, error))
