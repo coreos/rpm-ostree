@@ -294,6 +294,10 @@
         "initiating-command-line" (type 's')
         "lock-finalization" (type 'b')
         "reboot" (type 'b')
+        "source" (type 's') - Track kernel arguments by source name (e.g. "tuned").
+                              When set, all previous kargs from this source are removed
+                              and replaced with the new set. Source ownership is stored
+                              as a custom key (ostree-source-NAME) in the BLS config file.
     -->
     <method name="KernelArgs">
       <arg type="s" name="existing_kernel_arg_string" direction="in"/>

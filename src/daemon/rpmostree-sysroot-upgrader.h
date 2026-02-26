@@ -124,4 +124,18 @@ gboolean rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                             GCancellable *cancellable, GError **error);
 
 void rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self, char **kernel_args);
+
+/**
+ * rpmostree_sysroot_upgrader_set_kargs_source:
+ * @self: Upgrader
+ * @source: The source name (e.g., "tuned")
+ * @kargs: The kargs string for this source (or NULL to clear)
+ *
+ * Sets source-specific kernel arguments that will be tracked in the
+ * BLS config. This enables tools like tuned to manage their kargs
+ * even when /etc is transient.
+ */
+void rpmostree_sysroot_upgrader_set_kargs_source (RpmOstreeSysrootUpgrader *self,
+                                                  const char *source, const char *kargs);
+
 G_END_DECLS
