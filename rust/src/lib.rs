@@ -21,6 +21,7 @@ mod cxxrsutil;
 mod ffiutil;
 pub(crate) mod ffiwrappers;
 mod kargs;
+pub use crate::kargs::kargs_delete;
 mod reexec;
 pub(crate) use cxxrsutil::*;
 use ffi::BubblewrapMutability;
