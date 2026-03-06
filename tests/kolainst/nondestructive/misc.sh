@@ -19,8 +19,17 @@ rm -f out.txt
 rpm-ostree -h usroverlay >out.txt
 assert_file_has_content out.txt "ostree admin unlock"
 
-# Verify https://github.com/coreos/rpm-ostree/issues/26
 tmpfiles="/usr/lib/tmpfiles.d/rpm-ostree-autovar.conf"
+
+# Verify /var/lib/selinux compatibility symlink
+integ="/usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf"
+assert_file_has_content_literal $integ 'L /var/lib/selinux - - - - ../../etc/selinux'
+test -L /var/lib/selinux
+assert_streq "$(readlink /var/lib/selinux)" "../../etc/selinux"
+assert_not_file_has_content $tmpfiles '/var/lib/selinux'
+echo "ok /var/lib/selinux compatibility symlink"
+
+# Verify https://github.com/coreos/rpm-ostree/issues/26
 # Duplication in tmp.conf
 assert_not_file_has_content $tmpfiles 'd /var/tmp'
 # Duplication in var.conf
