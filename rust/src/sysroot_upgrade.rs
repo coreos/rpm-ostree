@@ -67,6 +67,15 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>, total_to_fetch: u
     let mut task = None;
     let mut n_fetched = 0u64;
     while let Some(v) = r.recv().await {
+        // Increment counter when a layer starts so we display 1-indexed progress
+        // (e.g., "[1/6]" for the first layer, not "[0/6]")
+        let is_started = matches!(
+            v,
+            ImportProgress::OstreeChunkStarted(_) | ImportProgress::DerivedLayerStarted(_)
+        );
+        if is_started {
+            n_fetched += 1;
+        }
         let mut msg = ostree_ext::cli::layer_progress_format(&v);
         msg.insert_str(0, &format!("[{n_fetched}/{total_to_fetch}] "));
         tracing::debug!("layer progress: {msg}");
@@ -77,7 +86,6 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>, total_to_fetch: u
             }
             ImportProgress::OstreeChunkCompleted(_) => {
                 assert!(task.take().is_some());
-                n_fetched += 1;
             }
             ImportProgress::DerivedLayerStarted(_) => {
                 assert!(task.is_none());
@@ -85,7 +93,6 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>, total_to_fetch: u
             }
             ImportProgress::DerivedLayerCompleted(_) => {
                 assert!(task.take().is_some());
-                n_fetched += 1;
             }
         }
     }
