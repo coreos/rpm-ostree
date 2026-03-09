@@ -1592,16 +1592,17 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
                                                  cancellable, error))
     return FALSE;
   changed = changed || layering_changed;
+  /* Also fold in package removals and override resets so that the early
+   * return below won't fire when those operations need a new deployment. */
+  changed = changed || remove_changed || override_changed;
 
-  /* When using containers and nothing changed after prep_layering, return early.
-   * This happens when all requested packages are already present in the container image.
+  /* When using containers and nothing changed, return early. This happens
+   * when all requested packages are already present in the container image.
    * For idempotent mode, this avoids the "No packages in transaction" error.
-   * However, if packages were removed from the origin, or overrides were reset, we need to
-   * deploy to update the origin even if no layering is needed. Similarly, if we're rebasing
-   * (refspec) or deploying a specific revision, we need to deploy. */
-  const bool origin_changed = layering_changed || remove_changed || override_changed;
+   * If we're rebasing (refspec) or deploying a specific revision, we also
+   * need to continue to deploy. */
   const bool have_refspec_or_revision = self->refspec || self->revision;
-  if (skip_base_check && !origin_changed && !have_refspec_or_revision)
+  if (skip_base_check && !changed && !have_refspec_or_revision)
     return TRUE;
 
   if (dry_run)
