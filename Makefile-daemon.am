@@ -35,6 +35,8 @@ librpmostreed_sources = \
 	src/daemon/rpmostree-sysroot-core.cxx \
 	src/daemon/rpmostree-sysroot-upgrader.h \
 	src/daemon/rpmostree-sysroot-upgrader.cxx \
+	src/daemon/rpmostree-bls-kargs.h \
+	src/daemon/rpmostree-bls-kargs.cxx \
 	src/daemon/rpmostreed-errors.h \
 	src/daemon/rpmostreed-errors.cxx \
 	src/daemon/rpmostreed-deployment-utils.h \

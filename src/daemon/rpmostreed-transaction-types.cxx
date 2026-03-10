@@ -24,6 +24,7 @@
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
 
+#include "rpmostree-bls-kargs.h"
 #include "rpmostree-core.h"
 #include "rpmostree-cxxrs.h"
 #include "rpmostree-importer.h"
@@ -2745,6 +2746,109 @@ kernel_arg_apply_final_str (KernelArgTransaction *self, RpmOstreeSysrootUpgrader
   return TRUE;
 }
 
+/**
+ * kernel_arg_apply_source:
+ *
+ * Apply source-aware kernel argument changes. When a source is specified,
+ * we track the kargs associated with that source and handle replacement
+ * semantics: all previous kargs from this source are removed and the new
+ * set is applied.
+ *
+ * The source ownership is tracked using a special key in the BLS config:
+ *   ostree-source-<name>=<kargs>
+ *
+ * This enables tools like tuned to manage their kargs even when /etc is
+ * transient (bootc use case), since the BLS config persists on /boot.
+ */
+static gboolean
+kernel_arg_apply_source (KernelArgTransaction *self, RpmOstreeSysrootUpgrader *upgrader,
+                         const char *source, OstreeKernelArgs *kargs, GCancellable *cancellable,
+                         GError **error)
+{
+  g_return_val_if_fail (self != NULL, FALSE);
+  g_return_val_if_fail (upgrader != NULL, FALSE);
+  g_return_val_if_fail (source != NULL, FALSE);
+  g_return_val_if_fail (kargs != NULL, FALSE);
+
+  /* Validate source name: only alphanumeric, dash, and underscore allowed.
+   * This prevents malformed BLS keys (e.g., spaces would break the key-value
+   * parser since OstreeBootconfigParser splits on whitespace).
+   */
+  for (const char *p = source; *p != '\0'; p++)
+    {
+      if (!g_ascii_isalnum (*p) && *p != '-' && *p != '_')
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                       "Invalid source name '%s': only alphanumeric characters, "
+                       "dashes, and underscores are allowed",
+                       source);
+          return FALSE;
+        }
+    }
+
+  /* Get the merge deployment to read current BLS config */
+  OstreeDeployment *merge_deployment = rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
+  if (merge_deployment == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No merge deployment found");
+      return FALSE;
+    }
+
+  OstreeBootconfigParser *bootconfig = ostree_deployment_get_bootconfig (merge_deployment);
+  if (bootconfig == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "No bootconfig found for deployment");
+      return FALSE;
+    }
+
+  /* Read existing source kargs from the special key */
+  g_autofree char *source_key = g_strdup_printf ("ostree-source-%s", source);
+  const char *old_source_kargs = ostree_bootconfig_parser_get (bootconfig, source_key);
+
+  /* Build new source kargs string from the added args */
+  g_autofree char *new_source_kargs = NULL;
+  if (self->kernel_args_added && self->kernel_args_added[0])
+    new_source_kargs = g_strjoinv (" ", self->kernel_args_added);
+
+  /* Compute what needs to change */
+  g_auto (GStrv) to_add = NULL;
+  g_auto (GStrv) to_remove = NULL;
+  gboolean has_changes
+      = rpmostree_bls_compute_source_diff (old_source_kargs, new_source_kargs, &to_add, &to_remove);
+
+  if (!has_changes)
+    {
+      rpmostree_output_message ("No changes to kernel arguments from source '%s'.", source);
+      return TRUE;
+    }
+
+  /* Remove old source kargs from the current kargs */
+  for (char **iter = to_remove; iter && *iter; iter++)
+    {
+      /* Use the delete API - ignore errors for missing args */
+      GError *local_error = NULL;
+      if (!ostree_kernel_args_delete (kargs, *iter, &local_error))
+        {
+          /* It's OK if the arg doesn't exist - it might have been manually removed */
+          g_clear_error (&local_error);
+        }
+    }
+
+  /* Add new source kargs */
+  for (char **iter = to_add; iter && *iter; iter++)
+    {
+      ostree_kernel_args_append (kargs, *iter);
+    }
+
+  /* Store the source metadata so the upgrader writes it to the new
+   * deployment's BLS config after deploy.
+   */
+  rpmostree_sysroot_upgrader_set_kargs_source (upgrader, source, new_source_kargs);
+
+  /* Use the shared apply path for deploy + reboot handling */
+  return kernel_arg_apply (self, upgrader, kargs, TRUE, cancellable, error);
+}
+
 static gboolean
 kernel_arg_apply_patching (KernelArgTransaction *self, RpmOstreeSysrootUpgrader *upgrader,
                            OstreeKernelArgs *kargs, GCancellable *cancellable, GError **error)
@@ -2846,10 +2950,17 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction, GCancellable
 
   auto final_kernel_args
       = static_cast<const char *> (vardict_lookup_ptr (self->options, "final-kernel-args", "&s"));
+  auto source = static_cast<const char *> (vardict_lookup_ptr (self->options, "source", "&s"));
+
   if (final_kernel_args != NULL)
     {
       /* Pre-assembled kargs string (e.g. coming from --editor) */
       return kernel_arg_apply_final_str (self, upgrader, final_kernel_args, cancellable, error);
+    }
+  else if (source != NULL)
+    {
+      /* Source-aware kargs management (e.g. for tuned with transient /etc) */
+      return kernel_arg_apply_source (self, upgrader, source, kargs, cancellable, error);
     }
   else
     {

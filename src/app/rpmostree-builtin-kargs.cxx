@@ -39,6 +39,7 @@ static char *opt_osname;
 static char *opt_deploy_index;
 static gboolean opt_lock_finalization;
 static gboolean opt_unchanged_exit_77;
+static char *opt_source;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME",
@@ -77,6 +78,10 @@ static GOptionEntry option_entries[] = {
     NULL },
   { "lock-finalization", 0, 0, G_OPTION_ARG_NONE, &opt_lock_finalization,
     "Prevent automatic deployment finalization on shutdown", NULL },
+  { "source", 0, 0, G_OPTION_ARG_STRING, &opt_source,
+    "Track kernel arguments by source name (e.g. tuned). When used, replaces all previous kargs "
+    "from this source with the new set",
+    "NAME" },
   { NULL }
 };
 
@@ -202,6 +207,25 @@ rpmostree_builtin_kargs (int argc, char **argv, RpmOstreeCommandInvocation *invo
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify --editor with --replace, --delete, --append, "
                    "--delete-if-present or --append-if-missing");
+      return FALSE;
+    }
+
+  if (opt_editor && opt_source)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Cannot specify --editor with --source");
+      return FALSE;
+    }
+
+  if (opt_source && (opt_kernel_delete_strings || opt_kernel_replace_strings))
+    {
+      /* With --source, we replace all kargs from that source with the new set.
+       * Delete and replace don't make sense in this context - just use --append
+       * with the new complete set of kargs for this source.
+       */
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Cannot specify --source with --delete or --replace. "
+                   "Use --append to specify the complete set of kargs for this source");
       return FALSE;
     }
 
@@ -358,6 +382,8 @@ rpmostree_builtin_kargs (int argc, char **argv, RpmOstreeCommandInvocation *invo
       if (opt_kernel_delete_if_present_strings && *opt_kernel_delete_if_present_strings)
         g_variant_dict_insert (&dict, "delete-if-present", "^as",
                                opt_kernel_delete_if_present_strings);
+      if (opt_source)
+        g_variant_dict_insert (&dict, "source", "s", opt_source);
       options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* call the generated dbus-function */
