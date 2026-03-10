@@ -483,10 +483,12 @@ compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpo
 
   /* Directly convert /run and /var entries to tmpfiles.d.
    * /var/lib/rpm is omitted as a special case, otherwise libsolv can get
-   * confused. */
+   * confused. /var/lib/selinux is omitted because the store is moved to
+   * /etc/selinux (via store-root in semanage.conf) and we instead create
+   * a compatibility symlink via rpm-ostree-0-integration.conf. */
   if (g_str_has_prefix (path, "/run/") || g_str_has_prefix (path, "/var/"))
     {
-      if (g_str_has_prefix (path, "/var/lib/rpm"))
+      if (g_str_has_prefix (path, "/var/lib/rpm") || g_str_has_prefix (path, "/var/lib/selinux"))
         return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
       // Only convert directories and symlinks.
