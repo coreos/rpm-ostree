@@ -4240,6 +4240,9 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
     {
       if (!self->allow_empty_transaction)
         return glnx_throw (error, "No packages in transaction");
+      /* Empty transaction is allowed (e.g. idempotent layering where packages are already
+       * in the base image). Skip package assembly and just run the final transformations. */
+      return rpmostree_context_assemble_end (self, cancellable, error);
     }
 
   /* Sort the packages as rpmtsOrder() only reorder to satisfy dependencies
