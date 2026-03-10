@@ -59,7 +59,7 @@ fn extensions_load_stream(
     basearch: &str,
     base_pkgs: &[StringMapping],
 ) -> Result<Box<Extensions>> {
-    let mut parsed: Extensions = serde_yaml::from_reader(stream)?;
+    let mut parsed: Extensions = yaml_serde::from_reader(stream)?;
 
     parsed.extensions.retain(|_, ext| {
         ext.architectures
