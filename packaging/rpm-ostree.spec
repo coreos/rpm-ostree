@@ -259,7 +259,7 @@ $PYTHON autofiles.py > files \
   '%{_libdir}/%{name}' \
   '%{_mandir}/man*/*' \
   '%{_datadir}/dbus-1/system.d/*' \
-  '%{_sysconfdir}/rpm-ostreed.conf' \
+  '%config(noreplace) %{_sysconfdir}/rpm-ostreed.conf' \
   '%{_prefix}/lib/systemd/system/*' \
   '%{_prefix}/lib/kernel/install.d/*' \
   '%{_libexecdir}/rpm-ostree*' \
