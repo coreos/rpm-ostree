@@ -1603,7 +1603,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction, GCancellable *ca
    * need to continue to deploy. */
   const bool have_refspec_or_revision = self->refspec || self->revision;
   if (skip_base_check && !changed && !have_refspec_or_revision)
-    return TRUE;
+    {
+      if (is_upgrade)
+        rpmostree_output_message ("No upgrade available.");
+      else
+        rpmostree_output_message ("No change.");
+      return TRUE;
+    }
 
   if (dry_run)
     /* Note early return here; we printed the transaction already */

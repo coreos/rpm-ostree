@@ -265,6 +265,14 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
     assert_streq "${rc}" "77"
     echo "ok upgrade --unchanged-exit-77 reports no change when already up to date"
 
+    # Test 9: Verify upgrade prints "No upgrade available." when already up to date
+    # Regression test for https://github.com/coreos/rpm-ostree/issues/5574
+    # Before this fix, container-based systems would exit silently with code 0
+    # without printing any message when no upgrade was available.
+    rpm-ostree upgrade 2>&1 | tee upgrade-output.txt
+    assert_file_has_content upgrade-output.txt "No upgrade available."
+    echo "ok upgrade prints 'No upgrade available.' on container-based system"
+
     ;;
   *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
 esac
