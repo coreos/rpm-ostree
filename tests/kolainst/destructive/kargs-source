@@ -1,0 +1,158 @@
+#!/bin/bash
+# Test for rpm-ostree kargs --source functionality
+# This enables tools like tuned to manage kargs on systems with transient /etc
+set -euo pipefail
+
+. ${KOLA_EXT_DATA}/libtest.sh
+cd "$(mktemp -d)"
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+  "")
+    # Test 1: Verify --source cannot be combined with --editor
+    if rpm-ostree kargs --source=test --editor 2>err.txt; then
+      fatal "--source with --editor should have failed"
+    fi
+    assert_file_has_content err.txt "Cannot specify --editor with --source"
+    echo "ok --source rejects --editor"
+
+    # Test 2: Verify --source cannot be combined with --delete
+    if rpm-ostree kargs --source=test --delete=foo 2>err.txt; then
+      fatal "--source with --delete should have failed"
+    fi
+    assert_file_has_content err.txt "Cannot specify --source with --delete"
+    echo "ok --source rejects --delete"
+
+    # Test 3: Verify --source cannot be combined with --replace
+    if rpm-ostree kargs --source=test --replace=foo=bar 2>err.txt; then
+      fatal "--source with --replace should have failed"
+    fi
+    assert_file_has_content err.txt "Cannot specify --source with"
+    echo "ok --source rejects --replace"
+
+    # Test 4: Verify invalid source name with spaces is rejected
+    if rpm-ostree kargs --source='bad name' --append=foo=bar 2>err.txt; then
+      fatal "--source with spaces should have failed"
+    fi
+    assert_file_has_content err.txt "Invalid source name"
+    echo "ok --source rejects invalid name (spaces)"
+
+    # Test 5: Verify invalid source name with special chars is rejected
+    if rpm-ostree kargs --source='foo@bar' --append=foo=bar 2>err.txt; then
+      fatal "--source with special chars should have failed"
+    fi
+    assert_file_has_content err.txt "Invalid source name"
+    echo "ok --source rejects invalid name (special chars)"
+
+    # Test 6: Verify empty source name is rejected
+    if rpm-ostree kargs --source='' --append=foo=bar 2>err.txt; then
+      fatal "--source with empty name should have failed"
+    fi
+    assert_file_has_content err.txt "Source name must not be empty"
+    echo "ok --source rejects empty name"
+
+    # Test 7: Verify valid source name with underscores and dashes is accepted
+    rpm-ostree kargs --source=my_custom-src --append=test_valid=1
+    rpm-ostree kargs > kargs.txt
+    assert_file_has_content_literal kargs.txt 'test_valid=1'
+    # Clean up: clear the test source
+    rpm-ostree kargs --source=my_custom-src
+    rpm-ostree kargs > kargs.txt
+    assert_not_file_has_content kargs.txt 'test_valid'
+    echo "ok --source accepts valid name (underscores/dashes)"
+
+    # Test 8: Basic source kargs - add kargs with source tracking
+    rpm-ostree kargs --source=tuned --append=nohz=full --append=isolcpus=1-3
+    rpm-ostree kargs > kargs.txt
+    assert_file_has_content_literal kargs.txt 'nohz=full'
+    assert_file_has_content_literal kargs.txt 'isolcpus=1-3'
+    echo "ok basic --source append"
+
+    # Verify the source key is in the pending deployment's BLS config
+    rpm-ostree status --json > status.json
+    # The deployment should be staged
+    assert_jq status.json '.deployments[0]["staged"] == true'
+
+    /tmp/autopkgtest-reboot 1
+    ;;
+  1)
+    # After reboot, verify kargs persisted
+    rpm-ostree kargs > kargs.txt
+    assert_file_has_content_literal kargs.txt 'nohz=full'
+    assert_file_has_content_literal kargs.txt 'isolcpus=1-3'
+
+    # Verify the source comment survived the staging roundtrip and is in the BLS config.
+    # This requires ostree with the "bootconfig-comments" staged serialization support.
+    grep -h '# x-ostree-options-source-tuned' /boot/loader/entries/ostree-*.conf | head -1 > source.txt
+    assert_file_has_content_literal source.txt 'nohz=full isolcpus=1-3'
+    echo "ok source comment persisted in BLS config after reboot"
+
+    # Test 9: Source replacement semantics - new source kargs replace old ones
+    rpm-ostree kargs --source=tuned --append=nohz=on --append=rcu_nocbs=2-7
+    rpm-ostree kargs > kargs.txt
+    # Old kargs should be gone (in pending deployment)
+    assert_not_file_has_content kargs.txt 'nohz=full'
+    assert_not_file_has_content kargs.txt 'isolcpus=1-3'
+    # New kargs should be present
+    assert_file_has_content_literal kargs.txt 'nohz=on'
+    assert_file_has_content_literal kargs.txt 'rcu_nocbs=2-7'
+    echo "ok --source replacement semantics"
+
+    /tmp/autopkgtest-reboot 2
+    ;;
+  2)
+    # Verify replacement persisted after reboot
+    rpm-ostree kargs > kargs.txt
+    assert_not_file_has_content kargs.txt 'nohz=full'
+    assert_not_file_has_content kargs.txt 'isolcpus=1-3'
+    assert_file_has_content_literal kargs.txt 'nohz=on'
+    assert_file_has_content_literal kargs.txt 'rcu_nocbs=2-7'
+    echo "ok replacement persisted after reboot"
+
+    # Test 10: Multiple sources can coexist
+    rpm-ostree kargs --source=dracut --append=rd.driver.pre=vfio-pci
+    rpm-ostree kargs > kargs.txt
+    # tuned kargs should still be present
+    assert_file_has_content_literal kargs.txt 'nohz=on'
+    assert_file_has_content_literal kargs.txt 'rcu_nocbs=2-7'
+    # dracut kargs should be added
+    assert_file_has_content_literal kargs.txt 'rd.driver.pre=vfio-pci'
+    echo "ok multiple sources coexist"
+
+    /tmp/autopkgtest-reboot 3
+    ;;
+  3)
+    # Verify multiple sources persisted
+    rpm-ostree kargs > kargs.txt
+    assert_file_has_content_literal kargs.txt 'nohz=on'
+    assert_file_has_content_literal kargs.txt 'rcu_nocbs=2-7'
+    assert_file_has_content_literal kargs.txt 'rd.driver.pre=vfio-pci'
+    echo "ok multiple sources persisted"
+
+    # Test 11: Clear source kargs (no --append = clear all owned kargs)
+    rpm-ostree kargs --source=dracut
+    rpm-ostree kargs > kargs.txt
+    # dracut kargs should be removed
+    assert_not_file_has_content kargs.txt 'rd.driver.pre=vfio-pci'
+    # tuned kargs should still be present
+    assert_file_has_content_literal kargs.txt 'nohz=on'
+    assert_file_has_content_literal kargs.txt 'rcu_nocbs=2-7'
+    echo "ok --source clear (empty append)"
+
+    /tmp/autopkgtest-reboot 4
+    ;;
+  4)
+    # Verify clear persisted
+    rpm-ostree kargs > kargs.txt
+    assert_not_file_has_content kargs.txt 'rd.driver.pre=vfio-pci'
+    assert_file_has_content_literal kargs.txt 'nohz=on'
+    echo "ok source clear persisted"
+
+    # Test 12: Idempotent operation - running same source kargs again should be no-op
+    rpm-ostree kargs --source=tuned --append=nohz=on --append=rcu_nocbs=2-7 > out.txt
+    assert_file_has_content_literal out.txt "No changes"
+    echo "ok idempotent source operation"
+
+    echo "All kargs --source tests passed!"
+    ;;
+  *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac

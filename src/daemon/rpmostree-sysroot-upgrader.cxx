@@ -118,6 +118,10 @@ struct RpmOstreeSysrootUpgrader
   char *final_revision;             /* Computed by layering; if NULL, only using base_revision */
 
   char **kargs_strv; /* Kernel argument list to be written into deployment  */
+
+  /* Source-tagged kargs for tracking ownership (e.g., for tuned with transient /etc) */
+  char *kargs_source;      /* Source name (e.g., "tuned") */
+  char *kargs_source_args; /* Kargs string for this source */
 };
 
 enum
@@ -245,6 +249,8 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_free (self->base_revision);
   g_free (self->final_revision);
   g_strfreev (self->kargs_strv);
+  g_free (self->kargs_source);
+  g_free (self->kargs_source_args);
 
   G_OBJECT_CLASS (rpmostree_sysroot_upgrader_parent_class)->finalize (object);
 }
@@ -1268,6 +1274,33 @@ rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self, char **ker
   self->kargs_strv = g_strdupv (kernel_args);
 }
 
+/**
+ * rpmostree_sysroot_upgrader_set_kargs_source:
+ * @self: Self
+ * @source: The source name (e.g., "tuned")
+ * @kargs: The kargs string for this source (or NULL to clear)
+ *
+ * Set source-specific kernel arguments that will be tracked in the
+ * BLS config file. This enables tools like tuned to manage their kargs
+ * even when /etc is transient (bootc use case).
+ *
+ * The source ownership is stored as a magic comment in the BLS config:
+ *   # x-ostree-options-source-<name> <kargs>
+ */
+void
+rpmostree_sysroot_upgrader_set_kargs_source (RpmOstreeSysrootUpgrader *self, const char *source,
+                                             const char *kargs)
+{
+  g_clear_pointer (&self->kargs_source, g_free);
+  g_clear_pointer (&self->kargs_source_args, g_free);
+
+  if (source != NULL)
+    {
+      self->kargs_source = g_strdup (source);
+      self->kargs_source_args = g_strdup (kargs);
+    }
+}
+
 static gboolean
 write_history (RpmOstreeSysrootUpgrader *self, OstreeDeployment *new_deployment,
                GCancellable *cancellable, GError **error)
@@ -1436,6 +1469,94 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   if (!write_history (self, new_deployment, cancellable, error))
     return FALSE;
+
+  /* Write source kargs metadata if set.
+   * For staged deployments, we update the staged GVariant file with
+   * a "bootconfig-comments" key so the magic comments survive finalization
+   * at shutdown. For direct deployments, we write the BLS file directly.
+   */
+  if (self->kargs_source != NULL)
+    {
+      g_autofree char *comment_key
+          = g_strdup_printf ("x-ostree-options-source-%s", self->kargs_source);
+      const char *source_val
+          = (self->kargs_source_args != NULL && self->kargs_source_args[0] != '\0')
+                ? self->kargs_source_args
+                : "";
+
+      if (use_staging)
+        {
+          /* Update the staged deployment GVariant with the source comment.
+           * During finalization at shutdown, ostree reads "bootconfig-comments"
+           * from the staged data and restores these comments on the deployment's
+           * bootconfig before writing the final BLS entry.
+           */
+          static const char staged_path[] = "/run/ostree/staged-deployment";
+
+          g_autoptr (GMappedFile) mfile = g_mapped_file_new (staged_path, FALSE, error);
+          if (!mfile)
+            return glnx_prefix_error (error, "Reading staged deployment data");
+
+          g_autoptr (GBytes) contents = g_mapped_file_get_bytes (mfile);
+
+          g_autoptr (GVariant) staged_data
+              = g_variant_new_from_bytes ((GVariantType *)"a{sv}", contents, TRUE);
+          g_autoptr (GVariantDict) dict = g_variant_dict_new (staged_data);
+
+          /* Build the bootconfig-comments a{ss} variant with our source comment */
+          g_autoptr (GVariantBuilder) comments_builder
+              = g_variant_builder_new ((GVariantType *)"a{ss}");
+
+          /* Preserve any existing comments from the staged data */
+          g_autoptr (GVariant) existing_comments = NULL;
+          if (g_variant_dict_lookup (dict, "bootconfig-comments", "@a{ss}", &existing_comments))
+            {
+              GVariantIter iter;
+              const char *k, *v;
+              g_variant_iter_init (&iter, existing_comments);
+              while (g_variant_iter_next (&iter, "{&s&s}", &k, &v))
+                {
+                  /* Skip our own comment key — we'll add the updated value below */
+                  if (!g_str_equal (k, comment_key))
+                    g_variant_builder_add (comments_builder, "{ss}", k, v);
+                }
+            }
+
+          /* Add our source comment */
+          g_variant_builder_add (comments_builder, "{ss}", comment_key, source_val);
+
+          g_variant_dict_insert_value (dict, "bootconfig-comments",
+                                       g_variant_builder_end (comments_builder));
+          g_autoptr (GVariant) new_data = g_variant_ref_sink (g_variant_dict_end (dict));
+
+          if (!glnx_file_replace_contents_at (
+                  AT_FDCWD, staged_path,
+                  static_cast<const guint8 *> (g_variant_get_data (new_data)),
+                  g_variant_get_size (new_data), GLNX_FILE_REPLACE_NODATASYNC, cancellable, error))
+            return glnx_prefix_error (error, "Writing updated staged deployment data");
+        }
+      else
+        {
+          /* Direct deploy: write the BLS file on disk directly. No finalization
+           * will happen, so this is the final BLS entry.
+           */
+          OstreeBootconfigParser *new_bootconfig
+              = ostree_deployment_get_bootconfig (new_deployment);
+          if (new_bootconfig != NULL)
+            {
+              ostree_bootconfig_parser_set_comment (new_bootconfig, comment_key, source_val);
+
+              g_autofree char *bootconfig_path
+                  = g_strdup_printf ("boot/loader/entries/ostree-%s-%d.conf", self->osname,
+                                     ostree_deployment_get_bootserial (new_deployment));
+
+              int sysroot_fd = ostree_sysroot_get_fd (self->sysroot);
+              if (!ostree_bootconfig_parser_write_at (new_bootconfig, sysroot_fd, bootconfig_path,
+                                                      cancellable, error))
+                return glnx_prefix_error (error, "Writing source kargs to bootconfig");
+            }
+        }
+    }
 
   /* Also do a sanitycheck even if there's no local mutation; it's basically free
    * and might save someone in the future.  The RPMOSTREE_SKIP_SANITYCHECK
