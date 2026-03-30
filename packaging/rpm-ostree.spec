@@ -34,7 +34,7 @@ BuildRequires: rust
 
 # Don't add the ostree-container binaries; this version
 # conditional needs to be kept in sync with the bootc one.
-%if 0%{?rhel} >= 10 || 0%{?fedora} > 41
+%if 0%{?rhel} >= 9 || 0%{?fedora} > 41
     %bcond_with ostree_ext
 %else
     %bcond_without ostree_ext
