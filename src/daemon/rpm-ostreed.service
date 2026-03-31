@@ -7,6 +7,7 @@ RequiresMountsFor=/boot
 [Service]
 # See similar code in rpm-ostree-countme.service
 User=rpm-ostree
+Nice=10
 DynamicUser=yes
 # As of right now, our primary API is DBus.  But see also https://github.com/coreos/rpm-ostree/issues/3850
 Type=dbus
