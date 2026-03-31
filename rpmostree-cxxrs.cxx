@@ -3029,6 +3029,9 @@ extern "C"
   void rpmostreecxx$cxxbridge1$cache_branch_to_nevra (::rust::Str nevra,
                                                       ::rust::String *return$) noexcept;
 
+  void rpmostreecxx$cxxbridge1$kargs_delete (::rust::Str kargs, ::rust::Str to_delete,
+                                              ::rust::String *return$) noexcept;
+
   ::std::uint32_t
   rpmostreecxx$cxxbridge1$CxxGObjectArray$length (::rpmostreecxx::CxxGObjectArray &self) noexcept
   {
@@ -6230,6 +6233,14 @@ cache_branch_to_nevra (::rust::Str nevra) noexcept
 {
   ::rust::MaybeUninit<::rust::String> return$;
   rpmostreecxx$cxxbridge1$cache_branch_to_nevra (nevra, &return$.value);
+  return ::std::move (return$.value);
+}
+
+::rust::String
+kargs_delete (::rust::Str kargs, ::rust::Str to_delete) noexcept
+{
+  ::rust::MaybeUninit<::rust::String> return$;
+  rpmostreecxx$cxxbridge1$kargs_delete (kargs, to_delete, &return$.value);
   return ::std::move (return$.value);
 }
 } // namespace rpmostreecxx
