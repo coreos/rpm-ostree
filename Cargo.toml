@@ -76,7 +76,7 @@ os-release = "0.1.0"
 ostree-ext = { git = "https://github.com/containers/bootc", rev = "b76d75d6024bd0aa0f270ff181807aff4209f9c9" }
 pastey = "0.1.1"
 phf = { version = "0.12", features = ["macros"] }
-rand = "0.9.1"
+rand = "0.9.3"
 rayon = "1.10.0"
 regex = "1.10"
 rusqlite = "0.37.0"
