@@ -64,11 +64,7 @@ build_rpm rpmostree-openvpn \
              build "" \
              summary "like openvpn" \
              install "mkdir -p %{buildroot}/{etc/%{name}.d,var/lib/%{name},usr/lib/sysusers.d}
-                      mkdir -p %{buildroot}/usr/lib/sysusers.d
-                      cat > %{buildroot}/usr/lib/sysusers.d/10-%{name}.conf <<'EOF'
-                      u %{name} - 'Test OpenVPN' /etc/%{name}.d -
-                      EOF
-                      " \
+                      echo 'u %{name} - \"Test OpenVPN\" /etc/%{name}.d -' > %{buildroot}/usr/lib/sysusers.d/10-%{name}.conf" \
              files "/usr/bin/%{name}
                     %attr(-, %{name}, %{name}) /etc/%{name}.d
                     /usr/lib/sysusers.d/*.conf
