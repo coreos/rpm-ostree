@@ -20,11 +20,11 @@ set -xeuo pipefail
 
 . /etc/os-release
 case $VERSION_ID in
-  42) kernel_release=6.14.1-300.fc42.x86_64
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2693809"
+  44) kernel_release=7.0.10-200.fc44.x86_64
+      koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=3001196"
   ;;
-  43) kernel_release=kernel-6.17.1-300.fc43
-      koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2837146"
+  43) kernel_release=7.0.10-100.fc43.x86_64
+      koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=3001197"
   ;;
   *) echo "Unsupported Fedora version: $VERSION_ID"
     exit 1

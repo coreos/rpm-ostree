@@ -39,13 +39,15 @@ cd "$(mktemp -d)"
 # Get Fedora version and set up kernel override URLs
 . /etc/os-release
 case "$VERSION_ID" in
-  42)
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2693809"
-    kernel_release=6.14.1-300.fc42.x86_64
+  44)
+    # kernel-7.0.10-200.fc44 (coreos-pool, differs from image's -201)
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=3001196"
+    kernel_release=7.0.10-200.fc44.x86_64
     ;;
   43)
-    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=2837146"
-    kernel_release=6.17.1-300.fc43.x86_64
+    # kernel-7.0.10-100.fc43 (f43-updates, differs from latest -101)
+    koji_kernel_url="https://koji.fedoraproject.org/koji/buildinfo?buildID=3001197"
+    kernel_release=7.0.10-100.fc43.x86_64
     ;;
   *)
     echo "Unsupported Fedora version: $VERSION_ID"
