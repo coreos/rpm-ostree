@@ -30,6 +30,8 @@ set -x
 vm_assert_layered_pkg nonrootcap absent
 
 vm_build_rpm nonrootcap \
+    provides "user(nrcuser)" \
+    provides "group(nrcgroup)" \
     build "echo nrc.conf > nrc.conf
            for mode in none user group caps{,-setuid} usergroup{,caps{,-setuid}}; do
                cp nonrootcap nrc-\$mode.sh
