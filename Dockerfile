@@ -5,7 +5,7 @@
 # Use e.g. --build-arg=base=quay.io/centos-bootc/centos-bootc:stream10 to target
 # CentOS instead.
 
-ARG base=quay.io/fedora/fedora-bootc:42
+ARG base=quay.io/fedora/fedora-bootc:44
 
 # This first image captures a snapshot of the source code,
 # note all the exclusions in .dockerignore.

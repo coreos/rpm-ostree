@@ -157,13 +157,13 @@ versionid=$(vm_cmd grep -E '^VERSION_ID=' /etc/os-release)
 versionid=${versionid:11} # trim off VERSION_ID=
 vm_cmd rpm-ostree db list "$(vm_get_deployment_info 0 checksum)" > current-dblist.txt
 case $versionid in
-  42)
-    evr=41.34-1.fc42
+  44)
+    evr=43.3-1.fc44
     koji_urls=(
-        https://koji.fedoraproject.org/koji/buildinfo?buildID=2674245
-        https://koji.fedoraproject.org/koji/buildinfo?buildID=2679093
+        https://koji.fedoraproject.org/koji/buildinfo?buildID=2965395
+        https://koji.fedoraproject.org/koji/buildinfo?buildID=2959092
     )
-    ;;  
+    ;;
   *) assert_not_reached "Unsupported Fedora version: $versionid";;
 esac
 assert_not_file_has_content current-dblist.txt selinux-policy-$evr

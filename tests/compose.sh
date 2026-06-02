@@ -50,7 +50,7 @@ if [ ! -d compose-cache ]; then
   # default; we'll want it to test `install-langs`. This also means that we have
   # to add updates-archive to the repo list.
   # Also neuter OSTree layers; we don't re-implement cosa's auto-layering sugar
-  curl -LO https://src.fedoraproject.org/rpms/fedora-repos/raw/f40/f/fedora-updates-archive.repo
+  curl -Lf --retry 3 -O https://src.fedoraproject.org/rpms/fedora-repos/raw/f42/f/fedora-updates-archive.repo
   python3 -c '
 import sys, json
 y = json.load(sys.stdin)
@@ -65,10 +65,10 @@ json.dump(y, sys.stdout)' < manifest.json > manifest.json.new
   # we just need a repo so we can download stuff (but see note above about
   # sharing pkgcache repo in the future)
   ostree init --repo=repo --mode=archive
+  # Don't use lockfiles; the locked NVRAs get GC'd from repos over time.
+  # Just download whatever versions are currently available.
   rpm-ostree compose tree --unified-core --download-only-rpms --repo=repo \
-    config/manifest.json --cachedir cachedir \
-    --ex-lockfile config/manifest-lock.x86_64.json \
-    --ex-lockfile config/manifest-lock.overrides.yaml
+    config/manifest.json --cachedir cachedir
   rm -rf repo
   (cd cachedir && createrepo_c .)
   echo -e "[cache]\nbaseurl=$(pwd)/cachedir\ngpgcheck=0" > config/cache.repo

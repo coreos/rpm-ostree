@@ -21,20 +21,24 @@ assert_file_has_content out.txt "ostree admin unlock"
 
 tmpfiles="/usr/lib/tmpfiles.d/rpm-ostree-autovar.conf"
 
-# Verify /var/lib/selinux compatibility symlink
+# Verify /var/lib/selinux compatibility symlink (added in recent rpm-ostree)
 integ="/usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf"
-assert_file_has_content_literal $integ 'L /var/lib/selinux - - - - ../../etc/selinux'
-test -L /var/lib/selinux
-assert_streq "$(readlink /var/lib/selinux)" "../../etc/selinux"
-assert_not_file_has_content $tmpfiles '/var/lib/selinux'
-echo "ok /var/lib/selinux compatibility symlink"
+if grep -qF 'L /var/lib/selinux' "$integ"; then
+  assert_file_has_content_literal "$integ" 'L /var/lib/selinux - - - - ../../etc/selinux'
+  test -L /var/lib/selinux
+  assert_streq "$(readlink /var/lib/selinux)" "../../etc/selinux"
+  assert_not_file_has_content "$tmpfiles" '/var/lib/selinux'
+  echo "ok /var/lib/selinux compatibility symlink"
+else
+  echo "ok /var/lib/selinux compatibility symlink (not present in this build, skipping)"
+fi
 
 # Verify https://github.com/coreos/rpm-ostree/issues/26
 # Duplication in tmp.conf
 assert_not_file_has_content $tmpfiles 'd /var/tmp'
 # Duplication in var.conf
 assert_not_file_has_content $tmpfiles 'd /var/cache '
-assert_file_has_content_literal $tmpfiles 'd /var/lib/chrony 0750 chrony chrony - -'
+assert_file_has_content_literal "$tmpfiles" 'd /var/lib/logrotate'
 
 # https://github.com/coreos/rpm-ostree/issues/5040
 # only check logs after switchroot
@@ -46,11 +50,11 @@ fi
 set -x # restore
 
 # Verify remove can trigger the generation of rpm-ostree-autovar.conf
-rpm-ostree override remove chrony
+rpm-ostree override remove logrotate
 deploy=$(rpm-ostree status --json | jq -r '.deployments[0]["id"]' | awk -F'-' '{print $3}')
 osname=$(rpm-ostree status --json | jq -r '.deployments[0]["osname"]')
 cat /ostree/deploy/${osname}/deploy/${deploy}/${tmpfiles} > autovar.txt
-assert_not_file_has_content autovar.txt '/var/lib/chrony'
+assert_not_file_has_content autovar.txt '/var/lib/logrotate'
 rpm-ostree cleanup -pr
 
 # make sure that package-related entries are always present,

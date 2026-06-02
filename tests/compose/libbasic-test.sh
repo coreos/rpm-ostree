@@ -141,8 +141,9 @@ echo "ok symlinks"
 ostree --repo="${repo}" ls "${treeref}" '/usr/etc/alternatives-admindir/iptables' | grep '^-' > alternatives.txt
 assert_file_has_content_literal alternatives.txt '/usr/etc/alternatives-admindir/iptables'
 ostree --repo="${repo}" ls "${treeref}" '/usr/etc/alternatives/iptables' | grep '^l00777' > symlinks.txt
-# NOTE: this does not check the whole symlink target, but only a reasonably-stable leading portion of it.
-assert_file_has_content_literal symlinks.txt '/usr/etc/alternatives/iptables -> /usr/sbin/ip'
+# Verify the symlink target is an iptables binary (location varies across Fedora versions:
+# /usr/sbin/iptables on older, /usr/bin/iptables-nft on f43+)
+assert_file_has_content symlinks.txt '/usr/etc/alternatives/iptables -> /usr/s\?bin/iptables'
 echo "ok alternatives"
 }
 

@@ -29,8 +29,8 @@ jobs:
       fail-fast: false
       matrix:
         base_image:
-          - name: fedora-42
-            image: quay.io/fedora/fedora-bootc:42
+          - name: fedora-44
+            image: quay.io/fedora/fedora-bootc:44
           # TODO: Enable CentOS Stream 10 once tests support it
           # - name: centos-10
           #   image: quay.io/centos-bootc/centos-bootc:stream10
