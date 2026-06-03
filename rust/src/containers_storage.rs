@@ -13,9 +13,9 @@ use crate::cmdutils::CommandRunExt;
 /// and container storage operations will work reliably.
 /// https://github.com/containers/buildah/issues/5976
 pub(crate) fn reexec_if_needed() -> Result<()> {
-    use rustix::thread::{capability_is_in_bounding_set, Capability};
+    use rustix::thread::{capability_is_in_bounding_set, CapabilitySet};
     if crate::client::running_in_container()
-        && !capability_is_in_bounding_set(Capability::SystemAdmin)?
+        && !capability_is_in_bounding_set(CapabilitySet::SYS_ADMIN)?
     {
         crate::reexec::reexec_with_guardenv(
             "_RPMOSTREE_REEXEC_USERNS",
