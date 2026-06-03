@@ -167,7 +167,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+      image: quay.io/coreos-assembler/fcos-buildroot:testing-devel
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
@@ -189,9 +189,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        RELEASE: ['40', '41', '42']
+        RELEASE: ['43', '44']
     container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+      image: quay.io/coreos-assembler/fcos-buildroot:testing-devel
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
@@ -235,7 +235,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     container:
-      image: registry.ci.openshift.org/coreos/coreos-assembler:latest
+      image: quay.io/coreos-assembler/fcos-buildroot:testing-devel
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
@@ -244,6 +244,8 @@ jobs:
         uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
+      - name: Install test deps
+        run: dnf -y install skopeo
       - name: Install
         run: tar -C / -xzvf install.tar
       - name: Integration tests
