@@ -447,8 +447,8 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
             let initramfs = initramfs.downcast_ref::<ostree::RepoFile>().unwrap();
             let checksum = initramfs.checksum();
             let name = "initramfs".to_string();
-            let identifier = format!("{} (kernel {})", name, kernel_ver).into_boxed_str();
-            let identifier = Rc::from(identifier);
+            let identifier_str = format!("{} (kernel {})", name, kernel_ver);
+            let identifier = Rc::from(identifier_str.clone().into_boxed_str());
 
             state
                 .checksum_paths
@@ -456,17 +456,11 @@ pub fn container_encapsulate(args: Vec<String>) -> CxxResult<()> {
                 .or_default()
                 .insert(path.clone());
             state
-                .path_packages
+                .path_components
                 .entry(path.clone())
                 .or_default()
                 .insert(Rc::clone(&identifier));
-            state.packagemeta.insert(ObjectSourceMeta {
-                identifier: Rc::clone(&identifier),
-                name: Rc::from(name),
-                srcid: Rc::clone(&identifier),
-                change_time_offset: u32::MAX,
-                change_frequency: u32::MAX,
-            });
+            state.component_ids.insert(identifier_str);
             state.skip.insert(path);
         }
     }
