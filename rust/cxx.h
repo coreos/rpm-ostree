@@ -20,6 +20,14 @@
 #include <sys/types.h>
 #endif
 
+#if __cplusplus >= 201703L
+#include <string_view>
+#endif
+
+#if __cplusplus >= 202002L
+#include <ranges>
+#endif
+
 namespace rust
 {
 inline namespace cxxbridge1
@@ -48,6 +56,10 @@ public:
   String (const char *, std::size_t);
   String (const char16_t *);
   String (const char16_t *, std::size_t);
+#ifdef __cpp_char8_t
+  String (const char8_t *s);
+  String (const char8_t *s, std::size_t len);
+#endif
 
   // Replace invalid Unicode data with the replacement character (U+FFFD).
   static String lossy (const std::string &) noexcept;
@@ -124,6 +136,9 @@ public:
   Str &operator= (const Str &) & noexcept = default;
 
   explicit operator std::string () const;
+#if __cplusplus >= 201703L
+  explicit operator std::string_view () const;
+#endif
 
   // Note: no null terminator.
   const char *data () const noexcept;
@@ -186,6 +201,8 @@ public:
   Slice () noexcept;
   Slice (T *, std::size_t count) noexcept;
 
+  template <typename C> explicit Slice (C &c) : Slice (c.data (), c.size ()) {}
+
   Slice &operator= (const Slice<T> &) & noexcept = default;
   Slice &operator= (Slice<T> &&) & noexcept = default;
 
@@ -220,10 +237,19 @@ private:
   std::array<std::uintptr_t, 2> repr;
 };
 
+#ifdef __cpp_deduction_guides
+template <typename C>
+explicit Slice (C &c) -> Slice<std::remove_reference_t<decltype (*std::declval<C> ().data ())>>;
+#endif // __cpp_deduction_guides
+
 template <typename T> class Slice<T>::iterator final
 {
 public:
+#if __cplusplus >= 202002L
+  using iterator_category = std::contiguous_iterator_tag;
+#else
   using iterator_category = std::random_access_iterator_tag;
+#endif
   using value_type = T;
   using difference_type = std::ptrdiff_t;
   using pointer = typename std::add_pointer<T>::type;
@@ -241,6 +267,11 @@ public:
   iterator &operator+= (difference_type) noexcept;
   iterator &operator-= (difference_type) noexcept;
   iterator operator+ (difference_type) const noexcept;
+  friend inline iterator
+  operator+ (difference_type lhs, iterator rhs) noexcept
+  {
+    return rhs + lhs;
+  }
   iterator operator- (difference_type) const noexcept;
   difference_type operator- (const iterator &) const noexcept;
 
@@ -256,6 +287,12 @@ private:
   void *pos;
   std::size_t stride;
 };
+
+#if __cplusplus >= 202002L
+static_assert (std::ranges::contiguous_range<rust::Slice<const uint8_t>>);
+static_assert (std::contiguous_iterator<rust::Slice<const uint8_t>::iterator>);
+#endif
+
 #endif // CXXBRIDGE1_RUST_SLICE
 
 #ifndef CXXBRIDGE1_RUST_BOX
@@ -700,7 +737,7 @@ typename Slice<T>::iterator::difference_type
 Slice<T>::iterator::operator- (const iterator &other) const noexcept
 {
   auto diff = std::distance (static_cast<char *> (other.pos), static_cast<char *> (this->pos));
-  return diff / this->stride;
+  return diff / static_cast<typename Slice<T>::iterator::difference_type> (this->stride);
 }
 
 template <typename T>

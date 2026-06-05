@@ -34,7 +34,7 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DLOCALEDIR=\"$(datadir)/locale\" \
 	-DSYSCONFDIR='"$(sysconfdir)"' \
 	-DRPM_OSTREE_GITREV='"$(RPM_OSTREE_GITREV)"' \
-	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_56 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_70
+	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_56 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_76
 # Compiler warnings
 warnings_skipped = sign-compare
 warnings_error = empty-body format=2 format-security format-nonliteral \

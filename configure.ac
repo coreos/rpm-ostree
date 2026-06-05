@@ -106,6 +106,13 @@ AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
 LIBGLNX_CONFIGURE
+dnl Additional checks needed by newer libglnx (not yet in libglnx.m4)
+AC_CHECK_DECLS([name_to_handle_at], [], [], [[
+#include <sys/types.h>
+#include <unistd.h>
+#include <fcntl.h>
+]])
+AC_CHECK_FUNCS([open_tree openat2])
 
 m4_ifdef([GOBJECT_INTROSPECTION_CHECK], [
   GOBJECT_INTROSPECTION_CHECK([1.34.0])

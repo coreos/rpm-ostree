@@ -79,9 +79,40 @@ rpm-ostree override replace $koji_kernel_url
 # test that the new initramfs was generated
 test -f /usr/lib/modules/${kver}-${krev}.fc${versionid}.x86_64/initramfs.img
 
-# TODO: treefile-apply tests are disabled on f44+ due to versionlock
-# plugin incompatibilities with dnf5. Re-enable when fixed.
-# See also: https://github.com/coreos/rpm-ostree/issues/5365
+# test treefile-apply
+# do it before cliwrap because we want real dnf
+if rpm -q ltrace vim-enhanced; then
+  fatal "ltrace and/or vim-enhanced exist"
+fi
+vim_vr=$(rpm -q vim-minimal --qf '%{version}-%{release}')
+cat > /tmp/treefile.yaml << EOF
+packages:
+  - ltrace
+  # a split base/layered version-locked package
+  - vim-enhanced
+# also test repo enablement but using variables so we don't have to rewrite a
+# new treefile each time
+conditional-include:
+  - if: addrepos == "disable"
+    include:
+      repos: []
+  - if: addrepos == "enable"
+    include:
+      repos: [fedora-cisco-openh264]
+      packages: [openh264-devel]
+EOF
+# setting `repos` to empty list; should fail
+if rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml --var addrepos=disable; then
+  fatal "installed packages without enabled repos?"
+fi
+if rpm -q ltrace; then fatal "ltrace installed"; fi
+if rpm -q vim-enhanced-"$vim_vr"; then fatal "vim-enhanced installed"; fi
+# not setting repos; default enablement
+rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml --var addrepos=
+rpm -q ltrace vim-enhanced-"$vim_vr"
+# setting repos; only those repos enabled
+rpm-ostree experimental compose treefile-apply /tmp/treefile.yaml --var addrepos=enable
+rpm -q openh264-devel
 
 rpm-ostree cliwrap install-to-root /
 

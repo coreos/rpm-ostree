@@ -9,12 +9,20 @@ rpm-ostree container-encapsulate --help >/dev/null
 tmpdir=$(mktemp -d)
 cd ${tmpdir}
 ostree --repo=repo init --mode=bare-user
-cat /etc/ostree/remotes.d/fedora.conf >> repo/config
-# Pull the ostree commit directly from the remote. We use ostree pull
-# rather than container unencapsulate because FCOS stable now ships
-# non-ostree layers for bootc compatibility.
-testref=fedora:fedora/x86_64/coreos/stable
-ostree --repo=repo pull "${testref}"
+
+# Create a minimal ostree commit to test encapsulation. The commit needs
+# a populated rpmdb (container-encapsulate uses package data to generate
+# chunked layers) and /usr/lib/modules.
+mkdir -p rootfs/usr/bin rootfs/usr/lib/modules rootfs/usr/share/rpm
+echo '#!/bin/sh' > rootfs/usr/bin/test-encapsulate
+chmod +x rootfs/usr/bin/test-encapsulate
+# Copy host rpmdb - location varies across systems
+cp /usr/share/rpm/rpmdb.sqlite rootfs/usr/share/rpm/ 2>/dev/null || \
+  cp /usr/lib/sysimage/rpm/rpmdb.sqlite rootfs/usr/share/rpm/
+testref=testref
+ostree --repo=repo commit -b "${testref}" --tree=dir=rootfs \
+  --add-metadata-string=version=1.0 \
+  --add-metadata-string=fedora-coreos.stream=stable
 # Re-pack it as a (chunked) container
 
 cat > config.json << 'EOF'

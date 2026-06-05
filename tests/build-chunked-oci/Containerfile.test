@@ -1,4 +1,4 @@
-FROM quay.io/fedora/fedora-bootc:41
+FROM quay.io/fedora/fedora-bootc:44
 RUN <<EORUN
 set -xeuo pipefail
 mkdir -p /var/lib/rpm-state
