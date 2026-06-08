@@ -48,7 +48,7 @@ anyhow = "1.0.102"
 binread = "2.2.0"
 bitflags = "2.12"
 camino = "1.2.2"
-cap-std-ext = "4"
+cap-std-ext = "5"
 cap-primitives = "3"
 cap-std = { version = "3", features = ["fs_utf8"] }
 # Explicitly force on libc
