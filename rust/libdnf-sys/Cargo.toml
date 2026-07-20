@@ -15,7 +15,7 @@ path = "lib.rs"
 
 [build-dependencies]
 cmake = "0.1.58"
-system-deps = "7.0"
+system-deps = "8.0"
 anyhow = "1.0"
 cxx-build = "1.0.194"
 pkg-config = "0.3"
