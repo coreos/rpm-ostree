@@ -38,6 +38,8 @@ ostree --repo=${repo} cat ${treeref} \
   /usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist > subs_dist.txt
 assert_not_file_has_content subs_dist.txt '^/var/home \+'
 assert_file_has_content subs_dist.txt '^/home \+/var/home$'
+# https://github.com/coreos/rpm-ostree/issues/5616
+assert_file_has_content subs_dist.txt '^/var/lib/selinux \+/etc/selinux$'
 echo "ok etc/default/useradd"
 
 for path in /usr/share/rpm /usr/lib/sysimage/rpm-ostree-base-db; do
