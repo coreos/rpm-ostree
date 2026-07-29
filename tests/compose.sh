@@ -50,7 +50,7 @@ if [ ! -d compose-cache ]; then
   # default; we'll want it to test `install-langs`. This also means that we have
   # to add updates-archive to the repo list.
   # Also neuter OSTree layers; we don't re-implement cosa's auto-layering sugar
-  curl -Lf --retry 3 -O https://src.fedoraproject.org/rpms/fedora-repos/raw/f42/f/fedora-updates-archive.repo
+  curl -Lf --retry 3 -O https://src.fedoraproject.org/rpms/fedora-repos/raw/f44/f/fedora-updates-archive.repo
   python3 -c '
 import sys, json
 y = json.load(sys.stdin)

@@ -1,7 +1,7 @@
 # Build RPMs for rpm-ostree
 # This containerfile builds RPMs in a containerized environment.
 
-ARG base=quay.io/fedora/fedora-bootc:42
+ARG base=quay.io/fedora/fedora-bootc:44
 
 FROM scratch as src
 # For RPM builds, we need the git repository

@@ -419,6 +419,14 @@ fn postprocess_subs_dist(rootfs_dfd: &Dir) -> Result<()> {
                 }
                 writeln!(w, "# https://github.com/coreos/rpm-ostree/pull/1795")?;
                 writeln!(w, "/usr/lib/opt /opt")?;
+                // The SELinux policy store is moved from /var/lib/selinux to
+                // /etc/selinux (see postprocess_selinux_policy_store_location),
+                // and a compatibility symlink is created via tmpfiles.d. Add an
+                // equivalency rule so that label lookups through the old path
+                // resolve correctly.
+                // https://github.com/coreos/rpm-ostree/issues/5616
+                writeln!(w, "# https://github.com/coreos/rpm-ostree/issues/5616")?;
+                writeln!(w, "/var/lib/selinux /etc/selinux")?;
                 Ok(())
             })?;
         }
