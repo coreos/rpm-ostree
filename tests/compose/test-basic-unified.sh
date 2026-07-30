@@ -75,8 +75,8 @@ treefile_pyedit "del tf['base-refspec']"
 echo "ok cannot use derivation for composes yet"
 
 
-treefile_pyedit "tf['add-commit-metadata']['foobar'] = 'bazboo'"
-treefile_pyedit "tf['add-commit-metadata']['overrideme'] = 'old var'"
+treefile_pyedit "tf.setdefault('add-commit-metadata', {})['foobar'] = 'bazboo'"
+treefile_pyedit "tf.setdefault('add-commit-metadata', {})['overrideme'] = 'old var'"
 
 # Test metadata json with objects, arrays, numbers
 cat > metadata.json <<EOF
