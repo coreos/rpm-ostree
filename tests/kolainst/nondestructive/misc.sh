@@ -383,3 +383,86 @@ echo "ok install-packages+treefile UpdateDeployment denied without override perm
 
 rm -f /etc/polkit-1/rules.d/49-rpm-ostree-treefile-test.rules
 systemctl restart polkit
+
+# Test GHSA-rq45-x7mc-f7h8: transaction socket connection limit and UID restriction
+# The transaction progress socket must:
+# 1. Reject connections once the peer limit is reached
+# 2. Reject connections from UIDs other than root and the transaction initiator
+rm -f /etc/systemd/system/rpm-ostreed.service.d/http-proxy.conf
+mkdir -p /etc/systemd/system/rpm-ostreed.service.d
+cat > /etc/systemd/system/rpm-ostreed.service.d/test-failpoint.conf <<'EOF'
+[Service]
+Environment="FAILPOINTS=transaction::execute=sleep(5000)"
+EOF
+systemctl daemon-reload
+systemctl restart rpm-ostreed.service
+
+# Hold a transaction in its execute method so the progress socket remains
+# available while connections are authenticated.
+rpm-ostree refresh-md --force &
+REFRESH_PID=$!
+for i in $(seq 1 50); do
+    if test -S /run/rpm-ostree-transaction.sock; then
+        break
+    fi
+    sleep 0.2
+done
+test -S /run/rpm-ostree-transaction.sock
+
+# A real D-Bus client is required to complete authentication and reach the
+# new-connection callback; a raw Unix socket connection is insufficient.
+cursor=$(journalctl -o json -n 1 | jq -r '.["__CURSOR"]')
+timeout 2 runuser -u bin -- gdbus monitor \
+    --address=unix:path=/run/rpm-ostree-transaction.sock \
+    --object-path / >/dev/null 2>&1 || true
+for i in $(seq 1 20); do
+    if journalctl -u rpm-ostreed --after-cursor "$cursor" \
+        | grep -q 'is not the transaction initiator'; then
+        break
+    fi
+    sleep 0.1
+done
+journalctl -u rpm-ostreed --after-cursor "$cursor" \
+    | grep -q 'is not the transaction initiator'
+echo "ok transaction socket UID restriction"
+
+# The initiating rpm-ostree client occupies one retained peer slot.  Hold 63
+# additional authenticated connections open as root to reach the limit of 64.
+cursor=$(journalctl -o json -n 1 | jq -r '.["__CURSOR"]')
+PEER_PIDS=()
+for _ in $(seq 1 63); do
+    { printf '\0AUTH EXTERNAL 30\r\nBEGIN\r\n'; sleep 30; } \
+        | socat - UNIX-CONNECT:/run/rpm-ostree-transaction.sock >/dev/null &
+    PEER_PIDS+=("$!")
+done
+for i in $(seq 1 50); do
+    if journalctl -u rpm-ostreed --after-cursor "$cursor" \
+        | grep -q '(64/64 peers)'; then
+        break
+    fi
+    sleep 0.1
+done
+journalctl -u rpm-ostreed --after-cursor "$cursor" \
+    | grep -q '(64/64 peers)'
+
+# One more authenticated, authorized connection must be rejected by the cap.
+timeout 2 gdbus monitor \
+    --address=unix:path=/run/rpm-ostree-transaction.sock \
+    --object-path / >/dev/null 2>&1 || true
+for i in $(seq 1 20); do
+    if journalctl -u rpm-ostreed --after-cursor "$cursor" \
+        | grep -q 'peer limit reached (64/64)'; then
+        break
+    fi
+    sleep 0.1
+done
+journalctl -u rpm-ostreed --after-cursor "$cursor" \
+    | grep -q 'peer limit reached (64/64)'
+echo "ok transaction socket authenticated peer limit"
+
+kill "${PEER_PIDS[@]}" 2>/dev/null || true
+wait "${PEER_PIDS[@]}" 2>/dev/null || true
+wait $REFRESH_PID 2>/dev/null || true
+rm -f /etc/systemd/system/rpm-ostreed.service.d/test-failpoint.conf
+systemctl daemon-reload
+systemctl restart rpm-ostreed.service
