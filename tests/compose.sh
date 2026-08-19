@@ -3,7 +3,7 @@ set -euo pipefail
 
 # freeze on a specific commit for tests for reproducibility and since it should
 # always work to target older treefiles
-FEDORA_COREOS_CONFIG_COMMIT=0661e4edc55d4f5293ba463c9dec0471b84d05d4
+FEDORA_COREOS_CONFIG_COMMIT=932185829a451812a6f627f7937f49fe3bf952be
 
 dn=$(cd "$(dirname "$0")" && pwd)
 topsrcdir=$(cd "$dn/.." && pwd)
@@ -50,13 +50,32 @@ if [ ! -d compose-cache ]; then
   # default; we'll want it to test `install-langs`. This also means that we have
   # to add updates-archive to the repo list.
   # Also neuter OSTree layers; we don't re-implement cosa's auto-layering sugar
-  curl -Lf --retry 3 -O https://src.fedoraproject.org/rpms/fedora-repos/raw/f44/f/fedora-updates-archive.repo
+  curl -Lf --retry 3 -O https://src.fedoraproject.org/rpms/fedora-repos/raw/f43/f/fedora-updates-archive.repo
   python3 -c '
 import sys, json
 y = json.load(sys.stdin)
 y["repos"] += ["updates-archive"]
-y["packages"] += ["glibc-all-langpacks"]
+y["packages"] += ["glibc-all-langpacks", "rpm-ostree"]
 y["ostree-layers"] = []
+# The fedora-bootc submodule no longer provides these treefile keys
+# that are needed by compose tests. Inject them as test infrastructure.
+y.setdefault("packages", [])
+if "kernel" not in y["packages"]:
+    y["packages"] += ["kernel"]
+y.setdefault("ref", "fedora/x86_64/coreos/testing-devel")
+y.setdefault("boot-location", "modules")
+y.setdefault("tmp-is-dir", True)
+y.setdefault("machineid-compat", False)
+y.setdefault("default-target", "multi-user.target")
+y.setdefault("rpmdb", "sqlite")
+y.setdefault("opt-usrlocal", "var")
+y.setdefault("add-commit-metadata", {})
+y.setdefault("check-passwd", {"type": "none"})
+y.setdefault("check-groups", {"type": "none"})
+y.setdefault("automatic-version-prefix", "43.<date:%Y%m%d>.dev")
+y.setdefault("mutate-os-release", "43")
+if "exclude-packages" not in y:
+    y["exclude-packages"] = ["kernel-debug-core"]
 json.dump(y, sys.stdout)' < manifest.json > manifest.json.new
   mv manifest.json{.new,}
   popd # config

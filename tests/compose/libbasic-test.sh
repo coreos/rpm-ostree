@@ -23,9 +23,10 @@ ostree --repo=${repo} ls ${treeref} /usr/etc/passwd > passwd.txt
 assert_file_has_content_literal passwd.txt '00644 '
 
 ostree --repo=${repo} ls ${treeref} /usr/etc/shadow > shadow.txt
-assert_file_has_content_literal shadow.txt '00000 '
+# shadow-utils >= 4.17 uses mode 0400; older versions use 0000
+assert_file_has_content shadow.txt '00[04]00 '
 ostree --repo=${repo} ls ${treeref} /usr/etc/gshadow > gshadow.txt
-assert_file_has_content_literal gshadow.txt '00000 '
+assert_file_has_content gshadow.txt '00[04]00 '
 
 ostree --repo=${repo} cat ${treeref} /usr/etc/default/useradd > useradd.txt
 assert_file_has_content_literal useradd.txt HOME=/var/home

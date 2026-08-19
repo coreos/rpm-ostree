@@ -6,7 +6,7 @@ dn=$(cd "$(dirname "$0")" && pwd)
 . "${dn}/libcomposetest.sh"
 
 # This is used to test postprocessing with treefile vs not
-treefile_set "boot-location" '"new"'
+treefile_set "boot-location" '"modules"'
 # On by default now:
 # treefile_set "ignore-devices" 'True'
 
