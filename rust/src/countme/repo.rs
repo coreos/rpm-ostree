@@ -3,14 +3,12 @@
 use anyhow::{Context, Result};
 use fn_error_context::context;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ini::Ini;
 
 use crate::utils;
-
-/// Location for DNF repositories configuration
-pub const YUM_REPOS_D: &str = "/etc/yum.repos.d";
+use crate::{ABS_DNF5_REPOS_D, ABS_YUM_REPOS_D};
 
 /// Repository configuration
 /// Not exhaustive and only includes the options needed for Count Me support.
@@ -28,12 +26,17 @@ fn is_true(string: &str) -> bool {
     string == "1" || string == "yes" || string == "true" || string == "on"
 }
 
-/// Read all repository configuration files from the default location
-pub fn all() -> Result<Vec<Repo>> {
-    let configs = fs::read_dir(YUM_REPOS_D)
-        .with_context(|| format!("Could not list files in: {}", YUM_REPOS_D))?;
-    let mut repos = Vec::new();
-    for c in configs {
+/// Read repo config files from a single directory, appending to `repos`.
+/// Silently skips the directory if it does not exist.
+fn collect_repos_from_dir(dir: &Path, repos: &mut Vec<Repo>) -> Result<()> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(e).with_context(|| format!("Could not list files in: {}", dir.display()))
+        }
+    };
+    for c in entries {
         let path = c?.path();
         match parse_repo_file(&path) {
             Err(e) => {
@@ -45,6 +48,15 @@ pub fn all() -> Result<Vec<Repo>> {
             }
             Ok(mut r) => repos.append(&mut r),
         }
+    }
+    Ok(())
+}
+
+/// Read all repository configuration files from both repo config directories
+pub fn all() -> Result<Vec<Repo>> {
+    let mut repos = Vec::new();
+    for dir in &[ABS_YUM_REPOS_D, ABS_DNF5_REPOS_D] {
+        collect_repos_from_dir(Path::new(dir), &mut repos)?;
     }
     Ok(repos)
 }

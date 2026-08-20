@@ -59,7 +59,10 @@ ${systemd_sysusers}
 repos:
   - fedora  # Intentially using frozen GA repo
 EOF
-cp /etc/yum.repos.d/*.repo .
+# Copy repo files from whichever location exists
+for d in /usr/share/dnf5/repos.d /etc/yum.repos.d; do
+  test -d "$d" && cp "$d"/*.repo . 2>/dev/null || true
+done
 if rpm-ostree compose image --cachedir=../cache-container --label=foo=bar --label=baz=blah --initialize-mode=never minimal.yaml minimal.ociarchive 2>/dev/null; then
   fatal "built an image in --initialize-mode=never"
 fi
@@ -90,7 +93,10 @@ packages:
 repos:
   - fedora  # Intentially using frozen GA repo
 EOF
-cp /etc/yum.repos.d/*.repo .
+# Copy repo files from whichever location exists
+for d in /usr/share/dnf5/repos.d /etc/yum.repos.d; do
+  test -d "$d" && cp "$d"/*.repo . 2>/dev/null || true
+done
 # Unfortunately, --initialize-mode=if-not-exists is broken with .ociarchive...
 rpm-ostree compose image --cachedir=../cache --touch-if-changed=changed.stamp --initialize-mode=always minimal.yaml minimal.ociarchive
 # TODO actually test this container image

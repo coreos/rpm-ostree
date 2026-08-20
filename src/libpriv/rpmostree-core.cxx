@@ -186,6 +186,25 @@ state_action_changed_cb (DnfState *state, DnfStateAction action, const gchar *ac
     }
 }
 
+/* Build a NULL-terminated array of repo configuration directories,
+ * using the canonical list from Rust. If @root is non-NULL, each
+ * path is prefixed with it (for deployment/source root contexts).
+ */
+static GStrv
+build_repos_dirs (const char *root)
+{
+  auto dirs = rpmostreecxx::get_repos_dirs ();
+  auto ret = g_new0 (gchar *, dirs.size () + 1);
+  for (size_t i = 0; i < dirs.size (); i++)
+    {
+      if (root)
+        ret[i] = g_build_filename (root, dirs[i].c_str (), NULL);
+      else
+        ret[i] = g_strdup (dirs[i].c_str ());
+    }
+  return ret;
+}
+
 /* Low level API to create a context.  Avoid this in preference
  * to creating a client or compose context unless necessary.
  */
@@ -206,7 +225,13 @@ rpmostree_context_new_base (OstreeRepo *repo)
   self->dnfctx = dnf_context_new ();
   dnf_context_set_http_proxy (self->dnfctx, g_getenv ("http_proxy"));
 
-  dnf_context_set_repo_dir (self->dnfctx, "/etc/yum.repos.d");
+  /* Set repo configuration directories using the canonical list from Rust.
+   * The repo loader gracefully skips non-existent directories.
+   */
+  {
+    g_auto (GStrv) repos_dirs = build_repos_dirs (NULL);
+    dnf_context_set_repos_dir (self->dnfctx, (const gchar *const *)repos_dirs);
+  }
   dnf_context_set_cache_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
   dnf_context_set_solv_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
   dnf_context_set_lock_dir (self->dnfctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
@@ -357,16 +382,26 @@ rpmostree_context_set_repos_dir (RpmOstreeContext *self, const char *reposdir)
   g_debug ("set override for repos dir");
 }
 
+// Same as above but using the multi-directory variant to allow setting
+// multiple repos dirs (e.g. both /etc/yum.repos.d and /usr/share/dnf5/repos.d).
+void
+rpmostree_context_set_repos_dirs (RpmOstreeContext *self, const char *const *reposdirs)
+{
+  dnf_context_set_repos_dir (self->dnfctx, reposdirs);
+  self->repos_dir_configured = TRUE;
+  g_debug ("set override for repos dirs (multi)");
+}
+
 /* Pick up repos dir and passwd from @cfg_deployment. */
 void
 rpmostree_context_configure_from_deployment (RpmOstreeContext *self, OstreeSysroot *sysroot,
                                              OstreeDeployment *cfg_deployment)
 {
   g_autofree char *cfg_deployment_root = rpmostree_get_deployment_root (sysroot, cfg_deployment);
-  g_autofree char *reposdir = g_build_filename (cfg_deployment_root, "etc/yum.repos.d", NULL);
 
-  /* point libhif to the yum.repos.d and os-release of the merge deployment */
-  rpmostree_context_set_repos_dir (self, reposdir);
+  /* Point libdnf to repo config dirs under the merge deployment. */
+  g_auto (GStrv) repos_dirs = build_repos_dirs (cfg_deployment_root);
+  rpmostree_context_set_repos_dirs (self, (const gchar *const *)repos_dirs);
 
   /* point the core to the passwd & group of the merge deployment */
   g_assert (!self->passwd_dir);
@@ -694,9 +729,9 @@ rpmostree_context_setup (RpmOstreeContext *self, const char *install_root, const
       // overrode the repos dir.
       if (!self->repos_dir_configured)
         {
-          g_autofree char *source_repos = g_build_filename (source_root, "etc/yum.repos.d", NULL);
-          dnf_context_set_repo_dir (self->dnfctx, source_repos);
-          g_debug ("Set repos dir from source root");
+          g_auto (GStrv) repos_dirs = build_repos_dirs (source_root);
+          dnf_context_set_repos_dir (self->dnfctx, (const gchar *const *)repos_dirs);
+          g_debug ("Set repos dirs from source root");
         }
     }
 
@@ -2370,8 +2405,10 @@ rpmostree_find_and_download_packages (const char *const *packages, const char *s
   if (!rpmostree_context_setup (ctx, NULL, source_root, cancellable, error))
     return glnx_prefix_error (error, "Setting up dnf context");
 
-  g_autofree char *reposdir = g_build_filename (repo_root ?: source_root, "etc/yum.repos.d", NULL);
-  dnf_context_set_repo_dir (ctx->dnfctx, reposdir);
+  {
+    g_auto (GStrv) repos_dirs = build_repos_dirs (repo_root ?: source_root);
+    dnf_context_set_repos_dir (ctx->dnfctx, (const gchar *const *)repos_dirs);
+  }
 
   auto flags = (DnfContextSetupSackFlags)(DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB
                                           | DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS);

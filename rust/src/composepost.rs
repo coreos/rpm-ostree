@@ -50,6 +50,23 @@ pub(crate) const RPMOSTREE_RPMDB_LOCATION: &str = "usr/share/rpm";
 pub(crate) const RPMOSTREE_SYSIMAGE_RPMDB: &str = "usr/lib/sysimage/rpm";
 pub(crate) const TRADITIONAL_RPMDB_LOCATION: &str = "var/lib/rpm";
 
+/// Repository configuration directories. The /etc path is for user-added
+/// configuration; the /usr path is for distribution-provided configuration
+/// (introduced with DNF5 in Fedora 45).
+pub(crate) const YUM_REPOS_D: &str = "etc/yum.repos.d";
+pub(crate) const DNF5_REPOS_D: &str = "usr/share/dnf5/repos.d";
+pub(crate) const REPOS_DIRS: &[&str] = &[YUM_REPOS_D, DNF5_REPOS_D];
+
+/// Absolute-path versions of the above, for use in contexts that need them.
+pub(crate) const ABS_YUM_REPOS_D: &str = "/etc/yum.repos.d";
+pub(crate) const ABS_DNF5_REPOS_D: &str = "/usr/share/dnf5/repos.d";
+
+/// Return the list of absolute repo configuration directories to search,
+/// exposed to C++ via cxx bridge.
+pub(crate) fn get_repos_dirs() -> Vec<String> {
+    vec![ABS_YUM_REPOS_D.to_string(), ABS_DNF5_REPOS_D.to_string()]
+}
+
 const SD_LOCAL_FS_TARGET_REQUIRES: &str = "usr/lib/systemd/system/local-fs.target.requires";
 
 #[context("Moving {}", name)]

@@ -36,8 +36,9 @@ It supports the following parameters:
    use, from any files that end in `.repo`, in the same directory as
    the treefile. If missing, all yum repos enabled by default are used.
    `rpm-ostree compose tree` does not use the system
-   `/etc/yum.repos.d`, because it's common to want to compose a target
-   system distinct from the one the host sytem is running.
+   repository configuration directories, because it's common to want
+   to compose a target system distinct from the one the host sytem
+   is running.
 
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
