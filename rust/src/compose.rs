@@ -33,7 +33,7 @@ use crate::cmdutils::CommandRunExt;
 use crate::containers_storage::Mount;
 use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::isolation::self_command;
-use crate::{RPMOSTREE_RPMDB_LOCATION, RPMOSTREE_SYSIMAGE_RPMDB};
+use crate::{REPOS_DIRS, RPMOSTREE_RPMDB_LOCATION, RPMOSTREE_SYSIMAGE_RPMDB};
 
 const OSTREE_COMPOSEFS_DIGEST_V0_KEY: &str = "ostree.composefs.digest.v0";
 
@@ -640,23 +640,24 @@ fn mutate_source_root(exec_root: &Dir, source_root: &Utf8Path) -> Result<()> {
         println!("Symlinked {RPMOSTREE_RPMDB_LOCATION} in source root");
     }
 
-    if !source_root_dir.try_exists("etc")? {
-        return Ok(());
-    }
-    if let Some(repos) = source_root_dir
-        .open_dir_optional("etc/yum.repos.d")
-        .context("Opening yum.repos.d")?
-    {
-        for ent in repos.entries_utf8()? {
-            let ent = ent?;
-            if !ent.file_type()?.is_file() {
-                continue;
+    // Scan all repo directory locations for .repo files that may need
+    // GPG key path rewriting.
+    for repos_dir in REPOS_DIRS {
+        if let Some(repos) = source_root_dir
+            .open_dir_optional(repos_dir)
+            .with_context(|| format!("Opening {repos_dir}"))?
+        {
+            for ent in repos.entries_utf8()? {
+                let ent = ent?;
+                if !ent.file_type()?.is_file() {
+                    continue;
+                }
+                let name: Utf8PathBuf = ent.file_name()?.into();
+                let Some("repo") = name.extension() else {
+                    continue;
+                };
+                mutate_one_dnf_repo(exec_root, source_root, &repos, &name)?;
             }
-            let name: Utf8PathBuf = ent.file_name()?.into();
-            let Some("repo") = name.extension() else {
-                continue;
-            };
-            mutate_one_dnf_repo(exec_root, source_root, &repos, &name)?;
         }
     }
 
@@ -1683,6 +1684,29 @@ mod tests {
         gpgkey=file:///absolute/path/not-in-source-root
     "#};
         similar_asserts::assert_eq!(expected, found_repos);
+
+        // Also test with repos in the new /usr/share/dnf5/repos.d location
+        rootfs.create_dir_all("repos/usr/share/dnf5/repos.d")?;
+        rootfs.create_dir_all("repos/usr/share/pki/rpm-gpg")?;
+        rootfs.write("repos/usr/share/pki/rpm-gpg/repo5.key", "repo5 gpg key")?;
+        let dnf5_repo_content = indoc::indoc! { r#"
+        [repo5]
+        baseurl=blah
+        gpgkey=file:///usr/share/pki/rpm-gpg/repo5.key
+    "#};
+        rootfs.write(
+            "repos/usr/share/dnf5/repos.d/test-dnf5.repo",
+            dnf5_repo_content,
+        )?;
+        mutate_source_root(rootfs, "repos".into()).unwrap();
+        let found_dnf5_repos =
+            rootfs.read_to_string("repos/usr/share/dnf5/repos.d/test-dnf5.repo")?;
+        let expected_dnf5 = indoc::indoc! { r#"
+        [repo5]
+        baseurl=blah
+        gpgkey=file:///repos/usr/share/pki/rpm-gpg/repo5.key
+    "#};
+        similar_asserts::assert_eq!(expected_dnf5, found_dnf5_repos);
 
         Ok(())
     }

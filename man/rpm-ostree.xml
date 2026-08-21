@@ -222,8 +222,8 @@ Boston, MA 02111-1307, USA.
         <listitem>
           <para>
             Takes one or more packages as arguments. The packages are
-            fetched from the enabled repositories in
-            <filename>/etc/yum.repos.d/</filename> and are overlayed on
+            fetched from the enabled repositories in the system
+            repository configuration directories and are overlayed on
             top of a new deployment.  It is also possible to specify a
             local RPM package that resides on the host. Overlayed
             packages can later be removed with the
@@ -310,8 +310,8 @@ Boston, MA 02111-1307, USA.
             Takes one or more packages as arguments. The packages are
             removed from the set of packages that are currently
             overlayed. The remaining packages in the set (if any) are
-            fetched from the enabled repositories in
-            <filename>/etc/yum.repos.d/</filename> and are overlayed on
+            fetched from the enabled repositories in the system
+            repository configuration directories and are overlayed on
             top of a new deployment.
           </para>
 
@@ -334,8 +334,8 @@ Boston, MA 02111-1307, USA.
         <listitem>
           <para>
             Takes one or more query terms as arguments. The packages are
-            searched within the enabled repositories in
-            <filename>/etc/yum.repos.d/</filename>. Packages can be
+            searched within the enabled repositories in the system
+            repository configuration directories. Packages can be
             overlayed and removed using the <command>install</command>
             and <command>uninstall</command> commands.
           </para>
@@ -519,8 +519,8 @@ Boston, MA 02111-1307, USA.
             <option>--check</option> to just check if an upgrade is
             available, without downloading it or performing a
             package-level diff.  Using this flag will force an update
-            of the RPM metadata from the enabled repos in
-            <filename>/etc/yum.repos.d/</filename>, if there are any
+            of the RPM metadata from the enabled repos in the system
+            repository configuration directories, if there are any
             layered packages.
           </para>
 
@@ -911,14 +911,17 @@ $ systemctl start postgresql  # Some setup required
     <title>Repository configuration and GPG keys</title>
 
     <para>
-      rpm-ostree uses the libdnf shared library, which honors <literal>/etc/yum.repos.d</literal>.
+      rpm-ostree uses the libdnf shared library, which honors both
+      <literal>/etc/yum.repos.d</literal> (for user configuration) and
+      <literal>/usr/share/dnf5/repos.d</literal> (for distribution-provided configuration).
       Note that rpm-md (yum/dnf) repositories are only checked if client-side package layering is
       enabled.
     </para>
 
     <para>
       However, the behavior for GPG keys is slightly different from a traditional <command>rpm</command>
-      system.  Essentially, all GPG keys in <literal>/etc/pki/rpm-gpg</literal> are loaded and trusted.
+      system.  Essentially, all GPG keys in <literal>/etc/pki/rpm-gpg</literal> and
+      <literal>/usr/share/pki/rpm-gpg</literal> are loaded and trusted.
       The <literal>.repo</literal> file should reference the file path in there.
     </para>
     <para>

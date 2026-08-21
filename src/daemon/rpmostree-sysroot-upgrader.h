@@ -65,7 +65,7 @@ typedef enum
 
 /* _NONE means we're doing pure ostree, no client-side computation.
  * _LOCAL is just e.g. rpm-ostree initramfs
- * _RPMMD_REPOS is where we're downloading data from /etc/yum.repos.d
+ * _RPMMD_REPOS is where we're downloading data from yum.repos.d / dnf5 repos.d
  */
 typedef enum
 {

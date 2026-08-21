@@ -701,6 +701,13 @@ pub mod ffi {
         fn get_packages(&self) -> Vec<String>;
     }
 
+    // composepost.rs
+    extern "Rust" {
+        /// Return the list of repo configuration directories to search
+        /// (e.g. ["/etc/yum.repos.d", "/usr/share/dnf5/repos.d"]).
+        fn get_repos_dirs() -> Vec<String>;
+    }
+
     // utils.rs
     extern "Rust" {
         fn varsubstitute(s: &str, vars: &Vec<StringMapping>) -> Result<String>;

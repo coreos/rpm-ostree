@@ -20,7 +20,13 @@
 setup_rpmmd_repos() {
     dest=$1
     shift
-    repos=${RPMOSTREE_COMPOSE_TEST_USE_REPOS:-/etc/yum.repos.d}
+    if [ -n "${RPMOSTREE_COMPOSE_TEST_USE_REPOS:-}" ]; then
+        repos=${RPMOSTREE_COMPOSE_TEST_USE_REPOS}
+    elif [ -d /usr/share/dnf5/repos.d ]; then
+        repos=/usr/share/dnf5/repos.d
+    else
+        repos=/etc/yum.repos.d
+    fi
     for x in ${repos}/fedora{,-updates}.repo; do
         bn=$(basename ${x})
         cp $x ${dest}/${bn}
