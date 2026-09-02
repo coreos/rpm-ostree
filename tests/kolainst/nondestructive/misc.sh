@@ -330,3 +330,56 @@ if rpm-ostree rebase ostree-unverified-registry:quay.io/fedora/fedora-coreos:tes
 fi
 assert_file_has_content_literal err.txt "proxyconnect tcp: dial tcp: lookup test123.com"
 echo "ok proxy"
+
+# Test GHSA-2m78-7qj3-jmvc: treefile modifier must require override action
+# The treefile modifier in UpdateDeployment must map to the
+# org.projectatomic.rpmostree1.override polkit action. Without the fix, a
+# caller with only install-uninstall-packages permission could include treefile
+# alongside another modifier and bypass the override requirement.
+rm -f /etc/systemd/system/rpm-ostreed.service.d/http-proxy.conf
+systemctl daemon-reload
+systemctl restart rpm-ostreed.service
+
+# Give core the weaker package-management permission while explicitly denying
+# override.  This reproduces the authorization split required for the bypass:
+# package changes must be accepted, but adding treefile must be rejected.
+mkdir -p /etc/polkit-1/rules.d
+cat >/etc/polkit-1/rules.d/49-rpm-ostree-treefile-test.rules <<'EOF'
+polkit.addRule(function(action, subject) {
+    if (subject.user == "core") {
+        if (action.id == "org.projectatomic.rpmostree1.install-uninstall-packages")
+            return polkit.Result.YES;
+        if (action.id == "org.projectatomic.rpmostree1.override")
+            return polkit.Result.NO;
+    }
+});
+EOF
+systemctl restart polkit
+
+# Resolve the booted OS object path
+stateroot=$(rpm-ostree status --booted --json | jq -r '.deployments[0].osname')
+OSPATH=/org/projectatomic/rpmostree1/${stateroot//-/_}
+# First prove that core is authorized for a package-only request.  The client
+# disconnects without calling Start, so this does not alter the deployment.
+runuser -u core -- gdbus call --system \
+    --dest org.projectatomic.rpmostree1 \
+    --object-path "$OSPATH" \
+    --method org.projectatomic.rpmostree1.OS.UpdateDeployment \
+    "{'install-packages': <['bash']>}" \
+    "{'no-pull-base': <true>}" >/dev/null
+echo "ok package-only UpdateDeployment allowed"
+
+# The same permitted request plus treefile must require override and be denied.
+if runuser -u core -- gdbus call --system \
+    --dest org.projectatomic.rpmostree1 \
+    --object-path "$OSPATH" \
+    --method org.projectatomic.rpmostree1.OS.UpdateDeployment \
+    "{'install-packages': <['bash']>, 'treefile': <'{\"packages\":[\"bash\"]}'>}" \
+    "{'no-pull-base': <true>}" 2>err.txt; then
+    assert_not_reached "install-packages+treefile UpdateDeployment should require override"
+fi
+assert_file_has_content err.txt 'Authorization error\|AccessDenied'
+echo "ok install-packages+treefile UpdateDeployment denied without override permission"
+
+rm -f /etc/polkit-1/rules.d/49-rpm-ostree-treefile-test.rules
+systemctl restart polkit

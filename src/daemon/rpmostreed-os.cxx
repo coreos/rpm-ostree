@@ -205,6 +205,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *i
           &modifiers_dict, "install-local-fileoverride-packages", G_VARIANT_TYPE ("ah"));
       g_autoptr (GVariant) override_replace_local_pkgs = g_variant_dict_lookup_value (
           &modifiers_dict, "override-replace-local-packages", G_VARIANT_TYPE ("ah"));
+      auto treefile
+          = static_cast<const char *> (vardict_lookup_ptr (&modifiers_dict, "treefile", "&s"));
       gboolean no_pull_base = vardict_lookup_bool (&options_dict, "no-pull-base", FALSE);
       gboolean no_overrides = vardict_lookup_bool (&options_dict, "no-overrides", FALSE);
       gboolean no_layering = vardict_lookup_bool (&options_dict, "no-layering", FALSE);
@@ -236,6 +238,17 @@ os_authorize_method (GDBusInterfaceSkeleton *interface, GDBusMethodInvocation *i
               && g_variant_n_children (override_replace_local_pkgs) > 0)
           || no_overrides)
         g_ptr_array_add (actions, (void *)"org.projectatomic.rpmostree1.override");
+
+      /* The treefile modifier can merge arbitrary deployment/origin
+       * changes (packages, overrides, etc.) via
+       * rpmostree_origin_merge_treefile().  It must always require the
+       * override action so that a caller with only a weaker permission
+       * (e.g. install-uninstall-packages) cannot smuggle treefile
+       * changes through alongside an otherwise-permitted modifier.
+       * See: GHSA-2m78-7qj3-jmvc */
+      if (treefile != NULL)
+        g_ptr_array_add (actions, (void *)"org.projectatomic.rpmostree1.override");
+
       /* If we couldn't figure out what's going on, count it as an override.  This occurs
        * right now with `deploy --ex-cliwrap=true`.
        */
