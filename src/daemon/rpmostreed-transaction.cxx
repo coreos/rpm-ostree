@@ -35,6 +35,12 @@
 // generated, but there's no point because there can be at most one transaction.
 #define CLIENT_TRANSACTION_PATH "/run/rpm-ostree-transaction.sock"
 
+// Hard limit on the number of simultaneous peer connections to the
+// transaction progress socket.  This bounds the file-descriptor and
+// memory footprint that can be caused by connection flooding.
+// 64 is generous enough for any realistic monitoring scenario.
+#define MAX_TRANSACTION_PEER_CONNECTIONS 64
+
 struct _RpmostreedTransactionPrivate
 {
   GDBusMethodInvocation *invocation;
@@ -59,6 +65,13 @@ struct _RpmostreedTransactionPrivate
 
   GDBusServer *server;
   GHashTable *peer_connections;
+
+  /* UID of the client that initiated the transaction, used to restrict
+   * connections on the progress socket to the initiator and root.  A
+   * value of (uid_t)-1 means we could not determine the UID and we
+   * fall back to allowing any local connection (still bounded by
+   * MAX_TRANSACTION_PEER_CONNECTIONS). */
+  uid_t initiating_uid;
 
   /* For emitting Finished signals to late connections. */
   GVariant *finished_params;
@@ -169,6 +182,40 @@ transaction_new_connection_cb (GDBusServer *server, GDBusConnection *connection,
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
   GError *local_error = NULL;
 
+  GCredentials *peer_creds = g_dbus_connection_get_peer_credentials (connection);
+  g_autofree char *creds = creds_to_string (peer_creds);
+
+  /* Enforce a hard cap on the number of peer connections to prevent
+   * resource exhaustion from connection flooding (GHSA-rq45-x7mc-f7h8).  */
+  guint n_peers = g_hash_table_size (priv->peer_connections);
+  if (n_peers >= MAX_TRANSACTION_PEER_CONNECTIONS)
+    {
+      sd_journal_print (LOG_WARNING,
+                        "Rejecting transaction progress connection from %s: "
+                        "peer limit reached (%u/%u)",
+                        creds, n_peers, (guint)MAX_TRANSACTION_PEER_CONNECTIONS);
+      return FALSE;
+    }
+
+  /* Only allow connections from root or the user who initiated the
+   * transaction.  This prevents unprivileged local users from
+   * connecting to the progress socket and e.g. cancelling a
+   * transaction they did not start.  If we could not determine the
+   * initiating UID at transaction creation time we skip this check
+   * and rely on the connection limit above.  */
+  if (peer_creds != NULL && priv->initiating_uid != (uid_t)-1)
+    {
+      uid_t peer_uid = g_credentials_get_unix_user (peer_creds, NULL);
+      if (peer_uid != 0 && peer_uid != priv->initiating_uid)
+        {
+          sd_journal_print (LOG_WARNING,
+                            "Rejecting transaction progress connection from %s: "
+                            "uid %u is not the transaction initiator (uid %u) or root",
+                            creds, (guint)peer_uid, (guint)priv->initiating_uid);
+          return FALSE;
+        }
+    }
+
   g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (self), connection, "/",
                                     &local_error);
 
@@ -184,8 +231,8 @@ transaction_new_connection_cb (GDBusServer *server, GDBusConnection *connection,
 
   g_hash_table_add (priv->peer_connections, g_object_ref (connection));
 
-  g_autofree char *creds = creds_to_string (g_dbus_connection_get_peer_credentials (connection));
-  sd_journal_print (LOG_INFO, "Process %s connected to transaction progress", creds);
+  sd_journal_print (LOG_INFO, "Process %s connected to transaction progress (%u/%u peers)", creds,
+                    n_peers + 1, (guint)MAX_TRANSACTION_PEER_CONNECTIONS);
 
   return TRUE;
 }
@@ -649,6 +696,22 @@ transaction_constructed (GObject *object)
       priv->sd_unit = rpmostreed_daemon_client_get_sd_unit (rpmostreed_daemon_get (), sender);
       rpmostree_transaction_set_initiating_client_description ((RPMOSTreeTransaction *)self,
                                                                priv->client_description);
+
+      /* Resolve the initiating client's UID from the system bus so we
+       * can restrict progress-socket connections to that user (and
+       * root).  This is a synchronous call but is expected to return
+       * near-instantly since we are talking to the bus daemon itself.  */
+      g_autoptr (GVariant) uid_reply = g_dbus_connection_call_sync (
+          connection, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+          "GetConnectionUnixUser", g_variant_new ("(s)", sender), G_VARIANT_TYPE ("(u)"),
+          G_DBUS_CALL_FLAGS_NONE, -1, NULL, NULL);
+      if (uid_reply != NULL)
+        {
+          guint32 uid;
+          g_variant_get (uid_reply, "(u)", &uid);
+          priv->initiating_uid = (uid_t)uid;
+          sd_journal_print (LOG_INFO, "Transaction initiated by uid %u", uid);
+        }
     }
 }
 
@@ -700,6 +763,13 @@ transaction_initable_init (GInitable *initable, GCancellable *cancellable, GErro
   if (priv->server == NULL)
     return FALSE;
 
+  /* The socket permissions are a secondary defence; the connection
+   * callback enforces UID-based access control and a hard connection
+   * limit.  We use 0666 to allow local users to connect (the UID
+   * check in transaction_new_connection_cb decides whether to accept),
+   * since restricting at the filesystem level would prevent the
+   * legitimate initiating user from connecting when the daemon runs
+   * as root.  */
   if (chmod (CLIENT_TRANSACTION_PATH, 0666) < 0)
     return glnx_throw_errno_prefix (error, "Failed to chmod %s", CLIENT_TRANSACTION_PATH);
 
@@ -888,6 +958,7 @@ rpmostreed_transaction_init (RpmostreedTransaction *self)
 
   self->priv->peer_connections
       = g_hash_table_new_full (g_direct_hash, g_direct_equal, g_object_unref, NULL);
+  self->priv->initiating_uid = (uid_t)-1;
 }
 
 gboolean
