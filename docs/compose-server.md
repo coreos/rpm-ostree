@@ -56,7 +56,7 @@ other distributions however.
 
 Example base rpm-ostree "manifest repositories" are:
 
- - [Silverblue](https://pagure.io/workstation-ostree-config)
+ - [Silverblue](https://forge.fedoraproject.org/atomic-desktops/config)
  - [IoT](https://pagure.io/fedora-iot/ostree)
  - [Fedora CoreOS](https://github.com/coreos/fedora-coreos-config/)
 
