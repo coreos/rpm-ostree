@@ -401,7 +401,7 @@ systemctl restart rpm-ostreed.service
 # available while connections are authenticated.
 rpm-ostree refresh-md --force &
 REFRESH_PID=$!
-for i in $(seq 1 50); do
+for _ in $(seq 1 50); do
     if test -S /run/rpm-ostree-transaction.sock; then
         break
     fi
@@ -415,7 +415,7 @@ cursor=$(journalctl -o json -n 1 | jq -r '.["__CURSOR"]')
 timeout 2 runuser -u bin -- gdbus monitor \
     --address=unix:path=/run/rpm-ostree-transaction.sock \
     --object-path / >/dev/null 2>&1 || true
-for i in $(seq 1 20); do
+for _ in $(seq 1 20); do
     if journalctl -u rpm-ostreed --after-cursor "$cursor" \
         | grep -q 'is not the transaction initiator'; then
         break
@@ -435,7 +435,7 @@ for _ in $(seq 1 63); do
         | socat - UNIX-CONNECT:/run/rpm-ostree-transaction.sock >/dev/null &
     PEER_PIDS+=("$!")
 done
-for i in $(seq 1 50); do
+for _ in $(seq 1 50); do
     if journalctl -u rpm-ostreed --after-cursor "$cursor" \
         | grep -q '(64/64 peers)'; then
         break
@@ -449,7 +449,7 @@ journalctl -u rpm-ostreed --after-cursor "$cursor" \
 timeout 2 gdbus monitor \
     --address=unix:path=/run/rpm-ostree-transaction.sock \
     --object-path / >/dev/null 2>&1 || true
-for i in $(seq 1 20); do
+for _ in $(seq 1 20); do
     if journalctl -u rpm-ostreed --after-cursor "$cursor" \
         | grep -q 'peer limit reached (64/64)'; then
         break
