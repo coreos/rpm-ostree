@@ -70,6 +70,9 @@ y.setdefault("default-target", "multi-user.target")
 y.setdefault("rpmdb", "sqlite")
 y.setdefault("opt-usrlocal", "var")
 y.setdefault("add-commit-metadata", {})
+# The pinned F43 config predates the FCOS switch to documentation: false, and
+# the test fixture removes its old documentation-deletion postprocess script.
+y.setdefault("documentation", False)
 y.setdefault("check-passwd", {"type": "none"})
 y.setdefault("check-groups", {"type": "none"})
 y.setdefault("automatic-version-prefix", "43.<date:%Y%m%d>.dev")
