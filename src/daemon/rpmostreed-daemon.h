@@ -68,3 +68,7 @@ namespace rpmostreecxx
 {
 rust::Box<TokioEnterGuard> rpmostreed_daemon_tokio_enter (RpmostreedDaemon *self);
 }
+
+void reset_idle_exit_timer (GDBusConnection *connection, const gchar *sender_name,
+                            const gchar *object_path, const gchar *interface_name,
+                            const gchar *signal_name, GVariant *parameters, gpointer user_data);
