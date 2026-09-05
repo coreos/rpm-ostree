@@ -70,8 +70,14 @@ y.setdefault("default-target", "multi-user.target")
 y.setdefault("rpmdb", "sqlite")
 y.setdefault("opt-usrlocal", "var")
 y.setdefault("add-commit-metadata", {})
+# The pinned F43 config predates the FCOS switch to documentation: false, and
+# the test fixture removes its old documentation-deletion postprocess script.
+y.setdefault("documentation", False)
 y.setdefault("check-passwd", {"type": "none"})
 y.setdefault("check-groups", {"type": "none"})
+# The old full treefile supplied file-backed passwd/group data on every
+# compose, so it never preserved those files from the previous commit.
+y.setdefault("preserve-passwd", False)
 y.setdefault("automatic-version-prefix", "43.<date:%Y%m%d>.dev")
 y.setdefault("mutate-os-release", "43")
 if "exclude-packages" not in y:

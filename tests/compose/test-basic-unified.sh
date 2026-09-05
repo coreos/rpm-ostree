@@ -20,7 +20,9 @@ build_rpm testpkg-stdout-and-stderr \
 echo testpkg-some-stdout-testing
 echo testpkg-some-stderr-testing 1>&2
 echo testpkg-more-stdout-testing
-echo testpkg-more-stderr-testing 1>&2"
+echo testpkg-more-stderr-testing 1>&2" \
+             install "mkdir -p %{buildroot}/var/lib/testpkg-autovar" \
+             files "%dir %attr(0750, bin, bin) /var/lib/testpkg-autovar"
 
 echo gpgcheck=0 >> yumrepo.repo
 ln "$PWD/yumrepo.repo" config/yumrepo.repo
@@ -114,9 +116,11 @@ ostree --repo="${repo}" cat "${treeref}" ${rpmostree_tmpfiles_path}/filesystem.c
 # Picked this one at random as an example of something that won't likely be
 # converted to tmpfiles.d upstream.  But if it is, we can change this test.
 assert_file_has_content_literal autovar.txt 'd /var/cache 0755 root root - -'
-ostree --repo="${repo}" cat "${treeref}" ${rpmostree_tmpfiles_path}/chrony.conf > autovar.txt
-# And this one has a non-root uid
-assert_file_has_content_literal autovar.txt 'd /var/lib/chrony 0750 chrony chrony - -'
+# Current chrony packages ship native tmpfiles entries for their ghosted state
+# directories, so use our test package to exercise this importer translation.
+ostree --repo="${repo}" cat "${treeref}" \
+  ${rpmostree_tmpfiles_path}/testpkg-stdout-and-stderr.conf > autovar.txt
+assert_file_has_content_literal autovar.txt 'd /var/lib/testpkg-autovar 0750 bin bin - -'
 # see rpmostree-importer.c
 if ostree --repo="${repo}" cat "${treeref}" ${rpmostree_tmpfiles_path}/rpm.conf > rpm.txt 2>/dev/null; then
     assert_not_file_has_content rpm.txt 'd /var/lib/rpm'

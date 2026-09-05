@@ -104,7 +104,7 @@ cd ..
 echo "ok minimal ${RELEASE}"
 
 # Next, test the full Fedora Silverblue config, and also using an OCI directory
-test -d workstation-ostree-config.${RELEASE} || git clone --depth=1 https://pagure.io/workstation-ostree-config --branch "f${RELEASE}" workstation-ostree-config.${RELEASE}
+test -d workstation-ostree-config.${RELEASE} || git clone --depth=1 https://forge.fedoraproject.org/atomic-desktops/config.git --branch "f${RELEASE}" workstation-ostree-config.${RELEASE}
 mkdir_oci() {
   local d
   d=$1

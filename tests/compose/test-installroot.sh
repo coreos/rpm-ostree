@@ -38,6 +38,9 @@ cp -al ${instroot}{-postprocess,-postprocess-treefile}
 
 
 ! test -f ${instroot}-postprocess/${integrationconf}
+# Without a treefile, postprocess uses the legacy boot-location=new default.
+# Seed its expected /boot directory instead of imposing that layout on modules.
+mkdir -p ${instroot}-postprocess/boot
 rpm-ostree compose postprocess ${instroot}-postprocess
 test -f ${instroot}-postprocess/${integrationconf}
 ostree --repo=${repo} commit -b test-directcommit --selinux-policy ${instroot}-postprocess --tree=dir=${instroot}-postprocess

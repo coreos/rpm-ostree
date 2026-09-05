@@ -74,8 +74,9 @@ assert_file_has_content ls.txt '/vmlinuz$'
 assert_file_has_content ls.txt '^-00644 .*/initramfs.img$'
 echo "ok kernel and initramfs"
 
-ostree --repo=${repo} ls ${treeref} /usr/share > share.txt
-assert_not_file_has_content share.txt /usr/share/man
+# documentation: false may leave empty directories and dangling symlinks.
+ostree --repo=${repo} ls -R ${treeref} /usr/share > share.txt
+assert_not_file_has_content share.txt '^-.*/usr/share/man/'
 # test-misc-tweaks tests the docs path
 echo "ok no manpages"
 
