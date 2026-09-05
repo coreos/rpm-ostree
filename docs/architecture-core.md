@@ -185,7 +185,7 @@ just another package.  Most higher level package managers such
 as yum gained some special casing around the kernel - because
 it's not possible to restart the running kernel, traditional RPM
 systems need to keep the kernel modules for the running kernel
-around.  For example yum/dnf have a concept of "installonlyn"
+around.  For example yum/dnf have a concept of "installonly"
 which defaults to 2 for the kernel package.
 
 Additionally, for at least traditional Fedora derivatives with
