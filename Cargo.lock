@@ -281,7 +281,7 @@ checksum = "b6cf3aea8a5081171859ef57bc1606b1df6999df4f1110f8eef68b30098d1d3a"
 dependencies = [
  "ambient-authority",
  "fs-set-times",
- "io-extras",
+ "io-extras 0.18.4",
  "io-lifetimes 2.0.4",
  "ipnet",
  "maybe-owned",
@@ -292,15 +292,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-primitives"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdadbd7c002d3a484b35243669abdae85a0ebaded5a61117169dc3400f9a7ff0"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras 0.19.0",
+ "io-lifetimes 3.0.1",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "rustix-linux-procfs",
+ "windows-sys 0.61.2",
+ "winx",
+]
+
+[[package]]
 name = "cap-std"
 version = "3.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6dc3090992a735d23219de5c204927163d922f42f575a0189b005c62d37549a"
 dependencies = [
  "camino",
- "cap-primitives",
- "io-extras",
+ "cap-primitives 3.4.5",
+ "io-extras 0.18.4",
  "io-lifetimes 2.0.4",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7281235d6e96d3544ca18bba9049be92f4190f8d923e3caef1b5f66cfa752608"
+dependencies = [
+ "cap-primitives 4.0.2",
+ "io-extras 0.19.0",
+ "io-lifetimes 3.0.1",
  "rustix",
 ]
 
@@ -310,8 +340,20 @@ version = "4.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fe962d42e07c22aec2618191c3683412735b7e6dcd7bab2eec811ab4697c58e"
 dependencies = [
- "cap-primitives",
- "cap-tempfile",
+ "cap-primitives 3.4.5",
+ "cap-tempfile 3.4.5",
+ "libc",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std-ext"
+version = "5.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c6c5ac70c4465b47c3a322330f87c2df31e42ac527497d94dc1f1d1cb8989f9"
+dependencies = [
+ "cap-primitives 4.0.2",
+ "cap-tempfile 4.0.2",
  "libc",
  "rustix",
 ]
@@ -323,11 +365,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68d8ad5cfac469e58e632590f033d45c66415ef7a8aa801409884818036706f5"
 dependencies = [
  "camino",
- "cap-std",
+ "cap-std 3.4.5",
  "rand 0.8.6",
  "rustix",
  "rustix-linux-procfs",
  "uuid",
+]
+
+[[package]]
+name = "cap-tempfile"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42f22d5c0b1147e8bd9105fa004450f673c139d7e632f7edc3980f94a51f20f3"
+dependencies = [
+ "cap-std 4.0.2",
+ "rand 0.9.4",
+ "rustix",
+ "rustix-linux-procfs",
+ "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -597,7 +653,7 @@ version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4efbec7ca93c60462005402029839fcc8958eb5239bab1dd09f6d3e5165911a"
 dependencies = [
- "cap-std-ext",
+ "cap-std-ext 4.0.7",
  "futures-util",
  "itertools",
  "oci-spec",
@@ -1837,6 +1893,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-extras"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
+dependencies = [
+ "io-lifetimes 3.0.1",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "io-lifetimes"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2258,7 +2324,7 @@ checksum = "92e746e3e6a7bb57a72ea4f0b8085f84aedaab1d537a5dc5488fd3cd5af0cd67"
 dependencies = [
  "camino",
  "canon-json",
- "cap-std-ext",
+ "cap-std-ext 4.0.7",
  "chrono",
  "flate2",
  "hex",
@@ -2370,7 +2436,7 @@ dependencies = [
  "bootc-internal-utils",
  "camino",
  "canon-json",
- "cap-std-ext",
+ "cap-std-ext 4.0.7",
  "chrono",
  "clap",
  "comfy-table",
@@ -2889,9 +2955,9 @@ dependencies = [
  "binread",
  "bitflags 2.12.1",
  "camino",
- "cap-primitives",
- "cap-std",
- "cap-std-ext",
+ "cap-primitives 3.4.5",
+ "cap-std 3.4.5",
+ "cap-std-ext 5.1.2",
  "chrono",
  "clap",
  "cxx",
