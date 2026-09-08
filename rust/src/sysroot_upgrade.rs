@@ -100,18 +100,7 @@ async fn layer_progress_print(mut r: Receiver<ImportProgress>, total_to_fetch: u
 
 fn default_container_pull_config(imgref: &OstreeImageReference) -> Result<ImageProxyConfig> {
     let mut cfg = ImageProxyConfig::default();
-    if imgref.imgref.transport == ostree_container::Transport::ContainerStorage {
-        // Fetching from containers-storage, may require privileges to read files
-        ostree_container::merge_default_container_proxy_opts_with_isolation(&mut cfg, None)?;
-    } else {
-        let isolation_systemd = crate::utils::running_in_systemd().then_some("rpm-ostree");
-        let isolation_default = rustix::process::getuid().is_root().then_some("nobody");
-        let isolation_user = isolation_systemd.or(isolation_default);
-        ostree_container::merge_default_container_proxy_opts_with_isolation(
-            &mut cfg,
-            isolation_user,
-        )?;
-    }
+    ostree_container::merge_default_container_proxy_opts(&mut cfg)?;
     Ok(cfg)
 }
 

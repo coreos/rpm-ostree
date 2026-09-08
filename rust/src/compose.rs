@@ -1213,10 +1213,8 @@ pub(crate) fn compose_image(args: Vec<String>) -> CxxResult<()> {
     let handle = tokio::runtime::Handle::current();
     let proxy = handle
         .block_on(async {
-            let config = containers_image_proxy::ImageProxyConfig {
-                authfile: opt.authfile.as_ref().map(|v| v.as_std_path().to_owned()),
-                ..Default::default()
-            };
+            let mut config = containers_image_proxy::ImageProxyConfig::default();
+            config.authfile = opt.authfile.as_ref().map(|v| v.as_std_path().to_owned());
             containers_image_proxy::ImageProxy::new_with_config(config).await
         })
         .expect("Create an image proxy");
