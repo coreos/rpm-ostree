@@ -122,8 +122,7 @@ FROM quay.io/fedora/fedora-coreos:testing-devel
 RUN mkdir /var/opt && \
     rpm -Uvh https://downloads.linux.hpe.com/repo/stk/rhel/7/x86_64/current/hp-scripting-tools-11.60-20.rhel7.x86_64.rpm && \
     mv /var/opt/hp/ /usr/lib/hp && \
-    echo 'L /opt/hp - - - - ../../usr/lib/hp' > /usr/lib/tmpfiles.d/hp.conf && \
-    ostree container commit
+    echo 'L /opt/hp - - - - ../../usr/lib/hp' > /usr/lib/tmpfiles.d/hp.conf
 ```
 
 #### Users and groups
@@ -132,14 +131,6 @@ At the current time, `rpm-ostree` will auto-synthesize [systemd-sysusers](https:
 snippets when `useradd` or `groupadd` are invoked during the process of e.g. `rpm-ostree install`.
 
 This means that user and group IDs are allocated per machine.
-
-### Using "ostree container commit"
-
-In a container build, it's a current best practice to invoke this at the end
-of each `RUN` instruction (or equivalent).  This will verify compatibility
-of `/var`, and also clean up extraneous files in e.g. `/tmp`.
-
-In the future, this command may perform more operations.
 
 ## Creating base images
 
