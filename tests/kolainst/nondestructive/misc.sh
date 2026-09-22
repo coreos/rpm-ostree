@@ -29,6 +29,19 @@ if grep -qF 'L /var/lib/selinux' "$integ"; then
   assert_streq "$(readlink /var/lib/selinux)" "../../etc/selinux"
   assert_not_file_has_content "$tmpfiles" '/var/lib/selinux'
   echo "ok /var/lib/selinux compatibility symlink"
+  # Legacy installs keep a real directory tree here, which the policy's
+  # /var/lib/selinux -> /etc/selinux equivalence relabels via this Z entry.
+  # See https://github.com/coreos/fedora-coreos-tracker/issues/2226 and the
+  # destructive selinux-store-relabel test for the legacy layout itself.
+  if grep -qF 'Z /var/lib/selinux' "$integ"; then
+    assert_file_has_content_literal "$integ" 'Z /var/lib/selinux - - - -'
+    if [ "$(getenforce)" != Disabled ]; then
+      restorecon -nRv /var/lib/selinux > relabel.txt
+      assert_file_empty relabel.txt
+      rm -f relabel.txt
+    fi
+    echo "ok /var/lib/selinux relabel entry"
+  fi
 else
   echo "ok /var/lib/selinux compatibility symlink (not present in this build, skipping)"
 fi
