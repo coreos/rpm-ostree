@@ -12,6 +12,7 @@ use gio::prelude::*;
 use ostree_ext::{gio, glib};
 use std::io::{BufRead, Write};
 use std::os::unix::io::IntoRawFd;
+use std::path;
 use std::process::Command;
 
 /// The well-known bus name.
@@ -267,13 +268,16 @@ pub(crate) fn is_bare_split_xattrs() -> CxxResult<bool> {
     Ok(ostree_ext::container_utils::is_bare_split_xattrs()?)
 }
 
-pub(crate) fn is_ostree_container() -> CxxResult<bool> {
-    Ok(ostree_ext::container_utils::is_ostree_container()?)
+/// This duplicates the logic found inside bootc is_ostee_container function
+/// maybe its better to try and expose it from bootc directly
+pub(crate) fn maybe_container() -> CxxResult<bool> {
+    let ostree_booted = path::Path::new(OSTREE_BOOTED).try_exists()?;
+    Ok(running_in_container() || (!utils::running_in_systemd() && !ostree_booted))
 }
 
 pub(crate) fn get_system_host_type() -> CxxResult<SystemHostType> {
-    let r = if ostree_ext::container_utils::is_ostree_container()? {
-        SystemHostType::OstreeContainer
+    let r = if maybe_container()? {
+        SystemHostType::Container
     } else if std::path::Path::new(OSTREE_BOOTED).exists() {
         SystemHostType::OstreeHost
     } else {
@@ -284,7 +288,7 @@ pub(crate) fn get_system_host_type() -> CxxResult<SystemHostType> {
 
 pub(crate) fn system_host_type_str(t: &SystemHostType) -> &'static str {
     match *t {
-        SystemHostType::OstreeContainer => "ostree container",
+        SystemHostType::Container => "container",
         SystemHostType::OstreeHost => "ostree host",
         _ => "unknown",
     }

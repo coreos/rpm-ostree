@@ -55,7 +55,7 @@ fn has_query(argv: &[&str]) -> bool {
 fn disposition(host: SystemHostType, argv: &[&str]) -> Result<RunDisposition> {
     // For now, all rpm invocations are directly passed through
     match host {
-        SystemHostType::OstreeContainer => return Ok(RunDisposition::Ok),
+        SystemHostType::Container => return Ok(RunDisposition::Ok),
         SystemHostType::OstreeHost => {}
         _ => return Ok(RunDisposition::Unsupported),
     };
@@ -97,7 +97,7 @@ pub(crate) fn main(host: SystemHostType, argv: &[&str]) -> Result<()> {
     let is_unlocked_ostree = host == SystemHostType::OstreeHost && cliutil::is_unlocked()?;
     // For now if we're in a container or unlocked, just directly exec rpm. In the future we
     // may choose to actually redirect commands like `rpm -e foo` to `rpm-ostree uninstall foo`.
-    if host == SystemHostType::OstreeContainer || is_unlocked_ostree {
+    if host == SystemHostType::Container || is_unlocked_ostree {
         cliutil::exec_real_binary("rpm", argv)
     } else {
         match disposition(host, argv)? {

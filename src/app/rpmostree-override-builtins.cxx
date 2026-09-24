@@ -151,11 +151,11 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
                  const char *const *override_remove, const char *const *override_replace,
                  const char *const *override_reset, GCancellable *cancellable, GError **error)
 {
-  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
+  CXX_TRY_VAR (maybe_container, rpmostreecxx::maybe_container (), error);
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
-  if (!is_ostree_container)
+  if (!maybe_container)
     {
       if (!rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable, &os_proxy,
                                       &osexperimental_proxy, error))
@@ -164,7 +164,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
 
   if (!opt_experimental && (opt_freeze || opt_from))
     return glnx_throw (error, "Must specify --experimental to use --freeze or --from");
-  if (is_ostree_container && override_reset && *override_reset)
+  if (maybe_container && override_reset && *override_reset)
     return glnx_throw (error, "Resetting overrides is not supported in container mode");
 
   CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
@@ -194,7 +194,7 @@ handle_override (RPMOSTreeSysroot *sysroot_proxy, RpmOstreeCommandInvocation *in
       override_replace = override_replace_local;
     }
 
-  if (is_ostree_container)
+  if (maybe_container)
     {
       for (const char *const *it = override_replace; it && *it; it++)
         {

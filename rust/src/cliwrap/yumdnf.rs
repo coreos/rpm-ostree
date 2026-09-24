@@ -218,7 +218,7 @@ fn disposition(opt: Opt, hosttype: SystemHostType) -> Result<RunDisposition> {
             }
             }
         },
-        SystemHostType::OstreeContainer => match opt.cmd {
+        SystemHostType::Container => match opt.cmd {
             Cmd::Upgrade | Cmd::Update => RunDisposition::NotImplementedYet("At the current time, it is not supported to update packages independently of the base image."),
             Cmd::Install { packages } => {
                 let mut args = packages;
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_yumdnf() -> Result<()> {
-        for common in [SystemHostType::OstreeContainer, SystemHostType::OstreeHost] {
+        for common in [SystemHostType::Container, SystemHostType::OstreeHost] {
             assert!(matches!(
                 testrun(common, &["search", "foo", "bar"])?,
                 RunDisposition::NotImplementedYet(_)
@@ -355,7 +355,7 @@ mod tests {
         }
 
         // Tests for the ostree container case
-        let host = SystemHostType::OstreeContainer;
+        let host = SystemHostType::Container;
         assert_eq!(
             testrun(host, &["install", "foo", "bar"])?,
             RunDisposition::ExecRpmOstree(strvec(["install", "foo", "bar"]))

@@ -73,7 +73,7 @@ pub fn entrypoint(args: &[&str]) -> Result<()> {
     let host_type = crate::get_system_host_type()?;
     if matches!(
         host_type,
-        SystemHostType::OstreeHost | SystemHostType::OstreeContainer
+        SystemHostType::OstreeHost | SystemHostType::Container
     ) {
         match name {
             "rpm" => Ok(self::rpm::main(host_type, args)?),

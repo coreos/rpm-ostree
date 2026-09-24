@@ -1179,7 +1179,7 @@ struct StringMapping final
 // Classify the running system.
 enum class SystemHostType : ::std::uint8_t
 {
-  OstreeContainer = 0,
+  Container = 0,
   OstreeHost = 1,
   Unknown = 2,
 };
@@ -1816,7 +1816,7 @@ bool is_bare_split_xattrs ();
 
 bool is_http_arg (::rust::Str arg) noexcept;
 
-bool is_ostree_container ();
+bool maybe_container ();
 
 ::rpmostreecxx::SystemHostType get_system_host_type ();
 

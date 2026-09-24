@@ -231,8 +231,8 @@ rpmostree_builtin_install (int argc, char **argv, RpmOstreeCommandInvocation *in
         }
     }
 
-  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
-  if (is_ostree_container)
+  CXX_TRY_VAR (maybe_container, rpmostreecxx::maybe_container (), error);
+  if (maybe_container)
     {
       CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
       // TODO: better API/cache for this
@@ -310,8 +310,8 @@ rpmostree_builtin_uninstall (int argc, char **argv, RpmOstreeCommandInvocation *
   argc--;
   argv[argc] = NULL;
 
-  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
-  if (is_ostree_container)
+  CXX_TRY_VAR (maybe_container, rpmostreecxx::maybe_container (), error);
+  if (maybe_container)
     {
       CXX_TRY_VAR (treefile, rpmostreecxx::treefile_new_empty (), error);
       treefile->add_packages_override_remove (util::rust_stringvec_from_strv (argv));

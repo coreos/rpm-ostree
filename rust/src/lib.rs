@@ -89,7 +89,7 @@ pub mod ffi {
     /// Classify the running system.
     #[derive(Clone, Debug)]
     enum SystemHostType {
-        OstreeContainer,
+        Container,
         OstreeHost,
         Unknown,
     }
@@ -98,7 +98,7 @@ pub mod ffi {
     extern "Rust" {
         fn is_bare_split_xattrs() -> Result<bool>;
         fn is_http_arg(arg: &str) -> bool;
-        fn is_ostree_container() -> Result<bool>;
+        fn maybe_container() -> Result<bool>;
         fn get_system_host_type() -> Result<SystemHostType>;
         fn require_system_host_type(t: SystemHostType) -> Result<()>;
         fn is_rpm_arg(arg: &str) -> bool;

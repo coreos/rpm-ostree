@@ -313,9 +313,9 @@ rpmostree_option_context_parse (GOptionContext *context, const GOptionEntry *mai
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0)
     ROSCXX_TRY (client_require_root (), error);
 
-  CXX_TRY_VAR (is_ostree_container, rpmostreecxx::is_ostree_container (), error);
+  CXX_TRY_VAR (maybe_container, rpmostreecxx::maybe_container (), error);
   bool container_capable = (flags & RPM_OSTREE_BUILTIN_FLAG_CONTAINER_CAPABLE) > 0;
-  if (use_daemon && !(is_ostree_container && container_capable))
+  if (use_daemon && !(maybe_container && container_capable))
     {
       if (out_sysroot_proxy == NULL)
         return glnx_throw (error, "This command can only run in an OSTree container.");

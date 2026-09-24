@@ -12,7 +12,7 @@ use fn_error_context::context;
 /// Primary entrypoint to running our wrapped `kernel-install` handling.
 #[context("rpm-ostree kernel-install wrapper")]
 pub(crate) fn main(argv: &[&str]) -> Result<()> {
-    if !ostree_ext::container_utils::is_ostree_container()? {
+    if !crate::client::maybe_container()? {
         return cliutil::exec_real_binary("kernel-install", argv);
     }
     let is_install = matches!(argv.first(), Some(&"add"));

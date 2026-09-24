@@ -1360,7 +1360,7 @@ struct StringMapping final
 // Classify the running system.
 enum class SystemHostType : ::std::uint8_t
 {
-  OstreeContainer = 0,
+  Container = 0,
   OstreeHost = 1,
   Unknown = 2,
 };
@@ -1999,7 +1999,7 @@ extern "C"
 
   bool rpmostreecxx$cxxbridge1$194$is_http_arg (::rust::Str arg) noexcept;
 
-  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$194$is_ostree_container (bool *return$) noexcept;
+  ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$194$maybe_container (bool *return$) noexcept;
 
   ::rust::repr::PtrLen rpmostreecxx$cxxbridge1$194$get_system_host_type (
       ::rpmostreecxx::SystemHostType *return$) noexcept;
@@ -3180,10 +3180,9 @@ extern "C"
       ::rust::Str sysroot_path, ::rpmostreecxx::RpmOstreeDiffPrintFormat format,
       ::std::uint32_t max_key_len, ::rpmostreecxx::GCancellable *cancellable) noexcept
   {
-    void (*print_treepkg_diff_from_sysroot_path$) (::rust::Str,
-                                                   ::rpmostreecxx::RpmOstreeDiffPrintFormat,
-                                                   ::std::uint32_t, ::rpmostreecxx::GCancellable *)
-        = ::rpmostreecxx::print_treepkg_diff_from_sysroot_path;
+    void (*print_treepkg_diff_from_sysroot_path$) (
+        ::rust::Str, ::rpmostreecxx::RpmOstreeDiffPrintFormat, ::std::uint32_t,
+        ::rpmostreecxx::GCancellable *) = ::rpmostreecxx::print_treepkg_diff_from_sysroot_path;
     print_treepkg_diff_from_sysroot_path$ (sysroot_path, format, max_key_len, cancellable);
   }
 
@@ -3250,8 +3249,7 @@ extern "C"
                                                 ::rpmostreecxx::RpmTs **return$) noexcept
   {
     ::std::unique_ptr<::rpmostreecxx::RpmTs> (*rpmts_for_commit$) (
-        ::rpmostreecxx::OstreeRepo const &, ::rust::Str)
-        = ::rpmostreecxx::rpmts_for_commit;
+        ::rpmostreecxx::OstreeRepo const &, ::rust::Str) = ::rpmostreecxx::rpmts_for_commit;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
         [&]
@@ -3287,8 +3285,7 @@ extern "C"
                                                   ::rpmostreecxx::PackageMeta **return$) noexcept
   {
     ::std::unique_ptr<::rpmostreecxx::PackageMeta> (::rpmostreecxx::RpmTs::*package_meta$) (
-        ::rust::Str, ::rust::Str) const
-        = &::rpmostreecxx::RpmTs::package_meta;
+        ::rust::Str, ::rust::Str) const = &::rpmostreecxx::RpmTs::package_meta;
     ::rust::repr::PtrLen throw$;
     ::rust::behavior::trycatch (
         [&]
@@ -3393,10 +3390,10 @@ is_http_arg (::rust::Str arg) noexcept
 }
 
 bool
-is_ostree_container ()
+maybe_container ()
 {
   ::rust::MaybeUninit<bool> return$;
-  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$194$is_ostree_container (&return$.value);
+  ::rust::repr::PtrLen error$ = rpmostreecxx$cxxbridge1$194$maybe_container (&return$.value);
   if (error$.ptr)
     {
       throw ::rust::impl<::rust::Error>::error (error$);
