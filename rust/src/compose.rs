@@ -771,6 +771,39 @@ fn generate_commit_from_rootfs(
     modifier: ostree::RepoCommitModifier,
     creation_time: Option<&chrono::DateTime<chrono::FixedOffset>>,
 ) -> Result<String> {
+    generate_commit_from_rootfs_impl(repo, rootfs, modifier, creation_time, None, None, false)
+}
+
+/// Generate a complete deployment commit from an already merged container rootfs.
+/// Keep the base commit as the parent for ancestry and preserve its non-package metadata.
+pub(crate) fn generate_deploy_commit_from_rootfs(
+    repo: &ostree::Repo,
+    rootfs: &Dir,
+    parent: &str,
+    metadata: &glib::Variant,
+) -> Result<String> {
+    let modifier =
+        ostree::RepoCommitModifier::new(ostree::RepoCommitModifierFlags::empty(), None);
+    generate_commit_from_rootfs_impl(
+        repo,
+        rootfs,
+        modifier,
+        None,
+        Some(parent),
+        Some(metadata),
+        true,
+    )
+}
+
+fn generate_commit_from_rootfs_impl(
+    repo: &ostree::Repo,
+    rootfs: &Dir,
+    modifier: ostree::RepoCommitModifier,
+    creation_time: Option<&chrono::DateTime<chrono::FixedOffset>>,
+    parent: Option<&str>,
+    metadata: Option<&glib::Variant>,
+    skip_ostree: bool,
+) -> Result<String> {
     let root_mtree = ostree::MutableTree::new();
     let cancellable = gio::Cancellable::NONE;
     let tx = repo.auto_transaction(cancellable)?;
@@ -795,7 +828,7 @@ fn generate_commit_from_rootfs(
 
         let ftype = ent.file_type()?;
         // Skip the contents of the sysroot
-        if ftype.is_dir() && name == SYSROOT {
+        if ftype.is_dir() && (name == SYSROOT || (skip_ostree && name == "ostree")) {
             let child_mtree = root_mtree.ensure_dir(&name)?;
             child_mtree.set_metadata_checksum(&root_metachecksum.to_hex());
         } else if ftype.is_dir() {
@@ -839,10 +872,10 @@ fn generate_commit_from_rootfs(
         .try_into()
         .context("Parsing creation time")?;
     let commit = repo.write_commit_with_time(
+        parent,
         None,
         None,
-        None,
-        None,
+        metadata,
         ostree_root,
         creation_time,
         cancellable,

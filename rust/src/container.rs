@@ -536,6 +536,41 @@ struct UpdateFromRunningOpts {
     reboot: bool,
 }
 
+/// Read a field from the container engine metadata file.
+fn containerenv_field(field: &str) -> Option<String> {
+    let contents = std::fs::read_to_string("/run/.containerenv").ok()?;
+    let prefix = format!("{field}=");
+    let value = contents.lines().find_map(|line| line.strip_prefix(&prefix))?.trim();
+    let value = value
+        .strip_prefix('"')
+        .and_then(|v| v.strip_suffix('"'))
+        .unwrap_or(value);
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
+/// Mount the running container's rootfs through the host Podman store.
+fn mount_running_container_rootfs(target_root: &Utf8Path) -> Result<Option<Utf8PathBuf>> {
+    let Some(container_id) = containerenv_field("id") else {
+        return Ok(None);
+    };
+    let mut output = Command::new("chroot")
+        .args([
+            target_root.as_str(),
+            "/usr/bin/podman",
+            "mount",
+            container_id.as_str(),
+        ])
+        .run_get_output()
+        .context("Mounting the running container rootfs with host Podman")?;
+    let mut path = String::new();
+    output.read_to_string(&mut path)?;
+    let path = Utf8Path::new(path.trim());
+    if !path.is_absolute() {
+        anyhow::bail!("Podman returned a non-absolute rootfs path: {path}");
+    }
+    Ok(Some(target_root.join(path.strip_prefix("/")?)))
+}
+
 // This reimplements https://github.com/ostreedev/ostree/pull/2691 basically
 #[context("Finding encapsulated commits")]
 fn find_encapsulated_commits(repo: &Utf8Path) -> Result<Vec<String>> {
@@ -595,9 +630,7 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     }
 
     let src_repo_path = Utf8Path::new("/ostree/repo");
-    // Just verify it can be opened for now...in the future ideally we'll use https://github.com/ostreedev/ostree/pull/2701
     let src_repo = ostree::Repo::open_at(libc::AT_FDCWD, src_repo_path.as_str(), cancellable)?;
-    drop(src_repo);
 
     let encapsulated_commits = find_encapsulated_commits(src_repo_path)?;
     let commit = match encapsulated_commits.as_slice() {
@@ -631,6 +664,35 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
                 cancellable,
             )
             .context("Pulling from embedded repo")?;
+    }
+
+    if let Some(rootfs_path) = mount_running_container_rootfs(&opts.target_root)? {
+        let rootfs = Dir::open_ambient_dir(&rootfs_path, cap_std::ambient_authority())
+            .with_context(|| format!("Opening merged rootfs at {rootfs_path}"))?;
+        let (base_commit, _) = src_repo.load_commit(commit)?;
+        let base_metadata = base_commit.child_value(0);
+        let metadata = glib::VariantDict::new(Some(&base_metadata));
+        // The copied package list describes the base commit, not the merged filesystem.  Drop
+        // it so rpm-ostree falls back to reading the rpmdb from the newly written commit tree.
+        metadata.remove("rpmostree.rpmdb.pkglist");
+        let metadata = metadata.end();
+        let merge_commit = crate::compose::generate_deploy_commit_from_rootfs(
+            &target_repo,
+            &rootfs,
+            commit,
+            &metadata,
+        )?;
+        println!("Imported merged filesystem: {merge_commit}");
+        Command::new("chroot")
+            .args([
+                opts.target_root.as_str(),
+                "rpm-ostree",
+                "rebase",
+                merge_commit.as_str(),
+            ])
+            .args(opts.reboot.then_some("--reboot"))
+            .run()?;
+        return Ok(());
     }
 
     println!("Imported: {commit}");
