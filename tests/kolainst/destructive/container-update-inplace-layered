@@ -1,0 +1,147 @@
+#!/bin/bash
+# kola: { "timeoutMin": 30, "minDisk": 20, "minMemory": 4096 }
+# SPDX-License-Identifier: LGPL-2.0-or-later
+
+set -euo pipefail
+
+. "${KOLA_EXT_DATA}/libtest.sh"
+
+set -x
+
+cd "$(mktemp -d)"
+arch=$(arch)
+marker=/usr/share/deploy-from-self-layered
+config=/etc/deploy-from-self-layered.conf
+runtime_marker=/usr/share/deploy-from-self-runtime
+image=localhost/deploy-from-self-layered:latest
+composefs_key=ostree.composefs.digest.v0
+pkglist_key=rpmostree.rpmdb.pkglist
+stale_package=deploy-from-self-stale-base
+# Fixed, and distinct from the booted commit, so reuse is checked exactly.
+base_timestamp=1767225600
+# Leftovers in the derived image that the native importer does not deploy.
+leftover_tmp=/tmp/deploy-from-self-leftover
+leftover_toplevel=/deploy-from-self-toplevel
+var_file=/var/lib/deploy-from-self/data
+
+case "${AUTOPKGTEST_REBOOT_MARK:-}" in
+  "")
+    libtest_prepare_offline
+    systemctl mask --now zincati
+    if rpm -q foo; then
+      fatal "foo must not be present in the base image"
+    fi
+    assert_not_has_file "${marker}"
+    assert_not_has_file "${config}"
+    assert_not_has_file "${runtime_marker}"
+
+    checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    # The booted fixture may not carry a composefs digest. Create a base with
+    # one so retaining its metadata after adding layers is always exercised.
+    # Give it a package list too, which must not describe the derived image.
+    checksum=$(ostree commit --orphan --parent="${checksum}" \
+      --tree="ref=${checksum}" --add-metadata-string=version=deploy-from-self-layered-base --bootable \
+      --add-metadata="${pkglist_key}=[('${stale_package}', '0', '1', '1', 'noarch')]" \
+      --timestamp="@${base_timestamp}" \
+      --generate-composefs-metadata)
+    base_digest=$(ostree show --print-hex --print-metadata-key="${composefs_key}" "${checksum}")
+    ostree show --print-metadata-key="${pkglist_key}" "${checksum}" > /dev/null
+    ostree checkout --composefs "${checksum}" base.cfs
+    ostree container encapsulate --repo=/ostree/repo "${checksum}" \
+      containers-storage:localhost/deploy-from-self-base --label ostree.bootable=TRUE
+    if ostree ls "${checksum}" /usr/etc/hostname; then
+      fatal "the base must not have /etc/hostname"
+    fi
+    # As on a real node, the host starts without the embedded commit.
+    ostree prune --delete-commit="${checksum}"
+    cp "${KOLA_EXT_DATA}/rpm-repos/0/packages/${arch}/foo-1.2-3.${arch}.rpm" foo.rpm
+    cat > Dockerfile <<'EOF'
+FROM localhost/deploy-from-self-base
+COPY foo.rpm /tmp/foo.rpm
+RUN rm -f /etc/yum.repos.d/*.repo && \
+    rpm-ostree install /tmp/foo.rpm && rm /tmp/foo.rpm && \
+    echo 'first layer' > /usr/share/deploy-from-self-layered
+RUN echo 'second layer' > /usr/share/deploy-from-self-layered && \
+    echo 'derived configuration' > /etc/deploy-from-self-layered.conf
+# Older builders leave empty placeholders for runtime bind mounts.
+COPY empty /etc/hostname
+COPY leftover /tmp/deploy-from-self-leftover
+COPY leftover /deploy-from-self-toplevel/leftover
+COPY leftover /var/lib/deploy-from-self/data
+EOF
+    touch empty
+    echo leftover > leftover
+    # Keep the additions outside the embedded OSTree commit, as in a derived
+    # OpenShift node image. No registry or distribution repositories are needed.
+    podman build --network=none --layers -t "${image}" .
+    podman run --rm "${image}" rpm -q foo
+    podman run --rm "${image}" cat "${marker}" > marker.txt
+    assert_streq "$(cat marker.txt)" 'second layer'
+
+    # Call this directly: old skopeo only makes MCO select this code path;
+    # it is not required to trigger the loss of derived layers here.
+    # The running container's temporary changes must not enter the deployment.
+    podman run --privileged --pid=host --net=host --rm -v /:/run/host \
+      "${image}" sh -ec 'echo runtime > /usr/share/deploy-from-self-runtime
+        exec rpm-ostree ex deploy-from-self /run/host'
+
+    # The old implementation silently deployed only the embedded base commit.
+    # Check the staged tree as well as the package list before rebooting.
+    rpmostree_assert_status '.deployments[0].staged'
+    staged=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
+    ostree cat "${staged}" "${marker}" > marker.txt
+    assert_streq "$(cat marker.txt)" 'second layer'
+    ostree ls "${staged}" /usr/share > share.txt
+    assert_not_file_has_content_literal share.txt "${runtime_marker}"
+    # Only the embedded commit's checksum is recorded, as in a shallow pull.
+    assert_streq "$(ostree rev-parse "${staged}^")" "${checksum}"
+    if ostree show "${checksum}"; then
+      fatal "the embedded commit was pulled"
+    fi
+    # Filtered like derived layers in a native container deployment.
+    for path in /usr/etc/hostname "${leftover_toplevel}"; do
+      if ostree ls "${staged}" "${path}"; then
+        fatal "derived deployment has ${path}"
+      fi
+    done
+    ostree ls "${staged}" /tmp > tmp.txt
+    assert_not_file_has_content_literal tmp.txt "${leftover_tmp}"
+    ostree cat "${staged}" "${var_file}" > var.txt
+    assert_file_has_content_literal var.txt leftover
+    assert_streq "$(ostree show --print-metadata-key=ostree.linux "${staged}")" "'$(uname -r)'"
+    rpm-ostree db list "${staged}" > packages.txt
+    assert_file_has_content_literal packages.txt "foo-1.2-3.${arch}"
+    assert_not_file_has_content_literal packages.txt "${stale_package}"
+
+    # This explicitly checks the digest even when the host's deployment path
+    # does not require verity. Merely checking that the metadata exists misses
+    # a stale digest copied from the embedded base commit.
+    ostree checkout --composefs "${staged}" staged.cfs
+    staged_digest=$(ostree show --print-hex --print-metadata-key="${composefs_key}" "${staged}")
+    if test "${staged_digest}" = "${base_digest}"; then
+      fatal "derived deployment retained the base composefs digest"
+    fi
+    rpmostree_assert_status \
+      ".deployments[0][\"custom-origin\"][0] == \"pivot://${image}\""
+    rpmostree_assert_status ".deployments[0].timestamp == ${base_timestamp}" \
+      '.deployments[0].version == "deploy-from-self-layered-base"'
+
+    /tmp/autopkgtest-reboot layered
+    ;;
+  layered)
+    assert_streq "$(cat "${marker}")" 'second layer'
+    assert_streq "$(cat "${config}")" 'derived configuration'
+    assert_streq "$(rpm -q foo)" "foo-1.2-3.${arch}"
+    assert_streq "$(/usr/bin/foo)" "foo-1.2-3.${arch}"
+    assert_not_has_file "${runtime_marker}"
+    matchpathcon -V "${marker}" /usr/bin/foo
+    # MCO strips pivot:// from custom-origin[0] to recover the expected image.
+    rpmostree_assert_status \
+      ".deployments[] | select(.booted) | .[\"custom-origin\"][0] == \"pivot://${image}\""
+    booted=$(rpm-ostree status --json | jq -r '.deployments[] | select(.booted) | .checksum')
+    ostree show --print-hex --print-metadata-key="${composefs_key}" "${booted}"
+    ostree checkout --composefs "${booted}" booted.cfs
+    echo 'ok container-update-inplace-layered'
+    ;;
+  *) echo "unexpected mark: ${AUTOPKGTEST_REBOOT_MARK}"; exit 1;;
+esac

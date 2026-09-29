@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::BufReader;
 use std::num::NonZeroU32;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::rc::Rc;
 
 use anyhow::{Context, Result};
@@ -663,6 +663,271 @@ struct UpdateFromRunningOpts {
     reboot: bool,
 }
 
+/// Written by Podman (and other engines) inside the container.
+const CONTAINERENV_PATH: &str = "/run/.containerenv";
+/// The host's Podman, which owns the storage the running image came from.
+const HOST_PODMAN: &str = "/usr/bin/podman";
+
+/// Commit metadata of the embedded base that does not hold for a derived image.
+/// The client layering keys would make the host treat it as a layered commit.
+const STALE_BASE_METADATA_KEYS: &[&str] = &[
+    "rpmostree.rpmdb.pkglist",
+    "rpmostree.inputhash",
+    "ostree.linux",
+    "rpmostree.clientlayer",
+    "rpmostree.spec",
+];
+
+/// Derive the metadata for a commit of the merged image from its embedded
+/// base, dropping keys that describe the base tree. Also returns whether the
+/// base had a composefs digest, which must then be recomputed for the new tree.
+fn derived_commit_metadata(base: &glib::Variant) -> (glib::Variant, bool) {
+    let metadata = glib::VariantDict::new(Some(base));
+    // Without a package list, rpm-ostree reads the rpmdb from the new commit.
+    for key in STALE_BASE_METADATA_KEYS {
+        metadata.remove(key);
+    }
+    let had_composefs_digest = metadata.remove(crate::compose::OSTREE_COMPOSEFS_DIGEST_V0_KEY);
+    (metadata.end(), had_composefs_digest)
+}
+
+fn read_containerenv(path: &Utf8Path) -> Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("Reading {path}")),
+    }
+}
+
+/// Parse a field from the container engine metadata file.
+fn containerenv_field<'a>(contents: &'a str, field: &str) -> Option<&'a str> {
+    let prefix = format!("{field}=");
+    let value = contents
+        .lines()
+        .map(str::trim)
+        .find_map(|line| line.strip_prefix(&prefix))?
+        .trim();
+    let value = value
+        .strip_prefix('"')
+        .and_then(|v| v.strip_suffix('"'))
+        .unwrap_or(value);
+    (!value.is_empty()).then_some(value)
+}
+
+/// The image backing the running container, as recorded by the engine.
+#[derive(Debug, PartialEq, Eq)]
+struct RunningImage {
+    /// Podman's immutable image ID.
+    id: String,
+    /// The reference the image was run as, e.g. a pull spec by digest.
+    reference: String,
+}
+
+/// Identify the running image from the contents of the container engine
+/// metadata file. Podman only records it for privileged containers.
+fn parse_running_image(containerenv: &str) -> Option<RunningImage> {
+    Some(RunningImage {
+        id: containerenv_field(containerenv, "imageid")?.to_owned(),
+        reference: containerenv_field(containerenv, "image")?.to_owned(),
+    })
+}
+
+/// Identify the image backing this container. Without it, only the embedded
+/// base commit can be deployed.
+fn running_container_image() -> Result<Option<RunningImage>> {
+    let image =
+        read_containerenv(Utf8Path::new(CONTAINERENV_PATH))?.and_then(|c| parse_running_image(&c));
+    if image.is_none() {
+        eprintln!(
+            "warning: No container image found in {CONTAINERENV_PATH}; deploying only the embedded base commit"
+        );
+    }
+    Ok(image)
+}
+
+/// The subset of `podman image inspect` output used here.
+#[derive(serde::Deserialize)]
+struct PodmanImageInspect {
+    #[serde(rename = "RootFS")]
+    root_fs: PodmanImageRootFs,
+    #[serde(rename = "Labels", default)]
+    labels: Option<HashMap<String, String>>,
+}
+
+#[derive(serde::Deserialize)]
+struct PodmanImageRootFs {
+    #[serde(rename = "Layers", default)]
+    layers: Vec<String>,
+}
+
+/// Given `podman image inspect` output, determine whether the image has layers
+/// after its ostree commit, whose last diffid ostree-ext records in a label.
+/// Without that label we cannot tell, so assume there are.
+fn image_has_derived_layers(inspect: &str) -> Result<bool> {
+    let images: Vec<PodmanImageInspect> =
+        serde_json::from_str(inspect).context("Parsing podman image inspect output")?;
+    let [image] = images.as_slice() else {
+        anyhow::bail!(
+            "Expected one image from podman image inspect, found {}",
+            images.len()
+        );
+    };
+    let final_diffid = image
+        .labels
+        .as_ref()
+        .and_then(|l| l.get(ostree_ext::container::DIFFID_LABEL));
+    Ok(final_diffid.map_or(true, |d| image.root_fs.layers.last() != Some(d)))
+}
+
+#[context("Inspecting container image {image_id}")]
+fn host_image_has_derived_layers(target_root: &Utf8Path, image_id: &str) -> Result<bool> {
+    let mut output = Command::new("chroot")
+        .args([
+            target_root.as_str(),
+            HOST_PODMAN,
+            "image",
+            "inspect",
+            image_id,
+        ])
+        .run_get_output()?;
+    let mut inspect = String::new();
+    output.read_to_string(&mut inspect)?;
+    image_has_derived_layers(&inspect)
+}
+
+/// Files that container builds may leave behind as empty placeholders for
+/// runtime bind mounts.
+const RUNTIME_INJECTED_FILES: &[&str] = &["/etc/hostname", "/etc/resolv.conf"];
+
+/// Whether to leave `path` out of the commit of a derived image's merged
+/// filesystem, handling derived content like the native container importer
+/// does: /usr, /etc and /var are taken from the image, minus runtime
+/// placeholders; elsewhere (e.g. /tmp, /run or new toplevel directories) only
+/// what `in_base` says the embedded commit has is kept. Unlike the native
+/// importer, this does not allow new toplevel directories with a transient root.
+fn skip_merged_path(
+    path: &str,
+    info: &gio::FileInfo,
+    in_base: impl Fn(&str) -> Result<bool>,
+) -> Result<bool> {
+    let relpath = path.trim_start_matches('/');
+    Ok(match relpath.split('/').next() {
+        Some("" | "usr" | "var") | None => false,
+        Some("etc") => {
+            RUNTIME_INJECTED_FILES.contains(&path)
+                && info.file_type() == gio::FileType::Regular
+                && info.size() == 0
+        }
+        Some(_) => !in_base(relpath)?,
+    })
+}
+
+struct MountedContainerImage {
+    target_root: Utf8PathBuf,
+    image_id: String,
+    path: Utf8PathBuf,
+    mounted: bool,
+}
+
+impl MountedContainerImage {
+    fn unmount_inner(&mut self) -> Result<()> {
+        if !std::mem::replace(&mut self.mounted, false) {
+            return Ok(());
+        }
+        Command::new("chroot")
+            .args([
+                self.target_root.as_str(),
+                HOST_PODMAN,
+                "image",
+                "unmount",
+                self.image_id.as_str(),
+            ])
+            .stdout(Stdio::null())
+            .run()
+            .context("Unmounting the container image with host Podman")
+    }
+
+    fn unmount(mut self) -> Result<()> {
+        self.unmount_inner()
+    }
+
+    /// Open the image root, resolving Podman's path in the host root as it
+    /// did, e.g. through absolute symlinks in the storage path.
+    fn open_rootfs(&self) -> Result<Dir> {
+        let root = cap_std_ext::RootDir::open_ambient_root(
+            &self.target_root,
+            cap_std::ambient_authority(),
+        )?;
+        let rootfs = root
+            .open(&self.path)
+            .with_context(|| format!("Opening image rootfs at {}", self.path))?;
+        if !rootfs.metadata()?.is_dir() {
+            anyhow::bail!("Image rootfs at {} is not a directory", self.path);
+        }
+        Ok(Dir::from_std_file(rootfs))
+    }
+}
+
+impl Drop for MountedContainerImage {
+    fn drop(&mut self) {
+        if let Err(e) = self.unmount_inner() {
+            eprintln!("warning: Failed to unmount container image: {e:#}");
+        }
+    }
+}
+
+/// Mount the backing image, not the live container with its runtime mounts and
+/// writable layer. Use the immutable image ID from Podman rather than a tag.
+fn mount_container_image(target_root: &Utf8Path, image_id: &str) -> Result<MountedContainerImage> {
+    let mut output = Command::new("chroot")
+        .args([
+            target_root.as_str(),
+            HOST_PODMAN,
+            "image",
+            "mount",
+            image_id,
+        ])
+        .run_get_output()
+        .context("Mounting the container image with host Podman")?;
+    // Balance Podman's mount counter even if parsing or importing fails.
+    let mut mounted_image = MountedContainerImage {
+        target_root: target_root.to_owned(),
+        image_id: image_id.to_owned(),
+        path: Utf8PathBuf::new(),
+        mounted: true,
+    };
+    let mut path = String::new();
+    output.read_to_string(&mut path)?;
+    let path = Utf8Path::new(path.trim());
+    if !path.is_absolute() {
+        anyhow::bail!("Podman returned a non-absolute rootfs path: {path}");
+    }
+    mounted_image.path = path.to_owned();
+    Ok(mounted_image)
+}
+
+/// Deploy a commit that is already in the host repository with the host's
+/// rpm-ostree, which keeps the booted origin's packages, overrides and kargs.
+fn host_rebase(
+    target_root: &Utf8Path,
+    commit: &str,
+    custom_origin_url: Option<&str>,
+    reboot: bool,
+) -> Result<()> {
+    Command::new("chroot")
+        .args([target_root.as_str(), "rpm-ostree", "rebase", commit])
+        .args(custom_origin_url.into_iter().flat_map(|url| {
+            [
+                "--custom-origin-url",
+                url,
+                "--custom-origin-description",
+                "Image deployed via deploy-from-self",
+            ]
+        }))
+        .args(reboot.then_some("--reboot"))
+        .run()
+}
+
 // This reimplements https://github.com/ostreedev/ostree/pull/2691 basically
 #[context("Finding encapsulated commits")]
 fn find_encapsulated_commits(repo: &Utf8Path) -> Result<Vec<String>> {
@@ -703,10 +968,33 @@ fn find_encapsulated_commits(repo: &Utf8Path) -> Result<Vec<String>> {
     Ok(r)
 }
 
+/// Copy the embedded commit into the host repository.
+#[context("Pulling from embedded repo")]
+fn pull_embedded_commit(
+    target_repo: &ostree::Repo,
+    src_repo_path: &Utf8Path,
+    commit: &str,
+) -> Result<()> {
+    let flags = ostree::RepoPullFlags::MIRROR;
+    let opts = glib::VariantDict::new(None);
+    let refs = [commit];
+    opts.insert("refs", &refs[..]);
+    opts.insert("flags", flags.bits() as i32);
+    let options = opts.to_variant();
+    target_repo.pull_with_options(
+        &format!("file://{src_repo_path}"),
+        &options,
+        None,
+        gio::Cancellable::NONE,
+    )?;
+    Ok(())
+}
+
 /// The implementation of `rpm-ostree ex deploy-from-self`, which writes
 /// the container ostree commit to the host and deploys it, optionally rebooting.
 pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     use nix::sys::statvfs;
+    use std::os::fd::AsRawFd;
     let cancellable = gio::Cancellable::NONE;
     let opts = UpdateFromRunningOpts::parse_from(args);
 
@@ -722,9 +1010,7 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     }
 
     let src_repo_path = Utf8Path::new("/ostree/repo");
-    // Just verify it can be opened for now...in the future ideally we'll use https://github.com/ostreedev/ostree/pull/2701
     let src_repo = ostree::Repo::open_at(libc::AT_FDCWD, src_repo_path.as_str(), cancellable)?;
-    drop(src_repo);
 
     let encapsulated_commits = find_encapsulated_commits(src_repo_path)?;
     let commit = match encapsulated_commits.as_slice() {
@@ -743,29 +1029,83 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
     let target_repo = sysroot.join("ostree/repo");
     let target_repo = ostree::Repo::open_at(libc::AT_FDCWD, target_repo.as_str(), cancellable)?;
 
-    {
-        let flags = ostree::RepoPullFlags::MIRROR;
-        let opts = glib::VariantDict::new(None);
-        let refs = [commit];
-        opts.insert("refs", &refs[..]);
-        opts.insert("flags", flags.bits() as i32);
-        let options = opts.to_variant();
-        target_repo
-            .pull_with_options(
-                &format!("file://{src_repo_path}"),
-                &options,
-                None,
-                cancellable,
-            )
-            .context("Pulling from embedded repo")?;
+    let image = running_container_image()?;
+    // A checksum rebase has no container-image-reference. MCO recognizes
+    // this custom origin and strips the prefix to recover the image URL.
+    let custom_origin_url = image.as_ref().map(|i| format!("pivot://{}", i.reference));
+    let derived_image = match image {
+        Some(image) if host_image_has_derived_layers(&opts.target_root, &image.id)? => image,
+        _ => {
+            pull_embedded_commit(&target_repo, src_repo_path, commit)?;
+            println!("Imported: {commit}");
+            host_rebase(
+                &opts.target_root,
+                commit,
+                custom_origin_url.as_deref(),
+                opts.reboot,
+            )?;
+            return Ok(());
+        }
+    };
+
+    // Layers added on top of the embedded commit (e.g. packages in a derived
+    // node image) exist only in the image, so import its merged filesystem.
+    // The embedded commit is its parent, but as with a shallow pull, it isn't
+    // copied: all of its content is read from the image anyway.
+    let mounted_image = mount_container_image(&opts.target_root, &derived_image.id)?;
+    let rootfs = mounted_image.open_rootfs()?;
+    let (base_commit, _) = src_repo.load_commit(commit)?;
+    let (metadata, add_composefs_digest) = derived_commit_metadata(&base_commit.child_value(0));
+    let metadata = glib::VariantDict::new(Some(&metadata));
+    // This also verifies that the image has a kernel.
+    let rootfs_path = gio::File::for_path(format!("/proc/self/fd/{}", rootfs.as_raw_fd()));
+    ostree::commit_metadata_for_bootable(&rootfs_path, &metadata, cancellable)
+        .context("Finding the kernel in the image")?;
+    let metadata = metadata.end();
+    let timestamp = i64::try_from(ostree::commit_get_timestamp(&base_commit))
+        .ok()
+        .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
+        .context("Invalid base commit timestamp")?
+        .fixed_offset();
+    let base_root = src_repo.read_commit(commit, cancellable)?.0;
+    let base_checksum = commit.to_owned();
+    let in_base = move |relpath: &str| -> Result<bool> {
+        match base_root.resolve_relative_path(relpath).query_info(
+            "standard::type",
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            gio::Cancellable::NONE,
+        ) {
+            Ok(_) => Ok(true),
+            Err(e) if e.matches(gio::IOErrorEnum::NotFound) => Ok(false),
+            Err(e) => Err(e).with_context(|| format!("Looking up {relpath} in {base_checksum}")),
+        }
+    };
+    let merge_commit = crate::compose::generate_commit_from_rootfs(
+        &target_repo,
+        &rootfs,
+        crate::compose::RootfsCommitOpts {
+            parent: Some(commit),
+            metadata: Some(&metadata),
+            creation_time: Some(&timestamp),
+            add_composefs_digest,
+            skip: Some(Box::new(move |path, info| {
+                skip_merged_path(path, info, &in_base)
+            })),
+            ..Default::default()
+        },
+    )?;
+    drop(rootfs);
+    // The commit is already written; a leaked mount must not block the update.
+    if let Err(e) = mounted_image.unmount() {
+        eprintln!("warning: Failed to unmount container image: {e:#}");
     }
-
-    println!("Imported: {commit}");
-
-    Command::new("chroot")
-        .args([opts.target_root.as_str(), "rpm-ostree", "rebase", commit])
-        .args(opts.reboot.then_some("--reboot"))
-        .run()?;
+    println!("Imported merged filesystem: {merge_commit}");
+    host_rebase(
+        &opts.target_root,
+        &merge_commit,
+        custom_origin_url.as_deref(),
+        opts.reboot,
+    )?;
 
     Ok(())
 }
@@ -774,6 +1114,189 @@ pub(crate) fn deploy_from_self_entrypoint(args: Vec<String>) -> CxxResult<()> {
 mod tests {
     use super::*;
     use std::collections::{BTreeSet, HashMap, HashSet};
+
+    #[test]
+    fn test_containerenv_field() {
+        for (contents, field, expected) in [
+            ("id=\"container\"", "id", Some("container")),
+            (
+                "image=localhost/test:latest",
+                "image",
+                Some("localhost/test:latest"),
+            ),
+            (
+                "imageid=\"image-id\"\r\n image=\"quay.io/test@sha256:abcd\"\r\n",
+                "image",
+                Some("quay.io/test@sha256:abcd"),
+            ),
+            ("imageid=\"image-id\"", "image", None),
+            ("id=\"\"", "id", None),
+            ("id=  \r\n", "id", None),
+            ("", "id", None),
+        ] {
+            assert_eq!(
+                containerenv_field(contents, field),
+                expected,
+                "{contents:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_running_image() {
+        let image = |id: &str, reference: &str| RunningImage {
+            id: id.into(),
+            reference: reference.into(),
+        };
+        for (contents, expected) in [
+            // As written for an unprivileged container.
+            ("", None),
+            ("engine=\"podman-5.0\"\n", None),
+            (
+                "id=\"c\"\nimage=\"quay.io/a@sha256:ab\"\nimageid=\"i\"\n",
+                Some(image("i", "quay.io/a@sha256:ab")),
+            ),
+            // Incomplete metadata; don't guess.
+            ("id=\"c\"\nimage=\"quay.io/a\"\n", None),
+            ("id=\"c\"\nimageid=\"i\"\n", None),
+        ] {
+            assert_eq!(parse_running_image(contents), expected, "{contents:?}");
+        }
+    }
+
+    #[test]
+    fn test_skip_merged_path() {
+        let base = ["boot", "tmp", "opt", "sysroot"];
+        let in_base = |relpath: &str| Ok(base.contains(&relpath));
+        let info = |file_type, size| {
+            let info = gio::FileInfo::new();
+            info.set_file_type(file_type);
+            info.set_size(size);
+            info
+        };
+        let (dir, file, empty) = (
+            info(gio::FileType::Directory, 0),
+            info(gio::FileType::Regular, 1),
+            info(gio::FileType::Regular, 0),
+        );
+        for (path, info, expected) in [
+            ("/", &dir, false),
+            ("/usr/bin/foo", &file, false),
+            ("/var/lib/foo", &file, false),
+            ("/etc/foo.conf", &empty, false),
+            ("/etc/hostname", &file, false),
+            ("/etc/hostname", &empty, true),
+            ("/etc/resolv.conf", &empty, true),
+            ("/usr/etc/hostname", &empty, false),
+            // Outside /usr, /etc and /var, only the embedded commit's content.
+            ("/tmp", &dir, false),
+            ("/tmp/build-leftover", &file, true),
+            ("/boot/foo", &file, true),
+            ("/opt", &dir, false),
+            ("/sysroot/ostree", &dir, true),
+            ("/newtoplevel", &dir, true),
+        ] {
+            assert_eq!(
+                skip_merged_path(path, info, in_base).unwrap(),
+                expected,
+                "{path}"
+            );
+        }
+        // A failed lookup must not be mistaken for an absent path.
+        let failing = |_: &str| -> Result<bool> { anyhow::bail!("corrupt") };
+        assert!(skip_merged_path("/usr/bin/foo", &file, failing).is_ok());
+        assert!(skip_merged_path("/boot/foo", &file, failing).is_err());
+    }
+
+    #[test]
+    fn test_image_has_derived_layers() {
+        let inspect = |layers: &str, labels: &str| {
+            format!(
+                r#"[{{"Id": "i", "RootFS": {{"Type": "layers", "Layers": {layers}}}, "Labels": {labels}}}]"#
+            )
+        };
+        let label = r#"{"ostree.final-diffid": "sha256:b"}"#;
+        for (json, expected) in [
+            (inspect(r#"["sha256:a", "sha256:b"]"#, label), Some(false)),
+            (
+                inspect(r#"["sha256:a", "sha256:b", "sha256:c"]"#, label),
+                Some(true),
+            ),
+            // Without the label, the ostree layers are unknown.
+            (inspect(r#"["sha256:a"]"#, "null"), Some(true)),
+            (inspect(r#"["sha256:a"]"#, r#"{"other": "x"}"#), Some(true)),
+            (inspect("[]", label), Some(true)),
+            ("[]".into(), None),
+            ("not json".into(), None),
+        ] {
+            assert_eq!(image_has_derived_layers(&json).ok(), expected, "{json}");
+        }
+    }
+
+    #[test]
+    fn test_derived_commit_metadata() {
+        let digest_key = crate::compose::OSTREE_COMPOSEFS_DIGEST_V0_KEY;
+        for (base_keys, expected_keys, expected_digest) in [
+            (&[][..], &[][..], false),
+            (&["version"][..], &["version"][..], false),
+            (
+                &["version", "ostree.bootable", digest_key][..],
+                &["ostree.bootable", "version"][..],
+                true,
+            ),
+            (
+                &[
+                    "version",
+                    "rpmostree.rpmdb.pkglist",
+                    "rpmostree.inputhash",
+                    "ostree.linux",
+                ][..],
+                &["version"][..],
+                false,
+            ),
+        ] {
+            let base = glib::VariantDict::new(None);
+            for k in base_keys {
+                base.insert(k, "value");
+            }
+            let (metadata, had_digest) = derived_commit_metadata(&base.end());
+            let mut keys = metadata
+                .iter()
+                .map(|e| e.child_value(0).get::<String>().unwrap())
+                .collect::<Vec<_>>();
+            keys.sort();
+            assert_eq!(keys, expected_keys, "{base_keys:?}");
+            assert_eq!(had_digest, expected_digest, "{base_keys:?}");
+            // The retained values are carried over unchanged.
+            let metadata = glib::VariantDict::new(Some(&metadata));
+            for k in expected_keys {
+                assert_eq!(
+                    metadata.lookup::<String>(k).unwrap().as_deref(),
+                    Some("value")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_read_containerenv() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let path = Utf8Path::from_path(tmp.path())
+            .unwrap()
+            .join("containerenv");
+        assert_eq!(read_containerenv(&path)?, None);
+        std::fs::write(&path, b"id=container\n")?;
+        assert_eq!(read_containerenv(&path)?.as_deref(), Some("id=container\n"));
+        // Invalid data must not be mistaken for an absent metadata file,
+        // which would select the legacy base-only deployment.
+        std::fs::write(&path, b"\xff")?;
+        let err = read_containerenv(&path).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_mapping_builder_create_package_meta() {
