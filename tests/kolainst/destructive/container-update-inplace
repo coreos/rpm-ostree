@@ -40,4 +40,10 @@ checksum=$(rpm-ostree status --json | jq -r '.deployments[0].checksum')
 ostree container encapsulate --repo=/ostree/repo ${checksum} containers-storage:localhost/fcos
 podman run --privileged --pid=host --net=host --rm -v /:/run/host --rm localhost/fcos rpm-ostree ex deploy-from-self /run/host
 
+# An image without derived layers deploys its embedded commit unchanged,
+# recording the image for MCO rather than importing its filesystem.
+rpmostree_assert_status '.deployments[0].staged' \
+  ".deployments[0].checksum == \"${checksum}\"" \
+  '.deployments[0]["custom-origin"][0] == "pivot://localhost/fcos:latest"'
+
 echo ok container-update-inplace

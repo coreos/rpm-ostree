@@ -35,7 +35,7 @@ use crate::cxxrsutil::{CxxResult, FFIGObjectWrapper};
 use crate::isolation::self_command;
 use crate::{REPOS_DIRS, RPMOSTREE_RPMDB_LOCATION, RPMOSTREE_SYSIMAGE_RPMDB};
 
-const OSTREE_COMPOSEFS_DIGEST_V0_KEY: &str = "ostree.composefs.digest.v0";
+pub(crate) const OSTREE_COMPOSEFS_DIGEST_V0_KEY: &str = "ostree.composefs.digest.v0";
 
 const SYSROOT_PREFIX: &str = "/sysroot/";
 const USR: &str = "usr";
@@ -412,9 +412,11 @@ impl BuildChunkedOCIOpts {
         let commitid = generate_commit_from_rootfs(
             &repo,
             &rootfs,
-            false,
-            creation_timestamp.as_ref(),
-            add_composefs_digest,
+            RootfsCommitOpts {
+                creation_time: creation_timestamp.as_ref(),
+                add_composefs_digest,
+                ..Default::default()
+            },
         )?;
         for sign_arg in &self.sign_commits {
             repo_sign_commit(&repo, &commitid, &sign_arg)?;
@@ -1089,30 +1091,74 @@ fn bootc_commit_filter_no_attrs(
     res
 }
 
+/// A predicate on an absolute path and its file info, returning true for
+/// content to leave out of a commit. An error fails the commit.
+pub(crate) type CommitSkipFn = Box<dyn Fn(&str, &gio::FileInfo) -> Result<bool>>;
+
+/// Options for [`generate_commit_from_rootfs`].
+#[derive(Default)]
+pub(crate) struct RootfsCommitOpts<'a> {
+    /// Ignore ownership and xattrs from the filesystem, other than SELinux labels.
+    pub(crate) no_attrs: bool,
+    pub(crate) parent: Option<&'a str>,
+    /// Initial commit metadata. A composefs digest in it is kept unless
+    /// `add_composefs_digest` recomputes it, so it must match the tree.
+    pub(crate) metadata: Option<&'a glib::Variant>,
+    pub(crate) creation_time: Option<&'a chrono::DateTime<chrono::FixedOffset>>,
+    pub(crate) add_composefs_digest: bool,
+    /// Content to skip, in addition to the contents of /sysroot.
+    pub(crate) skip: Option<CommitSkipFn>,
+}
+
+/// Import a root filesystem as an ostree commit, labeling it with the SELinux
+/// policy it contains.
 #[context("Generating commit from rootfs")]
-fn generate_commit_from_rootfs(
+pub(crate) fn generate_commit_from_rootfs(
     repo: &ostree::Repo,
     rootfs: &Dir,
-    no_attrs: bool,
-    creation_time: Option<&chrono::DateTime<chrono::FixedOffset>>,
-    add_composefs_digest: bool,
+    opts: RootfsCommitOpts,
 ) -> Result<String> {
+    let RootfsCommitOpts {
+        no_attrs,
+        parent,
+        metadata,
+        creation_time,
+        add_composefs_digest,
+        skip,
+    } = opts;
     let root_mtree = ostree::MutableTree::new();
     let cancellable = gio::Cancellable::NONE;
     let tx = repo.auto_transaction(cancellable)?;
 
-    let modifier = if no_attrs {
-        ostree::RepoCommitModifier::new(
+    let (flags, filter): (_, fn(&ostree::Repo, &str, &gio::FileInfo) -> _) = if no_attrs {
+        (
             ostree::RepoCommitModifierFlags::SKIP_XATTRS
                 | ostree::RepoCommitModifierFlags::CANONICAL_PERMISSIONS,
-            Some(Box::new(bootc_commit_filter_no_attrs)),
+            bootc_commit_filter_no_attrs,
         )
     } else {
-        ostree::RepoCommitModifier::new(
+        (
             ostree::RepoCommitModifierFlags::empty(),
-            Some(Box::new(bootc_commit_filter)),
+            bootc_commit_filter,
         )
     };
+    // The filter can't return errors, so keep the first one for later.
+    let skip_error = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let modifier = ostree::RepoCommitModifier::new(flags, {
+        let skip_error = skip_error.clone();
+        Some(Box::new(move |repo, path, info| {
+            match skip.as_ref().map(|skip| skip(path, info)) {
+                Some(Ok(true)) => ostree::RepoCommitFilterResult::Skip,
+                Some(Err(e)) => {
+                    skip_error
+                        .borrow_mut()
+                        .get_or_insert_with(|| e.context(format!("Filtering {path}")));
+                    ostree::RepoCommitFilterResult::Skip
+                }
+                None | Some(Ok(false)) => filter(repo, path, info),
+            }
+        }))
+    });
 
     let policy = ostree::SePolicy::new_at(rootfs.as_fd().as_raw_fd(), cancellable)?;
     modifier.set_sepolicy(Some(&policy));
@@ -1136,6 +1182,9 @@ fn generate_commit_from_rootfs(
         cancellable,
     )
     .with_context(|| format!("Processing rootfs"))?;
+    if let Some(e) = skip_error.take() {
+        return Err(e);
+    }
 
     postprocess_mtree(repo, &root_mtree)?;
 
@@ -1148,13 +1197,13 @@ fn generate_commit_from_rootfs(
         .try_into()
         .context("Parsing creation time")?;
 
-    let mut commitmeta = glib::VariantDict::new(None);
+    let mut commitmeta = glib::VariantDict::new(metadata);
     if add_composefs_digest {
         repo.commit_add_composefs_metadata(0, &mut commitmeta, ostree_root, cancellable)?;
     }
 
     let commit = repo.write_commit_with_time(
-        None,
+        parent,
         None,
         None,
         Some(&commitmeta.end()),
@@ -1501,7 +1550,11 @@ mod tests {
         let td = base_td.open_dir("root")?;
         td.set_permissions(".", cap_std::fs::Permissions::from_mode(0o755))?;
 
-        let commit = generate_commit_from_rootfs(&repo, &td, true, None, false).unwrap();
+        let no_attrs = || RootfsCommitOpts {
+            no_attrs: true,
+            ..Default::default()
+        };
+        let commit = generate_commit_from_rootfs(&repo, &td, no_attrs()).unwrap();
         // Verify there are zero children
         let commit_root = repo.read_commit(&commit, cancellable)?.0;
         {
@@ -1536,7 +1589,15 @@ mod tests {
         )?;
 
         let ts = chrono::DateTime::parse_from_rfc2822("Fri, 29 Aug 1997 10:30:42 PST").unwrap();
-        let commit = generate_commit_from_rootfs(&repo, &td, true, Some(&ts), false).unwrap();
+        let commit = generate_commit_from_rootfs(
+            &repo,
+            &td,
+            RootfsCommitOpts {
+                creation_time: Some(&ts),
+                ..no_attrs()
+            },
+        )
+        .unwrap();
         assert_eq!(
             commit,
             "1423c43d7b76207dc86b357a4834fcea444fcb2ee3a81541fbfbd52a85e05bc3"
@@ -1576,6 +1637,40 @@ mod tests {
             cancellable,
         )?;
         assert_eq!(bashmeta.size(), 11);
+
+        // A derived commit keeps its base as parent and the given metadata,
+        // and leaves out what the caller skips (seen before /etc is moved).
+        let metadata = glib::VariantDict::new(None);
+        metadata.insert("version", "42");
+        let derived = generate_commit_from_rootfs(
+            &repo,
+            &td,
+            RootfsCommitOpts {
+                parent: Some(&commit),
+                metadata: Some(&metadata.end()),
+                creation_time: Some(&ts),
+                skip: Some(Box::new(|path, _| Ok(path == "/etc/foo"))),
+                ..no_attrs()
+            },
+        )?;
+        let derived_root = repo.read_commit(&derived, cancellable)?.0;
+        assert!(!derived_root
+            .resolve_relative_path("usr/etc/foo")
+            .query_exists(cancellable));
+        assert!(derived_root
+            .resolve_relative_path("usr/bin/bash")
+            .query_exists(cancellable));
+        let derived = repo.load_commit(&derived)?.0;
+        assert_eq!(
+            ostree::commit_get_parent(&derived).as_deref(),
+            Some(commit.as_str())
+        );
+        assert_eq!(
+            ostree::commit_get_timestamp(&derived),
+            ts.timestamp() as u64
+        );
+        let metadata = glib::VariantDict::new(Some(&derived.child_value(0)));
+        assert_eq!(metadata.lookup::<String>("version")?.as_deref(), Some("42"));
 
         Ok(())
     }
