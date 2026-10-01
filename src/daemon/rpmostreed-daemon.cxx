@@ -562,6 +562,20 @@ on_idle_exit (void *data)
   return FALSE;
 }
 
+void
+reset_idle_exit_timer (GDBusConnection *connection, const gchar *sender_name,
+                       const gchar *object_path, const gchar *interface_name,
+                       const gchar *signal_name, GVariant *parameters, gpointer user_data)
+{
+  auto self = static_cast<RpmostreedDaemon *> (user_data);
+  if (self->idle_exit_source)
+    {
+      guint64 curtime = g_source_get_time (self->idle_exit_source);
+      const guint idle_exit_secs = self->idle_exit_timeout + g_random_int_range (0, 5);
+      g_source_set_ready_time (self->idle_exit_source, curtime + idle_exit_secs * G_USEC_PER_SEC);
+    }
+}
+
 static void
 update_status (RpmostreedDaemon *self)
 {
@@ -570,6 +584,12 @@ update_status (RpmostreedDaemon *self)
   const char *method, *sender, *path;
   const guint n_clients = g_hash_table_size (self->bus_clients);
   gboolean currently_idle = FALSE;
+
+  guint subscription_id;
+
+  subscription_id = g_dbus_connection_signal_subscribe (
+      self->connection, NULL, NULL, NULL, "/org/freedesktop/DBus", NULL, G_DBUS_SIGNAL_FLAGS_NONE,
+      reset_idle_exit_timer, g_object_ref (self), g_object_unref);
 
   g_object_get (rpmostreed_sysroot_get (), "active-transaction", &active_txn, NULL);
 
@@ -618,7 +638,10 @@ update_status (RpmostreedDaemon *self)
       guint64 curtime = g_source_get_time (self->idle_exit_source);
       guint64 timeout_micros = readytime - curtime;
       if (readytime < curtime)
-        timeout_micros = 0;
+        {
+          timeout_micros = 0;
+          g_dbus_connection_signal_unsubscribe (self->connection, subscription_id);
+        }
 
       g_assert (currently_idle && self->idle_exit_source);
       sd_notifyf (0, "STATUS=clients=%u; idle exit in %" G_GUINT64_FORMAT " seconds", n_clients,
