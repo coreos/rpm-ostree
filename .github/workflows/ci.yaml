@@ -21,8 +21,17 @@ jobs:
   build:
     name: "Build"
     runs-on: ubuntu-latest
-    container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
+    # Build on the Fedora release of the images this binary is tested in
+    # (fedora-coreos:stable, fedora-bootc:44), not in fcos-buildroot: that
+    # tracks testing-devel, which can be a Fedora release ahead (Fedora 45
+    # links against OpenSSL 4, which Fedora 44 doesn't have). Bump this when
+    # fedora-coreos:stable moves to a new release.
+    container: quay.io/fedora/fedora:44
     steps:
+      # Before checkout, so that it is a git checkout; codestyle and the
+      # unit tests need the rest (fcos-buildroot has them preinstalled).
+      - name: Install git, codestyle and unit test tools
+        run: dnf -y install git-core clang-tools-extra cargo rustfmt cpio
       - name: Checkout repository
         uses: actions/checkout@v3
       # https://github.com/actions/checkout/issues/760
@@ -179,7 +188,10 @@ jobs:
         with:
           name: install.tar
       - name: Install
-        run: tar -C / -xzvf install.tar
+        # The binary is built on Fedora 44 (see the Build job), and
+        # fcos-buildroot can be newer; pull in its OpenSSL 3 compat libs.
+        # Drop this when the Build job's container matches fcos-buildroot.
+        run: tar -C / -xzvf install.tar && dnf -y install 'libssl.so.3()(64bit)'
       - name: Integration tests
         run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh
   compose-image:
@@ -203,7 +215,10 @@ jobs:
         with:
           name: install.tar
       - name: Install
-        run: tar -C / -xzvf install.tar
+        # The binary is built on Fedora 44 (see the Build job), and
+        # fcos-buildroot can be newer; pull in its OpenSSL 3 compat libs.
+        # Drop this when the Build job's container matches fcos-buildroot.
+        run: tar -C / -xzvf install.tar && dnf -y install 'libssl.so.3()(64bit)'
       - name: Integration tests
         run: env TMPDIR=/var/tmp JOBS=3 RELEASE=${RELEASE} ./tests/compose-image.sh
         env:
@@ -247,7 +262,10 @@ jobs:
       - name: Install test deps
         run: dnf -y install skopeo
       - name: Install
-        run: tar -C / -xzvf install.tar
+        # The binary is built on Fedora 44 (see the Build job), and
+        # fcos-buildroot can be newer; pull in its OpenSSL 3 compat libs.
+        # Drop this when the Build job's container matches fcos-buildroot.
+        run: tar -C / -xzvf install.tar && dnf -y install 'libssl.so.3()(64bit)'
       - name: Integration tests
         run: env TMPDIR=/var/tmp ./tests/encapsulate.sh
   test-build-chunked-oci:
