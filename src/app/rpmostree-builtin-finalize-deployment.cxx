@@ -27,19 +27,18 @@ static char *opt_osname;
 static gboolean opt_allow_unlocked;
 static gboolean opt_allow_missing;
 
-static GOptionEntry option_entries[] = {
-  /* though there can only be one staged deployment at a time, this could still
-   * be useful to assert a specific osname */
-  { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME",
-    "OSNAME" },
-  { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
-    "STATEROOT" },
-  { "allow-missing-checksum", 0, 0, G_OPTION_ARG_NONE, &opt_allow_missing,
-    "Don't error out if no expected checksum is provided", NULL },
-  { "allow-unlocked", 0, 0, G_OPTION_ARG_NONE, &opt_allow_unlocked,
-    "Don't error out if staged deployment wasn't locked", NULL },
-  { NULL }
-};
+/* though there can only be one staged deployment at a time, --os/--stateroot
+ * could still be useful to assert a specific osname */
+static GOptionEntry option_entries[]
+    = { { "os", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_osname,
+          "Operate on provided OSNAME", "OSNAME" },
+        { "stateroot", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided STATEROOT",
+          "STATEROOT" },
+        { "allow-missing-checksum", 0, 0, G_OPTION_ARG_NONE, &opt_allow_missing,
+          "Don't error out if no expected checksum is provided", NULL },
+        { "allow-unlocked", 0, 0, G_OPTION_ARG_NONE, &opt_allow_unlocked,
+          "Don't error out if staged deployment wasn't locked", NULL },
+        { NULL } };
 
 gboolean
 rpmostree_builtin_finalize_deployment (int argc, char **argv,
