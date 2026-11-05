@@ -129,11 +129,14 @@ lto = "thin"
 # Note: If you add a feature here, you also probably want to update utils.rs:get_features()
 fedora-integration = []
 rhsm = ["libdnf-sys/rhsm"]
+# Modularity support in libdnf, which needs libmodulemd. Disable with
+# --no-default-features (configure --without-modulemd).
+modulemd = ["libdnf-sys/modulemd"]
 bin-unit-tests = []
 # ASAN+UBSAN
 sanitizers = []
 
-default = []
+default = ["modulemd"]
 
 [lints]
 workspace = true

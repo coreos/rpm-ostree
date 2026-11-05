@@ -32,7 +32,7 @@ gpgme = { version = "1", optional = true }
 openssl = "1"
 libcurl = "7"
 sqlite3 = "3"
-modulemd = { name = "modulemd-2.0", version = "2" }
+modulemd = { name = "modulemd-2.0", version = "2", feature = "modulemd" }
 jsonc = { name = "json-c", version = "0" }
 glib = { name = "glib-2.0", version = "2" }
 zck = { version = "0.9", optional = true }
@@ -40,4 +40,6 @@ librhsm = { version = "0.0.3", feature = "rhsm" }
 
 [features]
 rhsm = []
+# Build libdnf with libmodulemd, i.e. with modularity support
+modulemd = []
 default = []

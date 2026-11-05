@@ -541,6 +541,7 @@ pub(crate) fn get_features() -> Vec<String> {
         cfg!(feature = "fedora-integration").then(|| "fedora-integration"),
         cfg!(feature = "bin-unit-tests").then(|| "bin-unit-tests"),
         cfg!(feature = "rhsm").then(|| "rhsm"),
+        cfg!(feature = "modulemd").then(|| "modulemd"),
     ]
     .into_iter();
     defaults
