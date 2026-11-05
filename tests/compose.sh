@@ -51,6 +51,10 @@ if [ ! -d compose-cache ]; then
   # to add updates-archive to the repo list.
   # Also neuter OSTree layers; we don't re-implement cosa's auto-layering sugar
   curl -Lf --retry 3 -O https://src.fedoraproject.org/rpms/fedora-repos/raw/f43/f/fedora-updates-archive.repo
+  # The pinned config and the f43 repo file still point at /etc/pki/rpm-gpg,
+  # which Fedora 45 no longer populates; use /usr/share/pki/rpm-gpg like
+  # fedora-coreos-config itself does now (it exists on older Fedora too).
+  sed -i -e 's,file:///etc/pki/rpm-gpg/,file:///usr/share/pki/rpm-gpg/,' ./*.repo
   python3 -c '
 import sys, json
 y = json.load(sys.stdin)
