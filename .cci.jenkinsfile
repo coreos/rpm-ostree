@@ -88,7 +88,7 @@ cosaPod(runAsUser: 0, memory: "${mem}Mi", cpu: "${nhosts}") {
   stage("kola-upgrades") {
     unstash 'rpms'
     shwrap("""
-      coreos-installer download -p qemu -f qcow2.xz -s testing --decompress
+      coreos-installer download -p qemu -f qcow2.xz -s stable --decompress
       mv rpm-ostree-[0-9]*.rpm rpm-ostree-libs-[0-9]*.rpm /usr/lib/coreos-assembler/tests/kola/rpm-ostree/destructive/data/      
     """)
     kola(cosaDir: "${env.WORKSPACE}", skipUpgrade: true, extraArgs: "--qemu-image ./fedora-coreos*.qcow2 --tag rpm-ostree-upgrade")
