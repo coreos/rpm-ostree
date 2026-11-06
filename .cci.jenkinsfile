@@ -8,7 +8,14 @@ properties([
 stage("Build") {
 parallel rpms: {
   def n = 4
-  buildPod(memory: "6Gi", cpu: "${n}") {
+  // Build on the Fedora release of `cosa init -b stable` and the cosa image
+  // below, not in buildPod's fcos-buildroot:testing-devel: that can be a
+  // release ahead (Fedora 45 links against OpenSSL 4, which Fedora 44
+  // lacks). As root, so ci/installdeps.sh installs the build dependencies
+  // that fcos-buildroot has preinstalled. Bump this with FCOS stable.
+  pod(image: "quay.io/fedora/fedora:44", runAsUser: 0, memory: "6Gi", cpu: "${n}") {
+      // git for the checkout; the rest come from the spec file
+      shwrap("dnf -y install git-core make rpm-build")
       checkout scm
       // 2:1 job to CPU at most should keep us from getting kicked out
       shwrap("""RPM_BUILD_NCPUS=${n} CARGO_BUILD_JOBS=${n} ./ci/coreosci-rpmbuild.sh""")
