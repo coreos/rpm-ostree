@@ -114,9 +114,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.42"
+version = "0.4.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e79b3f8a79cccc2898f31920fc69f304859b3bd567490f75ebf51ae1c792a9ac"
+checksum = "9d5755640120b24961f8231e05892e4a4f7e0d04e8aeca161508c9c397946970"
 dependencies = [
  "compression-codecs",
  "compression-core",
@@ -238,8 +238,8 @@ dependencies = [
 
 [[package]]
 name = "bootc-internal-utils"
-version = "1.16.11"
-source = "git+https://github.com/containers/bootc?rev=add7a909584c832c563bdc3a45c61e42f736ecf2#add7a909584c832c563bdc3a45c61e42f736ecf2"
+version = "1.17.3"
+source = "git+https://github.com/containers/bootc?rev=6d7893f2dbdd289a4a04a5727e4df29433d43024#6d7893f2dbdd289a4a04a5727e4df29433d43024"
 dependencies = [
  "anstream",
  "anyhow",
@@ -250,7 +250,6 @@ dependencies = [
  "serde",
  "serde_json",
  "shlex 2.0.1",
- "tempfile",
  "tokio",
  "tracing",
  "tracing-journald",
@@ -561,9 +560,9 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "comfy-table"
-version = "7.2.2"
+version = "8.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "958c5d6ecf1f214b4c2bbbbf6ab9523a864bd136dcf71a7e8904799acfe1ad47"
+checksum = "b96a46ad395a5e00676eddaca4a45ed78b29c08be5a878d35e4b071c625637dd"
 dependencies = [
  "crossterm",
  "unicode-segmentation",
@@ -572,8 +571,9 @@ dependencies = [
 
 [[package]]
 name = "composefs"
-version = "0.9.0"
-source = "git+https://github.com/composefs/composefs-rs?tag=v0.9.0#90f30e8abbcb5af60421b6b749cbf189b2a8895e"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7678ceb9ed3a1cd466aac8cae1d055d77336c7698fc3d7c8b8cbc5a3a3d33e42"
 dependencies = [
  "anyhow",
  "composefs-ioctls",
@@ -594,18 +594,18 @@ dependencies = [
  "xxhash-rust",
  "zerocopy",
  "zlink-core",
- "zstd",
+ "zstd 0.14.3",
 ]
 
 [[package]]
 name = "composefs-boot"
-version = "0.9.0"
-source = "git+https://github.com/composefs/composefs-rs?tag=v0.9.0#90f30e8abbcb5af60421b6b749cbf189b2a8895e"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c61074a193dda9270830d3598d26b618b0181726c8cf61ab59d3f66924875d5e"
 dependencies = [
  "anyhow",
  "composefs",
  "fn-error-context",
- "hex",
  "pcre2",
  "regex-automata",
  "rustix",
@@ -615,8 +615,9 @@ dependencies = [
 
 [[package]]
 name = "composefs-ctl"
-version = "0.9.0"
-source = "git+https://github.com/composefs/composefs-rs?tag=v0.9.0#90f30e8abbcb5af60421b6b749cbf189b2a8895e"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32bf730c9fe70c9d0a3b9f013547520c2d6d0ebb966a538ac73700a576114532"
 dependencies = [
  "anyhow",
  "cap-std-ext 5.1.2",
@@ -644,8 +645,9 @@ dependencies = [
 
 [[package]]
 name = "composefs-fuse"
-version = "0.9.0"
-source = "git+https://github.com/composefs/composefs-rs?tag=v0.9.0#90f30e8abbcb5af60421b6b749cbf189b2a8895e"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a795d7cd30c58b9245122c3a41409c35ca3bf30dc313cfac700662f3a6e6e176"
 dependencies = [
  "anyhow",
  "composefs",
@@ -659,8 +661,9 @@ dependencies = [
 
 [[package]]
 name = "composefs-ioctls"
-version = "0.9.0"
-source = "git+https://github.com/composefs/composefs-rs?tag=v0.9.0#90f30e8abbcb5af60421b6b749cbf189b2a8895e"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aad17a5f5c2c2f667c1c5cb543f6d6a5b5984fab651178eecc62b83008ebe6d"
 dependencies = [
  "rustix",
  "thiserror 2.0.18",
@@ -668,8 +671,9 @@ dependencies = [
 
 [[package]]
 name = "composefs-oci"
-version = "0.9.0"
-source = "git+https://github.com/composefs/composefs-rs?tag=v0.9.0#90f30e8abbcb5af60421b6b749cbf189b2a8895e"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4f7302aba57a0663087356e3df39d0bf43adf7304d845f5873b5b62974a4123"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -685,6 +689,7 @@ dependencies = [
  "fn-error-context",
  "hex",
  "indicatif 0.18.4",
+ "oci-delta",
  "ocidir",
  "rustix",
  "serde",
@@ -696,13 +701,14 @@ dependencies = [
  "tracing",
  "zlink",
  "zlink-core",
- "zstd",
+ "zstd 0.14.3",
 ]
 
 [[package]]
 name = "composefs-splitdirfdstream"
-version = "0.9.0"
-source = "git+https://github.com/composefs/composefs-rs?tag=v0.9.0#90f30e8abbcb5af60421b6b749cbf189b2a8895e"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abe821055dd88f7c2d7e3ee8ac1e54be8b646f676d568c1f37e53c606b911f09"
 dependencies = [
  "openssl",
  "rand 0.10.2",
@@ -714,8 +720,9 @@ dependencies = [
 
 [[package]]
 name = "composefs-storage"
-version = "0.9.0"
-source = "git+https://github.com/composefs/composefs-rs?tag=v0.9.0#90f30e8abbcb5af60421b6b749cbf189b2a8895e"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "999579b801c75fec30b73eb416f40eff07725432ea704b1fb646ad709a1664ba"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -734,27 +741,27 @@ dependencies = [
  "toml",
  "tracing",
  "zlink",
- "zstd",
+ "zstd 0.14.3",
 ]
 
 [[package]]
 name = "compression-codecs"
-version = "0.4.38"
+version = "0.4.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce2548391e9c1929c21bf6aa2680af86fe4c1b33e6cea9ac1cfeec0bd11218cf"
+checksum = "cae36683101b2899f48bd31f8db9839437356188e3b1ff23096e73dab09ba8fe"
 dependencies = [
  "compression-core",
  "flate2",
  "memchr",
- "zstd",
- "zstd-safe",
+ "zstd 0.14.3",
+ "zstd-safe 8.2.0",
 ]
 
 [[package]]
 name = "compression-core"
-version = "0.4.32"
+version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789"
+checksum = "2ebdda89edc534bf8d5dd2857562633b6495557e5846552ade994b99ed13c36a"
 
 [[package]]
 name = "concurrent-queue"
@@ -843,7 +850,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3246dd5271aa01ab3d2a5346ef5059ff158e135d59da2d5d3a27954c6704f2c"
 dependencies = [
- "cap-std-ext 4.0.7",
+ "cap-std-ext 5.1.2",
  "futures-util",
  "hex",
  "itertools",
@@ -1986,7 +1993,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.4",
+ "socket2 0.5.10",
  "system-configuration 0.7.0",
  "tokio",
  "tower-service",
@@ -2197,7 +2204,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
 dependencies = [
  "io-lifetimes 3.0.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2235,7 +2242,7 @@ version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82cb6a9f675da968c63b6208c641b9dca58fc0133ae53375736b1767b0cab8bd"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2651,6 +2658,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
+name = "oci-delta"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41a05a78259219da6cd834271e9732013caa47e9955b70cf1e4d45f33f42689a"
+dependencies = [
+ "anyhow",
+ "flate2",
+ "hex",
+ "oci-spec",
+ "openssl",
+ "zstd 0.13.3",
+]
+
+[[package]]
 name = "oci-spec"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2781,7 +2802,7 @@ dependencies = [
 [[package]]
 name = "ostree-ext"
 version = "0.15.3"
-source = "git+https://github.com/containers/bootc?rev=add7a909584c832c563bdc3a45c61e42f736ecf2#add7a909584c832c563bdc3a45c61e42f736ecf2"
+source = "git+https://github.com/containers/bootc?rev=6d7893f2dbdd289a4a04a5727e4df29433d43024#6d7893f2dbdd289a4a04a5727e4df29433d43024"
 dependencies = [
  "anyhow",
  "bootc-internal-utils",
@@ -2817,7 +2838,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
- "zstd",
+ "zstd 0.14.3",
 ]
 
 [[package]]
@@ -4008,7 +4029,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4609,7 +4630,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -5209,7 +5230,16 @@ version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
 dependencies = [
- "zstd-safe",
+ "zstd-safe 7.2.4",
+]
+
+[[package]]
+name = "zstd"
+version = "0.14.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db3ae9bf90af6e40197bef767eeefc46ad6397420fe873830bd85e5fbbfb3c70"
+dependencies = [
+ "zstd-safe 8.2.0",
 ]
 
 [[package]]
@@ -5222,10 +5252,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "zstd-sys"
-version = "2.0.16+zstd.1.5.7"
+name = "zstd-safe"
+version = "8.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91e19ebc2adc8f83e43039e79776e3fda8ca919132d68a1fed6a5faca2683748"
+checksum = "ded520f16b29e1a9b771c722221b2b0a0398c2316d9bb3c42b458a5414d7434b"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.1.2+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "481ada9c543b2323cbb7bbdbb5249177fbf0188ed959ed2c15e4b22421c84ed3"
 dependencies = [
  "cc",
  "pkg-config",
