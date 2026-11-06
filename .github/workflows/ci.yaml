@@ -171,69 +171,58 @@ jobs:
       with:
         log-level: warn
         command: check bans sources licenses
+  # The compose tests are host jobs that start the buildroot container
+  # themselves, so that bootc-host-setup can first fix up the host: on
+  # ubuntu-26.04, AppArmor's bwrap-userns-restrict profile attaches to
+  # /usr/bin/bwrap even inside a privileged container, and would run
+  # scriptlets without any capabilities (e.g. systemd-sysusers then can't
+  # read /etc/gshadow). A container job starts before any of its steps.
+  #
+  # The binary is built on Fedora 44 (see the Build job), and fcos-buildroot
+  # can be newer, hence the OpenSSL 3 compat libs. Drop them when the Build
+  # job's container matches fcos-buildroot.
   compose:
     name: "Compose tests"
     needs: build
-    # See compose-image below.
-    runs-on: ubuntu-24.04
-    container:
-      image: quay.io/coreos-assembler/fcos-buildroot:testing-devel
-      options: "--user root --privileged -v /var/tmp:/var/tmp"
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      - name: Install test dependencies
-        run: ./ci/install-test-deps.sh
+      - name: Bootc host setup
+        uses: bootc-dev/actions/bootc-host-setup@de95828443214c605662555316955bd1425b448d
       - name: Download build
         uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
-      - name: Install
-        # The binary is built on Fedora 44 (see the Build job), and
-        # fcos-buildroot can be newer; pull in its OpenSSL 3 compat libs.
-        # Drop this when the Build job's container matches fcos-buildroot.
-        run: tar -C / -xzvf install.tar && dnf -y install 'libssl.so.3()(64bit)'
       - name: Integration tests
-        run: env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh
+        run: >-
+          sudo podman run --rm --privileged -v /var/tmp:/var/tmp -v "$PWD:$PWD" -w "$PWD"
+          quay.io/coreos-assembler/fcos-buildroot:testing-devel bash -xeuc
+          './ci/install-test-deps.sh && tar -C / -xzf install.tar && dnf -y install "libssl.so.3()(64bit)"
+          && env TMPDIR=/var/tmp JOBS=3 ./tests/compose.sh'
   compose-image:
     name: "compose-image tests"
     needs: build
-    # The ubuntu-26.04 image (which ubuntu-latest is moving to) confines
-    # /usr/bin/bwrap, even inside a privileged container, with AppArmor's
-    # bwrap-userns-restrict profile; its unpriv_bwrap child profile denies
-    # all capabilities, so scriptlets run as root without CAP_DAC_OVERRIDE
-    # and e.g. systemd-sysusers can't read /etc/gshadow. A container job
-    # can't change the host's AppArmor policy. Profile:
-    # https://gitlab.com/apparmor/apparmor/-/blob/aecf78014d02a7ed226387fc17a5b3e23b1df1e2/profiles/apparmor/profiles/extras/bwrap-userns-restrict#L59-79
-    # There is no runner-images or Ubuntu bug about root bwrap in privileged
-    # containers yet. Drop this pin once ubuntu-26.04 runners let these
-    # scriptlets keep their capabilities (check with sysusers in the
-    # Silverblue compose), or once these composes no longer run bwrap
-    # directly on the runner's kernel (e.g. inside a VM).
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
         RELEASE: ['43', '44']
-    container:
-      image: quay.io/coreos-assembler/fcos-buildroot:testing-devel
-      options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      - name: Install test dependencies
-        run: ./ci/install-test-deps.sh
+      - name: Bootc host setup
+        uses: bootc-dev/actions/bootc-host-setup@de95828443214c605662555316955bd1425b448d
       - name: Download build
         uses: actions/download-artifact@v4.1.7
         with:
           name: install.tar
-      - name: Install
-        # The binary is built on Fedora 44 (see the Build job), and
-        # fcos-buildroot can be newer; pull in its OpenSSL 3 compat libs.
-        # Drop this when the Build job's container matches fcos-buildroot.
-        run: tar -C / -xzvf install.tar && dnf -y install 'libssl.so.3()(64bit)'
       - name: Integration tests
-        run: env TMPDIR=/var/tmp JOBS=3 RELEASE=${RELEASE} ./tests/compose-image.sh
+        run: >-
+          sudo podman run --rm --privileged -v /var/tmp:/var/tmp -v "$PWD:$PWD" -w "$PWD" -e RELEASE="$RELEASE"
+          quay.io/coreos-assembler/fcos-buildroot:testing-devel bash -xeuc
+          './ci/install-test-deps.sh && tar -C / -xzf install.tar && dnf -y install "libssl.so.3()(64bit)"
+          && env TMPDIR=/var/tmp JOBS=3 ./tests/compose-image.sh'
         env:
           RELEASE: ${{ matrix.RELEASE }}
   compose-rootfs:
