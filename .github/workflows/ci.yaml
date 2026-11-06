@@ -146,12 +146,12 @@ jobs:
   container-build:
     name: "Container build"
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      - name: Bootc Ubuntu Setup
-        uses: ./.github/actions/bootc-ubuntu-setup
+      - name: Bootc host setup
+        uses: bootc-dev/actions/bootc-host-setup@de95828443214c605662555316955bd1425b448d
       - name: Checkout coreos-layering-examples
         uses: actions/checkout@v3
         with:
@@ -239,14 +239,14 @@ jobs:
   compose-rootfs:
     name: "compose-rootfs tests"
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Bootc Ubuntu Setup
-        uses: ./.github/actions/bootc-ubuntu-setup
+      - name: Bootc host setup
+        uses: bootc-dev/actions/bootc-host-setup@de95828443214c605662555316955bd1425b448d
       - name: Checkout repository
         uses: actions/checkout@v3
       - name: Download build
@@ -284,14 +284,14 @@ jobs:
   test-build-chunked-oci:
     name: "build-chunked-oci tests"
     needs: build-c10s
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Bootc Ubuntu Setup
-        uses: ./.github/actions/bootc-ubuntu-setup
+      - name: Bootc host setup
+        uses: bootc-dev/actions/bootc-host-setup@de95828443214c605662555316955bd1425b448d
       - name: Unprivileged tests
         run: |
           set -xeuo pipefail
