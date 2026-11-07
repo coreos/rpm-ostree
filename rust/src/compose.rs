@@ -15,7 +15,7 @@ use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use cap_std::fs::{Dir, MetadataExt};
+use cap_std::fs::Dir;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use clap::Parser;
 use fn_error_context::context;
@@ -990,12 +990,11 @@ fn label_to_xattrs(label: Option<&str>) -> Option<glib::Variant> {
     xattrs.map(|x| x.to_variant())
 }
 
-fn create_root_dirmeta(root: &Dir, policy: &ostree::SePolicy) -> Result<glib::Variant> {
+fn create_root_dirmeta(policy: &ostree::SePolicy) -> Result<glib::Variant> {
     let finfo = gio::FileInfo::new();
-    let meta = root.dir_metadata()?;
     finfo.set_attribute_uint32("unix::uid", 0);
     finfo.set_attribute_uint32("unix::gid", 0);
-    finfo.set_attribute_uint32("unix::mode", libc::S_IFDIR | meta.mode());
+    finfo.set_attribute_uint32("unix::mode", libc::S_IFDIR | 0o555);
     let label = policy.label("/", 0o777 | libc::S_IFDIR, gio::Cancellable::NONE)?;
     let xattrs = label_to_xattrs(label.as_deref());
     let r = ostree::create_directory_metadata(&finfo, xattrs.as_ref());
@@ -1163,7 +1162,7 @@ pub(crate) fn generate_commit_from_rootfs(
     let policy = ostree::SePolicy::new_at(rootfs.as_fd().as_raw_fd(), cancellable)?;
     modifier.set_sepolicy(Some(&policy));
 
-    let root_dirmeta = create_root_dirmeta(rootfs, &policy)?;
+    let root_dirmeta = create_root_dirmeta(&policy)?;
     let root_metachecksum = repo
         .write_metadata(
             ostree::ObjectType::DirMeta,
