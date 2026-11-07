@@ -1,0 +1,30 @@
+---
+upstream_package_name: rpm-ostree
+downstream_package_name: rpm-ostree
+
+upstream_tag_template: v{version}
+
+specfile_path: packaging/rpm-ostree.spec
+
+actions:
+  # Do nothing with spec file. Two steps here are for debugging
+  fix-spec-file:
+    - bash -c "cat packaging/rpm-ostree.spec"
+    - bash -c "ls -al packaging/"
+
+jobs:
+  - job: propose_downstream
+    trigger: release
+    dist_git_branches:
+      - fedora-all
+
+  - job: koji_build
+    trigger: commit
+    dist_git_branches:
+      - fedora-all
+
+  - job: bodhi_update
+    trigger: commit
+    dist_git_branches:
+      # Fedora rawhide updates are created automatically
+      - fedora-branched
