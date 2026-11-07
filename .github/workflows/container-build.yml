@@ -24,7 +24,7 @@ concurrency:
 jobs:
   # Build container and run basic validation
   build-and-validate:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -41,8 +41,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Bootc Ubuntu Setup
-        uses: ./.github/actions/bootc-ubuntu-setup
+      - name: Bootc host setup
+        uses: bootc-dev/actions/bootc-host-setup@de95828443214c605662555316955bd1425b448d
 
       - name: Run validation
         run: |
