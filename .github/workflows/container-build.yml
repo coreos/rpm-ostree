@@ -41,8 +41,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Bootc Ubuntu Setup
-        uses: ./.github/actions/bootc-ubuntu-setup
+      - name: Bootc host setup
+        uses: bootc-dev/actions/bootc-host-setup@main
 
       - name: Run validation
         run: |
