@@ -1675,6 +1675,47 @@ mod tests {
         Ok(())
     }
 
+    // A commit's root dirmeta is derived from the physical rootfs directory.
+    // The container commit paths (deploy-from-self, build-chunked-oci) rely
+    // on this to carry the root permissions of the source rootfs into the
+    // commit.
+    #[test]
+    fn write_commit_root_mode() -> Result<()> {
+        let cancellable = gio::Cancellable::NONE;
+        let repo_td = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        let repo =
+            ostree::Repo::create_at_dir(repo_td.as_fd(), ".", ostree::RepoMode::BareUser, None)?;
+        let base_td = cap_tempfile::tempdir(cap_std::ambient_authority())?;
+        base_td.create_dir("root")?;
+        let td = base_td.open_dir("root")?;
+        td.create_dir_all("usr/bin")?;
+        td.write("usr/bin/bash", "bash binary")?;
+
+        for root_mode in [0o555u32, 0o755u32] {
+            td.set_permissions(".", cap_std::fs::Permissions::from_mode(root_mode))?;
+            let commit = generate_commit_from_rootfs(
+                &repo,
+                &td,
+                RootfsCommitOpts {
+                    no_attrs: true,
+                    ..Default::default()
+                },
+            )?;
+            let (root, _) = repo.read_commit(&commit, cancellable)?;
+            let info = root.query_info(
+                "unix::mode",
+                gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+                cancellable,
+            )?;
+            assert_eq!(
+                info.attribute_uint32("unix::mode") & 0o7777,
+                root_mode,
+                "commit root mode does not match the physical rootfs dir"
+            );
+        }
+        Ok(())
+    }
+
     #[test]
     fn test_unpack() -> Result<()> {
         // Skip without the ostree binary since ostree-devel doesn't pull it in
