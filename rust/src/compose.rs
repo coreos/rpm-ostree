@@ -15,7 +15,7 @@ use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use cap_std::fs::{Dir, MetadataExt};
+use cap_std::fs::Dir;
 use cap_std_ext::dirext::CapStdExtDirExt;
 use clap::Parser;
 use fn_error_context::context;
@@ -981,27 +981,6 @@ fn unpack_commit_to_dir_as_bare_split_xattrs(
     })
 }
 
-fn label_to_xattrs(label: Option<&str>) -> Option<glib::Variant> {
-    let xattrs = label.map(|label| {
-        let mut label: Vec<_> = label.to_owned().into();
-        label.push(0);
-        vec![(c"security.selinux".to_bytes_with_nul(), label)]
-    });
-    xattrs.map(|x| x.to_variant())
-}
-
-fn create_root_dirmeta(root: &Dir, policy: &ostree::SePolicy) -> Result<glib::Variant> {
-    let finfo = gio::FileInfo::new();
-    let meta = root.dir_metadata()?;
-    finfo.set_attribute_uint32("unix::uid", 0);
-    finfo.set_attribute_uint32("unix::gid", 0);
-    finfo.set_attribute_uint32("unix::mode", libc::S_IFDIR | meta.mode());
-    let label = policy.label("/", 0o777 | libc::S_IFDIR, gio::Cancellable::NONE)?;
-    let xattrs = label_to_xattrs(label.as_deref());
-    let r = ostree::create_directory_metadata(&finfo, xattrs.as_ref());
-    Ok(r)
-}
-
 enum MtreeEntry {
     #[allow(dead_code)]
     Leaf(String),
@@ -1163,17 +1142,9 @@ pub(crate) fn generate_commit_from_rootfs(
     let policy = ostree::SePolicy::new_at(rootfs.as_fd().as_raw_fd(), cancellable)?;
     modifier.set_sepolicy(Some(&policy));
 
-    let root_dirmeta = create_root_dirmeta(rootfs, &policy)?;
-    let root_metachecksum = repo
-        .write_metadata(
-            ostree::ObjectType::DirMeta,
-            None,
-            &root_dirmeta,
-            cancellable,
-        )
-        .context("Writing root dirmeta")?;
-    root_mtree.set_metadata_checksum(&root_metachecksum.to_hex());
-
+    // Note that the root dirmeta is derived from the physical rootfs
+    // directory by write_dfd_to_mtree() below, so there is no need to set
+    // it on the mtree here.
     repo.write_dfd_to_mtree(
         rootfs.as_raw_fd(),
         ".",
