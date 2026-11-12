@@ -6,6 +6,7 @@ fn main() -> Result<()> {
     let has_gpgme_pkgconfig = libs.get_by_name("gpgme").is_some();
     let with_zck: u8 = libs.get_by_name("zck").is_some().into();
     let with_rhsm = std::env::var_os("CARGO_FEATURE_RHSM").is_some();
+    let with_modulemd = std::env::var_os("CARGO_FEATURE_MODULEMD").is_some();
 
     // Query pkg-config for glib's full link flags (including transitive dependencies)
     // We'll need this later to ensure proper linking of the C++ wrapper.
@@ -34,6 +35,7 @@ fn main() -> Result<()> {
             "ENABLE_RHSM_SUPPORT:BOOL",
             if with_rhsm { "1" } else { "0" },
         )
+        .define("WITH_MODULEMD:BOOL", if with_modulemd { "1" } else { "0" })
         // Auto-enable zchunk, if present
         .define("WITH_ZCHUNK:BOOL", format!("{}", with_zck))
         // Don't need bindings
