@@ -1,4 +1,7 @@
-FROM quay.io/containers/buildah:latest as builder
+# Pinned to the last release without the build-context overlay regression
+# See https://github.com/podman-container-tools/buildah/issues/6890
+ARG BUILDAH_IMAGE=quay.io/containers/buildah:v1.43.5
+FROM ${BUILDAH_IMAGE} as builder
 
 RUN <<ENDF
 set -xeuo pipefail
@@ -9,7 +12,7 @@ make
 cp target/release/rpm-ostree /rpm-ostree
 ENDF
 
-FROM quay.io/containers/buildah:latest
+FROM ${BUILDAH_IMAGE}
 RUN dnf -y install rpm-ostree && rpm -e rpm-ostree
 COPY --from=builder /rpm-ostree /usr/bin/rpm-ostree
 COPY tests/build-chunked-oci/test-buildah.sh /test-buildah.sh
