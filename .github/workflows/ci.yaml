@@ -33,7 +33,7 @@ jobs:
       - name: Install git, codestyle and unit test tools
         run: dnf -y install git-core clang-tools-extra cargo rustfmt cpio
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -60,7 +60,7 @@ jobs:
       options: "--user root --privileged"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -77,7 +77,7 @@ jobs:
     container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       # https://github.com/actions/checkout/issues/760
       - name: Mark git checkout as safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -94,7 +94,7 @@ jobs:
   #   container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v3
+  #       uses: actions/checkout@v7
   #     - name: Install dependencies
   #       run: ./ci/installdeps.sh
   #     - name: Remove system Rust toolchain
@@ -114,7 +114,7 @@ jobs:
   #  container: quay.io/coreos-assembler/fcos-buildroot:testing-devel
   #  steps:
   #    - name: Checkout repository
-  #      uses: actions/checkout@v3
+  #      uses: actions/checkout@v7
   #    # https://github.com/actions/checkout/issues/760
   #    - name: Mark git checkout as safe
   #      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -127,7 +127,7 @@ jobs:
     container: quay.io/fedora/fedora-coreos:stable
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       - name: Download build
         uses: actions/download-artifact@v4.1.7
         with:
@@ -149,11 +149,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       - name: Bootc host setup
         uses: bootc-dev/actions/bootc-host-setup@main
       - name: Checkout coreos-layering-examples
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           repository: coreos/coreos-layering-examples
           path: coreos-layering-examples
@@ -166,7 +166,7 @@ jobs:
   cargo-deny:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
     - uses: EmbarkStudios/cargo-deny-action@v2.0.11
       with:
         log-level: warn
@@ -181,7 +181,7 @@ jobs:
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       - name: Install test dependencies
         run: ./ci/install-test-deps.sh
       - name: Download build
@@ -220,7 +220,7 @@ jobs:
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       - name: Install test dependencies
         run: ./ci/install-test-deps.sh
       - name: Download build
@@ -242,13 +242,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
       - name: Bootc host setup
         uses: bootc-dev/actions/bootc-host-setup@main
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       - name: Download build
         uses: actions/download-artifact@v4.1.7
         with:
@@ -267,7 +267,7 @@ jobs:
       options: "--user root --privileged -v /var/tmp:/var/tmp"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
       - name: Download build
         uses: actions/download-artifact@v4.1.7
         with:
@@ -287,7 +287,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: true
       - name: Bootc host setup
@@ -319,7 +319,7 @@ jobs:
       - name: Install git
         run: yum -y install git
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           submodules: true
       # https://github.com/actions/checkout/issues/760
@@ -348,7 +348,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Differential ShellCheck
