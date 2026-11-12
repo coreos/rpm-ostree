@@ -28,6 +28,13 @@ assert_file_has_content shadow.txt '00[04]00 '
 ostree --repo=${repo} ls ${treeref} /usr/etc/gshadow > gshadow.txt
 assert_file_has_content gshadow.txt '00[04]00 '
 
+# The root dir must carry the mode from the content set (0o555 from the
+# filesystem RPM), not the 0o755 which compose_init_rootfs_*() forces.
+# https://github.com/coreos/fedora-coreos-tracker/issues/2238
+ostree --repo=${repo} ls -d ${treeref} / > root.txt
+assert_file_has_content_literal root.txt 'd00555 '
+echo "ok root dir mode"
+
 ostree --repo=${repo} cat ${treeref} /usr/etc/default/useradd > useradd.txt
 assert_file_has_content_literal useradd.txt HOME=/var/home
 
