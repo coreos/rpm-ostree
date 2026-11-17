@@ -32,6 +32,7 @@ G_BEGIN_DECLS
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (archive, archive_read_free);
 
-struct archive *rpmostree_unpack_rpm2cpio (int fd, GError **error);
+struct archive *rpmostree_unpack_rpm (int fd, Header header, off_t payload_offset,
+                                      GCancellable *cancellable, GError **error);
 
 G_END_DECLS
