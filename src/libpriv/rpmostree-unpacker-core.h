@@ -26,13 +26,20 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include <libdnf/libdnf.h>
+#include <rpm/rpmfi.h>
 #include <rpm/rpmlib.h>
 
 G_BEGIN_DECLS
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (archive, archive_read_free);
 
+/* Called only for regular files to select a retained hardlink content carrier.
+ * The iterator is independent of the payload reader and must not be advanced. */
+typedef gboolean (*RpmOstreeRpmFileFilter) (rpmfi fi, gboolean *out_skip, gpointer user_data,
+                                            GError **error);
+
 struct archive *rpmostree_unpack_rpm (int fd, Header header, off_t payload_offset,
+                                      RpmOstreeRpmFileFilter filter, gpointer filter_data,
                                       GCancellable *cancellable, GError **error);
 
 G_END_DECLS

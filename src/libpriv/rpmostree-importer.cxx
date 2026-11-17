@@ -509,6 +509,32 @@ compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpo
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
+/* Use the commit filter to select a hardlink carrier, including the same path
+ * translation used by archive import. Only regular files are examined here, so
+ * the filter cannot generate directory or symlink tmpfiles entries. */
+static gboolean
+filter_payload_file (rpmfi fi, gboolean *out_skip, gpointer user_data, GError **error)
+{
+  auto *self = static_cast<RpmOstreeImporter *> (user_data);
+  const char *path = rpmfiFN (fi);
+  if (path == NULL || path[0] != '/')
+    return glnx_throw (error, "Invalid RPM payload path: %s", path ?: "");
+
+  auto translated = rpmostreecxx::translate_path_for_ostree (path + 1);
+  g_autofree char *translated_path
+      = translated.empty () ? g_strdup (path) : g_strconcat ("/", translated.c_str (), NULL);
+  g_autoptr (GFileInfo) info = g_file_info_new ();
+  g_file_info_set_file_type (info, G_FILE_TYPE_REGULAR);
+  g_file_info_set_size (info, rpmfiFSize (fi));
+  g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_UNIX_MODE, rpmfiFMode (fi));
+  g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_UNIX_UID, 0);
+  g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_UNIX_GID, 0);
+  cb_data data = { self, error };
+  *out_skip = compose_filter_cb (self->repo, translated_path, info, &data)
+              == OSTREE_REPO_COMMIT_FILTER_SKIP;
+  return *error == NULL;
+}
+
 static GVariant *
 xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer user_data)
 {
@@ -589,8 +615,8 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
   opts.translate_pathname = handle_translate_pathname;
   opts.translate_pathname_user_data = self;
 
-  g_autoptr (archive) archive
-      = rpmostree_unpack_rpm (self->fd, self->hdr, self->cpio_offset, cancellable, error);
+  g_autoptr (archive) archive = rpmostree_unpack_rpm (
+      self->fd, self->hdr, self->cpio_offset, filter_payload_file, self, cancellable, error);
   if (archive == NULL)
     return FALSE;
 

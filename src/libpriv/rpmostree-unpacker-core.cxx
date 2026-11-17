@@ -107,6 +107,10 @@ struct RpmArchive
   struct archive_entry *entry;
   FD_t payload;
   rpmfi fi;
+  rpmfi metadata;
+  RpmOstreeRpmFileFilter filter;
+  gpointer filter_data;
+  int hardlink_target;
   GCancellable *cancellable;
   GByteArray *output;
   char *hardlink;
@@ -125,6 +129,7 @@ rpm_archive_free (RpmArchive *state)
     }
   archive_entry_free (state->entry);
   rpmfiFree (state->fi);
+  rpmfiFree (state->metadata);
   Fclose (state->payload);
   g_clear_object (&state->cancellable);
   g_byte_array_unref (state->output);
@@ -153,7 +158,50 @@ static int
 rpm_archive_write_header (RpmArchive *state)
 {
   rpmfi fi = state->fi;
-  const char *path = rpmfiFN (fi);
+  const int source_index = rpmfiFX (fi);
+  int entry_index = source_index;
+  const bool has_content = rpmfiArchiveHasContent (fi);
+
+  if (S_ISREG (rpmfiFMode (fi)) && rpmfiFNlink (fi) > 1)
+    {
+      const int *links = NULL;
+      const auto nlinks = rpmfiFLinks (fi, &links);
+      if (has_content)
+        {
+          /* The payload iterator delivers a group's bytes with its first name.
+           * Swap that name with a retained member, leaving the payload iterator
+           * in place so the content is still read exactly once. */
+          state->hardlink_target = source_index;
+          for (guint i = 0; i < nlinks; i++)
+            {
+              rpmfiSetFX (state->metadata, links[i]);
+              gboolean skip = FALSE;
+              g_autoptr (GError) error = NULL;
+              if (!state->filter (state->metadata, &skip, state->filter_data, &error))
+                {
+                  archive_set_error (state->writer, EIO, "Filtering RPM hardlink: %s",
+                                     error->message);
+                  return ARCHIVE_FATAL;
+                }
+              if (!skip)
+                {
+                  state->hardlink_target = links[i];
+                  break;
+                }
+            }
+          entry_index = state->hardlink_target;
+          rpmfiSetFX (state->metadata, entry_index);
+          g_free (state->hardlink);
+          state->hardlink = g_strconcat (".", rpmfiFN (state->metadata), NULL);
+        }
+      else if (source_index == state->hardlink_target)
+        entry_index = links[0];
+    }
+
+  /* Metadata follows the emitted name, while file data follows the payload. */
+  rpmfi metadata = state->metadata;
+  rpmfiSetFX (metadata, entry_index);
+  const char *path = rpmfiFN (metadata);
   if (path == NULL || path[0] != '/')
     {
       archive_set_error (state->writer, EINVAL, "Invalid RPM payload path: %s", path ?: "");
@@ -165,24 +213,19 @@ rpm_archive_write_header (RpmArchive *state)
   archive_entry_set_pathname (entry, relative_path);
   /* RPM stores ownership by name. The importer handles those names from the
    * header, so keep numeric ownership at zero without consulting the host. */
-  const auto mode = rpmfiFMode (fi);
+  const auto mode = rpmfiFMode (metadata);
   archive_entry_set_mode (entry, mode);
-  archive_entry_set_mtime (entry, rpmfiFMtime (fi), 0);
+  archive_entry_set_mtime (entry, rpmfiFMtime (metadata), 0);
   archive_entry_set_size (entry, 0);
   if (S_ISLNK (mode))
-    archive_entry_set_symlink (entry, rpmfiFLink (fi));
+    archive_entry_set_symlink (entry, rpmfiFLink (metadata));
 
   if (S_ISREG (mode))
     {
-      if (rpmfiArchiveHasContent (fi))
+      if (has_content)
         {
           state->remaining = rpmfiFSize (fi);
           archive_entry_set_size (entry, state->remaining);
-          if (rpmfiFNlink (fi) > 1)
-            {
-              g_free (state->hardlink);
-              state->hardlink = util::move_nullify (relative_path);
-            }
         }
       else
         archive_entry_set_hardlink (entry, state->hardlink);
@@ -252,8 +295,8 @@ rpm_archive_read (struct archive *reader, void *data, const void **buffer)
 }
 
 struct archive *
-rpmostree_unpack_rpm (int fd, Header header, off_t payload_offset, GCancellable *cancellable,
-                      GError **error)
+rpmostree_unpack_rpm (int fd, Header header, off_t payload_offset, RpmOstreeRpmFileFilter filter,
+                      gpointer filter_data, GCancellable *cancellable, GError **error)
 {
   // Older librpm releases do not define the RPMFORMAT tag.
   const auto format_tag = rpmTagGetValue ("RPMFORMAT");
@@ -299,9 +342,12 @@ rpmostree_unpack_rpm (int fd, Header header, off_t payload_offset, GCancellable 
   state->entry = archive_entry_new ();
   state->payload = util::move_nullify (payload);
   state->fi = util::move_nullify (reader);
+  state->metadata = rpmfilesIter (files, RPMFI_ITER_FWD);
+  state->filter = filter;
+  state->filter_data = filter_data;
   state->cancellable = cancellable ? (GCancellable *)g_object_ref (cancellable) : NULL;
   state->output = g_byte_array_new ();
-  if (state->writer == NULL || state->entry == NULL)
+  if (state->writer == NULL || state->entry == NULL || state->metadata == NULL)
     return (struct archive *)glnx_null_throw (error, "Creating RPM payload writer");
   if (archive_write_set_format_pax_restricted (state->writer) != ARCHIVE_OK
       || archive_write_set_format_option (state->writer, "pax", "hdrcharset", "BINARY")
