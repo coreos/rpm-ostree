@@ -8,7 +8,10 @@ dn=$(cd "$(dirname "$0")" && pwd)
 . "${dn}/libcomposetest.sh"
 
 formats=(4)
-if rpm --querytags | grep -Fx RPMFORMAT; then
+# RPM 6.0 introduced v6 package generation. Older builders may know RPMFORMAT
+# while still producing v4 packages when asked for v6.
+rpm_supports_v6=$(rpmbuild --eval '%{expr: v"%{rpmversion}" >= v"6.0.0"}')
+if [ "$rpm_supports_v6" = 1 ]; then
     formats+=(6)
 fi
 
@@ -92,7 +95,8 @@ for format in "${formats[@]}"; do
                %ghost /usr/share/%{name}/ghost
                %dir %attr(0750, bin, bin) /var/lib/%{name}
                $hardlink_files"
-    if [ "${#formats[@]}" -gt 1 ]; then
+    if [ "$rpm_supports_v6" = 1 ]; then
+        # Check the output too: requesting v6 must actually produce RPMFORMAT=6.
         assert_streq "$(rpm -qp --qf '%{RPMFORMAT}' yumrepo/packages/*/"${name}"-*.rpm)" "$format"
     fi
     treefile_append packages "[\"$name\"]"
@@ -157,7 +161,7 @@ done
 
 # Reimport with docs enabled. Every name in the documentation groups must now
 # exist, including the aliases which were filtered out during the first import.
-if [ "${#formats[@]}" -gt 1 ]; then
+if [ "$rpm_supports_v6" = 1 ]; then
     treefile_set documentation True
     mkdir cache-docs
     rpm-ostree compose tree "${treefile}" --unified-core --repo="${repo}" \
