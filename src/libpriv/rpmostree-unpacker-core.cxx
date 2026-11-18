@@ -298,9 +298,10 @@ struct archive *
 rpmostree_unpack_rpm (int fd, Header header, off_t payload_offset, RpmOstreeRpmFileFilter filter,
                       gpointer filter_data, GCancellable *cancellable, GError **error)
 {
-  // Older librpm releases do not define the RPMFORMAT tag.
-  const auto format_tag = rpmTagGetValue ("RPMFORMAT");
-  if (format_tag == RPMTAG_NOT_FOUND || headerGetNumber (header, format_tag) < 6)
+  // RPMTAG_RPMFORMAT is 5114. Use its number because older librpm versions
+  // can read v6 payloads without knowing the tag name. V4 headers omit it.
+  const rpmTagVal format_tag = 5114;
+  if (headerGetNumber (header, format_tag) < 6)
     return rpmostree_unpack_rpm2cpio (fd, error);
 
   g_autofree char *path = g_strdup_printf ("/proc/self/fd/%d", fd);
