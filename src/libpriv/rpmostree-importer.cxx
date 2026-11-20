@@ -19,14 +19,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-/**
- * Implements unpacking an RPM.  The design here is to reuse
- * libarchive's RPM support for most of it.  We do however need to
- * look at file capabilities, which are part of the header.
- *
- * Hence we end up with two file descriptors open.
- */
-
 #include "config.h"
 
 #include "rpmostree-core.h"
@@ -35,7 +27,6 @@
 #include "rpmostree-unpacker-core.h"
 #include "rpmostree-util.h"
 #include <archive.h>
-#include <archive_entry.h>
 #include <gio/gunixinputstream.h>
 #include <grp.h>
 #include <pwd.h>
@@ -56,7 +47,6 @@ struct RpmOstreeImporter
   GObject parent_instance;
   OstreeRepo *repo;
   OstreeSePolicy *sepolicy;
-  struct archive *archive;
   int fd;
   Header hdr;
   rpmfi fi;
@@ -74,8 +64,6 @@ rpmostree_importer_finalize (GObject *object)
   RpmOstreeImporter *self = (RpmOstreeImporter *)object;
   if (self->hdr)
     headerFree (self->hdr);
-  if (self->archive)
-    archive_read_free (self->archive);
   if (self->fi)
     (void)rpmfiFree (self->fi);
   glnx_close_fd (&self->fd);
@@ -135,6 +123,8 @@ rpmostree_importer_read_metainfo (int fd, rpmostreecxx::RpmImporterFlags &flags,
       if (!flags.is_ima_enabled ())
         rpmfi_flags |= RPMFI_NOFILESIGNATURES;
       ret_fi = rpmfiNew (ts, ret_header, RPMTAG_BASENAMES, rpmfi_flags);
+      if (ret_fi == NULL)
+        return glnx_throw (error, "Reading RPM file metadata from %s", abspath);
       ret_fi = rpmfiInit (ret_fi, 0);
     }
 
@@ -241,10 +231,6 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   g_auto (rpmfi) fi = NULL;
   gsize cpio_offset = 0;
 
-  g_autoptr (archive) ar = rpmostree_unpack_rpm2cpio (*fd, error);
-  if (ar == NULL)
-    return NULL;
-
   if (!rpmostree_importer_read_metainfo (*fd, flags, &hdr, &cpio_offset, &fi, error))
     return (RpmOstreeImporter *)glnx_prefix_error_null (error, "Reading metainfo");
   g_assert (hdr != NULL);
@@ -261,7 +247,6 @@ rpmostree_importer_new_take_fd (int *fd, OstreeRepo *repo, DnfPackage *pkg,
   ret->repo = (OstreeRepo *)g_object_ref (repo);
   ret->sepolicy = (OstreeSePolicy *)(sepolicy ? g_object_ref (sepolicy) : NULL);
   ret->fi = util::move_nullify (fi);
-  ret->archive = util::move_nullify (ar);
   ret->hdr = util::move_nullify (hdr);
   ret->cpio_offset = cpio_offset;
   ret->pkg = (DnfPackage *)(pkg ? g_object_ref (pkg) : NULL);
@@ -313,9 +298,7 @@ static gboolean
 get_lead_sig_header_as_bytes (RpmOstreeImporter *self, GBytes **out_metadata,
                               GCancellable *cancellable, GError **error)
 {
-  /* Inline a pread() based reader here to avoid affecting the file
-   * offset since both librpm and libarchive have references.
-   */
+  /* Read the header without affecting the payload reader's file offset. */
   g_autofree char *buf = (char *)g_malloc (self->cpio_offset);
   char *bufp = buf;
   size_t bytes_remaining = self->cpio_offset;
@@ -526,6 +509,32 @@ compose_filter_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpo
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
+/* Use the commit filter to select a hardlink carrier, including the same path
+ * translation used by archive import. Only regular files are examined here, so
+ * the filter cannot generate directory or symlink tmpfiles entries. */
+static gboolean
+filter_payload_file (rpmfi fi, gboolean *out_skip, gpointer user_data, GError **error)
+{
+  auto *self = static_cast<RpmOstreeImporter *> (user_data);
+  const char *path = rpmfiFN (fi);
+  if (path == NULL || path[0] != '/')
+    return glnx_throw (error, "Invalid RPM payload path: %s", path ?: "");
+
+  auto translated = rpmostreecxx::translate_path_for_ostree (path + 1);
+  g_autofree char *translated_path
+      = translated.empty () ? g_strdup (path) : g_strconcat ("/", translated.c_str (), NULL);
+  g_autoptr (GFileInfo) info = g_file_info_new ();
+  g_file_info_set_file_type (info, G_FILE_TYPE_REGULAR);
+  g_file_info_set_size (info, rpmfiFSize (fi));
+  g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_UNIX_MODE, rpmfiFMode (fi));
+  g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_UNIX_UID, 0);
+  g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_UNIX_GID, 0);
+  cb_data data = { self, error };
+  *out_skip = compose_filter_cb (self->repo, translated_path, info, &data)
+              == OSTREE_REPO_COMMIT_FILTER_SKIP;
+  return *error == NULL;
+}
+
 static GVariant *
 xattr_cb (OstreeRepo *repo, const char *path, GFileInfo *file_info, gpointer user_data)
 {
@@ -606,9 +615,14 @@ import_rpm_to_repo (RpmOstreeImporter *self, char **out_csum, char **out_metadat
   opts.translate_pathname = handle_translate_pathname;
   opts.translate_pathname_user_data = self;
 
+  g_autoptr (archive) archive = rpmostree_unpack_rpm (
+      self->fd, self->hdr, self->cpio_offset, filter_payload_file, self, cancellable, error);
+  if (archive == NULL)
+    return FALSE;
+
   g_autoptr (OstreeMutableTree) mtree = ostree_mutable_tree_new ();
-  if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree, modifier,
-                                            cancellable, error))
+  if (!ostree_repo_import_archive_to_mtree (repo, &opts, archive, mtree, modifier, cancellable,
+                                            error))
     return glnx_prefix_error (error, "Importing archive");
 
   /* check if any of the cbs set an error */

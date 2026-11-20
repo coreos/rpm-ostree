@@ -140,6 +140,7 @@ build_rpm() {
     local version=1.0
     local release=1
     local arch=x86_64
+    local rpmformat=
 
     mkdir -p $test_tmpdir/yumrepo/{specs,packages}
     local spec=$test_tmpdir/yumrepo/specs/$name.spec
@@ -172,7 +173,7 @@ EOF
             echo "Summary: $arg" >> $spec;;
         post_args)
             post_args="$arg";;
-        version|release|epoch|arch|build|install|files|pretrans|pre|post|posttrans|verifyscript|uinfo)
+        version|release|epoch|arch|rpmformat|build|install|files|pretrans|pre|post|posttrans|verifyscript|uinfo)
             declare $section="$arg";;
         transfiletriggerin)
             transfiletriggerin_patterns="$arg";
@@ -250,8 +251,14 @@ EOF
         buildarch=$(uname -m)
     fi
 
+    local -a format_args=()
+    if [ -n "$rpmformat" ]; then
+        format_args=(--define "_rpmformat $rpmformat")
+    fi
+
     (cd $test_tmpdir/yumrepo/specs &&
      setarch $buildarch rpmbuild --target $arch -ba $name.spec \
+        "${format_args[@]}" \
         --define "_topdir $PWD" \
         --define "_sourcedir $PWD" \
         --define "_specdir $PWD" \
