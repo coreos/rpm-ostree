@@ -71,6 +71,12 @@ AC_ARG_ENABLE(featuresrs,
               [enable_featuresrs=])
 AC_SUBST([RUST_FEATURES], $enable_featuresrs)
 
+AC_ARG_WITH(modulemd,
+            AS_HELP_STRING([--without-modulemd],
+                           [Build libdnf without libmodulemd, i.e. without modularity support (default: with)]),,
+            [with_modulemd=yes])
+AM_CONDITIONAL(BUILDOPT_MODULEMD, [test x$with_modulemd != xno])
+
 # Initialize libtool
 LT_PREREQ([2.2.4])
 LT_INIT([disable-static])
@@ -84,6 +90,9 @@ dnl These are the dependencies of the public librpmostree-1.0.0 shared library
 PKG_CHECK_MODULES(PKGDEP_LIBRPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0 ostree-1 >= 2023.7 rpm >= 4.16])
 dnl And these additional ones are used by for the rpmostreeinternals C/C++ library
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [polkit-gobject-1 libarchive])
+AS_IF([test x$with_modulemd != xno],
+  [PKG_CHECK_EXISTS([modulemd-2.0], [],
+    [AC_MSG_ERROR([modulemd-2.0 not found; install libmodulemd-devel or use --without-modulemd])])])
 
 AC_CHECK_DECL([RPMTRANS_FLAG_NOSYSUSERS], [
   AC_DEFINE(HAVE_RPMTRANS_FLAG_NOSYSUSERS, 1, [Define if we have RPMTRANS_FLAG_NOSYSUSERS])
@@ -164,5 +173,6 @@ echo "
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release
     rust features:                           $enable_featuresrs
+    modulemd (modularity):                   $with_modulemd
     bdb rpmdb default:                       ${enable_bdb_rpmdb_default}
 "

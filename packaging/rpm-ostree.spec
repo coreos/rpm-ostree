@@ -47,6 +47,15 @@ BuildRequires: rust
 %bcond_with rhsm
 %endif
 
+# Modularity is retired in Fedora and dropped in RHEL 11 (and so ELN), so
+# build libdnf without libmodulemd there.
+# https://github.com/coreos/rpm-ostree/issues/5566
+%if 0%{?fedora} >= 46 || 0%{?rhel} >= 11
+%bcond_with modulemd
+%else
+%bcond_without modulemd
+%endif
+
 # RHEL (8,9) doesn't ship zchunk today.  Keep this in sync
 # with libdnf: https://gitlab.com/redhat/centos-stream/rpms/libdnf/-/blob/762f631e36d1e42c63a794882269d26c156b68c1/libdnf.spec#L45
 %if 0%{?rhel}
@@ -132,11 +141,15 @@ BuildRequires:  pkgconfig(zck) >= 0.9.11
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(json-c)
 BuildRequires:  pkgconfig(cppunit)
+%if %{with modulemd}
 BuildRequires:  pkgconfig(modulemd-2.0) >= %{libmodulemd_version}
+%endif
 BuildRequires:  pkgconfig(smartcols)
 BuildRequires:  gettext
 
+%if %{with modulemd}
 Requires:       libmodulemd%{?_isa} >= %{libmodulemd_version}
+%endif
 Requires:       libsolv%{?_isa} >= %{libsolv_version}
 Requires:       librepo%{?_isa} >= %{librepo_version}
 %if 0%{?fedora} >= 43 || 0%{?rhel} >= 11
@@ -210,7 +223,7 @@ env NOCONFIGURE=1 ./autogen.sh
 export RUSTFLAGS="%{build_rustflags}"
 %endif
 %configure --disable-silent-rules --enable-gtk-doc %{?rpmdb_default} %{?with_sanitizers:--enable-sanitizers}  %{?with_bin_unit_tests:--enable-bin-unit-tests} \
-  %{?with_rhsm:--enable-featuresrs=rhsm}
+  %{?with_rhsm:--enable-featuresrs=rhsm} %{!?with_modulemd:--without-modulemd}
 
 %make_build
 %if 0%{?fedora} || 0%{?rhel} >= 10
