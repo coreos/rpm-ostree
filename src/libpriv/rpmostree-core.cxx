@@ -4258,6 +4258,16 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
     return FALSE;
   const gboolean layering_on_base = (errno == 0);
 
+  /* The mode to apply to the root directory.  The `filesystem` package
+   * special case below overrides this. A fresh root (a compose) defaults
+   * to 0o555, which is what systemd's /usr/lib/tmpfiles.d/root.conf
+   * enforces at boot. That enforcement fails on read-only roots, so the
+   * commit has to carry the mode already. When layering on a base we
+   * keep the mode of the base checkout.
+   */
+  gboolean have_root_dir_mode = !layering_on_base;
+  guint32 root_dir_mode = 0555;
+
   /* Don't verify checksums here (we should have done this on ostree
    * import).  Also, avoid updating the database or anything by
    * flagging it as a test.  We'll do the database next.
@@ -4368,6 +4378,28 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
               self, filesystem_package, tmprootfs_dfd, ".", self->devino_cache, c, NULL,
               OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL, cancellable, error))
         return FALSE;
+      /* Checkouts do not change the metadata of directories which already
+       * exist, and we created the target root ourselves. Grab the mode
+       * for `/` from the `filesystem` package header, which is what an
+       * rpm transaction would apply in a classic install. It is applied
+       * below once all checkouts are done.
+       */
+      {
+        g_auto (rpmfi) fi = NULL;
+        g_autofree char *path = get_package_relpath (filesystem_package);
+        if (!get_package_metainfo (self, path, NULL, &fi, error))
+          return glnx_prefix_error (error, "Reading filesystem package header");
+        while (rpmfiNext (fi) >= 0)
+          {
+            const char *fn = rpmfiFN (fi);
+            fn += strspn (fn, "./");
+            if (*fn)
+              continue;
+            root_dir_mode = rpmfiFMode (fi);
+            have_root_dir_mode = TRUE;
+            break;
+          }
+      }
       auto provides = dnf_package_get_provides (filesystem_package);
       for (int i = 0; i < dnf_reldep_list_count (provides); i++)
         {
@@ -4708,6 +4740,17 @@ rpmostree_context_assemble (RpmOstreeContext *self, GCancellable *cancellable, G
   if (!write_rpmdb (self, tmprootfs_dfd, overlays, overrides_replace, overrides_remove, cancellable,
                     error))
     return glnx_prefix_error (error, "Writing rpmdb");
+
+  /* Apply the root dir mode once all of the content is assembled,
+   * since the steps above write to the top level. Ostree derives the
+   * committed root dirmeta from this dir, so the mode ends up in
+   * the commit.
+   */
+  if (have_root_dir_mode)
+    {
+      if (fchmodat (tmprootfs_dfd, ".", root_dir_mode & 07777, 0) < 0)
+        return glnx_throw_errno_prefix (error, "Applying root directory permissions");
+    }
 
   return rpmostree_context_assemble_end (self, cancellable, error);
 }

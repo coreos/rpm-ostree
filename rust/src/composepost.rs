@@ -217,6 +217,13 @@ pub fn compose_prepare_rootfs(
 
     let tmp_is_dir = treefile.parsed.base.tmp_is_dir.unwrap_or_default();
 
+    // Preserve the source root dirs permissions, which come from the content
+    // set or our fallback of 0o555 applied by `rpmostree_context_assemble()`.
+    let src_root_perms = src_rootfs_dfd
+        .metadata(".")
+        .context("Reading source rootfs permissions")?
+        .permissions();
+
     if crate::ostree_prepareroot::transient_root_enabled(src_rootfs_dfd)? {
         println!("Target has transient root enabled");
         // While sadly tmp-is-dir: false by default, we want to encourage
@@ -238,6 +245,11 @@ pub fn compose_prepare_rootfs(
                 .with_context(|| format!("Moving {name:?}"))?;
         }
         compose_init_rootfs_transient(target_rootfs_dfd)?;
+
+        // Restore the source root dir perms
+        target_rootfs_dfd
+            .set_permissions(".", src_root_perms)
+            .context("Restoring root directory permissions")?;
         return Ok(());
     }
 
@@ -263,6 +275,11 @@ pub fn compose_prepare_rootfs(
     TOPLEVEL_LINKS
         .par_iter()
         .try_for_each(|&l| dir_move_if_exists(src_rootfs_dfd, target_rootfs_dfd, l))?;
+
+    // Restore the source root dir perms
+    target_rootfs_dfd
+        .set_permissions(".", src_root_perms)
+        .context("Restoring root directory permissions")?;
 
     Ok(())
 }
@@ -1332,6 +1349,7 @@ mod tests {
     use super::*;
     use cap_std::fs::{Dir, DirBuilder};
     use cap_std_ext::{cap_std, cap_tempfile};
+    use std::os::fd::{AsFd as _, AsRawFd as _};
 
     #[test]
     fn stripany() {
@@ -1341,6 +1359,60 @@ mod tests {
             strip_any_prefix(s, &["baz:", "foo:", "bar:"]).unwrap(),
             ("foo:", " bar")
         );
+    }
+
+    // Verify that compose_prepare_rootfs() preserves the source root
+    // directory permissions instead of the 0o755 forced by
+    // compose_init_rootfs_*(), in both the strict and transient paths.
+    #[test]
+    fn compose_prepare_rootfs_preserves_root_perms() {
+        let run = |src_mode: u32, transient: bool| {
+            let src_rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
+            // Minimal source rootfs with the content that gets moved.
+            src_rootfs.create_dir_all("usr/bin").unwrap();
+            src_rootfs.create_dir("etc").unwrap();
+            let treefile_src = if transient {
+                r#"{"tmp-is-dir": true}"#
+            } else {
+                "{}"
+            };
+            if transient {
+                src_rootfs.create_dir_all("etc/ostree").unwrap();
+                src_rootfs
+                    .write("etc/ostree/prepare-root.conf", "[root]\ntransient=true\n")
+                    .unwrap();
+            }
+            src_rootfs
+                .set_permissions(".", Permissions::from_mode(src_mode))
+                .unwrap();
+
+            let target_rootfs = cap_tempfile::tempdir(cap_std::ambient_authority()).unwrap();
+            let mut treefile =
+                Treefile::new_from_string(crate::utils::InputFormat::JSON, treefile_src).unwrap();
+
+            compose_prepare_rootfs(
+                src_rootfs.as_fd().as_raw_fd(),
+                target_rootfs.as_fd().as_raw_fd(),
+                &mut treefile,
+            )
+            .unwrap();
+
+            let mode = target_rootfs.metadata(".").unwrap().permissions().mode();
+            assert_eq!(mode & 0o7777, src_mode, "root permissions not preserved");
+        };
+
+        let is_root = rustix::process::getuid().is_root();
+        for transient in [false, true] {
+            // Any mode other than the default works for any user, since
+            // moving entries out of the source root needs write access to it.
+            run(0o750, transient);
+
+            // The case that matters. Need to be root to move entries out
+            // of a 0o555 `/`.
+            if is_root {
+                run(0o555, transient);
+            }
+        }
     }
 
     #[test]
