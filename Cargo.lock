@@ -348,7 +348,6 @@ version = "3.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6dc3090992a735d23219de5c204927163d922f42f575a0189b005c62d37549a"
 dependencies = [
- "camino",
  "cap-primitives 3.4.5",
  "io-extras 0.18.4",
  "io-lifetimes 2.0.4",
@@ -3403,9 +3402,9 @@ dependencies = [
  "binread",
  "bitflags 2.12.1",
  "camino",
- "cap-primitives 3.4.5",
- "cap-std 3.4.5",
- "cap-std-ext 4.0.7",
+ "cap-primitives 4.0.3",
+ "cap-std 4.0.3",
+ "cap-std-ext 5.1.2",
  "chrono",
  "clap",
  "cxx",
